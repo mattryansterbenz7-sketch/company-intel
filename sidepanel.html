@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    /* HubSpot palette:
+       Orange accent:  #FF7A59
+       Dark navy:      #2D3E50
+       Med blue-grey:  #516F90
+       Teal success:   #00BDA5
+       Body bg:        #1C2D3A
+       Card bg:        #243342
+       Border:         #2D3E50
+    */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #1C2D3A; color: #e2e8f0; width: 380px; min-height: 100vh; }
+
+    /* Header */
+    .header { padding: 14px 16px; border-bottom: 1px solid #2D3E50; display: flex; align-items: center; justify-content: space-between; background: #1C2D3A; }
+    .logo { font-size: 15px; font-weight: 700; color: #f8fafc; letter-spacing: -0.01em; }
+    .logo span { color: #FF7A59; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    #search-btn { background: #FF7A59; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: 0.02em; box-shadow: 0 0 0 1px rgba(255,122,89,0.3); }
+    #search-btn:hover { background: #e8623f; box-shadow: 0 0 0 1px rgba(255,122,89,0.5); }
+    .header-icon-btn { background: none; border: none; cursor: pointer; padding: 4px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 6px; transition: background 0.15s; }
+    .header-icon-btn:hover { background: rgba(255,255,255,0.05); }
+    .header-icon { font-size: 20px; line-height: 1; }
+    .header-icon-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #516F90; }
+    #saved-btn .header-icon { color: #516F90; }
+    #saved-btn:hover .header-icon { color: #FF7A59; }
+    #saved-btn:hover .header-icon-label { color: #FF7A59; }
+    #settings-btn .header-icon { color: #516F90; }
+    #settings-btn:hover .header-icon { color: #99afc4; }
+    #settings-btn:hover .header-icon-label { color: #99afc4; }
+    #settings-btn.active .header-icon, #settings-btn.active .header-icon-label { color: #FF7A59; }
+
+    /* Tooltip system */
+    [data-tooltip] { position: relative; }
+    [data-tooltip]::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #111e28; color: #cbd5e1; font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 200px; padding: 8px 10px; border-radius: 7px; border: 1px solid #2D3E50; box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; text-transform: none; letter-spacing: normal; }
+    [data-tooltip]:hover::after { opacity: 1; }
+    .pref-hint { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: #2D3E50; color: #516F90; font-size: 9px; font-weight: 700; text-align: center; line-height: 14px; cursor: default; margin-left: 5px; vertical-align: middle; position: relative; flex-shrink: 0; }
+    .pref-hint::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #111e28; color: #cbd5e1; font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 220px; padding: 8px 10px; border-radius: 7px; border: 1px solid #2D3E50; box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; }
+    .pref-hint:hover::after { opacity: 1; }
+
+    /* Company bar */
+    .company-bar { padding: 10px 16px; background: #243342; border-bottom: 1px solid #2D3E50; display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: 10px; }
+    .company-bar-left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+    #company-favicon { width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0; display: none; background: #2D3E50; object-fit: contain; }
+    .company-bar-meta { display: flex; flex-direction: column; min-width: 0; }
+    .detected-label { font-size: 10px; font-weight: 700; color: #516F90; text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; }
+    #company-name { font-size: 14px; font-weight: 700; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Job bar */
+    #job-bar { padding: 8px 16px; background: #243342; border-bottom: 1px solid #2D3E50; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .job-bar-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+    #job-title-bar { font-size: 13px; font-weight: 600; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #job-snapshot-inline { display: flex; flex-wrap: wrap; gap: 6px; }
+    #save-job-btn { background: #FF7A59; border: none; color: #fff; font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    #save-job-btn:hover { background: #e8623f; }
+    #save-job-btn.saved { background: transparent; border: 1px solid #FF7A59; color: #FF7A59; cursor: default; }
+    #save-btn { background: #2D3E50; border: 1px solid #3d5468; color: #7a9ab8; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s; }
+    #save-btn:hover { background: #FF7A59; border-color: #FF7A59; color: #fff; }
+    #save-btn.saved { background: transparent; border-color: #FF7A59; color: #FF7A59; cursor: default; }
+
+    /* Save panel */
+    #save-panel { display: none; padding: 14px 16px; background: #243342; border-bottom: 1px solid #2D3E50; }
+    #save-panel.visible { display: block; }
+    .save-panel-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .save-stars { display: flex; gap: 5px; }
+    .save-star { font-size: 20px; color: #2D3E50; cursor: pointer; transition: color 0.1s; line-height: 1; }
+    .save-star.filled { color: #f59e0b; }
+    .save-star:hover { color: #f59e0b; }
+    .save-panel-label { font-size: 11px; font-weight: 600; color: #516F90; text-transform: uppercase; letter-spacing: 0.07em; }
+    #save-notes { width: 100%; background: #2D3E50; border: 1px solid #3d5468; border-radius: 6px; color: #cbd5e1; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: none; height: 52px; line-height: 1.5; margin-bottom: 10px; }
+    #save-notes:focus { outline: none; border-color: #FF7A59; }
+    #save-notes::placeholder { color: #516F90; }
+    /* Tag input in save panel */
+    .save-tag-area { margin-bottom: 10px; }
+    .save-tag-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; min-height: 0; }
+    .save-tag-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; background: rgba(255,122,89,0.15); border: 1px solid rgba(255,122,89,0.4); color: #FF7A59; }
+    .save-tag-chip .remove-tag { cursor: pointer; font-size: 10px; color: #FF7A59; line-height: 1; margin-left: 2px; }
+    .save-tag-chip .remove-tag:hover { color: #f87171; }
+    .save-tag-input-wrap { position: relative; }
+    #save-tag-input { width: 100%; background: #1C2D3A; border: 1px solid #2D3E50; border-radius: 6px; color: #e2e8f0; font-size: 12px; font-family: inherit; padding: 7px 10px; }
+    #save-tag-input:focus { outline: none; border-color: #FF7A59; }
+    #save-tag-input::placeholder { color: #516F90; }
+    .save-tag-suggestions { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: #243342; border: 1px solid #2D3E50; border-radius: 6px; z-index: 50; overflow: hidden; display: none; }
+    .save-tag-suggestion { padding: 7px 10px; font-size: 12px; color: #99afc4; cursor: pointer; }
+    .save-tag-suggestion:hover { background: #2D3E50; color: #e2e8f0; }
+    .save-status-select { width: 100%; background: #2D3E50; border: 1px solid #3d5468; border-radius: 6px; color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: inherit; padding: 8px 10px; cursor: pointer; appearance: none; -webkit-appearance: none; }
+    .save-status-select:focus { outline: none; border-color: #FF7A59; }
+    #save-confirm-btn { width: 100%; background: #FF7A59; color: #fff; border: none; padding: 8px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    #save-confirm-btn:hover { background: #e8623f; }
+    #save-confirm-btn.saved { background: #2D3E50; color: #FF7A59; border: 1px solid #3d5468; cursor: default; }
+
+    /* Company links */
+    #company-links { }
+    .company-links { display: flex; gap: 8px; padding: 8px 16px; background: #1C2D3A; border-bottom: 1px solid #2D3E50; }
+    .company-link { font-size: 12px; color: #FF7A59; text-decoration: none; display: flex; align-items: center; gap: 4px; font-weight: 600; }
+    .company-link:hover { color: #ffaa94; }
+
+    /* Content */
+    #content { }
+    .loading { padding: 40px 16px; text-align: center; color: #516F90; font-size: 14px; }
+    .spinner { width: 22px; height: 22px; border: 2px solid #2D3E50; border-top-color: #FF7A59; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { padding: 16px; background: #1e0f0f; border-radius: 8px; color: #fca5a5; font-size: 13px; margin: 16px; border: 1px solid #3f1515; }
+    .empty { padding: 60px 16px; text-align: center; color: #3d5468; font-size: 14px; line-height: 1.6; }
+
+    /* Top accent bar — HubSpot orange to teal */
+    body::before { content: ''; display: block; height: 3px; background: linear-gradient(90deg, #FF7A59, #ff9a7a, #00BDA5); }
+
+    /* Sections */
+    .section { padding: 16px; border-bottom: 1px solid #2D3E50; border-left: 3px solid transparent; }
+    .section-title { font-size: 10px; font-weight: 800; color: #516F90; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px; }
+
+    /* Section accent colors — HubSpot palette */
+    .section-job { border-left-color: #FF7A59; background: rgba(255,122,89,0.04); }
+    .section-job .section-title { color: #FF7A59; }
+    .section-intel { border-left-color: #00BDA5; background: rgba(0,189,165,0.03); }
+    .section-intel .section-title { color: #00BDA5; }
+    .section-overview { border-left-color: #45a8c4; background: rgba(69,168,196,0.03); }
+    .section-overview .section-title { color: #45a8c4; }
+    .section-signals { border-left-color: #FF7A59; background: rgba(255,122,89,0.03); }
+    .section-signals .section-title { color: #ff9a7a; }
+    .section-leadership { border-left-color: #00BDA5; background: rgba(0,189,165,0.03); }
+    .section-leadership .section-title { color: #00BDA5; }
+    .section-reviews { border-left-color: #f59e0b; background: rgba(245,158,11,0.03); }
+    .section-reviews .section-title { color: #f59e0b; }
+
+    /* Stats */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { background: #243342; border-radius: 8px; padding: 10px 12px; border: 1px solid #2D3E50; }
+    .stat-label { font-size: 10px; color: #516F90; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-value { font-size: 15px; font-weight: 700; color: #f8fafc; }
+    a.stat { text-decoration: none; color: inherit; cursor: pointer; }
+    a.stat:hover { border-color: #FF7A59; background: #2a3d50; }
+
+    /* Intelligence */
+    .one-liner { font-size: 14px; color: #e8f0f8; line-height: 1.6; margin-bottom: 12px; font-weight: 400; }
+    .intel-category { display: inline-block; font-size: 11px; color: #FF7A59; background: rgba(255,122,89,0.12); border: 1px solid rgba(255,122,89,0.35); border-radius: 20px; padding: 3px 10px; margin-bottom: 14px; font-weight: 600; }
+    details { margin-bottom: 5px; }
+    details[open] { margin-bottom: 8px; }
+    summary { font-size: 11px; font-weight: 700; color: #516F90; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; padding: 8px 12px; background: #243342; border-radius: 6px; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; border: 1px solid #2D3E50; }
+    summary:hover { color: #99afc4; border-color: #3d5468; }
+    summary::after { content: '›'; font-size: 16px; transition: transform 0.2s; }
+    details[open] summary::after { transform: rotate(90deg); }
+    .detail-body { padding: 10px 12px; font-size: 13px; color: #99afc4; line-height: 1.65; background: #1C2D3A; border-radius: 0 0 6px 6px; margin-top: -2px; border: 1px solid #2D3E50; border-top: none; }
+
+    /* Job Opportunity section */
+    .job-opportunity-section { border-left: 2px solid rgba(255,122,89,0.4); }
+    .job-summary { font-size: 13px; color: #99afc4; line-height: 1.65; margin-bottom: 4px; }
+
+    /* Strong Fits / Red Flags bullets */
+    .match-bullets { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 7px; }
+    .match-bullets li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; }
+    .bullet-icon { flex-shrink: 0; font-weight: 700; font-size: 12px; margin-top: 1px; }
+    .bullet-fit .bullet-icon { color: #00BDA5; }
+    .bullet-fit { color: #cbd5e1; }
+    .bullet-flag .bullet-icon { color: #f87171; }
+    .bullet-flag { color: #cbd5e1; }
+
+    /* Location match indicator */
+    .location-match { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 7px; margin-bottom: 12px; }
+    .location-match.ok { background: rgba(0,189,165,0.09); color: #00BDA5; border: 1px solid rgba(0,189,165,0.25); }
+    .location-match.bad { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.3); font-size: 14px; letter-spacing: 0.01em; }
+    .location-match.neutral { background: rgba(81,111,144,0.1); color: #99afc4; border: 1px solid rgba(81,111,144,0.2); }
+    .loc-icon { font-size: 15px; flex-shrink: 0; }
+
+    /* Fit / Match */
+    .verdict-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+    .verdict-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; letter-spacing: 0.02em; }
+    .verdict-badge.high { background: rgba(0,189,165,0.12); color: #00BDA5; border: 1px solid rgba(0,189,165,0.3); }
+    .verdict-badge.mid { background: rgba(255,122,89,0.12); color: #FF7A59; border: 1px solid rgba(255,122,89,0.3); }
+    .verdict-badge.mixed { background: rgba(81,111,144,0.1); color: #99afc4; border: 1px solid rgba(81,111,144,0.2); }
+    .verdict-badge.low { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+    .fit-verdict { font-size: 13px; color: #cbd5e1; line-height: 1.4; }
+    .summary { font-size: 13px; color: #99afc4; line-height: 1.65; }
+
+    /* Reviews */
+    .review-item { margin-bottom: 8px; padding: 10px 12px; background: #243342; border-radius: 8px; font-size: 12px; color: #8ba5c0; line-height: 1.55; border: 1px solid #2D3E50; }
+    .review-source { font-size: 10px; color: #516F90; margin-top: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    a.review-item { display: block; text-decoration: none; color: inherit; cursor: pointer; }
+    a.review-item:hover { border-color: #f59e0b; background: #2a3d50; }
+
+    /* Leaders */
+    .leader-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #243342; border-radius: 8px; margin-bottom: 8px; border: 1px solid #2D3E50; }
+    .leader-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .leader-avatar-initials { width: 36px; height: 36px; border-radius: 50%; background: #2D3E50; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #516F90; border: 1px solid #3d5468; }
+    .leader-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .leader-name { font-size: 13px; font-weight: 700; color: #e8f0f8; }
+    .leader-title { font-size: 11px; color: #516F90; }
+    .leader-links { display: flex; gap: 8px; flex-shrink: 0; }
+    .leader-link { font-size: 11px; color: #FF7A59; text-decoration: none; font-weight: 600; }
+    .leader-link:hover { color: #ffaa94; }
+
+    /* Jobs */
+    .job-item { display: block; text-decoration: none; padding: 10px 12px; background: #243342; border-radius: 8px; margin-bottom: 8px; color: inherit; border: 1px solid #2D3E50; }
+    .job-item:hover { background: #2a3d50; border-color: #FF7A59; }
+    .job-item.current-posting { border-color: rgba(255,122,89,0.5); background: rgba(255,122,89,0.06); }
+    .job-title { font-size: 13px; color: #e8f0f8; font-weight: 600; margin-bottom: 3px; }
+    .job-snippet { font-size: 11px; color: #516F90; line-height: 1.4; }
+
+    /* Settings */
+    #settings-panel { display: none; padding: 20px 16px; background: #1C2D3A; }
+    #settings-panel.visible { display: block; }
+    .settings-intro { font-size: 13px; color: #516F90; line-height: 1.65; margin-bottom: 20px; }
+    .pref-group { margin-bottom: 16px; }
+    .pref-label { font-size: 10px; font-weight: 800; color: #516F90; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; display: block; }
+    .pref-input { width: 100%; background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #e8f0f8; font-size: 13px; font-family: inherit; padding: 10px 12px; resize: vertical; min-height: 68px; line-height: 1.5; }
+    .pref-input:focus { outline: none; border-color: #FF7A59; }
+    .pref-input::placeholder { color: #3d5468; }
+    #save-prefs-btn { width: 100%; background: #FF7A59; color: #fff; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 4px; }
+    #save-prefs-btn:hover { background: #e8623f; }
+    .save-confirm { text-align: center; font-size: 12px; color: #FF7A59; margin-top: 10px; opacity: 0; transition: opacity 0.3s; }
+    .save-confirm.show { opacity: 1; }
+
+    /* Skeleton loading */
+    .skeleton-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .skeleton-stat { height: 54px; background: linear-gradient(90deg, #243342 25%, #2D3E50 50%, #243342 75%); background-size: 200% 100%; border-radius: 8px; animation: shimmer 1.4s infinite; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* Job snapshot */
+    .job-snapshot { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; background: #243342; border-bottom: 1px solid #2D3E50; }
+    .job-snap-item { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
+    .job-snap-item.salary { color: #00BDA5; }
+    .job-snap-item.remote { color: #45a8c4; }
+    .job-snap-item.hybrid { color: #f59e0b; }
+    .job-snap-item.onsite { color: #f87171; }
+    .job-snap-item.type { color: #99afc4; }
+    .job-snap-icon { font-size: 13px; }
+    .pref-divider { height: 1px; background: #2D3E50; margin: 20px 0; }
+    .pref-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .pref-checkboxes { display: flex; flex-direction: column; gap: 8px; }
+    .pref-arr-row { display: flex; align-items: center; gap: 8px; }
+    .pref-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #99afc4; cursor: pointer; white-space: nowrap; min-width: 74px; }
+    .pref-check input { accent-color: #FF7A59; width: 14px; height: 14px; cursor: pointer; }
+    .pref-arr-geo { flex: 1; background: #2D3E50; border: 1px solid #3d5468; border-radius: 6px; color: #e2e8f0; font-size: 12px; font-family: inherit; padding: 6px 10px; height: 30px; min-height: 0; resize: none; }
+    .pref-arr-geo:focus { outline: none; border-color: #FF7A59; }
+    .pref-arr-geo::placeholder { color: #3d5468; }
+    .pref-toggle-desc { font-size: 12px; color: #516F90; margin-top: 3px; }
+    .toggle-switch { position: relative; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track { display: block; width: 38px; height: 22px; background: #2D3E50; border-radius: 11px; cursor: pointer; transition: background 0.2s; border: 1px solid #3d5468; position: relative; }
+    .toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #516F90; border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+    .toggle-switch input:checked + .toggle-track { background: rgba(255,122,89,0.2); border-color: #FF7A59; }
+    .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); background: #FF7A59; }
+
+    /* Collapsible bar chevrons */
+    .bar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .bar-chevron { font-size: 18px; color: #3d5468; transition: transform 0.2s; line-height: 1; user-select: none; }
+    .bar-chevron.open { transform: rotate(90deg); }
+    .company-bar { cursor: pointer; }
+    .company-bar:hover { background: #2a3d50; }
+    #job-bar { cursor: pointer; }
+    #job-bar:hover { background: #2a3d50; }
+
+    /* Job content area (below job bar) */
+    #job-content { border-bottom: 1px solid #2D3E50; }
+    #job-snapshot-inline { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 4px; background: #243342; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Company<span>Intel</span></div>
+    <div class="header-actions">
+      <button id="saved-btn" class="header-icon-btn" data-tooltip="Open your saved companies &amp; jobs — your full research history in one place">
+        <span class="header-icon">📋</span>
+        <span class="header-icon-label">Saved</span>
+      </button>
+      <button id="settings-btn" class="header-icon-btn" data-tooltip="Set your job preferences — used to score job postings for fit when you view them on LinkedIn or job boards">
+        <span class="header-icon">⚙️</span>
+        <span class="header-icon-label">Settings</span>
+      </button>
+      <button id="search-btn">&#8635; Refresh</button>
+    </div>
+  </div>
+
+  <!-- Company bar — always shown, click to expand/collapse company content -->
+  <div class="company-bar" id="company-bar-toggle">
+    <div class="company-bar-left">
+      <img id="company-favicon" src="" alt="">
+      <div class="company-bar-meta">
+        <span class="detected-label">Detected</span>
+        <span id="company-name">—</span>
+      </div>
+    </div>
+    <div class="bar-actions">
+      <button id="save-btn">+ Save Company</button>
+      <span class="bar-chevron open" id="company-chevron">›</span>
+    </div>
+  </div>
+
+  <!-- Job bar — only shown when a job posting is detected, click to expand/collapse job content -->
+  <div id="job-bar" style="display:none">
+    <span id="job-title-bar"></span>
+    <div class="bar-actions">
+      <button id="save-job-btn">+ Save Job Posting</button>
+      <span class="bar-chevron open" id="job-chevron">›</span>
+    </div>
+  </div>
+
+  <!-- Save panel — shared, adapts to company vs job mode -->
+  <div id="save-panel">
+    <div id="save-mode-label" style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px"></div>
+    <div id="save-status-row" style="display:none;margin-bottom:10px">
+      <select id="save-status-select" class="save-status-select"></select>
+    </div>
+    <div class="save-panel-row">
+      <span class="save-panel-label">Rate (optional)</span>
+      <div class="save-stars" id="save-stars">
+        <span class="save-star" data-val="1">&#9733;</span>
+        <span class="save-star" data-val="2">&#9733;</span>
+        <span class="save-star" data-val="3">&#9733;</span>
+        <span class="save-star" data-val="4">&#9733;</span>
+        <span class="save-star" data-val="5">&#9733;</span>
+      </div>
+    </div>
+    <textarea id="save-notes" placeholder="Quick note... (optional)"></textarea>
+    <div class="save-tag-area">
+      <div id="save-tags-chips" class="save-tag-chips"></div>
+      <div class="save-tag-input-wrap">
+        <input id="save-tag-input" type="text" placeholder="Add tag… type &amp; press Enter">
+        <div id="save-tag-suggestions" class="save-tag-suggestions"></div>
+      </div>
+    </div>
+    <button id="save-confirm-btn">Save</button>
+  </div>
+
+  <!-- Job expandable content — directly under job bar, only shown when job detected -->
+  <div id="job-content" style="display:none">
+    <div id="job-snapshot-inline"></div>
+    <div id="job-opportunity"></div>
+  </div>
+
+  <!-- Company expandable content -->
+  <div id="company-content">
+    <div id="company-links"></div>
+    <div id="content">
+      <div class="empty">Navigate to a company page or job posting and click Refresh</div>
+    </div>
+  </div>
+
+  <div id="settings-panel">
+    <p class="settings-intro">Your preferences power the <strong style="color:#818cf8">Job Opportunity</strong> section — when you open a job posting, CompanyIntel scores it against your background, flags strong fits and red flags, and checks if the work arrangement matches.</p>
+    <div class="pref-group">
+      <label class="pref-label">What roles are you looking for? <span class="pref-hint" data-tooltip="Used to evaluate job titles and responsibilities. Be specific — include seniority, function, and what growth you want (e.g. 'path to VP').">i</span></label>
+      <textarea class="pref-input" id="pref-roles" placeholder="e.g. Head of Sales, VP Revenue, AE at a Series A-C company. I want ownership and a path to CRO."></textarea>
+    </div>
+    <div class="pref-group">
+      <label class="pref-label">What do you want to avoid? <span class="pref-hint" data-tooltip="Red flags for the job match scorer. Mention company types, cultures, or role characteristics you'd pass on (e.g. 'slow-moving orgs', 'no eng support').">i</span></label>
+      <textarea class="pref-input" id="pref-avoid" placeholder="e.g. Large enterprises, heavily process-driven cultures, companies without strong product-market fit."></textarea>
+    </div>
+    <div class="pref-group">
+      <label class="pref-label">What industries or products excite you? <span class="pref-hint" data-tooltip="Helps identify roles at companies in spaces you care about. Also used when researching companies on non-job pages.">i</span></label>
+      <textarea class="pref-input" id="pref-interests" placeholder="e.g. Developer tools, fintech infrastructure, AI/ML tooling, technical B2B products."></textarea>
+    </div>
+    <div class="pref-group">
+      <label class="pref-label">Work arrangement preference <span class="pref-hint" data-tooltip="When a job posting lists Remote/Hybrid/On-site, it's instantly compared to your preference and shown as a ✓ match or ✗ mismatch — no AI needed.">i</span></label>
+      <div class="pref-checkboxes">
+        <div class="pref-arr-row">
+          <label class="pref-check"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
+          <input type="text" class="pref-arr-geo" id="pref-remote-geo" placeholder="Geography, e.g. US only">
+        </div>
+        <div class="pref-arr-row">
+          <label class="pref-check"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
+          <input type="text" class="pref-arr-geo" id="pref-hybrid-location" placeholder="City, e.g. New York, NY">
+        </div>
+        <div class="pref-arr-row">
+          <label class="pref-check"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
+          <input type="text" class="pref-arr-geo" id="pref-onsite-location" placeholder="City, e.g. San Francisco, CA">
+        </div>
+      </div>
+    </div>
+    <div class="pref-group">
+      <label class="pref-label">Salary signals <span class="pref-hint" data-tooltip="Only applied when a job posting explicitly lists pay. If no salary is shown, this is never penalized. Walk-away = instant red flag. Strong offer = noted as a positive.">i</span></label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;color:#94a3b8;white-space:nowrap;min-width:130px">🚩 Walk away below</span>
+          <input type="text" class="pref-input" id="pref-salary-floor" placeholder="e.g. $120K" style="min-height:0;height:34px;resize:none;flex:1">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;color:#94a3b8;white-space:nowrap;min-width:130px">🟢 Strong offer above</span>
+          <input type="text" class="pref-input" id="pref-salary-strong" placeholder="e.g. $200K" style="min-height:0;height:34px;resize:none;flex:1">
+        </div>
+      </div>
+    </div>
+
+    <div class="pref-divider"></div>
+
+    <div class="pref-toggle-row">
+      <div>
+        <span class="pref-label" style="margin-bottom:0;display:inline">Job Match Insights</span>
+        <div class="pref-toggle-desc">Score job postings against your background &amp; preferences</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="pref-job-match-toggle">
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+
+    <div id="job-match-fields" style="display:none">
+      <div class="pref-group" style="margin-top:14px">
+        <label class="pref-label">Your background &amp; strengths <span class="pref-hint" data-tooltip="Tell the AI who you are — years of experience, deal sizes, team sizes, skills. The more specific, the more accurate your job match score.">i</span></label>
+        <textarea class="pref-input" id="pref-job-match-bg" placeholder="e.g. 7 years in B2B SaaS sales, built and led teams of 8+, strong at enterprise deals and process-building. Background in technical products."></textarea>
+      </div>
+    </div>
+
+    <button id="save-prefs-btn">Save Preferences</button>
+    <div class="save-confirm" id="save-confirm">Saved — applies to your next research</div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

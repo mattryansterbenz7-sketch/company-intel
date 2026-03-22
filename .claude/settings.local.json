@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Read(//Users/mattsterbenz/Desktop/mattsterbenz-site/**)",
+      "Bash(gh auth:*)"
+    ]
+  }
+}

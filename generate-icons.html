@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate Icons</title></head>
+<body>
+<script>
+function drawIcon(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  const radius = size * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(radius, 0);
+  ctx.lineTo(size - radius, 0);
+  ctx.quadraticCurveTo(size, 0, size, radius);
+  ctx.lineTo(size, size - radius);
+  ctx.quadraticCurveTo(size, size, size - radius, size);
+  ctx.lineTo(radius, size);
+  ctx.quadraticCurveTo(0, size, 0, size - radius);
+  ctx.lineTo(0, radius);
+  ctx.quadraticCurveTo(0, 0, radius, 0);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#111827');
+  grad.addColorStop(1, '#0f0f1a');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Green accent bar on left
+  ctx.fillStyle = '#4ade80';
+  ctx.fillRect(0, size * 0.25, size * 0.07, size * 0.5);
+
+  // "C" in green
+  ctx.fillStyle = '#4ade80';
+  ctx.font = `bold ${size * 0.42}px -apple-system, system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('C', size * 0.38, size * 0.52);
+
+  // "I" in white
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${size * 0.42}px -apple-system, system-ui, sans-serif`;
+  ctx.fillText('I', size * 0.68, size * 0.52);
+
+  return canvas;
+}
+
+function download(canvas, name) {
+  const a = document.createElement('a');
+  a.download = name;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+const sizes = [16, 48, 128];
+sizes.forEach(size => {
+  setTimeout(() => download(drawIcon(size), `icon${size}.png`), size);
+});
+
+document.body.innerHTML = '<p style="font-family:sans-serif;padding:20px">Icons downloaded! You can close this tab.</p>';
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CompanyIntel — Saved</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #111e28; color: #e2e8f0; min-height: 100vh; }
+
+    .header { padding: 20px 32px; border-bottom: 1px solid #2D3E50; display: flex; align-items: center; justify-content: space-between; background: #1C2D3A; }
+    .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; }
+    .logo span { color: #FF7A59; }
+    .logo .slash { font-weight: 400; color: #3d5468; font-size: 14px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .stat-pill { font-size: 12px; color: #516F90; background: #243342; border-radius: 20px; padding: 5px 14px; border: 1px solid #2D3E50; }
+    .stat-pill b { color: #e2e8f0; }
+
+    .toolbar { padding: 14px 32px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #2D3E50; background: #1C2D3A; }
+    .search-input { flex: 1; background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #e2e8f0; font-size: 13px; padding: 8px 14px; font-family: inherit; }
+    .search-input:focus { outline: none; border-color: #FF7A59; }
+    .search-input::placeholder { color: #516F90; }
+    .filter-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 12px; padding: 8px 14px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .filter-btn.active { border-color: #FF7A59; color: #fff; background: #FF7A59; }
+    .filter-btn:hover { color: #e2e8f0; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; padding: 24px 32px; }
+
+    .card { background: #1C2D3A; border: 1px solid #2D3E50; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 11px; transition: border-color 0.15s; }
+    .card:hover { border-color: #FF7A59; }
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .card-favicon { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; object-fit: contain; }
+    .card-company { font-size: 16px; font-weight: 600; color: #f1f5f9; }
+    .card-job { font-size: 12px; color: #516F90; margin-top: 3px; }
+    .card-delete { background: none; border: none; color: #3d5468; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex-shrink: 0; transition: color 0.15s; }
+    .card-delete:hover { color: #f87171; }
+    .card-category { display: inline-block; font-size: 11px; color: #FF7A59; background: rgba(255,122,89,0.1); border: 1px solid rgba(255,122,89,0.25); border-radius: 20px; padding: 2px 10px; font-weight: 500; }
+    .card-oneliner { font-size: 13px; color: #99afc4; line-height: 1.55; }
+    .card-stars { display: flex; gap: 3px; }
+    .star { font-size: 16px; color: #2D3E50; cursor: pointer; transition: color 0.1s; }
+    .star.filled { color: #f59e0b; }
+    .star:hover { color: #f59e0b; }
+    .card-notes { width: 100%; background: #243342; border: 1px solid #2D3E50; border-radius: 6px; color: #99afc4; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: vertical; min-height: 52px; line-height: 1.5; }
+    .card-notes:focus { outline: none; border-color: #FF7A59; }
+    .card-notes::placeholder { color: #3d5468; }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; }
+    .card-date { font-size: 11px; color: #3d5468; }
+    .card-links { display: flex; gap: 10px; }
+    .card-link { font-size: 11px; color: #FF7A59; text-decoration: none; font-weight: 500; }
+    .card-link:hover { color: #ffaa94; }
+    .card-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+    .card-stat { font-size: 11px; color: #516F90; background: #243342; border-radius: 4px; padding: 2px 8px; }
+
+    .toolbar-type { padding-top: 0; border-top: none; }
+    .toolbar-stars { padding-top: 0; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
+    .toolbar-status { padding-top: 0; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
+    .filter-label { font-size: 11px; font-weight: 700; color: #516F90; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 60px; }
+    .filter-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 13px; font-weight: 500; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .filter-btn.active { border-color: #FF7A59; color: #fff; background: #FF7A59; }
+    .filter-btn:hover:not(.active) { color: #e2e8f0; border-color: #516F90; }
+    .star-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 12px; padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .star-btn.active { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.1); }
+    .star-btn:hover:not(.active) { color: #e2e8f0; }
+    .status-filter-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 12px; padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .status-filter-btn.active { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.1); }
+    .status-filter-btn:hover:not(.active) { color: #e2e8f0; }
+    .card-type { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; border-radius: 4px; padding: 2px 7px; }
+    .card-type.job { color: #FF7A59; background: rgba(255,122,89,0.1); border: 1px solid rgba(255,122,89,0.25); }
+    .card-type.company { color: #99afc4; background: rgba(81,111,144,0.1); border: 1px solid rgba(81,111,144,0.2); }
+    .card-job-match { font-size: 12px; color: #516F90; margin-top: 3px; }
+    .card-job-match b { color: #e2e8f0; }
+
+    /* Salary / work arrangement chips on job cards */
+    .card-job-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+    .job-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; border-radius: 6px; padding: 3px 10px; }
+    .job-chip.salary { color: #4ade80; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.25); }
+    .job-chip.remote { color: #60a5fa; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); }
+    .job-chip.hybrid { color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); }
+    .job-chip.onsite { color: #f87171; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); }
+
+    /* Status selector — full width, colored by current status */
+    .status-select { width: 100%; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; transition: all 0.15s; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+    /* Job statuses */
+    .status-select[data-status="needs_review"] { background-color: rgba(100,116,139,0.12); border: 1.5px solid #64748b; color: #94a3b8; }
+    .status-select[data-status="want_to_apply"] { background-color: rgba(34,211,238,0.1); border: 1.5px solid #22d3ee; color: #22d3ee; }
+    .status-select[data-status="applied"] { background-color: rgba(96,165,250,0.12); border: 1.5px solid #60a5fa; color: #60a5fa; }
+    .status-select[data-status="intro_requested"] { background-color: rgba(167,139,250,0.12); border: 1.5px solid #a78bfa; color: #a78bfa; }
+    .status-select[data-status="conversations"] { background-color: rgba(251,146,60,0.12); border: 1.5px solid #fb923c; color: #fb923c; }
+    .status-select[data-status="offer_stage"] { background-color: rgba(163,230,53,0.12); border: 1.5px solid #a3e635; color: #a3e635; }
+    .status-select[data-status="accepted"] { background-color: rgba(74,222,128,0.12); border: 1.5px solid #4ade80; color: #4ade80; }
+    .status-select[data-status="rejected"] { background-color: rgba(248,113,113,0.12); border: 1.5px solid #f87171; color: #f87171; }
+    /* Company statuses */
+    .status-select[data-status="saved"] { background-color: rgba(100,116,139,0.12); border: 1.5px solid #64748b; color: #94a3b8; }
+    .status-select[data-status="saved_later"] { background-color: rgba(96,165,250,0.08); border: 1.5px solid #3b82f6; color: #60a5fa; }
+    .status-select[data-status="archived"] { background-color: rgba(100,116,139,0.06); border: 1.5px solid #374151; color: #4b5563; }
+    .status-select:focus { outline: none; }
+    .empty-state { grid-column: 1/-1; text-align: center; padding: 80px 20px; color: #334155; font-size: 15px; line-height: 1.8; }
+    .empty-state b { color: #475569; display: block; font-size: 18px; margin-bottom: 8px; }
+
+    /* Tags */
+    .card-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+    .card-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; border: 1px solid; cursor: default; }
+    .card-tag .tag-remove { cursor: pointer; font-size: 9px; margin-left: 2px; opacity: 0.6; }
+    .card-tag .tag-remove:hover { opacity: 1; color: #f87171; }
+    .tag-add-btn { font-size: 11px; color: #3d5468; background: none; border: 1px dashed #3d5468; border-radius: 20px; padding: 3px 9px; cursor: pointer; transition: all 0.15s; }
+    .tag-add-btn:hover { border-color: #FF7A59; color: #FF7A59; }
+    .tag-inline-input { font-size: 11px; background: #243342; border: 1px solid #FF7A59; border-radius: 20px; color: #e2e8f0; padding: 2px 9px; outline: none; width: 100px; font-family: inherit; }
+    .tag-suggestions-inline { position: absolute; background: #1C2D3A; border: 1px solid #2D3E50; border-radius: 7px; z-index: 50; min-width: 140px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+    .tag-suggestion-inline { padding: 7px 12px; font-size: 12px; color: #99afc4; cursor: pointer; }
+    .tag-suggestion-inline:hover { background: #243342; color: #e2e8f0; }
+    .tag-inline-wrap { position: relative; display: inline-flex; }
+    .toolbar-tags { overflow-x: auto; flex-wrap: nowrap; padding-top: 0; }
+    .tag-filter-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; border: 1px solid; cursor: pointer; white-space: nowrap; transition: all 0.15s; background: transparent; }
+    .tag-filter-btn:not(.active):hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Company<span>Intel</span> <span class="slash">/ Saved</span></div>
+    <div class="header-right">
+      <div class="stat-pill"><b id="company-count">0</b> companies</div>
+      <div class="stat-pill"><b id="job-count">0</b> job postings</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search-input" id="search" placeholder="Search companies, notes, categories...">
+  </div>
+  <div class="toolbar toolbar-type">
+    <span class="filter-label">Type:</span>
+    <button class="filter-btn active" data-type="all">All</button>
+    <button class="filter-btn" data-type="job">Job Postings</button>
+    <button class="filter-btn" data-type="company">Companies</button>
+  </div>
+  <div class="toolbar toolbar-stars">
+    <span class="filter-label">Rating:</span>
+    <button class="star-btn active" data-rating="all">Any</button>
+    <button class="star-btn" data-rating="5">&#9733;&#9733;&#9733;&#9733;&#9733;</button>
+    <button class="star-btn" data-rating="4">&#9733;&#9733;&#9733;&#9733;+</button>
+    <button class="star-btn" data-rating="3">&#9733;&#9733;&#9733;+</button>
+    <button class="star-btn" data-rating="2">&#9733;&#9733;+</button>
+    <button class="star-btn" data-rating="1">&#9733;+</button>
+  </div>
+  <div class="toolbar toolbar-status" id="status-toolbar">
+    <span class="filter-label">Status:</span>
+    <button class="status-filter-btn active" data-status="all">All</button>
+  </div>
+  <div class="toolbar toolbar-tags" id="tags-toolbar" style="display:none">
+    <span class="filter-label">Tags:</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script src="saved.js"></script>
+</body>
+</html>
