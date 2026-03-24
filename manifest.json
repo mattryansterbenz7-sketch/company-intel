@@ -5,9 +5,18 @@
   "description": "Research companies while you browse",
   "permissions": [
     "activeTab",
+    "tabs",
+    "scripting",
     "sidePanel",
-    "storage"
+    "storage",
+    "identity"
   ],
+  "oauth2": {
+    "client_id": "221085528448-0arlbjv4uudl9m1ad5oatrp7ufn5eaj9.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly"
+    ]
+  },
   "host_permissions": [
     "<all_urls>"
   ],

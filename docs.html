@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CompanyIntel — Documentation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f8fa; color: #33475b; font-size: 14px; }
+
+    /* Header */
+    .header { background: #2d3e50; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; position: sticky; top: 0; z-index: 100; }
+    .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; }
+    .logo span { color: #FF7A59; }
+    .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
+    .header-link { color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #4a6580; border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; text-decoration: none; transition: all 0.15s; }
+    .header-link:hover { color: #fff; border-color: #7c98b6; }
+
+    /* Layout */
+    .layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 40px; gap: 40px; }
+
+    /* Sidebar nav */
+    .doc-nav { width: 220px; flex-shrink: 0; }
+    .doc-nav-inner { position: sticky; top: 88px; }
+    .doc-nav-title { font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+    .doc-nav a { display: block; font-size: 13px; color: #516f90; text-decoration: none; padding: 6px 10px; border-radius: 6px; margin-bottom: 2px; transition: all 0.12s; border-left: 2px solid transparent; }
+    .doc-nav a:hover { background: #eaf0f6; color: #33475b; }
+    .doc-nav a.active { background: #eaf0f6; color: #ff7a59; border-left-color: #ff7a59; font-weight: 600; }
+    .doc-nav-divider { height: 1px; background: #dfe3eb; margin: 10px 0; }
+
+    /* Main content */
+    .doc-content { flex: 1; min-width: 0; }
+
+    /* Section */
+    .doc-section { margin-bottom: 56px; }
+    .doc-section-anchor { display: block; height: 1px; margin-top: -80px; padding-top: 80px; }
+    .doc-section-title { font-size: 22px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 2px solid #dfe3eb; }
+    .doc-section-lead { font-size: 15px; color: #516f90; line-height: 1.7; margin-bottom: 24px; }
+
+    /* Feature cards */
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .feature-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 18px 20px; }
+    .feature-card-title { font-size: 13px; font-weight: 700; color: #2d3e50; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .feature-card-title .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+    .badge-new { background: rgba(74,222,128,0.12); color: #16a34a; border: 1px solid rgba(74,222,128,0.3); }
+    .badge-beta { background: rgba(99,102,241,0.1); color: #4f46e5; border: 1px solid rgba(99,102,241,0.2); }
+    .feature-card p { font-size: 13px; color: #516f90; line-height: 1.6; }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 16px; margin: 16px 0; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num { width: 26px; height: 26px; border-radius: 50%; background: #ff7a59; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .step-body { flex: 1; }
+    .step-title { font-size: 13px; font-weight: 700; color: #2d3e50; margin-bottom: 4px; }
+    .step-desc { font-size: 13px; color: #516f90; line-height: 1.6; }
+
+    /* Info blocks */
+    .info-block { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 18px 20px; margin: 16px 0; }
+    .info-block h3 { font-size: 13px; font-weight: 700; color: #2d3e50; margin-bottom: 10px; }
+    .info-block p, .info-block li { font-size: 13px; color: #516f90; line-height: 1.7; }
+    .info-block ul { padding-left: 18px; }
+    .info-block li { margin-bottom: 4px; }
+
+    /* Note callout */
+    .callout { border-radius: 8px; padding: 14px 16px; margin: 16px 0; display: flex; gap: 10px; font-size: 13px; line-height: 1.6; }
+    .callout-tip { background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.2); color: #4338ca; }
+    .callout-info { background: rgba(14,165,233,0.06); border: 1px solid rgba(14,165,233,0.2); color: #0369a1; }
+    .callout-warn { background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2); color: #92400e; }
+    .callout-icon { font-size: 16px; flex-shrink: 0; }
+
+    /* UI anatomy diagram */
+    .ui-diagram { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; overflow: hidden; margin: 16px 0; }
+    .ui-diagram-header { background: #2d3e50; padding: 10px 16px; font-size: 12px; font-weight: 700; color: #b0c1d4; letter-spacing: 0.05em; text-transform: uppercase; }
+    .ui-diagram-row { display: flex; }
+    .ui-col { padding: 14px 16px; border-right: 1px solid #dfe3eb; }
+    .ui-col:last-child { border-right: none; }
+    .ui-col-label { font-size: 11px; font-weight: 700; color: #ff7a59; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+    .ui-col-item { font-size: 12px; color: #516f90; padding: 3px 0; line-height: 1.5; }
+    .ui-col-item strong { color: #33475b; font-weight: 600; }
+    .ui-col-left { width: 200px; flex-shrink: 0; }
+    .ui-col-main { flex: 1; }
+    .ui-col-right { width: 190px; flex-shrink: 0; }
+
+    /* Integration status */
+    .integration-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0f3f8; }
+    .integration-row:last-child { border-bottom: none; }
+    .integration-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .integration-icon.gmail { background: #fef2f2; }
+    .integration-icon.granola { background: #f0fdf4; }
+    .integration-icon.apollo { background: #eff6ff; }
+    .integration-icon.claude { background: #fdf4ff; }
+    .integration-icon.serper { background: #fff7ed; }
+    .integration-info { flex: 1; }
+    .integration-name { font-size: 13px; font-weight: 700; color: #2d3e50; }
+    .integration-desc { font-size: 12px; color: #7c98b6; margin-top: 2px; line-height: 1.5; }
+    .integration-setup { font-size: 12px; font-weight: 600; color: #ff7a59; text-decoration: none; }
+    .integration-setup:hover { text-decoration: underline; }
+
+    /* Tag pill */
+    .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 2px; }
+    .pill-blue { background: rgba(30,136,229,0.1); color: #1e88e5; }
+    .pill-gray { background: #eaf0f6; color: #516f90; }
+    .pill-green { background: rgba(74,222,128,0.1); color: #16a34a; }
+
+    /* Inline code */
+    code { background: #eaf0f6; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; color: #2d3e50; }
+
+    h3.sub { font-size: 15px; font-weight: 700; color: #2d3e50; margin: 24px 0 10px; }
+    p.body { font-size: 13px; color: #516f90; line-height: 1.7; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Company<span>Intel</span> <span class="slash">/ Documentation</span></div>
+  <div style="display:flex;gap:12px">
+    <a class="header-link" href="preferences.html">Setup</a>
+    <a class="header-link" href="saved.html">← Back to App</a>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- Sidebar nav -->
+  <nav class="doc-nav">
+    <div class="doc-nav-inner">
+      <div class="doc-nav-title">Documentation</div>
+      <a href="#overview" class="active">Overview</a>
+      <a href="#sidepanel">Sidepanel</a>
+      <a href="#company-view">Company View</a>
+      <a href="#opportunity">Opportunity Pipeline</a>
+      <a href="#emails">Emails</a>
+      <a href="#meetings">Meetings</a>
+      <a href="#contacts">Known Contacts</a>
+      <div class="doc-nav-divider"></div>
+      <a href="#integrations">Integrations</a>
+      <a href="#data">Data & Storage</a>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div class="doc-content">
+
+    <!-- Overview -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="overview"></span>
+      <div class="doc-section-title">Overview</div>
+      <p class="doc-section-lead">CompanyIntel is a Chrome extension that turns your browser into a lightweight CRM. It researches companies as you browse, tracks your relationships and outreach, and connects your Gmail and meeting notes to give you context exactly when you need it.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-card-title">Instant Company Research</div>
+          <p>Visit any company website or LinkedIn page and the sidepanel automatically pulls firmographics, leadership, funding, reviews, and hiring signals — no manual input required.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Save to CRM</div>
+          <p>One click saves a company or opportunity to your personal pipeline. Data syncs across the sidepanel and the full-screen company view.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Activity Tracking <span class="badge badge-new">New</span></div>
+          <p>Email threads from Gmail and Granola meeting notes surface automatically in the company view so you always know where a relationship stands.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Known Contacts <span class="badge badge-new">New</span></div>
+          <p>The extension detects people from a company's domain in your emails and saves them as verified contacts, separate from API-guessed leadership.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Opportunity Pipeline</div>
+          <p>Tag any company as an opportunity and track it through a custom Kanban pipeline — from first contact to offer stage.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Job Match Scoring</div>
+          <p>When browsing a job posting, CompanyIntel scores the role against your preferences and background using Claude AI.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidepanel -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="sidepanel"></span>
+      <div class="doc-section-title">Sidepanel</div>
+      <p class="doc-section-lead">The sidepanel opens automatically when you browse a company website or LinkedIn page. It's your research-on-demand layer — no tab switching required.</p>
+
+      <h3 class="sub">How research works</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Company detected</div>
+            <div class="step-desc">The content script reads the page URL and title to identify the company. For LinkedIn company pages, it extracts the company name and slug directly.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Research runs in background</div>
+            <div class="step-desc">Apollo.io returns firmographics (employees, funding, founded year, industry). Serper runs Google searches for leadership, reviews, and job listings. Claude AI synthesizes everything into a structured company profile.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Results cached</div>
+            <div class="step-desc">Research is cached in <code>chrome.storage.local</code> keyed by company name. Subsequent visits return instantly. Cache is used as-is; hit Refresh to re-run research.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Save to pipeline</div>
+            <div class="step-desc">Click <strong>Save Company</strong> to add to your CRM. If you're on a job posting, <strong>Save as Opportunity</strong> captures the role and runs a Job Match score against your preferences.</div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="sub">Sidepanel sections</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>Company Overview</strong> — employees, funding, industry, founded year, one-liner, category</li>
+          <li><strong>Hiring Signals</strong> — open roles found on LinkedIn Jobs, Greenhouse, and Lever</li>
+          <li><strong>Known Contacts</strong> — people from the company's domain found in your Gmail (appears once contacts are detected)</li>
+          <li><strong>Leadership</strong> — founders and executives sourced from LinkedIn and news results</li>
+          <li><strong>Reviews & Signal</strong> — Glassdoor, Blind, RepVue, and Reddit snippets</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>The <strong>View in CRM</strong> link appears after you save a company. It opens the full-screen company view for that entry.</span>
+      </div>
+    </div>
+
+    <!-- Company View -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="company-view"></span>
+      <div class="doc-section-title">Company View</div>
+      <p class="doc-section-lead">The full-screen company view (<code>company.html</code>) is your CRM record for a company. It has three columns — a left properties sidebar, a main tabbed content area, and a right context sidebar.</p>
+
+      <div class="ui-diagram">
+        <div class="ui-diagram-header">Layout — company.html</div>
+        <div class="ui-diagram-row">
+          <div class="ui-col ui-col-left">
+            <div class="ui-col-label">Left Sidebar</div>
+            <div class="ui-col-item"><strong>Properties</strong> — website, LinkedIn, employees, funding, founded, industry + custom fields</div>
+            <div class="ui-col-item" style="margin-top:8px"><strong>Tags</strong> — freeform labels</div>
+          </div>
+          <div class="ui-col ui-col-main">
+            <div class="ui-col-label">Main — Hub Tabs</div>
+            <div class="ui-col-item"><strong>Intel</strong> (default) — company overview, intel, employee reviews</div>
+            <div class="ui-col-item"><strong>Notes</strong> — free-form notes, auto-saved on blur</div>
+            <div class="ui-col-item"><strong>Emails</strong> — Gmail threads related to this company, lazy-loaded on first tab click</div>
+            <div class="ui-col-item"><strong>Meetings</strong> — Granola meeting notes, lazy-loaded on first tab click</div>
+          </div>
+          <div class="ui-col ui-col-right">
+            <div class="ui-col-label">Right Sidebar</div>
+            <div class="ui-col-item"><strong>Known Contacts</strong> — verified via email/calendar</div>
+            <div class="ui-col-item"><strong>Leadership</strong> — API-sourced, email shown if contact matched</div>
+            <div class="ui-col-item"><strong>Opportunity</strong> — pipeline stage, role, job posting link</div>
+            <div class="ui-col-item"><strong>Hiring Signals</strong> — open roles filtered to this company</div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="sub">Header</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>Company Status</strong> — dropdown to set where this company sits in your company pipeline (Watch List → Archived)</li>
+          <li><strong>Star Rating</strong> — 1–5 stars, used for filtering in Saved view</li>
+          <li><strong>Offer Stage →</strong> — if tagged as an opportunity, shows current opportunity stage and jumps to the Opportunity panel when clicked</li>
+          <li><strong>+ Add to Pipeline</strong> — appears when not yet an opportunity; one click adds to the Opportunity pipeline at "Needs Review"</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Panel drag-and-drop</h3>
+      <p class="body">Panels in the left and right sidebars can be dragged to reorder or moved between columns. Layout is saved per-company in <code>localStorage</code>. Collapse any panel with the ▲ button in its header.</p>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ</span>
+        <span>The main column (hub tabs) is not drag-and-drop configurable. Its content is fixed: Intel, Notes, Emails, Meetings.</span>
+      </div>
+    </div>
+
+    <!-- Opportunity Pipeline -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="opportunity"></span>
+      <div class="doc-section-title">Opportunity Pipeline</div>
+      <p class="doc-section-lead">Any saved company can be tagged as an Opportunity. Opportunities appear in their own Kanban pipeline in the Saved view, tracked separately from your general company research.</p>
+
+      <h3 class="sub">Architecture</h3>
+      <p class="body">Opportunities are not separate records — they are companies with <code>isOpportunity: true</code> set. This means a company record and its opportunity share a single entry, eliminating the sync issues that come with duplicated data.</p>
+      <p class="body">Opportunity-specific fields are stored directly on the company entry:</p>
+      <div class="info-block">
+        <ul>
+          <li><code>isOpportunity</code> — boolean flag</li>
+          <li><code>jobStage</code> — current pipeline stage (separate from <code>status</code> which tracks company research stage)</li>
+          <li><code>jobTitle</code> — role title</li>
+          <li><code>jobUrl</code> — link to the original job posting</li>
+          <li><code>jobMatch</code> — AI match score and analysis</li>
+          <li><code>jobSnapshot</code> — salary, work arrangement, employment type</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Default pipeline stages</h3>
+      <div style="margin: 12px 0; display:flex; flex-wrap:wrap; gap:8px;">
+        <span class="pill pill-gray">Needs Review</span>
+        <span class="pill pill-gray">Want to Apply</span>
+        <span class="pill pill-gray">Applied</span>
+        <span class="pill pill-gray">Intro Requested</span>
+        <span class="pill pill-gray">Conversations in Progress</span>
+        <span class="pill pill-gray">Offer Stage</span>
+        <span class="pill pill-gray">Accepted</span>
+        <span class="pill pill-gray">Rejected / DQ'd</span>
+      </div>
+      <p class="body">Stages are fully customizable in Setup. Custom stages persist in <code>chrome.storage.local</code> as <code>opportunityStages</code>.</p>
+
+      <h3 class="sub">Job Match scoring</h3>
+      <p class="body">When you save a job posting from the sidepanel, Claude AI scores the role (1–10) against your background, preferred roles, work arrangement, and salary floor set in Preferences. The score and a breakdown (strong fits, red flags, verdict) are saved on the entry and shown on Kanban cards.</p>
+    </div>
+
+    <!-- Emails -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="emails"></span>
+      <div class="doc-section-title">Emails</div>
+      <p class="doc-section-lead">The Emails tab in the company view shows Gmail threads related to the company, lazy-loaded the first time you click the tab.</p>
+
+      <h3 class="sub">How emails are fetched</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Query built</div>
+            <div class="step-desc">A Gmail search query is constructed using the company domain (<code>from:*@domain.com OR to:*@domain.com</code>), company name, and LinkedIn slug. Up to 20 messages are fetched.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Full message bodies fetched</div>
+            <div class="step-desc">Each message is fetched with <code>format=full</code> to get the complete body. MIME parts are parsed recursively to find <code>text/plain</code> content.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Quoted content stripped</div>
+            <div class="step-desc">Reply chains, <code>&gt;</code>-quoted lines, and <code>On [date]... wrote:</code> headers are stripped so each message shows only its new content.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Threads grouped, contacts extracted</div>
+            <div class="step-desc">Messages are grouped by <code>threadId</code>. Any sender/recipient whose email domain matches the company domain is saved as a Known Contact on the entry.</div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="sub">Thread UI</h3>
+      <div class="info-block">
+        <ul>
+          <li>Each thread shows as a collapsible card: subject, participants, date, message count</li>
+          <li>Click a thread header to expand/collapse all messages in that thread</li>
+          <li>Within a thread, each individual message can be expanded by clicking its sender row — the latest message starts expanded, older messages start collapsed</li>
+          <li><strong>Open in Gmail →</strong> link at the bottom of each thread opens the thread directly in Gmail</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠</span>
+        <span>Gmail must be connected in Setup for emails to appear. The extension uses Chrome's identity API (<code>chrome.identity.getAuthToken</code>) — no password is stored.</span>
+      </div>
+    </div>
+
+    <!-- Meetings -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="meetings"></span>
+      <div class="doc-section-title">Meetings</div>
+      <p class="doc-section-lead">The Meetings tab shows notes from Granola, an AI meeting notes tool. Notes are fetched by searching Granola's MCP API for the company name.</p>
+
+      <h3 class="sub">How meeting notes are fetched</h3>
+      <div class="info-block">
+        <p>When you click the Meetings tab, the extension sends a <code>GRANOLA_SEARCH</code> message to the background service worker, which calls the Granola MCP API with the company name as the search query. Results are displayed as pre-formatted notes.</p>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>Granola uses OAuth 2.0 with PKCE (S256 challenge). Connect it in Setup. Future versions will also extract meeting attendees from calendar invites and add them to Known Contacts.</span>
+      </div>
+    </div>
+
+    <!-- Known Contacts -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="contacts"></span>
+      <div class="doc-section-title">Known Contacts</div>
+      <p class="doc-section-lead">Known Contacts are people from a company's domain who have verifiably engaged with you — via email or calendar — as distinct from API-guessed leadership.</p>
+
+      <h3 class="sub">Detection — Email</h3>
+      <p class="body">When the Emails tab loads, every <code>From:</code> and <code>To:</code> header is scanned. Any email address whose domain matches the company's website domain (e.g. <code>*@productgenius.ai</code>) is saved as a Known Contact with:</p>
+      <div class="info-block">
+        <ul>
+          <li><code>name</code> — parsed from the display name in the email header, or derived from the email local part</li>
+          <li><code>email</code> — the full email address</li>
+          <li><code>source</code> — <code>"email"</code> (future: <code>"calendar"</code>)</li>
+          <li><code>detectedAt</code> — Unix timestamp</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Detection — Calendar</h3>
+      <p class="body">Calendar-based detection is planned. When implemented, attendees from Google Calendar events with company-domain email addresses will be added automatically.</p>
+
+      <h3 class="sub">Leadership email matching</h3>
+      <p class="body">When a Known Contact's name fuzzy-matches a leader in the Leadership panel (same first name + last name, case-insensitive), that leader's card shows their email address below their title. This happens automatically when new contacts are detected.</p>
+
+      <h3 class="sub">Where contacts appear</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>company.html — Known Contacts panel</strong> (top of right column) — all detected contacts with teal avatar, name, email, source badge</li>
+          <li><strong>company.html — Leadership panel</strong> — matched email shown below the leader's role</li>
+          <li><strong>Sidepanel — Known Contacts section</strong> — appears above Leadership when contacts exist for the current company</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ</span>
+        <span>Contacts persist on the entry in <code>savedCompanies</code>. They are detected once and remain even if you don't open the Emails tab again.</span>
+      </div>
+    </div>
+
+    <!-- Integrations -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="integrations"></span>
+      <div class="doc-section-title">Integrations</div>
+      <p class="doc-section-lead">CompanyIntel connects several APIs to power research, AI analysis, and activity tracking. All keys are stored locally in <code>chrome.storage.sync</code> and never sent to any server other than the respective API.</p>
+
+      <div class="info-block">
+        <div class="integration-row">
+          <div class="integration-icon gmail">📧</div>
+          <div class="integration-info">
+            <div class="integration-name">Gmail</div>
+            <div class="integration-desc">Used to fetch email threads related to companies. Uses Chrome's built-in OAuth via <code>chrome.identity.getAuthToken</code>. No password stored. Requires the Gmail read scope.</div>
+          </div>
+          <a class="integration-setup" href="preferences.html">Connect in Setup</a>
+        </div>
+        <div class="integration-row">
+          <div class="integration-icon granola">🌿</div>
+          <div class="integration-info">
+            <div class="integration-name">Granola</div>
+            <div class="integration-desc">AI meeting notes tool. Connected via OAuth 2.0 with PKCE. Meeting notes are searched by company name via the Granola MCP API.</div>
+          </div>
+          <a class="integration-setup" href="preferences.html">Connect in Setup</a>
+        </div>
+        <div class="integration-row">
+          <div class="integration-icon apollo">🔵</div>
+          <div class="integration-info">
+            <div class="integration-name">Apollo.io</div>
+            <div class="integration-desc">B2B data provider. Used for firmographics: employee count, funding, founded year, industry, website, LinkedIn URL. Requires an Apollo API key.</div>
+          </div>
+          <a class="integration-setup" href="preferences.html">Add API key</a>
+        </div>
+        <div class="integration-row">
+          <div class="integration-icon claude">🤖</div>
+          <div class="integration-info">
+            <div class="integration-name">Anthropic / Claude</div>
+            <div class="integration-desc">Powers company intelligence summaries, job match scoring, and the Ask AI chat panel. Uses Claude Sonnet 4.5 by default. Requires an Anthropic API key.</div>
+          </div>
+          <a class="integration-setup" href="preferences.html">Add API key</a>
+        </div>
+        <div class="integration-row">
+          <div class="integration-icon serper">🔍</div>
+          <div class="integration-info">
+            <div class="integration-name">Serper</div>
+            <div class="integration-desc">Google Search API. Used to find leadership profiles, reviews, hiring signals, and company product info. Requires a Serper API key.</div>
+          </div>
+          <a class="integration-setup" href="preferences.html">Add API key</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data & Storage -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="data"></span>
+      <div class="doc-section-title">Data & Storage</div>
+      <p class="doc-section-lead">All data is stored locally in your browser. Nothing is sent to any CompanyIntel server.</p>
+
+      <div class="info-block">
+        <h3>Storage keys</h3>
+        <ul>
+          <li><code>savedCompanies</code> — array of all company/opportunity entries (in <code>chrome.storage.local</code>)</li>
+          <li><code>researchCache</code> — cached research results keyed by company name, used to avoid re-running API calls (in <code>chrome.storage.local</code>)</li>
+          <li><code>opportunityStages</code> / <code>companyStages</code> — custom pipeline stage configurations</li>
+          <li><code>prefs</code> — your profile and job preferences, used for Job Match scoring (in <code>chrome.storage.sync</code>, synced across devices)</li>
+          <li><code>gmailConnected</code> — boolean flag for Gmail connection state</li>
+          <li><code>granolaToken</code> — Granola OAuth access token</li>
+          <li><code>ci_co_layout_[id]</code> — per-company panel layout saved in <code>localStorage</code></li>
+          <li><code>ci_co_collapsed_[id]</code> — per-company panel collapse state saved in <code>localStorage</code></li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>Research cache entries do not expire automatically. To re-run research for a company, click the Refresh button in the sidepanel when on that company's page.</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="docs.js"></script>
+
+</body>
+</html>

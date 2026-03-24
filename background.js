@@ -27,6 +27,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+  if (message.type === 'GMAIL_AUTH') {
+    gmailAuth().then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GMAIL_FETCH_EMAILS') {
+    fetchGmailEmails(message.domain, message.companyName, message.linkedinSlug, message.knownContactEmails).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GMAIL_REVOKE') {
+    gmailRevoke().then(sendResponse);
+    return true;
+  }
+  if (message.type === 'CHAT_MESSAGE') {
+    handleChatMessage(message).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GRANOLA_SEARCH') {
+    searchGranolaNotes(message.companyName).then(sendResponse);
+    return true;
+  }
 });
 
 async function quickLookup(company, domain) {
@@ -38,7 +58,7 @@ async function quickLookup(company, domain) {
       industry: apolloData.industry || null,
       founded: apolloData.founded_year ? String(apolloData.founded_year) : null,
       companyWebsite: apolloData.website_url || null,
-      companyLinkedin: apolloData.linkedin_url || null
+      companyLinkedin: (apolloData.linkedin_url && !apolloData.linkedin_url.includes('/company/unavailable')) ? apolloData.linkedin_url : null
     };
   } catch (e) {
     return {};
@@ -99,15 +119,16 @@ async function researchCompany(company, domain, prefs) {
 
     const aiSummary = await fetchClaudeSummary(company, finalApolloData, reviewResults, leaderResults, productResults, domain);
 
+    const claudeFirmo = aiSummary.firmographics || {};
     const result = {
       ...aiSummary,
-      // Priority: Apollo → LinkedIn snippet → Claude
-      employees: finalApolloData.estimated_num_employees ? String(finalApolloData.estimated_num_employees) : (linkedinFirmo?.employees || aiSummary.employees || null),
-      funding: finalApolloData.total_funding_printed || aiSummary.funding || null,
-      industry: finalApolloData.industry || linkedinFirmo?.industry || aiSummary.industry || null,
-      founded: finalApolloData.founded_year ? String(finalApolloData.founded_year) : (linkedinFirmo?.founded || aiSummary.founded || null),
+      // Priority: Apollo → LinkedIn snippet → Claude estimate
+      employees: finalApolloData.estimated_num_employees ? String(finalApolloData.estimated_num_employees) : (linkedinFirmo?.employees || claudeFirmo.employees || null),
+      funding: finalApolloData.total_funding_printed || linkedinFirmo?.funding || claudeFirmo.funding || null,
+      industry: finalApolloData.industry || linkedinFirmo?.industry || claudeFirmo.industry || null,
+      founded: finalApolloData.founded_year ? String(finalApolloData.founded_year) : (linkedinFirmo?.founded || claudeFirmo.founded || null),
       companyWebsite: finalApolloData.website_url || null,
-      companyLinkedin: finalApolloData.linkedin_url || null,
+      companyLinkedin: (finalApolloData.linkedin_url && !finalApolloData.linkedin_url.includes('/company/unavailable')) ? finalApolloData.linkedin_url : null,
       jobListings: jobResults.map(r => ({ title: r.title, url: r.link, snippet: r.snippet }))
     };
     await setCached(cacheKey, result);
@@ -120,15 +141,11 @@ async function researchCompany(company, domain, prefs) {
 async function analyzeJob(company, jobTitle, jobDescription, prefs) {
   if (!prefs) return null;
   const hasJobPrefs = prefs.jobMatchEnabled || prefs.jobMatchBackground || prefs.roles ||
-    prefs.avoid || prefs.workArrangement?.length > 0 || prefs.salaryFloor || prefs.salaryStrong;
+    prefs.avoid || prefs.workArrangement?.length > 0 || prefs.salaryFloor || prefs.salaryStrong ||
+    prefs.resumeText;
   if (!hasJobPrefs) return null;
 
-  const locationContext = [
-    prefs.workArrangement?.includes('Remote') && prefs.remoteGeo ? `Remote (${prefs.remoteGeo})` : null,
-    prefs.workArrangement?.includes('Hybrid') && prefs.hybridLocation ? `Hybrid near ${prefs.hybridLocation}` : null,
-    prefs.workArrangement?.includes('On-site') && prefs.onsiteLocation ? `On-site in ${prefs.onsiteLocation}` : null,
-    prefs.workArrangement?.length && !prefs.remoteGeo && !prefs.hybridLocation && !prefs.onsiteLocation ? prefs.workArrangement.join(', ') : null
-  ].filter(Boolean).join('; ');
+  const locationContext = prefs.workArrangement?.length ? prefs.workArrangement.join(', ') : null;
 
   const salaryFloor = prefs.salaryFloor || prefs.minSalary || null;
   const salaryStrong = prefs.salaryStrong || null;
@@ -141,26 +158,39 @@ ${jobDescription
   ? `Job Description:\n${jobDescription}`
   : `(Full description unavailable — analyze from job title and company context only.)`}
 
+${prefs.resumeText ? `Candidate Resume / LinkedIn Profile:\n${prefs.resumeText}\n` : ''}
 User Profile:
-- Background & experience: ${prefs.jobMatchBackground || 'not specified'}
+- Additional background notes: ${prefs.jobMatchBackground || 'none'}
 - Target roles: ${prefs.roles || 'not specified'}
 - Things to avoid: ${prefs.avoid || 'not specified'}
+- Actual location: ${prefs.userLocation || 'not specified'}
 - Work arrangement preference: ${locationContext || 'not specified'}
+- Max travel willing to do: ${prefs.maxTravel || 'not specified'}
 - Salary floor (walk away below): ${salaryFloor || 'not set'}
 - Salary strong offer (exciting above): ${salaryStrong || 'not set'}
+${prefs.roleLoved ? `- A role they loved: ${prefs.roleLoved}` : ''}
+${prefs.roleHated ? `- A role that was a bad fit: ${prefs.roleHated}` : ''}
 
-Salary rules: Only mention salary if explicitly stated in the job description. If missing, say nothing about compensation anywhere.
+Analysis rules:
+1. Work arrangement and location are QUALIFIERS, not flags — they are already evaluated separately. Do NOT put remote/hybrid/on-site or location eligibility in strongFits or redFlags under any circumstances.
+2. Only flag things explicitly stated or directly evidenced in the posting. Do NOT flag the absence of information — if equity isn't mentioned, that is not a red flag. If reporting structure isn't mentioned, do not speculate. No "Unclear:" prefixes — if you can't support it with evidence from the posting, leave it out.
+3. Red flags must be genuine concerns a reasonable person would want to know — not stylistic differences or things the user said they're okay with. If the user hasn't flagged something as a dealbreaker, don't treat it as one.
+4. Travel: if the posting explicitly mentions travel requirements, compare against max travel preference and flag only if it clearly exceeds it.
+5. Bridge the language gap: the user describes themselves in personal terms; job postings use corporate language. Map them — e.g. "I love autonomy and building from scratch" → look for early-stage, greenfield, founder-led signals. "Manage and grow existing accounts" → retention focus, not new business ownership.
+6. Read between the lines on culture, scope, and autonomy — but only from what the posting actually implies, not from what it omits.
+7. Use loved/hated role examples as calibration for concrete signals you find in the posting.
+8. Salary: extract any pay range or compensation figure mentioned anywhere in the posting — including legal/compensation disclosure sections at the bottom. If no number is mentioned anywhere, use null.
 
 {
   "jobMatch": {
-    "jobSummary": "<2-3 sentences on core responsibilities and what success looks like>",
-    "score": <1-10 based on measurable fit: work arrangement, salary if listed, required skills vs background>,
-    "verdict": "<one direct sentence — should they apply>",
-    "strongFits": ["<concise bullet, 8-12 words max>"],
-    "redFlags": ["<concise bullet, 8-12 words max>"]
+    "jobSummary": "<2-3 sentences on core responsibilities and what success looks like in this role>",
+    "score": <1-10 fit score: work arrangement, skills vs background, role type vs targets, loved/hated role signals>,
+    "verdict": "<one direct, honest sentence — should they apply and why>",
+    "strongFits": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
+    "redFlags": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"]
   },
   "jobSnapshot": {
-    "salary": "<pay range as listed or null>",
+    "salary": "<exact pay range as written in the posting, e.g. '$133,500 - $200,500' — null only if truly not mentioned anywhere>",
     "workArrangement": "<Remote/Hybrid/On-site or null>",
     "location": "<city/state if hybrid or on-site, null if remote>",
     "employmentType": "<Full-time/Part-time/Contract or null>"
@@ -177,8 +207,8 @@ Salary rules: Only mention salary if explicitly stated in the job description. I
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 700,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 900,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -316,7 +346,13 @@ Respond with a JSON object only, no markdown:
     "category": "<type of company, e.g. 'B2B SaaS, payments infrastructure'>",
     "howItWorks": "<2-3 sentences on core product mechanics and what makes it defensible>"
   },
-  "reviews": [{"snippet": "<direct quote from review results only>", "source": "<site name>", "url": "<exact URL>"}],
+  "firmographics": {
+    "employees": "<headcount or range extracted from search results, e.g. '50-200' or '~500' — null if truly unknown>",
+    "founded": "<year founded from any source — null if truly unknown>",
+    "funding": "<total funding or stage from any source, e.g. 'Series B, $24M' — null if truly unknown>",
+    "industry": "<industry/category from context — null if truly unknown>"
+  },
+  "reviews": [{"snippet": "<key insight or sentiment about culture/employee experience from search results — use the snippet text as-is, even if not a verbatim quote>", "source": "<site name, e.g. Glassdoor, Blind, RepVue, Reddit>", "url": "<exact URL>"}],
   "leaders": [{"name": "<full name>", "title": "<role at this company>", "newsUrl": "<URL or null>"}]
 }`;
 
@@ -329,13 +365,16 @@ Respond with a JSON object only, no markdown:
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1600,
       messages: [{ role: 'user', content: prompt }]
     })
   });
 
   const data = await res.json();
+  // Surface API-level errors (rate limits, overload, invalid key, etc.)
+  if (data.error) throw new Error(`Claude API error: ${data.error.message || data.error.type}`);
+  if (!res.ok) throw new Error(`Claude HTTP ${res.status}`);
   const raw = data.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude');
   const clean = raw.replace(/```json|```/g, '').trim();
@@ -351,3 +390,317 @@ Respond with a JSON object only, no markdown:
     throw e;
   }
 }
+
+// ── Gmail ───────────────────────────────────────────────────────────────────
+
+async function gmailAuth() {
+  return new Promise(resolve => {
+    chrome.identity.getAuthToken({ interactive: true }, token => {
+      void chrome.runtime.lastError;
+      if (!token) {
+        resolve({ error: 'Auth failed or cancelled' });
+        return;
+      }
+      chrome.storage.local.set({ gmailConnected: true });
+      resolve({ success: true });
+    });
+  });
+}
+
+async function gmailRevoke() {
+  return new Promise(resolve => {
+    chrome.identity.getAuthToken({ interactive: false }, token => {
+      void chrome.runtime.lastError;
+      if (!token) {
+        chrome.storage.local.remove('gmailConnected');
+        resolve({ success: true });
+        return;
+      }
+      chrome.identity.removeCachedAuthToken({ token }, () => {
+        fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`).catch(() => {});
+        chrome.storage.local.remove('gmailConnected');
+        resolve({ success: true });
+      });
+    });
+  });
+}
+
+function extractEmailBody(payload) {
+  if (!payload) return '';
+  // Direct plain text body
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    try { return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch(e) {}
+  }
+  // Search parts for text/plain
+  for (const part of payload.parts || []) {
+    if (part.mimeType === 'text/plain' && part.body?.data) {
+      try { return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch(e) {}
+    }
+  }
+  // Recurse into nested multipart
+  for (const part of payload.parts || []) {
+    const nested = extractEmailBody(part);
+    if (nested) return nested;
+  }
+  return '';
+}
+
+async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactEmails) {
+  return new Promise(resolve => {
+    chrome.identity.getAuthToken({ interactive: false }, async token => {
+      void chrome.runtime.lastError;
+      if (!token) { resolve({ emails: [], error: 'not_connected' }); return; }
+      try {
+        const parts = [];
+        // Gmail suffix match: from:@domain.com matches any address at that domain
+        if (domain) parts.push(`from:@${domain} OR to:@${domain}`);
+        if (companyName) parts.push(`"${companyName}"`);
+        if (linkedinSlug && linkedinSlug !== domain) parts.push(`"${linkedinSlug}"`);
+        // Explicitly include known contact emails to catch threads that don't mention the company name
+        (knownContactEmails || []).forEach(email => {
+          if (!domain || !email.endsWith('@' + domain)) {
+            parts.push(`from:${email} OR to:${email}`);
+          }
+        });
+        const query = parts.join(' OR ');
+        const searchRes = await fetch(
+          `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=50`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (searchRes.status === 401) {
+          chrome.identity.removeCachedAuthToken({ token }, () => {});
+          chrome.storage.local.remove('gmailConnected');
+          resolve({ emails: [], error: 'token_expired' });
+          return;
+        }
+        const searchData = await searchRes.json();
+        const messages = (searchData.messages || []).slice(0, 50);
+        const emails = await Promise.all(messages.map(async msg => {
+          const r = await fetch(
+            `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!r.ok) return null;
+          const d = await r.json();
+          const h = d.payload?.headers || [];
+          const get = n => h.find(x => x.name === n)?.value || '';
+          const body = extractEmailBody(d.payload);
+          return { id: msg.id, from: get('From'), to: get('To'), subject: get('Subject'), date: get('Date'), snippet: d.snippet || '', body, threadId: d.threadId };
+        }));
+        resolve({ emails: emails.filter(Boolean) });
+      } catch (err) {
+        resolve({ emails: [], error: err.message });
+      }
+    });
+  });
+}
+
+// ── Chat ────────────────────────────────────────────────────────────────────
+
+async function handleChatMessage({ messages, context }) {
+  chrome.storage.sync.get(['prefs'], async ({ prefs }) => {});
+  const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
+
+  const systemParts = [
+    `You are a sharp, concise assistant embedded in CompanyIntel — a job search tool. You have full context about this ${context.type === 'job' ? 'job opportunity' : 'company'}. Answer questions directly and specifically using the data below. If information isn't available in the context, say so.`
+  ];
+
+  if (context.company)                systemParts.push(`\nCompany: ${context.company}`);
+  if (context.jobTitle)               systemParts.push(`Job Title: ${context.jobTitle}`);
+  if (context.status)                 systemParts.push(`Stage: ${context.status}`);
+  if (context.notes)                  systemParts.push(`\nNotes: ${context.notes}`);
+  if (context.tags?.length)           systemParts.push(`Tags: ${context.tags.join(', ')}`);
+  if (context.intelligence?.eli5)     systemParts.push(`\nWhat they do: ${context.intelligence.eli5}`);
+  if (context.intelligence?.whosBuyingIt) systemParts.push(`Who buys it: ${context.intelligence.whosBuyingIt}`);
+  if (context.intelligence?.howItWorks)   systemParts.push(`How it works: ${context.intelligence.howItWorks}`);
+  if (context.jobMatch?.verdict)      systemParts.push(`\nJob match verdict: ${context.jobMatch.verdict}`);
+  if (context.jobMatch?.score)        systemParts.push(`Match score: ${context.jobMatch.score}/10`);
+  if (context.jobMatch?.strongFits?.length) systemParts.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
+  if (context.jobMatch?.redFlags?.length)   systemParts.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
+  if (context.reviews?.length)        systemParts.push(`\nEmployee reviews:\n${context.reviews.slice(0,3).map(r => `- "${r.snippet}" (${r.source || ''})`).join('\n')}`);
+  if (context.leaders?.length)        systemParts.push(`\nLeadership: ${context.leaders.map(l => `${l.name} — ${l.title || 'unknown title'}`).join(', ')}`);
+
+  if (context.emails?.length) {
+    systemParts.push(`\nEmail activity (${context.emails.length} emails with this company):`);
+    context.emails.slice(0, 10).forEach(e => systemParts.push(`  ${e.date}: "${e.subject}" — From: ${e.from}`));
+  }
+
+  if (context.granolaNote) {
+    systemParts.push(`\nMeeting notes (from Granola):\n${context.granolaNote}`);
+  }
+
+  if (prefs.jobMatchBackground) systemParts.push(`\nUser background: ${prefs.jobMatchBackground}`);
+  if (prefs.roles)               systemParts.push(`Target roles: ${prefs.roles}`);
+  if (prefs.avoid)               systemParts.push(`Things to avoid: ${prefs.avoid}`);
+  if (prefs.roleLoved)           systemParts.push(`Enjoys: ${prefs.roleLoved}`);
+  if (prefs.roleHated)           systemParts.push(`Avoids: ${prefs.roleHated}`);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: systemParts.join('\n'),
+        messages
+      })
+    });
+    const data = await res.json();
+    return { reply: data.content?.[0]?.text || 'No response.' };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+// ── Granola MCP ─────────────────────────────────────────────────────────────
+
+async function searchGranolaNotes(companyName) {
+  const { granolaToken } = await new Promise(r => chrome.storage.local.get(['granolaToken'], r));
+  if (!granolaToken) return { notes: null, error: 'not_connected' };
+
+  try {
+    // MCP initialize
+    await fetch('https://mcp.granola.ai/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${granolaToken}` },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'CompanyIntel', version: '1.0' } } })
+    });
+    // Search for notes by company name
+    const res = await fetch('https://mcp.granola.ai/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${granolaToken}` },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', id: 2, params: { name: 'search_notes', arguments: { query: companyName } } })
+    });
+    if (!res.ok) return { notes: null, error: 'mcp_error' };
+    const data = await res.json();
+    const notes = data.result?.content?.[0]?.text || null;
+    return { notes };
+  } catch (err) {
+    return { notes: null, error: err.message };
+  }
+}
+
+// ── Backfill missing website/linkedin for saved companies ──────────────────
+
+async function backfillMissingWebsites() {
+  const { savedCompanies } = await new Promise(resolve =>
+    chrome.storage.local.get(['savedCompanies'], resolve)
+  );
+  const entries = savedCompanies || [];
+  const needsFill = entries.filter(
+    e => (e.type || 'company') === 'company' && !e.companyWebsite && !e.websiteLookupFailed
+  );
+  if (!needsFill.length) return;
+
+  let changed = false;
+  for (const entry of needsFill) {
+    try {
+      // Step 1: Serper search for official website
+      const results = await fetchSerperResults(`"${entry.company}" official website`, 3);
+      const domain = extractDomainFromResults(results, entry.company);
+
+      if (domain) {
+        entry.companyWebsite = 'https://' + domain;
+        changed = true;
+      } else {
+        // Step 2: Apollo fallback
+        try {
+          const apolloData = await fetchApolloData(null, entry.company);
+          if (apolloData.website_url) {
+            entry.companyWebsite = apolloData.website_url;
+            changed = true;
+          }
+          if (apolloData.linkedin_url && !entry.companyLinkedin) {
+            entry.companyLinkedin = apolloData.linkedin_url;
+            changed = true;
+          }
+          if (!apolloData.website_url) {
+            entry.websiteLookupFailed = true;
+            changed = true;
+          }
+        } catch {
+          entry.websiteLookupFailed = true;
+          changed = true;
+        }
+      }
+    } catch {
+      entry.websiteLookupFailed = true;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    // Merge backfilled entries back into the full list
+    const updatedMap = Object.fromEntries(needsFill.map(e => [e.id, e]));
+    const updated = entries.map(e => updatedMap[e.id] || e);
+    chrome.storage.local.set({ savedCompanies: updated }, () => void chrome.runtime.lastError);
+  }
+}
+
+// ── Migrate type:'job' records into their company records (run once) ──────────
+
+async function migrateJobsToCompanies() {
+  const data = await new Promise(r => chrome.storage.local.get(['savedCompanies', 'jobMigrationV1Done'], r));
+  if (data.jobMigrationV1Done) return;
+
+  const entries = data.savedCompanies || [];
+  const jobs = entries.filter(e => e.type === 'job');
+  if (!jobs.length) { chrome.storage.local.set({ jobMigrationV1Done: true }); return; }
+
+  let updated = [...entries];
+  const idsToRemove = new Set();
+
+  for (const job of jobs) {
+    let coIdx = job.linkedCompanyId ? updated.findIndex(c => c.id === job.linkedCompanyId) : -1;
+    if (coIdx === -1) {
+      coIdx = updated.findIndex(c =>
+        (c.type || 'company') === 'company' &&
+        c.company.toLowerCase().trim() === job.company.toLowerCase().trim()
+      );
+    }
+
+    if (coIdx !== -1) {
+      const co = { ...updated[coIdx] };
+      co.isOpportunity = true;
+      co.jobStage = job.status || 'needs_review';
+      if (job.jobTitle && job.jobTitle !== 'New Opportunity') co.jobTitle = co.jobTitle || job.jobTitle;
+      co.jobMatch    = co.jobMatch    || job.jobMatch    || null;
+      co.jobSnapshot = co.jobSnapshot || job.jobSnapshot || null;
+      co.jobDescription = co.jobDescription || job.jobDescription || null;
+      co.jobUrl      = co.jobUrl      || job.url         || null;
+      if (!co.companyWebsite  && job.companyWebsite)  co.companyWebsite  = job.companyWebsite;
+      if (!co.companyLinkedin && job.companyLinkedin) co.companyLinkedin = job.companyLinkedin;
+      if (!co.intelligence    && job.intelligence)    co.intelligence    = job.intelligence;
+      if (!(co.leaders  || []).length && (job.leaders  || []).length) co.leaders  = job.leaders;
+      if (!(co.reviews  || []).length && (job.reviews  || []).length) co.reviews  = job.reviews;
+      if (!(co.jobListings || []).length && (job.jobListings || []).length) co.jobListings = job.jobListings;
+      co.mergedJobIds = [...(co.mergedJobIds || []), job.id];
+      updated[coIdx] = co;
+      idsToRemove.add(job.id);
+    } else {
+      // No linked company — convert the job record itself to a company record
+      const idx = updated.findIndex(e => e.id === job.id);
+      updated[idx] = {
+        ...job,
+        type: 'company',
+        isOpportunity: true,
+        jobStage: job.status || 'needs_review',
+        jobUrl: job.url || null,
+        status: 'co_watchlist',
+      };
+    }
+  }
+
+  updated = updated.filter(e => !idsToRemove.has(e.id));
+  chrome.storage.local.set({ savedCompanies: updated, jobMigrationV1Done: true });
+}
+
+// Run backfill on service worker startup
+migrateJobsToCompanies();
+backfillMissingWebsites();

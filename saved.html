@@ -5,112 +5,252 @@
   <title>CompanyIntel — Saved</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, sans-serif; background: #111e28; color: #e2e8f0; min-height: 100vh; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1e2d3d; min-height: 100vh; }
 
-    .header { padding: 20px 32px; border-bottom: 1px solid #2D3E50; display: flex; align-items: center; justify-content: space-between; background: #1C2D3A; }
+    /* ── Header (stays dark — HubSpot keeps its nav navy) ── */
+    .header { padding: 16px 32px; border-bottom: 1px solid #1e2f3d; display: flex; align-items: center; justify-content: space-between; background: #2d3e50; }
     .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; }
     .logo span { color: #FF7A59; }
-    .logo .slash { font-weight: 400; color: #3d5468; font-size: 14px; }
+    .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
     .header-right { display: flex; align-items: center; gap: 12px; }
-    .stat-pill { font-size: 12px; color: #516F90; background: #243342; border-radius: 20px; padding: 5px 14px; border: 1px solid #2D3E50; }
-    .stat-pill b { color: #e2e8f0; }
+    .stat-pill { font-size: 12px; color: #b0c1d4; background: rgba(255,255,255,0.08); border-radius: 20px; padding: 5px 14px; border: 1px solid rgba(255,255,255,0.12); }
+    .stat-pill b { color: #f1f5f9; }
+    .prefs-link { font-size: 12px; font-weight: 600; color: #b0c1d4; text-decoration: none; padding: 5px 12px; border: 1px solid #4a6580; border-radius: 20px; transition: all 0.15s; }
+    .prefs-link:hover { color: #fff; border-color: #7c98b6; }
 
-    .toolbar { padding: 14px 32px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #2D3E50; background: #1C2D3A; }
-    .search-input { flex: 1; background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #e2e8f0; font-size: 13px; padding: 8px 14px; font-family: inherit; }
-    .search-input:focus { outline: none; border-color: #FF7A59; }
-    .search-input::placeholder { color: #516F90; }
-    .filter-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 12px; padding: 8px 14px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    /* ── Toolbars ── */
+    .toolbar { padding: 12px 32px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #dfe3eb; background: #fff; }
+    .search-input { flex: 1; background: #f5f8fa; border: 1px solid #dfe3eb; border-radius: 8px; color: #33475b; font-size: 13px; padding: 8px 14px; font-family: inherit; }
+    .search-input:focus { outline: none; border-color: #FF7A59; background: #fff; }
+    .search-input::placeholder { color: #b0c1d4; }
+
+    .toolbar-type  { padding-top: 10px; padding-bottom: 10px; border-top: none; }
+    .toolbar-stars { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
+    .toolbar-status { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
+    .toolbar-tags  { overflow-x: auto; flex-wrap: nowrap; padding-top: 8px; padding-bottom: 8px; }
+
+    .filter-label { font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 60px; }
+    .filter-btn { background: #fff; border: 1px solid #dfe3eb; border-radius: 8px; color: #516f90; font-size: 13px; font-weight: 500; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
     .filter-btn.active { border-color: #FF7A59; color: #fff; background: #FF7A59; }
-    .filter-btn:hover { color: #e2e8f0; }
+    .filter-btn:hover:not(.active) { color: #33475b; border-color: #99acc2; }
+    .rating-dropdown { position: relative; }
+    .rating-dropdown-btn { background: #fff; border: 1px solid #dfe3eb; border-radius: 8px; color: #33475b; font-size: 13px; font-weight: 500; padding: 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s; font-family: inherit; white-space: nowrap; }
+    .rating-dropdown-btn:hover { border-color: #99acc2; }
+    .rating-dropdown-btn.active { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.07); }
+    .rating-dropdown-arrow { font-size: 11px; color: #7c98b6; transition: transform 0.15s; }
+    .rating-dropdown-btn.open .rating-dropdown-arrow { transform: rotate(180deg); }
+    .rating-dropdown-menu {
+      display: none; position: absolute; top: calc(100% + 6px); left: 0;
+      background: #fff; border: 1px solid #dfe3eb; border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(45,62,80,0.15); z-index: 200;
+      min-width: 160px; padding: 6px 0; overflow: hidden;
+    }
+    .rating-dropdown-menu.open { display: block; }
+    .rating-option { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: #33475b; cursor: pointer; transition: background 0.1s; user-select: none; }
+    .rating-option:hover { background: #f5f8fa; }
+    .rating-option input[type="checkbox"] { width: 15px; height: 15px; accent-color: #FF7A59; cursor: pointer; flex-shrink: 0; }
+    .rating-option-divider { height: 1px; background: #eaf0f6; margin: 4px 0; }
+    .rating-clear-btn { display: block; width: 100%; text-align: left; padding: 7px 14px; font-size: 12px; color: #7c98b6; background: none; border: none; cursor: pointer; font-family: inherit; transition: color 0.15s; }
+    .rating-clear-btn:hover { color: #e5483b; }
+    .status-filter-btn { background: #fff; border: 1px solid #dfe3eb; border-radius: 8px; color: #516f90; font-size: 12px; padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .status-filter-btn.active { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.07); }
+    .status-filter-btn:hover:not(.active) { color: #33475b; }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; padding: 24px 32px; }
+    /* ── View toggle bar ── */
+    .view-toggle-bar { padding: 10px 32px; background: #fff; border-bottom: 1px solid #dfe3eb; display: flex; align-items: center; gap: 10px; }
+    .view-toggle-label { font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 2px; }
+    .view-toggle { display: flex; }
+    .view-toggle-btn { background: #f5f8fa; border: 1px solid #dfe3eb; color: #516f90; font-size: 13px; font-weight: 700; padding: 8px 20px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .view-toggle-btn:first-child { border-radius: 8px 0 0 8px; }
+    .view-toggle-btn:last-child  { border-radius: 0 8px 8px 0; border-left: none; }
+    .view-toggle-btn.active { background: #FF7A59; border-color: #FF7A59; color: #fff; }
+    .view-toggle-btn:not(.active):hover { color: #33475b; border-color: #99acc2; }
+    .view-toggle-btn:disabled { opacity: 0.3; cursor: default; }
 
-    .card { background: #1C2D3A; border: 1px solid #2D3E50; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 11px; transition: border-color 0.15s; }
-    .card:hover { border-color: #FF7A59; }
+    /* ── Pipeline buttons ── */
+    .pipeline-btn { background: #fff; border: 1px solid #dfe3eb; border-radius: 8px; color: #516f90; font-size: 13px; font-weight: 600; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .pipeline-btn.active { border-color: #FF7A59; color: #fff; background: #FF7A59; }
+    .pipeline-btn:hover:not(.active) { color: #33475b; border-color: #99acc2; }
+    #pipeline-all-btn.active { background: #f5f8fa; border-color: #516f90; color: #33475b; }
+
+    /* Edit stages btn */
+    .stage-add-btn { background: none; border: 1px dashed #b0c1d4; border-radius: 8px; color: #7c98b6; font-size: 13px; padding: 7px 16px; cursor: pointer; transition: all 0.15s; }
+    .stage-add-btn:hover { border-color: #FF7A59; color: #FF7A59; }
+
+    /* ── Pipeline header ── */
+    .pipeline-header { padding: 18px 32px 6px; display: flex; align-items: center; gap: 12px; }
+    .pipeline-header-text { font-size: 24px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; }
+
+    /* ── Grid ── */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; padding: 20px 32px; }
+
+    /* ── Cards ── */
+    .card { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 11px; transition: box-shadow 0.15s, border-color 0.15s; box-shadow: 0 1px 3px rgba(45,62,80,0.06); }
+    .card:hover { border-color: #FF7A59; box-shadow: 0 3px 10px rgba(45,62,80,0.1); }
     .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
     .card-favicon { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; object-fit: contain; }
-    .card-company { font-size: 16px; font-weight: 600; color: #f1f5f9; }
-    .card-job { font-size: 12px; color: #516F90; margin-top: 3px; }
-    .card-delete { background: none; border: none; color: #3d5468; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex-shrink: 0; transition: color 0.15s; }
-    .card-delete:hover { color: #f87171; }
-    .card-category { display: inline-block; font-size: 11px; color: #FF7A59; background: rgba(255,122,89,0.1); border: 1px solid rgba(255,122,89,0.25); border-radius: 20px; padding: 2px 10px; font-weight: 500; }
-    .card-oneliner { font-size: 13px; color: #99afc4; line-height: 1.55; }
+    .card-company { font-size: 16px; font-weight: 700; color: #2d3e50; text-decoration: none; cursor: pointer; }
+    .card-company:hover { color: #0077b5; }
+    .card-job { font-size: 12px; color: #7c98b6; margin-top: 3px; }
+    .card-delete { background: none; border: none; color: #b0c1d4; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex-shrink: 0; transition: color 0.15s; }
+    .card-delete:hover { color: #e5483b; }
+    .card-category { display: inline-block; font-size: 11px; color: #FF7A59; background: rgba(255,122,89,0.08); border: 1px solid rgba(255,122,89,0.25); border-radius: 20px; padding: 2px 10px; font-weight: 600; }
+    .card-oneliner { font-size: 13px; color: #516f90; line-height: 1.6; }
     .card-stars { display: flex; gap: 3px; }
-    .star { font-size: 16px; color: #2D3E50; cursor: pointer; transition: color 0.1s; }
+    .star { font-size: 16px; color: #dfe3eb; cursor: pointer; transition: color 0.1s; }
     .star.filled { color: #f59e0b; }
     .star:hover { color: #f59e0b; }
-    .card-notes { width: 100%; background: #243342; border: 1px solid #2D3E50; border-radius: 6px; color: #99afc4; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: vertical; min-height: 52px; line-height: 1.5; }
-    .card-notes:focus { outline: none; border-color: #FF7A59; }
-    .card-notes::placeholder { color: #3d5468; }
+    .card-notes { width: 100%; background: #f5f8fa; border: 1px solid #dfe3eb; border-radius: 6px; color: #516f90; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: vertical; min-height: 52px; line-height: 1.5; }
+    .card-notes:focus { outline: none; border-color: #FF7A59; background: #fff; }
+    .card-notes::placeholder { color: #b0c1d4; }
     .card-footer { display: flex; align-items: center; justify-content: space-between; }
-    .card-date { font-size: 11px; color: #3d5468; }
-    .card-links { display: flex; gap: 10px; }
-    .card-link { font-size: 11px; color: #FF7A59; text-decoration: none; font-weight: 500; }
-    .card-link:hover { color: #ffaa94; }
+    .card-date { font-size: 11px; color: #b0c1d4; }
+    .card-links { display: flex; gap: 10px; align-items: center; }
+    .card-link { font-size: 11px; color: #FF7A59; text-decoration: none; font-weight: 600; }
+    .card-link:hover { color: #e5612a; }
+    .card-link-li { color: #0a66c2; }
+    .card-link-li:hover { color: #3a86d4; }
+    .card-link-web { color: #00897b; }
+    .card-link-web:hover { color: #00bda5; }
     .card-stats { display: flex; gap: 6px; flex-wrap: wrap; }
-    .card-stat { font-size: 11px; color: #516F90; background: #243342; border-radius: 4px; padding: 2px 8px; }
+    .card-stat { font-size: 11px; color: #7c98b6; background: #eaf0f6; border-radius: 4px; padding: 2px 8px; }
 
-    .toolbar-type { padding-top: 0; border-top: none; }
-    .toolbar-stars { padding-top: 0; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
-    .toolbar-status { padding-top: 0; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
-    .filter-label { font-size: 11px; font-weight: 700; color: #516F90; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 60px; }
-    .filter-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 13px; font-weight: 500; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-    .filter-btn.active { border-color: #FF7A59; color: #fff; background: #FF7A59; }
-    .filter-btn:hover:not(.active) { color: #e2e8f0; border-color: #516F90; }
-    .star-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 12px; padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-    .star-btn.active { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.1); }
-    .star-btn:hover:not(.active) { color: #e2e8f0; }
-    .status-filter-btn { background: #243342; border: 1px solid #2D3E50; border-radius: 8px; color: #516F90; font-size: 12px; padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-    .status-filter-btn.active { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.1); }
-    .status-filter-btn:hover:not(.active) { color: #e2e8f0; }
-    .card-type { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; border-radius: 4px; padding: 2px 7px; }
-    .card-type.job { color: #FF7A59; background: rgba(255,122,89,0.1); border: 1px solid rgba(255,122,89,0.25); }
-    .card-type.company { color: #99afc4; background: rgba(81,111,144,0.1); border: 1px solid rgba(81,111,144,0.2); }
-    .card-job-match { font-size: 12px; color: #516F90; margin-top: 3px; }
-    .card-job-match b { color: #e2e8f0; }
+    /* ── Job card extras ── */
+    .card-job-overview { display: flex; flex-direction: column; gap: 10px; }
+    .card-job-summary { font-size: 13px; color: #516f90; line-height: 1.6; }
+    .card-verdict-row { display: flex; align-items: flex-start; gap: 10px; }
+    .card-verdict-badge { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 3px 10px; white-space: nowrap; flex-shrink: 0; border: 1px solid; }
+    .card-verdict-badge.high  { background: rgba(0,189,165,0.1);  color: #00897b; border-color: rgba(0,189,165,0.35); }
+    .card-verdict-badge.mid   { background: rgba(99,102,241,0.1); color: #6366f1; border-color: rgba(99,102,241,0.35); }
+    .card-verdict-badge.mixed { background: rgba(245,158,11,0.1); color: #d97706; border-color: rgba(245,158,11,0.35); }
+    .card-verdict-badge.low   { background: rgba(229,72,59,0.08); color: #e5483b; border-color: rgba(229,72,59,0.3); }
+    .card-verdict-text { font-size: 12px; color: #516f90; line-height: 1.55; }
+    .card-job-match { font-size: 12px; color: #7c98b6; margin-top: 3px; }
+    .card-job-match b { color: #33475b; }
 
-    /* Salary / work arrangement chips on job cards */
     .card-job-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
     .job-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; border-radius: 6px; padding: 3px 10px; }
-    .job-chip.salary { color: #4ade80; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.25); }
-    .job-chip.remote { color: #60a5fa; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); }
-    .job-chip.hybrid { color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); }
-    .job-chip.onsite { color: #f87171; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); }
+    .job-chip.salary { color: #00897b; background: rgba(0,189,165,0.08); border: 1px solid rgba(0,189,165,0.25); }
+    .job-chip.remote { color: #2563eb; background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.2); }
+    .job-chip.hybrid { color: #d97706; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); }
+    .job-chip.onsite { color: #e5483b; background: rgba(229,72,59,0.07); border: 1px solid rgba(229,72,59,0.2); }
 
-    /* Status selector — full width, colored by current status */
-    .status-select { width: 100%; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; transition: all 0.15s; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-    /* Job statuses */
-    .status-select[data-status="needs_review"] { background-color: rgba(100,116,139,0.12); border: 1.5px solid #64748b; color: #94a3b8; }
-    .status-select[data-status="want_to_apply"] { background-color: rgba(34,211,238,0.1); border: 1.5px solid #22d3ee; color: #22d3ee; }
-    .status-select[data-status="applied"] { background-color: rgba(96,165,250,0.12); border: 1.5px solid #60a5fa; color: #60a5fa; }
-    .status-select[data-status="intro_requested"] { background-color: rgba(167,139,250,0.12); border: 1.5px solid #a78bfa; color: #a78bfa; }
-    .status-select[data-status="conversations"] { background-color: rgba(251,146,60,0.12); border: 1.5px solid #fb923c; color: #fb923c; }
-    .status-select[data-status="offer_stage"] { background-color: rgba(163,230,53,0.12); border: 1.5px solid #a3e635; color: #a3e635; }
-    .status-select[data-status="accepted"] { background-color: rgba(74,222,128,0.12); border: 1.5px solid #4ade80; color: #4ade80; }
-    .status-select[data-status="rejected"] { background-color: rgba(248,113,113,0.12); border: 1.5px solid #f87171; color: #f87171; }
-    /* Company statuses */
-    .status-select[data-status="saved"] { background-color: rgba(100,116,139,0.12); border: 1.5px solid #64748b; color: #94a3b8; }
-    .status-select[data-status="saved_later"] { background-color: rgba(96,165,250,0.08); border: 1.5px solid #3b82f6; color: #60a5fa; }
-    .status-select[data-status="archived"] { background-color: rgba(100,116,139,0.06); border: 1.5px solid #374151; color: #4b5563; }
+    .card-type { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; border-radius: 4px; padding: 2px 7px; }
+    .card-type.job     { color: #FF7A59; background: rgba(255,122,89,0.08); border: 1px solid rgba(255,122,89,0.25); }
+    .card-type.company { color: #516f90; background: rgba(81,111,144,0.07); border: 1px solid rgba(81,111,144,0.18); }
+
+    /* ── Analysis (card expand) ── */
+    .card-analysis { border: 1px solid #dfe3eb; border-radius: 8px; overflow: hidden; }
+    .card-analysis summary { padding: 9px 13px; font-size: 10px; font-weight: 800; color: #7c98b6; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; background: #f5f8fa; text-transform: uppercase; letter-spacing: 0.08em; }
+    .card-analysis summary::-webkit-details-marker { display: none; }
+    .card-analysis summary::after { content: '›'; font-size: 15px; transition: transform 0.2s; }
+    .card-analysis[open] summary::after { transform: rotate(90deg); }
+    .analysis-body { padding: 12px 13px; background: #fff; display: flex; flex-direction: column; gap: 14px; }
+    .analysis-section-label { font-size: 10px; font-weight: 800; color: #7c98b6; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+    .analysis-section-body { font-size: 12px; color: #516f90; line-height: 1.6; }
+    .analysis-bullets { list-style: none; display: flex; flex-direction: column; gap: 5px; padding: 0; }
+    .analysis-bullets li { font-size: 12px; line-height: 1.5; display: flex; gap: 7px; }
+    .analysis-bullets li.fit  { color: #00897b; }
+    .analysis-bullets li.flag { color: #e5483b; }
+    .analysis-review { font-size: 12px; color: #516f90; line-height: 1.5; font-style: italic; border-bottom: 1px solid #eaf0f6; padding-bottom: 8px; margin-bottom: 8px; }
+    .analysis-review:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .analysis-review-src { font-size: 11px; color: #99acc2; font-style: normal; margin-top: 2px; }
+
+    /* ── Status selector ── */
+    .status-select { width: 100%; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; transition: all 0.15s; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237c98b6' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+    .status-select[data-status="needs_review"]    { background-color: rgba(100,116,139,0.07); border: 1.5px solid #94a3b8; color: #64748b; }
+    .status-select[data-status="want_to_apply"]   { background-color: rgba(6,182,212,0.07);   border: 1.5px solid #06b6d4; color: #0891b2; }
+    .status-select[data-status="applied"]         { background-color: rgba(37,99,235,0.07);   border: 1.5px solid #3b82f6; color: #2563eb; }
+    .status-select[data-status="intro_requested"] { background-color: rgba(139,92,246,0.07);  border: 1.5px solid #8b5cf6; color: #7c3aed; }
+    .status-select[data-status="conversations"]   { background-color: rgba(249,115,22,0.07);  border: 1.5px solid #f97316; color: #ea6d0d; }
+    .status-select[data-status="offer_stage"]     { background-color: rgba(101,163,13,0.07);  border: 1.5px solid #84cc16; color: #65a30d; }
+    .status-select[data-status="accepted"]        { background-color: rgba(22,163,74,0.07);   border: 1.5px solid #22c55e; color: #16a34a; }
+    .status-select[data-status="rejected"]        { background-color: rgba(220,38,38,0.07);   border: 1.5px solid #ef4444; color: #dc2626; }
+    .status-select[data-status="co_watchlist"]    { background-color: rgba(100,116,139,0.07); border: 1.5px solid #94a3b8; color: #64748b; }
+    .status-select[data-status="co_researching"]  { background-color: rgba(6,182,212,0.07);   border: 1.5px solid #06b6d4; color: #0891b2; }
+    .status-select[data-status="co_networking"]   { background-color: rgba(139,92,246,0.07);  border: 1.5px solid #8b5cf6; color: #7c3aed; }
+    .status-select[data-status="co_interested"]   { background-color: rgba(249,115,22,0.07);  border: 1.5px solid #f97316; color: #ea6d0d; }
+    .status-select[data-status="co_applied"]      { background-color: rgba(37,99,235,0.07);   border: 1.5px solid #3b82f6; color: #2563eb; }
+    .status-select[data-status="co_archived"]     { background-color: rgba(107,114,128,0.07); border: 1.5px solid #9ca3af; color: #6b7280; }
     .status-select:focus { outline: none; }
-    .empty-state { grid-column: 1/-1; text-align: center; padding: 80px 20px; color: #334155; font-size: 15px; line-height: 1.8; }
-    .empty-state b { color: #475569; display: block; font-size: 18px; margin-bottom: 8px; }
 
-    /* Tags */
+    .empty-state { grid-column: 1/-1; text-align: center; padding: 80px 20px; color: #b0c1d4; font-size: 15px; line-height: 1.8; }
+    .empty-state b { color: #516f90; display: block; font-size: 18px; margin-bottom: 8px; }
+
+    /* ── Tags ── */
     .card-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
     .card-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; border: 1px solid; cursor: default; }
-    .card-tag .tag-remove { cursor: pointer; font-size: 9px; margin-left: 2px; opacity: 0.6; }
-    .card-tag .tag-remove:hover { opacity: 1; color: #f87171; }
-    .tag-add-btn { font-size: 11px; color: #3d5468; background: none; border: 1px dashed #3d5468; border-radius: 20px; padding: 3px 9px; cursor: pointer; transition: all 0.15s; }
+    .card-tag .tag-remove { cursor: pointer; font-size: 12px; margin-left: 4px; opacity: 0.7; font-weight: 700; line-height: 1; }
+    .card-tag .tag-remove:hover { opacity: 1; color: #e5483b; }
+    .tag-add-btn { font-size: 11px; color: #7c98b6; background: none; border: 1px dashed #99acc2; border-radius: 20px; padding: 3px 9px; cursor: pointer; transition: all 0.15s; font-weight: 600; }
     .tag-add-btn:hover { border-color: #FF7A59; color: #FF7A59; }
-    .tag-inline-input { font-size: 11px; background: #243342; border: 1px solid #FF7A59; border-radius: 20px; color: #e2e8f0; padding: 2px 9px; outline: none; width: 100px; font-family: inherit; }
-    .tag-suggestions-inline { position: absolute; background: #1C2D3A; border: 1px solid #2D3E50; border-radius: 7px; z-index: 50; min-width: 140px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
-    .tag-suggestion-inline { padding: 7px 12px; font-size: 12px; color: #99afc4; cursor: pointer; }
-    .tag-suggestion-inline:hover { background: #243342; color: #e2e8f0; }
+    .tag-inline-input { font-size: 11px; background: #fff; border: 1px solid #FF7A59; border-radius: 20px; color: #33475b; padding: 2px 9px; outline: none; width: 100px; font-family: inherit; }
+    .tag-suggestions-inline { position: absolute; background: #fff; border: 1px solid #dfe3eb; border-radius: 7px; z-index: 50; min-width: 140px; overflow: hidden; box-shadow: 0 4px 16px rgba(45,62,80,0.15); }
+    .tag-suggestion-inline { padding: 7px 12px; font-size: 12px; color: #516f90; cursor: pointer; }
+    .tag-suggestion-inline:hover { background: #f5f8fa; color: #33475b; }
     .tag-inline-wrap { position: relative; display: inline-flex; }
-    .toolbar-tags { overflow-x: auto; flex-wrap: nowrap; padding-top: 0; }
     .tag-filter-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; border: 1px solid; cursor: pointer; white-space: nowrap; transition: all 0.15s; background: transparent; }
-    .tag-filter-btn:not(.active):hover { opacity: 0.85; }
+    .tag-filter-btn:not(.active):hover { opacity: 0.8; }
+
+    /* ── Kanban board ── */
+    .kanban-board { display: none; gap: 14px; padding: 20px 32px 40px; overflow-x: auto; min-height: calc(100vh - 220px); align-items: flex-start; background: #f5f8fa; }
+    .kanban-col { flex-shrink: 0; width: 280px; display: flex; flex-direction: column; }
+    .kanban-col-header { padding: 10px 14px; border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: space-between; border: 1px solid; border-bottom: none; }
+    .kanban-col-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+    .kanban-col-count { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 1px 8px; background: rgba(0,0,0,0.12); }
+    .kanban-cards { display: flex; flex-direction: column; gap: 8px; min-height: 100px; border-radius: 0 0 10px 10px; padding: 10px 8px; border: 1px solid; border-top: none; transition: background 0.15s; }
+    .kanban-cards.drag-over { background: rgba(255,122,89,0.05) !important; }
+    .kanban-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 13px; display: flex; flex-direction: column; gap: 8px; cursor: grab; transition: box-shadow 0.15s, border-color 0.15s; user-select: none; box-shadow: 0 1px 3px rgba(45,62,80,0.06); }
+    .kanban-card:hover { border-color: #FF7A59; box-shadow: 0 3px 10px rgba(45,62,80,0.1); }
+    .kanban-card.dragging { opacity: 0.35; cursor: grabbing; }
+    .kanban-card-company { font-size: 14px; font-weight: 700; color: #2d3e50; line-height: 1.2; text-decoration: none; cursor: pointer; }
+    .kanban-card-company:hover { color: #0077b5; }
+    .kanban-card-job { font-size: 12px; color: #7c98b6; margin-top: 2px; }
+    .kanban-card-oneliner { font-size: 12px; color: #7c98b6; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .kanban-empty { font-size: 12px; color: #b0c1d4; text-align: center; padding: 24px 0; }
+    .kanban-card .card-notes { font-size: 12px; min-height: 42px; cursor: auto; background: #f5f8fa; border-color: #dfe3eb; color: #516f90; }
+    .kanban-card .card-notes::placeholder { color: #b0c1d4; }
+
+    /* ── Kanban details expand ── */
+    .kanban-details { border: 1px solid #dfe3eb; border-radius: 8px; overflow: hidden; margin-top: 2px; }
+    .kanban-details-toggle { padding: 8px 12px; font-size: 11px; font-weight: 700; color: #7c98b6; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; background: #f5f8fa; text-transform: uppercase; letter-spacing: 0.07em; }
+    .kanban-details-toggle::-webkit-details-marker { display: none; }
+    .kanban-details-toggle::after { content: '›'; font-size: 14px; transition: transform 0.2s; }
+    .kanban-details[open] .kanban-details-toggle::after { transform: rotate(90deg); }
+    .kanban-details-body { padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+    .kanban-detail-summary { font-size: 12px; color: #516f90; line-height: 1.6; }
+    .kanban-detail-verdict { font-size: 12px; color: #7c98b6; line-height: 1.5; font-style: italic; }
+    .kanban-details .card-analysis { border-radius: 6px; margin-top: 2px; }
+
+    /* ── Stage editor modal ── */
+    .stage-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .stage-editor-modal { background: #fff; border: 1px solid #dfe3eb; border-radius: 16px; width: 480px; max-width: 95vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(45,62,80,0.2); }
+    .stage-editor-header { padding: 20px 24px 16px; border-bottom: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; }
+    .stage-editor-title { font-size: 16px; font-weight: 700; color: #2d3e50; }
+    .stage-editor-subtitle { font-size: 12px; color: #7c98b6; margin-top: 3px; }
+    .stage-editor-x { background: none; border: none; color: #b0c1d4; font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
+    .stage-editor-x:hover { color: #e5483b; }
+    .stage-editor-list { padding: 12px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .stage-row { display: flex; align-items: center; gap: 10px; background: #f5f8fa; border: 1px solid #dfe3eb; border-radius: 10px; padding: 10px 12px; }
+    .stage-drag-handle { color: #b0c1d4; font-size: 16px; cursor: grab; user-select: none; }
+    .stage-color-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid; cursor: pointer; flex-shrink: 0; transition: transform 0.15s; }
+    .stage-color-swatch:hover { transform: scale(1.2); }
+    .stage-label-input { flex: 1; background: #fff; border: 1px solid #dfe3eb; border-radius: 6px; color: #33475b; font-size: 13px; padding: 6px 10px; font-family: inherit; }
+    .stage-label-input:focus { outline: none; border-color: #FF7A59; }
+    .stage-move-btn { background: #fff; border: 1px solid #dfe3eb; border-radius: 5px; color: #7c98b6; font-size: 12px; padding: 4px 7px; cursor: pointer; }
+    .stage-move-btn:hover:not(:disabled) { color: #33475b; border-color: #99acc2; }
+    .stage-move-btn:disabled { opacity: 0.3; cursor: default; }
+    .stage-delete-btn { background: none; border: none; color: #b0c1d4; font-size: 14px; cursor: pointer; padding: 0 2px; }
+    .stage-delete-btn:hover { color: #e5483b; }
+    .stage-editor-footer { padding: 16px 24px; border-top: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .stage-save-btn { background: #FF7A59; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; padding: 9px 24px; cursor: pointer; transition: background 0.15s; }
+    .stage-save-btn:hover { background: #e5612a; }
+
+    /* ── Opportunity / company action links ── */
+    .card-link-opp { color: #FF7A59; font-weight: 700; }
+    .card-link-opp:hover { color: #e5612a; }
+    .add-opp-btn { font-size: 11px; color: #FF7A59; background: none; border: 1px solid rgba(255,122,89,0.4); border-radius: 6px; padding: 3px 9px; cursor: pointer; transition: all 0.15s; font-weight: 600; font-family: inherit; }
+    .add-opp-btn:hover { background: rgba(255,122,89,0.07); border-color: #FF7A59; }
   </style>
 </head>
 <body>
@@ -118,27 +258,66 @@
     <div class="logo">Company<span>Intel</span> <span class="slash">/ Saved</span></div>
     <div class="header-right">
       <div class="stat-pill"><b id="company-count">0</b> companies</div>
-      <div class="stat-pill"><b id="job-count">0</b> job postings</div>
+      <div class="stat-pill"><b id="job-count">0</b> job opportunities</div>
+      <a class="prefs-link" href="preferences.html" target="_blank">⚙ Preferences</a>
     </div>
   </div>
 
+  <div class="view-toggle-bar">
+    <span class="view-toggle-label">View</span>
+    <div class="view-toggle">
+      <button class="view-toggle-btn active" id="view-grid-btn">⊞ Grid</button>
+      <button class="view-toggle-btn" id="view-kanban-btn">⬛ Kanban</button>
+    </div>
+    <button class="stage-add-btn" id="edit-stages-btn" style="margin-left:auto">⚙ Edit Stages</button>
+  </div>
+
+  <div class="stage-editor-overlay" id="stage-editor-modal">
+    <div class="stage-editor-modal">
+      <div class="stage-editor-header">
+        <div>
+          <div class="stage-editor-title" id="stage-editor-title">Pipeline Stages</div>
+          <div class="stage-editor-subtitle" id="stage-editor-subtitle">Rename, recolor, reorder, or add new stages</div>
+        </div>
+        <button class="stage-editor-x" id="stage-editor-close">✕</button>
+      </div>
+      <div class="stage-editor-list" id="stage-editor-list"></div>
+      <div class="stage-editor-footer">
+        <button class="stage-add-btn" id="stage-editor-add">+ Add Stage</button>
+        <button class="stage-save-btn" id="stage-editor-save">Save Stages</button>
+      </div>
+    </div>
+  </div>
   <div class="toolbar">
     <input class="search-input" id="search" placeholder="Search companies, notes, categories...">
   </div>
   <div class="toolbar toolbar-type">
-    <span class="filter-label">Type:</span>
-    <button class="filter-btn active" data-type="all">All</button>
-    <button class="filter-btn" data-type="job">Job Postings</button>
-    <button class="filter-btn" data-type="company">Companies</button>
+    <span class="filter-label">Pipeline:</span>
+    <button class="pipeline-btn active" id="pipeline-all-btn">All Saved</button>
+    <button class="pipeline-btn" id="pipeline-opp-btn">Opportunity Pipeline</button>
+    <button class="pipeline-btn" id="pipeline-co-btn">Company Pipeline</button>
+  </div>
+  <div class="pipeline-header" id="pipeline-header" style="display:none">
+    <span class="pipeline-header-text" id="pipeline-header-text"></span>
   </div>
   <div class="toolbar toolbar-stars">
     <span class="filter-label">Rating:</span>
-    <button class="star-btn active" data-rating="all">Any</button>
-    <button class="star-btn" data-rating="5">&#9733;&#9733;&#9733;&#9733;&#9733;</button>
-    <button class="star-btn" data-rating="4">&#9733;&#9733;&#9733;&#9733;+</button>
-    <button class="star-btn" data-rating="3">&#9733;&#9733;&#9733;+</button>
-    <button class="star-btn" data-rating="2">&#9733;&#9733;+</button>
-    <button class="star-btn" data-rating="1">&#9733;+</button>
+    <div class="rating-dropdown" id="rating-dropdown">
+      <button class="rating-dropdown-btn" id="rating-dropdown-btn">
+        <span id="rating-dropdown-label">Any Rating</span>
+        <span class="rating-dropdown-arrow">▾</span>
+      </button>
+      <div class="rating-dropdown-menu" id="rating-dropdown-menu">
+        <label class="rating-option"><input type="checkbox" value="5"> ★★★★★</label>
+        <label class="rating-option"><input type="checkbox" value="4"> ★★★★</label>
+        <label class="rating-option"><input type="checkbox" value="3"> ★★★</label>
+        <label class="rating-option"><input type="checkbox" value="2"> ★★</label>
+        <label class="rating-option"><input type="checkbox" value="1"> ★</label>
+        <label class="rating-option"><input type="checkbox" value="0"> Unrated</label>
+        <div class="rating-option-divider"></div>
+        <button class="rating-clear-btn" id="rating-clear-btn">Clear</button>
+      </div>
+    </div>
   </div>
   <div class="toolbar toolbar-status" id="status-toolbar">
     <span class="filter-label">Status:</span>
@@ -149,6 +328,7 @@
   </div>
 
   <div class="grid" id="grid"></div>
+  <div class="kanban-board" id="kanban-board"></div>
 
   <script src="saved.js"></script>
 </body>

@@ -38,33 +38,47 @@
 
     #trigger {
       position: fixed;
-      bottom: 24px;
-      right: 24px;
-      width: 50px;
-      height: 50px;
+      right: 0;
+      width: 10px;
+      height: 44px;
       background: #FF7A59;
-      border-radius: 50%;
+      border-radius: 8px 0 0 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 20px rgba(255,122,89,0.45);
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 12px;
-      font-weight: 800;
+      cursor: grab;
+      box-shadow: -2px 0 14px rgba(255,122,89,0.4);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 13px;
+      font-weight: 900;
       color: #fff;
-      letter-spacing: -0.02em;
+      letter-spacing: 1px;
+      overflow: hidden;
       pointer-events: all;
-      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+      transition: width 0.25s ease, height 0.25s ease, border-radius 0.25s ease, right 0.25s ease, box-shadow 0.2s, background 0.2s;
       user-select: none;
     }
-    #trigger:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(255,122,89,0.55); }
-    #trigger.open { background: #243342; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    #trigger:hover, #trigger.ci-expanded {
+      width: 50px;
+      height: 50px;
+      right: 18px;
+      border-radius: 50%;
+      box-shadow: 0 4px 20px rgba(255,122,89,0.5);
+    }
+    #trigger:active { cursor: grabbing; }
+    #trigger.open {
+      width: 50px;
+      height: 50px;
+      right: 18px;
+      border-radius: 50%;
+      background: #243342;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
 
     #panel {
       position: fixed;
-      right: 88px;
-      top: 50%;
+      right: 74px;
+      top: 50vh;
       transform: translateY(-50%) scale(0.96);
       width: 360px;
       max-height: 86vh;
@@ -86,7 +100,7 @@
       pointer-events: all;
       transform: translateY(-50%) scale(1);
     }
-    #panel.dragging { transition: none; }
+    #panel.repositioning { transition: none; }
 
     #ci-header {
       padding: 13px 14px;
@@ -95,11 +109,10 @@
       display: flex;
       align-items: center;
       gap: 9px;
-      cursor: grab;
+      cursor: default;
       user-select: none;
       flex-shrink: 0;
     }
-    #ci-header:active { cursor: grabbing; }
 
     #ci-favicon {
       width: 22px; height: 22px;
@@ -256,9 +269,10 @@
   let hasResearched = false;
 
   // Drag state
-  let dragging = false;
-  let dragStartX, dragStartY, panelStartRight, panelStartTop;
-  let panelRight = 88, panelTop = null; // null = use CSS default (50%)
+  let isDraggingTrigger = false;
+  let didDrag = false;
+  let triggerDragStartY = 0, triggerDragStartTop = 0;
+  let triggerTop = window.innerHeight - 74;
 
   // ── DOM refs ─────────────────────────────────────────────────────────────
   const trigger = shadow.getElementById('trigger');
@@ -270,12 +284,25 @@
   const refreshBtn = shadow.getElementById('ci-refresh');
   const closeBtn = shadow.getElementById('ci-close');
 
+  // ── Init position ────────────────────────────────────────────────────────
+  trigger.style.top = triggerTop + 'px';
+
+  function updatePanelPosition() {
+    const triggerCenter = triggerTop + 25;
+    const half = Math.min(window.innerHeight * 0.43, 280);
+    const clamped = Math.max(half + 10, Math.min(window.innerHeight - half - 10, triggerCenter));
+    panel.style.top = clamped + 'px';
+  }
+
   // ── Toggle ───────────────────────────────────────────────────────────────
   trigger.addEventListener('click', () => {
+    if (didDrag) { didDrag = false; return; }
     isOpen = !isOpen;
     panel.classList.toggle('open', isOpen);
     trigger.classList.toggle('open', isOpen);
+    if (!isOpen) trigger.classList.remove('ci-expanded');
     trigger.textContent = isOpen ? '✕' : 'CI';
+    if (isOpen) updatePanelPosition();
     if (isOpen && !hasResearched) {
       const detected = detectCompany();
       currentCompany = detected.company;
@@ -289,6 +316,7 @@
     isOpen = false;
     panel.classList.remove('open');
     trigger.classList.remove('open');
+    trigger.classList.remove('ci-expanded');
     trigger.textContent = 'CI';
   });
 
@@ -299,34 +327,32 @@
     }
   });
 
-  // ── Drag ─────────────────────────────────────────────────────────────────
-  ciHeader.addEventListener('mousedown', e => {
-    if (e.target === refreshBtn || e.target === closeBtn) return;
-    dragging = true;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    const rect = panel.getBoundingClientRect();
-    panelStartRight = window.innerWidth - rect.right;
-    panelStartTop = rect.top + rect.height / 2;
-    panel.classList.add('dragging');
-    e.preventDefault();
+  // ── Drag (trigger slides up/down along right edge) ───────────────────────
+  trigger.addEventListener('mousedown', e => {
+    isDraggingTrigger = true;
+    didDrag = false;
+    triggerDragStartY = e.clientY;
+    triggerDragStartTop = triggerTop;
+    trigger.classList.add('ci-expanded');
   });
 
   document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const dx = dragStartX - e.clientX;
-    const dy = e.clientY - dragStartY;
-    panelRight = Math.max(8, Math.min(window.innerWidth - 368, panelStartRight + dx));
-    const newTop = Math.max(60, Math.min(window.innerHeight - 60, panelStartTop + dy));
-    panel.style.right = panelRight + 'px';
-    panel.style.top = newTop + 'px';
-    panel.style.transform = 'none';
+    if (!isDraggingTrigger) return;
+    const dy = e.clientY - triggerDragStartY;
+    if (Math.abs(dy) > 3) didDrag = true;
+    triggerTop = Math.max(20, Math.min(window.innerHeight - 70, triggerDragStartTop + dy));
+    trigger.style.top = triggerTop + 'px';
+    if (isOpen) {
+      panel.classList.add('repositioning');
+      updatePanelPosition();
+    }
   });
 
   document.addEventListener('mouseup', () => {
-    if (dragging) {
-      dragging = false;
-      panel.classList.remove('dragging');
+    if (isDraggingTrigger) {
+      isDraggingTrigger = false;
+      panel.classList.remove('repositioning');
+      if (!isOpen) trigger.classList.remove('ci-expanded');
     }
   });
 

@@ -11,8 +11,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(() => sendResponse({}));
     return true;
   }
+
   return true;
 });
+
+function extractMyLinkedInProfile() {
+  const parts = [];
+
+  // Name + headline from the top card
+  const name = document.querySelector('h1')?.textContent?.trim();
+  const headline = document.querySelector('.text-body-medium.break-words')?.textContent?.trim();
+  if (name) parts.push(`Name: ${name}`);
+  if (headline) parts.push(`Headline: ${headline}\n`);
+
+  // Extract a named section by its anchor id
+  function sectionText(anchorId) {
+    const anchor = document.getElementById(anchorId);
+    if (!anchor) return null;
+    // The anchor sits inside the section heading; walk up to the section container
+    let el = anchor;
+    for (let i = 0; i < 6; i++) {
+      el = el.parentElement;
+      if (!el) break;
+      const text = el.innerText?.trim();
+      // Section containers typically have the heading + items — look for substantial content
+      if (text && text.length > 80) return text;
+    }
+    return null;
+  }
+
+  const about = sectionText('about');
+  if (about) parts.push(`About:\n${about.replace(/^About\s*\n/, '')}\n`);
+
+  const experience = sectionText('experience');
+  if (experience) parts.push(`Experience:\n${experience.replace(/^Experience\s*\n/, '')}\n`);
+
+  const education = sectionText('education');
+  if (education) parts.push(`Education:\n${education.replace(/^Education\s*\n/, '')}\n`);
+
+  const skills = sectionText('skills');
+  if (skills) parts.push(`Skills:\n${skills.replace(/^Skills\s*\n/, '')}`);
+
+  const result = parts.join('\n').trim();
+  // Truncate to keep it usable as prompt context (~4000 chars)
+  return result.slice(0, 4000) || null;
+}
 
 async function detectCompanyAndJob() {
   const url = window.location.href;
@@ -70,9 +113,22 @@ async function extractJobDescriptionForPanel() {
   if (moreBtn) moreBtn.click();
   await new Promise(r => setTimeout(r, 800));
 
+  const jobMeta = extractLinkedInJobMeta();
+
+  // If salary not found in DOM chips, scan the full description text before truncation
+  if (!jobMeta.salary) {
+    const fullText = extractJobDescriptionFull();
+    if (fullText) {
+      // Match patterns like "$133,500 - $200,500" or "$95K - $120K" anywhere in the text
+      const m = fullText.match(/\$[\d,]+(?:K)?\s*[-–]\s*\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))?/i)
+               || fullText.match(/\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))/i);
+      if (m) jobMeta.salary = m[0].trim();
+    }
+  }
+
   return {
     jobDescription: extractJobDescription(),
-    jobMeta: extractLinkedInJobMeta() // re-extract with fully loaded panel
+    jobMeta
   };
 }
 
@@ -414,14 +470,15 @@ function detectGeneric() {
   const segments = rawTitle.split(/\s*[|·—–]\s*/).map(s => s.trim()).filter(Boolean);
   if (segments.length > 1) {
     const last = segments[segments.length - 1];
-    if (last.length > 1 && last.length < 50 && !/jobs|careers|hiring/i.test(last)) {
+    if (last.length > 1 && last.length < 50 && !/jobs|careers|hiring/i.test(last) && !/[.!?]/.test(last)) {
       return { company: last, source: 'generic', domain };
     }
   }
   // First segment if it's short enough to be a brand name (not a tagline)
   if (segments.length > 0) {
     const first = segments[0];
-    if (first.length > 1 && first.length < 35 && !/jobs|careers|hiring/i.test(first)) {
+    // Skip if it looks like a sentence (contains period, !, ?) — those are taglines not names
+    if (first.length > 1 && first.length < 35 && !/jobs|careers|hiring/i.test(first) && !/[.!?]/.test(first)) {
       return { company: first, source: 'generic', domain };
     }
   }
@@ -547,6 +604,20 @@ function extractLinkedInJobMeta() {
     if (!result.salary && /\$[\d,K]+/.test(t) && t.length < 60) result.salary = t;
   }
 
+  // Dedicated salary scan — runs regardless of chip results, catches salary in description body (p/div elements)
+  if (!result.salary) {
+    for (const el of scope.querySelectorAll('p, div, span, li')) {
+      if (el.children.length > 0) continue;
+      const t = el.textContent?.trim();
+      if (!t || !/\$[\d,]/.test(t) || t.length > 100) continue;
+      if (/\$[\d,]+(?:K)?\s*[-–—]\s*\$[\d,]+/.test(t) ||
+          /\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))/i.test(t)) {
+        result.salary = t;
+        break;
+      }
+    }
+  }
+
   // Location — specific selectors then broad fallback
   const locationSelectors = [
     '.job-details-jobs-unified-top-card__primary-description-without-tagline .tvm__text',
@@ -612,6 +683,53 @@ function waitForJobDescriptionPanel() {
       const timeout = setTimeout(() => { observer.disconnect(); resolve(); }, 5000);
     }, 600);
   });
+}
+
+function extractJobDescriptionFull() {
+  // Same as extractJobDescription but returns full text without truncation
+  const candidates = [];
+  const panelSelectors = [
+    '#job-details',
+    '.jobs-search__job-details--wrapper',
+    '.scaffold-layout__detail',
+    '[class*="jobs-search__job-details"]',
+    '[class*="job-details-module"]',
+    '.jobs-description__content',
+    '.jobs-description'
+  ];
+  let panel = null;
+  for (const sel of panelSelectors) {
+    const el = document.querySelector(sel);
+    if (el && el.innerText?.trim().length > 80) { panel = el; break; }
+  }
+  const scope = panel || document;
+  const linkedinSelectors = [
+    '.jobs-description-content__text--truncated',
+    '.jobs-description-content__text',
+    '.jobs-description__content .jobs-box__html-content',
+    '.jobs-description__content',
+    '.jobs-description',
+  ];
+  for (const sel of linkedinSelectors) {
+    const el = scope.querySelector(sel);
+    const text = el?.innerText?.trim();
+    if (text && text.length > 150) candidates.push(text);
+  }
+  const jobDetailsEl = document.querySelector('#job-details');
+  if (jobDetailsEl) {
+    const text = jobDetailsEl.innerText?.trim();
+    if (text && text.length > 150) candidates.push(text);
+  }
+  if (panel) {
+    const clone = panel.cloneNode(true);
+    clone.querySelectorAll('[class*="premium"], [class*="promoted"], [class*="upsell"], .artdeco-card, [class*="job-alert"], [class*="similar-jobs"]').forEach(n => n.remove());
+    const text = clone.textContent?.replace(/\s+/g, ' ').trim();
+    if (text && text.length > 150) candidates.push(text);
+  }
+  if (candidates.length > 0) {
+    return candidates.reduce((a, b) => a.length > b.length ? a : b);
+  }
+  return null;
 }
 
 function extractJobDescription() {

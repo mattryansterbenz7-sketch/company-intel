@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CompanyIntel — Preferences</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f8fa; color: #33475b; min-height: 100vh; font-size: 14px; }
+
+    /* ── Header ── */
+    .header { background: #2d3e50; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; }
+    .logo span { color: #FF7A59; }
+    .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
+    .header-back { color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #4a6580; border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .header-back:hover { color: #fff; border-color: #7c98b6; }
+    .save-status { font-size: 13px; font-weight: 600; color: #4ade80; opacity: 0; transition: opacity 0.3s; }
+    .save-status.show { opacity: 1; }
+
+    /* ── Page layout ── */
+    .page { max-width: 1100px; margin: 0 auto; padding: 36px 40px 60px; }
+    .page-title { font-size: 26px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .page-subtitle { font-size: 14px; color: #7c98b6; margin-bottom: 32px; line-height: 1.6; }
+
+    /* ── Grid ── */
+    .pref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+
+    /* ── Cards ── */
+    .pref-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(45,62,80,0.06); display: flex; flex-direction: column; gap: 20px; }
+    .pref-card-title { font-size: 13px; font-weight: 800; color: #516f90; text-transform: uppercase; letter-spacing: 0.09em; padding-bottom: 14px; border-bottom: 1px solid #eaf0f6; }
+    .pref-card.full { grid-column: 1 / -1; }
+
+    /* ── Fields ── */
+    .pref-field { display: flex; flex-direction: column; gap: 7px; }
+    .pref-label { font-size: 12px; font-weight: 700; color: #33475b; display: flex; align-items: center; gap: 6px; }
+    .pref-hint {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%; background: #eaf0f6;
+      color: #7c98b6; font-size: 9px; font-weight: 700; cursor: default;
+      position: relative; flex-shrink: 0;
+    }
+    .pref-hint:hover::after {
+      content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%); background: #2d3e50; color: #f1f5f9; font-size: 11px;
+      font-weight: 400; line-height: 1.5; white-space: normal; width: 220px; padding: 8px 10px;
+      border-radius: 7px; border: 1px solid #4a6580; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      pointer-events: none; z-index: 100; font-style: normal;
+    }
+    .pref-input {
+      width: 100%; background: #f5f8fa; border: 1px solid #dfe3eb; border-radius: 8px;
+      color: #33475b; font-size: 13px; font-family: inherit; padding: 10px 12px;
+      resize: vertical; line-height: 1.6; transition: border-color 0.15s, background 0.15s;
+    }
+    .pref-input:focus { outline: none; border-color: #FF7A59; background: #fff; }
+    .pref-input::placeholder { color: #b0c1d4; }
+    .pref-textarea-sm { min-height: 80px; }
+    .pref-textarea-md { min-height: 120px; }
+    .pref-textarea-lg { min-height: 220px; }
+    .pref-input-row { display: flex; gap: 10px; }
+    .pref-input-row .pref-input { flex: 1; min-height: 0; height: 40px; resize: none; padding: 9px 12px; }
+    select.pref-input { min-height: 0; height: 40px; resize: none; cursor: pointer; }
+
+    /* ── Toggle ── */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0; }
+    .toggle-info { display: flex; flex-direction: column; gap: 3px; }
+    .toggle-label { font-size: 14px; font-weight: 600; color: #33475b; }
+    .toggle-desc  { font-size: 12px; color: #7c98b6; }
+    .toggle-switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute; inset: 0; background: #dfe3eb; border-radius: 11px; cursor: pointer; transition: background 0.2s;
+    }
+    .toggle-track::before {
+      content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .toggle-switch input:checked + .toggle-track { background: #FF7A59; }
+    .toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
+
+    /* ── Checkboxes ── */
+    .check-group { display: flex; gap: 20px; flex-wrap: wrap; padding: 4px 0; }
+    .check-label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #33475b; cursor: pointer; }
+    .check-label input { accent-color: #FF7A59; width: 15px; height: 15px; cursor: pointer; }
+
+    /* ── Import buttons ── */
+    .import-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .import-btn {
+      font-size: 12px; font-weight: 600; color: #516f90; background: #fff;
+      border: 1px solid #dfe3eb; border-radius: 6px; padding: 6px 12px;
+      cursor: pointer; font-family: inherit; transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+    }
+    .import-btn:hover { border-color: #99acc2; color: #33475b; }
+    .import-status { font-size: 12px; font-weight: 600; color: #00897b; margin-top: 4px; min-height: 18px; }
+    .import-status.err { color: #e5483b; }
+
+    /* ── Salary row ── */
+    .salary-row { display: flex; flex-direction: column; gap: 10px; }
+    .salary-item { display: flex; align-items: center; gap: 12px; }
+    .salary-label { font-size: 12px; color: #516f90; white-space: nowrap; min-width: 140px; }
+
+    /* ── Save button ── */
+    .integration-status { font-size: 13px; font-weight: 600; color: #7c98b6; }
+    .integration-status.connected { color: #059669; }
+    .integration-btn { font-size: 13px; font-weight: 700; color: #fff; background: #2d3e50; border: none; border-radius: 8px; padding: 8px 18px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .integration-btn:hover { background: #FF7A59; }
+    .integration-btn-danger { background: none; color: #e5483b; border: 1px solid rgba(229,72,59,0.4); }
+    .integration-btn-danger:hover { background: rgba(229,72,59,0.06); border-color: #e5483b; }
+    .integration-note { font-size: 12px; color: #7c98b6; line-height: 1.6; margin-top: 4px; }
+    .save-bar { position: sticky; bottom: 0; background: rgba(245,248,250,0.95); border-top: 1px solid #dfe3eb; padding: 16px 40px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; backdrop-filter: blur(4px); }
+    .save-btn { background: #FF7A59; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; padding: 10px 28px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .save-btn:hover { background: #e05c3a; }
+    .save-confirm { font-size: 13px; font-weight: 600; color: #00897b; opacity: 0; transition: opacity 0.3s; }
+    .save-confirm.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">Company<span>Intel</span> <span class="slash">/ Preferences</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="save-confirm" id="save-confirm">Saved ✓</span>
+      <a class="header-back" href="docs.html" target="_blank" style="text-decoration:none">Docs</a>
+      <button class="header-back" id="btn-back">← Back to Saved</button>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="page-title">Your Profile &amp; Preferences</div>
+    <div class="page-subtitle">Used by Job Match to score opportunities against your background. The more detail you add, the more accurate the scoring.</div>
+
+    <div class="pref-grid">
+
+      <!-- LEFT: Profile -->
+      <div style="display:flex;flex-direction:column;gap:28px">
+
+        <div class="pref-card">
+          <div class="pref-card-title">Job Match</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">Job Match Insights</div>
+              <div class="toggle-desc">Score job postings against your background &amp; preferences</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="pref-job-match-toggle">
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="pref-card">
+          <div class="pref-card-title">Your Profile</div>
+          <div class="pref-field">
+            <label class="pref-label">LinkedIn profile URL <span class="pref-hint" data-tooltip="Your own LinkedIn URL — used by the Import button to pull your profile text.">i</span></label>
+            <input type="text" class="pref-input" id="pref-linkedin-url" placeholder="linkedin.com/in/yourname" style="min-height:0;height:40px;resize:none;">
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">Resume or LinkedIn profile text <span class="pref-hint" data-tooltip="The primary input for job match scoring. Paste your resume, import from LinkedIn, or upload a file.">i</span></label>
+            <div class="import-row">
+              <button class="import-btn" id="import-linkedin-btn">⬇ Import from LinkedIn tab</button>
+              <label class="import-btn" style="cursor:pointer">📄 Upload .txt / .md <input type="file" id="upload-resume-file" accept=".txt,.md" style="display:none"></label>
+            </div>
+            <div class="import-status" id="import-status"></div>
+            <textarea class="pref-input pref-textarea-lg" id="pref-resume-text" placeholder="Paste your resume or LinkedIn profile here.&#10;&#10;Include experience, skills, and accomplishments for the most accurate scoring."></textarea>
+          </div>
+        </div>
+
+        <div class="pref-card">
+          <div class="pref-card-title">Role Context</div>
+          <div class="pref-field">
+            <label class="pref-label">Your background &amp; strengths <span class="pref-hint" data-tooltip="Anything beyond your resume — deal sizes, team sizes, key achievements.">i</span></label>
+            <textarea class="pref-input pref-textarea-md" id="pref-job-match-bg" placeholder="e.g. 7 years in B2B SaaS sales, built and led teams of 8+, closed $2M+ enterprise deals."></textarea>
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">Responsibilities & attributes you enjoy <span class="pref-hint" data-tooltip="Specific things you want more of — types of work, ownership, dynamics, pace.">i</span></label>
+            <textarea class="pref-input pref-textarea-md" id="pref-role-loved" placeholder="e.g. Building from scratch, direct revenue ownership, async culture, working closely with founders, greenfield territory."></textarea>
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">Responsibilities & attributes to avoid <span class="pref-hint" data-tooltip="Specific things you want to steer clear of — tasks, structures, dynamics that drain you.">i</span></label>
+            <textarea class="pref-input pref-textarea-md" id="pref-role-hated" placeholder="e.g. Heavy admin/CRM logging, managing up constantly, rigid approval chains, post-sale account management only."></textarea>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: Preferences -->
+      <div style="display:flex;flex-direction:column;gap:28px">
+
+        <div class="pref-card">
+          <div class="pref-card-title">Career Preferences</div>
+          <div class="pref-field">
+            <label class="pref-label">What roles are you looking for? <span class="pref-hint" data-tooltip="Used to evaluate job titles and responsibilities. Include seniority, function, and growth goals.">i</span></label>
+            <textarea class="pref-input pref-textarea-sm" id="pref-roles" placeholder="e.g. Head of Sales, VP Revenue, AE at a Series A–C company. I want ownership and a path to CRO."></textarea>
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">What do you want to avoid? <span class="pref-hint" data-tooltip="Red flags for the scorer. Company types, cultures, or role characteristics you'd pass on.">i</span></label>
+            <textarea class="pref-input pref-textarea-sm" id="pref-avoid" placeholder="e.g. Large enterprises, heavily process-driven cultures, no PMF."></textarea>
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">What industries or products excite you? <span class="pref-hint" data-tooltip="Helps identify roles at companies in spaces you care about.">i</span></label>
+            <textarea class="pref-input pref-textarea-sm" id="pref-interests" placeholder="e.g. Developer tools, fintech infrastructure, AI/ML tooling, technical B2B."></textarea>
+          </div>
+        </div>
+
+        <div class="pref-card">
+          <div class="pref-card-title">Location &amp; Logistics</div>
+          <div class="pref-field">
+            <label class="pref-label">Your location</label>
+            <div class="pref-input-row">
+              <input type="text" class="pref-input" id="pref-location-city" placeholder="City" autocomplete="off">
+              <select class="pref-input" id="pref-location-state">
+                <option value="">State</option>
+                <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
+              </select>
+            </div>
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">Work arrangement <span class="pref-hint" data-tooltip="What you're open to.">i</span></label>
+            <div class="check-group">
+              <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
+              <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
+              <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
+            </div>
+          </div>
+          <div class="pref-field">
+            <label class="pref-label">Max travel <span class="pref-hint" data-tooltip="Flagged when a posting explicitly mentions travel requirements.">i</span></label>
+            <input type="text" class="pref-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None" style="min-height:0;height:40px;resize:none;">
+          </div>
+        </div>
+
+        <div class="pref-card">
+          <div class="pref-card-title">Salary Signals</div>
+          <div class="pref-field">
+            <label class="pref-label" style="margin-bottom:4px">Only applied when a posting explicitly lists pay</label>
+            <div class="salary-row">
+              <div class="salary-item">
+                <span class="salary-label">🚩 Walk away below</span>
+                <input type="text" class="pref-input" id="pref-salary-floor" placeholder="e.g. $120K" style="flex:1;min-height:0;height:40px;resize:none;">
+              </div>
+              <div class="salary-item">
+                <span class="salary-label">🟢 Strong offer above</span>
+                <input type="text" class="pref-input" id="pref-salary-strong" placeholder="e.g. $200K" style="flex:1;min-height:0;height:40px;resize:none;">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Integrations — full width -->
+      <div class="pref-card full" id="integrations-card">
+        <div class="pref-card-title">Integrations</div>
+
+        <div class="pref-field">
+          <label class="pref-label">Gmail <span class="pref-hint" data-tooltip="Connects read-only Gmail access to surface emails from company domains inside each opportunity and company view.">i</span></label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="integration-status" id="gmail-status">Checking…</span>
+            <button class="integration-btn" id="gmail-connect-btn" style="display:none">Connect Gmail</button>
+            <button class="integration-btn integration-btn-danger" id="gmail-disconnect-btn" style="display:none">Disconnect</button>
+          </div>
+          <p class="integration-note">Allows the AI chat to pull in emails from recruiters, founders, and application confirmations associated with each company's domain.</p>
+        </div>
+
+        <div class="pref-field" style="border-top:1px solid #eaf0f6;padding-top:16px">
+          <label class="pref-label">Granola Meeting Notes <span class="pref-hint" data-tooltip="Connects to Granola MCP to surface meeting notes for each company inside the AI chat.">i</span></label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="integration-status" id="granola-status">Not connected</span>
+            <button class="integration-btn" id="granola-connect-btn">Connect Granola</button>
+            <button class="integration-btn integration-btn-danger" id="granola-disconnect-btn" style="display:none">Disconnect</button>
+          </div>
+          <p class="integration-note">When you ask the AI about a company, it will automatically search your Granola notes for that company and include relevant meeting context.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="save-bar">
+    <span class="save-confirm" id="save-confirm-bar">Saved ✓</span>
+    <button class="save-btn" id="save-btn">Save Preferences</button>
+  </div>
+
+  <script src="preferences.js"></script>
+</body>
+</html>
