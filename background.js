@@ -638,6 +638,10 @@ async function handleChatMessage({ messages, context }) {
     `\n=== TODAY ===\n${todayStr}`
   ];
 
+  if (context._applicationMode) {
+    systemParts.push(`\n=== APPLICATION MODE ===\nThe user is currently filling out a job application. Help them answer application questions concisely and compellingly, drawing on their background, the job description, and what you know about the company. Keep answers specific to this role — not generic. Mirror the language and values from the job posting. Be confident but authentic.`);
+  }
+
   // ── Company overview ──────────────────────────────────────────────────────
   const overview = [`\n=== COMPANY / OPPORTUNITY ===`];
   if (context.company)    overview.push(`Company: ${context.company}`);

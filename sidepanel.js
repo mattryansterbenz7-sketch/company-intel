@@ -1572,3 +1572,144 @@ function renderContactsSection(el, contacts) {
     ${html}
   </div>`;
 }
+
+// ── Side Panel Chat ─────────────────────────────────────────────────────────
+
+(function initSidePanelChat() {
+  const chatEl = document.getElementById('sp-chat');
+  const msgsEl = document.getElementById('sp-chat-messages');
+  const inputEl = document.getElementById('sp-chat-input');
+  const sendBtn = document.getElementById('sp-chat-send');
+  if (!chatEl || !msgsEl || !inputEl || !sendBtn) return;
+
+  let history = [];
+  let isApplicationMode = false;
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+  }
+
+  function renderMessages(showThinking) {
+    if (history.length === 0) {
+      msgsEl.innerHTML = '<div class="sp-chat-empty">Ask about this role, company, or get help with your application.</div>';
+    } else {
+      msgsEl.innerHTML = history.map(m => {
+        const bubble = m.role === 'assistant' ? escHtml(m.content) : escHtml(m.content);
+        return `<div class="sp-chat-msg sp-chat-msg-${m.role}"><div class="sp-chat-bubble">${bubble}</div></div>`;
+      }).join('') + (showThinking ? '<div class="sp-chat-msg sp-chat-msg-assistant"><div class="sp-chat-bubble sp-chat-thinking">Thinking...</div></div>' : '');
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  function buildSidePanelContext() {
+    const company = companyNameEl?.textContent || '';
+    const entry = currentSavedEntry || {};
+    const research = currentResearch || {};
+    return {
+      todayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+      todayTimestamp: Date.now(),
+      type: currentJobTitle ? 'job' : 'company',
+      company,
+      jobTitle: currentJobTitle || entry.jobTitle || null,
+      status: entry.status || null,
+      notes: entry.notes || null,
+      tags: entry.tags || [],
+      intelligence: research.intelligence || entry.intelligence || null,
+      jobMatch: research.jobMatch || entry.jobMatch || null,
+      matchFeedback: entry.matchFeedback || null,
+      jobDescription: currentJobDescription || entry.jobDescription || null,
+      reviews: research.reviews || entry.reviews || [],
+      leaders: research.leaders || entry.leaders || [],
+      employees: research.employees || entry.employees || null,
+      funding: research.funding || entry.funding || null,
+      knownContacts: entry.knownContacts || [],
+      emails: (entry.cachedEmails || []).slice(0, 20).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet })),
+      meetings: entry.cachedMeetings || [],
+      granolaNote: entry.cachedMeetingTranscript || entry.cachedMeetingNotes || null,
+      _applicationMode: isApplicationMode,
+    };
+  }
+
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    inputEl.style.height = '';
+    history.push({ role: 'user', content: text });
+    renderMessages(true);
+    sendBtn.disabled = true;
+    sendBtn.textContent = '…';
+
+    const context = buildSidePanelContext();
+    const apiMessages = history.map(m => ({ role: m.role, content: m.content }));
+
+    let result;
+    try {
+      result = await Promise.race([
+        new Promise(resolve => {
+          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context }, r => {
+            if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+            else resolve(r);
+          });
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000))
+      ]);
+    } catch (e) {
+      result = { error: e.message === 'timeout' ? 'Request timed out.' : e.message };
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+    history.push({ role: 'assistant', content: result?.reply || result?.error || 'Something went wrong.' });
+    renderMessages();
+  }
+
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = '';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+  });
+
+  // Quick action buttons
+  document.querySelector('.sp-chat-actions')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-prompt]');
+    if (btn) {
+      isApplicationMode = btn.dataset.prompt.includes('application');
+      inputEl.value = btn.dataset.prompt;
+      send();
+      return;
+    }
+    if (e.target.closest('[data-action="clear"]')) {
+      history = [];
+      isApplicationMode = false;
+      renderMessages();
+    }
+  });
+
+  // Show chat when company is detected — observe the company name element
+  const observer = new MutationObserver(() => {
+    if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
+      chatEl.style.display = 'block';
+      // Check for highlighted text on the page
+      if (currentTabId) {
+        chrome.tabs.sendMessage(currentTabId, { type: 'GET_SELECTION' }, r => {
+          void chrome.runtime.lastError;
+          if (r?.selection && r.selection.length > 3) {
+            inputEl.value = r.selection;
+            inputEl.placeholder = 'Ask about this text...';
+          }
+        });
+      }
+    }
+  });
+  observer.observe(companyNameEl, { childList: true, characterData: true, subtree: true });
+  // Also show immediately if already populated
+  if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
+    chatEl.style.display = 'block';
+  }
+
+  renderMessages();
+})();

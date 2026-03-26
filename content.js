@@ -11,6 +11,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(() => sendResponse({}));
     return true;
   }
+  if (message.type === 'GET_SELECTION') {
+    sendResponse({ selection: window.getSelection()?.toString()?.trim() || '' });
+    return true;
+  }
 
   return true;
 });
