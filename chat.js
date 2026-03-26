@@ -245,8 +245,26 @@ function buildChatPanel(container, entry) {
 
   renderHistory();
 
+  // Auto-fetch emails in background if not cached
+  if (!emailContext) {
+    const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+    const linkedinSlug = (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
+    if (domain || entry.company) {
+      chrome.runtime.sendMessage(
+        { type: 'GMAIL_FETCH_EMAILS', domain, companyName: entry.company, linkedinSlug },
+        result => {
+          void chrome.runtime.lastError;
+          if (result?.emails?.length) {
+            emailContext = result.emails;
+            console.log('[Chat Auto] Loaded', emailContext.length, 'emails');
+          }
+        }
+      );
+    }
+  }
+
   // Auto-fetch fresh meeting notes in background — skip if entry already has cached notes
-  if (!granolaContext && !entry.cachedMeetingTranscript && !entry.cachedMeetingNotes) {
+  if (!granolaContext && !meetingsContext && !entry.cachedMeetingTranscript && !entry.cachedMeetingNotes) {
     const contactNames = (entry.knownContacts || []).map(c => c.name).filter(Boolean);
     chrome.runtime.sendMessage(
       { type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames },
