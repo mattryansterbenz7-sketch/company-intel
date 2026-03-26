@@ -52,6 +52,8 @@ function buildChatPanel(container, entry) {
     || entry.cachedMeetingTranscript
     || entry.cachedMeetingNotes
     || null;
+  // Structured meetings (populated by "Load meeting notes" button or auto-fetch)
+  let meetingsContext = (entry.cachedMeetings?.length) ? entry.cachedMeetings : null;
 
   function renderHistory(showThinking) {
     msgsEl.innerHTML = history.length === 0
@@ -97,7 +99,15 @@ function buildChatPanel(container, entry) {
 
     // Always read the freshest override at send time — handles Granola arriving after panel was built
     const effectiveGranola = _chatContextOverrides[chatKey] || granolaContext;
-    const context = buildContext(entry, emailContext, effectiveGranola);
+    const effectiveMeetings = meetingsContext || entry.cachedMeetings || [];
+    const context = buildContext(entry, emailContext, effectiveGranola, effectiveMeetings);
+
+    console.log('[Chat Send] Context summary:', {
+      company: context.company,
+      meetingsCount: context.meetings?.length || 0,
+      granolaNote: context.granolaNote ? context.granolaNote.slice(0, 80) + '...' : null,
+      emailsCount: context.emails?.length || 0,
+    });
 
     const apiMessages = history.map(m => ({
       role: m.role,
@@ -187,11 +197,21 @@ function buildChatPanel(container, entry) {
     if (action === 'granola') {
       btn.disabled = true;
       btn.textContent = 'Loading…';
+      const contactNames = (entry.knownContacts || []).map(c => c.name).filter(Boolean);
       const result = await new Promise(resolve =>
-        chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company }, resolve)
+        chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames }, resolve)
       );
       btn.disabled = false;
       btn.textContent = 'Load meeting notes';
+
+      console.log('[Chat Granola] Raw result:', JSON.stringify({
+        hasNotes: !!result?.notes,
+        notesLen: result?.notes?.length || 0,
+        hasTranscript: !!result?.transcript,
+        transcriptLen: result?.transcript?.length || 0,
+        meetingsCount: result?.meetings?.length || 0,
+        error: result?.error || null
+      }));
 
       if (result?.error === 'token_expired') {
         showStatus('Granola session expired — please reconnect in Preferences.', 'err');
@@ -201,12 +221,18 @@ function buildChatPanel(container, entry) {
         showStatus('Granola not connected. Connect it in Preferences.', 'err');
         return;
       }
-      if (!result?.notes && !result?.transcript) {
+      if (!result?.notes && !result?.transcript && !result?.meetings?.length) {
         showStatus('No Granola notes found for this company.', 'info');
         return;
       }
       granolaContext = result.transcript || result.notes;
-      showStatus(`Meeting ${result.transcript ? 'transcripts' : 'notes'} loaded into context.`, 'ok');
+      // Also capture structured meetings so they're available in context
+      if (result.meetings?.length) {
+        meetingsContext = result.meetings;
+        console.log('[Chat Granola] Stored', meetingsContext.length, 'structured meetings');
+      }
+      const count = result.meetings?.length || (result.transcript ? 'transcripts' : 'notes');
+      showStatus(`Meeting ${typeof count === 'number' ? count + ' meeting(s)' : count} loaded into context.`, 'ok');
     }
   });
 
@@ -236,12 +262,16 @@ function buildChatPanel(container, entry) {
           granolaContext = notes;
           showStatus('Meeting notes loaded into context.', 'ok');
         }
+        if (result?.meetings?.length) {
+          meetingsContext = result.meetings;
+          console.log('[Chat Auto] Loaded', meetingsContext.length, 'structured meetings');
+        }
       }
     );
   }
 }
 
-function buildContext(entry, emails, granolaNote) {
+function buildContext(entry, emails, granolaNote, meetings) {
   const now = new Date();
   return {
     todayDate: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
@@ -262,8 +292,8 @@ function buildContext(entry, emails, granolaNote) {
     knownContacts: entry.knownContacts || [],
     // Full emails with snippets
     emails: emails || (entry.cachedEmails || []).slice(0, 20).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet })),
-    // Structured per-meeting data with full transcripts
-    meetings: (entry.cachedMeetings || []),
+    // Structured per-meeting data with full transcripts — prefer passed-in meetings over entry cache
+    meetings: meetings || entry.cachedMeetings || [],
     // Joined transcript fallback (used if no structured meetings)
     granolaNote: granolaNote || null,
   };

@@ -682,6 +682,11 @@ async function handleChatMessage({ messages, context }) {
   }
 
   // ── Meeting transcripts ───────────────────────────────────────────────────
+  console.log('[Chat Prompt] Meeting data:', {
+    structuredMeetings: context.meetings?.length || 0,
+    granolaNote: context.granolaNote ? `${context.granolaNote.length} chars` : 'null',
+    meetingTitles: (context.meetings || []).map(m => m.title).slice(0, 5),
+  });
   // Prefer structured per-meeting data (with individual dates + transcripts)
   if (context.meetings?.length) {
     const mtgLines = context.meetings.map(m => {
