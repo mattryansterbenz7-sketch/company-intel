@@ -7,6 +7,7 @@ let customCompanyStages = [];
 let customOpportunityStages = [];
 let customFieldDefs = []; // user-created fields
 let gmailUserEmail = ''; // user's own Gmail address, used to exclude self from Known Contacts
+let _stageCelebrations = {}; // loaded from storage for confetti/sound on stage changes
 
 const DEFAULT_FIELD_DEFS = [
   { id: 'companyWebsite',  label: 'Website',   type: 'url'  },
@@ -68,7 +69,8 @@ function init() {
   const id = new URLSearchParams(location.search).get('id');
   if (!id) { showError('No company ID specified.'); return; }
 
-  chrome.storage.local.get(['savedCompanies', 'allTags', 'companyStages', 'opportunityStages', 'customStages', 'companyFieldDefs', 'researchCache', 'gmailUserEmail'], data => {
+  chrome.storage.local.get(['savedCompanies', 'allTags', 'companyStages', 'opportunityStages', 'customStages', 'companyFieldDefs', 'researchCache', 'gmailUserEmail', 'stageCelebrations'], data => {
+    if (data.stageCelebrations) _stageCelebrations = data.stageCelebrations;
     allCompanies = data.savedCompanies || [];
     // Derive tags from actual entries — allTags can get stale if tags are removed from entries
     allKnownTags = [...new Set(allCompanies.flatMap(c => c.tags || []))].sort();
@@ -309,6 +311,9 @@ function renderHeader() {
       if (sIdx > toIdx && ts[s.key]) delete ts[s.key];
     }
     saveEntry({ jobStage: sel.value, stageTimestamps: ts });
+    // Fire celebration if configured
+    const celebCfg = _getCelebrationConfig(sel.value);
+    if (celebCfg) _fireCelebration(celebCfg);
   });
 
   document.getElementById('hdr-stars')?.querySelectorAll('.hdr-star').forEach(btn => {
@@ -2320,6 +2325,67 @@ function initColumnResize() {
 
   bindHandle('resize-left',  colLeft,  'ci_col_left_w',  'right');
   bindHandle('resize-right', colRight, 'ci_col_right_w', 'left');
+}
+
+// ── Celebrations (mirrors saved.js logic) ──────────────────────────────────
+
+function _getDefaultCelebration(key) {
+  if (/applied/i.test(key)) return { type: 'thumbsup', sound: 'pop', count: 15 };
+  if (/conversations?|mutual/i.test(key)) return { type: 'confetti', sound: 'pop', count: 30 };
+  if (/offer|accepted|referral/i.test(key)) return { type: 'money', sound: 'chaching', count: 40 };
+  if (/stalled/i.test(key)) return { type: 'stopsign', sound: 'none', count: 20 };
+  if (/rejected|closed|dq/i.test(key)) return { type: 'peace', sound: 'farewell', count: 25 };
+  return null;
+}
+
+function _getCelebrationConfig(newStatus) {
+  const cfg = _stageCelebrations[newStatus] || _getDefaultCelebration(newStatus);
+  if (!cfg || cfg.type === 'none') return null;
+  return cfg;
+}
+
+function _fireCelebration(config) {
+  const { type, sound, count } = config;
+  if (sound === 'chaching') _playChaChingSound();
+  else if (sound === 'pop') _playConfettiPop();
+  else if (sound === 'farewell') _playFarewellVoice();
+
+  const colors = ['#ff4444', '#ffbb00', '#00cc88', '#4488ff', '#cc44ff', '#ff8844', '#00ccff', '#ffcc00'];
+  const isEmoji = type === 'thumbsup' || type === 'money' || type === 'stopsign' || type === 'peace';
+  const baseEmoji = type === 'thumbsup' ? '👍' : type === 'stopsign' ? '🛑' : type === 'peace' ? '✌️' : '🤑';
+  const n = count || 30;
+  const particles = [];
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;z-index:99999;pointer-events:none;font-size:' + (isEmoji ? '22px' : '10px') + ';';
+    if (isEmoji) { el.textContent = type === 'money' && Math.random() > 0.5 ? '💵' : baseEmoji; }
+    else { el.style.width = '8px'; el.style.height = '8px'; el.style.borderRadius = '2px'; el.style.background = colors[i % colors.length]; }
+    document.body.appendChild(el);
+    particles.push({ el, x: window.innerWidth / 2 + (Math.random() - 0.5) * 200, y: window.innerHeight, vx: (Math.random() - 0.5) * 12, vy: -(Math.random() * 14 + 8), life: 1 });
+  }
+  function animate() {
+    let alive = 0;
+    for (const p of particles) {
+      if (p.life <= 0) continue;
+      p.vy += 0.25; p.x += p.vx; p.y += p.vy; p.life -= 0.008;
+      p.el.style.left = p.x + 'px'; p.el.style.top = p.y + 'px'; p.el.style.opacity = Math.max(0, p.life);
+      if (p.life <= 0) p.el.remove(); else alive++;
+    }
+    if (alive > 0) requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+}
+
+function _playConfettiPop() {
+  try { const c = new AudioContext(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.setValueAtTime(600, c.currentTime); o.frequency.exponentialRampToValueAtTime(1200, c.currentTime + 0.1); g.gain.setValueAtTime(0.3, c.currentTime); g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.15); o.start(); o.stop(c.currentTime + 0.15); } catch(e) {}
+}
+
+function _playChaChingSound() {
+  try { const c = new AudioContext(); const t = c.currentTime; [800, 1200, 1600].forEach((f, i) => { const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = f; g.gain.setValueAtTime(0.2, t + i * 0.12); g.gain.exponentialRampToValueAtTime(0.01, t + i * 0.12 + 0.2); o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.2); }); } catch(e) {}
+}
+
+function _playFarewellVoice() {
+  try { const u = new SpeechSynthesisUtterance(['peace', 'adios', 'see ya', 'bye'][Math.floor(Math.random() * 4)]); u.rate = 1.1; u.pitch = 1.0; u.volume = 0.6; speechSynthesis.speak(u); } catch(e) {}
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
