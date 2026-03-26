@@ -82,6 +82,21 @@
     .pipeline-header-text { font-size: 24px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; }
 
     /* ── Grid ── */
+    /* ── Micro-interactions ── */
+    button, .btn, [role="button"] { transition: all 0.15s ease; }
+    button:active:not(:disabled), .btn:active:not(:disabled) { transform: scale(0.96); }
+    .card { transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease; }
+    .card:hover { transform: translateY(-1px); }
+    .goal-card { transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease; }
+    .goal-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(45,62,80,0.1); }
+    .kanban-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+    .kanban-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(45,62,80,0.12); }
+    .filter-btn, .period-tab, .stage-tab-btn { transition: all 0.12s ease; }
+    .filter-btn:active, .period-tab:active, .stage-tab-btn:active { transform: scale(0.95); }
+    .funnel-stage { transition: transform 0.15s ease; }
+    .funnel-stage:hover { transform: translateY(-2px); }
+    .gc-action-btn:active { transform: scale(0.94); }
+
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; padding: 20px 32px; }
 
     /* ── Cards ── */
