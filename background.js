@@ -1194,8 +1194,9 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
     };
 
     // Resolve the actual tool name for getting full meeting data (varies by Granola version)
-    const transcriptToolName = ['get_meeting_transcript', 'get_meeting', 'get_transcript']
+    const transcriptToolName = ['get_meeting_transcript', 'get_meetings', 'get_meeting', 'get_transcript']
       .find(n => availableTools.includes(n)) || null;
+    console.log('[Granola] Transcript tool resolved to:', transcriptToolName);
 
     // Resolve query tool name
     const queryToolName = ['query_granola_meetings', 'search_meetings', 'search']
@@ -1311,9 +1312,7 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
       }
 
       // Find meeting IDs relevant to this company.
-      // Only match on company name or full contact name in the title — date matching removed
-      // (date matching caused mass false positives: any meeting on a day you had a company call got pulled in)
-      // First-name-only matching removed for same reason (too many common names like "Josh", "Matt")
+      console.log('[Granola] Parsed', Object.keys(meetingMeta).length, 'meetings from list. Looking for:', lowerCompany, '| contacts:', contactLower);
       const relevantIds = [];
       for (const [id, meta] of Object.entries(meetingMeta)) {
         const title = (meta.title || '').toLowerCase();
@@ -1337,6 +1336,22 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
         });
 
         if (matchesCompany || matchesContact) relevantIds.push(id);
+      }
+
+      console.log('[Granola] Matched', relevantIds.length, 'meetings by title. Titles checked:', Object.values(meetingMeta).map(m => m.title).slice(0, 10));
+
+      // Fallback: if query_granola_meetings found results but title matching didn't,
+      // extract UUIDs from the query result text and fetch those transcripts
+      if (relevantIds.length === 0 && allNotes.length > 0) {
+        const queryUuids = [];
+        for (const note of allNotes) {
+          const found = note.match(uuidRe);
+          if (found) queryUuids.push(...found);
+        }
+        if (queryUuids.length) {
+          console.log('[Granola] Fallback: extracted', queryUuids.length, 'UUIDs from query results');
+          relevantIds.push(...queryUuids);
+        }
       }
 
       // Fetch transcripts in parallel (max 5 meetings) — capture structured per-meeting data
