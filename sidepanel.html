@@ -92,6 +92,21 @@
     #save-confirm-btn:hover { background: #e8623f; }
     #save-confirm-btn.saved { background: #2D3E50; color: #FF7A59; border: 1px solid #3d5468; cursor: default; }
 
+    /* Duplicate detection dialog */
+    .dup-dialog { display: none; padding: 12px 16px; background: #1a2c3a; border: 1px solid #3d5468; border-radius: 8px; margin: 10px 16px; }
+    .dup-dialog.visible { display: block; }
+    .dup-dialog-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }
+    .dup-dialog-body { font-size: 12px; color: #94a3b8; line-height: 1.6; margin-bottom: 12px; }
+    .dup-dialog-body strong { color: #e2e8f0; }
+    .dup-dialog-btns { display: flex; gap: 8px; }
+    .dup-btn { flex: 1; padding: 8px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; border: none; text-align: center; }
+    .dup-btn-update { background: #2D3E50; color: #FF7A59; border: 1px solid #3d5468; }
+    .dup-btn-update:hover { border-color: #FF7A59; }
+    .dup-btn-new { background: #FF7A59; color: #fff; }
+    .dup-btn-new:hover { background: #e8623f; }
+    .sp-toast { position: fixed; bottom: 16px; left: 16px; right: 16px; background: #2D3E50; color: #e2e8f0; font-size: 12px; font-weight: 600; padding: 10px 14px; border-radius: 8px; border: 1px solid #3d5468; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .sp-toast.show { opacity: 1; }
+
     /* Opportunity fields strip */
     #sp-opp-fields { display: none; padding: 8px 16px 10px; background: #1e2d3c; border-bottom: 1px solid #2D3E50; }
     .sp-opp-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
@@ -476,6 +491,16 @@
     <button id="save-prefs-btn">Save Preferences</button>
     <div class="save-confirm" id="save-confirm">Saved — applies to your next research</div>
   </div>
+
+  <div class="dup-dialog" id="dup-dialog">
+    <div class="dup-dialog-title" id="dup-dialog-title"></div>
+    <div class="dup-dialog-body" id="dup-dialog-body"></div>
+    <div class="dup-dialog-btns">
+      <button class="dup-btn dup-btn-update" id="dup-btn-update">Update existing</button>
+      <button class="dup-btn dup-btn-new" id="dup-btn-new">Add as new opportunity</button>
+    </div>
+  </div>
+  <div class="sp-toast" id="sp-toast"></div>
 
   <script src="sidepanel.js"></script>
 </body>

@@ -223,6 +223,30 @@ document.getElementById('save-stars').addEventListener('mouseleave', () => {
 });
 
 // Save confirm
+// Title similarity: strip seniority prefixes and compare core role words
+function titlesAreSimilar(a, b) {
+  if (!a || !b) return true; // if either is missing, treat as same
+  const strip = t => t.toLowerCase()
+    .replace(/^(senior|sr\.?|staff|principal|lead|head of|vp of?|director of?|chief|junior|jr\.?|associate|founding)\s+/i, '')
+    .replace(/[,\-–—|·•].*$/, '') // strip suffixes like ", B2B SAAS"
+    .trim();
+  const ca = strip(a), cb = strip(b);
+  if (ca === cb) return true;
+  if (ca.includes(cb) || cb.includes(ca)) return true;
+  // Check word overlap — if >50% of words match
+  const wa = ca.split(/\s+/), wb = cb.split(/\s+/);
+  const shared = wa.filter(w => wb.includes(w)).length;
+  return shared >= Math.min(wa.length, wb.length) * 0.5;
+}
+
+function showToast(msg) {
+  const el = document.getElementById('sp-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
 saveConfirmBtn.addEventListener('click', () => {
   if (saveConfirmBtn.classList.contains('saved')) return;
   const company = companyNameEl.textContent;
@@ -236,45 +260,26 @@ saveConfirmBtn.addEventListener('click', () => {
     void chrome.runtime.lastError;
     const existing = savedCompanies || [];
 
-    // Find existing company record (all records are now type:'company')
     const dupIdx = existing.findIndex(c => companiesMatch(c.company, company));
 
     if (dupIdx !== -1) {
-      // Update existing record
       const prev = existing[dupIdx];
-      const merged = {
-        ...prev,
-        notes:          saveNotes.value.trim() || prev.notes,
-        rating:         saveRating || prev.rating,
-        tags:           [...new Set([...(prev.tags || []), ...currentSaveTags])],
-        companyWebsite: prev.companyWebsite  || companyWebsite  || null,
-        companyLinkedin:prev.companyLinkedin || companyLinkedin || null,
-        intelligence:   prev.intelligence   || currentResearch?.intelligence || null,
-        reviews:        prev.reviews?.length ? prev.reviews : (currentResearch?.reviews || null),
-        leaders:        prev.leaders?.length ? prev.leaders : (currentResearch?.leaders || null),
-        employees:      prev.employees || currentResearch?.employees || null,
-        funding:        prev.funding   || currentResearch?.funding   || null,
-        founded:        prev.founded   || currentResearch?.founded   || null,
-        ...(isJobSave ? {
-          isOpportunity:  true,
-          jobStage:       jobStageValue,
-          jobTitle:       currentJobTitle || prev.jobTitle || null,
-          jobUrl:         currentUrl || prev.jobUrl || null,
-          jobMatch:       currentResearch?.jobMatch || prev.jobMatch || null,
-          jobSnapshot:    currentResearch?.jobSnapshot || prev.jobSnapshot || null,
-          jobDescription: currentJobDescription || prev.jobDescription || null,
-        } : {
-          status: prev.status || 'co_watchlist',
-        }),
-      };
-      const updated = [merged, ...existing.filter((_, i) => i !== dupIdx)];
-      chrome.storage.local.set({ savedCompanies: updated }, () => {
-        void chrome.runtime.lastError;
-        saveConfirmBtn.textContent = '✓ Saved'; saveConfirmBtn.classList.add('saved');
-        if (isJobSave) { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
-        else           { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
-        showCrmLink(merged);
-      });
+
+      // Smart duplicate detection for job saves
+      if (isJobSave && prev.isOpportunity && prev.jobTitle && currentJobTitle) {
+        if (titlesAreSimilar(prev.jobTitle, currentJobTitle)) {
+          // Same role — silently enrich existing opportunity
+          enrichExistingOpportunity(prev, existing, dupIdx);
+          return;
+        } else {
+          // Different role — ask the user
+          showDuplicateDialog(prev, existing, dupIdx);
+          return;
+        }
+      }
+
+      // Non-job save or no existing opportunity — merge as before
+      mergeAndSave(prev, existing, dupIdx);
       return;
     }
 
@@ -326,6 +331,141 @@ saveConfirmBtn.addEventListener('click', () => {
     });
   });
 });
+
+function mergeAndSave(prev, existing, dupIdx) {
+  const isJobSave = saveMode === 'job';
+  const jobStageValue = isJobSave ? (document.getElementById('save-status-select')?.value || 'needs_review') : null;
+  const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
+  const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
+
+  const merged = {
+    ...prev,
+    notes:          saveNotes.value.trim() || prev.notes,
+    rating:         saveRating || prev.rating,
+    tags:           [...new Set([...(prev.tags || []), ...currentSaveTags])],
+    companyWebsite: prev.companyWebsite  || companyWebsite  || null,
+    companyLinkedin:prev.companyLinkedin || companyLinkedin || null,
+    intelligence:   prev.intelligence   || currentResearch?.intelligence || null,
+    reviews:        prev.reviews?.length ? prev.reviews : (currentResearch?.reviews || null),
+    leaders:        prev.leaders?.length ? prev.leaders : (currentResearch?.leaders || null),
+    employees:      prev.employees || currentResearch?.employees || null,
+    funding:        prev.funding   || currentResearch?.funding   || null,
+    founded:        prev.founded   || currentResearch?.founded   || null,
+    ...(isJobSave ? {
+      isOpportunity:  true,
+      jobStage:       prev.jobStage || jobStageValue,
+      jobTitle:       currentJobTitle || prev.jobTitle || null,
+      jobUrl:         currentUrl || prev.jobUrl || null,
+      jobMatch:       prev.jobMatch || currentResearch?.jobMatch || null,
+      jobSnapshot:    currentResearch?.jobSnapshot || prev.jobSnapshot || null,
+      jobDescription: currentJobDescription || prev.jobDescription || null,
+    } : {
+      status: prev.status || 'co_watchlist',
+    }),
+  };
+  const updated = [merged, ...existing.filter((_, i) => i !== dupIdx)];
+  chrome.storage.local.set({ savedCompanies: updated }, () => {
+    void chrome.runtime.lastError;
+    markAsSaved();
+    showCrmLink(merged);
+  });
+}
+
+function enrichExistingOpportunity(prev, existing, dupIdx) {
+  // Silently enrich — keep existing jobMatch untouched, backfill missing data
+  const enriched = { ...prev };
+  // Use longer/more detailed job description
+  if (currentJobDescription && (!prev.jobDescription || currentJobDescription.length > prev.jobDescription.length)) {
+    enriched.jobDescription = currentJobDescription;
+  }
+  // Backfill missing snapshot data
+  if (currentResearch?.jobSnapshot) {
+    enriched.jobSnapshot = { ...(prev.jobSnapshot || {}), ...currentResearch.jobSnapshot };
+    // Only overwrite salary if it was missing
+    if (prev.jobSnapshot?.salary) enriched.jobSnapshot.salary = prev.jobSnapshot.salary;
+  }
+  // Add new URL if different
+  if (currentUrl && currentUrl !== prev.jobUrl) enriched.jobUrl = currentUrl;
+  // Backfill company data
+  enriched.intelligence = prev.intelligence || currentResearch?.intelligence || null;
+  enriched.reviews = prev.reviews?.length ? prev.reviews : (currentResearch?.reviews || null);
+  enriched.leaders = prev.leaders?.length ? prev.leaders : (currentResearch?.leaders || null);
+  enriched.tags = [...new Set([...(prev.tags || []), ...currentSaveTags])];
+
+  const updated = [enriched, ...existing.filter((_, i) => i !== dupIdx)];
+  chrome.storage.local.set({ savedCompanies: updated }, () => {
+    void chrome.runtime.lastError;
+    markAsSaved();
+    showToast(`Updated existing opportunity at ${prev.company} with new details.`);
+    showCrmLink(enriched);
+  });
+}
+
+function showDuplicateDialog(prev, existing, dupIdx) {
+  const dialog = document.getElementById('dup-dialog');
+  const titleEl = document.getElementById('dup-dialog-title');
+  const bodyEl = document.getElementById('dup-dialog-body');
+  titleEl.textContent = `Existing opportunity at ${prev.company}`;
+  bodyEl.innerHTML = `You're already tracking <strong>${prev.jobTitle}</strong> at ${prev.company}. This posting is for <strong>${currentJobTitle}</strong>. Is this a different role?`;
+  dialog.classList.add('visible');
+
+  const updateBtn = document.getElementById('dup-btn-update');
+  const newBtn = document.getElementById('dup-btn-new');
+
+  // Clean up old listeners
+  const newUpdateBtn = updateBtn.cloneNode(true);
+  const newNewBtn = newBtn.cloneNode(true);
+  updateBtn.replaceWith(newUpdateBtn);
+  newBtn.replaceWith(newNewBtn);
+
+  newUpdateBtn.addEventListener('click', () => {
+    dialog.classList.remove('visible');
+    enrichExistingOpportunity(prev, existing, dupIdx);
+  });
+  newNewBtn.addEventListener('click', () => {
+    dialog.classList.remove('visible');
+    // Create brand new opportunity entry for the different role
+    const company = companyNameEl.textContent;
+    const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
+    const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || null;
+    const entry = {
+      id:             Date.now().toString(36) + Math.random().toString(36).substr(2),
+      type:           'company',
+      company,
+      savedAt:        Date.now(),
+      notes:          saveNotes.value.trim(),
+      rating:         saveRating || null,
+      tags:           [...currentSaveTags],
+      companyWebsite: companyWebsite || prev.companyWebsite || null,
+      companyLinkedin: companyLinkedin || prev.companyLinkedin || null,
+      intelligence:   prev.intelligence || currentResearch?.intelligence || null,
+      reviews:        prev.reviews || currentResearch?.reviews || null,
+      leaders:        prev.leaders || currentResearch?.leaders || null,
+      employees:      prev.employees || currentResearch?.employees || null,
+      funding:        prev.funding || currentResearch?.funding || null,
+      founded:        prev.founded || currentResearch?.founded || null,
+      status:         'co_watchlist',
+      isOpportunity:  true,
+      jobStage:       document.getElementById('save-status-select')?.value || 'needs_review',
+      jobTitle:       currentJobTitle || null,
+      jobUrl:         currentUrl || null,
+      jobMatch:       currentResearch?.jobMatch || null,
+      jobSnapshot:    currentResearch?.jobSnapshot || null,
+      jobDescription: currentJobDescription || null,
+    };
+    chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, () => {
+      void chrome.runtime.lastError;
+      markAsSaved();
+      showCrmLink(entry);
+    });
+  });
+}
+
+function markAsSaved() {
+  saveConfirmBtn.textContent = '✓ Saved'; saveConfirmBtn.classList.add('saved');
+  if (saveMode === 'job') { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
+  else                    { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
+}
 
 // Detect company on load and auto-research
 chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
