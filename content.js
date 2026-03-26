@@ -69,6 +69,8 @@ async function detectCompanyAndJob() {
     result = detectLever();
   } else if (url.includes('myworkdayjobs.com') || url.includes('workday.com')) {
     result = detectWorkday();
+  } else if (url.includes('workatastartup.com')) {
+    result = detectWorkAtAStartup();
   } else {
     result = detectGeneric();
   }
@@ -515,6 +517,53 @@ function detectWorkday() {
   }
 
   return { company, jobTitle: jobTitle || null, source: 'workday', domain };
+}
+
+function detectWorkAtAStartup() {
+  const domain = window.location.hostname.replace('www.', '');
+
+  // Job page: title is "Account Executive (US) at kapa.ai (S23)"
+  // Extract company from "at [company]" pattern in title or page heading
+  let company = null;
+  let jobTitle = null;
+
+  // Try the page title: "Account Executive (US) at kapa.ai (S23)"
+  const titleMatch = document.title.match(/^(.+?)\s+at\s+(.+?)(?:\s*\(S\d+\)|\s*\(W\d+\))?$/i);
+  if (titleMatch) {
+    jobTitle = titleMatch[1].trim();
+    company = titleMatch[2].replace(/\s*\([SW]\d+\)\s*$/i, '').trim();
+  }
+
+  // Fallback: breadcrumb "Companies / kapa.ai (S23) / Jobs"
+  if (!company) {
+    const breadcrumbs = document.querySelectorAll('a[href*="/companies/"]');
+    for (const bc of breadcrumbs) {
+      const text = bc.textContent?.trim();
+      if (text && text.length > 1 && text.length < 60) {
+        company = text.replace(/\s*\([SW]\d+\)\s*$/i, '').trim();
+        break;
+      }
+    }
+  }
+
+  // Fallback: h1 heading
+  if (!jobTitle) {
+    const h1 = document.querySelector('h1');
+    if (h1) {
+      const h1Text = h1.textContent?.trim();
+      const m = h1Text?.match(/^(.+?)\s+at\s+(.+?)(?:\s*\([SW]\d+\))?$/i);
+      if (m) {
+        jobTitle = m[1].trim();
+        if (!company) company = m[2].replace(/\s*\([SW]\d+\)\s*$/i, '').trim();
+      } else {
+        jobTitle = h1Text;
+      }
+    }
+  }
+
+  if (!company) company = 'Unknown Company';
+
+  return { company, jobTitle: jobTitle || null, source: 'workatastartup', domain };
 }
 
 function detectGeneric() {
