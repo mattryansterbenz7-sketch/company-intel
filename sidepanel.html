@@ -114,6 +114,10 @@
     .sp-opp-val { font-size: 11px; color: #cbd5e1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-opp-val a { color: #FF7A59; text-decoration: none; }
     .sp-opp-val a:hover { text-decoration: underline; }
+    .sp-stage-select { background: #243342; border: 1px solid #3d5468; border-radius: 5px; color: #e2e8f0; font-size: 11px; font-weight: 600; font-family: inherit; padding: 4px 8px; cursor: pointer; appearance: none; -webkit-appearance: none; max-width: 180px; }
+    .sp-stage-select:focus { outline: none; border-color: #FF7A59; }
+    .sp-stage-opp { border-color: rgba(255,122,89,0.4); color: #FF7A59; }
+    @keyframes sp-stage-flash { 0% { box-shadow: 0 0 0 0 rgba(255,122,89,0.4); } 50% { box-shadow: 0 0 0 4px rgba(255,122,89,0.2); } 100% { box-shadow: 0 0 0 0 rgba(255,122,89,0); } }
 
     /* Company links */
     #company-links { }

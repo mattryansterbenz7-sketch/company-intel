@@ -952,42 +952,101 @@ const COMPANY_STATUSES = {
 function renderOppFields(savedEntry) {
   const el = document.getElementById('sp-opp-fields');
   if (!el) return;
-  if (!savedEntry || !savedEntry.isOpportunity) { el.style.display = 'none'; return; }
+  if (!savedEntry) { el.style.display = 'none'; return; }
 
-  const fields = [];
-  if (savedEntry.companyWebsite) {
-    const display = savedEntry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    fields.push(['Website', `<a href="${savedEntry.companyWebsite}" target="_blank">${display}</a>`]);
-  }
-  if (savedEntry.companyLinkedin) {
-    fields.push(['LinkedIn', `<a href="${savedEntry.companyLinkedin}" target="_blank">LinkedIn ↗</a>`]);
-  }
-  if (savedEntry.founded) fields.push(['Founded', savedEntry.founded]);
-  if (savedEntry.funding) fields.push(['Funding', savedEntry.funding]);
-  if (savedEntry.industry) fields.push(['Industry', savedEntry.industry]);
-  if (savedEntry.employees) fields.push(['Employees', savedEntry.employees]);
-  const stageLabel = savedEntry.jobStage ? (JOB_STATUSES[savedEntry.jobStage] || savedEntry.jobStage) : null;
-  if (stageLabel) fields.push(['Stage', stageLabel]);
-  const role = (savedEntry.jobTitle && savedEntry.jobTitle !== 'New Opportunity') ? savedEntry.jobTitle : null;
-  if (role) fields.push(['Role', role]);
-  if (savedEntry.nextStep) fields.push(['Next Step', savedEntry.nextStep]);
-  if (savedEntry.nextStepDate) {
-    const d = new Date(savedEntry.nextStepDate);
-    const formatted = isNaN(d) ? savedEntry.nextStepDate : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    fields.push(['Next Step Date', formatted]);
-  }
-  const lastActivityTs = Math.max(savedEntry.cachedEmailsAt || 0, savedEntry.cachedMeetingNotesAt || 0, savedEntry.cachedGranolaAt || 0, savedEntry.savedAt || 0);
-  if (lastActivityTs) {
-    const d = new Date(lastActivityTs);
-    fields.push(['Last Activity', d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })]);
-  }
+  // Load custom stages from storage for accurate dropdowns
+  chrome.storage.local.get(['opportunityStages', 'companyStages', 'customStages'], data => {
+    void chrome.runtime.lastError;
+    const oppStages = data.opportunityStages || data.customStages || Object.entries(JOB_STATUSES).map(([key, label]) => ({ key, label }));
+    const coStages = data.companyStages || Object.entries(COMPANY_STATUSES).map(([key, label]) => ({ key, label }));
 
-  if (!fields.length) { el.style.display = 'none'; return; }
+    const fields = [];
+    if (savedEntry.companyWebsite) {
+      const display = savedEntry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      fields.push(['Website', `<a href="${savedEntry.companyWebsite}" target="_blank">${display}</a>`]);
+    }
+    if (savedEntry.companyLinkedin) {
+      fields.push(['LinkedIn', `<a href="${savedEntry.companyLinkedin}" target="_blank">LinkedIn ↗</a>`]);
+    }
+    if (savedEntry.founded) fields.push(['Founded', savedEntry.founded]);
+    if (savedEntry.funding) fields.push(['Funding', savedEntry.funding]);
+    if (savedEntry.industry) fields.push(['Industry', savedEntry.industry]);
+    if (savedEntry.employees) fields.push(['Employees', savedEntry.employees]);
 
-  el.innerHTML = fields.map(([k, v]) =>
-    `<div class="sp-opp-row"><span class="sp-opp-key">${k}</span><span class="sp-opp-val">${v}</span></div>`
-  ).join('');
-  el.style.display = 'block';
+    // Company stage dropdown (always show)
+    const coOptions = coStages.map(s =>
+      `<option value="${s.key}" ${(savedEntry.status || 'co_watchlist') === s.key ? 'selected' : ''}>${s.label}</option>`
+    ).join('');
+    fields.push(['Company', `<select class="sp-stage-select" id="sp-co-stage">${coOptions}</select>`]);
+
+    // Opportunity stage dropdown (show if opportunity)
+    if (savedEntry.isOpportunity) {
+      const oppOptions = oppStages.map(s =>
+        `<option value="${s.key}" ${(savedEntry.jobStage || 'needs_review') === s.key ? 'selected' : ''}>${s.label}</option>`
+      ).join('');
+      fields.push(['Opp Stage', `<select class="sp-stage-select sp-stage-opp" id="sp-opp-stage">${oppOptions}</select>`]);
+    }
+
+    const role = (savedEntry.jobTitle && savedEntry.jobTitle !== 'New Opportunity') ? savedEntry.jobTitle : null;
+    if (role) fields.push(['Role', role]);
+    if (savedEntry.nextStep) fields.push(['Next Step', savedEntry.nextStep]);
+    if (savedEntry.nextStepDate) {
+      const d = new Date(savedEntry.nextStepDate);
+      const formatted = isNaN(d) ? savedEntry.nextStepDate : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      fields.push(['Next Step Date', formatted]);
+    }
+    const lastActivityTs = Math.max(savedEntry.cachedEmailsAt || 0, savedEntry.cachedMeetingNotesAt || 0, savedEntry.cachedGranolaAt || 0, savedEntry.savedAt || 0);
+    if (lastActivityTs) {
+      const d = new Date(lastActivityTs);
+      fields.push(['Last Activity', d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })]);
+    }
+
+    if (!fields.length) { el.style.display = 'none'; return; }
+
+    el.innerHTML = fields.map(([k, v]) =>
+      `<div class="sp-opp-row"><span class="sp-opp-key">${k}</span><span class="sp-opp-val">${v}</span></div>`
+    ).join('');
+    el.style.display = 'block';
+
+    // Bind stage change handlers
+    const updateEntry = (changes) => {
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const entries = savedCompanies || [];
+        const idx = entries.findIndex(c => c.id === savedEntry.id);
+        if (idx === -1) return;
+        Object.assign(entries[idx], changes);
+        Object.assign(savedEntry, changes);
+        if (currentSavedEntry?.id === savedEntry.id) Object.assign(currentSavedEntry, changes);
+        chrome.storage.local.set({ savedCompanies: entries });
+      });
+    };
+
+    const coSelect = el.querySelector('#sp-co-stage');
+    if (coSelect) {
+      coSelect.addEventListener('change', () => {
+        updateEntry({ status: coSelect.value });
+        coSelect.style.animation = 'sp-stage-flash 0.4s ease';
+        setTimeout(() => coSelect.style.animation = '', 400);
+      });
+    }
+
+    const oppSelect = el.querySelector('#sp-opp-stage');
+    if (oppSelect) {
+      oppSelect.addEventListener('change', () => {
+        const ts = { ...(savedEntry.stageTimestamps || {}) };
+        if (!ts[oppSelect.value]) ts[oppSelect.value] = Date.now();
+        updateEntry({ jobStage: oppSelect.value, stageTimestamps: ts, lastActivity: Date.now() });
+        oppSelect.style.animation = 'sp-stage-flash 0.4s ease';
+        setTimeout(() => oppSelect.style.animation = '', 400);
+        // Update the header stage text
+        const stageEl = document.getElementById('crm-stage');
+        if (stageEl) {
+          const label = oppStages.find(s => s.key === oppSelect.value)?.label || oppSelect.value;
+          stageEl.textContent = label;
+        }
+      });
+    }
+  });
 }
 
 function showCrmLink(savedEntry) {
