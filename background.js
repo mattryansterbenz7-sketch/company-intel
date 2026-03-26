@@ -698,6 +698,8 @@ async function handleChatMessage({ messages, context }) {
   if (userParts.length)          systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
 
   try {
+    const systemText = systemParts.join('\n');
+    console.log('[Chat] System prompt length:', systemText.length, 'chars');
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -709,13 +711,18 @@ async function handleChatMessage({ messages, context }) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2048,
-        system: systemParts.join('\n'),
+        system: systemText,
         messages
       })
     });
     const data = await res.json();
+    if (!res.ok) {
+      console.error('[Chat] API error:', res.status, data);
+      return { error: data?.error?.message || `API error ${res.status}` };
+    }
     return { reply: data.content?.[0]?.text || 'No response.' };
   } catch (err) {
+    console.error('[Chat] Error:', err);
     return { error: err.message };
   }
 }

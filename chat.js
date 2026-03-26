@@ -106,9 +106,20 @@ function buildChatPanel(container, entry) {
       content: typeof m.content === 'string' ? m.content : m.content[0]?.text || ''
     }));
 
-    const result = await new Promise(resolve =>
-      chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context }, resolve)
-    );
+    let result;
+    try {
+      result = await Promise.race([
+        new Promise(resolve => {
+          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context }, r => {
+            if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+            else resolve(r);
+          });
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000))
+      ]);
+    } catch (e) {
+      result = { error: e.message === 'timeout' ? 'Request timed out. Try again.' : e.message };
+    }
 
     sendBtn.disabled = false;
     sendBtn.textContent = 'Send';
@@ -116,7 +127,8 @@ function buildChatPanel(container, entry) {
     if (result?.reply) {
       history.push({ role: 'assistant', content: [{ type: 'text', text: result.reply }] });
     } else {
-      history.push({ role: 'assistant', content: [{ type: 'text', text: 'Sorry, something went wrong. Try again.' }] });
+      const errMsg = result?.error || 'Sorry, something went wrong. Try again.';
+      history.push({ role: 'assistant', content: [{ type: 'text', text: errMsg }] });
     }
 
     saveHistory();
