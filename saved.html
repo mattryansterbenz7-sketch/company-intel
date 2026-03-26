@@ -113,8 +113,9 @@
     .card-delete:hover { color: #e5483b; }
     .card-category { display: inline-block; font-size: 11px; color: #FF7A59; background: rgba(255,122,89,0.08); border: 1px solid rgba(255,122,89,0.25); border-radius: 20px; padding: 2px 10px; font-weight: 600; }
     .card-oneliner { font-size: 13px; color: #516f90; line-height: 1.6; }
-    .card-stars { display: flex; gap: 3px; }
-    .star { font-size: 16px; color: #dfe3eb; cursor: pointer; transition: color 0.1s; }
+    .card-stars { display: flex; gap: 2px; align-items: center; }
+    .card-stars-label { font-size: 9px; color: #b0c1d4; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 3px; font-weight: 600; }
+    .star { font-size: 13px; color: #dfe3eb; cursor: pointer; transition: color 0.1s; }
     .star.filled { color: #f59e0b; }
     .star:hover { color: #f59e0b; }
     .card-notes { width: 100%; background: #f5f8fa; border: 1px solid #dfe3eb; border-radius: 6px; color: #516f90; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: vertical; min-height: 52px; line-height: 1.5; }
@@ -141,6 +142,9 @@
     .card-score-denom { font-size: 12px; font-weight: 600; opacity: 0.6; }
     .card-score-ago { font-size: 10px; color: #b0c1d4; margin-left: auto; }
     .card-scoring-indicator { font-size: 11px; color: #94a3b8; font-style: italic; }
+    .card-score-mod { font-size: 10px; font-weight: 700; margin-left: -2px; }
+    .card-score-mod.up { color: #00897b; }
+    .card-score-mod.down { color: #e5483b; }
     .card-verdict-badge { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 3px 10px; white-space: nowrap; flex-shrink: 0; border: 1px solid; }
     .card-verdict-badge.high  { background: rgba(0,189,165,0.1);  color: #00897b; border-color: rgba(0,189,165,0.35); }
     .card-verdict-badge.mid   { background: rgba(99,102,241,0.1); color: #6366f1; border-color: rgba(99,102,241,0.35); }
@@ -500,10 +504,10 @@
     <span class="pipeline-header-text" id="pipeline-header-text"></span>
   </div>
   <div class="toolbar toolbar-stars">
-    <span class="filter-label">Rating:</span>
+    <span class="filter-label">Excitement:</span>
     <div class="rating-dropdown" id="rating-dropdown">
       <button class="rating-dropdown-btn" id="rating-dropdown-btn">
-        <span id="rating-dropdown-label">Any Rating</span>
+        <span id="rating-dropdown-label">Any Excitement</span>
         <span class="rating-dropdown-arrow">▾</span>
       </button>
       <div class="rating-dropdown-menu" id="rating-dropdown-menu">

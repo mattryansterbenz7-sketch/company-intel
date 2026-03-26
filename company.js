@@ -267,7 +267,7 @@ function renderHeader() {
         ${statusOptions}
       </select>
     </div>
-    <div class="hdr-stars" id="hdr-stars">${stars}</div>
+    <div class="hdr-stars" id="hdr-stars"><span class="hdr-stars-label">Excitement</span>${stars}</div>
     ${entry.isOpportunity
       ? `<div class="hdr-stage-group"><span class="hdr-stage-label">Opportunity</span><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor};color:${oppStageColor}">${oppStageOptions}</select></div>`
       : `<button class="hdr-opp-btn" id="hdr-add-opp">+ Add to Pipeline</button>`}

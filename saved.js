@@ -82,6 +82,14 @@ function scoreToVerdict(score) {
   return { label: 'Likely Not a Fit', cls: 'low' };
 }
 
+// Excitement Score modifier: user's gut feeling adjusts the AI score slightly
+function applyExcitementModifier(baseScore, rating) {
+  if (!baseScore || !rating || rating === 3) return { final: baseScore, mod: 0 };
+  const mod = { 1: -1, 2: -0.5, 4: 0.5, 5: 1 }[rating] || 0;
+  const final = Math.max(1, Math.min(10, Math.round((baseScore + mod) * 10) / 10));
+  return { final, mod };
+}
+
 // Tag color palette
 const TAG_PALETTE = [
   { border: '#818cf8', color: '#a5b4fc', bg: 'rgba(99,102,241,0.12)' },
@@ -422,7 +430,7 @@ function render() {
             <button class="tag-add-btn" data-id="${c.id}">+ tag</button>
           </div>
         </div>
-        <div class="card-stars">${stars}</div>
+        <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>
         <textarea class="card-notes" data-id="${c.id}" placeholder="Add notes...">${c.notes || ''}</textarea>
         ${(c.intelligence || c.jobMatch) ? `
         <details class="card-analysis">
@@ -900,10 +908,10 @@ function renderKanban(filtered) {
     // Sort by job match score (highest first), then by most recent activity
     if (activePipeline === 'opportunity') {
       cards.sort((a, b) => {
-        const sa = a.jobMatch?.score ?? -1;
-        const sb = b.jobMatch?.score ?? -1;
-        if (sb !== sa) return sb - sa; // higher score first
-        return (b.lastActivity || b.savedAt || 0) - (a.lastActivity || a.savedAt || 0); // newer first
+        const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : -1;
+        const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : -1;
+        if (sb !== sa) return sb - sa;
+        return (b.lastActivity || b.savedAt || 0) - (a.lastActivity || a.savedAt || 0);
       });
     }
     const s = stageStyle(statusKey);
@@ -1027,13 +1035,15 @@ function renderKanbanCard(c) {
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
       <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => {
-        const v = scoreToVerdict(c.jobMatch.score);
-        const scoreColor = c.jobMatch.score >= 7 ? '#00897b' : c.jobMatch.score >= 4 ? '#d97706' : '#e5483b';
+        const { final, mod } = applyExcitementModifier(c.jobMatch.score, c.rating);
+        const v = scoreToVerdict(final);
+        const scoreColor = final >= 7 ? '#00897b' : final >= 4 ? '#d97706' : '#e5483b';
+        const modText = mod > 0 ? `<span class="card-score-mod up">+${mod}</span>` : mod < 0 ? `<span class="card-score-mod down">${mod}</span>` : '';
         const agoText = c.jobMatchScoredAt ? (() => {
           const d = Math.round((Date.now() - c.jobMatchScoredAt) / 86400000);
           return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
         })() : '';
-        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${c.jobMatch.score}<span class="card-score-denom">/10</span></span><span class="card-verdict-badge ${v.cls}">${v.label}</span>${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
+        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring…</span>' : '')}</div>
       ${isJob && (c.salary || c.workArrangement) ? `<div class="card-job-chips">
         ${c.salary ? `<span class="job-chip salary">💰 ${c.salary}</span>` : ''}
@@ -1070,7 +1080,7 @@ function renderKanbanCard(c) {
           <input class="kanban-next-step-date${c.nextStepDate ? ' has-value' : ''}" data-id="${c.id}" type="date" value="${c.nextStepDate || ''}">
         </div>
       </div>
-      <div class="card-stars">${stars}</div>
+      <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>
       <textarea class="card-notes" data-id="${c.id}" placeholder="Notes...">${c.notes || ''}</textarea>
       <div class="card-footer" style="margin-top:0">
         <span class="card-date">${new Date(c.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -1510,7 +1520,7 @@ function updatePipelineUI() {
 
   function updateRatingLabel() {
     if (activeRatings.size === 0) {
-      dropLabel.textContent = 'Any Rating';
+      dropLabel.textContent = 'Any Excitement';
       dropBtn.classList.remove('active');
     } else {
       const stars = ['★','★★','★★★','★★★★','★★★★★'];
