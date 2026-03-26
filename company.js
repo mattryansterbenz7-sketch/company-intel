@@ -633,10 +633,18 @@ function buildFitSection() {
 
   // Score + verdict row
   if (score) {
+    const fb = entry.matchFeedback;
+    const upA = fb?.type === 'up' ? ' active up' : '';
+    const downA = fb?.type === 'down' ? ' active down' : '';
     html += `<div class="fit-score-row">
       <span class="fit-score">${score}<span class="fit-score-denom">/10</span></span>
       <span class="fit-verdict" style="color:${v.color}">${v.label}</span>
-    </div>`;
+      <span class="verdict-thumbs">
+        <button class="thumb-btn${upA}" data-dir="up" title="Agree">👍</button>
+        <button class="thumb-btn${downA}" data-dir="down" title="Disagree">👎</button>
+      </span>
+    </div>
+    <div id="co-thumb-form" style="display:none"></div>`;
   }
 
   // Refresh button — always available for opportunities
@@ -711,6 +719,29 @@ function bindHubTabs() {
     const prev = entry.notes || '';
     saveEntry({ notes: ta.value });
     if (ta.value.trim() !== prev.trim()) maybeRescore('notes_updated');
+  });
+
+  // Thumbs feedback on match verdict
+  document.addEventListener('click', e => {
+    const thumbBtn = e.target.closest('.thumb-btn');
+    if (!thumbBtn || !thumbBtn.closest('.fit-score-row, .verdict-row')) return;
+    const dir = thumbBtn.dataset.dir;
+    const formEl = document.getElementById('co-thumb-form');
+    if (!formEl) return;
+    document.querySelectorAll('.fit-score-row .thumb-btn, .verdict-row .thumb-btn').forEach(b => b.classList.remove('active', 'up', 'down'));
+    thumbBtn.classList.add('active', dir);
+    const placeholder = dir === 'up' ? 'What resonated?' : 'What felt off?';
+    formEl.style.display = 'block';
+    formEl.innerHTML = `<div class="thumb-feedback-form"><input class="thumb-feedback-input" id="co-thumb-note" type="text" placeholder="${placeholder}"><button class="thumb-feedback-submit" id="co-thumb-submit">Submit</button></div>`;
+    formEl.querySelector('#co-thumb-note')?.focus();
+    const submit = () => {
+      const note = document.getElementById('co-thumb-note')?.value?.trim() || '';
+      saveEntry({ matchFeedback: { type: dir, note, date: Date.now() } });
+      formEl.innerHTML = `<div style="font-size:11px;color:#7da8c4;padding:4px 0">Thanks for the feedback</div>`;
+      setTimeout(() => { formEl.style.display = 'none'; }, 2000);
+    };
+    document.getElementById('co-thumb-submit')?.addEventListener('click', submit);
+    document.getElementById('co-thumb-note')?.addEventListener('keydown', e2 => { if (e2.key === 'Enter') submit(); });
   });
 
   // Fit analysis refresh button (may be rendered later if intel tab is active)

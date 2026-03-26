@@ -1241,14 +1241,24 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
         ${(jobSnapshot?.salary || currentJobMeta?.salary) ? `<div class="salary-display"><span class="salary-label">${jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base Salary'}</span><span class="salary-value">${jobSnapshot?.salary || currentJobMeta?.salary}</span></div>` : ''}
         ${(jobSnapshot?.perks?.length || currentJobMeta?.perks?.length) ? `<div class="perks-display">${(jobSnapshot?.perks || currentJobMeta?.perks || []).map(p => `<span class="perk-chip">🎁 ${p}</span>`).join('')}</div>` : ''}
         ${hasMatch && jobMatch.jobSummary ? `<div class="job-summary">${jobMatch.jobSummary}</div>` : ''}
-        ${hasMatch ? `
+        ${hasMatch ? (() => {
+          const fb = currentResearch?.matchFeedback;
+          const upActive = fb?.type === 'up' ? ' active up' : '';
+          const downActive = fb?.type === 'down' ? ' active down' : '';
+          return `
           <div class="verdict-row" style="margin-top:12px">
             <span class="verdict-badge ${v.cls}">${v.label}</span>
+            <span class="verdict-thumbs">
+              <button class="thumb-btn${upActive}" data-dir="up" id="sp-thumb-up" title="Agree with assessment">👍</button>
+              <button class="thumb-btn${downActive}" data-dir="down" id="sp-thumb-down" title="Disagree with assessment">👎</button>
+            </span>
             <span class="fit-verdict">${jobMatch.verdict}</span>
           </div>
+          <div id="sp-thumb-form" style="display:none"></div>
           ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
           ${(jobMatch.redFlags || jobMatch.watchOuts) ? `<details open class="flags-red"><summary>Red Flags</summary><div class="detail-body">${renderBullets(jobMatch.redFlags || jobMatch.watchOuts, 'flag')}</div></details>` : ''}
-        ` : ''}
+        `;
+        })() : ''}
       </div>
     </details>`;
 }
@@ -1285,6 +1295,51 @@ function startLoaderTextCycle(container) {
     update();
   }, 1800);
 }
+
+// Thumbs feedback handler (delegated)
+document.addEventListener('click', e => {
+  const thumbBtn = e.target.closest('.thumb-btn');
+  if (!thumbBtn) return;
+  const dir = thumbBtn.dataset.dir;
+  const formEl = document.getElementById('sp-thumb-form');
+  if (!formEl) return;
+
+  // Toggle active state
+  document.querySelectorAll('.thumb-btn').forEach(b => b.classList.remove('active', 'up', 'down'));
+  thumbBtn.classList.add('active', dir);
+
+  // Show inline feedback form
+  const placeholder = dir === 'up' ? 'What resonated?' : 'What felt off?';
+  formEl.style.display = 'block';
+  formEl.innerHTML = `<div class="thumb-feedback-form">
+    <input class="thumb-feedback-input" id="sp-thumb-note" type="text" placeholder="${placeholder}">
+    <button class="thumb-feedback-submit" id="sp-thumb-submit">Submit</button>
+  </div>`;
+  formEl.querySelector('#sp-thumb-note')?.focus();
+
+  const submit = () => {
+    const note = document.getElementById('sp-thumb-note')?.value?.trim() || '';
+    const feedback = { type: dir, note, date: Date.now() };
+    // Save to current research and persist to entry
+    if (currentResearch) currentResearch.matchFeedback = feedback;
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const companies = savedCompanies || [];
+      const company = companyNameEl.textContent;
+      const idx = companies.findIndex(c => companiesMatch(c.company, company));
+      if (idx !== -1) {
+        companies[idx] = { ...companies[idx], matchFeedback: feedback };
+        chrome.storage.local.set({ savedCompanies: companies });
+      }
+    });
+    formEl.innerHTML = `<div style="font-size:11px;color:#7da8c4;padding:4px 0">Thanks for the feedback</div>`;
+    setTimeout(() => { formEl.style.display = 'none'; }, 2000);
+  };
+
+  document.getElementById('sp-thumb-submit')?.addEventListener('click', submit);
+  document.getElementById('sp-thumb-note')?.addEventListener('keydown', e2 => {
+    if (e2.key === 'Enter') submit();
+  });
+});
 
 function renderQuickData(data) {
   const companySlug = companyNameEl.textContent.toLowerCase().replace(/\s+/g, '-');

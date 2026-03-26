@@ -527,6 +527,16 @@
     .fit-score { font-size: 26px; font-weight: 800; color: #33475b; line-height: 1; }
     .fit-score-denom { font-size: 14px; font-weight: 500; color: #99acc2; }
     .fit-verdict { font-size: 13px; font-weight: 700; }
+    .verdict-thumbs { display: inline-flex; align-items: center; gap: 2px; margin-left: 2px; }
+    .thumb-btn { background: none; border: none; font-size: 13px; cursor: pointer; opacity: 0.3; padding: 2px 3px; border-radius: 4px; transition: all 0.15s; line-height: 1; }
+    .thumb-btn:hover { opacity: 0.8; background: rgba(0,0,0,0.04); }
+    .thumb-btn.active { opacity: 1; }
+    .thumb-btn.active.up { color: #16a34a; }
+    .thumb-btn.active.down { color: #e5483b; }
+    .thumb-feedback-form { display: flex; gap: 6px; align-items: center; margin: 6px 0 10px; }
+    .thumb-feedback-input { flex: 1; border: 1px solid #dfe3eb; border-radius: 6px; color: #33475b; font-size: 12px; padding: 6px 8px; font-family: inherit; outline: none; }
+    .thumb-feedback-input:focus { border-color: #FF7A59; }
+    .thumb-feedback-submit { background: #FF7A59; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 6px 10px; cursor: pointer; font-family: inherit; flex-shrink: 0; }
     .fit-refresh-btn { display: inline-block; margin-bottom: 12px; font-size: 11px; color: #7c98b6; background: none; border: 1px solid #dfe3eb; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-family: inherit; transition: all 0.12s; white-space: nowrap; }
     .fit-refresh-btn:hover { border-color: #FF7A59; color: #FF7A59; }
     .fit-refresh-btn:disabled { opacity: 0.5; cursor: default; }

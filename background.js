@@ -182,6 +182,7 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
   if (rc.storyTime) richSection += `\nUser Story Time Profile:\n${rc.storyTime.slice(0, 1500)}\n`;
   if (rc.notes) richSection += `\nUser Notes on This Company:\n${rc.notes}\n`;
   if (rc.knownComp) richSection += `\n${rc.knownComp}\n`;
+  if (rc.matchFeedback) richSection += `\nPrevious assessment feedback: ${rc.matchFeedback}\n`;
 
   const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
 
@@ -681,6 +682,10 @@ async function handleChatMessage({ messages, context }) {
     if (context.jobMatch?.score)       job.push(`Match score: ${context.jobMatch.score}/10`);
     if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
     if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
+    if (context.matchFeedback) {
+      const fb = context.matchFeedback;
+      job.push(`User feedback on match: ${fb.type === 'up' ? '👍 Agreed' : '👎 Disagreed'}${fb.note ? ` — "${fb.note}"` : ''}`);
+    }
     systemParts.push(job.join('\n'));
   }
 

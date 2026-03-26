@@ -302,6 +302,7 @@ function buildContext(entry, emails, granolaNote, meetings) {
     tags: entry.tags || [],
     intelligence: entry.intelligence || null,
     jobMatch: entry.jobMatch || null,
+    matchFeedback: entry.matchFeedback || null,
     jobDescription: entry.jobDescription || null,
     reviews: entry.reviews || [],
     leaders: entry.leaders || [],

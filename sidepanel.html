@@ -240,6 +240,20 @@
     .verdict-badge.mid { background: rgba(255,122,89,0.12); color: #FF7A59; border: 1px solid rgba(255,122,89,0.3); }
     .verdict-badge.mixed { background: rgba(81,111,144,0.1); color: #99afc4; border: 1px solid rgba(81,111,144,0.2); }
     .verdict-badge.low { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+
+    /* Thumbs feedback */
+    .verdict-thumbs { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; }
+    .thumb-btn { background: none; border: none; font-size: 13px; cursor: pointer; opacity: 0.35; padding: 2px 3px; border-radius: 4px; transition: all 0.15s; line-height: 1; }
+    .thumb-btn:hover { opacity: 0.8; background: rgba(255,255,255,0.08); }
+    .thumb-btn.active { opacity: 1; }
+    .thumb-btn.active.up { color: #4ade80; }
+    .thumb-btn.active.down { color: #f87171; }
+    .thumb-feedback-form { display: flex; gap: 6px; align-items: center; margin-top: 6px; animation: joppFadeIn 0.15s ease; }
+    .thumb-feedback-input { flex: 1; background: #1C2D3A; border: 1px solid #3d5468; border-radius: 6px; color: #e2e8f0; font-size: 12px; padding: 6px 8px; font-family: inherit; outline: none; }
+    .thumb-feedback-input:focus { border-color: #FF7A59; }
+    .thumb-feedback-input::placeholder { color: #4a6580; }
+    .thumb-feedback-submit { background: #FF7A59; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 6px 10px; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+    .thumb-feedback-submit:hover { background: #e8623f; }
     .fit-verdict { font-size: 13px; color: #cbd5e1; line-height: 1.4; }
     .summary { font-size: 13px; color: #99afc4; line-height: 1.65; }
 

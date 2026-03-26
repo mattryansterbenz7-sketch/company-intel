@@ -973,6 +973,7 @@ function renderKanban(filtered) {
               storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
               notes: c.notes || null,
               knownComp: c.baseSalaryRange || c.oteTotalComp ? `Known comp: ${c.baseSalaryRange ? 'Base ' + c.baseSalaryRange : ''} ${c.oteTotalComp ? 'OTE ' + c.oteTotalComp : ''} ${c.equity ? 'Equity ' + c.equity : ''} (source: ${c.compSource || 'unknown'})`.trim() : null,
+              matchFeedback: c.matchFeedback ? `User ${c.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${c.matchFeedback.note ? ': "' + c.matchFeedback.note + '"' : ''}` : null,
             };
             chrome.runtime.sendMessage(
               { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {}, richContext },
