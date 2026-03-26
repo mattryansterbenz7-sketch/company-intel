@@ -82,7 +82,7 @@ function buildChatPanel(container, entry) {
   }
 
   function saveHistory() {
-    localStorage.setItem(storageKey, JSON.stringify(history.slice(-40)));
+    // History is session-only — no-op. Kept for call-site compatibility.
   }
 
   async function send() {
