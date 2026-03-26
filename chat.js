@@ -54,9 +54,11 @@ function buildChatPanel(container, entry) {
     || null;
 
   function renderHistory() {
+    // Spacer pushes messages to bottom when content doesn't fill the container
+    const spacer = '<div style="flex:1;min-height:0"></div>';
     msgsEl.innerHTML = history.length === 0
       ? `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.</div>`
-      : history.map((m, idx) => {
+      : spacer + history.map((m, idx) => {
           const text = m.content[0]?.text || m.content;
           const bubble = m.role === 'assistant'
             ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escapeHtml(text))

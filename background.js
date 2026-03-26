@@ -969,6 +969,7 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
     await granolaPost({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
     const toolsRes = await granolaPost({ jsonrpc: '2.0', method: 'tools/list', id: 2 });
     const availableTools = (toolsRes?.result?.tools || []).map(t => t.name);
+    console.log('[Granola MCP] Available tools:', availableTools.join(', '));
 
     const seen = new Set();
     const allNotes = [];
@@ -984,20 +985,31 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
       return data?.result?.content?.[0]?.text || null;
     };
 
+    // Resolve the actual tool name for getting full meeting data (varies by Granola version)
+    const transcriptToolName = ['get_meeting_transcript', 'get_meeting', 'get_transcript']
+      .find(n => availableTools.includes(n)) || null;
+
+    // Resolve query tool name
+    const queryToolName = ['query_granola_meetings', 'search_meetings', 'search']
+      .find(n => availableTools.includes(n)) || 'query_granola_meetings';
+    // Resolve list tool name
+    const listToolName = ['list_meetings', 'list_granola_meetings']
+      .find(n => availableTools.includes(n)) || 'list_meetings';
+
     // Strategy 1: natural language summary query
-    addNote(await callTool('query_granola_meetings', { query: `meetings with ${companyName}` }));
+    addNote(await callTool(queryToolName, { query: `meetings with ${companyName}` }));
 
     // Strategy 2: if nothing found, try contact names
     if (!allNotes.length) {
       for (const name of contactNames.slice(0, 3)) {
-        if (name) addNote(await callTool('query_granola_meetings', { query: `meetings with ${name}` }));
+        if (name) addNote(await callTool(queryToolName, { query: `meetings with ${name}` }));
       }
     }
 
     // Strategy 3: fetch full transcripts for relevant meetings
     const transcripts = [];
     const meetings = [];
-    const meetingsList = await callTool('list_meetings', { time_range: 'last_90_days' });
+    const meetingsList = await callTool(listToolName, { time_range: 'last_90_days' });
     if (meetingsList) {
       const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
       const lowerCompany = companyName.toLowerCase();
@@ -1122,7 +1134,7 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
       // Fetch transcripts in parallel (max 5 meetings) — capture structured per-meeting data
       const uniqueIds = [...new Set(relevantIds)].slice(0, 5);
       await Promise.all(uniqueIds.map(async id => {
-        const t = await callTool('get_meeting_transcript', { meeting_id: id });
+        const t = transcriptToolName ? await callTool(transcriptToolName, { meeting_id: id }) : null;
         if (!t) return;
         transcripts.push(t);
         const meta = meetingMeta[id] || {};
