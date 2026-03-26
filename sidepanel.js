@@ -1190,6 +1190,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
   const jobLoc = jobSnapshot?.location || currentJobMeta?.location;
   const userWants = currentPrefs?.workArrangement || [];
   let locationMatchHtml = '';
+  let locationSummary = '';
   if (jobArr) {
     if (userWants.length > 0) {
       if (userWants.includes(jobArr)) {
@@ -1197,38 +1198,71 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
         if (jobArr === 'Remote' && currentPrefs?.remoteGeo) detail += ` · ${currentPrefs.remoteGeo}`;
         else if (jobLoc) detail += ` · ${jobLoc}`;
         locationMatchHtml = `<div class="location-match ok"><span class="loc-icon">✓</span> ${detail} — matches your preference</div>`;
+        locationSummary = `<span class="jopp-sum-loc ok">✓ ${jobArr}</span>`;
       } else {
         let jobDetail = jobArr + (jobLoc ? ` · ${jobLoc}` : '');
         locationMatchHtml = `<div class="location-match bad"><span class="loc-icon">✗</span> ${jobDetail} — you want ${userWants.join('/')}</div>`;
+        locationSummary = `<span class="jopp-sum-loc bad">✗ ${jobArr}</span>`;
       }
     } else {
       locationMatchHtml = `<div class="location-match neutral"><span class="loc-icon">📍</span> ${jobArr}${jobLoc ? ' · ' + jobLoc : ''}</div>`;
+      locationSummary = `<span class="jopp-sum-loc">${jobArr}</span>`;
     }
-  }
-
-  if (!locationMatchHtml && !jobMatch) {
-    jobOpportunityEl.innerHTML = '';
-    return;
   }
 
   const hasMatch = !!(jobMatch);
   const v = hasMatch ? scoreToVerdict(jobMatch.score) : null;
+
+  // If no data yet, show loading state
+  if (!locationMatchHtml && !hasMatch) {
+    jobOpportunityEl.innerHTML = `
+      <details class="jopp-dropdown">
+        <summary class="jopp-summary">
+          <span class="jopp-summary-left">Job Opportunity</span>
+          <span class="jopp-summary-right"><span class="jopp-loader"><span class="jopp-loader-icon">🔍</span><span class="jopp-loader-text"></span></span></span>
+        </summary>
+        <div class="jopp-body"><div class="jopp-loading-area"><span class="jopp-loader-icon jopp-loader-lg">🔍</span><span class="jopp-loader-text"></span></div></div>
+      </details>`;
+    startLoaderTextCycle(jobOpportunityEl);
+    return;
+  }
+
+  const summaryBadge = v ? `<span class="verdict-badge-sm ${v.cls}">${v.label}</span>` : '';
+
   jobOpportunityEl.innerHTML = `
-    <div class="section section-job job-opportunity-section">
-      <div class="section-title">Job Opportunity</div>
-      ${locationMatchHtml}
-      ${(jobSnapshot?.salary || currentJobMeta?.salary) ? `<div class="salary-display"><span class="salary-label">${jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base Salary'}</span><span class="salary-value">${jobSnapshot?.salary || currentJobMeta?.salary}</span></div>` : ''}
-      ${(jobSnapshot?.perks?.length || currentJobMeta?.perks?.length) ? `<div class="perks-display">${(jobSnapshot?.perks || currentJobMeta?.perks || []).map(p => `<span class="perk-chip">🎁 ${p}</span>`).join('')}</div>` : ''}
-      ${hasMatch && jobMatch.jobSummary ? `<div class="job-summary">${jobMatch.jobSummary}</div>` : ''}
-      ${hasMatch ? `
-        <div class="verdict-row" style="margin-top:12px">
-          <span class="verdict-badge ${v.cls}">${v.label}</span>
-          <span class="fit-verdict">${jobMatch.verdict}</span>
-        </div>
-        ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
-        ${(jobMatch.redFlags || jobMatch.watchOuts) ? `<details open class="flags-red"><summary>Red Flags</summary><div class="detail-body">${renderBullets(jobMatch.redFlags || jobMatch.watchOuts, 'flag')}</div></details>` : ''}
-      ` : ''}
-    </div>`;
+    <details class="jopp-dropdown">
+      <summary class="jopp-summary">
+        <span class="jopp-summary-left">Job Opportunity</span>
+        <span class="jopp-summary-right">${locationSummary}${summaryBadge}</span>
+      </summary>
+      <div class="jopp-body">
+        ${locationMatchHtml}
+        ${(jobSnapshot?.salary || currentJobMeta?.salary) ? `<div class="salary-display"><span class="salary-label">${jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base Salary'}</span><span class="salary-value">${jobSnapshot?.salary || currentJobMeta?.salary}</span></div>` : ''}
+        ${(jobSnapshot?.perks?.length || currentJobMeta?.perks?.length) ? `<div class="perks-display">${(jobSnapshot?.perks || currentJobMeta?.perks || []).map(p => `<span class="perk-chip">🎁 ${p}</span>`).join('')}</div>` : ''}
+        ${hasMatch && jobMatch.jobSummary ? `<div class="job-summary">${jobMatch.jobSummary}</div>` : ''}
+        ${hasMatch ? `
+          <div class="verdict-row" style="margin-top:12px">
+            <span class="verdict-badge ${v.cls}">${v.label}</span>
+            <span class="fit-verdict">${jobMatch.verdict}</span>
+          </div>
+          ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
+          ${(jobMatch.redFlags || jobMatch.watchOuts) ? `<details open class="flags-red"><summary>Red Flags</summary><div class="detail-body">${renderBullets(jobMatch.redFlags || jobMatch.watchOuts, 'flag')}</div></details>` : ''}
+        ` : ''}
+      </div>
+    </details>`;
+}
+
+function startLoaderTextCycle(container) {
+  const phrases = ['Researching role...', 'Analyzing fit...', 'Scoring match...', 'Checking alignment...'];
+  let idx = 0;
+  const els = container.querySelectorAll('.jopp-loader-text');
+  if (!els.length) return;
+  const update = () => { els.forEach(el => el.textContent = phrases[idx]); idx = (idx + 1) % phrases.length; };
+  update();
+  const interval = setInterval(() => {
+    if (!container.isConnected) { clearInterval(interval); return; }
+    update();
+  }, 1800);
 }
 
 function renderQuickData(data) {
