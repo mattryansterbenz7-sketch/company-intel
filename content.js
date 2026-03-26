@@ -15,9 +15,190 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ selection: window.getSelection()?.toString()?.trim() || '' });
     return true;
   }
+  if (message.type === 'OPEN_FLOATING_CHAT') {
+    openFloatingChatWidget(message.context);
+    sendResponse({ ok: true });
+    return true;
+  }
 
   return true;
 });
+
+// ── Floating Chat Widget (injected into page from sidepanel) ────────────────
+
+function openFloatingChatWidget(context) {
+  // If already open, bring to front
+  let widget = document.getElementById('ci-sp-float-chat');
+  if (widget) {
+    widget.style.display = 'flex';
+    widget.querySelector('.ci-fc-input')?.focus();
+    // Update context
+    widget._ciContext = context;
+    return;
+  }
+
+  let history = [];
+
+  // Create widget
+  widget = document.createElement('div');
+  widget.id = 'ci-sp-float-chat';
+  widget._ciContext = context;
+  widget.innerHTML = `
+    <style>
+      #ci-sp-float-chat { position: fixed; bottom: 24px; right: 24px; width: 420px; height: 520px; max-height: 80vh; background: #fff; border-radius: 14px; box-shadow: 0 12px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: column; z-index: 2147483647; border: 1px solid #dfe3eb; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; resize: both; min-width: 320px; min-height: 300px; }
+      .ci-fc-header { height: 48px; padding: 0 10px 0 14px; background: #2D3E50; display: flex; align-items: center; justify-content: space-between; cursor: grab; flex-shrink: 0; border-radius: 14px 14px 0 0; user-select: none; }
+      .ci-fc-header:active { cursor: grabbing; }
+      .ci-fc-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; color: #fff; font-size: 14px; font-weight: 700; }
+      .ci-fc-header-left span:first-child { color: #FF7A59; }
+      .ci-fc-company { color: #7da8c4; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ci-fc-btns { display: flex; gap: 1px; }
+      .ci-fc-btn { background: none; border: none; color: #7da8c4; font-size: 15px; cursor: pointer; padding: 5px 7px; border-radius: 6px; line-height: 1; transition: all 0.1s; }
+      .ci-fc-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+      .ci-fc-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+      .ci-fc-messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+      .ci-fc-empty { color: #94a3b8; font-size: 13px; padding: 32px 20px; text-align: center; line-height: 1.6; }
+      .ci-fc-msg { display: flex; flex-direction: column; }
+      .ci-fc-msg-user { align-items: flex-end; }
+      .ci-fc-msg-assistant { align-items: flex-start; }
+      .ci-fc-msg-user .ci-fc-bubble { background: #f0f4f8; color: #33475b; padding: 8px 12px; border-radius: 10px 10px 3px 10px; font-size: 13px; line-height: 1.5; max-width: 85%; }
+      .ci-fc-msg-assistant .ci-fc-bubble { font-size: 13px; line-height: 1.6; color: #2d3e50; padding: 2px 0; max-width: 100%; }
+      .ci-fc-msg-assistant .ci-fc-bubble strong { font-weight: 600; }
+      .ci-fc-thinking { color: #94a3b8 !important; font-style: italic; }
+      .ci-fc-input-row { padding: 10px 14px; border-top: 1px solid #f0f3f8; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+      .ci-fc-input { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; color: #33475b; font-size: 14px; padding: 10px 12px; resize: none; font-family: inherit; min-height: 42px; line-height: 1.5; outline: none; }
+      .ci-fc-input:focus { border-color: #FF7A59; }
+      .ci-fc-input::placeholder { color: #94a3b8; }
+      .ci-fc-send { background: #FF7A59; color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: inherit; }
+      .ci-fc-send:hover { background: #e8623f; }
+      .ci-fc-send:disabled { background: #ccc; cursor: default; }
+      .ci-fc-actions { padding: 6px 14px 10px; border-top: 1px solid #f0f3f8; display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+      .ci-fc-action { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #dfe3eb; background: #f8fafc; color: #516f90; cursor: pointer; font-family: inherit; transition: all 0.1s; }
+      .ci-fc-action:hover { border-color: #FF7A59; color: #FF7A59; }
+      .ci-fc-action:active { transform: scale(0.95); }
+    </style>
+    <div class="ci-fc-header" id="ci-fc-header">
+      <div class="ci-fc-header-left">
+        <span>&#10038;</span> Ask AI <span class="ci-fc-company">— ${context.company || ''}</span>
+      </div>
+      <div class="ci-fc-btns">
+        <button class="ci-fc-btn" id="ci-fc-min" title="Minimize">&minus;</button>
+        <button class="ci-fc-btn" id="ci-fc-close" title="Close">&#10005;</button>
+      </div>
+    </div>
+    <div class="ci-fc-body">
+      <div class="ci-fc-messages" id="ci-fc-messages">
+        <div class="ci-fc-empty">Ask about this role, company, or get help with your application.</div>
+      </div>
+      <div class="ci-fc-input-row">
+        <textarea class="ci-fc-input" id="ci-fc-input" placeholder="Ask anything about this opportunity..." rows="2"></textarea>
+        <button class="ci-fc-send" id="ci-fc-send">Send</button>
+      </div>
+      <div class="ci-fc-actions">
+        <button class="ci-fc-action" data-prompt="Help me answer application questions for this role">Help me apply</button>
+        <button class="ci-fc-action" data-prompt="What should I know before interviewing here?">Prep me</button>
+        <button class="ci-fc-action" data-action="clear" style="margin-left:auto;color:#94a3b8">Clear</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(widget);
+
+  const msgsEl = widget.querySelector('#ci-fc-messages');
+  const inputEl = widget.querySelector('#ci-fc-input');
+  const sendBtn = widget.querySelector('#ci-fc-send');
+  const headerEl = widget.querySelector('#ci-fc-header');
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+
+  function render(thinking) {
+    if (history.length === 0) {
+      msgsEl.innerHTML = '<div class="ci-fc-empty">Ask about this role, company, or get help with your application.</div>';
+    } else {
+      msgsEl.innerHTML = history.map(m =>
+        `<div class="ci-fc-msg ci-fc-msg-${m.role}"><div class="ci-fc-bubble">${esc(m.content)}</div></div>`
+      ).join('') + (thinking ? '<div class="ci-fc-msg ci-fc-msg-assistant"><div class="ci-fc-bubble ci-fc-thinking">Thinking...</div></div>' : '');
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    history.push({ role: 'user', content: text });
+    render(true);
+    sendBtn.disabled = true;
+
+    const ctx = { ...widget._ciContext };
+    // Check if application mode
+    if (text.toLowerCase().includes('application') || text.toLowerCase().includes('apply')) {
+      ctx._applicationMode = true;
+    }
+    const msgs = history.map(m => ({ role: m.role, content: m.content }));
+
+    let result;
+    try {
+      result = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('timeout')), 60000);
+        chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: msgs, context: ctx }, r => {
+          clearTimeout(timeout);
+          if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+          else resolve(r);
+        });
+      });
+    } catch (e) {
+      result = { error: e.message === 'timeout' ? 'Request timed out.' : e.message };
+    }
+
+    sendBtn.disabled = false;
+    history.push({ role: 'assistant', content: result?.reply || result?.error || 'Something went wrong.' });
+    render();
+  }
+
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+
+  // Quick actions
+  widget.querySelector('.ci-fc-actions').addEventListener('click', e => {
+    const btn = e.target.closest('[data-prompt]');
+    if (btn) { inputEl.value = btn.dataset.prompt; send(); return; }
+    if (e.target.closest('[data-action="clear"]')) { history = []; render(); }
+  });
+
+  // Close / minimize
+  widget.querySelector('#ci-fc-close').addEventListener('click', () => { widget.style.display = 'none'; });
+  widget.querySelector('#ci-fc-min').addEventListener('click', () => {
+    const body = widget.querySelector('.ci-fc-body');
+    const isMin = body.style.display === 'none';
+    body.style.display = isMin ? 'flex' : 'none';
+    widget.style.height = isMin ? '520px' : '48px';
+    widget.style.resize = isMin ? 'both' : 'none';
+  });
+
+  // Drag to reposition
+  let dragging = false, sx, sy, sr, sb;
+  headerEl.addEventListener('mousedown', e => {
+    if (e.target.closest('.ci-fc-btn')) return;
+    dragging = true; sx = e.clientX; sy = e.clientY;
+    const r = widget.getBoundingClientRect();
+    sr = window.innerWidth - r.right; sb = window.innerHeight - r.bottom;
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    widget.style.right = Math.max(0, sr - (e.clientX - sx)) + 'px';
+    widget.style.bottom = Math.max(0, sb - (e.clientY - sy)) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = ''; });
+
+  // Pre-populate with selected text
+  const sel = window.getSelection()?.toString()?.trim();
+  if (sel && sel.length > 3) {
+    inputEl.value = sel;
+    inputEl.placeholder = 'Ask about this text...';
+  }
+
+  inputEl.focus();
+}
 
 function extractMyLinkedInProfile() {
   const parts = [];

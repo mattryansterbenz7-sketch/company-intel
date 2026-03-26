@@ -241,35 +241,10 @@
     .verdict-badge.mixed { background: rgba(81,111,144,0.1); color: #99afc4; border: 1px solid rgba(81,111,144,0.2); }
     .verdict-badge.low { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
 
-    /* Side panel chat */
-    .sp-chat-dropdown { margin: 0 16px 8px; }
-    .sp-chat-summary { font-size: 12px; font-weight: 700; color: #FF7A59; cursor: pointer; padding: 8px 12px; background: rgba(255,122,89,0.06); border-radius: 6px; list-style: none; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255,122,89,0.25); user-select: none; }
-    .sp-chat-summary:hover { border-color: #FF7A59; }
-    .sp-chat-chevron { font-size: 16px; transition: transform 0.2s; color: #FF7A59; }
-    .sp-chat-dropdown[open] .sp-chat-chevron { transform: rotate(90deg); }
-    .sp-chat-body { padding: 10px; background: #1C2D3A; border: 1px solid rgba(255,122,89,0.15); border-top: none; border-radius: 0 0 6px 6px; margin-top: -2px; }
-    .sp-chat-messages { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-    .sp-chat-empty { color: #4a6580; font-size: 12px; text-align: center; padding: 16px 8px; }
-    .sp-chat-msg { display: flex; flex-direction: column; }
-    .sp-chat-msg-user { align-items: flex-end; }
-    .sp-chat-msg-assistant { align-items: flex-start; }
-    .sp-chat-msg-user .sp-chat-bubble { background: rgba(255,255,255,0.08); color: #e2e8f0; padding: 6px 10px; border-radius: 8px 8px 2px 8px; font-size: 12px; line-height: 1.5; max-width: 90%; }
-    .sp-chat-msg-assistant .sp-chat-bubble { color: #cbd5e1; font-size: 12px; line-height: 1.6; padding: 2px 0; max-width: 100%; }
-    .sp-chat-msg-assistant .sp-chat-bubble strong { color: #e2e8f0; font-weight: 600; }
-    .sp-chat-msg-assistant .sp-chat-bubble p { margin: 0 0 4px; }
-    .sp-chat-msg-assistant .sp-chat-bubble p:last-child { margin: 0; }
-    .sp-chat-input-row { display: flex; gap: 6px; align-items: flex-end; }
-    .sp-chat-input { flex: 1; background: #243342; border: 1px solid #3d5468; border-radius: 6px; color: #e2e8f0; font-size: 12px; padding: 8px; font-family: inherit; resize: none; outline: none; min-height: 36px; }
-    .sp-chat-input:focus { border-color: #FF7A59; }
-    .sp-chat-input::placeholder { color: #4a6580; }
-    .sp-chat-send { background: #FF7A59; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0; }
-    .sp-chat-send:hover { background: #e8623f; }
-    .sp-chat-send:disabled { background: #3d5468; cursor: default; }
-    .sp-chat-actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-    .sp-chat-action { font-size: 10px; padding: 3px 8px; border-radius: 4px; border: 1px solid #3d5468; background: none; color: #7da8c4; cursor: pointer; font-family: inherit; transition: all 0.1s; }
-    .sp-chat-action:hover { border-color: #FF7A59; color: #FF7A59; }
-    .sp-chat-clear { margin-left: auto; color: #4a6580; }
-    .sp-chat-thinking { color: #4a6580 !important; font-style: italic; font-size: 11px; }
+    /* Side panel chat launch button */
+    .sp-chat-launch-btn { width: 100%; background: rgba(255,122,89,0.06); color: #FF7A59; border: 1px solid rgba(255,122,89,0.25); border-radius: 6px; padding: 10px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .sp-chat-launch-btn:hover { background: rgba(255,122,89,0.12); border-color: #FF7A59; }
+    .sp-chat-launch-btn:active { transform: scale(0.97); }
 
     /* Thumbs feedback */
     .verdict-thumbs { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; }
@@ -457,28 +432,9 @@
     <div id="job-opportunity"></div>
   </div>
 
-  <!-- Side panel chat -->
-  <div id="sp-chat" style="display:none">
-    <details class="sp-chat-dropdown" id="sp-chat-dropdown">
-      <summary class="sp-chat-summary">
-        <span>&#10038; Ask AI</span>
-        <span class="sp-chat-chevron">›</span>
-      </summary>
-      <div class="sp-chat-body">
-        <div class="sp-chat-messages" id="sp-chat-messages">
-          <div class="sp-chat-empty">Ask about this role, company, or get help with your application.</div>
-        </div>
-        <div class="sp-chat-input-row">
-          <textarea class="sp-chat-input" id="sp-chat-input" placeholder="Ask anything..." rows="2"></textarea>
-          <button class="sp-chat-send" id="sp-chat-send">Send</button>
-        </div>
-        <div class="sp-chat-actions">
-          <button class="sp-chat-action" data-prompt="Help me answer application questions for this role">Help me apply</button>
-          <button class="sp-chat-action" data-prompt="What should I know before interviewing here?">Prep me</button>
-          <button class="sp-chat-action sp-chat-clear" data-action="clear">Clear</button>
-        </div>
-      </div>
-    </details>
+  <!-- Side panel chat launch button -->
+  <div id="sp-chat" style="display:none;padding:0 16px 8px">
+    <button class="sp-chat-launch-btn" id="sp-chat-launch">&#10038; Ask AI — opens floating chat</button>
   </div>
 
   <!-- Company expandable content -->
