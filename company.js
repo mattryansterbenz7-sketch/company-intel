@@ -250,16 +250,16 @@ function renderHeader() {
 
   // Editable company name
   const nameInput = document.getElementById('hdr-name');
-  nameInput.addEventListener('blur', () => {
+  nameInput?.addEventListener('blur', () => {
     const val = nameInput.value.trim();
     if (val && val !== entry.company) {
       saveEntry({ company: val });
       document.title = `${val} — CompanyIntel`;
     }
   });
-  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
+  nameInput?.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
 
-  document.getElementById('hdr-status').addEventListener('change', e => {
+  document.getElementById('hdr-status')?.addEventListener('change', e => {
     const sel = e.target;
     const c = stageColor(sel.value, customCompanyStages);
     sel.style.borderColor = c; sel.style.color = c;
@@ -281,7 +281,7 @@ function renderHeader() {
     saveEntry({ jobStage: sel.value, stageTimestamps: ts });
   });
 
-  document.getElementById('hdr-stars').querySelectorAll('.hdr-star').forEach(btn => {
+  document.getElementById('hdr-stars')?.querySelectorAll('.hdr-star').forEach(btn => {
     btn.addEventListener('click', () => {
       const val = parseInt(btn.dataset.val);
       saveEntry({ rating: val });
