@@ -225,7 +225,7 @@ function renderHeader() {
 
   const hdr = document.getElementById('co-header');
   hdr.innerHTML = `
-    <button class="hdr-back" id="hdr-back">← Back</button>
+    <a href="saved.html" style="text-decoration:none;font-size:14px;font-weight:700;color:#f1f5f9;letter-spacing:-0.01em;margin-right:4px">Company<span style="color:#FF7A59">Intel</span></a>
     <div class="hdr-divider"></div>
     ${favicon}
     <input class="hdr-name-input" id="hdr-name" value="${nameVal}" placeholder="Company name">
