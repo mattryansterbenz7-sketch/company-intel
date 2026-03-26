@@ -1155,7 +1155,11 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
     const transcript = transcripts.length ? transcripts.join('\n\n---\n\n') : null;
     return { notes, transcript, meetings };
   } catch (err) {
-    if (err.code === 401) return { notes: null, error: 'not_connected' };
+    if (err.code === 401) {
+      // Token expired — clear stale token so Preferences reflects real state
+      chrome.storage.local.remove('granolaToken');
+      return { notes: null, error: 'token_expired' };
+    }
     return { notes: null, error: err.message };
   }
 }

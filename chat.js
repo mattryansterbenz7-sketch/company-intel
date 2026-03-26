@@ -181,6 +181,10 @@ function buildChatPanel(container, entry) {
       btn.disabled = false;
       btn.textContent = 'Load meeting notes';
 
+      if (result?.error === 'token_expired') {
+        showStatus('Granola session expired — please reconnect in Preferences.', 'err');
+        return;
+      }
       if (result?.error === 'not_connected') {
         showStatus('Granola not connected. Connect it in Preferences.', 'err');
         return;
@@ -210,6 +214,11 @@ function buildChatPanel(container, entry) {
       { type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames },
       result => {
         void chrome.runtime.lastError;
+        if (result?.error === 'token_expired') {
+          showStatus('Granola session expired — reconnect in Preferences.', 'err');
+          return;
+        }
+        if (result?.error === 'not_connected') return; // silently skip if never connected
         const notes = result?.transcript || result?.notes;
         if (notes) {
           granolaContext = notes;

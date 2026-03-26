@@ -361,8 +361,26 @@ document.getElementById('upload-resume-file').addEventListener('change', e => {
     disconnBtn.style.display = yes ? '' : 'none';
   }
 
-  chrome.storage.local.get(['granolaToken'], ({ granolaToken }) => {
-    setConnected(!!granolaToken);
+  chrome.storage.local.get(['granolaToken'], async ({ granolaToken }) => {
+    if (!granolaToken) { setConnected(false); return; }
+    // Validate token is still live — a stale token shows "Connected" but fails silently elsewhere
+    try {
+      const res = await fetch('https://mcp.granola.ai/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Authorization': `Bearer ${granolaToken}` },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'CompanyIntel', version: '1.0' } } })
+      });
+      if (res.status === 401) {
+        chrome.storage.local.remove('granolaToken');
+        setConnected(false);
+        statusEl.textContent = 'Session expired — please reconnect';
+      } else {
+        setConnected(true);
+      }
+    } catch(e) {
+      // Network error — assume still connected, let the next actual use surface errors
+      setConnected(true);
+    }
   });
 
   connectBtn.addEventListener('click', async () => {
