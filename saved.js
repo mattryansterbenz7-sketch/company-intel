@@ -895,9 +895,17 @@ function renderKanban(filtered) {
   board.innerHTML = stages.map(({ key: statusKey, label: statusLabel }) => {
     const cards = filtered.filter(c => {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
-      // Entries with unknown status fall into the first column
       return validKeys.has(s) ? s === statusKey : statusKey === stages[0].key;
     });
+    // Sort by job match score (highest first), then by most recent activity
+    if (activePipeline === 'opportunity') {
+      cards.sort((a, b) => {
+        const sa = a.jobMatch?.score ?? -1;
+        const sb = b.jobMatch?.score ?? -1;
+        if (sb !== sa) return sb - sa; // higher score first
+        return (b.lastActivity || b.savedAt || 0) - (a.lastActivity || a.savedAt || 0); // newer first
+      });
+    }
     const s = stageStyle(statusKey);
     return `
       <div class="kanban-col">
@@ -932,6 +940,37 @@ function renderKanban(filtered) {
       }
     );
   });
+
+  // Auto-score unscored opportunities in background
+  if (activePipeline === 'opportunity') {
+    const unscored = filtered.filter(c => c.isOpportunity && !c.jobMatch && c.jobDescription && !c._scoring);
+    if (unscored.length) {
+      chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+        unscored.slice(0, 3).forEach(c => { // max 3 concurrent
+          c._scoring = true;
+          // Show loading indicator on the card
+          const cardEl = board.querySelector(`.card-match-area[data-id="${c.id}"]`);
+          if (cardEl) cardEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">Scoring…</span>';
+          chrome.runtime.sendMessage(
+            { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {} },
+            result => {
+              void chrome.runtime.lastError;
+              delete c._scoring;
+              if (!result?.jobMatch) return;
+              const idx = allCompanies.findIndex(x => x.id === c.id);
+              if (idx === -1) return;
+              allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch };
+              if (result.jobSnapshot) allCompanies[idx].jobSnapshot = result.jobSnapshot;
+              chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+                void chrome.runtime.lastError;
+                render();
+              });
+            }
+          );
+        });
+      });
+    }
+  }
 }
 
 function renderKanbanCard(c) {
@@ -977,7 +1016,7 @@ function renderKanbanCard(c) {
         </div>
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
-      ${isJob && c.jobMatch?.score ? (() => { const v = scoreToVerdict(c.jobMatch.score); return `<div><span class="card-verdict-badge ${v.cls}">${v.label}</span></div>`; })() : ''}
+      <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => { const v = scoreToVerdict(c.jobMatch.score); return `<span class="card-verdict-badge ${v.cls}">${v.label}</span>`; })() : (isJob && c._scoring ? '<span style="color:#94a3b8;font-size:11px">Scoring…</span>' : '')}</div>
       ${isJob && (c.salary || c.workArrangement) ? `<div class="card-job-chips">
         ${c.salary ? `<span class="job-chip salary">💰 ${c.salary}</span>` : ''}
         ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}</span>` : ''}
