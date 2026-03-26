@@ -64,6 +64,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     consolidateProfile(message.rawInput, message.insights).then(sendResponse);
     return true;
   }
+  if (message.type === 'GLOBAL_CHAT_MESSAGE') {
+    handleGlobalChatMessage(message).then(sendResponse);
+    return true;
+  }
 });
 
 async function quickLookup(company, domain) {
@@ -740,6 +744,80 @@ async function handleChatMessage({ messages, context }) {
     return { reply: data.content?.[0]?.text || 'No response.' };
   } catch (err) {
     console.error('[Chat] Error:', err);
+    return { error: err.message };
+  }
+}
+
+// ── Global Chat (Pipeline Advisor) ───────────────────────────────────────────
+
+async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
+  const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
+  const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
+
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const systemParts = [
+    `You are the user's strategic career advisor with full visibility across their job search pipeline. You know their background, values, and preferences. You can see every company and opportunity they're tracking.\n\nHelp them prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When they mention a specific company or person, use the pipeline context to inform your response.\n\nIf they ask you to draft a message, email, or follow-up — pull from what you know about that company's stage, contacts, notes, and context to write something specific and actionable.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about them. Don't be sycophantic.\n\nResponse style: Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.`,
+    `\n=== TODAY ===\n${todayStr}`
+  ];
+
+  // Story Time
+  if (storyTime) {
+    const storyText = storyTime.profileSummary || storyTime.rawInput;
+    if (storyText) systemParts.push(`\n=== YOUR STORY ===\n${storyText.slice(0, 4000)}`);
+    const insights = (storyTime.learnedInsights || []).slice(-20);
+    if (insights.length) systemParts.push(`\n=== AI-LEARNED INSIGHTS ===\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
+  }
+
+  // User prefs
+  const userParts = [];
+  if (prefs.jobMatchBackground) userParts.push(`Background: ${prefs.jobMatchBackground}`);
+  if (prefs.roles)               userParts.push(`Target roles: ${prefs.roles}`);
+  if (prefs.avoid)               userParts.push(`Avoid: ${prefs.avoid}`);
+  if (prefs.roleLoved)           userParts.push(`Loves: ${prefs.roleLoved}`);
+  if (prefs.roleHated)           userParts.push(`Hates: ${prefs.roleHated}`);
+  if (prefs.salaryFloor)         userParts.push(`Salary floor: $${prefs.salaryFloor}`);
+  if (prefs.userLocation)        userParts.push(`Location: ${prefs.userLocation}`);
+  const wa = (prefs.workArrangement || []).join(', ');
+  if (wa) userParts.push(`Work arrangement: ${wa}`);
+  if (userParts.length) systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
+
+  // Pipeline summary
+  if (pipeline) {
+    const companyCount = pipeline.split('\n').length;
+    systemParts.push(`\n=== YOUR PIPELINE (${companyCount} entries) ===\n${pipeline}`);
+  }
+
+  // Company-specific enrichment (only for mentioned companies)
+  if (enrichments) systemParts.push(enrichments);
+
+  try {
+    const systemText = systemParts.join('\n');
+    console.log('[GlobalChat] System prompt length:', systemText.length, 'chars');
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: systemText,
+        messages
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('[GlobalChat] API error:', res.status, data);
+      return { error: data?.error?.message || `API error ${res.status}` };
+    }
+    return { reply: data.content?.[0]?.text || 'No response.' };
+  } catch (err) {
+    console.error('[GlobalChat] Error:', err);
     return { error: err.message };
   }
 }

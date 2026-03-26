@@ -1814,4 +1814,207 @@ function openStatCardEditor() {
   });
 }
 
+// ── Global Chat Widget ─────────────────────────────────────────────────────
+
+(function initGlobalChat() {
+  const floatEl  = document.getElementById('gc-float');
+  const trigger  = document.getElementById('gc-trigger');
+  const header   = document.getElementById('gc-header');
+  const msgsEl   = document.getElementById('gc-messages');
+  const inputEl  = document.getElementById('gc-input');
+  const sendBtn  = document.getElementById('gc-send');
+  const closeBtn = document.getElementById('gc-close');
+  const minBtn   = document.getElementById('gc-min');
+  const sizeBtn  = document.getElementById('gc-size');
+  if (!floatEl || !trigger) return;
+
+  let history = [];
+  let isMinimized = false;
+  let sizeState = 0;
+  const SIZE_ICONS = ['\u2922', '\u2921', '\u22A1'];
+  const SIZE_CLASSES = ['', 'gc-maximized', 'gc-fullscreen'];
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+  }
+
+  function renderMessages(showThinking) {
+    if (history.length === 0) {
+      msgsEl.innerHTML = '<div class="gc-empty">Ask anything about your pipeline — compare opportunities, draft follow-ups, get strategic advice.</div>';
+    } else {
+      msgsEl.innerHTML = history.map(m => {
+        const text = m.content;
+        const bubble = m.role === 'assistant'
+          ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escHtml(text))
+          : escHtml(text);
+        return `<div class="gc-msg gc-msg-${m.role}"><div class="gc-bubble">${bubble}</div></div>`;
+      }).join('') + (showThinking ? '<div class="gc-msg gc-msg-assistant"><div class="gc-bubble gc-thinking"><span class="gc-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>' : '');
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    inputEl.style.height = '';
+    history.push({ role: 'user', content: text });
+    renderMessages(true);
+    sendBtn.disabled = true;
+    sendBtn.textContent = '\u2026';
+
+    // Build compact pipeline summary
+    const pipeline = allCompanies.map(c => {
+      const parts = [c.company];
+      parts.push(`Stage: ${c.isOpportunity ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist')}`);
+      if (c.jobTitle) parts.push(`Role: ${c.jobTitle}`);
+      if (c.rating) parts.push(`Rating: ${c.rating}/5`);
+      const contacts = (c.knownContacts || []).slice(0, 3).map(k => k.name).filter(Boolean);
+      if (contacts.length) parts.push(`Contacts: ${contacts.join(', ')}`);
+      if (c.notes) parts.push(`Notes: ${c.notes.slice(0, 80)}`);
+      if (c.tags?.length) parts.push(`Tags: ${c.tags.join(', ')}`);
+      return '- ' + parts.join(' | ');
+    }).join('\n');
+
+    // Detect mentioned companies for enrichment
+    const lowerText = text.toLowerCase();
+    const mentionedEntries = allCompanies.filter(c =>
+      c.company && c.company.length > 2 && lowerText.includes(c.company.toLowerCase())
+    );
+
+    // Build enrichment for mentioned companies
+    const enrichments = mentionedEntries.slice(0, 3).map(c => {
+      const parts = [`\n=== ENRICHED CONTEXT: ${c.company} ===`];
+      if (c.intelligence?.eli5) parts.push(`What they do: ${c.intelligence.eli5}`);
+      if (c.intelligence?.whosBuyingIt) parts.push(`Who buys it: ${c.intelligence.whosBuyingIt}`);
+      if (c.jobTitle) parts.push(`Role: ${c.jobTitle}`);
+      if (c.jobMatch?.verdict) parts.push(`Match verdict: ${c.jobMatch.verdict} (${c.jobMatch.score}/10)`);
+      if (c.jobMatch?.strongFits?.length) parts.push(`Strong fits: ${c.jobMatch.strongFits.join('; ')}`);
+      if (c.jobMatch?.redFlags?.length) parts.push(`Red flags: ${c.jobMatch.redFlags.join('; ')}`);
+      if (c.jobDescription) parts.push(`Job description:\n${c.jobDescription.slice(0, 3000)}`);
+      if (c.leaders?.length) parts.push(`Leadership: ${c.leaders.map(l => `${l.name} (${l.title || ''})`).join(', ')}`);
+      if (c.notes) parts.push(`Notes: ${c.notes}`);
+      const contacts = (c.knownContacts || []).map(k => `${k.name}${k.email ? ' <' + k.email + '>' : ''}`);
+      if (contacts.length) parts.push(`Known contacts: ${contacts.join(', ')}`);
+      const emails = (c.cachedEmails || []).slice(0, 10);
+      if (emails.length) {
+        parts.push(`Recent emails:\n${emails.map(e => `  [${e.date || ''}] "${e.subject}" — ${e.from}${e.snippet ? '\n  ' + e.snippet.slice(0, 150) : ''}`).join('\n')}`);
+      }
+      const meetings = (c.cachedMeetings || []);
+      if (meetings.length) {
+        parts.push(`Meeting transcripts:\n${meetings.map(m => `--- ${m.title || 'Meeting'} | ${m.date || ''} ---\n${(m.transcript || '').slice(0, 3000)}`).join('\n\n')}`);
+      } else if (c.cachedMeetingTranscript) {
+        parts.push(`Meeting transcript:\n${c.cachedMeetingTranscript.slice(0, 4000)}`);
+      }
+      if (c.reviews?.length) parts.push(`Reviews: ${c.reviews.slice(0, 3).map(r => `"${r.snippet}" (${r.source || ''})`).join('; ')}`);
+      return parts.join('\n');
+    }).join('\n');
+
+    const apiMessages = history.map(m => ({ role: m.role, content: m.content }));
+
+    let result;
+    try {
+      result = await Promise.race([
+        new Promise(resolve => {
+          chrome.runtime.sendMessage({
+            type: 'GLOBAL_CHAT_MESSAGE',
+            messages: apiMessages,
+            pipeline,
+            enrichments,
+          }, r => {
+            if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+            else resolve(r);
+          });
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000))
+      ]);
+    } catch (e) {
+      result = { error: e.message === 'timeout' ? 'Request timed out. Try again.' : e.message };
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+
+    if (result?.reply) {
+      history.push({ role: 'assistant', content: result.reply });
+    } else {
+      history.push({ role: 'assistant', content: result?.error || 'Something went wrong. Try again.' });
+    }
+    renderMessages();
+  }
+
+  // Event listeners
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = '';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  });
+
+  // Quick action buttons
+  document.querySelector('.gc-actions')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-gc-prompt]');
+    if (btn) { inputEl.value = btn.dataset.gcPrompt; send(); return; }
+    if (e.target.closest('[data-gc-action="clear"]')) {
+      history = [];
+      renderMessages();
+    }
+  });
+
+  // Open / close / minimize / resize
+  function open() {
+    floatEl.classList.remove('gc-hidden', 'gc-minimized');
+    trigger.style.display = 'none';
+    isMinimized = false;
+    setTimeout(() => inputEl.focus(), 150);
+  }
+  function close() {
+    floatEl.classList.add('gc-hidden');
+    floatEl.classList.remove('gc-minimized', 'gc-maximized', 'gc-fullscreen');
+    trigger.style.display = '';
+    isMinimized = false; sizeState = 0;
+    sizeBtn.innerHTML = SIZE_ICONS[0];
+  }
+  function minimize() {
+    isMinimized = !isMinimized;
+    floatEl.classList.toggle('gc-minimized', isMinimized);
+    minBtn.innerHTML = isMinimized ? '+' : '&minus;';
+    if (isMinimized) { floatEl.classList.remove('gc-maximized', 'gc-fullscreen'); sizeState = 0; sizeBtn.innerHTML = SIZE_ICONS[0]; }
+  }
+  function cycleSize() {
+    floatEl.classList.remove(...SIZE_CLASSES.filter(Boolean));
+    sizeState = (sizeState + 1) % SIZE_CLASSES.length;
+    if (SIZE_CLASSES[sizeState]) floatEl.classList.add(SIZE_CLASSES[sizeState]);
+    sizeBtn.innerHTML = SIZE_ICONS[sizeState];
+    if (isMinimized) { isMinimized = false; floatEl.classList.remove('gc-minimized'); minBtn.innerHTML = '&minus;'; }
+  }
+
+  trigger.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  minBtn.addEventListener('click', minimize);
+  sizeBtn.addEventListener('click', cycleSize);
+
+  // Drag to reposition
+  let dragging = false, startX, startY, startRight, startBottom;
+  header.addEventListener('mousedown', e => {
+    if (e.target.closest('.gc-btn')) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    const rect = floatEl.getBoundingClientRect();
+    startRight = window.innerWidth - rect.right;
+    startBottom = window.innerHeight - rect.bottom;
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    floatEl.style.right  = Math.max(0, startRight  - (e.clientX - startX)) + 'px';
+    floatEl.style.bottom = Math.max(0, startBottom - (e.clientY - startY)) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = ''; });
+
+  renderMessages();
+})();
+
 load();
