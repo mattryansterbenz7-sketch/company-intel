@@ -79,6 +79,93 @@ loadPrefsWithMigration(prefs => {
   });
 });
 
+// ── Story Time ────────────────────────────────────────────────────────────
+
+(function initStoryTime() {
+  const inputEl = document.getElementById('story-time-input');
+  const saveBtn = document.getElementById('story-time-save');
+  const statusEl = document.getElementById('story-time-status');
+  const toggleEl = document.getElementById('story-time-profile-toggle');
+  const chevronEl = document.getElementById('story-time-chevron');
+  const bodyEl = document.getElementById('story-time-profile-body');
+  const textEl = document.getElementById('story-time-profile-text');
+  const refreshBtn = document.getElementById('story-time-refresh');
+
+  // Load existing Story Time data
+  chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+    const st = storyTime || {};
+    inputEl.value = st.rawInput || '';
+    renderProfile(st);
+  });
+
+  function renderProfile(st) {
+    if (st.profileSummary) {
+      textEl.textContent = st.profileSummary;
+      textEl.classList.remove('story-time-profile-empty');
+    } else {
+      textEl.textContent = 'No profile generated yet. Write about yourself above, save it, then click "Refresh Profile" to generate a consolidated AI summary.';
+      textEl.classList.add('story-time-profile-empty');
+    }
+  }
+
+  // Save raw input
+  saveBtn.addEventListener('click', () => {
+    chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+      const st = storyTime || {};
+      st.rawInput = inputEl.value.trim();
+      chrome.storage.local.set({ storyTime: st }, () => {
+        void chrome.runtime.lastError;
+        statusEl.classList.add('show');
+        setTimeout(() => statusEl.classList.remove('show'), 2000);
+      });
+    });
+  });
+
+  // Toggle profile visibility
+  toggleEl.addEventListener('click', () => {
+    const isOpen = bodyEl.classList.toggle('open');
+    chevronEl.innerHTML = isOpen ? '&#9660;' : '&#9654;';
+  });
+
+  // Refresh Profile (consolidation) — will be fully implemented in Step 3
+  refreshBtn.addEventListener('click', async () => {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Generating...';
+
+    const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
+    const st = storyTime || {};
+    const rawInput = st.rawInput || '';
+    const insights = (st.learnedInsights || []).map(i => i.insight).join('\n');
+
+    if (!rawInput && !insights) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = 'Refresh Profile';
+      textEl.textContent = 'Write about yourself first, then refresh.';
+      return;
+    }
+
+    const result = await new Promise(resolve =>
+      chrome.runtime.sendMessage({
+        type: 'CONSOLIDATE_PROFILE',
+        rawInput,
+        insights
+      }, resolve)
+    );
+
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = 'Refresh Profile';
+
+    if (result?.profileSummary) {
+      st.profileSummary = result.profileSummary;
+      st.lastConsolidated = Date.now();
+      chrome.storage.local.set({ storyTime: st });
+      renderProfile(st);
+    } else {
+      textEl.textContent = result?.error || 'Could not generate profile. Try again.';
+    }
+  });
+})();
+
 // ── Save ───────────────────────────────────────────────────────────────────
 
 document.getElementById('save-btn').addEventListener('click', () => savePrefs(true));

@@ -60,6 +60,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     searchGranolaNotes(message.companyName, message.contactNames || [], message.calendarDates || [], message.attendeeHandles || []).then(sendResponse);
     return true;
   }
+  if (message.type === 'CONSOLIDATE_PROFILE') {
+    consolidateProfile(message.rawInput, message.insights).then(sendResponse);
+    return true;
+  }
 });
 
 async function quickLookup(company, domain) {
@@ -697,6 +701,19 @@ async function handleChatMessage({ messages, context }) {
   if (prefs.roleHated)           userParts.push(`Hates: ${prefs.roleHated}`);
   if (userParts.length)          systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
 
+  // ── Story Time (persistent personal context) ───────────────────────────────
+  const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
+  if (storyTime) {
+    const storyText = storyTime.profileSummary || storyTime.rawInput;
+    if (storyText) {
+      systemParts.push(`\n=== YOUR STORY (from Story Time) ===\n${storyText.slice(0, 4000)}`);
+    }
+    const insights = (storyTime.learnedInsights || []).slice(-20);
+    if (insights.length) {
+      systemParts.push(`\n=== AI-LEARNED INSIGHTS ===\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
+    }
+  }
+
   try {
     const systemText = systemParts.join('\n');
     console.log('[Chat] System prompt length:', systemText.length, 'chars');
@@ -723,6 +740,40 @@ async function handleChatMessage({ messages, context }) {
     return { reply: data.content?.[0]?.text || 'No response.' };
   } catch (err) {
     console.error('[Chat] Error:', err);
+    return { error: err.message };
+  }
+}
+
+// ── Story Time: Profile Consolidation ────────────────────────────────────────
+
+async function consolidateProfile(rawInput, insights) {
+  const prompt = `Consolidate the following personal narrative and learned observations into a clear, structured personal profile summary. Preserve the user's voice and specifics. Organize into sections like: Background & Experience, Values & Preferences, Working Style, Career Goals, Dealbreakers, Relationship Patterns. Only include sections where you have real information. Keep it under 1500 words.
+
+=== USER'S OWN WORDS ===
+${rawInput || '(none provided)'}
+
+=== AI-LEARNED OBSERVATIONS ===
+${insights || '(none yet)'}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error?.message || `API error ${res.status}` };
+    return { profileSummary: data.content?.[0]?.text || '' };
+  } catch (err) {
     return { error: err.message };
   }
 }

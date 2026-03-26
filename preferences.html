@@ -136,6 +136,29 @@
     .save-btn:hover { background: #e05c3a; }
     .save-confirm { font-size: 13px; font-weight: 600; color: #00897b; opacity: 0; transition: opacity 0.3s; }
     .save-confirm.show { opacity: 1; }
+
+    /* ── Story Time ── */
+    .story-time-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 12px; padding: 24px 28px; box-shadow: 0 1px 3px rgba(45,62,80,0.06); margin-bottom: 32px; }
+    .story-time-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .story-time-title { font-size: 18px; font-weight: 800; color: #2d3e50; letter-spacing: -0.01em; }
+    .story-time-subtitle { font-size: 13px; color: #7c98b6; line-height: 1.6; margin-bottom: 16px; }
+    .story-time-textarea { width: 100%; min-height: 140px; border: 1.5px solid #dfe3eb; border-radius: 10px; padding: 14px 16px; font-size: 14px; color: #33475b; font-family: inherit; line-height: 1.65; resize: vertical; outline: none; transition: border-color 0.15s; }
+    .story-time-textarea:focus { border-color: #FF7A59; }
+    .story-time-textarea::placeholder { color: #b0c1d4; }
+    .story-time-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+    .story-time-save { background: #2d3e50; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; padding: 8px 18px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .story-time-save:hover { background: #FF7A59; }
+    .story-time-status { font-size: 12px; font-weight: 600; color: #00897b; opacity: 0; transition: opacity 0.3s; }
+    .story-time-status.show { opacity: 1; }
+    .story-time-profile { margin-top: 18px; border-top: 1px solid #eaf0f6; padding-top: 14px; }
+    .story-time-profile-toggle { font-size: 12px; font-weight: 700; color: #516f90; cursor: pointer; display: flex; align-items: center; gap: 6px; user-select: none; }
+    .story-time-profile-toggle:hover { color: #FF7A59; }
+    .story-time-profile-body { display: none; margin-top: 10px; }
+    .story-time-profile-body.open { display: block; }
+    .story-time-profile-text { font-size: 13px; color: #516f90; line-height: 1.7; white-space: pre-wrap; background: #f8fafc; border-radius: 8px; padding: 14px 16px; border: 1px solid #eaf0f6; max-height: 300px; overflow-y: auto; }
+    .story-time-profile-empty { font-size: 13px; color: #b0c1d4; font-style: italic; }
+    .story-time-refresh { font-size: 12px; font-weight: 600; color: #7c98b6; background: none; border: 1px solid #dfe3eb; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-family: inherit; margin-top: 10px; transition: all 0.15s; }
+    .story-time-refresh:hover { border-color: #FF7A59; color: #FF7A59; }
   </style>
 </head>
 <body>
@@ -153,6 +176,29 @@
   <div class="page">
     <div class="page-title">Your Profile &amp; Preferences</div>
     <div class="page-subtitle">Used by Job Match to score opportunities against your background. The more detail you add, the more accurate the scoring.</div>
+
+    <!-- Story Time -->
+    <div class="story-time-card">
+      <div class="story-time-header">
+        <span style="font-size:20px">&#9733;</span>
+        <span class="story-time-title">Story Time — Tell Me About You</span>
+      </div>
+      <div class="story-time-subtitle">Tell me about yourself — your career story, what drives you, what you're looking for, what environments bring out your best work. Be as detailed and honest as you want. This context helps every AI conversation in CompanyIntel understand who you are.</div>
+      <textarea class="story-time-textarea" id="story-time-input" placeholder="I've spent the last 10 years building revenue engines at early-stage SaaS companies. What I love most is..."></textarea>
+      <div class="story-time-actions">
+        <button class="story-time-save" id="story-time-save">Save</button>
+        <span class="story-time-status" id="story-time-status">Saved</span>
+      </div>
+      <div class="story-time-profile">
+        <div class="story-time-profile-toggle" id="story-time-profile-toggle">
+          <span id="story-time-chevron">&#9654;</span> What the AI has learned about you
+        </div>
+        <div class="story-time-profile-body" id="story-time-profile-body">
+          <div class="story-time-profile-text" id="story-time-profile-text"></div>
+          <button class="story-time-refresh" id="story-time-refresh">Refresh Profile</button>
+        </div>
+      </div>
+    </div>
 
     <div class="pref-grid">
 
