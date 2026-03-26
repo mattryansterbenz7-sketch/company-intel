@@ -527,11 +527,23 @@ function detectWorkAtAStartup() {
   let company = null;
   let jobTitle = null;
 
-  // Try the page title: "Account Executive (US) at kapa.ai (S23)"
-  const titleMatch = document.title.match(/^(.+?)\s+at\s+(.+?)(?:\s*\(S\d+\)|\s*\(W\d+\))?$/i);
+  // Strip site suffix from title: "... | Y Combinator's Work at a Startup" or " - Y Combinator..."
+  const rawTitle = document.title
+    .replace(/\s*[|·—–]\s*Y\s*Combinator.*$/i, '')
+    .replace(/\s*[|·—–]\s*Work\s+at\s+a\s+Startup.*$/i, '')
+    .trim();
+
+  // Title patterns:
+  // "Account Executive (US) at kapa.ai (S23)"
+  // "Head of Sales - Vector at Vector (W23)"
+  const titleMatch = rawTitle.match(/^(.+?)\s+at\s+([^|]+?)(?:\s*\([SW]\d+\))?\s*$/i);
   if (titleMatch) {
     jobTitle = titleMatch[1].trim();
     company = titleMatch[2].replace(/\s*\([SW]\d+\)\s*$/i, '').trim();
+    // Clean job title: "Head of Sales - Vector" → "Head of Sales" (strip company name from title)
+    if (company && jobTitle.endsWith('- ' + company)) {
+      jobTitle = jobTitle.slice(0, -(company.length + 2)).trim();
+    }
   }
 
   // Fallback: breadcrumb "Companies / kapa.ai (S23) / Jobs"
