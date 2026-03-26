@@ -946,27 +946,37 @@ function renderKanban(filtered) {
     const unscored = filtered.filter(c => c.isOpportunity && !c.jobMatch && c.jobDescription && !c._scoring);
     if (unscored.length) {
       chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-        unscored.slice(0, 3).forEach(c => { // max 3 concurrent
-          c._scoring = true;
-          // Show loading indicator on the card
-          const cardEl = board.querySelector(`.card-match-area[data-id="${c.id}"]`);
-          if (cardEl) cardEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">Scoring…</span>';
-          chrome.runtime.sendMessage(
-            { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {} },
-            result => {
-              void chrome.runtime.lastError;
-              delete c._scoring;
-              if (!result?.jobMatch) return;
-              const idx = allCompanies.findIndex(x => x.id === c.id);
-              if (idx === -1) return;
-              allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch };
-              if (result.jobSnapshot) allCompanies[idx].jobSnapshot = result.jobSnapshot;
-              chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+        chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+          unscored.slice(0, 3).forEach(c => {
+            c._scoring = true;
+            const cardEl = board.querySelector(`.card-match-area[data-id="${c.id}"]`);
+            if (cardEl) cardEl.innerHTML = '<span class="card-scoring-indicator">Scoring…</span>';
+            const richContext = {
+              intelligence: c.intelligence?.eli5 || c.oneLiner || null,
+              reviews: c.reviews || [],
+              emails: (c.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
+              meetings: (c.cachedMeetings || []).slice(0, 3),
+              transcript: c.cachedMeetingTranscript || null,
+              storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
+              notes: c.notes || null,
+            };
+            chrome.runtime.sendMessage(
+              { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {}, richContext },
+              result => {
                 void chrome.runtime.lastError;
-                render();
-              });
-            }
-          );
+                delete c._scoring;
+                if (!result?.jobMatch) return;
+                const idx = allCompanies.findIndex(x => x.id === c.id);
+                if (idx === -1) return;
+                allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
+                if (result.jobSnapshot) allCompanies[idx].jobSnapshot = result.jobSnapshot;
+                chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+                  void chrome.runtime.lastError;
+                  render();
+                });
+              }
+            );
+          });
         });
       });
     }
@@ -1016,7 +1026,15 @@ function renderKanbanCard(c) {
         </div>
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
-      <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => { const v = scoreToVerdict(c.jobMatch.score); return `<span class="card-verdict-badge ${v.cls}">${v.label}</span>`; })() : (isJob && c._scoring ? '<span style="color:#94a3b8;font-size:11px">Scoring…</span>' : '')}</div>
+      <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => {
+        const v = scoreToVerdict(c.jobMatch.score);
+        const scoreColor = c.jobMatch.score >= 7 ? '#00897b' : c.jobMatch.score >= 4 ? '#d97706' : '#e5483b';
+        const agoText = c.jobMatchScoredAt ? (() => {
+          const d = Math.round((Date.now() - c.jobMatchScoredAt) / 86400000);
+          return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
+        })() : '';
+        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${c.jobMatch.score}<span class="card-score-denom">/10</span></span><span class="card-verdict-badge ${v.cls}">${v.label}</span>${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
+      })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring…</span>' : '')}</div>
       ${isJob && (c.salary || c.workArrangement) ? `<div class="card-job-chips">
         ${c.salary ? `<span class="job-chip salary">💰 ${c.salary}</span>` : ''}
         ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}</span>` : ''}

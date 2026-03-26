@@ -185,6 +185,36 @@ function saveEntry(changes) {
   chrome.storage.local.set({ savedCompanies: allCompanies });
 }
 
+// Event-driven re-scoring: triggers when new context arrives (meetings, emails, notes)
+function maybeRescore(reason) {
+  if (!entry.isOpportunity || !entry.jobDescription) return;
+  chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+    if (!prefs) return;
+    chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+      console.log('[Rescore] Triggering re-score for', entry.company, '— reason:', reason);
+      const richContext = {
+        intelligence: entry.intelligence?.eli5 || entry.oneLiner || null,
+        reviews: entry.reviews || [],
+        emails: (entry.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
+        meetings: (entry.cachedMeetings || []).slice(0, 3),
+        transcript: entry.cachedMeetingTranscript || null,
+        storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
+        notes: entry.notes || null,
+      };
+      chrome.runtime.sendMessage(
+        { type: 'ANALYZE_JOB', company: entry.company, jobTitle: entry.jobTitle, jobDescription: entry.jobDescription, prefs, richContext },
+        result => {
+          void chrome.runtime.lastError;
+          if (!result?.jobMatch) return;
+          saveEntry({ jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() });
+          if (result.jobSnapshot) saveEntry({ jobSnapshot: result.jobSnapshot });
+          renderPanel('opportunity');
+        }
+      );
+    });
+  });
+}
+
 function saveLayout() {
   localStorage.setItem('ci_co_layout_' + entry.id, JSON.stringify(panelLayout));
 }
@@ -657,7 +687,11 @@ function bindHubTabs() {
   });
 
   const ta = document.getElementById('hub-notes-ta');
-  if (ta) ta.addEventListener('blur', () => saveEntry({ notes: ta.value }));
+  if (ta) ta.addEventListener('blur', () => {
+    const prev = entry.notes || '';
+    saveEntry({ notes: ta.value });
+    if (ta.value.trim() !== prev.trim()) maybeRescore('notes_updated');
+  });
 
   // Fit analysis refresh button (may be rendered later if intel tab is active)
   document.addEventListener('click', e => {
@@ -749,6 +783,7 @@ function loadHubEmails(forceRefresh) {
     saveEntry(emailUpdates);
     renderEmailsFromData(result.emails);
     applyContactsFromEmails(result.emails);
+    maybeRescore('new_emails');
   });
 }
 
@@ -861,8 +896,9 @@ function loadHubMeetings(forceRefresh) {
       const calEvents = entry.cachedCalendarEvents || [];
       renderMeetingsTimeline(calEvents, granolaNotes);
 
-      // New context arrived — refresh fit analysis (TTL check inside will prevent redundant calls)
+      // New context arrived — refresh fit analysis and job match score
       maybeRefreshDeepFitAnalysis();
+      maybeRescore('new_meetings');
 
       // Auto-populate next step + date if not already set
       if (!entry.nextStep && !entry.nextStepDate) {

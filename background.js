@@ -18,7 +18,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'ANALYZE_JOB') {
-    analyzeJob(message.company, message.jobTitle, message.jobDescription, message.prefs).then(sendResponse);
+    analyzeJob(message.company, message.jobTitle, message.jobDescription, message.prefs, message.richContext).then(sendResponse);
     return true;
   }
   if (message.type === 'GET_LEADER_PHOTOS') {
@@ -159,7 +159,7 @@ async function researchCompany(company, domain, prefs) {
   }
 }
 
-async function analyzeJob(company, jobTitle, jobDescription, prefs) {
+async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext) {
   if (!prefs) return null;
   const hasJobPrefs = prefs.jobMatchEnabled || prefs.jobMatchBackground || prefs.roles ||
     prefs.avoid || prefs.workArrangement?.length > 0 || prefs.salaryFloor || prefs.salaryStrong ||
@@ -171,6 +171,17 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs) {
   const salaryFloor = prefs.salaryFloor || prefs.minSalary || null;
   const salaryStrong = prefs.salaryStrong || null;
 
+  // Build rich context section from available data
+  const rc = richContext || {};
+  let richSection = '';
+  if (rc.intelligence) richSection += `\nCompany Intelligence: ${rc.intelligence}\n`;
+  if (rc.reviews?.length) richSection += `\nEmployee Reviews:\n${rc.reviews.slice(0, 4).map(r => `- "${r.snippet}" (${r.source || ''})`).join('\n')}\n`;
+  if (rc.emails?.length) richSection += `\nRecent Email Context (${rc.emails.length} emails):\n${rc.emails.slice(0, 5).map(e => `- [${e.date}] "${e.subject}" from ${e.from}`).join('\n')}\n`;
+  if (rc.meetings?.length) richSection += `\nMeeting Context (${rc.meetings.length} meetings):\n${rc.meetings.slice(0, 3).map(m => `- ${m.title || 'Meeting'} (${m.date || ''}) — ${(m.transcript || '').slice(0, 500)}`).join('\n')}\n`;
+  if (rc.transcript) richSection += `\nMeeting Transcript (summary):\n${rc.transcript.slice(0, 1500)}\n`;
+  if (rc.storyTime) richSection += `\nUser Story Time Profile:\n${rc.storyTime.slice(0, 1500)}\n`;
+  if (rc.notes) richSection += `\nUser Notes on This Company:\n${rc.notes}\n`;
+
   const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
 
 Company: ${company}
@@ -178,7 +189,7 @@ Job Title: ${jobTitle}
 ${jobDescription
   ? `Job Description:\n${jobDescription}`
   : `(Full description unavailable — analyze from job title and company context only.)`}
-
+${richSection}
 ${prefs.resumeText ? `Candidate Resume / LinkedIn Profile:\n${prefs.resumeText}\n` : ''}
 User Profile:
 - Additional background notes: ${prefs.jobMatchBackground || 'none'}
