@@ -1882,8 +1882,24 @@ function openStatCardEditor() {
       c.company && c.company.length > 2 && lowerText.includes(c.company.toLowerCase())
     );
 
-    // Build enrichment for mentioned companies
-    const enrichments = mentionedEntries.slice(0, 3).map(c => {
+    // Fetch missing emails/meetings for mentioned companies, then build enrichment
+    const enrichmentParts = await Promise.all(mentionedEntries.slice(0, 3).map(async c => {
+      // Fetch emails if not cached
+      if (!c.cachedEmails?.length) {
+        const domain = (c.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+        if (domain) {
+          const emailResult = await new Promise(r => chrome.runtime.sendMessage({ type: 'GMAIL_FETCH_EMAILS', domain, companyName: c.company }, r));
+          if (emailResult?.emails?.length) c.cachedEmails = emailResult.emails;
+        }
+      }
+      // Fetch meetings if not cached
+      if (!c.cachedMeetings?.length && !c.cachedMeetingTranscript) {
+        const contactNames = (c.knownContacts || []).map(k => k.name).filter(Boolean);
+        const granolaResult = await new Promise(r => chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: c.company, contactNames }, r));
+        if (granolaResult?.meetings?.length) c.cachedMeetings = granolaResult.meetings;
+        else if (granolaResult?.transcript) c.cachedMeetingTranscript = granolaResult.transcript;
+      }
+
       const parts = [`\n=== ENRICHED CONTEXT: ${c.company} ===`];
       if (c.intelligence?.eli5) parts.push(`What they do: ${c.intelligence.eli5}`);
       if (c.intelligence?.whosBuyingIt) parts.push(`Who buys it: ${c.intelligence.whosBuyingIt}`);
@@ -1908,7 +1924,8 @@ function openStatCardEditor() {
       }
       if (c.reviews?.length) parts.push(`Reviews: ${c.reviews.slice(0, 3).map(r => `"${r.snippet}" (${r.source || ''})`).join('; ')}`);
       return parts.join('\n');
-    }).join('\n');
+    }));
+    const enrichments = enrichmentParts.join('\n');
 
     const apiMessages = history.map(m => ({ role: m.role, content: m.content }));
 

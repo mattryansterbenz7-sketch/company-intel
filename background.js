@@ -741,7 +741,11 @@ async function handleChatMessage({ messages, context }) {
       console.error('[Chat] API error:', res.status, data);
       return { error: data?.error?.message || `API error ${res.status}` };
     }
-    return { reply: data.content?.[0]?.text || 'No response.' };
+    const reply = data.content?.[0]?.text || 'No response.';
+    // Passive learning: extract insights in background (non-blocking)
+    const lastUserMsg = messages[messages.length - 1]?.content || '';
+    extractInsightsFromChat(lastUserMsg, reply, `chat:${context.company || 'unknown'}`);
+    return { reply };
   } catch (err) {
     console.error('[Chat] Error:', err);
     return { error: err.message };
@@ -815,10 +819,73 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
       console.error('[GlobalChat] API error:', res.status, data);
       return { error: data?.error?.message || `API error ${res.status}` };
     }
-    return { reply: data.content?.[0]?.text || 'No response.' };
+    const reply = data.content?.[0]?.text || 'No response.';
+    // Passive learning: extract insights in background (non-blocking)
+    const lastUserMsg = messages[messages.length - 1]?.content || '';
+    extractInsightsFromChat(lastUserMsg, reply, 'global-chat');
+    return { reply };
   } catch (err) {
     console.error('[GlobalChat] Error:', err);
     return { error: err.message };
+  }
+}
+
+// ── Story Time: Passive Learning (insight extraction after every chat) ───────
+
+async function extractInsightsFromChat(userMessage, assistantResponse, source) {
+  try {
+    const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
+    const st = storyTime || {};
+    const existing = (st.learnedInsights || []).slice(-20).map(i => i.insight).join('\n');
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: `You just had a conversation with the user. Based on the conversation below, extract any NEW personal insights about the user — things like values, preferences, communication style, concerns, patterns, career goals, or relationship dynamics that would help you advise them better in the future.
+
+Return ONLY a JSON array of insight strings. If there are no new insights, return an empty array [].
+
+Conversation:
+User: ${userMessage}
+Assistant: ${assistantResponse}
+
+Existing insights (don't repeat these):
+${existing}` }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { console.error('[Insights] API error:', res.status); return; }
+
+    const text = (data.content?.[0]?.text || '').trim();
+    let insights;
+    try {
+      // Extract JSON array from response (handle markdown code fences)
+      const jsonStr = text.replace(/^```json?\s*/i, '').replace(/\s*```$/, '');
+      insights = JSON.parse(jsonStr);
+    } catch (e) { return; }
+
+    if (!Array.isArray(insights) || insights.length === 0) return;
+
+    const now = new Date().toISOString().slice(0, 10);
+    const newInsights = insights
+      .filter(i => typeof i === 'string' && i.trim().length > 5)
+      .map(i => ({ source, date: now, insight: i.trim() }));
+
+    if (newInsights.length === 0) return;
+
+    st.learnedInsights = [...(st.learnedInsights || []), ...newInsights].slice(-100); // keep last 100
+    chrome.storage.local.set({ storyTime: st });
+    console.log(`[Insights] Extracted ${newInsights.length} new insight(s) from ${source}`);
+  } catch (err) {
+    console.error('[Insights] Error:', err.message);
   }
 }
 

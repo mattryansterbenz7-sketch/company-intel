@@ -99,6 +99,13 @@ loadPrefsWithMigration(prefs => {
   });
 
   function renderProfile(st) {
+    const insights = st.learnedInsights || [];
+    const insightCount = insights.length;
+    const toggleLabel = insightCount > 0
+      ? `What the AI has learned about you (${insightCount} insight${insightCount === 1 ? '' : 's'})`
+      : 'What the AI has learned about you';
+    toggleEl.innerHTML = `<span id="story-time-chevron">${bodyEl.classList.contains('open') ? '\u25BC' : '\u25B6'}</span> ${toggleLabel}`;
+
     if (st.profileSummary) {
       textEl.textContent = st.profileSummary;
       textEl.classList.remove('story-time-profile-empty');
