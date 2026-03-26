@@ -53,12 +53,10 @@ function buildChatPanel(container, entry) {
     || entry.cachedMeetingNotes
     || null;
 
-  function renderHistory() {
-    // Spacer pushes messages to bottom when content doesn't fill the container
-    const spacer = '<div style="flex:1;min-height:0"></div>';
+  function renderHistory(showThinking) {
     msgsEl.innerHTML = history.length === 0
       ? `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.</div>`
-      : spacer + history.map((m, idx) => {
+      : history.map((m, idx) => {
           const text = m.content[0]?.text || m.content;
           const bubble = m.role === 'assistant'
             ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escapeHtml(text))
@@ -68,7 +66,7 @@ function buildChatPanel(container, entry) {
             ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
             : '';
           return `<div class="chat-msg chat-msg-${m.role}"><div class="chat-msg-bubble">${bubble}</div>${followup}</div>`;
-        }).join('');
+        }).join('') + (showThinking ? '<div class="chat-msg chat-msg-assistant"><div class="chat-msg-bubble chat-thinking"><span class="chat-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>' : '');
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
     // Bind follow-up chip clicks
@@ -92,7 +90,7 @@ function buildChatPanel(container, entry) {
     inputEl.value = '';
     inputEl.style.height = '';
     history.push({ role: 'user', content: [{ type: 'text', text }] });
-    renderHistory();
+    renderHistory(true);
 
     sendBtn.disabled = true;
     sendBtn.textContent = '…';

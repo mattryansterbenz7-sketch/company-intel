@@ -588,6 +588,11 @@
     #ci-float-chat .chat-followups { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
     #ci-float-chat .chat-followup-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid #dfe3eb; background: #f8fafc; color: #516f90; cursor: pointer; font-family: inherit; transition: all 0.1s; }
     #ci-float-chat .chat-followup-btn:hover { border-color: #FF7A59; color: #FF7A59; }
+    .chat-thinking { color: #94a3b8 !important; font-style: italic; }
+    .chat-thinking-dots span { animation: chatDotPulse 1.4s infinite; opacity: 0.3; }
+    .chat-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .chat-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes chatDotPulse { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
   </style>
 </head>
 <body>
