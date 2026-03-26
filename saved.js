@@ -27,6 +27,14 @@ const DEFAULT_COMPANY_STAGES = [
 let customOpportunityStages = [...DEFAULT_OPPORTUNITY_STAGES];
 let customCompanyStages = [...DEFAULT_COMPANY_STAGES];
 let activePipeline = localStorage.getItem('ci_activePipeline') || 'all'; // 'all' | 'opportunity' | 'company'
+let stageCelebrations = {}; // { [stageKey]: { confetti, sound } } — loaded from storage
+let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
+let activityCustomRange = JSON.parse(localStorage.getItem('ci_activityCustomRange') || 'null'); // {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} or null
+let activityGoals = {
+  daily:   { saved: 3,  applied: 1,  intro: 1,  interviewed: 1 },
+  weekly:  { saved: 15, applied: 5,  intro: 3,  interviewed: 2 },
+  monthly: { saved: 60, applied: 20, intro: 12, interviewed: 8 }
+};
 
 function currentStages() {
   return activePipeline === 'company' ? customCompanyStages : customOpportunityStages;
@@ -59,32 +67,118 @@ function scoreToVerdict(score) {
   return { label: 'Likely Not a Fit', cls: 'low' };
 }
 
-// Deterministic color for a tag string
-function tagColor(tag) {
+// Tag color palette
+const TAG_PALETTE = [
+  { border: '#818cf8', color: '#a5b4fc', bg: 'rgba(99,102,241,0.12)' },
+  { border: '#34d399', color: '#6ee7b7', bg: 'rgba(52,211,153,0.12)' },
+  { border: '#fb923c', color: '#fdba74', bg: 'rgba(251,146,60,0.12)' },
+  { border: '#f472b6', color: '#f9a8d4', bg: 'rgba(244,114,182,0.12)' },
+  { border: '#38bdf8', color: '#7dd3fc', bg: 'rgba(56,189,248,0.12)' },
+  { border: '#c084fc', color: '#d8b4fe', bg: 'rgba(192,132,252,0.12)' },
+  { border: '#4ade80', color: '#86efac', bg: 'rgba(74,222,128,0.12)' },
+  { border: '#f59e0b', color: '#fcd34d', bg: 'rgba(245,158,11,0.12)' },
+];
+let customTagColors = {}; // { tagName: paletteIndex }
+
+function tagColorIndex(tag) {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff;
-  const palette = [
-    { border: '#818cf8', color: '#a5b4fc', bg: 'rgba(99,102,241,0.12)' },
-    { border: '#34d399', color: '#6ee7b7', bg: 'rgba(52,211,153,0.12)' },
-    { border: '#fb923c', color: '#fdba74', bg: 'rgba(251,146,60,0.12)' },
-    { border: '#f472b6', color: '#f9a8d4', bg: 'rgba(244,114,182,0.12)' },
-    { border: '#38bdf8', color: '#7dd3fc', bg: 'rgba(56,189,248,0.12)' },
-    { border: '#c084fc', color: '#d8b4fe', bg: 'rgba(192,132,252,0.12)' },
-    { border: '#4ade80', color: '#86efac', bg: 'rgba(74,222,128,0.12)' },
-    { border: '#f59e0b', color: '#fcd34d', bg: 'rgba(245,158,11,0.12)' },
-  ];
-  return palette[Math.abs(hash) % palette.length];
+  return Math.abs(hash) % TAG_PALETTE.length;
+}
+function tagColor(tag) {
+  const idx = (customTagColors[tag] !== undefined) ? customTagColors[tag] : tagColorIndex(tag);
+  return TAG_PALETTE[idx % TAG_PALETTE.length];
+}
+function saveTagColor(tag, idx) {
+  customTagColors[tag] = idx;
+  chrome.storage.local.set({ tagColors: customTagColors }, () => { updateTagsToolbar(); render(); });
+}
+function saveStageColor(stageKey, colorHex) {
+  let stage = customOpportunityStages.find(s => s.key === stageKey);
+  if (stage) {
+    stage.color = colorHex;
+    chrome.storage.local.set({ opportunityStages: customOpportunityStages }, () => {
+      updateStageDynamicCSS(); updateStatusToolbar(); render();
+    });
+    return;
+  }
+  stage = customCompanyStages.find(s => s.key === stageKey);
+  if (stage) {
+    stage.color = colorHex;
+    chrome.storage.local.set({ companyStages: customCompanyStages }, () => {
+      updateStageDynamicCSS(); updateStatusToolbar(); render();
+    });
+  }
 }
 
+// ── Inline color picker popover ──────────────────────────────────────────────
+function showColorPicker(anchorEl, palette, currentIdx, onSelect) {
+  const popover = document.getElementById('color-picker-popover');
+  popover.innerHTML = palette.map((c, i) =>
+    `<button class="cp-swatch${i === currentIdx ? ' active' : ''}" data-i="${i}" style="background:${c}"></button>`
+  ).join('');
+  popover.querySelectorAll('.cp-swatch').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onSelect(parseInt(btn.dataset.i));
+      popover.style.display = 'none';
+    });
+  });
+  popover.style.display = 'flex';
+  // Position below anchor, adjusted to stay in viewport
+  requestAnimationFrame(() => {
+    const rect = anchorEl.getBoundingClientRect();
+    let top = rect.bottom + 6, left = rect.left;
+    const pw = popover.offsetWidth, ph = popover.offsetHeight;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
+    popover.style.top = Math.max(8, top) + 'px';
+    popover.style.left = Math.max(8, left) + 'px';
+  });
+}
+document.addEventListener('click', () => {
+  const p = document.getElementById('color-picker-popover');
+  if (p) p.style.display = 'none';
+});
+
 function load() {
-  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages'], (data) => {
+  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations'], (data) => {
     const { savedCompanies, allTags } = data;
     // Migration: old customStages → opportunityStages
     const storedOpp = data.opportunityStages || data.customStages;
     if (storedOpp && storedOpp.length > 0) customOpportunityStages = storedOpp;
     if (data.companyStages && data.companyStages.length > 0) customCompanyStages = data.companyStages;
+    if (data.tagColors) customTagColors = data.tagColors;
+    if (data.activityGoals) {
+      activityGoals.daily     = { ...activityGoals.daily,     ...(data.activityGoals.daily     || {}) };
+      activityGoals.weekly    = { ...activityGoals.weekly,    ...(data.activityGoals.weekly    || {}) };
+      activityGoals.monthly   = { ...activityGoals.monthly,   ...(data.activityGoals.monthly   || {}) };
+    }
+    if (data.stageCelebrations) stageCelebrations = data.stageCelebrations;
     updateStageDynamicCSS();
     allCompanies = (savedCompanies || []).sort((a, b) => b.savedAt - a.savedAt);
+
+    // One-time backfill: stamp appliedAt/interviewedAt for entries already in those stages
+    // that predate the stamping logic. Uses savedAt as best available approximation.
+    let needsBackfill = false;
+    allCompanies = allCompanies.map(c => {
+      if (!c.isOpportunity) return c;
+      const stage = c.jobStage || '';
+      if (!c.appliedAt && /applied/i.test(stage)) {
+        needsBackfill = true;
+        return { ...c, appliedAt: c.savedAt || Date.now() };
+      }
+      if (!c.introAt && /intro_request/i.test(stage)) {
+        needsBackfill = true;
+        return { ...c, introAt: c.savedAt || Date.now() };
+      }
+      if (!c.interviewedAt && /^conversations?$/i.test(stage)) {
+        needsBackfill = true;
+        return { ...c, interviewedAt: c.savedAt || Date.now() };
+      }
+      return c;
+    });
+    if (needsBackfill) chrome.storage.local.set({ savedCompanies: allCompanies });
     allKnownTags = allTags || [];
     // Sync any tags from saved entries that aren't in allTags yet
     const tagsFromEntries = [...new Set(allCompanies.flatMap(c => c.tags || []))];
@@ -97,6 +191,7 @@ function load() {
     updateStatusToolbar();
     updateTagsToolbar();
     render();
+    renderActivitySection();
   });
 }
 
@@ -120,6 +215,16 @@ function updateTagsToolbar() {
     const btn = document.createElement('button');
     btn.className = 'tag-filter-btn' + (activeTag === tag ? ' active' : '');
     btn.style.cssText = `border-color:${c.border};color:${activeTag === tag ? '#fff' : c.color};background:${activeTag === tag ? c.bg : 'transparent'};display:inline-flex;align-items:center;gap:5px;`;
+
+    const dot = document.createElement('span');
+    dot.className = 'tag-swatch-dot';
+    dot.style.background = c.border;
+    dot.title = 'Change tag color';
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const currIdx = customTagColors[tag] !== undefined ? customTagColors[tag] : tagColorIndex(tag);
+      showColorPicker(dot, TAG_PALETTE.map(p => p.border), currIdx, (idx) => saveTagColor(tag, idx));
+    });
 
     const label = document.createElement('span');
     label.textContent = tag;
@@ -146,6 +251,7 @@ function updateTagsToolbar() {
       render();
     });
 
+    btn.appendChild(dot);
     btn.appendChild(label);
     btn.appendChild(del);
     toolbar.appendChild(btn);
@@ -171,7 +277,23 @@ function updateStatusToolbar() {
     const btn = document.createElement('button');
     btn.className = 'status-filter-btn' + (currentStatus === val ? ' active' : '');
     btn.dataset.status = val;
-    btn.textContent = label;
+    btn.style.display = 'inline-flex';
+    btn.style.alignItems = 'center';
+    btn.style.gap = '6px';
+
+    const dot = document.createElement('span');
+    dot.className = 'stage-swatch-dot';
+    dot.style.background = stageColor(val);
+    dot.title = 'Change stage color';
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const currColor = stageColor(val);
+      const currIdx = STAGE_COLOR_PALETTE.indexOf(currColor);
+      showColorPicker(dot, STAGE_COLOR_PALETTE, currIdx === -1 ? 0 : currIdx, (idx) => saveStageColor(val, STAGE_COLOR_PALETTE[idx]));
+    });
+
+    btn.appendChild(dot);
+    btn.appendChild(document.createTextNode(label));
     btn.addEventListener('click', () => { activeStatus = val; updateStatusToolbar(); render(); });
     toolbar.appendChild(btn);
   });
@@ -253,7 +375,7 @@ function render() {
               <span class="card-type ${isJob ? 'job' : 'company'}">${isJob ? 'Opportunity' : 'Company'}</span>
               <a class="card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}</a>
             </div>
-            ${isJob && c.jobTitle ? `<div class="card-job" style="font-size:13px;color:#cbd5e1;font-weight:500;margin-bottom:2px">${c.jobTitle}</div>` : ''}
+            ${isJob && c.jobTitle ? `<div class="card-job" style="font-size:13px;font-weight:500;margin-bottom:2px">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : `<span style="color:#cbd5e1">${c.jobTitle}</span>`}</div>` : ''}
             ${isJob && (c.salary || c.workArrangement) ? `<div class="card-job-chips">
               ${c.salary ? `<span class="job-chip salary">💰 ${c.salary}</span>` : ''}
               ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}${c.location ? ' · ' + c.location : ''}</span>` : ''}
@@ -323,6 +445,17 @@ function render() {
     });
   });
 
+  // Tag color edit (click tag text, not ✕)
+  grid.querySelectorAll('.card-tag').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.tag-remove')) return;
+      e.stopPropagation();
+      const tag = el.dataset.tag;
+      const currIdx = customTagColors[tag] !== undefined ? customTagColors[tag] : tagColorIndex(tag);
+      showColorPicker(el, TAG_PALETTE.map(p => p.border), currIdx, (idx) => saveTagColor(tag, idx));
+    });
+  });
+
   // Tag add button — show inline input
   grid.querySelectorAll('.tag-add-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -375,7 +508,13 @@ function render() {
     sel.addEventListener('change', () => {
       sel.dataset.status = sel.value;
       const field = sel.dataset.stageField || 'status';
-      updateCompany(sel.dataset.id, { [field]: sel.value });
+      const entry = allCompanies.find(c => c.id === sel.dataset.id);
+      const now = Date.now();
+      const changes = { [field]: sel.value, ...(entry ? backfillClearTimestamps(entry, sel.value) : {}) };
+      if (/applied/i.test(sel.value)) { changes.lastActivity = now; if (!entry?.appliedAt) changes.appliedAt = now; }
+      if (/intro_request/i.test(sel.value) && !entry?.introAt) changes.introAt = now;
+      if (/^conversations?$/i.test(sel.value) && !entry?.interviewedAt) changes.interviewedAt = now;
+      updateCompany(sel.dataset.id, changes);
     });
   });
 
@@ -419,9 +558,288 @@ function commitTag(id, tag) {
   updateTagsToolbar();
 }
 
+// ── Confetti ──────────────────────────────────────────────────────────────────
+
+// ── Celebration config ────────────────────────────────────────────────────────
+
+const CONFETTI_OPTIONS = [
+  { value: 'none',     label: '— None' },
+  { value: 'confetti', label: '🎊 Confetti' },
+  { value: 'thumbsup', label: '👍 Thumbs Up' },
+  { value: 'stopsign', label: '🛑 Stop Sign' },
+  { value: 'peace',    label: '✌️ Peace' },
+  { value: 'money',    label: '🤑 Money' },
+];
+const SOUND_OPTIONS = [
+  { value: 'none',     label: '— None' },
+  { value: 'pop',      label: '🎊 Pop' },
+  { value: 'chaching', label: '💰 Cha-ching' },
+  { value: 'farewell', label: '👋 Farewell Voice' },
+];
+
+// Smart defaults — used when a stage has no custom config set
+function getDefaultCelebration(stageKey) {
+  const stages = customOpportunityStages;
+  if (stageKey === 'applied')                              return { confetti: 'thumbsup', sound: 'none' };
+  if (/stall/i.test(stageKey))                            return { confetti: 'stopsign', sound: 'none' };
+  if (/rejected|closed.lost|dq/i.test(stageKey))         return { confetti: 'peace',    sound: 'farewell' };
+
+  const convoIdx    = stages.findIndex(s => s.key === 'conversations');
+  const offerIdx    = stages.findIndex(s => /offer/i.test(s.key));
+  const rejectedIdx = stages.findIndex(s => /rejected/i.test(s.key));
+  const toIdx       = stages.findIndex(s => s.key === stageKey);
+
+  if (convoIdx < 0 || toIdx < convoIdx) return { confetti: 'none', sound: 'none' };
+  if (rejectedIdx >= 0 && toIdx >= rejectedIdx) return { confetti: 'none', sound: 'none' };
+  if (offerIdx >= 0 && toIdx >= offerIdx)       return { confetti: 'money',    sound: 'chaching' };
+  return { confetti: 'confetti', sound: 'pop' };
+}
+
+function getConfettiConfig(newStatus) {
+  const stages = customOpportunityStages;
+  const cfg = stageCelebrations[newStatus] || getDefaultCelebration(newStatus);
+  if (!cfg || cfg.confetti === 'none') return null;
+
+  // Count scales with pipeline position for progressive feel
+  let count = 30;
+  if (cfg.confetti === 'confetti') {
+    const convoIdx = stages.findIndex(s => s.key === 'conversations');
+    const toIdx    = stages.findIndex(s => s.key === newStatus);
+    const pos = (convoIdx >= 0 && toIdx >= 0) ? Math.max(0, toIdx - convoIdx) : 0;
+    count = 80 + pos * 55;
+  } else if (cfg.confetti === 'money') {
+    const offerIdx = stages.findIndex(s => /offer/i.test(s.key));
+    const toIdx    = stages.findIndex(s => s.key === newStatus);
+    const pos = (offerIdx >= 0 && toIdx >= 0) ? Math.max(0, toIdx - offerIdx) : 0;
+    count = 55 + pos * 35;
+  } else if (cfg.confetti === 'thumbsup') count = 20;
+  else if (cfg.confetti === 'stopsign')   count = 25;
+  else if (cfg.confetti === 'peace')      count = 35;
+
+  return { type: cfg.confetti, sound: cfg.sound || 'none', count };
+}
+
+function playConfettiPop() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = ctx.currentTime;
+
+    // Tonal pop — descending pitch sweep
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(700, t);
+    osc.frequency.exponentialRampToValueAtTime(160, t + 0.12);
+    const oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(0.5, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.18);
+
+    // Noise burst for pop texture
+    const bufSize = Math.floor(ctx.sampleRate * 0.045);
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.35, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    noise.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(t);
+  } catch(e) {}
+}
+
+const _farewellPhrases = ['peace', 'adios', 'see ya', 'hasta la vista'];
+let _farewellIdx = Math.floor(Math.random() * _farewellPhrases.length);
+function playFarewellVoice() {
+  try {
+    const phrase = _farewellPhrases[_farewellIdx % _farewellPhrases.length];
+    _farewellIdx++;
+    const utter = new SpeechSynthesisUtterance(phrase);
+    utter.rate  = 0.88;
+    utter.pitch = 1.1;
+    utter.volume = 0.9;
+    window.speechSynthesis.speak(utter);
+  } catch(e) {}
+}
+
+function playChaChingSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = ctx.currentTime;
+
+    // Master compressor so everything sits together
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -6;
+    comp.ratio.value = 4;
+    comp.connect(ctx.destination);
+
+    // "KA" — low mechanical thunk
+    const kaOsc = ctx.createOscillator();
+    kaOsc.type = 'sine';
+    kaOsc.frequency.setValueAtTime(200, t);
+    kaOsc.frequency.exponentialRampToValueAtTime(55, t + 0.09);
+    const kaGain = ctx.createGain();
+    kaGain.gain.setValueAtTime(0.9, t);
+    kaGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    kaOsc.connect(kaGain); kaGain.connect(comp);
+    kaOsc.start(t); kaOsc.stop(t + 0.12);
+
+    // Noise punch on the "ka"
+    const kaBufSize = Math.floor(ctx.sampleRate * 0.05);
+    const kaBuf = ctx.createBuffer(1, kaBufSize, ctx.sampleRate);
+    const kaData = kaBuf.getChannelData(0);
+    for (let i = 0; i < kaBufSize; i++) kaData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / kaBufSize, 3);
+    const kaNoise = ctx.createBufferSource(); kaNoise.buffer = kaBuf;
+    const kaNoiseGain = ctx.createGain();
+    kaNoiseGain.gain.setValueAtTime(0.5, t);
+    kaNoiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    kaNoise.connect(kaNoiseGain); kaNoiseGain.connect(comp);
+    kaNoise.start(t);
+
+    // "CHING" — bright sustained bell, fundamental
+    const ching = ctx.createOscillator();
+    ching.type = 'sine';
+    ching.frequency.setValueAtTime(2350, t + 0.07);
+    const chingGain = ctx.createGain();
+    chingGain.gain.setValueAtTime(0.75, t + 0.07);
+    chingGain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
+    ching.connect(chingGain); chingGain.connect(comp);
+    ching.start(t + 0.07); ching.stop(t + 1.6);
+
+    // Harmonic overtones for metallic body
+    [[3500, 0.45, 1.1], [4700, 0.25, 0.7], [6200, 0.14, 0.45]].forEach(([freq, vol, decay]) => {
+      const h = ctx.createOscillator(); h.type = 'sine'; h.frequency.value = freq;
+      const hg = ctx.createGain();
+      hg.gain.setValueAtTime(vol, t + 0.07);
+      hg.gain.exponentialRampToValueAtTime(0.001, t + decay);
+      h.connect(hg); hg.connect(comp);
+      h.start(t + 0.07); h.stop(t + decay);
+    });
+
+    // Coin shimmer — 3 quick metallic taps after the ching
+    [0.13, 0.21, 0.31].forEach((delay, i) => {
+      const coin = ctx.createOscillator(); coin.type = 'sine';
+      const f = 1900 - i * 120;
+      coin.frequency.setValueAtTime(f, t + delay);
+      coin.frequency.exponentialRampToValueAtTime(f * 0.65, t + delay + 0.07);
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.3 - i * 0.07, t + delay);
+      cg.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.12);
+      coin.connect(cg); cg.connect(comp);
+      coin.start(t + delay); coin.stop(t + delay + 0.12);
+    });
+
+  } catch(e) {}
+}
+
+function fireConfetti(config) {
+  const { type, sound, count } = config;
+  const colors = ['#ff4444', '#ffbb00', '#00cc88', '#4488ff', '#cc44ff', '#ff8844', '#00ccff', '#ffcc00'];
+  const isEmoji = type === 'thumbsup' || type === 'money' || type === 'stopsign' || type === 'peace';
+  const baseEmoji = type === 'thumbsup' ? '👍' : type === 'stopsign' ? '🛑' : type === 'peace' ? '✌️' : '🤑';
+
+  if (sound === 'chaching') playChaChingSound();
+  else if (sound === 'pop')      playConfettiPop();
+  else if (sound === 'farewell') playFarewellVoice();
+
+  const particles = [];
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;will-change:transform';
+
+    if (isEmoji) {
+      // Money: mix 🤑 with $ signs
+      const isDollar = type === 'money' && Math.random() < 0.4;
+      el.textContent = isDollar ? '$' : baseEmoji;
+      el.style.fontSize = (isDollar ? 20 + Math.random() * 14 : 16 + Math.random() * 14) + 'px';
+      el.style.lineHeight = '1';
+      if (isDollar) {
+        el.style.fontWeight = 'bold';
+        el.style.color = Math.random() < 0.5 ? '#22c55e' : '#eab308';
+      }
+    } else {
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      el.style.width        = (7 + Math.random() * 7) + 'px';
+      el.style.height       = (4 + Math.random() * 4) + 'px';
+      el.style.background   = color;
+      el.style.borderRadius = '2px';
+    }
+
+    // Launch from random point near the bottom of the screen
+    const startX = window.innerWidth  * (0.05 + Math.random() * 0.9);
+    const startY = window.innerHeight * (0.85 + Math.random() * 0.15);
+    // Fan upward — angle spread roughly ±55° around straight up
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * (Math.PI * 0.65);
+    const speed = 5 + Math.random() * 6;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed; // negative = upward
+    const vr = (Math.random() - 0.5) * 9;
+
+    el.style.left = startX + 'px';
+    el.style.top  = startY + 'px';
+    document.body.appendChild(el);
+    particles.push({ el, x: startX, y: startY, vx, vy, vr, rot: Math.random() * 360 });
+  }
+
+  const start     = performance.now();
+  const fadeStart = 2400;
+  const fadeEnd   = 4200;
+
+  function animate(now) {
+    const elapsed = now - start;
+    let alive = 0;
+
+    particles.forEach(p => {
+      if (!p.el.parentNode) return;
+
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vy += 0.09;  // gentle gravity — slower arc
+      p.vx *= 0.99;  // slight air resistance
+      p.rot += p.vr;
+
+      const opacity = elapsed < fadeStart
+        ? 1
+        : Math.max(0, 1 - (elapsed - fadeStart) / (fadeEnd - fadeStart));
+
+      if (p.y > window.innerHeight + 80 || opacity <= 0) {
+        p.el.remove();
+        return;
+      }
+
+      p.el.style.left      = p.x + 'px';
+      p.el.style.top       = p.y + 'px';
+      p.el.style.transform = `rotate(${p.rot}deg)`;
+      p.el.style.opacity   = opacity;
+      alive++;
+    });
+
+    if (alive > 0) requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// Returns changes that clear activity timestamps when moving backwards in the pipeline
+function backfillClearTimestamps(entry, toKey) {
+  const stages = customOpportunityStages;
+  const idx = k => stages.findIndex(s => s.key === k);
+  const toIdx = idx(toKey);
+  const clears = {};
+  if (entry.appliedAt    && toIdx < idx(stages.find(s => /applied/i.test(s.key))?.key))       clears.appliedAt    = null;
+  if (entry.introAt      && toIdx < idx(stages.find(s => /intro_request/i.test(s.key))?.key)) clears.introAt      = null;
+  if (entry.interviewedAt && toIdx < idx(stages.find(s => /^conversations?$/i.test(s.key))?.key)) clears.interviewedAt = null;
+  return clears;
+}
+
 function updateCompany(id, changes) {
   allCompanies = allCompanies.map(c => c.id === id ? { ...c, ...changes } : c);
-  chrome.storage.local.set({ savedCompanies: allCompanies }, render);
+  chrome.storage.local.set({ savedCompanies: allCompanies }, () => { render(); renderActivitySection(); });
 }
 
 function deleteCompany(id) {
@@ -460,7 +878,7 @@ function renderKanban(filtered) {
     const s = stageStyle(statusKey);
     return `
       <div class="kanban-col">
-        <div class="kanban-col-header" style="border-color:${s.border};background:${s.bg};color:${s.color}">
+        <div class="kanban-col-header" data-status="${statusKey}" style="border-color:${s.border};background:${s.bg};color:${s.color}">
           <span class="kanban-col-title">${statusLabel}</span>
           <span class="kanban-col-count">${cards.length}</span>
         </div>
@@ -471,6 +889,26 @@ function renderKanban(filtered) {
   }).join('');
 
   bindKanbanEvents(board);
+
+  // Background-fetch calendar events for any card missing them
+  filtered.forEach(c => {
+    if (c.cachedCalendarEvents) return;
+    const domain = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+    if (!domain) return;
+    const contactEmails = (c.knownContacts || []).flatMap(k => [k.email, ...(k.aliases || [])]);
+    chrome.runtime.sendMessage(
+      { type: 'CALENDAR_FETCH_EVENTS', domain, companyName: c.company || '', knownContactEmails: contactEmails },
+      result => {
+        void chrome.runtime.lastError;
+        const events = result?.events;
+        if (!events?.length) return;
+        const idx = allCompanies.findIndex(x => x.id === c.id);
+        if (idx === -1) return;
+        allCompanies[idx] = { ...allCompanies[idx], cachedCalendarEvents: events };
+        chrome.storage.local.set({ savedCompanies: allCompanies });
+      }
+    );
+  });
 }
 
 function renderKanbanCard(c) {
@@ -512,7 +950,7 @@ function renderKanbanCard(c) {
             <span class="card-type ${isJob ? 'job' : 'company'}">${isJob ? 'Opp' : 'Co.'}</span>
             <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}</a>
           </div>
-          ${isJob && c.jobTitle ? `<div class="kanban-card-job">${c.jobTitle}</div>` : ''}
+          ${isJob && c.jobTitle ? `<div class="kanban-card-job">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : c.jobTitle}</div>` : ''}
         </div>
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
@@ -523,7 +961,16 @@ function renderKanbanCard(c) {
       </div>` : ''}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
       ${detailsHtml}
-      <select class="status-select" data-id="${c.id}" data-status="${currentStage}" data-stage-field="${stageField}">${statusOptions}</select>
+      ${(() => {
+        const events = c.cachedCalendarEvents || [];
+        const past = events.filter(e => new Date(e.start) <= new Date()).sort((a, b) => new Date(b.start) - new Date(a.start));
+        const calTs = past.length ? new Date(past[0].start).getTime() : 0;
+        const actTs = c.lastActivity || 0;
+        const ts = Math.max(calTs, actTs);
+        if (!ts) return '';
+        const dateStr = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        return `<div class="kanban-last-activity">Last activity: <span>${dateStr}</span></div>`;
+      })()}
       <div class="card-tags" id="tags-${c.id}">
         ${(c.tags || []).map(tag => {
           const cl = tagColor(tag);
@@ -531,6 +978,16 @@ function renderKanbanCard(c) {
         }).join('')}
         <div class="tag-inline-wrap" id="tag-add-wrap-${c.id}">
           <button class="tag-add-btn" data-id="${c.id}">+ tag</button>
+        </div>
+      </div>
+      <div class="kanban-next-step">
+        <div class="kanban-next-step-row">
+          <label class="kanban-field-label">Next Step</label>
+          <input class="kanban-next-step-input" data-id="${c.id}" type="text" placeholder="e.g. Send proposal…" value="${(c.nextStep || '').replace(/"/g, '&quot;')}">
+        </div>
+        <div class="kanban-next-step-row">
+          <label class="kanban-field-label">Next Step Date</label>
+          <input class="kanban-next-step-date${c.nextStepDate ? ' has-value' : ''}" data-id="${c.id}" type="date" value="${c.nextStepDate || ''}">
         </div>
       </div>
       <div class="card-stars">${stars}</div>
@@ -569,24 +1026,45 @@ function bindKanbanEvents(board) {
       card.classList.remove('dragging');
       draggingId = null;
       dragAllowed = false;
-      board.querySelectorAll('.kanban-cards').forEach(col => col.classList.remove('drag-over'));
+      board.querySelectorAll('.kanban-cards, .kanban-col-header').forEach(el => el.classList.remove('drag-over'));
     });
   });
 
+  function handleColDrop(targetEl, e) {
+    e.preventDefault();
+    targetEl.classList.remove('drag-over');
+    if (!draggingId) return;
+    const newStatus = targetEl.dataset.status;
+    const entry = allCompanies.find(c => c.id === draggingId);
+    if (!entry) return;
+    const stageField = activePipeline === 'opportunity' ? 'jobStage' : 'status';
+    const curStage = activePipeline === 'opportunity' ? entry.jobStage : entry.status;
+    if (curStage !== newStatus) {
+      const now = Date.now();
+      const changes = { [stageField]: newStatus, ...backfillClearTimestamps(entry, newStatus) };
+      if (/applied/i.test(newStatus)) { changes.lastActivity = now; if (!entry.appliedAt) changes.appliedAt = now; }
+      if (/intro_request/i.test(newStatus) && !entry.introAt) changes.introAt = now;
+      if (/^conversations?$/i.test(newStatus) && !entry.interviewedAt) changes.interviewedAt = now;
+      updateCompany(draggingId, changes);
+      if (activePipeline !== 'company') {
+        const confettiConfig = getConfettiConfig(newStatus);
+        if (confettiConfig) fireConfetti(confettiConfig);
+      }
+    }
+  }
+
+  // Drop onto cards area
   board.querySelectorAll('.kanban-cards').forEach(col => {
     col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drag-over'); });
     col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
-    col.addEventListener('drop', (e) => {
-      e.preventDefault();
-      col.classList.remove('drag-over');
-      if (!draggingId) return;
-      const newStatus = col.dataset.status;
-      const entry = allCompanies.find(c => c.id === draggingId);
-      if (!entry) return;
-      const stageField = activePipeline === 'opportunity' ? 'jobStage' : 'status';
-      const curStage = activePipeline === 'opportunity' ? entry.jobStage : entry.status;
-      if (curStage !== newStatus) updateCompany(draggingId, { [stageField]: newStatus });
-    });
+    col.addEventListener('drop', (e) => handleColDrop(col, e));
+  });
+
+  // Drop onto column header (always visible, even when scrolled deep)
+  board.querySelectorAll('.kanban-col-header[data-status]').forEach(hdr => {
+    hdr.addEventListener('dragover', (e) => { e.preventDefault(); hdr.classList.add('drag-over'); });
+    hdr.addEventListener('dragleave', () => hdr.classList.remove('drag-over'));
+    hdr.addEventListener('drop', (e) => handleColDrop(hdr, e));
   });
 
   board.querySelectorAll('.card-delete').forEach(btn => {
@@ -600,6 +1078,19 @@ function bindKanbanEvents(board) {
   board.querySelectorAll('.card-notes').forEach(ta => {
     ta.addEventListener('mousedown', (e) => e.stopPropagation());
     ta.addEventListener('blur', () => updateCompany(ta.dataset.id, { notes: ta.value }));
+  });
+
+  board.querySelectorAll('.kanban-next-step-input').forEach(inp => {
+    inp.addEventListener('mousedown', (e) => e.stopPropagation());
+    inp.addEventListener('blur', () => updateCompany(inp.dataset.id, { nextStep: inp.value }));
+  });
+
+  board.querySelectorAll('.kanban-next-step-date').forEach(inp => {
+    inp.addEventListener('mousedown', (e) => e.stopPropagation());
+    inp.addEventListener('change', () => {
+      inp.classList.toggle('has-value', !!inp.value);
+      updateCompany(inp.dataset.id, { nextStepDate: inp.value });
+    });
   });
 
   board.querySelectorAll('.status-select').forEach(sel => {
@@ -637,6 +1128,17 @@ function bindKanbanEvents(board) {
       if (!entry) return;
       updateCompany(el.dataset.id, { tags: (entry.tags || []).filter(t => t !== el.dataset.tag) });
       updateTagsToolbar();
+    });
+  });
+
+  // Tag color edit
+  board.querySelectorAll('.card-tag').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.tag-remove')) return;
+      e.stopPropagation();
+      const tag = el.dataset.tag;
+      const currIdx = customTagColors[tag] !== undefined ? customTagColors[tag] : tagColorIndex(tag);
+      showColorPicker(el, TAG_PALETTE.map(p => p.border), currIdx, (idx) => saveTagColor(tag, idx));
     });
   });
 
@@ -698,21 +1200,35 @@ document.addEventListener('DOMContentLoaded', () => {}, { once: true });
 // Stage editor
 const STAGE_COLOR_PALETTE = ['#64748b','#22d3ee','#60a5fa','#a78bfa','#fb923c','#a3e635','#4ade80','#f87171','#f59e0b','#e879f9','#34d399','#f472b6'];
 let stageEditorOpen = false;
+let stageEditorTab = 'stages'; // 'stages' | 'celebrations'
 let editingStages = [];
 
 function openStageEditor() {
-  if (activePipeline === 'all') return; // must be in a specific pipeline to edit
+  if (activePipeline === 'all') return;
   editingStages = currentStages().map(s => ({ ...s }));
   const pipelineName = activePipeline === 'company' ? 'Company Pipeline' : 'Opportunity Pipeline';
   document.getElementById('stage-editor-title').textContent = `Edit ${pipelineName} Stages`;
   document.getElementById('stage-editor-subtitle').textContent = `Rename, recolor, reorder, or add stages for the ${pipelineName}`;
-  renderStageEditor();
+  // Celebrations tab only shown for opportunity pipeline
+  const tabsEl = document.getElementById('stage-editor-tabs');
+  tabsEl.querySelector('[data-tab="celebrations"]').style.display = activePipeline === 'opportunity' ? '' : 'none';
+  switchStageEditorTab('stages');
   document.getElementById('stage-editor-modal').style.display = 'flex';
   stageEditorOpen = true;
 }
 function closeStageEditor() {
   document.getElementById('stage-editor-modal').style.display = 'none';
   stageEditorOpen = false;
+}
+function switchStageEditorTab(tab) {
+  stageEditorTab = tab;
+  document.querySelectorAll('.stage-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('stage-editor-list').style.display         = tab === 'stages'       ? '' : 'none';
+  document.getElementById('stage-celebrations-list').style.display   = tab === 'celebrations' ? '' : 'none';
+  document.getElementById('stage-editor-add').style.display          = tab === 'stages'       ? '' : 'none';
+  document.getElementById('stage-editor-save').textContent           = tab === 'stages'       ? 'Save Stages' : 'Save Celebrations';
+  if (tab === 'stages')       renderStageEditor();
+  if (tab === 'celebrations') renderCelebrationEditor();
 }
 function saveStages() {
   const saved = editingStages.filter(s => s.label.trim());
@@ -728,6 +1244,56 @@ function saveStages() {
     });
   }
 }
+function saveCelebrations() {
+  chrome.storage.local.set({ stageCelebrations }, closeStageEditor);
+}
+
+function renderCelebrationEditor() {
+  const list = document.getElementById('stage-celebrations-list');
+  const stages = customOpportunityStages;
+
+  list.innerHTML = `
+    <div style="font-size:12px;color:#7c98b6;padding:4px 4px 8px;line-height:1.5">
+      Set the confetti and sound for each stage. Stages with no custom setting use smart defaults.
+    </div>
+    ${stages.map(s => {
+      const isCustom = !!stageCelebrations[s.key];
+      const cfg = stageCelebrations[s.key] || getDefaultCelebration(s.key);
+      const confettiVal = cfg.confetti || 'none';
+      const soundVal    = cfg.sound    || 'none';
+      const confettiOpts = CONFETTI_OPTIONS.map(o =>
+        `<option value="${o.value}"${confettiVal === o.value ? ' selected' : ''}>${o.label}</option>`
+      ).join('');
+      const soundOpts = SOUND_OPTIONS.map(o =>
+        `<option value="${o.value}"${soundVal === o.value ? ' selected' : ''}>${o.label}</option>`
+      ).join('');
+      return `<div class="celeb-row" data-key="${s.key}">
+        <span class="celeb-stage-dot" style="background:${s.color}"></span>
+        <span class="celeb-stage-name">${s.label}${!isCustom ? '<span class="celeb-default-badge">default</span>' : ''}</span>
+        <select class="celeb-select" data-key="${s.key}" data-field="confetti">${confettiOpts}</select>
+        <select class="celeb-select" data-key="${s.key}" data-field="sound">${soundOpts}</select>
+      </div>`;
+    }).join('')}
+    <div style="padding:8px 4px 2px">
+      <button id="celeb-reset-btn" style="font-size:11px;color:#b0c1d4;background:none;border:none;cursor:pointer;padding:0;font-family:inherit">↺ Reset all to defaults</button>
+    </div>`;
+
+  list.querySelectorAll('.celeb-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const key   = sel.dataset.key;
+      const field = sel.dataset.field;
+      if (!stageCelebrations[key]) stageCelebrations[key] = { ...getDefaultCelebration(key) };
+      stageCelebrations[key][field] = sel.value;
+      renderCelebrationEditor();
+    });
+  });
+
+  list.querySelector('#celeb-reset-btn')?.addEventListener('click', () => {
+    stageCelebrations = {};
+    renderCelebrationEditor();
+  });
+}
+
 function renderStageEditor() {
   const list = document.getElementById('stage-editor-list');
   list.innerHTML = editingStages.map((s, i) => `
@@ -776,8 +1342,15 @@ document.getElementById('stage-editor-add').addEventListener('click', () => {
   editingStages.push({ key: 'stage_' + Date.now(), label: 'New Stage', color: STAGE_COLOR_PALETTE[editingStages.length % STAGE_COLOR_PALETTE.length] });
   renderStageEditor();
 });
-document.getElementById('stage-editor-save').addEventListener('click', saveStages);
+document.getElementById('stage-editor-save').addEventListener('click', () => {
+  if (stageEditorTab === 'celebrations') saveCelebrations();
+  else saveStages();
+});
 document.getElementById('stage-editor-close').addEventListener('click', closeStageEditor);
+document.getElementById('stage-editor-tabs').addEventListener('click', e => {
+  const btn = e.target.closest('[data-tab]');
+  if (btn) switchStageEditorTab(btn.dataset.tab);
+});
 document.getElementById('stage-editor-modal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('stage-editor-modal')) closeStageEditor();
 });
@@ -871,6 +1444,11 @@ function updatePipelineUI() {
     e.stopPropagation();
     const open = dropMenu.classList.toggle('open');
     dropBtn.classList.toggle('open', open);
+    if (open) {
+      const r = dropBtn.getBoundingClientRect();
+      dropMenu.style.top  = (r.bottom + 6) + 'px';
+      dropMenu.style.left = r.left + 'px';
+    }
   });
 
   dropMenu.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -899,5 +1477,191 @@ function updatePipelineUI() {
 
 });
 
+
+// ── Activity & Goals ─────────────────────────────────────────────────────────
+
+function getPeriodRange(period) {
+  // Custom range overrides auto-calculation
+  if (activityCustomRange) {
+    const s = new Date(activityCustomRange.start + 'T00:00:00');
+    const e = new Date(activityCustomRange.end   + 'T23:59:59');
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return { start: s.getTime(), end: e.getTime(), label: `${fmt(s)} – ${fmt(e)}`, custom: true };
+  }
+  const now = new Date();
+  if (period === 'daily') {
+    const s = new Date(now); s.setHours(0,0,0,0);
+    const e = new Date(now); e.setHours(23,59,59,999);
+    return { start: s.getTime(), end: e.getTime(), label: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) };
+  }
+  if (period === 'weekly') {
+    const day = now.getDay();
+    const mon = new Date(now); mon.setDate(now.getDate() + (day === 0 ? -6 : 1 - day)); mon.setHours(0,0,0,0);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23,59,59,999);
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return { start: mon.getTime(), end: sun.getTime(), label: `${fmt(mon)} – ${fmt(sun)}` };
+  }
+  const s = new Date(now.getFullYear(), now.getMonth(), 1);
+  const e = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start: s.getTime(), end: e.getTime(), label: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
+}
+
+function goalRingSvg(current, goal, color) {
+  const r = 22, cx = 27, sw = 5, circ = +(2 * Math.PI * r).toFixed(2);
+  const pct = goal > 0 ? Math.min(1, current / goal) : 0;
+  const offset = +(circ * (1 - pct)).toFixed(2);
+  const fill = pct >= 1 ? '#4ade80' : color;
+  return `<svg width="54" height="54" viewBox="0 0 54 54">
+    <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#e8eef4" stroke-width="${sw}"/>
+    <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${fill}" stroke-width="${sw}"
+      stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+      stroke-linecap="round" transform="rotate(-90 ${cx} ${cx})"/>
+  </svg>`;
+}
+
+function renderActivitySection() {
+  const section = document.getElementById('activity-section');
+  if (!section) return;
+
+  const range = getPeriodRange(activityPeriod);
+  const { start, end, label } = range;
+  const periodName = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[activityPeriod];
+  const goals = activityGoals[activityPeriod];
+  const opps = allCompanies.filter(c => c.isOpportunity);
+  const inPeriod = ts => ts && ts >= start && ts <= end;
+
+  const savedCount     = opps.filter(c => inPeriod(c.savedAt)).length;
+  const appliedCount   = opps.filter(c => inPeriod(c.appliedAt)).length;
+  const introCount     = opps.filter(c => inPeriod(c.introAt)).length;
+  const interviewCount = opps.filter(c => inPeriod(c.interviewedAt)).length;
+
+  const funnelStages = customOpportunityStages
+    .filter(s => s.key !== 'rejected')
+    .map(s => ({ label: s.label, color: s.color, count: opps.filter(c => (c.jobStage || 'needs_review') === s.key).length }));
+
+  const funnelHtml = funnelStages.map((s, i) => `
+    <div class="funnel-stage">
+      <div class="funnel-count" style="${s.count > 0 ? `color:${s.color}` : 'color:#b0c1d4'}">${s.count || '—'}</div>
+      <div class="funnel-label">${s.label}</div>
+    </div>${i < funnelStages.length - 1 ? '<div class="funnel-arrow">›</div>' : ''}
+  `).join('');
+
+  const goalDefs = [
+    { key: 'saved',       label: 'Jobs Saved',                count: savedCount,     goal: goals.saved,       color: '#0ea5e9' },
+    { key: 'applied',     label: 'Applications',              count: appliedCount,   goal: goals.applied,     color: '#FF7A59' },
+    { key: 'intro',       label: 'Reached Out / Intro Asked', count: introCount,     goal: goals.intro,       color: '#a78bfa' },
+    { key: 'interviewed', label: 'New Conversations Started', count: interviewCount, goal: goals.interviewed, color: '#fb923c' },
+  ];
+
+  const goalCardsHtml = goalDefs.map(g => `
+    <div class="goal-card" data-goal-key="${g.key}">
+      <div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>
+      <div class="goal-text">
+        <div class="goal-fraction">${g.count}<span class="goal-denom">/${g.goal}</span></div>
+        <div class="goal-metric-label">${g.label}</div>
+        <div class="goal-edit-hint">click to edit goal</div>
+      </div>
+      <div class="goal-edit-form">
+        <label class="goal-edit-label">${g.label} goal</label>
+        <div style="display:flex;gap:7px;align-items:center">
+          <input class="goal-edit-input" type="number" min="0" max="999" value="${g.goal}" data-goal-key="${g.key}">
+          <button class="goal-save-btn-inline" data-goal-key="${g.key}">Save</button>
+          <button class="goal-cancel-btn">✕</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Format dates for <input type="date"> value (YYYY-MM-DD)
+  const toInputDate = ts => new Date(ts).toISOString().slice(0, 10);
+
+  section.innerHTML = `
+    <div class="activity-head">
+      <div class="activity-head-left">
+        <span class="activity-section-title">Pipeline Overview (all-time) &nbsp;·&nbsp; Goals tracking: ${periodName.toLowerCase()}</span>
+        <div class="activity-date-row">
+          <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">📅 ${label}${range.custom ? '' : ' <span class="act-auto-badge">auto</span>'}</span>
+          <div class="act-date-picker" id="act-date-picker" style="display:none">
+            <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
+            <span style="color:#7c98b6;font-size:13px">–</span>
+            <input type="date" id="act-date-end" class="act-date-input" value="${toInputDate(end)}">
+            <button class="act-date-apply">Apply</button>
+            ${range.custom ? `<button class="act-date-reset">Reset to auto</button>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="period-tabs">
+        <button class="period-tab${activityPeriod==='daily'?' active':''}" data-period="daily">Daily</button>
+        <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
+        <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
+      </div>
+    </div>
+    <div class="activity-funnel">${funnelHtml}</div>
+    <div class="activity-goals-row">${goalCardsHtml}</div>
+  `;
+
+  section.querySelectorAll('.period-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activityPeriod = btn.dataset.period;
+      localStorage.setItem('ci_activityPeriod', activityPeriod);
+      activityCustomRange = null;
+      localStorage.removeItem('ci_activityCustomRange');
+      renderActivitySection();
+    });
+  });
+
+  // Date range editing
+  const dateLabel = section.querySelector('#act-date-label');
+  const datePicker = section.querySelector('#act-date-picker');
+  if (dateLabel && datePicker) {
+    dateLabel.addEventListener('click', () => {
+      datePicker.style.display = datePicker.style.display === 'none' ? 'flex' : 'none';
+    });
+    section.querySelector('.act-date-apply')?.addEventListener('click', () => {
+      const s = section.querySelector('#act-date-start').value;
+      const e = section.querySelector('#act-date-end').value;
+      if (!s || !e || s > e) return;
+      activityCustomRange = { start: s, end: e };
+      localStorage.setItem('ci_activityCustomRange', JSON.stringify(activityCustomRange));
+      renderActivitySection();
+    });
+    section.querySelector('.act-date-reset')?.addEventListener('click', () => {
+      activityCustomRange = null;
+      localStorage.removeItem('ci_activityCustomRange');
+      renderActivitySection();
+    });
+  }
+
+  section.querySelectorAll('.goal-card').forEach(card => {
+    card.addEventListener('click', e => {
+      if (e.target.closest('.goal-edit-form')) return;
+      section.querySelectorAll('.goal-card').forEach(c => c.classList.remove('editing'));
+      card.classList.add('editing');
+      card.querySelector('.goal-edit-input')?.select();
+    });
+  });
+
+  section.querySelectorAll('.goal-cancel-btn').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); renderActivitySection(); });
+  });
+
+  section.querySelectorAll('.goal-save-btn-inline').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const key = btn.dataset.goalKey;
+      const val = Math.max(0, parseInt(section.querySelector(`.goal-edit-input[data-goal-key="${key}"]`).value) || 0);
+      activityGoals[activityPeriod][key] = val;
+      chrome.storage.local.set({ activityGoals }, () => { void chrome.runtime.lastError; renderActivitySection(); });
+    });
+  });
+
+  section.querySelectorAll('.goal-edit-input').forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') section.querySelector(`.goal-save-btn-inline[data-goal-key="${inp.dataset.goalKey}"]`)?.click();
+      if (e.key === 'Escape') renderActivitySection();
+    });
+    inp.addEventListener('click', e => e.stopPropagation());
+  });
+}
 
 load();

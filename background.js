@@ -6,6 +6,7 @@ const APOLLO_KEY = CONFIG.APOLLO_KEY;
 const SERPER_KEY = CONFIG.SERPER_KEY;
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persisted to storage, survives SW restarts
+const photoCache = {}; // in-memory, per service worker lifetime
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'QUICK_LOOKUP') {
@@ -43,8 +44,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleChatMessage(message).then(sendResponse);
     return true;
   }
+  if (message.type === 'CALENDAR_FETCH_EVENTS') {
+    fetchCalendarEvents(message.domain, message.companyName, message.knownContactEmails).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'DEEP_FIT_ANALYSIS') {
+    deepFitAnalysis(message).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'EXTRACT_NEXT_STEPS') {
+    extractNextSteps(message.notes, message.calendarEvents, message.transcripts).then(sendResponse);
+    return true;
+  }
   if (message.type === 'GRANOLA_SEARCH') {
-    searchGranolaNotes(message.companyName).then(sendResponse);
+    searchGranolaNotes(message.companyName, message.contactNames || [], message.calendarDates || [], message.attendeeHandles || []).then(sendResponse);
     return true;
   }
 });
@@ -98,9 +111,9 @@ async function researchCompany(company, domain, prefs) {
     const qd = `"${company}"${domainQualifier}`;
     const [apolloData, reviewResults, leaderResults, jobResults, productResults, websiteResults, linkedinCompanyResults] = await Promise.all([
       fetchApolloData(domain, company),
-      fetchSerperResults(q + ' company culture reviews employee glassdoor blind repvue reddit', 5),
+      fetchSerperResults(`${q} (site:glassdoor.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees culture`, 8),
       fetchSerperResults('site:linkedin.com/in ' + q + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
-      fetchSerperResults('site:linkedin.com/jobs OR site:greenhouse.io OR site:lever.co ' + q + ' jobs hiring', 3),
+      fetchSerperResults(q + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
       fetchSerperResults(qd + ' what does it do product overview how it works category', 3),
       fetchSerperResults(qd + ' official website', 2),
       fetchSerperResults('site:linkedin.com/company ' + q, 2)
@@ -179,7 +192,7 @@ Analysis rules:
 5. Bridge the language gap: the user describes themselves in personal terms; job postings use corporate language. Map them — e.g. "I love autonomy and building from scratch" → look for early-stage, greenfield, founder-led signals. "Manage and grow existing accounts" → retention focus, not new business ownership.
 6. Read between the lines on culture, scope, and autonomy — but only from what the posting actually implies, not from what it omits.
 7. Use loved/hated role examples as calibration for concrete signals you find in the posting.
-8. Salary: extract any pay range or compensation figure mentioned anywhere in the posting — including legal/compensation disclosure sections at the bottom. If no number is mentioned anywhere, use null.
+8. Salary: extract the BASE salary or base salary range if stated anywhere in the posting (including legal/compliance disclosure sections at the bottom). If multiple figures are given (e.g., base + OTE/commission), extract the base salary only and set salaryType to "base". If only total/OTE compensation is mentioned, extract that and set salaryType to "ote". If no number is mentioned anywhere, use null for both.
 
 {
   "jobMatch": {
@@ -190,7 +203,8 @@ Analysis rules:
     "redFlags": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"]
   },
   "jobSnapshot": {
-    "salary": "<exact pay range as written in the posting, e.g. '$133,500 - $200,500' — null only if truly not mentioned anywhere>",
+    "salary": "<base salary range as written in the posting, e.g. '$125,000' or '$133,500 - $200,500' — null only if truly not mentioned>",
+    "salaryType": "<'base' if this is base pay, 'ote' if this is OTE/total comp only, null if no salary>",
     "workArrangement": "<Remote/Hybrid/On-site or null>",
     "location": "<city/state if hybrid or on-site, null if remote>",
     "employmentType": "<Full-time/Part-time/Contract or null>"
@@ -286,6 +300,8 @@ async function fetchApolloData(domain, companyName) {
 }
 
 async function fetchLeaderPhoto(name, company) {
+  const cacheKey = `${name}|${company}`;
+  if (photoCache[cacheKey] !== undefined) return photoCache[cacheKey];
   try {
     const res = await fetch('https://google.serper.dev/images', {
       method: 'POST',
@@ -293,8 +309,11 @@ async function fetchLeaderPhoto(name, company) {
       body: JSON.stringify({ q: name + ' ' + company, num: 1 })
     });
     const data = await res.json();
-    return data.images?.[0]?.thumbnailUrl || null;
+    const photoUrl = data.images?.[0]?.thumbnailUrl || null;
+    photoCache[cacheKey] = photoUrl;
+    return photoUrl;
   } catch {
+    photoCache[cacheKey] = null;
     return null;
   }
 }
@@ -366,7 +385,7 @@ Respond with a JSON object only, no markdown:
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1600,
+      max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
     })
   });
@@ -409,15 +428,14 @@ async function gmailAuth() {
 
 async function gmailRevoke() {
   return new Promise(resolve => {
-    chrome.identity.getAuthToken({ interactive: false }, token => {
+    chrome.identity.getAuthToken({ interactive: false }, async token => {
       void chrome.runtime.lastError;
-      if (!token) {
-        chrome.storage.local.remove('gmailConnected');
-        resolve({ success: true });
-        return;
+      // Revoke server-side first so next auth forces a fresh consent screen
+      if (token) {
+        try { await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`); } catch(e) {}
       }
-      chrome.identity.removeCachedAuthToken({ token }, () => {
-        fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`).catch(() => {});
+      // Clear ALL cached tokens (not just this one) so new scopes are requested on reconnect
+      chrome.identity.clearAllCachedAuthTokens(() => {
         chrome.storage.local.remove('gmailConnected');
         resolve({ success: true });
       });
@@ -425,19 +443,27 @@ async function gmailRevoke() {
   });
 }
 
+function decodeBase64Utf8(data) {
+  try {
+    const bytes = atob(data.replace(/-/g, '+').replace(/_/g, '/'));
+    return decodeURIComponent(bytes.split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+  } catch(e) {
+    try { return atob(data.replace(/-/g, '+').replace(/_/g, '/')); } catch(e2) { return ''; }
+  }
+}
+
 function extractEmailBody(payload) {
   if (!payload) return '';
-  // Direct plain text body
   if (payload.mimeType === 'text/plain' && payload.body?.data) {
-    try { return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch(e) {}
+    const t = decodeBase64Utf8(payload.body.data);
+    if (t) return t;
   }
-  // Search parts for text/plain
   for (const part of payload.parts || []) {
     if (part.mimeType === 'text/plain' && part.body?.data) {
-      try { return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch(e) {}
+      const t = decodeBase64Utf8(part.body.data);
+      if (t) return t;
     }
   }
-  // Recurse into nested multipart
   for (const part of payload.parts || []) {
     const nested = extractEmailBody(part);
     if (nested) return nested;
@@ -452,32 +478,46 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
       if (!token) { resolve({ emails: [], error: 'not_connected' }); return; }
       try {
         const parts = [];
-        // Gmail suffix match: from:@domain.com matches any address at that domain
+        const baseDomain = domain ? domain.split('.')[0].toLowerCase() : '';
+
+        // Primary: domain-based search (most precise)
         if (domain) parts.push(`from:@${domain} OR to:@${domain}`);
-        if (companyName) parts.push(`"${companyName}"`);
-        if (linkedinSlug && linkedinSlug !== domain) parts.push(`"${linkedinSlug}"`);
-        // Explicitly include known contact emails to catch threads that don't mention the company name
+
+        // Sibling domains: any known contact email sharing the same base name
+        // e.g. productgenius.io when primary domain is productgenius.ai
+        const siblingDomains = new Set();
         (knownContactEmails || []).forEach(email => {
-          if (!domain || !email.endsWith('@' + domain)) {
-            parts.push(`from:${email} OR to:${email}`);
-          }
+          const d = (email.split('@')[1] || '').toLowerCase();
+          if (d && d !== domain && baseDomain && d.split('.')[0] === baseDomain) siblingDomains.add(d);
         });
-        const query = parts.join(' OR ');
-        const searchRes = await fetch(
-          `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=50`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (searchRes.status === 401) {
-          chrome.identity.removeCachedAuthToken({ token }, () => {});
-          chrome.storage.local.remove('gmailConnected');
-          resolve({ emails: [], error: 'token_expired' });
-          return;
+        siblingDomains.forEach(d => parts.push(`from:@${d} OR to:@${d}`));
+
+        // Bootstrap: when few contacts known, also search by company name to discover
+        // threads that may reveal additional team members / alternate domains
+        const isBootstrap = (knownContactEmails || []).filter(e => {
+          const d = (e.split('@')[1] || '').toLowerCase();
+          return d === domain || d.split('.')[0] === baseDomain;
+        }).length < 3;
+        if (isBootstrap && companyName) {
+          parts.push(`"${companyName}"`);
+          // Also search shorter name (strip common suffixes like "AI", "Inc", etc.)
+          // so casual emails without full brand name are still found
+          const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?|Co\.?|Technologies|Tech|Labs?|Group|Solutions?|Services?|Systems?|Software|Platform|Studios?|Ventures?)$/i, '').trim();
+          if (shortName && shortName !== companyName) parts.push(`"${shortName}"`);
         }
-        const searchData = await searchRes.json();
-        const messages = (searchData.messages || []).slice(0, 50);
-        const emails = await Promise.all(messages.map(async msg => {
+        const query = parts.join(' OR ');
+        const fetchMessages = async (q) => {
+          const res = await fetch(
+            `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=100`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.status === 401) throw Object.assign(new Error('token_expired'), { code: 401 });
+          const data = await res.json();
+          return data.messages || [];
+        };
+        const fetchEmail = async (msgId) => {
           const r = await fetch(
-            `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+            `https://www.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
           if (!r.ok) return null;
@@ -485,11 +525,56 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           const h = d.payload?.headers || [];
           const get = n => h.find(x => x.name === n)?.value || '';
           const body = extractEmailBody(d.payload);
-          return { id: msg.id, from: get('From'), to: get('To'), subject: get('Subject'), date: get('Date'), snippet: d.snippet || '', body, threadId: d.threadId };
-        }));
-        resolve({ emails: emails.filter(Boolean) });
+          return { id: msgId, from: get('From'), to: get('To'), cc: get('Cc'), subject: get('Subject'), date: get('Date'), snippet: d.snippet || '', body, threadId: d.threadId };
+        };
+
+        let msgList = await fetchMessages(query);
+        let allEmails = (await Promise.all(msgList.slice(0, 100).map(m => fetchEmail(m.id)))).filter(Boolean);
+
+        // Second pass: scan results for sibling domains not yet in the query
+        // (e.g. ben@productgenius.io found via bootstrap reveals .io for ryan@productgenius.io)
+        if (baseDomain) {
+          const seenIds = new Set(allEmails.map(e => e.id));
+          const newSiblings = new Set();
+          allEmails.forEach(e => {
+            [e.from, e.to, e.cc].forEach(field => {
+              if (!field) return;
+              field.split(/,\s*/).forEach(addr => {
+                const m = addr.match(/<([^>]+)>/) || [null, addr.trim()];
+                const emailAddr = (m[1] || '').toLowerCase();
+                const d = (emailAddr.split('@')[1] || '');
+                if (d && d !== domain && d.split('.')[0] === baseDomain && !siblingDomains.has(d)) {
+                  newSiblings.add(d);
+                }
+              });
+            });
+          });
+          if (newSiblings.size > 0) {
+            const secondQuery = [...newSiblings].map(d => `from:@${d} OR to:@${d}`).join(' OR ');
+            const secondMsgs = await fetchMessages(secondQuery);
+            const newMsgs = secondMsgs.filter(m => !seenIds.has(m.id)).slice(0, 100);
+            const secondEmails = (await Promise.all(newMsgs.map(m => fetchEmail(m.id)))).filter(Boolean);
+            allEmails = allEmails.concat(secondEmails);
+          }
+        }
+
+        // Get user's own email for contact deduplication
+        let userEmail = null;
+        try {
+          const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', { headers: { Authorization: `Bearer ${token}` } });
+          const profile = await profileRes.json();
+          userEmail = profile.emailAddress?.toLowerCase() || null;
+          if (userEmail) chrome.storage.local.set({ gmailUserEmail: userEmail });
+        } catch(e) {}
+        resolve({ emails: allEmails, userEmail });
       } catch (err) {
-        resolve({ emails: [], error: err.message });
+        if (err.code === 401) {
+          chrome.identity.removeCachedAuthToken({ token }, () => {});
+          chrome.storage.local.remove('gmailConnected');
+          resolve({ emails: [], error: 'token_expired' });
+        } else {
+          resolve({ emails: [], error: err.message });
+        }
       }
     });
   });
@@ -501,39 +586,116 @@ async function handleChatMessage({ messages, context }) {
   chrome.storage.sync.get(['prefs'], async ({ prefs }) => {});
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
 
+  const today = new Date(context.todayTimestamp || Date.now());
+  const todayStr = context.todayDate || today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  // Helper: how many days ago was a date string
+  const daysAgo = dateStr => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T12:00:00');
+    if (isNaN(d)) return null;
+    return Math.round((today - d) / 86400000);
+  };
+  const relTime = dateStr => {
+    const n = daysAgo(dateStr);
+    if (n === null) return '';
+    if (n === 0) return ' (today)';
+    if (n === 1) return ' (yesterday)';
+    if (n < 7)  return ` (${n} days ago)`;
+    if (n < 30) return ` (${Math.round(n/7)} weeks ago)`;
+    return ` (${Math.round(n/30)} months ago)`;
+  };
+
   const systemParts = [
-    `You are a sharp, concise assistant embedded in CompanyIntel — a job search tool. You have full context about this ${context.type === 'job' ? 'job opportunity' : 'company'}. Answer questions directly and specifically using the data below. If information isn't available in the context, say so.`
+    `You are a sharp, concise strategic advisor embedded in CompanyIntel — a personal job search intelligence tool. You have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. Use ALL available context to give specific, grounded answers. Bold key terms, use bullet lists. If something isn't in your context, say so — never fabricate.`,
+    `\n=== TODAY ===\n${todayStr}`
   ];
 
-  if (context.company)                systemParts.push(`\nCompany: ${context.company}`);
-  if (context.jobTitle)               systemParts.push(`Job Title: ${context.jobTitle}`);
-  if (context.status)                 systemParts.push(`Stage: ${context.status}`);
-  if (context.notes)                  systemParts.push(`\nNotes: ${context.notes}`);
-  if (context.tags?.length)           systemParts.push(`Tags: ${context.tags.join(', ')}`);
-  if (context.intelligence?.eli5)     systemParts.push(`\nWhat they do: ${context.intelligence.eli5}`);
-  if (context.intelligence?.whosBuyingIt) systemParts.push(`Who buys it: ${context.intelligence.whosBuyingIt}`);
-  if (context.intelligence?.howItWorks)   systemParts.push(`How it works: ${context.intelligence.howItWorks}`);
-  if (context.jobMatch?.verdict)      systemParts.push(`\nJob match verdict: ${context.jobMatch.verdict}`);
-  if (context.jobMatch?.score)        systemParts.push(`Match score: ${context.jobMatch.score}/10`);
-  if (context.jobMatch?.strongFits?.length) systemParts.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
-  if (context.jobMatch?.redFlags?.length)   systemParts.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
-  if (context.reviews?.length)        systemParts.push(`\nEmployee reviews:\n${context.reviews.slice(0,3).map(r => `- "${r.snippet}" (${r.source || ''})`).join('\n')}`);
-  if (context.leaders?.length)        systemParts.push(`\nLeadership: ${context.leaders.map(l => `${l.name} — ${l.title || 'unknown title'}`).join(', ')}`);
+  // ── Company overview ──────────────────────────────────────────────────────
+  const overview = [`\n=== COMPANY / OPPORTUNITY ===`];
+  if (context.company)    overview.push(`Company: ${context.company}`);
+  if (context.jobTitle)   overview.push(`Role: ${context.jobTitle}`);
+  if (context.status)     overview.push(`Pipeline stage: ${context.status}`);
+  if (context.employees)  overview.push(`Size: ${context.employees}`);
+  if (context.funding)    overview.push(`Funding: ${context.funding}`);
+  if (context.tags?.length) overview.push(`Tags: ${context.tags.join(', ')}`);
+  if (context.notes)      overview.push(`User notes: ${context.notes}`);
+  systemParts.push(overview.join('\n'));
 
+  // ── Company intelligence ──────────────────────────────────────────────────
+  if (context.intelligence?.eli5 || context.intelligence?.whosBuyingIt || context.intelligence?.howItWorks) {
+    const intel = [`\n=== COMPANY INTELLIGENCE ===`];
+    if (context.intelligence.eli5)          intel.push(`What they do: ${context.intelligence.eli5}`);
+    if (context.intelligence.whosBuyingIt)  intel.push(`Who buys it: ${context.intelligence.whosBuyingIt}`);
+    if (context.intelligence.howItWorks)    intel.push(`How it works: ${context.intelligence.howItWorks}`);
+    systemParts.push(intel.join('\n'));
+  }
+
+  // ── Leadership ───────────────────────────────────────────────────────────
+  if (context.leaders?.length) {
+    systemParts.push(`\n=== LEADERSHIP ===\n${context.leaders.map(l => `- ${l.name} — ${l.title || 'unknown'}`).join('\n')}`);
+  }
+
+  // ── Known contacts ───────────────────────────────────────────────────────
+  if (context.knownContacts?.length) {
+    const contacts = context.knownContacts.map(c => {
+      const parts = [c.name];
+      if (c.title)  parts.push(c.title);
+      if (c.email)  parts.push(`<${c.email}>`);
+      return `- ${parts.join(' | ')}`;
+    }).join('\n');
+    systemParts.push(`\n=== KNOWN CONTACTS AT ${(context.company || '').toUpperCase()} ===\n${contacts}`);
+  }
+
+  // ── Job opportunity ───────────────────────────────────────────────────────
+  if (context.jobDescription || context.jobMatch) {
+    const job = [`\n=== JOB DETAILS ===`];
+    if (context.jobDescription) job.push(`Full job description:\n${context.jobDescription.slice(0, 5000)}`);
+    if (context.jobMatch?.verdict)     job.push(`Match verdict: ${context.jobMatch.verdict}`);
+    if (context.jobMatch?.score)       job.push(`Match score: ${context.jobMatch.score}/10`);
+    if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
+    if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
+    systemParts.push(job.join('\n'));
+  }
+
+  // ── Employee reviews ─────────────────────────────────────────────────────
+  if (context.reviews?.length) {
+    systemParts.push(`\n=== EMPLOYEE REVIEWS ===\n${context.reviews.slice(0, 4).map(r => `- "${r.snippet}" (${r.source || ''})`).join('\n')}`);
+  }
+
+  // ── Emails ───────────────────────────────────────────────────────────────
   if (context.emails?.length) {
-    systemParts.push(`\nEmail activity (${context.emails.length} emails with this company):`);
-    context.emails.slice(0, 10).forEach(e => systemParts.push(`  ${e.date}: "${e.subject}" — From: ${e.from}`));
+    const emailLines = context.emails.slice(0, 20).map(e => {
+      const lines = [`[${e.date || ''}] "${e.subject}" — ${e.from}`];
+      if (e.snippet) lines.push(`  ${e.snippet.slice(0, 200)}`);
+      return lines.join('\n');
+    }).join('\n');
+    systemParts.push(`\n=== EMAIL HISTORY (${context.emails.length} emails) ===\n${emailLines}`);
   }
 
-  if (context.granolaNote) {
-    systemParts.push(`\nMeeting notes (from Granola):\n${context.granolaNote}`);
+  // ── Meeting transcripts ───────────────────────────────────────────────────
+  // Prefer structured per-meeting data (with individual dates + transcripts)
+  if (context.meetings?.length) {
+    const mtgLines = context.meetings.map(m => {
+      const rel = relTime(m.date);
+      const header = `--- Meeting: ${m.title || 'Untitled'} | ${m.date || 'unknown date'}${rel}${m.time ? ' at ' + m.time : ''} ---`;
+      const body = (m.transcript || '').slice(0, 4000);
+      return `${header}\n${body}`;
+    }).join('\n\n');
+    systemParts.push(`\n=== MEETING TRANSCRIPTS (${context.meetings.length} meetings) ===\n${mtgLines}`);
+  } else if (context.granolaNote) {
+    // Fallback: joined transcript blob
+    systemParts.push(`\n=== MEETING NOTES / TRANSCRIPTS ===\n${context.granolaNote.slice(0, 12000)}`);
   }
 
-  if (prefs.jobMatchBackground) systemParts.push(`\nUser background: ${prefs.jobMatchBackground}`);
-  if (prefs.roles)               systemParts.push(`Target roles: ${prefs.roles}`);
-  if (prefs.avoid)               systemParts.push(`Things to avoid: ${prefs.avoid}`);
-  if (prefs.roleLoved)           systemParts.push(`Enjoys: ${prefs.roleLoved}`);
-  if (prefs.roleHated)           systemParts.push(`Avoids: ${prefs.roleHated}`);
+  // ── User background & prefs ───────────────────────────────────────────────
+  const userParts = [];
+  if (prefs.jobMatchBackground) userParts.push(`Background: ${prefs.jobMatchBackground}`);
+  if (prefs.roles)               userParts.push(`Target roles: ${prefs.roles}`);
+  if (prefs.avoid)               userParts.push(`Avoid: ${prefs.avoid}`);
+  if (prefs.roleLoved)           userParts.push(`Loves: ${prefs.roleLoved}`);
+  if (prefs.roleHated)           userParts.push(`Hates: ${prefs.roleHated}`);
+  if (userParts.length)          systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -546,7 +708,7 @@ async function handleChatMessage({ messages, context }) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemParts.join('\n'),
         messages
       })
@@ -558,30 +720,442 @@ async function handleChatMessage({ messages, context }) {
   }
 }
 
+// ── Deep Fit Analysis ────────────────────────────────────────────────────────
+
+async function deepFitAnalysis({ company, jobTitle, jobSummary, jobSnapshot, jobDescription, jobMatch, notes, transcripts, emails, prefs }) {
+  const contextParts = [`Company: ${company}`, `Role: ${jobTitle || 'Unknown'}`];
+
+  if (jobSummary) contextParts.push(`Job summary: ${jobSummary}`);
+  // Full description is richer than the snapshot — prefer it, fall back to snapshot
+  if (jobDescription) {
+    contextParts.push(`Full job description:\n${jobDescription.slice(0, 4000)}`);
+  } else if (jobSnapshot) {
+    const snap = typeof jobSnapshot === 'string' ? jobSnapshot : JSON.stringify(jobSnapshot);
+    contextParts.push(`Job posting details:\n${snap.slice(0, 2000)}`);
+  }
+  if (jobMatch?.strongFits?.length) contextParts.push(`Initial green flags: ${jobMatch.strongFits.join('; ')}`);
+  if (jobMatch?.redFlags?.length)   contextParts.push(`Initial red flags: ${jobMatch.redFlags.join('; ')}`);
+  if (notes) contextParts.push(`My notes: ${notes.slice(0, 800)}`);
+  if (transcripts) contextParts.push(`Meeting transcripts:\n${transcripts.slice(0, 3000)}`);
+  if (emails?.length) {
+    contextParts.push(`Email activity:\n${emails.map(e => `- "${e.subject}" from ${e.from}: ${e.snippet || ''}`).join('\n')}`);
+  }
+  if (prefs?.resumeText)        contextParts.push(`Resume / LinkedIn profile:\n${prefs.resumeText.slice(0, 3000)}`);
+  if (prefs?.jobMatchBackground) contextParts.push(`My background: ${prefs.jobMatchBackground}`);
+  if (prefs?.roles)              contextParts.push(`Target roles: ${prefs.roles}`);
+  if (prefs?.avoid)              contextParts.push(`Things I want to avoid: ${prefs.avoid}`);
+  if (prefs?.roleLoved)          contextParts.push(`Roles / experiences I loved: ${prefs.roleLoved}`);
+  if (prefs?.roleHated)          contextParts.push(`Roles / experiences I disliked: ${prefs.roleHated}`);
+  if (prefs?.salaryFloor)        contextParts.push(`Salary floor (walk away below): ${prefs.salaryFloor}`);
+  if (prefs?.salaryStrong)       contextParts.push(`Salary that feels like a strong offer: ${prefs.salaryStrong}`);
+  if (prefs?.workArrangement?.length) contextParts.push(`Work arrangement preference: ${prefs.workArrangement.join(', ')}`);
+
+  const system = `You are a sharp, direct career advisor embedded in a job search tool. Analyze this opportunity against everything known: the job posting, the candidate's preferences and background, and — most importantly — any real interaction signals from meeting transcripts and emails.
+
+Write a focused 2-4 sentence narrative that covers:
+1. How well the role and company align with what the candidate is looking for (reference specifics from the posting and their stated preferences)
+2. What the actual conversations or emails reveal about fit, culture, and momentum — things the posting alone can't tell you
+3. A clear, honest recommendation (pursue / proceed with caution / pass) with the single most important reason
+
+Be specific. Reference real details. Don't hedge or restate the obvious. If transcripts/emails are available, weight them heavily — live interaction signals beat job description text every time.`;
+
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system,
+        messages: [{ role: 'user', content: contextParts.join('\n\n') }]
+      })
+    });
+    const data = await res.json();
+    return { analysis: data.content?.[0]?.text || null };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// ── Next Step Extraction ─────────────────────────────────────────────────────
+
+async function extractNextSteps(notes, calendarEvents, transcripts) {
+  const today = new Date().toISOString().slice(0, 10);
+  const futureEvents = (calendarEvents || []).filter(e => (e.start || '') > today);
+
+  const contextParts = [];
+  if (futureEvents.length) {
+    contextParts.push(`Upcoming calendar events:\n${futureEvents.map(e => `- ${e.start}: ${e.title}`).join('\n')}`);
+  }
+  if (transcripts) contextParts.push(`Meeting transcripts:\n${transcripts.slice(0, 3000)}`);
+  if (notes) contextParts.push(`Meeting notes:\n${notes.slice(0, 1500)}`);
+
+  if (!contextParts.length) return { nextStep: null, nextStepDate: null };
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON: {"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null"}. Dates like "Thursday" should be resolved to absolute dates relative to today.`,
+        messages: [{ role: 'user', content: contextParts.join('\n\n') }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '{}';
+    const match = text.match(/\{[\s\S]*?\}/);
+    const json = match ? JSON.parse(match[0]) : {};
+    return {
+      nextStep: (json.nextStep && json.nextStep !== 'null') ? json.nextStep : null,
+      nextStepDate: (json.nextStepDate && json.nextStepDate !== 'null') ? json.nextStepDate : null
+    };
+  } catch (e) {
+    return { nextStep: null, nextStepDate: null };
+  }
+}
+
+// ── Google Calendar ──────────────────────────────────────────────────────────
+
+async function fetchCalendarEvents(domain, companyName, knownContactEmails) {
+  return new Promise(resolve => {
+    chrome.identity.getAuthToken({ interactive: false }, async token => {
+      void chrome.runtime.lastError;
+      if (!token) { resolve({ events: [], error: 'not_connected' }); return; }
+      try {
+        // Verify token has Calendar scope before calling the API
+        const tokenInfo = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`).then(r => r.json()).catch(() => ({}));
+        const grantedScopes = tokenInfo.scope || '';
+        if (!grantedScopes.includes('calendar')) {
+          resolve({ events: [], error: 'needs_reauth', detail: 'Calendar scope not in token — disconnect and reconnect Gmail in Setup.' });
+          return;
+        }
+
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+        const oneMonthAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const params = new URLSearchParams({
+          timeMin: sixMonthsAgo.toISOString(),
+          timeMax: oneMonthAhead.toISOString(),
+          singleEvents: 'true',
+          orderBy: 'startTime',
+          maxResults: '250',
+        });
+        const res = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.status === 401) {
+          chrome.identity.removeCachedAuthToken({ token }, () => {});
+          resolve({ events: [], error: 'token_expired' }); return;
+        }
+        if (res.status === 403) {
+          const errBody = await res.json().catch(() => ({}));
+          const errMsg = errBody?.error?.message || errBody?.error || 'forbidden';
+          resolve({ events: [], error: 'needs_reauth', detail: errMsg }); return;
+        }
+        const data = await res.json();
+        const baseDomain = domain ? domain.split('.')[0].toLowerCase() : '';
+        const contactEmailSet = new Set((knownContactEmails || []).map(e => e.toLowerCase()));
+        const companyLower = (companyName || '').toLowerCase();
+
+        const isCompanyRelated = (event) => {
+          const attendees = event.attendees || [];
+          const hasCompanyAttendee = attendees.some(a => {
+            const email = (a.email || '').toLowerCase();
+            const d = (email.split('@')[1] || '');
+            return d === domain || (baseDomain && d.split('.')[0] === baseDomain) || contactEmailSet.has(email);
+          });
+          const inTitle = companyLower && (event.summary || '').toLowerCase().includes(companyLower);
+          return hasCompanyAttendee || inTitle;
+        };
+
+        const events = (data.items || [])
+          .filter(isCompanyRelated)
+          .map(e => ({
+            id: e.id,
+            title: e.summary || '(no title)',
+            start: e.start?.dateTime || e.start?.date || '',
+            end: e.end?.dateTime || e.end?.date || '',
+            attendees: (e.attendees || []).map(a => ({
+              email: (a.email || '').toLowerCase(),
+              name: a.displayName || '',
+              self: !!a.self,
+            })),
+            description: e.description || '',
+            meetLink: e.hangoutLink || e.conferenceData?.entryPoints?.[0]?.uri || null,
+          }));
+
+        resolve({ events });
+      } catch (err) {
+        resolve({ events: [], error: err.message });
+      }
+    });
+  });
+}
+
 // ── Granola MCP ─────────────────────────────────────────────────────────────
 
-async function searchGranolaNotes(companyName) {
+async function searchGranolaNotes(companyName, contactNames = [], calendarDates = [], attendeeHandles = []) {
   const { granolaToken } = await new Promise(r => chrome.storage.local.get(['granolaToken'], r));
   if (!granolaToken) return { notes: null, error: 'not_connected' };
 
-  try {
-    // MCP initialize
-    await fetch('https://mcp.granola.ai/mcp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${granolaToken}` },
-      body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'CompanyIntel', version: '1.0' } } })
-    });
-    // Search for notes by company name
+  const granolaPost = async (body) => {
+    const controller = new AbortController();
     const res = await fetch('https://mcp.granola.ai/mcp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${granolaToken}` },
-      body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', id: 2, params: { name: 'search_notes', arguments: { query: companyName } } })
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        'Authorization': `Bearer ${granolaToken}`
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
-    if (!res.ok) return { notes: null, error: 'mcp_error' };
-    const data = await res.json();
-    const notes = data.result?.content?.[0]?.text || null;
-    return { notes };
+    if (res.status === 401) throw Object.assign(new Error('Granola token expired'), { code: 401 });
+    if (!res.ok) return null;
+
+    // Read SSE stream — skip progress notifications, return the final result event
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('text/event-stream')) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const text = line.slice(5).trim();
+            if (!text) continue;
+            try {
+              const parsed = JSON.parse(text);
+              // Skip progress notifications — wait for the final result
+              if (parsed.method === 'notifications/progress') continue;
+              controller.abort();
+              return parsed;
+            } catch(e) { continue; }
+          }
+          // Keep only the last incomplete line in the buffer
+          buffer = lines[lines.length - 1];
+        }
+      } catch(e) { /* AbortError is expected */ }
+      return null;
+    }
+
+    const text = await res.text();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch(e) { return null; }
+  };
+
+  try {
+    // MCP handshake: initialize → notifications/initialized → tools/list
+    await granolaPost({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'CompanyIntel', version: '1.0' } } });
+    await granolaPost({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
+    const toolsRes = await granolaPost({ jsonrpc: '2.0', method: 'tools/list', id: 2 });
+    const availableTools = (toolsRes?.result?.tools || []).map(t => t.name);
+
+    const seen = new Set();
+    const allNotes = [];
+    let reqId = 3;
+
+    const addNote = text => {
+      if (text && !seen.has(text)) { seen.add(text); allNotes.push(text); }
+    };
+
+    const callTool = async (name, args) => {
+      if (!availableTools.includes(name)) return null;
+      const data = await granolaPost({ jsonrpc: '2.0', method: 'tools/call', id: reqId++, params: { name, arguments: args } });
+      return data?.result?.content?.[0]?.text || null;
+    };
+
+    // Strategy 1: natural language summary query
+    addNote(await callTool('query_granola_meetings', { query: `meetings with ${companyName}` }));
+
+    // Strategy 2: if nothing found, try contact names
+    if (!allNotes.length) {
+      for (const name of contactNames.slice(0, 3)) {
+        if (name) addNote(await callTool('query_granola_meetings', { query: `meetings with ${name}` }));
+      }
+    }
+
+    // Strategy 3: fetch full transcripts for relevant meetings
+    const transcripts = [];
+    const meetings = [];
+    const meetingsList = await callTool('list_meetings', { time_range: 'last_90_days' });
+    if (meetingsList) {
+      const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+      const lowerCompany = companyName.toLowerCase();
+      const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?)$/i, '').trim().toLowerCase();
+      const contactLower = contactNames.map(n => n.toLowerCase());
+
+      // Parse metadata (title, date, time) for every line or XML element that has a UUID
+      const meetingMeta = {};
+      const lines = meetingsList.split('\n');
+
+      // Helper: parse various date formats → {date: "YYYY-MM-DD", time: "HH:MM" | null}
+      const months3 = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+      const fullMonths = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11};
+      const toIso = (yr, mo, day) => `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const parseTime = (hr, mn, ap) => {
+        let h = parseInt(hr); const m2 = mn || '00'; const a = (ap||'').toUpperCase();
+        if (a === 'PM' && h < 12) h += 12;
+        if (a === 'AM' && h === 12) h = 0;
+        return `${String(h).padStart(2,'0')}:${m2}`;
+      };
+      const parseFriendlyDate = str => {
+        if (!str) return { date: null, time: null };
+        // 1. ISO: 2026-03-23 or 2026-03-23T10:30
+        const iso = str.match(/(\d{4}-\d{2}-\d{2})/);
+        if (iso) {
+          const t = str.match(/T(\d{2}:\d{2})/);
+          return { date: iso[1], time: t ? t[1] : null };
+        }
+        // 2. Unix timestamp (ms or s)
+        const tsOnly = str.match(/^\s*(\d{10,13})\s*$/);
+        if (tsOnly) {
+          const ts = parseInt(tsOnly[1]);
+          const d = new Date(ts > 1e12 ? ts : ts * 1000);
+          if (!isNaN(d)) return { date: d.toISOString().slice(0,10), time: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` };
+        }
+        // 3. "Mar 23 2026 10 30 AM" or "Mar 23 2026 10:30 AM" (3-letter month)
+        const m3 = str.match(/(\w{3,})\s+(\d{1,2})(?:,)?\s+(\d{4})(?:\s+(\d{1,2})[\s:](\d{2})\s*(AM|PM)?)?/i);
+        if (m3) {
+          const mk = m3[1].toLowerCase();
+          const mo = months3[mk.slice(0,3)] ?? fullMonths[mk] ?? -1;
+          if (mo >= 0) {
+            const date = toIso(m3[3], mo, parseInt(m3[2]));
+            const time = m3[4] ? parseTime(m3[4], m3[5], m3[6]) : null;
+            return { date, time };
+          }
+        }
+        // 4. "23 Mar 2026" (day first)
+        const m4 = str.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/i);
+        if (m4) {
+          const mo = months3[m4[2].toLowerCase()];
+          if (mo !== undefined) return { date: toIso(m4[3], mo, parseInt(m4[1])), time: null };
+        }
+        return { date: null, time: null };
+      };
+
+      for (const line of lines) {
+        // Try XML attribute format: <meeting id="uuid" title="..." date="...">
+        const xmlId = (line.match(/\bid="([^"]+)"/) || [])[1];
+        const xmlTitle = (line.match(/\btitle="([^"]*)"/) || [])[1];
+        const xmlDate = (line.match(/\bdate="([^"]*)"/) || [])[1];
+
+        let id, title, date, time;
+
+        if (xmlId && xmlId.length > 4) {
+          // XML format — use attribute values directly
+          id = xmlId;
+          title = xmlTitle || null;
+          const parsed = parseFriendlyDate(xmlDate);
+          date = parsed.date;
+          time = parsed.time;
+        } else {
+          // Fallback: UUID anywhere in line
+          const uuids = line.match(uuidRe);
+          if (!uuids) continue;
+          id = uuids[0];
+          const isoDate = parseFriendlyDate(line);
+          date = isoDate.date;
+          time = isoDate.time;
+          // Extract title by stripping UUID, dates, and XML/punctuation cruft
+          title = line
+            .replace(uuidRe, '')
+            .replace(/<[^>]+>/g, '')
+            .replace(/\d{4}-\d{2}-\d{2}[T\s]?\d{0,2}:?\d{0,2}:?\d{0,2}[^\s]*/g, '')
+            .replace(/[-–|:,\[\]()<>]+/g, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim()
+            .slice(0, 150) || null;
+        }
+
+        if (id) meetingMeta[id] = { title, date, time };
+      }
+
+      // Find meeting IDs relevant to this company.
+      // Only match on company name or full contact name in the title — date matching removed
+      // (date matching caused mass false positives: any meeting on a day you had a company call got pulled in)
+      // First-name-only matching removed for same reason (too many common names like "Josh", "Matt")
+      const relevantIds = [];
+      for (const [id, meta] of Object.entries(meetingMeta)) {
+        const title = (meta.title || '').toLowerCase();
+        if (!title) continue;
+
+        const matchesCompany = title.includes(lowerCompany) || (shortName.length > 3 && title.includes(shortName));
+
+        // Full contact name match only — require at least 2 words or 6+ chars to avoid common first names
+        const matchesContact = contactLower.some(n => {
+          if (!n || n.length < 3) return false;
+          const words = n.split(' ').filter(Boolean);
+          if (words.length >= 2) {
+            // Full name: both first and last appear → strong match
+            const fullMatch = words.every(w => w.length > 1 && title.includes(w));
+            if (fullMatch) return true;
+            // First-name-only match is acceptable for verified company contacts
+            // (these names are scoped to this specific company, so false positives are rare)
+            return words[0].length >= 3 && title.includes(words[0]);
+          }
+          return n.length >= 4 && title.includes(n);
+        });
+
+        if (matchesCompany || matchesContact) relevantIds.push(id);
+      }
+
+      // Fetch transcripts in parallel (max 5 meetings) — capture structured per-meeting data
+      const uniqueIds = [...new Set(relevantIds)].slice(0, 5);
+      await Promise.all(uniqueIds.map(async id => {
+        const t = await callTool('get_meeting_transcript', { meeting_id: id });
+        if (!t) return;
+        transcripts.push(t);
+        const meta = meetingMeta[id] || {};
+        // Use first non-XML, non-empty transcript line as title fallback
+        const firstLine = t.split('\n')
+          .map(l => l.trim())
+          .find(l => l && l.length > 3 && !l.startsWith('<')) || '';
+        const title = (meta.title && meta.title.length > 4 && !meta.title.startsWith('<'))
+          ? meta.title
+          : firstLine.replace(/^#+\s*/, '').slice(0, 150);
+        // If meta.date is missing, try extracting it from the transcript's XML opening tag
+        let meetingDate = meta.date;
+        let meetingTime = meta.time;
+        if (!meetingDate) {
+          const xmlDateAttr = (t.match(/\bdate="([^"]+)"/) || [])[1];
+          if (xmlDateAttr) {
+            const parsed = parseFriendlyDate(xmlDateAttr);
+            meetingDate = parsed.date;
+            meetingTime = parsed.time || meetingTime;
+          }
+        }
+        meetings.push({ id, title: title || 'Meeting', date: meetingDate, time: meetingTime, transcript: t });
+      }));
+
+      // Sort newest first
+      meetings.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    }
+
+    const notes = allNotes.length ? allNotes.join('\n\n---\n\n') : null;
+    const transcript = transcripts.length ? transcripts.join('\n\n---\n\n') : null;
+    return { notes, transcript, meetings };
   } catch (err) {
+    if (err.code === 401) return { notes: null, error: 'not_connected' };
     return { notes: null, error: err.message };
   }
 }

@@ -67,6 +67,8 @@ async function detectCompanyAndJob() {
     result = detectGreenhouse();
   } else if (url.includes('lever.co')) {
     result = detectLever();
+  } else if (url.includes('myworkdayjobs.com') || url.includes('workday.com')) {
+    result = detectWorkday();
   } else {
     result = detectGeneric();
   }
@@ -115,14 +117,17 @@ async function extractJobDescriptionForPanel() {
 
   const jobMeta = extractLinkedInJobMeta();
 
-  // If salary not found in DOM chips, scan the full description text before truncation
-  if (!jobMeta.salary) {
-    const fullText = extractJobDescriptionFull();
-    if (fullText) {
-      // Match patterns like "$133,500 - $200,500" or "$95K - $120K" anywhere in the text
-      const m = fullText.match(/\$[\d,]+(?:K)?\s*[-–]\s*\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))?/i)
-               || fullText.match(/\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))/i);
-      if (m) jobMeta.salary = m[0].trim();
+  // Always scan the job description body for an explicit company-stated salary.
+  // This overrides anything scraped from LinkedIn's chip/insight widgets, which
+  // show market estimates (e.g. "$270K–$315K/yr") instead of the stated salary.
+  const descEl = document.querySelector('#job-details, .jobs-description__content, .jobs-description');
+  if (descEl) {
+    const text = descEl.innerText || '';
+    // Highest priority: explicit "the [estimated/base/annual] [cash] salary for this role is $X"
+    const disclosure = text.match(/(?:the\s+)?(?:estimated|base|annual)\s+(?:cash\s+)?(?:base\s+)?salary[^$\n]{0,60}\$([\d,]+(?:\.\d+)?(?:K)?)\b/i)
+      || text.match(/\$[\d,]+(?:\.\d+)?(?:K)?\s*(?:per year|\/yr|annually|USD|a year)\b/i);
+    if (disclosure) {
+      jobMeta.salary = disclosure[0].trim();
     }
   }
 
@@ -205,7 +210,8 @@ async function detectLinkedIn() {
   if (isJobPage) {
     const titleResult = await waitForJobTitle();
     if (titleResult) {
-      return { ...titleResult, source: 'linkedin', domain: null };
+      const companyLinkedinUrl = extractLinkedInCompanyUrlFromJobPage();
+      return { ...titleResult, source: 'linkedin', domain: null, companyLinkedinUrl };
     }
     // Title never matched — fall through (company-only /jobs/ page or unusual layout)
   }
@@ -433,6 +439,26 @@ function extractLinkedInCompanyFromUrl() {
   return null;
 }
 
+function extractLinkedInCompanyUrlFromJobPage() {
+  // LinkedIn job pages always have a link to the company's LinkedIn page in the job detail panel
+  const jobId = new URLSearchParams(window.location.search).get('currentJobId');
+  const scope = jobId
+    ? (document.querySelector(`[data-job-id="${jobId}"], [data-occludable-job-id="${jobId}"]`) || document)
+    : document;
+  const sources = scope !== document ? [scope, document] : [document];
+  for (const root of sources) {
+    for (const link of root.querySelectorAll('a[href*="/company/"]')) {
+      const href = link.getAttribute('href') || '';
+      const m = href.match(/\/company\/([^/?#]+)/);
+      if (m && m[1] && m[1] !== 'unavailable') {
+        const slug = href.split('?')[0].replace(/\/$/, '');
+        return slug.startsWith('http') ? slug : 'https://www.linkedin.com' + slug;
+      }
+    }
+  }
+  return null;
+}
+
 function detectGreenhouse() {
   const company = document.querySelector('.company-name, #header .company-name, .greenhouse-header');
   const job = document.querySelector('#app_body h1, .app-title');
@@ -453,6 +479,42 @@ function detectLever() {
     source: 'lever',
     domain: null
   };
+}
+
+function detectWorkday() {
+  const domain = window.location.hostname;
+
+  // Company: og:site_name is most reliable ("DataRobot Careers" → strip "Careers")
+  let company = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.trim();
+  if (company) company = company.replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+  if (!company) {
+    // Page title: "Account Executive | DataRobot Careers" — take last segment, strip "Careers"
+    const segs = document.title.replace(/^\(\d+\)\s*/, '').split(/\s*[|·—–]\s*/);
+    if (segs.length > 1) company = segs[segs.length - 1].replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+  }
+  if (!company) company = extractDomain();
+
+  // Job title: Workday uses data-automation-id attributes
+  let jobTitle = document.querySelector('[data-automation-id="jobPostingTitle"]')?.textContent?.trim()
+    || document.querySelector('[data-automation-id="heading"]')?.textContent?.trim();
+  if (!jobTitle) {
+    // Page title first segment: "Account Executive | DataRobot Careers"
+    const segs = document.title.replace(/^\(\d+\)\s*/, '').split(/\s*[|·—–]\s*/);
+    const first = segs[0]?.trim();
+    if (first && first.length > 1 && first.length < 100 && !/jobs|careers|hiring/i.test(first)) {
+      jobTitle = first;
+    }
+  }
+  if (!jobTitle) {
+    // URL path: /job/Boston.../Account-Executive_R-102609 → "Account Executive"
+    const urlSeg = window.location.pathname.split('/job/').pop()?.split('/').pop();
+    if (urlSeg) {
+      const fromUrl = urlSeg.replace(/_[A-Z]\d+$/, '').replace(/-/g, ' ');
+      if (fromUrl.length > 2 && fromUrl.length < 80) jobTitle = fromUrl;
+    }
+  }
+
+  return { company, jobTitle: jobTitle || null, source: 'workday', domain };
 }
 
 function detectGeneric() {
@@ -547,7 +609,9 @@ function extractLinkedInJobTitle() {
 }
 
 function extractLinkedInJobMeta() {
-  const result = { workArrangement: null, salary: null, employmentType: null, location: null };
+  const result = { workArrangement: null, salary: null, employmentType: null, location: null, perks: [] };
+  const PERK_RE   = /stipend|allowance|reimbursement|subsidy|benefit/i;
+  const SALARY_RE = /\$\d+[Kk]|\$\d{1,3},\d{3}|\$\d{4,}/; // $50K, $50,000, $50000+
 
   // Find the job detail panel to scope the search
   const panelSelectors = [
@@ -601,7 +665,10 @@ function extractLinkedInJobMeta() {
       else if (/\bcontract\b/i.test(t)) result.employmentType = 'Contract';
       else if (/\binternship\b/i.test(t)) result.employmentType = 'Internship';
     }
-    if (!result.salary && /\$[\d,K]+/.test(t) && t.length < 60) result.salary = t;
+    if (/\$[\d,K]+/.test(t) && t.length < 60) {
+      if (PERK_RE.test(t)) result.perks.push(t);
+      else if (!result.salary && SALARY_RE.test(t)) result.salary = t;
+    }
   }
 
   // Dedicated salary scan — runs regardless of chip results, catches salary in description body (p/div elements)
@@ -610,6 +677,7 @@ function extractLinkedInJobMeta() {
       if (el.children.length > 0) continue;
       const t = el.textContent?.trim();
       if (!t || !/\$[\d,]/.test(t) || t.length > 100) continue;
+      if (PERK_RE.test(t)) { result.perks.push(t); continue; }
       if (/\$[\d,]+(?:K)?\s*[-–—]\s*\$[\d,]+/.test(t) ||
           /\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))/i.test(t)) {
         result.salary = t;
@@ -656,7 +724,10 @@ function waitForJobDescriptionPanel() {
     '.jobs-search__job-details--wrapper',
     '.scaffold-layout__detail',
     '[class*="jobs-search__job-details"]',
-    '[class*="job-details-module"]'
+    '[class*="job-details-module"]',
+    '[data-automation-id="jobPostingDescription"]',
+    '[data-automation-id="job-posting-description"]',
+    '[class*="jobPostingDescription"]'
   ];
 
   function isReady() {
@@ -800,11 +871,14 @@ function extractJobDescription() {
   // Use the longest candidate — most likely to be the full, expanded description
   if (candidates.length > 0) {
     const best = candidates.reduce((a, b) => a.length > b.length ? a : b);
-    return best.slice(0, 4000);
+    return best.slice(0, 8000);
   }
 
-  // Non-LinkedIn platforms (Greenhouse, Lever, generic job boards)
+  // Non-LinkedIn platforms (Greenhouse, Lever, Workday, generic job boards)
   const genericSelectors = [
+    '[data-automation-id="jobPostingDescription"]',
+    '[data-automation-id="job-posting-description"]',
+    '[class*="jobPostingDescription"]',
     '#app_body .job-description',
     '.job-description',
     '#content .section-wrapper',
@@ -818,7 +892,7 @@ function extractJobDescription() {
   for (const sel of genericSelectors) {
     const el = document.querySelector(sel);
     const text = el?.innerText?.trim();
-    if (text && text.length > 150) return text.slice(0, 4000);
+    if (text && text.length > 150) return text.slice(0, 8000);
   }
   return null;
 }

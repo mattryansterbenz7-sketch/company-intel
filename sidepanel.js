@@ -16,6 +16,7 @@ let saveMode = 'company'; // 'company' or 'job'
 let currentSaveTags = [];
 let allKnownTags = [];
 let detectedDomain = null;
+let detectedCompanyLinkedin = null;
 let settingsOpen = false;
 let currentResearch = null;
 let currentSavedEntry = null; // saved entry for the current company (for knownContacts etc.)
@@ -93,10 +94,12 @@ loadPrefsWithMigration((prefs) => {
   applyPrefsToForm(prefs);
 });
 
-// Open saved dashboard
+// Open full saved view and close the side panel so they don't compete
 savedBtn.addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('saved.html') });
+  window.close();
 });
+
 
 function openSavePanel(mode) {
   saveMode = mode;
@@ -116,13 +119,14 @@ function openSavePanel(mode) {
   savePanel.classList.add('visible');
   saveNotes.value = '';
   saveRating = 0;
-  currentSaveTags = [];
+  currentSaveTags = isJob ? ['Job Posted'] : [];
   document.querySelectorAll('.save-star').forEach(s => s.classList.remove('filled'));
   renderSaveTagChips();
 
-  // Load known tags for autocomplete
-  chrome.storage.local.get(['allTags'], ({ allTags }) => {
-    allKnownTags = allTags || [];
+  // Derive tags from actual entries so stale/removed tags never appear
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    void chrome.runtime.lastError;
+    allKnownTags = [...new Set((savedCompanies || []).flatMap(c => c.tags || []))].sort();
   });
 }
 
@@ -144,22 +148,21 @@ function renderSaveTagChips() {
 const saveTagInput = document.getElementById('save-tag-input');
 const saveTagSuggestions = document.getElementById('save-tag-suggestions');
 
-saveTagInput.addEventListener('input', () => {
+function showSaveTagSuggestions() {
   const val = saveTagInput.value.trim().toLowerCase();
-  if (!val) { saveTagSuggestions.style.display = 'none'; return; }
   const matches = allKnownTags.filter(t => t.toLowerCase().includes(val) && !currentSaveTags.includes(t));
   if (matches.length === 0) { saveTagSuggestions.style.display = 'none'; return; }
-  saveTagSuggestions.innerHTML = matches.slice(0, 6).map(t =>
+  saveTagSuggestions.innerHTML = matches.slice(0, 8).map(t =>
     `<div class="save-tag-suggestion" data-tag="${t}">${t}</div>`
   ).join('');
   saveTagSuggestions.style.display = 'block';
   saveTagSuggestions.querySelectorAll('.save-tag-suggestion').forEach(el => {
-    el.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      addSaveTag(el.dataset.tag);
-    });
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); addSaveTag(el.dataset.tag); });
   });
-});
+}
+
+saveTagInput.addEventListener('focus', showSaveTagSuggestions);
+saveTagInput.addEventListener('input', showSaveTagSuggestions);
 
 saveTagInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
@@ -204,13 +207,19 @@ saveJobBtn.addEventListener('click', () => {
 });
 
 // Save stars
-document.querySelectorAll('.save-star').forEach(star => {
+const allStars = [...document.querySelectorAll('.save-star')];
+allStars.forEach(star => {
+  star.addEventListener('mouseenter', () => {
+    const hoverVal = parseInt(star.dataset.val);
+    allStars.forEach((s, i) => s.classList.toggle('hovered', i < hoverVal));
+  });
   star.addEventListener('click', () => {
     saveRating = parseInt(star.dataset.val);
-    document.querySelectorAll('.save-star').forEach((s, i) => {
-      s.classList.toggle('filled', i < saveRating);
-    });
+    allStars.forEach((s, i) => s.classList.toggle('filled', i < saveRating));
   });
+});
+document.getElementById('save-stars').addEventListener('mouseleave', () => {
+  allStars.forEach(s => s.classList.remove('hovered'));
 });
 
 // Save confirm
@@ -221,7 +230,7 @@ saveConfirmBtn.addEventListener('click', () => {
   const jobStageValue = isJobSave ? (document.getElementById('save-status-select')?.value || 'needs_review') : null;
 
   const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
-  const companyLinkedin = currentResearch?.companyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
+  const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
 
   chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
     void chrome.runtime.lastError;
@@ -247,12 +256,13 @@ saveConfirmBtn.addEventListener('click', () => {
         funding:        prev.funding   || currentResearch?.funding   || null,
         founded:        prev.founded   || currentResearch?.founded   || null,
         ...(isJobSave ? {
-          isOpportunity: true,
-          jobStage:     jobStageValue,
-          jobTitle:     currentJobTitle || prev.jobTitle || null,
-          jobUrl:       currentUrl || prev.jobUrl || null,
-          jobMatch:     currentResearch?.jobMatch || prev.jobMatch || null,
-          jobSnapshot:  currentResearch?.jobSnapshot || prev.jobSnapshot || null,
+          isOpportunity:  true,
+          jobStage:       jobStageValue,
+          jobTitle:       currentJobTitle || prev.jobTitle || null,
+          jobUrl:         currentUrl || prev.jobUrl || null,
+          jobMatch:       currentResearch?.jobMatch || prev.jobMatch || null,
+          jobSnapshot:    currentResearch?.jobSnapshot || prev.jobSnapshot || null,
+          jobDescription: currentJobDescription || prev.jobDescription || null,
         } : {
           status: prev.status || 'co_watchlist',
         }),
@@ -290,12 +300,13 @@ saveConfirmBtn.addEventListener('click', () => {
       leaders:        currentResearch?.leaders      || null,
       status:         isJobSave ? 'co_watchlist' : 'co_watchlist',
       ...(isJobSave ? {
-        isOpportunity: true,
-        jobStage:     jobStageValue,
-        jobTitle:     currentJobTitle || null,
-        jobUrl:       currentUrl || null,
-        jobMatch:     currentResearch?.jobMatch    || null,
-        jobSnapshot:  currentResearch?.jobSnapshot || null,
+        isOpportunity:  true,
+        jobStage:       jobStageValue,
+        jobTitle:       currentJobTitle || null,
+        jobUrl:         currentUrl || null,
+        jobMatch:       currentResearch?.jobMatch    || null,
+        jobSnapshot:    currentResearch?.jobSnapshot || null,
+        jobDescription: currentJobDescription        || null,
       } : {}),
     };
 
@@ -329,6 +340,7 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     currentJobTitle = response.jobTitle || null;
     currentJobMeta = response.jobMeta || null;
     detectedDomain = response.domain || null;
+    detectedCompanyLinkedin = response.companyLinkedinUrl || null;
     updateJobTitleBar();
     triggerResearch(response.company);
 
@@ -345,7 +357,7 @@ function startJobDescriptionFlow(tabId) {
     if (!descResponse) return;
 
     // Update meta with more accurate post-panel data
-    if (descResponse.jobMeta?.workArrangement || descResponse.jobMeta?.salary) {
+    if (descResponse.jobMeta?.workArrangement || descResponse.jobMeta?.salary || descResponse.jobMeta?.perks?.length) {
       currentJobMeta = descResponse.jobMeta;
       renderJobSnapshot(descResponse.jobMeta);
     }
@@ -353,8 +365,9 @@ function startJobDescriptionFlow(tabId) {
     // Always render location match immediately, even without description
     renderJobOpportunity(null, descResponse.jobMeta || currentJobMeta || null);
 
-    // Full analysis only if description was extracted
+    // Store description for use in save + chat context
     if (descResponse.jobDescription) {
+      currentJobDescription = descResponse.jobDescription;
       const run = (prefs) => { currentPrefs = currentPrefs || prefs; triggerJobAnalysis(companyNameEl.textContent, descResponse.jobDescription); };
       if (currentPrefs) { run(currentPrefs); } else { loadPrefsWithMigration((prefs) => run(prefs || null)); }
     }
@@ -561,9 +574,15 @@ document.getElementById('job-bar').addEventListener('click', (e) => {
 
 // Refresh button — re-detect company then research
 searchBtn.addEventListener('click', () => {
-  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-    currentUrl = tabs[0]?.url || null;
-    chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_COMPANY' }, (response) => {
+  const tabId = currentTabId;
+  if (!tabId) {
+    contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
+    return;
+  }
+  chrome.tabs.get(tabId, tab => {
+    if (chrome.runtime.lastError || !tab) return;
+    currentUrl = tab.url || null;
+    chrome.tabs.sendMessage(tabId, { type: 'GET_COMPANY' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.company) {
         contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
         return;
@@ -572,15 +591,12 @@ searchBtn.addEventListener('click', () => {
       currentJobTitle = response.jobTitle || null;
       currentJobMeta = response.jobMeta || null;
       detectedDomain = response.domain || null;
-      // Clear stale job opportunity content before new data arrives
+      detectedCompanyLinkedin = response.companyLinkedinUrl || null;
       const jobOpp = document.getElementById('job-opportunity');
       if (jobOpp) jobOpp.innerHTML = '';
       updateJobTitleBar();
-      triggerResearch(response.company, true); // force bypass cache on manual refresh
-
-      if (currentJobTitle) {
-        startJobDescriptionFlow(tabs[0].id);
-      }
+      triggerResearch(response.company, true);
+      if (currentJobTitle) startJobDescriptionFlow(tabId);
     });
   });
 });
@@ -762,11 +778,75 @@ const JOB_STATUSES = {
   rejected: "Rejected / DQ'd"
 };
 
+const COMPANY_STATUSES = {
+  co_watchlist:   'Watch List',
+  co_researching: 'Researching',
+  co_networking:  'Networking',
+  co_interested:  'Strong Interest',
+  co_applied:     'Applied There',
+  co_archived:    'Archived',
+};
+
+function renderOppFields(savedEntry) {
+  const el = document.getElementById('sp-opp-fields');
+  if (!el) return;
+  if (!savedEntry || !savedEntry.isOpportunity) { el.style.display = 'none'; return; }
+
+  const fields = [];
+  if (savedEntry.companyWebsite) {
+    const display = savedEntry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    fields.push(['Website', `<a href="${savedEntry.companyWebsite}" target="_blank">${display}</a>`]);
+  }
+  if (savedEntry.companyLinkedin) {
+    fields.push(['LinkedIn', `<a href="${savedEntry.companyLinkedin}" target="_blank">LinkedIn ↗</a>`]);
+  }
+  if (savedEntry.founded) fields.push(['Founded', savedEntry.founded]);
+  if (savedEntry.funding) fields.push(['Funding', savedEntry.funding]);
+  if (savedEntry.industry) fields.push(['Industry', savedEntry.industry]);
+  if (savedEntry.employees) fields.push(['Employees', savedEntry.employees]);
+  const stageLabel = savedEntry.jobStage ? (JOB_STATUSES[savedEntry.jobStage] || savedEntry.jobStage) : null;
+  if (stageLabel) fields.push(['Stage', stageLabel]);
+  const role = (savedEntry.jobTitle && savedEntry.jobTitle !== 'New Opportunity') ? savedEntry.jobTitle : null;
+  if (role) fields.push(['Role', role]);
+  if (savedEntry.nextStep) fields.push(['Next Step', savedEntry.nextStep]);
+  if (savedEntry.nextStepDate) {
+    const d = new Date(savedEntry.nextStepDate);
+    const formatted = isNaN(d) ? savedEntry.nextStepDate : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    fields.push(['Next Step Date', formatted]);
+  }
+  const lastActivityTs = Math.max(savedEntry.cachedEmailsAt || 0, savedEntry.cachedMeetingNotesAt || 0, savedEntry.cachedGranolaAt || 0, savedEntry.savedAt || 0);
+  if (lastActivityTs) {
+    const d = new Date(lastActivityTs);
+    fields.push(['Last Activity', d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })]);
+  }
+
+  if (!fields.length) { el.style.display = 'none'; return; }
+
+  el.innerHTML = fields.map(([k, v]) =>
+    `<div class="sp-opp-row"><span class="sp-opp-key">${k}</span><span class="sp-opp-val">${v}</span></div>`
+  ).join('');
+  el.style.display = 'block';
+}
+
 function showCrmLink(savedEntry) {
   const crmLink = document.getElementById('crm-link');
   if (!crmLink || !savedEntry) return;
-  crmLink.href = chrome.runtime.getURL(`company.html?id=${savedEntry.id}`);
+  const focusParam = savedEntry.isOpportunity ? '&focus=opportunity' : '';
+  crmLink.href = chrome.runtime.getURL(`company.html?id=${savedEntry.id}${focusParam}`);
   crmLink.style.display = 'inline';
+  crmLink.onclick = () => window.close();
+  const stageEl = document.getElementById('crm-stage');
+  if (stageEl) {
+    let stageLabel = '';
+    if (savedEntry.isOpportunity && savedEntry.jobStage) {
+      stageLabel = JOB_STATUSES[savedEntry.jobStage] || savedEntry.jobStage;
+    } else if (savedEntry.status) {
+      stageLabel = COMPANY_STATUSES[savedEntry.status] || savedEntry.status;
+    }
+    stageEl.textContent = stageLabel || '';
+    stageEl.style.display = stageLabel ? 'block' : 'none';
+  }
+  renderOppFields(savedEntry);
 }
 
 function showSaveBar() {
@@ -776,6 +856,10 @@ function showSaveBar() {
   saveConfirmBtn.classList.remove('saved');
   const crmLink = document.getElementById('crm-link');
   if (crmLink) crmLink.style.display = 'none';
+  const stageEl = document.getElementById('crm-stage');
+  if (stageEl) stageEl.style.display = 'none';
+  const oppFields = document.getElementById('sp-opp-fields');
+  if (oppFields) oppFields.style.display = 'none';
 }
 
 function checkAlreadySaved(company) {
@@ -787,16 +871,117 @@ function checkAlreadySaved(company) {
       currentSavedEntry = match;
       saveBtn.textContent = '✓ Saved';
       saveBtn.classList.add('saved');
-      const crmLink = document.getElementById('crm-link');
-      if (crmLink) {
-        crmLink.href = chrome.runtime.getURL(`company.html?id=${match.id}`);
-        crmLink.style.display = 'inline';
+      showCrmLink(match);
+      // Auto-tag with 'Job Posted' when viewing from a job page
+      if (currentJobTitle && !(match.tags || []).includes('Job Posted')) {
+        match.tags = [...(match.tags || []), 'Job Posted'];
+        currentSavedEntry = match;
+        const updated = entries.map(c => companiesMatch(c.company, match.company) ? match : c);
+        chrome.storage.local.set({ savedCompanies: updated }, () => void chrome.runtime.lastError);
       }
       // Refresh contacts section if renderResults already ran
       const contactsSection = document.getElementById('sp-contacts-section');
       if (contactsSection) renderContactsSection(contactsSection, match.knownContacts || []);
+      // Auto-sync contacts in background if cache is stale (>4 hours)
+      const SYNC_INTERVAL = 4 * 60 * 60 * 1000;
+      if (!match.cachedEmailsAt || Date.now() - match.cachedEmailsAt > SYNC_INTERVAL) {
+        syncContactsForEntry(match);
+      }
     }
   });
+}
+
+// Silently fetch emails and update knownContacts for a saved entry
+function syncContactsForEntry(savedEntry) {
+  const domain = (savedEntry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  if (!domain) return;
+  const linkedinSlug = (savedEntry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
+  const knownContactEmails = (savedEntry.knownContacts || []).map(c => c.email);
+  chrome.runtime.sendMessage(
+    { type: 'GMAIL_FETCH_EMAILS', domain, companyName: savedEntry.company || '', linkedinSlug, knownContactEmails },
+    result => {
+      void chrome.runtime.lastError;
+      if (!result?.emails?.length) return;
+      const userEmail = (result.userEmail || '').toLowerCase();
+      if (userEmail) chrome.storage.local.set({ gmailUserEmail: userEmail });
+
+      const parseAddrs = field => {
+        if (!field) return [];
+        return field.split(/,\s*/).map(addr => {
+          const m = addr.match(/^(.*?)\s*<([^>]+)>$/) || [null, '', addr.trim()];
+          return { name: (m[1] || '').replace(/^["']+|["']+$/g, '').trim(), email: (m[2] || '').trim().toLowerCase() };
+        }).filter(a => a.email.includes('@'));
+      };
+
+      // Detect user's own email by most frequent non-domain from: address
+      const fromFreq = {};
+      result.emails.forEach(e => {
+        parseAddrs(e.from).forEach(({ email }) => {
+          if (domain && email.endsWith('@' + domain)) return;
+          fromFreq[email] = (fromFreq[email] || 0) + 1;
+        });
+      });
+      const selfEmail = userEmail ||
+        Object.entries(fromFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+
+      let current = (savedEntry.knownContacts || []).map(c => ({ ...c, aliases: c.aliases ? [...c.aliases] : [] }));
+      if (selfEmail) current = current.filter(c => c.email.toLowerCase() !== selfEmail);
+
+      const existing = new Set(current.map(c => c.email.toLowerCase()));
+      const baseDomain = domain ? domain.split('.')[0].toLowerCase() : '';
+      const namesMatch = (a, b) => {
+        const words = s => s.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+        const wa = words(a), wb = words(b);
+        return wa.length >= 2 && wb.length >= 2 && wa[0] === wb[0] && wa[wa.length - 1] === wb[wb.length - 1];
+      };
+      result.emails.forEach(e => {
+        const all = [...parseAddrs(e.from), ...parseAddrs(e.to), ...parseAddrs(e.cc)];
+        const hasCompany = all.some(a => {
+          const d = (a.email.split('@')[1] || '').toLowerCase();
+          return d === domain || (baseDomain && d.split('.')[0] === baseDomain);
+        });
+        if (!hasCompany) return;
+        all.forEach(({ name, email }) => {
+          if (!email || (selfEmail && email === selfEmail) || existing.has(email)) return;
+          existing.add(email);
+          // Merge into existing contact if same name, otherwise add new
+          const match = name && name.split(/\s+/).length >= 2
+            ? current.find(c => namesMatch(c.name, name)) : null;
+          if (match) {
+            match.aliases.push(email);
+          } else {
+            current.push({ name: name || email.split('@')[0], email, aliases: [], source: 'email', detectedAt: Date.now() });
+          }
+        });
+      });
+
+      const cacheUpdates = { cachedEmails: result.emails, cachedEmailsAt: Date.now() };
+      if (result.userEmail) cacheUpdates.gmailUserEmail = result.userEmail;
+
+      const origLen = (savedEntry.knownContacts || []).length;
+      const contactsChanged = current.length !== origLen ||
+        current.some((c, i) => (c.aliases || []).length !== ((savedEntry.knownContacts || [])[i]?.aliases || []).length);
+      if (contactsChanged) cacheUpdates.knownContacts = current;
+
+      // Persist updates to storage
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        void chrome.runtime.lastError;
+        const all = savedCompanies || [];
+        const idx = all.findIndex(c => c.id === savedEntry.id);
+        if (idx === -1) return;
+        all[idx] = { ...all[idx], ...cacheUpdates };
+        currentSavedEntry = all[idx];
+        chrome.storage.local.set({ savedCompanies: all }, () => {
+          void chrome.runtime.lastError;
+          // Re-render contacts section if visible
+          if (contactsChanged) {
+            const contactsSection = document.getElementById('sp-contacts-section');
+            if (contactsSection) renderContactsSection(contactsSection, all[idx].knownContacts || []);
+          }
+        });
+      });
+    }
+  );
 }
 
 function renderJobSnapshot(snap) {
@@ -805,9 +990,10 @@ function renderJobSnapshot(snap) {
   const arrClass = snap.workArrangement === 'Remote' ? 'remote' : snap.workArrangement === 'Hybrid' ? 'hybrid' : snap.workArrangement === 'On-site' ? 'onsite' : '';
   const arrIcon = snap.workArrangement === 'Remote' ? '🌐' : snap.workArrangement === 'Hybrid' ? '🏠' : snap.workArrangement === 'On-site' ? '🏢' : '';
   const bits = [];
-  if (snap.salary) bits.push(`<span class="job-snap-item salary"><span class="job-snap-icon">💰</span>${snap.salary}</span>`);
+  if (snap.salary) bits.push(`<span class="job-snap-item salary"><span class="job-snap-icon">💰</span>${snap.salary}${snap.salaryType === 'ote' ? ' OTE' : ''}</span>`);
   if (snap.workArrangement) bits.push(`<span class="job-snap-item ${arrClass}"><span class="job-snap-icon">${arrIcon}</span>${snap.workArrangement}${snap.location ? ' · ' + snap.location : ''}</span>`);
   if (snap.employmentType) bits.push(`<span class="job-snap-item type"><span class="job-snap-icon">🕐</span>${snap.employmentType}</span>`);
+  (snap.perks || []).forEach(p => bits.push(`<span class="job-snap-item perk"><span class="job-snap-icon">🎁</span>${p}</span>`));
   inlineEl.innerHTML = bits.join('');
 }
 
@@ -870,7 +1056,8 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
     <div class="section section-job job-opportunity-section">
       <div class="section-title">Job Opportunity</div>
       ${locationMatchHtml}
-      ${(jobSnapshot?.salary || currentJobMeta?.salary) ? `<div class="salary-display"><span class="salary-label">Base Salary</span><span class="salary-value">${jobSnapshot?.salary || currentJobMeta?.salary}</span></div>` : ''}
+      ${(jobSnapshot?.salary || currentJobMeta?.salary) ? `<div class="salary-display"><span class="salary-label">${jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base Salary'}</span><span class="salary-value">${jobSnapshot?.salary || currentJobMeta?.salary}</span></div>` : ''}
+      ${(jobSnapshot?.perks?.length || currentJobMeta?.perks?.length) ? `<div class="perks-display">${(jobSnapshot?.perks || currentJobMeta?.perks || []).map(p => `<span class="perk-chip">🎁 ${p}</span>`).join('')}</div>` : ''}
       ${hasMatch && jobMatch.jobSummary ? `<div class="job-summary">${jobMatch.jobSummary}</div>` : ''}
       ${hasMatch ? `
         <div class="verdict-row" style="margin-top:12px">
@@ -975,10 +1162,10 @@ function renderResults(data) {
 
   // Intelligence / What They Do
   const intel = data.intelligence || {};
-  const intelHtml = intel.oneLiner ? `
-    <div class="one-liner">${intel.oneLiner}</div>
+  const description = intel.oneLiner || intel.eli5 || '';
+  const intelHtml = description ? `
+    <div class="one-liner">${description}</div>
     ${intel.category ? `<span class="intel-category">${intel.category}</span>` : ''}
-    ${intel.eli5 ? `<details><summary>Simple explanation</summary><div class="detail-body">${intel.eli5}</div></details>` : ''}
     ${intel.whosBuyingIt ? `<details><summary>Who buys it</summary><div class="detail-body">${intel.whosBuyingIt}</div></details>` : ''}
     ${intel.howItWorks ? `<details><summary>How it works</summary><div class="detail-body">${intel.howItWorks}</div></details>` : ''}
   ` : '<div style="color:#555;font-size:13px">No product data available</div>';
@@ -1050,7 +1237,7 @@ function renderResults(data) {
           <div class="leader-avatar-initials" style="background:linear-gradient(135deg,#0d9488,#0077b5);color:#fff">${initials}</div>
           <div class="leader-info">
             <div class="leader-name">${c.name}</div>
-            <div class="leader-title" style="color:#0077b5">${c.email}</div>
+            <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" onclick="copyEmail(this,'${c.email.replace(/'/g,"\\'")}')">⎘</button></div>
           </div>
           <div class="leader-links">
             <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
@@ -1084,6 +1271,14 @@ function renderResults(data) {
   `;
 }
 
+function copyEmail(btn, email) {
+  navigator.clipboard.writeText(email).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
 function renderContactsSection(el, contacts) {
   if (!contacts.length) return;
   const html = contacts.map(c => {
@@ -1093,7 +1288,7 @@ function renderContactsSection(el, contacts) {
       <div class="leader-avatar-initials" style="background:linear-gradient(135deg,#0d9488,#0077b5);color:#fff">${initials}</div>
       <div class="leader-info">
         <div class="leader-name">${c.name}</div>
-        <div class="leader-title" style="color:#0077b5">${c.email}</div>
+        <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" onclick="copyEmail(this,'${c.email.replace(/'/g,"\\'")}')">⎘</button></div>
       </div>
       <div class="leader-links">
         <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>

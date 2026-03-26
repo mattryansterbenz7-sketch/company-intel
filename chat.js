@@ -1,5 +1,11 @@
 // chat.js — shared AI chat panel, initialized by company.js and opportunity.js
 
+// Context override map — keyed by chatKey, set before initChatPanels() is called
+const _chatContextOverrides = {};
+function setChatContext(key, context) {
+  _chatContextOverrides[key] = context;
+}
+
 function initChatPanels(entry) {
   document.querySelectorAll('[data-chat-panel]').forEach(container => {
     if (container.dataset.chatInit) return;
@@ -9,40 +15,68 @@ function initChatPanels(entry) {
 }
 
 function buildChatPanel(container, entry) {
-  const storageKey = `ci_chat_${entry.id}`;
+  const chatKey = container.dataset.chatKey || entry.id;
+  // History is session-only — starts fresh each time this panel is built.
+  // This keeps each company's chat isolated and avoids stale context from prior sessions.
   let history = [];
-  try { history = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch(e) {}
 
+  const panelId = chatKey.replace(/[^a-z0-9]/gi, '_');
+  const placeholder = container.dataset.chatPlaceholder || 'Ask anything about this company or role…';
+  const minimal = container.dataset.chatMinimal === '1';
   container.innerHTML = `
-    <div class="chat-messages" id="chat-msgs-${entry.id}"></div>
-    <div class="chat-email-status" id="chat-email-status-${entry.id}" style="display:none"></div>
+    <div class="chat-messages" id="chat-msgs-${panelId}"></div>
+    <div class="chat-email-status" id="chat-email-status-${panelId}" style="display:none"></div>
     <div class="chat-input-row">
-      <textarea class="chat-input" id="chat-input-${entry.id}" placeholder="Ask anything about this company or role…" rows="1"></textarea>
-      <button class="chat-send-btn" id="chat-send-${entry.id}">Send</button>
+      <textarea class="chat-input" id="chat-input-${panelId}" placeholder="${placeholder}" rows="1"></textarea>
+      <button class="chat-send-btn" id="chat-send-${panelId}">Send</button>
     </div>
+    ${minimal ? `<div class="chat-actions"><button class="chat-action-btn chat-clear-btn" data-action="clear">Clear chat</button></div>` : `
     <div class="chat-actions">
       <button class="chat-action-btn" data-action="emails">Load emails</button>
       <button class="chat-action-btn" data-action="granola">Load meeting notes</button>
       <button class="chat-action-btn chat-clear-btn" data-action="clear">Clear chat</button>
-    </div>
+    </div>`}
   `;
 
-  const msgsEl    = container.querySelector(`#chat-msgs-${entry.id}`);
-  const inputEl   = container.querySelector(`#chat-input-${entry.id}`);
-  const sendBtn   = container.querySelector(`#chat-send-${entry.id}`);
-  const statusEl  = container.querySelector(`#chat-email-status-${entry.id}`);
+  const msgsEl    = container.querySelector(`#chat-msgs-${panelId}`);
+  const inputEl   = container.querySelector(`#chat-input-${panelId}`);
+  const sendBtn   = container.querySelector(`#chat-send-${panelId}`);
+  const statusEl  = container.querySelector(`#chat-email-status-${panelId}`);
 
-  let emailContext  = null;
-  let granolaContext = null;
+  // Auto-include cached emails so context is always rich without manual "Load emails"
+  let emailContext = (entry.cachedEmails?.length)
+    ? entry.cachedEmails.slice(0, 15).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet }))
+    : null;
+  // Pre-load context: check override map first, then fall back to cached meeting data on the entry
+  let granolaContext = _chatContextOverrides[chatKey]
+    || entry.cachedMeetingTranscript
+    || entry.cachedMeetingNotes
+    || null;
 
   function renderHistory() {
     msgsEl.innerHTML = history.length === 0
       ? `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.</div>`
-      : history.map(m => `
-          <div class="chat-msg chat-msg-${m.role}">
-            <div class="chat-msg-bubble">${escapeHtml(m.content[0]?.text || m.content)}</div>
-          </div>`).join('');
+      : history.map((m, idx) => {
+          const text = m.content[0]?.text || m.content;
+          const bubble = m.role === 'assistant'
+            ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escapeHtml(text))
+            : escapeHtml(text);
+          const isLastAssistant = m.role === 'assistant' && idx === history.length - 1;
+          const followup = isLastAssistant
+            ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
+            : '';
+          return `<div class="chat-msg chat-msg-${m.role}"><div class="chat-msg-bubble">${bubble}</div>${followup}</div>`;
+        }).join('');
     msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    // Bind follow-up chip clicks
+    msgsEl.querySelectorAll('.chat-followup-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        inputEl.value = btn.dataset.followup;
+        inputEl.focus();
+        send();
+      });
+    });
   }
 
   function saveHistory() {
@@ -61,7 +95,9 @@ function buildChatPanel(container, entry) {
     sendBtn.disabled = true;
     sendBtn.textContent = '…';
 
-    const context = buildContext(entry, emailContext, granolaContext);
+    // Always read the freshest override at send time — handles Granola arriving after panel was built
+    const effectiveGranola = _chatContextOverrides[chatKey] || granolaContext;
+    const context = buildContext(entry, emailContext, effectiveGranola);
 
     const apiMessages = history.map(m => ({
       role: m.role,
@@ -149,12 +185,12 @@ function buildChatPanel(container, entry) {
         showStatus('Granola not connected. Connect it in Preferences.', 'err');
         return;
       }
-      if (!result?.notes) {
+      if (!result?.notes && !result?.transcript) {
         showStatus('No Granola notes found for this company.', 'info');
         return;
       }
-      granolaContext = result.notes;
-      showStatus('Meeting notes loaded into context.', 'ok');
+      granolaContext = result.transcript || result.notes;
+      showStatus(`Meeting ${result.transcript ? 'transcripts' : 'notes'} loaded into context.`, 'ok');
     }
   });
 
@@ -166,10 +202,29 @@ function buildChatPanel(container, entry) {
   }
 
   renderHistory();
+
+  // Auto-fetch fresh meeting notes in background — skip if entry already has cached notes
+  if (!granolaContext && !entry.cachedMeetingTranscript && !entry.cachedMeetingNotes) {
+    const contactNames = (entry.knownContacts || []).map(c => c.name).filter(Boolean);
+    chrome.runtime.sendMessage(
+      { type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames },
+      result => {
+        void chrome.runtime.lastError;
+        const notes = result?.transcript || result?.notes;
+        if (notes) {
+          granolaContext = notes;
+          showStatus('Meeting notes loaded into context.', 'ok');
+        }
+      }
+    );
+  }
 }
 
 function buildContext(entry, emails, granolaNote) {
+  const now = new Date();
   return {
+    todayDate: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+    todayTimestamp: now.getTime(),
     type: entry.type || 'company',
     company: entry.company,
     jobTitle: entry.jobTitle || null,
@@ -178,34 +233,52 @@ function buildContext(entry, emails, granolaNote) {
     tags: entry.tags || [],
     intelligence: entry.intelligence || null,
     jobMatch: entry.jobMatch || null,
+    jobDescription: entry.jobDescription || null,
     reviews: entry.reviews || [],
     leaders: entry.leaders || [],
     employees: entry.employees || null,
     funding: entry.funding || null,
-    emails: emails || [],
+    knownContacts: entry.knownContacts || [],
+    // Full emails with snippets
+    emails: emails || (entry.cachedEmails || []).slice(0, 20).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet })),
+    // Structured per-meeting data with full transcripts
+    meetings: (entry.cachedMeetings || []),
+    // Joined transcript fallback (used if no structured meetings)
     granolaNote: granolaNote || null,
   };
 }
 
 // ── Activity helpers (used by company.js + opportunity.js) ────────────────────
 
+function stripHtmlTags(text) {
+  if (!text) return '';
+  if (!/<[a-z]/i.test(text)) return text; // not HTML, skip
+  return text
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function stripQuotedContent(body) {
   if (!body) return '';
+  body = stripHtmlTags(body);
+  // Truncate at first inline "On [date]... wrote:" quote starter (handles mid-paragraph quoting)
+  body = body.replace(/\s+On [A-Z][a-z]{2},?\s[\s\S]{5,120}?wrote:\s*>[\s\S]*/m, '');
+  body = body.replace(/\s+On [A-Z][a-z]{2},?\s[\s\S]{5,120}?wrote:[\s\S]*/m, '');
   const lines = body.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // Stop at common quote headers: "On [date], ... wrote:"
     if (/^On .{5,100} wrote:/.test(line)) break;
     if (/^On .{5,50}$/.test(line) && i + 1 < lines.length && /wrote:/.test(lines[i + 1])) break;
-    // Stop at forwarded message headers
     if (/^-{3,}\s*(Original Message|Forwarded message)\s*-{3,}/i.test(line)) break;
     if (/^From:\s+\S/.test(line) && i > 0 && lines[i - 1].trim() === '') break;
-    // Skip lines that are purely quoting (start with >)
-    if (/^>/.test(line)) continue;
+    if (/^>/.test(line.trim())) continue;
     out.push(line);
   }
-  // Trim trailing blank lines and separator lines
   while (out.length && /^[\s\-_=*]+$/.test(out[out.length - 1])) out.pop();
   return out.join('\n').trim();
 }

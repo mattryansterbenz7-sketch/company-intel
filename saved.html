@@ -25,7 +25,7 @@
     .search-input::placeholder { color: #b0c1d4; }
 
     .toolbar-type  { padding-top: 10px; padding-bottom: 10px; border-top: none; }
-    .toolbar-stars { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
+    .toolbar-stars { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow: visible; flex-wrap: nowrap; }
     .toolbar-status { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
     .toolbar-tags  { overflow-x: auto; flex-wrap: nowrap; padding-top: 8px; padding-bottom: 8px; }
 
@@ -40,9 +40,9 @@
     .rating-dropdown-arrow { font-size: 11px; color: #7c98b6; transition: transform 0.15s; }
     .rating-dropdown-btn.open .rating-dropdown-arrow { transform: rotate(180deg); }
     .rating-dropdown-menu {
-      display: none; position: absolute; top: calc(100% + 6px); left: 0;
+      display: none; position: fixed;
       background: #fff; border: 1px solid #dfe3eb; border-radius: 10px;
-      box-shadow: 0 4px 20px rgba(45,62,80,0.15); z-index: 200;
+      box-shadow: 0 4px 20px rgba(45,62,80,0.15); z-index: 9000;
       min-width: 160px; padding: 6px 0; overflow: hidden;
     }
     .rating-dropdown-menu.open { display: block; }
@@ -92,6 +92,8 @@
     .card-company { font-size: 16px; font-weight: 700; color: #2d3e50; text-decoration: none; cursor: pointer; }
     .card-company:hover { color: #0077b5; }
     .card-job { font-size: 12px; color: #7c98b6; margin-top: 3px; }
+    .card-job-link { color: #0077b5; text-decoration: none; font-weight: 600; }
+    .card-job-link:hover { text-decoration: underline; }
     .card-delete { background: none; border: none; color: #b0c1d4; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex-shrink: 0; transition: color 0.15s; }
     .card-delete:hover { color: #e5483b; }
     .card-category { display: inline-block; font-size: 11px; color: #FF7A59; background: rgba(255,122,89,0.08); border: 1px solid rgba(255,122,89,0.25); border-radius: 20px; padding: 2px 10px; font-weight: 600; }
@@ -193,13 +195,14 @@
     .tag-filter-btn:not(.active):hover { opacity: 0.8; }
 
     /* ── Kanban board ── */
-    .kanban-board { display: none; gap: 14px; padding: 20px 32px 40px; overflow-x: auto; min-height: calc(100vh - 220px); align-items: flex-start; background: #f5f8fa; }
-    .kanban-col { flex-shrink: 0; width: 280px; display: flex; flex-direction: column; }
-    .kanban-col-header { padding: 10px 14px; border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: space-between; border: 1px solid; border-bottom: none; }
+    .kanban-board { display: none; gap: 14px; padding: 20px 32px 40px; overflow-x: auto; height: calc(100vh - 220px); align-items: stretch; background: #f5f8fa; }
+    .kanban-col { flex-shrink: 0; width: 280px; display: flex; flex-direction: column; min-height: 0; }
+    .kanban-col-header { padding: 10px 14px; border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: space-between; border: 1px solid; border-bottom: none; flex-shrink: 0; }
     .kanban-col-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
     .kanban-col-count { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 1px 8px; background: rgba(0,0,0,0.12); }
-    .kanban-cards { display: flex; flex-direction: column; gap: 8px; min-height: 100px; border-radius: 0 0 10px 10px; padding: 10px 8px; border: 1px solid; border-top: none; transition: background 0.15s; }
+    .kanban-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; border-radius: 0 0 10px 10px; padding: 10px 8px; border: 1px solid; border-top: none; transition: background 0.15s; }
     .kanban-cards.drag-over { background: rgba(255,122,89,0.05) !important; }
+    .kanban-col-header.drag-over { filter: brightness(1.1); outline: 2px solid rgba(255,122,89,0.6); outline-offset: -2px; }
     .kanban-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 13px; display: flex; flex-direction: column; gap: 8px; cursor: grab; transition: box-shadow 0.15s, border-color 0.15s; user-select: none; box-shadow: 0 1px 3px rgba(45,62,80,0.06); }
     .kanban-card:hover { border-color: #FF7A59; box-shadow: 0 3px 10px rgba(45,62,80,0.1); }
     .kanban-card.dragging { opacity: 0.35; cursor: grabbing; }
@@ -208,6 +211,17 @@
     .kanban-card-job { font-size: 12px; color: #7c98b6; margin-top: 2px; }
     .kanban-card-oneliner { font-size: 12px; color: #7c98b6; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .kanban-empty { font-size: 12px; color: #b0c1d4; text-align: center; padding: 24px 0; }
+    .kanban-last-activity { font-size: 12px; color: #33475b; } .kanban-last-activity span { color: #33475b; font-weight: 600; }
+    .kanban-next-step { display: flex; flex-direction: column; gap: 6px; }
+    .kanban-next-step-row { display: flex; align-items: center; gap: 8px; }
+    .kanban-field-label { font-size: 11px; color: #33475b; white-space: nowrap; width: 88px; flex-shrink: 0; }
+    .kanban-next-step-input::placeholder { color: #7c98b6; }
+    .kanban-next-step-date::placeholder { color: #7c98b6; }
+    .kanban-next-step-input { flex: 1; font-size: 12px; padding: 4px 7px; border: 1px solid #dfe3eb; border-radius: 5px; background: #f5f8fa; color: #2d3e50; outline: none; }
+    .kanban-next-step-input:focus { border-color: #FF7A59; background: #fff; }
+    .kanban-next-step-date { flex: 1; font-size: 12px; padding: 4px 7px; border: 1px solid #dfe3eb; border-radius: 5px; background: #f5f8fa; color: #2d3e50; outline: none; }
+    .kanban-next-step-date:focus { border-color: #FF7A59; background: #fff; }
+    input[type="date"]:not(.has-value):not(:focus)::-webkit-datetime-edit { color: transparent; }
     .kanban-card .card-notes { font-size: 12px; min-height: 42px; cursor: auto; background: #f5f8fa; border-color: #dfe3eb; color: #516f90; }
     .kanban-card .card-notes::placeholder { color: #b0c1d4; }
 
@@ -223,9 +237,59 @@
     .kanban-details .card-analysis { border-radius: 6px; margin-top: 2px; }
 
     /* ── Stage editor modal ── */
+    /* ── Activity & Goals ── */
+    .activity-section { padding: 20px 32px 22px; border-bottom: 2px solid #dfe3eb; background: #f5f8fa; }
+    .activity-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+    .activity-head-left { display: flex; flex-direction: column; gap: 3px; }
+    .activity-section-title { font-size: 10px; font-weight: 700; color: #7c98b6; letter-spacing: 0.07em; text-transform: uppercase; }
+    .activity-period-label { font-size: 14px; font-weight: 700; color: #2d3e50; }
+    .period-tabs { display: flex; gap: 2px; background: #e2e8f0; border-radius: 8px; padding: 2px; flex-shrink: 0; }
+    .period-tab { font-size: 12px; font-weight: 600; color: #7c98b6; border: none; background: none; border-radius: 6px; padding: 5px 13px; cursor: pointer; font-family: inherit; transition: all 0.12s; }
+    .period-tab.active { background: #fff; color: #2d3e50; box-shadow: 0 1px 3px rgba(45,62,80,0.12); }
+    .activity-funnel { display: flex; align-items: stretch; overflow-x: auto; border: 1px solid #dfe3eb; border-radius: 10px; background: #fff; margin-bottom: 16px; }
+    .funnel-stage { flex: 1; min-width: 80px; display: flex; flex-direction: column; align-items: center; padding: 11px 8px; border-right: 1px solid #f0f4f8; }
+    .funnel-stage:last-child { border-right: none; }
+    .funnel-count { font-size: 20px; font-weight: 800; line-height: 1; }
+    .funnel-label { font-size: 9px; font-weight: 700; color: #7c98b6; letter-spacing: 0.05em; text-transform: uppercase; margin-top: 5px; text-align: center; line-height: 1.3; }
+    .funnel-arrow { align-self: center; color: #dfe3eb; font-size: 18px; flex-shrink: 0; padding: 0 2px; }
+    .activity-goals-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .goal-card { display: flex; align-items: center; gap: 14px; background: #fff; border: 1.5px solid #dfe3eb; border-radius: 12px; padding: 14px 18px; cursor: pointer; transition: border-color 0.15s; user-select: none; min-width: 155px; }
+    .goal-card:hover { border-color: #b0c1d4; }
+    .goal-card.editing { border-color: #FF7A59; cursor: default; }
+    .goal-ring { flex-shrink: 0; }
+    .goal-text { display: flex; flex-direction: column; gap: 2px; }
+    .goal-fraction { font-size: 20px; font-weight: 800; color: #2d3e50; line-height: 1.1; }
+    .goal-denom { font-size: 14px; color: #7c98b6; font-weight: 600; }
+    .goal-metric-label { font-size: 12px; color: #7c98b6; }
+    .goal-edit-hint { font-size: 10px; color: #b0c1d4; }
+    .goal-edit-form { display: none; flex-direction: column; gap: 6px; }
+    .goal-card.editing .goal-text { display: none; }
+    .goal-card.editing .goal-edit-form { display: flex; }
+    .goal-edit-label { font-size: 11px; color: #7c98b6; font-weight: 700; }
+    .goal-edit-input { width: 65px; padding: 5px 8px; border: 1.5px solid #FF7A59; border-radius: 6px; font-size: 15px; font-weight: 700; color: #2d3e50; outline: none; font-family: inherit; text-align: center; }
+    .goal-save-btn-inline { background: #FF7A59; color: #fff; border: none; border-radius: 6px; padding: 5px 11px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .goal-cancel-btn { background: none; border: 1px solid #dfe3eb; border-radius: 6px; padding: 5px 8px; font-size: 12px; color: #7c98b6; cursor: pointer; font-family: inherit; }
+    .activity-date-row { display: flex; flex-direction: column; gap: 6px; }
+    .act-auto-badge { font-size: 10px; font-weight: 600; color: #b0c1d4; background: #f0f4f8; border-radius: 4px; padding: 1px 5px; vertical-align: middle; }
+    .act-date-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .act-date-input { padding: 5px 8px; border: 1.5px solid #dfe3eb; border-radius: 6px; font-size: 12px; color: #2d3e50; font-family: inherit; outline: none; }
+    .act-date-input:focus { border-color: #FF7A59; }
+    .act-date-apply { background: #FF7A59; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .act-date-reset { background: none; border: 1px solid #dfe3eb; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #7c98b6; cursor: pointer; font-family: inherit; }
     .stage-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1000; align-items: center; justify-content: center; }
-    .stage-editor-modal { background: #fff; border: 1px solid #dfe3eb; border-radius: 16px; width: 480px; max-width: 95vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(45,62,80,0.2); }
+    .stage-editor-modal { background: #fff; border: 1px solid #dfe3eb; border-radius: 16px; width: 540px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(45,62,80,0.2); }
     .stage-editor-header { padding: 20px 24px 16px; border-bottom: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; }
+    .stage-editor-tabs { display: flex; gap: 0; border-bottom: 1px solid #eaf0f6; }
+    .stage-tab-btn { flex: 1; background: none; border: none; border-bottom: 3px solid transparent; padding: 10px 16px; font-size: 13px; font-weight: 600; color: #7c98b6; cursor: pointer; font-family: inherit; transition: all 0.15s; margin-bottom: -1px; }
+    .stage-tab-btn:hover { color: #33475b; }
+    .stage-tab-btn.active { color: #FF7A59; border-bottom-color: #FF7A59; }
+    .stage-celebrations-list { padding: 10px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .celeb-row { display: flex; align-items: center; gap: 10px; background: #f5f8fa; border: 1px solid #dfe3eb; border-radius: 10px; padding: 9px 12px; }
+    .celeb-stage-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .celeb-stage-name { flex: 1; font-size: 13px; font-weight: 600; color: #33475b; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .celeb-default-badge { font-size: 10px; font-weight: 500; color: #b0c1d4; margin-left: 6px; font-style: italic; }
+    .celeb-select { background: #fff; border: 1px solid #dfe3eb; border-radius: 6px; color: #33475b; font-size: 12px; padding: 5px 8px; cursor: pointer; font-family: inherit; max-width: 130px; }
+    .celeb-select:focus { outline: none; border-color: #FF7A59; }
     .stage-editor-title { font-size: 16px; font-weight: 700; color: #2d3e50; }
     .stage-editor-subtitle { font-size: 12px; color: #7c98b6; margin-top: 3px; }
     .stage-editor-x { background: none; border: none; color: #b0c1d4; font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
@@ -245,6 +309,16 @@
     .stage-editor-footer { padding: 16px 24px; border-top: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .stage-save-btn { background: #FF7A59; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; padding: 9px 24px; cursor: pointer; transition: background 0.15s; }
     .stage-save-btn:hover { background: #e5612a; }
+
+    /* ── Inline color picker popover ── */
+    #color-picker-popover { display: none; position: fixed; z-index: 9999; background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(45,62,80,0.18); padding: 8px; flex-wrap: wrap; gap: 6px; width: 176px; }
+    .cp-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform 0.12s; flex-shrink: 0; }
+    .cp-swatch:hover { transform: scale(1.3); }
+    .cp-swatch.active { border-color: #2d3e50 !important; box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor; }
+    .tag-swatch-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; cursor: pointer; display: inline-block; transition: transform 0.12s; }
+    .tag-swatch-dot:hover { transform: scale(1.5); }
+    .stage-swatch-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; cursor: pointer; display: inline-block; transition: transform 0.12s; }
+    .stage-swatch-dot:hover { transform: scale(1.5); }
 
     /* ── Opportunity / company action links ── */
     .card-link-opp { color: #FF7A59; font-weight: 700; }
@@ -272,6 +346,9 @@
     <button class="stage-add-btn" id="edit-stages-btn" style="margin-left:auto">⚙ Edit Stages</button>
   </div>
 
+  <div id="activity-section" class="activity-section"></div>
+  <div id="color-picker-popover"></div>
+
   <div class="stage-editor-overlay" id="stage-editor-modal">
     <div class="stage-editor-modal">
       <div class="stage-editor-header">
@@ -281,7 +358,12 @@
         </div>
         <button class="stage-editor-x" id="stage-editor-close">✕</button>
       </div>
+      <div class="stage-editor-tabs" id="stage-editor-tabs">
+        <button class="stage-tab-btn active" data-tab="stages">Stages</button>
+        <button class="stage-tab-btn" data-tab="celebrations">🎉 Celebrations</button>
+      </div>
       <div class="stage-editor-list" id="stage-editor-list"></div>
+      <div class="stage-celebrations-list" id="stage-celebrations-list" style="display:none"></div>
       <div class="stage-editor-footer">
         <button class="stage-add-btn" id="stage-editor-add">+ Add Stage</button>
         <button class="stage-save-btn" id="stage-editor-save">Save Stages</button>

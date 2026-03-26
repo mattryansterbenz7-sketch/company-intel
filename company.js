@@ -6,6 +6,7 @@ let allKnownTags = [];
 let customCompanyStages = [];
 let customOpportunityStages = [];
 let customFieldDefs = []; // user-created fields
+let gmailUserEmail = ''; // user's own Gmail address, used to exclude self from Known Contacts
 
 const DEFAULT_FIELD_DEFS = [
   { id: 'companyWebsite',  label: 'Website',   type: 'url'  },
@@ -17,9 +18,9 @@ const DEFAULT_FIELD_DEFS = [
 ];
 
 const DEFAULT_LAYOUT = {
-  left:  ['properties', 'tags'],
+  left:  ['opportunity', 'tags'],
   main:  [], // replaced by hardcoded hub tabs
-  right: ['contacts', 'leadership', 'opportunity', 'hiring'],
+  right: ['contacts', 'leadership', 'hiring'],
 };
 
 const PANEL_TITLES = {
@@ -32,8 +33,8 @@ const PANEL_TITLES = {
   intel:         'Company Intel',
   reviews:       'Employee Reviews',
   leadership:    'Leadership',
-  contacts:      'Known Contacts',
-  opportunity:   'Opportunity',
+  contacts:      'Contacts',
+  opportunity:   'Overview',
   hiring:        'Hiring Signals',
   activity:      'Activity',
   chat:          'Ask AI',
@@ -67,15 +68,29 @@ function init() {
   const id = new URLSearchParams(location.search).get('id');
   if (!id) { showError('No company ID specified.'); return; }
 
-  chrome.storage.local.get(['savedCompanies', 'allTags', 'companyStages', 'opportunityStages', 'customStages', 'companyFieldDefs', 'researchCache'], data => {
+  chrome.storage.local.get(['savedCompanies', 'allTags', 'companyStages', 'opportunityStages', 'customStages', 'companyFieldDefs', 'researchCache', 'gmailUserEmail'], data => {
     allCompanies = data.savedCompanies || [];
-    allKnownTags = data.allTags || [];
+    // Derive tags from actual entries — allTags can get stale if tags are removed from entries
+    allKnownTags = [...new Set(allCompanies.flatMap(c => c.tags || []))].sort();
     customCompanyStages     = data.companyStages     || DEFAULT_COMPANY_STAGES;
     customOpportunityStages = data.opportunityStages || data.customStages || DEFAULT_OPP_STAGES;
     customFieldDefs = data.companyFieldDefs || [];
-
     entry = allCompanies.find(c => c.id === id);
     if (!entry) { showError('Company not found.'); return; }
+
+    gmailUserEmail = (data.gmailUserEmail || entry.gmailUserEmail || '').toLowerCase();
+
+    // Deduplicate existing contacts by name (merges split records like two Noah Maffitts)
+    if (entry.knownContacts?.length) {
+      const deduped = deduplicateContacts(entry.knownContacts);
+      if (deduped.length !== entry.knownContacts.length) {
+        entry = { ...entry, knownContacts: deduped };
+        saveEntry({ knownContacts: deduped });
+      }
+    }
+
+    // Extract contacts from cached emails immediately (purges self, finds any missed contacts)
+    if (entry.cachedEmails?.length) applyContactsFromEmails(entry.cachedEmails);
 
     // Fill missing firmographic fields from research cache (display-only, not persisted)
     const cached = (data.researchCache || {})[entry.company?.toLowerCase()]?.data;
@@ -117,6 +132,14 @@ function init() {
     panelLayout.main = [];
     // Notes moved to hub Notes tab — remove from left column
     panelLayout.left = panelLayout.left.filter(p => p !== 'notes');
+    // Chat replaced by floating chat — remove from all columns
+    ['left','main','right'].forEach(col => { panelLayout[col] = panelLayout[col].filter(p => p !== 'chat'); });
+    // Opportunity moved to top-left — remove from right, ensure it's first in left
+    panelLayout.right = panelLayout.right.filter(p => p !== 'opportunity');
+    if (!panelLayout.left.includes('opportunity')) panelLayout.left.unshift('opportunity');
+    else if (panelLayout.left[0] !== 'opportunity') {
+      panelLayout.left = ['opportunity', ...panelLayout.left.filter(p => p !== 'opportunity')];
+    }
 
     // Ensure all default panels are present
     const placed = new Set([...panelLayout.left, ...panelLayout.main, ...panelLayout.right]);
@@ -129,6 +152,25 @@ function init() {
     document.title = `${entry.company} — CompanyIntel`;
     renderHeader();
     renderColumns();
+    if (typeof initChatPanels === 'function') initChatPanels(entry);
+    initFloatingChat();
+
+    // Auto-refresh on open — show cache immediately, fetch fresh in background
+    loadHubEmails(true);
+    loadHubMeetings(false);
+    maybeRefreshDeepFitAnalysis();
+
+    const focus = new URLSearchParams(location.search).get('focus');
+    if (focus === 'opportunity') {
+      setTimeout(() => {
+        const panel = document.getElementById('panel-opportunity');
+        if (panel) {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          panel.classList.add('panel-focus-highlight');
+          setTimeout(() => panel.classList.remove('panel-focus-highlight'), 2000);
+        }
+      }, 150);
+    }
   });
 }
 
@@ -174,9 +216,12 @@ function renderHeader() {
   ).join('');
 
   const nameVal = (entry.company || '').replace(/"/g, '&quot;');
-  const oppStageLabel = entry.isOpportunity
-    ? (customOpportunityStages.find(s => s.key === entry.jobStage)?.label || entry.jobStage || 'In Pipeline')
+  const oppStageColor = entry.isOpportunity
+    ? stageColor(entry.jobStage || 'needs_review', customOpportunityStages)
     : null;
+  const oppStageOptions = customOpportunityStages.map(s =>
+    `<option value="${s.key}" ${(entry.jobStage || 'needs_review') === s.key ? 'selected' : ''}>${s.label}</option>`
+  ).join('');
 
   const hdr = document.getElementById('co-header');
   hdr.innerHTML = `
@@ -186,13 +231,17 @@ function renderHeader() {
     <input class="hdr-name-input" id="hdr-name" value="${nameVal}" placeholder="Company name">
     <div class="hdr-divider"></div>
     <div class="hdr-spacer"></div>
-    <select class="hdr-status" id="hdr-status" style="border-color:${statusColor};color:${statusColor}">
-      ${statusOptions}
-    </select>
+    <div class="hdr-stage-group">
+      <span class="hdr-stage-label">Company</span>
+      <select class="hdr-status" id="hdr-status" style="border-color:${statusColor};color:${statusColor}">
+        ${statusOptions}
+      </select>
+    </div>
     <div class="hdr-stars" id="hdr-stars">${stars}</div>
     ${entry.isOpportunity
-      ? `<button class="hdr-opp-btn has-opp" id="hdr-view-pipeline">${oppStageLabel} →</button>`
+      ? `<div class="hdr-stage-group"><span class="hdr-stage-label">Opportunity</span><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor};color:${oppStageColor}">${oppStageOptions}</select></div>`
       : `<button class="hdr-opp-btn" id="hdr-add-opp">+ Add to Pipeline</button>`}
+    <button class="hdr-refresh-btn" id="hdr-refresh-btn" title="Refresh emails &amp; meetings"><span class="hdr-refresh-icon">↻</span></button>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Setup</a>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('docs.html')}" target="_blank" style="margin-left:4px">Docs</a>
   `;
@@ -217,6 +266,19 @@ function renderHeader() {
     saveEntry({ status: sel.value });
   });
 
+  document.getElementById('hdr-opp-stage')?.addEventListener('change', e => {
+    const sel = e.target;
+    const c = stageColor(sel.value, customOpportunityStages);
+    sel.style.borderColor = c; sel.style.color = c;
+    const toIdx = customOpportunityStages.findIndex(s => s.key === sel.value);
+    const idx = k => customOpportunityStages.findIndex(s => s.key === k);
+    const clears = {};
+    if (entry.appliedAt     && toIdx < idx(customOpportunityStages.find(s => /applied/i.test(s.key))?.key))        clears.appliedAt     = null;
+    if (entry.introAt       && toIdx < idx(customOpportunityStages.find(s => /intro_request/i.test(s.key))?.key))  clears.introAt       = null;
+    if (entry.interviewedAt && toIdx < idx(customOpportunityStages.find(s => /^conversations?$/i.test(s.key))?.key)) clears.interviewedAt = null;
+    saveEntry({ jobStage: sel.value, ...clears });
+  });
+
   document.getElementById('hdr-stars').querySelectorAll('.hdr-star').forEach(btn => {
     btn.addEventListener('click', () => {
       const val = parseInt(btn.dataset.val);
@@ -230,6 +292,18 @@ function renderHeader() {
 
   const viewPipelineBtn = document.getElementById('hdr-view-pipeline');
   if (viewPipelineBtn) viewPipelineBtn.addEventListener('click', () => renderPanel('opportunity'));
+
+  const refreshBtn = document.getElementById('hdr-refresh-btn');
+  if (refreshBtn) refreshBtn.addEventListener('click', () => {
+    refreshBtn.classList.add('spinning');
+    refreshBtn.disabled = true;
+    loadHubEmails(true);
+    loadHubMeetings(true);
+    setTimeout(() => {
+      refreshBtn.classList.remove('spinning');
+      refreshBtn.disabled = false;
+    }, 2000);
+  });
 }
 
 function commitUrl(field, val) {
@@ -248,15 +322,22 @@ function addToOpportunityPipeline() {
 function createOpportunity() { addToOpportunityPipeline(); } // backward compat
 
 function scoreToVerdict(score) {
-  if (score >= 8) return { label: 'Strong Match', cls: 'high' };
-  if (score >= 6) return { label: 'Good Match',   cls: 'mid' };
-  if (score >= 4) return { label: 'Mixed Signals', cls: 'mixed' };
-  return              { label: 'Likely Not a Fit', cls: 'low' };
+  if (score >= 8) return { label: 'Strong Match',     cls: 'high',  color: '#059669' };
+  if (score >= 6) return { label: 'Good Match',       cls: 'mid',   color: '#2563eb' };
+  if (score >= 4) return { label: 'Mixed Signals',    cls: 'mixed', color: '#d97706' };
+  return                 { label: 'Likely Not a Fit', cls: 'low',   color: '#dc2626' };
 }
 
 function buildOpportunity() {
+  const propsHtml = buildProperties();
+
   if (!entry.isOpportunity) {
-    return `<button class="new-opp-btn" id="add-opp-btn">+ Add to Opportunity Pipeline</button>`;
+    return `${propsHtml}
+    <div id="prop-add-area">
+      <button class="prop-add-btn" id="prop-add-btn">+ Add field</button>
+    </div>
+    <div class="opp-divider"></div>
+    <button class="new-opp-btn" id="add-opp-btn">+ Add to Opportunity Pipeline</button>`;
   }
 
   const stageOptions = customOpportunityStages.map(s =>
@@ -280,7 +361,8 @@ function buildOpportunity() {
     ? `<div class="prop-row"><span class="prop-label">Posting</span><div class="prop-val-wrap"><a class="prop-open-link" href="${entry.jobUrl}" target="_blank">View Job ↗</a></div></div>`
     : '';
 
-  return `
+  return `${propsHtml}
+    <div class="opp-divider"></div>
     <div class="prop-row">
       <span class="prop-label">Stage</span>
       <div class="prop-val-wrap">
@@ -295,7 +377,30 @@ function buildOpportunity() {
     </div>
     ${jobUrlHtml}
     ${matchHtml}
-    <button class="prop-add-cancel" id="remove-from-pipeline-btn" style="font-size:11px;color:#b0c1d4;margin-top:8px;padding:2px 0">Remove from pipeline</button>
+    <div class="prop-row">
+      <span class="prop-label">Next Step</span>
+      <div class="prop-val-wrap">
+        <input class="prop-input ${!entry.nextStep ? 'prop-empty' : ''}" id="opp-next-step-input" value="${(entry.nextStep || '').replace(/"/g,'&quot;')}" placeholder="e.g. Send proposal…">
+      </div>
+    </div>
+    <div class="prop-row">
+      <span class="prop-label">Next Step Date</span>
+      <div class="prop-val-wrap">
+        <input class="prop-input${entry.nextStepDate ? ' has-value' : ''}" id="opp-next-step-date" type="date" value="${entry.nextStepDate || ''}">
+      </div>
+    </div>
+    ${(() => {
+      const ts = Math.max(entry.cachedEmailsAt || 0, entry.cachedMeetingNotesAt || 0, entry.cachedGranolaAt || 0, entry.savedAt || 0);
+      if (!ts) return '';
+      const d = new Date(ts);
+      return `<div class="prop-row">
+        <span class="prop-label">Last Activity</span>
+        <div class="prop-val-wrap"><span>${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+      </div>`;
+    })()}
+    <div id="prop-add-area">
+      <button class="prop-add-btn" id="prop-add-btn">+ Add field</button>
+    </div>
   `;
 }
 
@@ -357,19 +462,11 @@ function renderMainTabs() {
         <textarea class="hub-notes-ta" id="hub-notes-ta" placeholder="Add notes about this company…">${entry.notes || ''}</textarea>
       </div>
       <div class="hub-pane" id="hub-emails">
-        <div class="hub-pane-toolbar" id="emails-toolbar" style="display:none">
-          <span class="hub-cache-age" id="emails-cache-age"></span>
-          <button class="hub-refresh-btn" id="emails-refresh-btn">Refresh</button>
-        </div>
         <div class="p-empty" id="act-emails-status">Loading emails…</div>
         <div id="act-emails-list"></div>
       </div>
       <div class="hub-pane" id="hub-meetings">
-        <div class="hub-pane-toolbar" id="meetings-toolbar" style="display:none">
-          <span class="hub-cache-age" id="meetings-cache-age"></span>
-          <button class="hub-refresh-btn" id="meetings-refresh-btn">Refresh</button>
-        </div>
-        <div class="p-empty" id="act-meetings-status">Loading meeting notes…</div>
+        <div class="p-empty" id="act-meetings-status">Loading meetings…</div>
         <div id="act-meetings-content"></div>
       </div>
     </div>`;
@@ -378,22 +475,162 @@ function renderMainTabs() {
 
 function buildIntelTab() {
   const overview = buildOverview();
-  const intel = buildIntel();
-  const reviews = buildReviews();
+  const intel    = buildIntel();
   const hasIntel = !intel.includes('p-empty');
-  const hasReviews = !reviews.includes('p-empty');
+
+  // Fit section — always shown for opportunities; prompt to add if not
+  const fitHtml = (entry.isOpportunity || entry.jobMatch)
+    ? buildFitSection()
+    : `<div class="hub-section-label">Job Fit Analysis</div>
+       <div class="p-empty" style="text-align:left">Add this company to the Opportunity Pipeline to enable fit analysis against your preferences, meetings, and emails.</div>`;
+
   return `
     <div class="hub-intel-block">${overview}</div>
-    ${hasIntel  ? `<div class="hub-intel-block">${intel}</div>` : ''}
-    ${hasReviews ? `<div class="hub-intel-block"><div class="hub-section-label">Employee Reviews</div>${reviews}</div>` : ''}
-  `;
+    ${hasIntel ? `<div class="hub-intel-block">${intel}</div>` : ''}
+    <div class="hub-intel-block" id="hub-fit-block">${fitHtml}</div>
+    <div class="hub-intel-block" id="hub-reviews-block">
+      <div class="hub-section-label">Employee Reviews</div>
+      ${buildReviews()}
+    </div>
+    <div class="hub-intel-block" id="hub-hiring-block">
+      <div class="hub-section-label">Hiring Signals</div>
+      ${buildHiring()}
+    </div>
+  `.trim();
+}
+
+// Called when the Intel tab is first opened — fetches missing research data and triggers fit analysis
+function initIntelTab() {
+  // Trigger fresh research if reviews or hiring signals are missing
+  const needsResearch = !entry.reviews?.length || !entry.jobListings?.length;
+  if (needsResearch) {
+    const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+    chrome.runtime.sendMessage({ type: 'RESEARCH_COMPANY', company: entry.company, domain }, data => {
+      void chrome.runtime.lastError;
+      if (!data || data.error) return;
+      const updates = {};
+      if (data.reviews?.length && !entry.reviews?.length)     updates.reviews     = data.reviews;
+      if (data.jobListings?.length)                           updates.jobListings  = data.jobListings;
+      if (data.leaders?.length   && !entry.leaders?.length)   updates.leaders     = data.leaders;
+      if (data.intelligence      && !entry.intelligence)      updates.intelligence = data.intelligence;
+      if (!Object.keys(updates).length) return;
+      saveEntry(updates);
+      // Re-render only the sections that changed
+      const reviewsEl = document.getElementById('hub-reviews-block');
+      if (reviewsEl && updates.reviews) reviewsEl.innerHTML = `<div class="hub-section-label">Employee Reviews</div>${buildReviews()}`;
+      const hiringEl  = document.getElementById('hub-hiring-block');
+      if (hiringEl  && updates.jobListings) hiringEl.innerHTML  = `<div class="hub-section-label">Hiring Signals</div>${buildHiring()}`;
+    });
+  }
+
+  // Trigger / refresh deep fit analysis
+  maybeRefreshDeepFitAnalysis();
+}
+
+function maybeRefreshDeepFitAnalysis() {
+  if (!entry.isOpportunity && !entry.jobMatch) return;
+
+  // Determine if we have richer context than just the job posting
+  const hasContext = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
+    entry.cachedEmails?.length || entry.notes);
+
+  // Don't re-generate if analysis is fresh (< 60 min) AND context hasn't changed
+  const age = entry.deepFitAnalysisAt
+    ? (Date.now() - entry.deepFitAnalysisAt) / 60000
+    : Infinity;
+  if (entry.deepFitAnalysis && age < 60) return;
+
+  // No context beyond posting and no existing analysis — skip (not enough to say anything new)
+  if (!hasContext && entry.deepFitAnalysis) return;
+
+  chrome.storage.sync.get(['prefs'], ({ prefs = {} }) => {
+    chrome.runtime.sendMessage({
+      type: 'DEEP_FIT_ANALYSIS',
+      company:     entry.company,
+      jobTitle:    entry.jobTitle || '',
+      jobSummary:      entry.jobMatch?.jobSummary || entry.jobSummary || '',
+      jobSnapshot:     entry.jobSnapshot || '',
+      jobDescription:  entry.jobDescription || '',
+      jobMatch:        entry.jobMatch || {},
+      notes:           entry.notes || '',
+      transcripts:     entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '',
+      emails:          (entry.cachedEmails || []).slice(0, 8).map(e => ({ subject: e.subject, from: e.from, snippet: e.snippet })),
+      prefs
+    }, result => {
+      void chrome.runtime.lastError;
+      if (result?.analysis) {
+        saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
+        // Update only the fit block so other sections aren't disrupted
+        const fitBlock = document.getElementById('hub-fit-block');
+        if (fitBlock) fitBlock.innerHTML = buildFitSection();
+      }
+    });
+  });
+}
+
+function buildFitSection() {
+  const jm         = entry.jobMatch || {};
+  const score      = jm.score;
+  const strongFits = jm.strongFits || [];
+  const redFlags   = jm.redFlags   || jm.watchOuts || [];
+  const jobSummary = jm.jobSummary  || entry.jobSummary || '';
+  const deep       = entry.deepFitAnalysis || '';
+  const v          = score ? scoreToVerdict(score) : null;
+
+  let html = `<div class="hub-section-label">Job Fit Analysis</div>`;
+
+  // Score + verdict row
+  if (score) {
+    html += `<div class="fit-score-row">
+      <span class="fit-score">${score}<span class="fit-score-denom">/10</span></span>
+      <span class="fit-verdict" style="color:${v.color}">${v.label}</span>
+    </div>`;
+  }
+
+  // Refresh button — always available for opportunities
+  html += `<button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-analyze using job posting, meetings, emails &amp; notes">
+    ↻ ${score ? 'Refresh analysis' : 'Run fit analysis'}
+  </button>`;
+
+  // Job summary (from posting)
+  if (jobSummary) {
+    html += `<div class="fit-job-summary">${escapeHtml(jobSummary)}</div>`;
+  }
+
+  // Deep analysis narrative (generated from full context)
+  if (deep) {
+    html += `<div class="fit-deep-analysis">${renderMarkdown(deep)}</div>`;
+  } else if (!score) {
+    html += `<div class="p-empty" style="text-align:left;margin:8px 0">No fit analysis yet. Click "Run fit analysis" above — or save a job posting to automatically generate one.</div>`;
+  }
+
+  // Green flags / Red flags — always shown as side-by-side grid
+  html += `<div class="fit-flags-grid">
+    <div class="fit-flags-col fit-flags-green">
+      <div class="fit-flags-header">✓ Green Flags</div>
+      ${strongFits.length
+        ? strongFits.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
+        : '<div class="fit-flag-none">None identified yet</div>'}
+    </div>
+    <div class="fit-flags-col fit-flags-red">
+      <div class="fit-flags-header">⚠ Red Flags</div>
+      ${redFlags.length
+        ? redFlags.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
+        : '<div class="fit-flag-none">None identified yet</div>'}
+    </div>
+  </div>`;
+
+  return html;
 }
 
 function bindHubTabs() {
   const container = document.querySelector('.hub-tabs-container');
   if (!container) return;
 
-  let emailsLoaded = false, meetingsLoaded = false;
+  let emailsLoaded = false, meetingsLoaded = false, intelInited = false;
+
+  // Init intel immediately (starts active)
+  setTimeout(() => { if (!intelInited) { intelInited = true; initIntelTab(); } }, 0);
 
   container.querySelectorAll('.hub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -402,6 +639,10 @@ function bindHubTabs() {
       tab.classList.add('active');
       document.getElementById('hub-' + tab.dataset.tab)?.classList.add('active');
 
+      if (tab.dataset.tab === 'intel' && !intelInited) {
+        intelInited = true;
+        initIntelTab();
+      }
       if (tab.dataset.tab === 'emails' && !emailsLoaded) {
         emailsLoaded = true;
         loadHubEmails();
@@ -416,8 +657,41 @@ function bindHubTabs() {
   const ta = document.getElementById('hub-notes-ta');
   if (ta) ta.addEventListener('blur', () => saveEntry({ notes: ta.value }));
 
-  document.getElementById('emails-refresh-btn')?.addEventListener('click', () => loadHubEmails(true));
-  document.getElementById('meetings-refresh-btn')?.addEventListener('click', () => loadHubMeetings(true));
+  // Fit analysis refresh button (may be rendered later if intel tab is active)
+  document.addEventListener('click', e => {
+    if (e.target.id !== 'fit-refresh-btn') return;
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = '↻ Analyzing…';
+    const prefs = {};
+    chrome.storage.sync.get(['prefs'], d => {
+      Object.assign(prefs, d.prefs || {});
+      chrome.runtime.sendMessage({
+        type: 'DEEP_FIT_ANALYSIS',
+        company:    entry.company,
+        jobTitle:   entry.jobTitle || '',
+        jobSummary:     entry.jobMatch?.jobSummary || entry.jobSummary || '',
+        jobSnapshot:    entry.jobSnapshot || '',
+        jobDescription: entry.jobDescription || '',
+        jobMatch:       entry.jobMatch || {},
+        notes:          entry.notes || '',
+        transcripts:    entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '',
+        emails:         (entry.cachedEmails || []).slice(0, 8).map(e => ({ subject: e.subject, from: e.from, snippet: e.snippet })),
+        prefs
+      }, result => {
+        void chrome.runtime.lastError;
+        btn.disabled = false;
+        btn.textContent = '↻ Refresh analysis';
+        if (result?.analysis) {
+          saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
+          // Re-render only the fit block so we don't disrupt other sections
+          const fitBlock = document.getElementById('hub-fit-block');
+          if (fitBlock) fitBlock.innerHTML = buildFitSection();
+        }
+      });
+    });
+  }, { capture: true });
+
 }
 
 function formatCacheAge(ts) {
@@ -441,15 +715,13 @@ function renderEmailsFromData(emails) {
 function loadHubEmails(forceRefresh) {
   const statusEl  = document.getElementById('act-emails-status');
   const listEl    = document.getElementById('act-emails-list');
-  const toolbar   = document.getElementById('emails-toolbar');
-  const cacheAgeEl = document.getElementById('emails-cache-age');
   if (!statusEl || !listEl) return;
 
   // Serve from cache if available and not forcing refresh
   if (!forceRefresh && entry.cachedEmails?.length) {
     renderEmailsFromData(entry.cachedEmails);
-    if (toolbar) toolbar.style.display = 'flex';
-    if (cacheAgeEl) cacheAgeEl.textContent = `Updated ${formatCacheAge(entry.cachedEmailsAt)}`;
+    // Still extract any contacts we may have missed from cached emails
+    applyContactsFromEmails(entry.cachedEmails);
     return;
   }
 
@@ -461,63 +733,317 @@ function loadHubEmails(forceRefresh) {
   const linkedinSlug = (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
   const knownContactEmails = (entry.knownContacts || []).map(c => c.email);
   chrome.runtime.sendMessage({ type: 'GMAIL_FETCH_EMAILS', domain, companyName: entry.company || '', linkedinSlug, knownContactEmails }, result => {
+    void chrome.runtime.lastError;
     if (!document.getElementById('act-emails-status')) return; // pane unmounted
     if (result?.error === 'not_connected') { statusEl.textContent = 'Connect Gmail in Setup to see emails.'; return; }
     if (!result?.emails?.length)           { statusEl.textContent = 'No emails found for this company.'; return; }
 
     const now = Date.now();
-    saveEntry({ cachedEmails: result.emails, cachedEmailsAt: now });
-    renderEmailsFromData(result.emails);
-    if (toolbar) toolbar.style.display = 'flex';
-    if (cacheAgeEl) cacheAgeEl.textContent = 'Updated just now';
-
-    const newContacts = extractContactsFromEmails(result.emails);
-    if (newContacts.length) {
-      const merged = [...(entry.knownContacts || []), ...newContacts];
-      saveEntry({ knownContacts: merged });
-      renderPanel('contacts');
-      renderPanel('leadership');
-      bindPanelBodyEvents('contacts');
-      bindPanelBodyEvents('leadership');
+    const emailUpdates = { cachedEmails: result.emails, cachedEmailsAt: now };
+    if (result.userEmail) {
+      emailUpdates.gmailUserEmail = result.userEmail;
+      gmailUserEmail = result.userEmail.toLowerCase(); // update module-level variable immediately
     }
+    saveEntry(emailUpdates);
+    renderEmailsFromData(result.emails);
+    applyContactsFromEmails(result.emails);
   });
 }
 
 function loadHubMeetings(forceRefresh) {
   const statusEl  = document.getElementById('act-meetings-status');
   const contentEl = document.getElementById('act-meetings-content');
-  const toolbar   = document.getElementById('meetings-toolbar');
-  const cacheAgeEl = document.getElementById('meetings-cache-age');
   if (!statusEl || !contentEl) return;
 
-  // Serve from cache if available and not forcing refresh
-  if (!forceRefresh && entry.cachedMeetingNotes) {
+  const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  const knownContactEmails = (entry.knownContacts || []).flatMap(c => [c.email, ...(c.aliases || [])]);
+  const contactNames = (entry.knownContacts || []).map(c => c.name).filter(Boolean);
+
+  // Show cached calendar events immediately — never block UI on fetches
+  if (entry.cachedCalendarEvents?.length) {
     statusEl.style.display = 'none';
-    contentEl.innerHTML = `<div class="meeting-note">${escapeHtml(entry.cachedMeetingNotes)}</div>`;
-    if (toolbar) toolbar.style.display = 'flex';
-    if (cacheAgeEl) cacheAgeEl.textContent = `Updated ${formatCacheAge(entry.cachedMeetingNotesAt)}`;
-    return;
+    renderMeetingsTimeline(entry.cachedCalendarEvents, entry.cachedMeetingNotes);
+  } else {
+    statusEl.textContent = 'Loading meetings…';
   }
 
-  statusEl.style.display = '';
-  statusEl.textContent = 'Loading meeting notes…';
-  contentEl.innerHTML = '';
-
-  chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company }, result => {
+  // Always refresh calendar (fast)
+  chrome.runtime.sendMessage({ type: 'CALENDAR_FETCH_EVENTS', domain, companyName: entry.company, knownContactEmails }, calResult => {
+    void chrome.runtime.lastError;
     if (!document.getElementById('act-meetings-status')) return;
-    if (result?.error === 'not_connected') { statusEl.textContent = 'Connect Granola in Setup to see meeting notes.'; return; }
-    if (!result?.notes)                    { statusEl.textContent = 'No meeting notes found for this company.'; return; }
+    const calEvents = calResult?.events || [];
+    const calError = calResult?.error;
 
-    saveEntry({ cachedMeetingNotes: result.notes, cachedMeetingNotesAt: Date.now() });
-    statusEl.style.display = 'none';
-    contentEl.innerHTML = `<div class="meeting-note">${escapeHtml(result.notes)}</div>`;
-    if (toolbar) toolbar.style.display = 'flex';
-    if (cacheAgeEl) cacheAgeEl.textContent = 'Updated just now';
+    if (calError === 'needs_reauth') {
+      statusEl.textContent = `Calendar access error. Disconnect and reconnect Gmail in Setup.`;
+      statusEl.style.display = '';
+      return;
+    }
+
+    if (calEvents.length) {
+      saveEntry({ cachedCalendarEvents: calEvents });
+      statusEl.style.display = 'none';
+      renderMeetingsTimeline(calEvents, entry.cachedMeetingNotes);
+      // Auto-populate next step from future calendar events if not set
+      if (!entry.nextStep && !entry.nextStepDate) {
+        chrome.runtime.sendMessage({
+          type: 'EXTRACT_NEXT_STEPS',
+          notes: entry.cachedMeetingNotes || null,
+          transcripts: entry.cachedMeetingTranscript || null,
+          calendarEvents: calEvents
+        }, result => {
+          void chrome.runtime.lastError;
+          if (result?.nextStep || result?.nextStepDate) {
+            saveEntry({ nextStep: result.nextStep || null, nextStepDate: result.nextStepDate || null });
+            renderPanel('opportunity');
+          }
+        });
+      }
+    } else if (!entry.cachedCalendarEvents?.length) {
+      statusEl.textContent = calError === 'not_connected' ? 'Connect Gmail in Setup to see calendar events.' : 'No calendar events found.';
+      statusEl.style.display = '';
+    }
+  });
+
+  // Set context overrides from cache so embedded chat panels have context immediately
+  function applyGranolaContextOverrides() {
+    if (typeof setChatContext !== 'function') return;
+    const allCtx = entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '';
+    if (allCtx) {
+      setChatContext(`${entry.id}-meetings`, allCtx); // meetings-tab chat
+      setChatContext(entry.id, allCtx);               // floating chat (uses base entry.id as key)
+    }
+    (entry.cachedMeetings || []).forEach(m => {
+      if (m.transcript) setChatContext(`${entry.id}-meeting-${m.id}`, m.transcript);
+    });
+  }
+  applyGranolaContextOverrides();
+
+  // Refresh Granola only if forced or we have no notes or cache is older than 30 minutes
+  const granolaAge = (entry.cachedMeetingNotes && entry.cachedMeetingNotesAt)
+    ? (Date.now() - entry.cachedMeetingNotesAt) / 60000
+    : Infinity;
+  const missingStructuredMeetings = !entry.cachedMeetings?.length;
+  if (!forceRefresh && granolaAge < 30 && !missingStructuredMeetings) return;
+
+  Promise.race([
+    new Promise(r => {
+      // Extract calendar dates (YYYY-MM-DD) and attendee email handles to guide Granola search
+      const calEvents = entry.cachedCalendarEvents || [];
+      const calendarDates = [...new Set(calEvents.map(e => (e.start || '').slice(0, 10)).filter(Boolean))];
+      const attendeeHandles = [...new Set(
+        calEvents.flatMap(e => (e.attendees || [])
+          .filter(a => !a.self && a.email)
+          .map(a => a.email.split('@')[0].toLowerCase())
+        )
+      )];
+      chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames, calendarDates, attendeeHandles }, result => {
+        void chrome.runtime.lastError;
+        r(result || { notes: null });
+      });
+    }),
+    new Promise(r => setTimeout(() => r({ notes: null, error: 'timeout' }), 20000))
+  ]).then(granolaResult => {
+    if (!document.getElementById('act-meetings-content')) return;
+    const granolaNotes = granolaResult?.notes || null;
+    const granolaTranscript = granolaResult?.transcript || null;
+    const granolaMeetings = granolaResult?.meetings || null;
+    if (granolaNotes || granolaTranscript || granolaMeetings?.length) {
+      saveEntry({
+        cachedMeetingNotes: granolaNotes,
+        cachedMeetingTranscript: granolaTranscript,
+        cachedMeetings: granolaMeetings,
+        cachedMeetingNotesAt: Date.now(),
+      });
+      applyGranolaContextOverrides();
+      const calEvents = entry.cachedCalendarEvents || [];
+      renderMeetingsTimeline(calEvents, granolaNotes);
+
+      // New context arrived — refresh fit analysis (TTL check inside will prevent redundant calls)
+      maybeRefreshDeepFitAnalysis();
+
+      // Auto-populate next step + date if not already set
+      if (!entry.nextStep && !entry.nextStepDate) {
+        chrome.runtime.sendMessage({
+          type: 'EXTRACT_NEXT_STEPS',
+          notes: granolaNotes,
+          transcripts: granolaTranscript,
+          calendarEvents: calEvents
+        }, result => {
+          void chrome.runtime.lastError;
+          if (result?.nextStep || result?.nextStepDate) {
+            saveEntry({
+              nextStep: result.nextStep || null,
+              nextStepDate: result.nextStepDate || null
+            });
+            renderPanel('opportunity');
+          }
+        });
+      }
+    }
+  });
+}
+
+function renderMeetingsTimeline(events, granolaNotes, granolaError) {
+  const contentEl = document.getElementById('act-meetings-content');
+  if (!contentEl) return;
+
+  const meetings = entry.cachedMeetings || [];
+  const allCtx = entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '';
+  let html = '';
+
+  // ── "Ask about all meetings" chat (shown if we have any Granola data) ──────
+  if (meetings.length || allCtx) {
+    html += `
+      <div class="mtg-ask-all">
+        <div class="mtg-ask-all-header">
+          <span class="mtg-folder-icon">▤</span>
+          <div>
+            <div class="mtg-ask-all-title">${escapeHtml(entry.company)}</div>
+            <div class="mtg-ask-all-sub">${meetings.length ? meetings.length + ' meeting' + (meetings.length === 1 ? '' : 's') : 'All meetings'}</div>
+          </div>
+        </div>
+        <div data-chat-panel="${entry.id}"
+             data-chat-key="${entry.id}-meetings"
+             data-chat-placeholder="Ask about all meetings…"
+             data-chat-minimal="1"></div>
+        <div class="mtg-quick-actions">
+          <button class="mtg-quick-btn" data-prompt="Summarize all my meetings with this company">Summarize all</button>
+          <button class="mtg-quick-btn" data-prompt="What were the key decisions from my meetings with this company?">Key decisions</button>
+          <button class="mtg-quick-btn" data-prompt="List all action items from my meetings with this company">Action items</button>
+        </div>
+      </div>`;
+  }
+
+  // ── Meeting list (Granola structured) ──────────────────────────────────────
+  if (meetings.length) {
+    const byDate = {};
+    meetings.forEach(m => {
+      const key = m.date || '';
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(m);
+    });
+
+    html += '<div class="mtg-list">';
+    for (const [dateKey, dayMeetings] of Object.entries(byDate)) {
+      const d = dateKey ? new Date(dateKey + 'T12:00:00') : null;
+      const dateLabel = (d && !isNaN(d))
+        ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        : 'Unknown date';
+      html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
+      for (const m of dayMeetings) {
+        html += `
+          <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}">
+            <span class="mtg-card-icon">▤</span>
+            <div class="mtg-card-body">
+              <div class="mtg-card-title">${escapeHtml(m.title)}</div>
+            </div>
+            ${m.time ? `<span class="mtg-card-time">${escapeHtml(m.time)}</span>` : ''}
+            <span class="mtg-card-arrow">›</span>
+          </div>`;
+      }
+    }
+    html += '</div>';
+
+  } else if (events.length) {
+    // Fallback: calendar-only view
+    const byDate = {};
+    [...events].reverse().forEach(ev => {
+      const d = new Date(ev.start);
+      const key = isNaN(d) ? ev.start : d.toISOString().slice(0, 10);
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(ev);
+    });
+
+    html += '<div class="mtg-list">';
+    for (const [dateKey, dayEvs] of Object.entries(byDate)) {
+      const d = new Date(dateKey + 'T12:00:00');
+      const dateLabel = isNaN(d) ? dateKey : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
+      for (const ev of dayEvs) {
+        const evD = new Date(ev.start);
+        const timeStr = (ev.start.includes('T') && !isNaN(evD))
+          ? evD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : '';
+        const attendees = (ev.attendees || []).filter(a => !a.self).map(a => a.name || a.email).join(', ');
+        html += `
+          <div class="mtg-card mtg-card-cal">
+            <span class="mtg-card-icon mtg-card-icon-cal">◷</span>
+            <div class="mtg-card-body">
+              <div class="mtg-card-title">${escapeHtml(ev.title)}</div>
+              ${attendees ? `<div class="mtg-card-meta">${escapeHtml(attendees)}</div>` : ''}
+            </div>
+            ${timeStr ? `<span class="mtg-card-time">${timeStr}</span>` : ''}
+          </div>`;
+      }
+    }
+    html += '</div>';
+  }
+
+  if (!html) html = '<div class="p-empty">No meetings found.</div>';
+
+  contentEl.innerHTML = html;
+
+  // Init "ask all meetings" chat panel
+  if (typeof initChatPanels === 'function') initChatPanels(entry);
+
+  // Quick-action chips → pre-fill input
+  contentEl.querySelectorAll('.mtg-quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = contentEl.querySelector('.chat-input');
+      if (input) { input.value = btn.dataset.prompt; input.focus(); input.dispatchEvent(new Event('input')); }
+    });
+  });
+
+  // Meeting card click → detail view
+  contentEl.querySelectorAll('.mtg-card[data-meeting-id]').forEach(card => {
+    card.addEventListener('click', () => {
+      const meeting = meetings.find(m => m.id === card.dataset.meetingId);
+      if (meeting) renderMeetingDetail(contentEl, meeting, events, granolaNotes);
+    });
+  });
+}
+
+function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
+  const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
+  const dateLabel = (d && !isNaN(d))
+    ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : (meeting.date || '');
+
+  // Set context for this meeting's chat before rendering
+  if (typeof setChatContext === 'function' && meeting.transcript) {
+    setChatContext(`${entry.id}-meeting-${meeting.id}`, meeting.transcript);
+  }
+
+  contentEl.innerHTML = `
+    <button class="mtg-detail-back" id="mtg-back">← All meetings</button>
+    <div class="mtg-detail-header">
+      ${dateLabel ? `<div class="mtg-detail-date">${escapeHtml(dateLabel)}${meeting.time ? ' · ' + meeting.time : ''}</div>` : ''}
+      <div class="mtg-detail-title">${escapeHtml(meeting.title)}</div>
+    </div>
+    <div class="mtg-detail-chat">
+      <div data-chat-panel="${entry.id}"
+           data-chat-key="${entry.id}-meeting-${meeting.id}"
+           data-chat-placeholder="Ask about this meeting…"
+           data-chat-minimal="1"></div>
+    </div>
+    ${meeting.transcript ? `
+      <details class="mtg-transcript-wrap">
+        <summary class="mtg-transcript-label">Full transcript</summary>
+        <div class="mtg-transcript">${renderMarkdown(meeting.transcript)}</div>
+      </details>` : ''}
+  `;
+
+  if (typeof initChatPanels === 'function') initChatPanels(entry);
+
+  document.getElementById('mtg-back').addEventListener('click', () => {
+    renderMeetingsTimeline(events, granolaNotes);
   });
 }
 
 function buildPanelHTML(pid) {
-  const title = pid === 'properties' ? '' : (PANEL_TITLES[pid] || pid);
+  if (pid === 'properties') return ''; // merged into opportunity panel
+  const title = PANEL_TITLES[pid] || pid;
   const collapsed = !!collapsedPanels[pid];
   const body = buildPanelBody(pid);
   return `
@@ -557,7 +1083,7 @@ function buildPanelBody(pid) {
     case 'opportunities':  return buildOpportunity(); // legacy alias
     case 'hiring':     return buildHiring();
     case 'activity':   return buildActivity();
-    case 'chat':       return `<div data-chat-panel="${entry.id}"></div>`;
+    case 'chat':       return `<button class="open-float-chat-btn" data-action="open-float-chat">✦ Open AI Chat</button>`;
     default: return '<div class="p-empty">No content.</div>';
   }
 }
@@ -584,6 +1110,9 @@ function buildProperties() {
     }
 
     const val = (entry[f.id] || '').replace(/"/g, '&quot;');
+    // Hide empty default metadata fields — only show if they have a value
+    const isMetadataField = ['employees', 'funding', 'founded', 'industry'].includes(f.id);
+    if (isMetadataField && !val) return '';
     const isUrl = f.type === 'url';
     const openLink = isUrl && entry[f.id]
       ? `<a class="prop-open-link" href="${entry[f.id]}" target="_blank">↗</a>` : '';
@@ -597,10 +1126,14 @@ function buildProperties() {
     </div>`;
   }).join('');
 
-  return `<div class="prop-fields" id="prop-fields">${rows}</div>
-    <div id="prop-add-area">
-      <button class="prop-add-btn" id="prop-add-btn">+ Add field</button>
-    </div>`;
+  // Job posting link — shown only for saved opportunities that have a job URL
+  const jobLinkRow = (entry.isOpportunity && entry.jobUrl)
+    ? `<div class="prop-row prop-link-row">
+        <a class="prop-link-display" href="${entry.jobUrl}" target="_blank">📄 View Job Posting ↗</a>
+      </div>`
+    : '';
+
+  return `<div class="prop-fields" id="prop-fields">${rows}${jobLinkRow}</div>`;
 }
 
 function buildStats() {
@@ -650,11 +1183,12 @@ function buildOverview() {
   const oneLiner = entry.oneLiner || intel.oneLiner || '';
   const eli5 = intel.eli5 || '';
   const cat = entry.category || intel.category || '';
-  if (!oneLiner && !eli5 && !cat) return '<div class="p-empty">No overview available.</div>';
+  // Use oneLiner if available; fall back to eli5 if not — never show both
+  const description = oneLiner || eli5;
+  if (!description && !cat) return '<div class="p-empty">No overview available.</div>';
   return `
     ${cat ? `<span class="p-category">${cat}</span>` : ''}
-    ${oneLiner ? `<div class="p-oneliner">${oneLiner}</div>` : ''}
-    ${eli5 ? `<div class="p-section"><div class="p-section-label">In Plain English</div><div class="p-text">${eli5}</div></div>` : ''}
+    ${description ? `<div class="p-oneliner">${description}</div>` : ''}
   `.trim();
 }
 
@@ -682,37 +1216,101 @@ function buildReviews() {
     </div>`).join('');
 }
 
-// Extracts contacts from company domain out of email from/to fields
+// Extract contacts from emails and apply to entry, purging self
+function applyContactsFromEmails(emails) {
+  const { newContacts, detectedUserEmail } = extractContactsFromEmails(emails);
+  const blocked = new Set((entry.removedContacts || []).map(e => e.toLowerCase()));
+  let current = (entry.knownContacts || []).map(c => ({ ...c, aliases: c.aliases ? [...c.aliases] : [] }));
+
+  // Purge user's own email
+  const selfEmail = detectedUserEmail || gmailUserEmail;
+  if (selfEmail) {
+    current = current.filter(c =>
+      c.email.toLowerCase() !== selfEmail &&
+      !c.aliases.some(a => a.toLowerCase() === selfEmail)
+    );
+  }
+
+  let changed = selfEmail && (entry.knownContacts || []).some(c =>
+    c.email.toLowerCase() === selfEmail || (c.aliases || []).some(a => a.toLowerCase() === selfEmail)
+  );
+
+  newContacts.forEach(nc => {
+    // Skip contacts the user has explicitly removed
+    if (blocked.has(nc.email.toLowerCase())) return;
+    // Same name → merge as alias instead of new card
+    const match = current.find(c => namesMatch(c.name, nc.name));
+    if (match) {
+      const emailLower = nc.email.toLowerCase();
+      if (!match.aliases) match.aliases = [];
+      if (match.email !== emailLower && !match.aliases.includes(emailLower)) {
+        match.aliases.push(emailLower);
+        changed = true;
+      }
+    } else {
+      current.push(nc);
+      changed = true;
+    }
+  });
+
+  if (!changed) return;
+  saveEntry({ knownContacts: current });
+  renderPanel('contacts');
+  renderPanel('leadership');
+  bindPanelBodyEvents('contacts');
+  bindPanelBodyEvents('leadership');
+}
+
+// Extracts contacts from all participants in company-related emails
 function extractContactsFromEmails(emails) {
   const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
-  if (!domain) return [];
+  const baseDomain = domain ? domain.split('.')[0].toLowerCase() : '';
+  const isCompanyEmail = email => {
+    const d = (email.split('@')[1] || '').toLowerCase();
+    return d === domain || (baseDomain && d.split('.')[0] === baseDomain);
+  };
+
+  const parseAddrs = field => {
+    if (!field) return [];
+    return field.split(/,\s*/).map(addr => {
+      const m = addr.match(/^(.*?)\s*<([^>]+)>$/) || [null, '', addr.trim()];
+      const name = (m[1] || '').replace(/^["']+|["']+$/g, '').trim();
+      const email = (m[2] || '').trim().toLowerCase();
+      return { name, email };
+    }).filter(a => a.email.includes('@'));
+  };
+
+  // Detect the user's own email: the most frequent non-domain from: address is almost certainly the user
+  const fromFreq = {};
+  emails.forEach(e => {
+    parseAddrs(e.from).forEach(({ email }) => {
+      if (domain && isCompanyEmail(email)) return;
+      fromFreq[email] = (fromFreq[email] || 0) + 1;
+    });
+  });
+  const detectedUserEmail = gmailUserEmail ||
+    (entry.gmailUserEmail || '').toLowerCase() ||
+    Object.entries(fromFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
 
   const existing = new Set((entry.knownContacts || []).map(c => c.email.toLowerCase()));
   const newContacts = [];
 
   emails.forEach(e => {
-    [e.from, e.to].forEach(field => {
-      if (!field) return;
-      field.split(/,\s*/).forEach(addr => {
-        const m = addr.match(/^(.*?)\s*<([^>]+)>$/) || [null, '', addr.trim()];
-        const name = (m[1] || '').replace(/^["']+|["']+$/g, '').trim();
-        const email = (m[2] || '').trim().toLowerCase();
-        if (!email.includes('@')) return;
-        const emailDomain = email.split('@')[1];
-        if (emailDomain !== domain) return;
-        if (existing.has(email)) return;
-        existing.add(email);
-        newContacts.push({
-          name: name || email.split('@')[0],
-          email,
-          source: 'email',
-          detectedAt: Date.now(),
-        });
-      });
+    const allAddrs = [...parseAddrs(e.from), ...parseAddrs(e.to), ...parseAddrs(e.cc)];
+    // Only process emails that involve someone from the company domain
+    const hasCompanyParticipant = domain && allAddrs.some(a => isCompanyEmail(a.email));
+    if (!hasCompanyParticipant && domain) return;
+
+    allAddrs.forEach(({ name, email }) => {
+      if (!email) return;
+      if (detectedUserEmail && email === detectedUserEmail) return;
+      if (existing.has(email)) return;
+      existing.add(email);
+      newContacts.push({ name: name || email.split('@')[0], email, source: 'email', detectedAt: Date.now() });
     });
   });
 
-  return newContacts;
+  return { newContacts, detectedUserEmail };
 }
 
 // Fuzzy name match: both share at least first + last word
@@ -723,6 +1321,23 @@ function namesMatch(a, b) {
     wa[0] === wb[0] && wa[wa.length - 1] === wb[wb.length - 1];
 }
 
+// Merge contacts with the same name into one record with aliases
+function deduplicateContacts(contacts) {
+  const merged = [];
+  contacts.forEach(c => {
+    const existing = merged.find(m => namesMatch(m.name, c.name));
+    if (existing) {
+      const newEmails = [c.email, ...(c.aliases || [])].filter(
+        e => e !== existing.email && !(existing.aliases || []).includes(e)
+      );
+      if (newEmails.length) existing.aliases = [...(existing.aliases || []), ...newEmails];
+    } else {
+      merged.push({ ...c, aliases: c.aliases ? [...c.aliases] : [] });
+    }
+  });
+  return merged;
+}
+
 function buildLeadership() {
   const leaders = entry.leaders || [];
   if (!leaders.length) return '<div class="p-empty">No leadership data available.</div>';
@@ -730,18 +1345,30 @@ function buildLeadership() {
   return leaders.map(l => {
     const initials = (l.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     const matched = contacts.find(c => namesMatch(c.name, l.name || ''));
+    const safeName = (l.name||'').replace(/"/g,'&quot;');
+    const contactAction = matched
+      ? `<span class="leader-is-contact">✓ Contact</span>`
+      : `<button class="leader-add-contact-btn" data-name="${safeName}">+ Add as Contact</button>`;
     return `
       <div class="leader-card">
         <div class="leader-avatar" id="lavatar-${entry.id}-${encodeURIComponent(l.name||'')}">
           ${initials}
         </div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <div class="leader-name">${l.name||''}</div>
           <div class="leader-role">${l.title||''}</div>
           ${matched ? `<div class="leader-email">${matched.email}</div>` : ''}
           <div class="leader-links">
             ${l.linkedinUrl||l.linkedin ? `<a class="leader-link li" href="${l.linkedinUrl||l.linkedin}" target="_blank">LinkedIn</a>` : ''}
             ${l.newsUrl ? `<a class="leader-link news" href="${l.newsUrl}" target="_blank">${/linkedin\.com/i.test(l.newsUrl) ? 'LinkedIn' : 'News'}</a>` : ''}
+            ${contactAction}
+          </div>
+          <div class="leader-email-form" style="display:none">
+            <input class="leader-email-input" type="email" placeholder="Email address…">
+            <div class="leader-email-form-actions">
+              <button class="leader-email-save-btn">Save</button>
+              <button class="leader-email-cancel-btn">Cancel</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -750,20 +1377,52 @@ function buildLeadership() {
 
 function buildContacts() {
   const contacts = entry.knownContacts || [];
-  if (!contacts.length) return `<div class="p-empty" style="font-size:12px;color:#7c98b6">No contacts detected yet. Open the Activity panel to scan emails from this company's domain.</div>`;
-  return contacts.map(c => {
-    const initials = c.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
-    const sourceLabel = c.source === 'email' ? '✉' : '📅';
-    return `
-      <div class="contact-card">
-        <div class="contact-avatar">${initials}</div>
-        <div style="min-width:0;overflow:hidden">
-          <div class="contact-name">${c.name}</div>
-          <div class="contact-email">${c.email}</div>
-          <div class="contact-source">${sourceLabel} via ${c.source}</div>
-        </div>
-      </div>`;
-  }).join('');
+  const leaders = entry.leaders || [];
+  const cardsHtml = contacts.length === 0
+    ? `<div class="p-empty" style="font-size:12px;color:#7c98b6">No contacts yet. Add one below or scan emails.</div>`
+    : contacts.map(c => {
+        const initials = c.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
+        const sourceLabel = c.source === 'manual' ? '✎ manual' : c.source === 'email' ? '✉ email' : '📅 calendar';
+        const safeEmail = c.email.replace(/"/g, '&quot;');
+        const allEmails = [c.email, ...(c.aliases || [])];
+        const emailsHtml = allEmails.map(em => {
+          const se = em.replace(/"/g, '&quot;');
+          return `<div class="contact-email-row">
+            <span class="contact-email">${em}</span>
+            <button class="contact-copy-btn" data-email="${se}" title="Copy email">⎘</button>
+          </div>`;
+        }).join('');
+        const leader = leaders.find(l => namesMatch(l.name || '', c.name));
+        const liUrl = leader?.linkedinUrl || leader?.linkedin || (leader?.newsUrl && /linkedin\.com/i.test(leader.newsUrl) ? leader.newsUrl : null);
+        const liHtml = liUrl ? `<a class="contact-li-link" href="${liUrl}" target="_blank">LinkedIn</a>` : '';
+        return `
+          <div class="contact-card" data-email="${safeEmail}">
+            <div class="contact-avatar" id="cavatar-${encodeURIComponent(c.email)}">${initials}</div>
+            <div style="min-width:0;overflow:hidden;flex:1">
+              <div class="contact-name">${c.name}</div>
+              ${emailsHtml}
+              ${liHtml}
+              <div class="contact-source">${sourceLabel}</div>
+            </div>
+            <div class="contact-card-actions">
+              <button class="contact-edit-btn" data-email="${safeEmail}" title="Edit">✎</button>
+              <button class="contact-remove-btn" data-email="${safeEmail}" title="Remove">×</button>
+            </div>
+          </div>`;
+      }).join('');
+  return `
+    ${cardsHtml}
+    <div class="contact-add-row">
+      <button class="contact-add-btn" id="contact-add-btn">+ Add contact</button>
+    </div>
+    <div class="contact-add-form" id="contact-add-form" style="display:none">
+      <input class="contact-add-input" id="contact-add-name" placeholder="Name">
+      <input class="contact-add-input" id="contact-add-email" placeholder="Email">
+      <div class="contact-add-actions">
+        <button class="contact-confirm-btn" id="contact-add-save">Add</button>
+        <button class="contact-cancel-btn" id="contact-add-cancel">Cancel</button>
+      </div>
+    </div>`;
 }
 
 function buildOpportunities() {
@@ -796,8 +1455,15 @@ function buildHiring() {
   const companyLower = (entry.company || '').toLowerCase();
   const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
   const listings = allListings.filter(j => {
-    const text = ((j.title || '') + ' ' + (j.snippet || '') + ' ' + (j.url || '')).toLowerCase();
-    return text.includes(companyLower) || (domain && text.includes(domain));
+    const title = (j.title || '').toLowerCase();
+    const url = (j.url || '').toLowerCase();
+    const inTitle = title.includes(companyLower) || (domain && title.includes(domain));
+    const inUrl = domain && url.includes(domain);
+    if (!inTitle && !inUrl) return false;
+    // Skip results where the title is basically just the company name with no job context
+    const stripped = title.replace(companyLower, '').replace(domain || '', '').replace(/[^a-z0-9]/g, '');
+    if (stripped.length < 5) return false;
+    return true;
   });
   if (!listings.length) return `<div class="p-empty" style="font-size:13px;color:#7c98b6;padding:10px 0">No additional open roles found.</div>`;
   return listings.map(j => `
@@ -864,12 +1530,219 @@ function bindPanelEvents() {
   });
 
   // Bind interactive content for each panel
-  ['properties','stats','links','tags','overview','intel','reviews','leadership','contacts','opportunity'].forEach(pid => {
+  ['properties','stats','links','tags','overview','intel','reviews','leadership','contacts','opportunity','chat'].forEach(pid => {
     bindPanelBodyEvents(pid);
   });
 }
 
+function loadPhotosForPanel(pid) {
+  if (pid === 'leadership') {
+    const leaders = (entry.leaders || []).filter(l => l.name);
+    if (!leaders.length) return;
+    chrome.runtime.sendMessage({ type: 'GET_LEADER_PHOTOS', leaders, company: entry.company || '' }, photos => {
+      void chrome.runtime.lastError;
+      if (!photos) return;
+      leaders.forEach((l, i) => {
+        const photoUrl = photos[i];
+        if (!photoUrl) return;
+        const el = document.getElementById(`lavatar-${entry.id}-${encodeURIComponent(l.name||'')}`);
+        if (!el) return;
+        const initials = (l.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        el.innerHTML = `<img src="${photoUrl}" alt="${initials}" onerror="this.parentElement.textContent='${initials}'">`;
+      });
+    });
+  }
+
+  if (pid === 'contacts') {
+    const contacts = (entry.knownContacts || []).filter(c => c.name);
+    if (!contacts.length) return;
+    chrome.runtime.sendMessage(
+      { type: 'GET_LEADER_PHOTOS', leaders: contacts.map(c => ({ name: c.name })), company: entry.company || '' },
+      photos => {
+        void chrome.runtime.lastError;
+        if (!photos) return;
+        contacts.forEach((c, i) => {
+          const photoUrl = photos[i];
+          if (!photoUrl) return;
+          const el = document.getElementById(`cavatar-${encodeURIComponent(c.email)}`);
+          if (!el) return;
+          const initials = c.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
+          el.innerHTML = `<img src="${photoUrl}" alt="${initials}" onerror="this.parentElement.textContent='${initials}'">`;
+        });
+      }
+    );
+  }
+}
+
 function bindPanelBodyEvents(pid) {
+  if (pid === 'contacts') {
+    const body = document.getElementById('pbody-contacts');
+    if (!body) return;
+
+    // Remove contact
+    body.querySelectorAll('.contact-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const email = btn.dataset.email;
+        const contact = (entry.knownContacts || []).find(c => c.email === email);
+        const allEmails = contact ? [contact.email, ...(contact.aliases || [])] : [email];
+        const blocked = [...new Set([...(entry.removedContacts || []), ...allEmails])];
+        saveEntry({
+          knownContacts: (entry.knownContacts || []).filter(c => c.email !== email),
+          removedContacts: blocked
+        });
+        renderPanel('contacts'); bindPanelBodyEvents('contacts');
+      });
+    });
+
+    // Copy email
+    body.querySelectorAll('.contact-copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.email).catch(() => {});
+        const orig = btn.textContent; btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      });
+    });
+
+    // Edit button → expand inline edit form
+    body.querySelectorAll('.contact-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const email = btn.dataset.email;
+        const contact = (entry.knownContacts || []).find(c => c.email === email);
+        if (!contact) return;
+        const card = btn.closest('.contact-card');
+        if (!card) return;
+        const initials = contact.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
+        const allEmails = [contact.email, ...(contact.aliases || [])];
+
+        const emailRowsHtml = allEmails.map((em, i) => `
+          <div class="contact-edit-email-row">
+            <input class="contact-edit-input email-val" value="${em.replace(/"/g,'&quot;')}" placeholder="Email">
+            ${allEmails.length > 1 ? `<button class="contact-email-del-btn" data-idx="${i}" title="Remove this email">×</button>` : ''}
+          </div>`).join('');
+
+        card.innerHTML = `
+          <div class="contact-avatar">${initials}</div>
+          <div class="contact-edit-form">
+            <input class="contact-edit-input" id="ced-name" value="${contact.name.replace(/"/g,'&quot;')}" placeholder="Name">
+            <div class="contact-edit-emails">${emailRowsHtml}</div>
+            <button class="contact-add-email-btn">+ Add email</button>
+            <div class="contact-add-actions" style="margin-top:6px">
+              <button class="contact-confirm-btn contact-save-edit">Save</button>
+              <button class="contact-cancel-btn contact-cancel-edit">Cancel</button>
+            </div>
+          </div>`;
+
+        card.querySelector('#ced-name').focus();
+
+        // Remove individual email row
+        card.querySelectorAll('.contact-email-del-btn').forEach(d => {
+          d.addEventListener('click', () => d.closest('.contact-edit-email-row').remove());
+        });
+
+        // Add new email row
+        card.querySelector('.contact-add-email-btn').addEventListener('click', () => {
+          const row = document.createElement('div');
+          row.className = 'contact-edit-email-row';
+          row.innerHTML = `<input class="contact-edit-input email-val" placeholder="Email">
+            <button class="contact-email-del-btn" title="Remove">×</button>`;
+          row.querySelector('.contact-email-del-btn').addEventListener('click', () => row.remove());
+          card.querySelector('.contact-edit-emails').appendChild(row);
+          row.querySelector('input').focus();
+        });
+
+        const save = () => {
+          const newName = card.querySelector('#ced-name').value.trim();
+          const emails = [...card.querySelectorAll('.email-val')]
+            .map(i => i.value.trim().toLowerCase()).filter(e => e.includes('@'));
+          if (!emails.length) return;
+          saveEntry({ knownContacts: (entry.knownContacts || []).map(c =>
+            c.email === email ? { ...c, name: newName || c.name, email: emails[0], aliases: emails.slice(1) } : c
+          )});
+          renderPanel('contacts'); bindPanelBodyEvents('contacts');
+        };
+        card.querySelector('.contact-save-edit').addEventListener('click', save);
+        card.querySelector('.contact-cancel-edit').addEventListener('click', () => {
+          renderPanel('contacts'); bindPanelBodyEvents('contacts');
+        });
+      });
+    });
+
+    // Add contact form
+    const addBtn = document.getElementById('contact-add-btn');
+    const addForm = document.getElementById('contact-add-form');
+    if (addBtn) addBtn.addEventListener('click', () => {
+      addBtn.style.display = 'none';
+      addForm.style.display = '';
+      document.getElementById('contact-add-name').focus();
+    });
+    const doAdd = () => {
+      const name = document.getElementById('contact-add-name')?.value.trim();
+      const email = document.getElementById('contact-add-email')?.value.trim().toLowerCase();
+      if (!email || !email.includes('@')) return;
+      const existing = entry.knownContacts || [];
+      if (existing.some(c => c.email === email)) return;
+      saveEntry({ knownContacts: [...existing, { name: name || email.split('@')[0], email, source: 'manual', detectedAt: Date.now() }] });
+      renderPanel('contacts'); bindPanelBodyEvents('contacts');
+    };
+    document.getElementById('contact-add-save')?.addEventListener('click', doAdd);
+    document.getElementById('contact-add-cancel')?.addEventListener('click', () => {
+      renderPanel('contacts'); bindPanelBodyEvents('contacts');
+    });
+    document.getElementById('contact-add-email')?.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+    loadPhotosForPanel('contacts');
+  }
+
+  if (pid === 'leadership') {
+    const body = document.getElementById('pbody-leadership');
+    if (!body) return;
+
+    body.querySelectorAll('.leader-add-contact-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.leader-card');
+        btn.style.display = 'none';
+        const form = card.querySelector('.leader-email-form');
+        form.style.display = '';
+        form.querySelector('.leader-email-input').focus();
+      });
+    });
+
+    body.querySelectorAll('.leader-email-cancel-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.leader-card');
+        card.querySelector('.leader-email-form').style.display = 'none';
+        card.querySelector('.leader-add-contact-btn').style.display = '';
+      });
+    });
+
+    body.querySelectorAll('.leader-email-save-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.leader-card');
+        const name = card.querySelector('.leader-name')?.textContent?.trim() || '';
+        const email = card.querySelector('.leader-email-input')?.value?.trim().toLowerCase() || '';
+        if (!email || !email.includes('@')) {
+          card.querySelector('.leader-email-input')?.focus();
+          return;
+        }
+        const existing = entry.knownContacts || [];
+        if (!existing.some(c => c.email === email)) {
+          saveEntry({ knownContacts: [...existing, { name, email, source: 'manual', detectedAt: Date.now() }] });
+        }
+        renderPanel('leadership'); bindPanelBodyEvents('leadership');
+        renderPanel('contacts'); bindPanelBodyEvents('contacts');
+      });
+    });
+
+    // Allow Enter key in email input to save
+    body.querySelectorAll('.leader-email-input').forEach(input => {
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') input.closest('.leader-card').querySelector('.leader-email-save-btn').click();
+        if (e.key === 'Escape') input.closest('.leader-card').querySelector('.leader-email-cancel-btn').click();
+      });
+    });
+
+    loadPhotosForPanel('leadership');
+  }
+
   if (pid === 'notes') {
     const ta = document.getElementById('co-notes');
     if (ta) ta.addEventListener('blur', () => saveEntry({ notes: ta.value }));
@@ -955,12 +1828,26 @@ function bindPanelBodyEvents(pid) {
       titleInput.addEventListener('keydown', e => { if (e.key === 'Enter') titleInput.blur(); });
     }
 
-    const removeBtn = document.getElementById('remove-from-pipeline-btn');
-    if (removeBtn) removeBtn.addEventListener('click', () => {
-      if (!confirm('Remove from opportunity pipeline? The company record stays.')) return;
-      saveEntry({ isOpportunity: false, jobStage: null, jobTitle: null, jobMatch: null, jobUrl: null, jobSnapshot: null });
-      renderHeader();
-      renderPanel('opportunity');
+    const nextStepInput = document.getElementById('opp-next-step-input');
+    if (nextStepInput) {
+      nextStepInput.addEventListener('blur', () => saveEntry({ nextStep: nextStepInput.value.trim() || null }));
+      nextStepInput.addEventListener('keydown', e => { if (e.key === 'Enter') nextStepInput.blur(); });
+    }
+
+    const nextStepDate = document.getElementById('opp-next-step-date');
+    if (nextStepDate) {
+      nextStepDate.addEventListener('change', () => {
+        nextStepDate.classList.toggle('has-value', !!nextStepDate.value);
+        saveEntry({ nextStepDate: nextStepDate.value || null });
+      });
+    }
+
+  }
+
+  if (pid === 'chat') {
+    const body = document.getElementById('pbody-chat');
+    body?.querySelector('[data-action="open-float-chat"]')?.addEventListener('click', () => {
+      document.getElementById('fch-trigger')?.click();
     });
   }
 
@@ -1010,18 +1897,21 @@ function openTagInput() {
   const sugg  = document.getElementById('tag-sugg');
   input.focus();
 
-  input.addEventListener('input', () => {
+  function updateSugg() {
     const val = input.value.trim().toLowerCase();
     const existing = entry.tags || [];
-    if (!val) { sugg.style.display = 'none'; return; }
-    const matches = allKnownTags.filter(t => t.toLowerCase().includes(val) && !existing.includes(t));
+    const matches = allKnownTags.filter(t => !existing.includes(t) && (!val || t.toLowerCase().includes(val)));
     if (!matches.length) { sugg.style.display = 'none'; return; }
-    sugg.innerHTML = matches.slice(0,5).map(t => `<div class="tag-sugg-item" data-tag="${t}">${t}</div>`).join('');
+    sugg.innerHTML = matches.slice(0, 8).map(t => `<div class="tag-sugg-item" data-tag="${t}">${t}</div>`).join('');
     sugg.style.display = 'block';
     sugg.querySelectorAll('.tag-sugg-item').forEach(s => {
       s.addEventListener('mousedown', e => { e.preventDefault(); commitTag(s.dataset.tag); });
     });
-  });
+  }
+
+  updateSugg();
+  input.addEventListener('focus', updateSugg);
+  input.addEventListener('input', updateSugg);
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commitTag(input.value.trim()); }
     if (e.key === 'Escape') { renderPanel('tags'); bindPanelBodyEvents('tags'); }
@@ -1142,5 +2032,174 @@ function bindDragDrop() {
   });
 }
 
+function initFloatingChat() {
+  const floatEl   = document.getElementById('ci-float-chat');
+  const trigger   = document.getElementById('fch-trigger');
+  const header    = document.getElementById('fch-header');
+  const body      = document.getElementById('fch-body');
+  const closeBtn  = document.getElementById('fch-close');
+  const minBtn    = document.getElementById('fch-minimize');
+  const sizeBtn   = document.getElementById('fch-size-toggle');
+  const nameEl    = document.getElementById('fch-company-name');
+  if (!floatEl || !trigger) return;
+
+  if (nameEl && entry.company) nameEl.textContent = `— ${entry.company}`;
+
+  // Build the chat panel once
+  const chatContainer = document.createElement('div');
+  chatContainer.setAttribute('data-chat-panel', entry.id);
+  body.appendChild(chatContainer);
+  buildChatPanel(chatContainer, entry);
+
+  let isMinimized = false;
+  // sizeState: 0=normal, 1=large, 2=fullscreen
+  let sizeState = 0;
+  const SIZE_ICONS = ['⤢', '⤡', '⊡'];
+  const SIZE_CLASSES = ['', 'fch-maximized', 'fch-fullscreen'];
+
+  function open() {
+    floatEl.classList.remove('fch-hidden', 'fch-minimized');
+    trigger.style.display = 'none';
+    isMinimized = false;
+    setTimeout(() => chatContainer.querySelector('.chat-input')?.focus(), 150);
+  }
+
+  function close() {
+    floatEl.classList.add('fch-hidden');
+    floatEl.classList.remove('fch-minimized', 'fch-maximized', 'fch-fullscreen');
+    trigger.style.display = '';
+    isMinimized = false; sizeState = 0;
+    sizeBtn.textContent = SIZE_ICONS[0];
+  }
+
+  function minimize() {
+    isMinimized = !isMinimized;
+    floatEl.classList.toggle('fch-minimized', isMinimized);
+    minBtn.textContent = isMinimized ? '+' : '−';
+    if (isMinimized) {
+      floatEl.classList.remove('fch-maximized', 'fch-fullscreen');
+      sizeState = 0; sizeBtn.textContent = SIZE_ICONS[0];
+    }
+  }
+
+  function cycleSize() {
+    floatEl.classList.remove(...SIZE_CLASSES.filter(Boolean));
+    sizeState = (sizeState + 1) % SIZE_CLASSES.length;
+    if (SIZE_CLASSES[sizeState]) floatEl.classList.add(SIZE_CLASSES[sizeState]);
+    sizeBtn.textContent = SIZE_ICONS[sizeState];
+    if (isMinimized) { isMinimized = false; floatEl.classList.remove('fch-minimized'); minBtn.textContent = '−'; }
+  }
+
+  trigger.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  minBtn.addEventListener('click', minimize);
+  sizeBtn.addEventListener('click', cycleSize);
+
+  // Drag to reposition
+  let dragging = false, startX, startY, startRight, startBottom;
+  header.addEventListener('mousedown', e => {
+    if (e.target.closest('.fch-btn')) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    const rect = floatEl.getBoundingClientRect();
+    startRight  = window.innerWidth  - rect.right;
+    startBottom = window.innerHeight - rect.bottom;
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const newRight  = Math.max(0, Math.min(window.innerWidth  - 60, startRight  - dx));
+    const newBottom = Math.max(0, Math.min(window.innerHeight - 52, startBottom - dy));
+    floatEl.style.right  = newRight  + 'px';
+    floatEl.style.bottom = newBottom + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false;
+    document.body.style.userSelect = '';
+  });
+
+  // Open automatically if URL has ?chat=1
+  if (new URLSearchParams(location.search).get('chat') === '1') open();
+}
+
+function openChatPanel() {
+  const panel = document.getElementById('panel-chat');
+  if (!panel) return;
+  // Expand if collapsed
+  const body = document.getElementById('pbody-chat');
+  if (body && body.classList.contains('collapsed')) {
+    body.classList.remove('collapsed');
+    const btn = panel.querySelector('.panel-collapse-btn');
+    if (btn) btn.textContent = '▲';
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  setTimeout(() => {
+    const input = panel.querySelector('.chat-input');
+    if (input) input.focus();
+  }, 300);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderMarkdown(text) {
+  // Escape HTML first, then apply markdown patterns
+  let s = escapeHtml(text);
+  // Headers: ## Heading
+  s = s.replace(/^### (.+)$/gm, '<strong style="font-size:12px;color:#7c98b6;text-transform:uppercase;letter-spacing:.04em">$1</strong>');
+  s = s.replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:14px;color:#2d3e50;margin:10px 0 4px">$1</div>');
+  // Bold: **text**
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Citation links: [[N]](url) — render as clickable superscript
+  s = s.replace(/\[\[(\d+)\]\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" style="font-size:10px;color:#0077b5;vertical-align:super;text-decoration:none">[$1]</a>');
+  // Plain markdown links: [text](url)
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" style="color:#0077b5">$1</a>');
+  // Bullet lines: "- item"
+  s = s.replace(/^- (.+)$/gm, '<div style="padding-left:12px;margin:2px 0">• $1</div>');
+  // Line breaks
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+function initColumnResize() {
+  const colLeft  = document.getElementById('col-left');
+  const colRight = document.getElementById('col-right');
+
+  const savedLeft  = localStorage.getItem('ci_col_left_w');
+  const savedRight = localStorage.getItem('ci_col_right_w');
+  if (savedLeft)  colLeft.style.width  = savedLeft;
+  if (savedRight) colRight.style.width = savedRight;
+
+  function bindHandle(handleId, col, storageKey, direction) {
+    const handle = document.getElementById(handleId);
+    if (!handle) return;
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      handle.classList.add('resizing');
+      const startX = e.clientX;
+      const startW = col.getBoundingClientRect().width;
+      const onMove = e => {
+        const delta = direction === 'right' ? e.clientX - startX : startX - e.clientX;
+        col.style.width = Math.max(200, Math.min(560, startW + delta)) + 'px';
+      };
+      const onUp = () => {
+        handle.classList.remove('resizing');
+        localStorage.setItem(storageKey, col.style.width);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  bindHandle('resize-left',  colLeft,  'ci_col_left_w',  'right');
+  bindHandle('resize-right', colRight, 'ci_col_right_w', 'left');
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 init();
+initColumnResize();

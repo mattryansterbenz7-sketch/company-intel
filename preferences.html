@@ -107,6 +107,30 @@
     .integration-btn-danger { background: none; color: #e5483b; border: 1px solid rgba(229,72,59,0.4); }
     .integration-btn-danger:hover { background: rgba(229,72,59,0.06); border-color: #e5483b; }
     .integration-note { font-size: 12px; color: #7c98b6; line-height: 1.6; margin-top: 4px; }
+    /* ── Stages & Colors ── */
+    .stages-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+    .stage-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f0f3f8; }
+    .stage-row:last-child { border-bottom: none; }
+    .stage-color-wrap { position: relative; flex-shrink: 0; }
+    .stage-color-dot {
+      width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0,0,0,0.1);
+      transition: transform 0.15s; flex-shrink: 0;
+    }
+    .stage-color-dot:hover { transform: scale(1.15); }
+    .stage-color-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: none; padding: 0; }
+    .stage-label-input {
+      flex: 1; border: 1px solid transparent; border-radius: 6px; padding: 4px 8px;
+      font-size: 13px; font-weight: 600; color: #33475b; background: transparent; font-family: inherit;
+    }
+    .stage-label-input:hover { border-color: #dfe3eb; background: #f5f8fa; }
+    .stage-label-input:focus { outline: none; border-color: #FF7A59; background: #fff; }
+    .color-palette { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 4px; }
+    .color-swatch {
+      width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+      transition: transform 0.1s, border-color 0.1s; flex-shrink: 0;
+    }
+    .color-swatch:hover { transform: scale(1.2); border-color: rgba(0,0,0,0.2); }
+    .color-palette-label { font-size: 11px; color: #7c98b6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .save-bar { position: sticky; bottom: 0; background: rgba(245,248,250,0.95); border-top: 1px solid #dfe3eb; padding: 16px 40px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; backdrop-filter: blur(4px); }
     .save-btn { background: #FF7A59; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; padding: 10px 28px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
     .save-btn:hover { background: #e05c3a; }
@@ -274,6 +298,11 @@
       </div>
 
     </div>
+  </div>
+
+  <!-- Stages & Colors — rendered by preferences.js -->
+  <div class="page" style="padding-top:0">
+    <div id="stages-section"></div>
   </div>
 
   <div class="save-bar">

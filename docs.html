@@ -131,6 +131,8 @@
       <a href="#emails">Emails</a>
       <a href="#meetings">Meetings</a>
       <a href="#contacts">Known Contacts</a>
+      <a href="#ai-chat">AI Chat</a>
+      <a href="#celebrations">Celebrations</a>
       <div class="doc-nav-divider"></div>
       <a href="#integrations">Integrations</a>
       <a href="#data">Data & Storage</a>
@@ -170,6 +172,14 @@
         <div class="feature-card">
           <div class="feature-card-title">Job Match Scoring</div>
           <p>When browsing a job posting, CompanyIntel scores the role against your preferences and background using Claude AI.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">AI Chat <span class="badge badge-new">New</span></div>
+          <p>A contextual chat panel on every company and opportunity page. Includes full email history, Granola meeting transcripts, known contacts, reviews, and a timeline-aware system prompt.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Pipeline Celebrations <span class="badge badge-new">New</span></div>
+          <p>Confetti animations and sounds fire when dragging opportunities to key stages. Type (emoji vs classic confetti) and sound are fully configurable per stage in Settings.</p>
         </div>
       </div>
     </div>
@@ -314,6 +324,9 @@
 
       <h3 class="sub">Job Match scoring</h3>
       <p class="body">When you save a job posting from the sidepanel, Claude AI scores the role (1–10) against your background, preferred roles, work arrangement, and salary floor set in Preferences. The score and a breakdown (strong fits, red flags, verdict) are saved on the entry and shown on Kanban cards.</p>
+
+      <h3 class="sub">Job snapshot — Perks vs Salary</h3>
+      <p class="body">When a job posting is saved, LinkedIn chips are scanned and classified: amounts matching salary patterns (<code>$120K</code>, <code>$120,000</code>) go to <strong>Base Salary</strong>; chip text containing words like <em>stipend, allowance, reimbursement,</em> or <em>subsidy</em> is classified as a <strong>Perk</strong> instead. Perks appear as teal chips below the salary row so items like "$50/mo internet stipend" are never confused with base compensation.</p>
     </div>
 
     <!-- Emails -->
@@ -377,13 +390,40 @@
       <p class="doc-section-lead">The Meetings tab shows notes from Granola, an AI meeting notes tool. Notes are fetched by searching Granola's MCP API for the company name.</p>
 
       <h3 class="sub">How meeting notes are fetched</h3>
-      <div class="info-block">
-        <p>When you click the Meetings tab, the extension sends a <code>GRANOLA_SEARCH</code> message to the background service worker, which calls the Granola MCP API with the company name as the search query. Results are displayed as pre-formatted notes.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Search by company name + contacts</div>
+            <div class="step-desc">The background worker calls the Granola MCP <code>list_meetings</code> tool with the company name and, when available, known contact first names as search signals. The search window spans the last 90 days.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Match by title or attendee</div>
+            <div class="step-desc">A meeting matches if its title contains the company name or a known contact name. First-name-only matching (≥3 chars) is supported for verified company contacts so "Noah" matches "Noah Maffitt".</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Full transcripts fetched</div>
+            <div class="step-desc">For each matched meeting, <code>get_meeting</code> is called to retrieve the full transcript. Structured per-meeting data (title, date, attendees, transcript) is cached on the entry as <code>cachedMeetings</code>.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Auto-loaded into AI Chat context</div>
+            <div class="step-desc">Transcripts are automatically injected into the AI Chat panel when it opens — no manual "Load meeting notes" click required. Each meeting is shown in the AI system prompt with its relative date (e.g., "3 days ago").</div>
+          </div>
+        </div>
       </div>
 
       <div class="callout callout-tip">
         <span class="callout-icon">💡</span>
-        <span>Granola uses OAuth 2.0 with PKCE (S256 challenge). Connect it in Setup. Future versions will also extract meeting attendees from calendar invites and add them to Known Contacts.</span>
+        <span>Granola uses OAuth 2.0 with PKCE (S256 challenge). Connect it in Setup. The Meetings tab shows formatted notes; the AI Chat panel uses the raw transcripts for richer context.</span>
       </div>
     </div>
 
@@ -422,6 +462,98 @@
       <div class="callout callout-info">
         <span class="callout-icon">ℹ</span>
         <span>Contacts persist on the entry in <code>savedCompanies</code>. They are detected once and remain even if you don't open the Emails tab again.</span>
+      </div>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="ai-chat"></span>
+      <div class="doc-section-title">AI Chat</div>
+      <p class="doc-section-lead">Every company and opportunity page has a contextual AI chat panel powered by Claude. The chat is pre-loaded with everything CompanyIntel knows about that company so you can ask freeform questions without copy-pasting context.</p>
+
+      <h3 class="sub">What's included in the AI context</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>Today's date</strong> — absolute date + timestamp so the AI can reason about timelines</li>
+          <li><strong>Company profile</strong> — name, status, tags, intelligence summary, funding, employees</li>
+          <li><strong>Leadership</strong> — founders and executives with titles</li>
+          <li><strong>Known Contacts</strong> — verified people with email and source</li>
+          <li><strong>Job details</strong> — role, match score, job description, salary, perks</li>
+          <li><strong>Employee reviews</strong> — Glassdoor / Blind / Reddit snippets</li>
+          <li><strong>Email history</strong> — up to 20 emails with subject, sender, date, and body snippet</li>
+          <li><strong>Meeting transcripts</strong> — all matched Granola meetings, each labeled with relative time (e.g., "3 days ago"), up to 4,000 chars per meeting</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Chat behavior</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>Session-only history</strong> — chat history is fresh each time you open a company page, keeping context clean and focused on the current company</li>
+          <li><strong>Follow-up chips</strong> — after each AI reply, "Say more" and "Key takeaways" chips appear for quick follow-ups</li>
+          <li><strong>Action buttons</strong> — "Load emails" and "Load meeting notes" manually refresh those context sources mid-conversation</li>
+          <li><strong>Auto context</strong> — emails and meeting notes are injected automatically if already cached; Granola is fetched in the background when the panel opens</li>
+          <li><strong>Minimal mode</strong> — the floating chat widget (bottom-right of company.html) uses a compact version with only the Clear button</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>The AI context is rebuilt on every message send, so if Granola finishes loading after you opened the panel, the next message you send will include the full transcripts.</span>
+      </div>
+    </div>
+
+    <!-- Celebrations -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="celebrations"></span>
+      <div class="doc-section-title">Pipeline Celebrations</div>
+      <p class="doc-section-lead">When you drag an opportunity card into certain pipeline stages, a confetti animation fires and an optional sound plays. The type of confetti and the sound are fully configurable per stage.</p>
+
+      <h3 class="sub">Default celebrations</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>Applied</strong> — 👍 thumbs-up emojis, pop sound</li>
+          <li><strong>Conversations in Progress / Mutual Interest</strong> — classic confetti burst, pop sound</li>
+          <li><strong>Offer Stage / Accepted / Referral</strong> — 🤑 money emojis + 💵 dollar signs, cha-ching sound</li>
+          <li><strong>Stalled</strong> — 🛑 stop signs, no sound</li>
+          <li><strong>Rejected / DQ'd / Closed Lost</strong> — ✌️ peace signs, farewell voice (rotates: "peace", "adios", "see ya", "bye")</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Customizing celebrations</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Open the Stage Editor</div>
+            <div class="step-desc">In the Opportunity pipeline, click the gear icon (⚙) next to the pipeline header to open the Stage Editor.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Switch to the Celebrations tab</div>
+            <div class="step-desc">Click the <strong>🎉 Celebrations</strong> tab in the editor. Each stage is listed with its current confetti type and sound choice.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Set confetti type and sound per stage</div>
+            <div class="step-desc">Use the dropdowns to choose from: <em>None, Classic confetti, 👍 Thumbs up, 🤑 Money, 🛑 Stop signs, ✌️ Peace signs</em> — and sounds: <em>None, 🎉 Pop, 💰 Cha-ching, 👋 Farewell voice</em>. Stages set to "None" fire no animation.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Save</div>
+            <div class="step-desc">Click <strong>Save</strong> to persist. Your choices are saved in <code>chrome.storage.local</code> as <code>stageCelebrations</code>. Use <strong>Reset to defaults</strong> to restore the original behavior.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ</span>
+        <span>Celebrations only apply to the Opportunity pipeline. The Company pipeline has no celebrations tab (stage moves there don't trigger animations).</span>
       </div>
     </div>
 
@@ -487,6 +619,7 @@
           <li><code>savedCompanies</code> — array of all company/opportunity entries (in <code>chrome.storage.local</code>)</li>
           <li><code>researchCache</code> — cached research results keyed by company name, used to avoid re-running API calls (in <code>chrome.storage.local</code>)</li>
           <li><code>opportunityStages</code> / <code>companyStages</code> — custom pipeline stage configurations</li>
+          <li><code>stageCelebrations</code> — per-stage confetti type and sound overrides (in <code>chrome.storage.local</code>)</li>
           <li><code>prefs</code> — your profile and job preferences, used for Job Match scoring (in <code>chrome.storage.sync</code>, synced across devices)</li>
           <li><code>gmailConnected</code> — boolean flag for Gmail connection state</li>
           <li><code>granolaToken</code> — Granola OAuth access token</li>

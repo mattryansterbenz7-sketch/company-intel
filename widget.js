@@ -38,42 +38,30 @@
 
     #trigger {
       position: fixed;
-      right: 0;
-      width: 10px;
-      height: 44px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
       background: #FF7A59;
-      border-radius: 8px 0 0 8px;
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: grab;
-      box-shadow: -2px 0 14px rgba(255,122,89,0.4);
-      font-family: Georgia, 'Times New Roman', serif;
-      font-size: 13px;
-      font-weight: 900;
-      color: #fff;
-      letter-spacing: 1px;
-      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(255,122,89,0.45), 0 1px 4px rgba(0,0,0,0.18);
       pointer-events: all;
-      transition: width 0.25s ease, height 0.25s ease, border-radius 0.25s ease, right 0.25s ease, box-shadow 0.2s, background 0.2s;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s;
       user-select: none;
     }
-    #trigger:hover, #trigger.ci-expanded {
-      width: 50px;
-      height: 50px;
-      right: 18px;
-      border-radius: 50%;
-      box-shadow: 0 4px 20px rgba(255,122,89,0.5);
+    #trigger:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 22px rgba(255,122,89,0.55), 0 2px 6px rgba(0,0,0,0.2);
     }
-    #trigger:active { cursor: grabbing; }
+    #trigger:active { cursor: grabbing; transform: scale(0.96); }
     #trigger.open {
-      width: 50px;
-      height: 50px;
-      right: 18px;
-      border-radius: 50%;
-      background: #243342;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      background: #2d3e50;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35);
     }
+    #trigger svg { display: block; }
 
     #panel {
       position: fixed;
@@ -138,6 +126,7 @@
     #ci-body {
       overflow-y: auto;
       flex: 1;
+      min-height: 0;
       padding: 14px;
       display: flex;
       flex-direction: column;
@@ -229,9 +218,15 @@
     }
     .ci-save-btn:hover { background: #e8623f; }
     .ci-save-btn.saved {
-      background: transparent; border: 1px solid #FF7A59;
-      color: #FF7A59; cursor: default;
+      background: transparent; border: 1px solid #2D3E50;
+      color: #516F90; cursor: default;
     }
+    .ci-crm-link {
+      display: block; text-align: center; font-size: 13px; font-weight: 600;
+      color: #FF7A59; text-decoration: none; padding: 8px 0 2px;
+      transition: color 0.15s;
+    }
+    .ci-crm-link:hover { color: #ffaa94; }
 
     .ci-empty { color: #516F90; font-size: 13px; text-align: center; padding: 32px 0; line-height: 1.6; }
     .ci-error { color: #f87171; font-size: 13px; padding: 8px 0; }
@@ -241,7 +236,12 @@
   // ── HTML ─────────────────────────────────────────────────────────────────
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <div id="trigger" title="Company Intel">CI</div>
+    <div id="trigger" title="Company Intel">
+      <svg id="trigger-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/>
+        <line x1="16.5" y1="16.5" x2="22" y2="22"/>
+      </svg>
+    </div>
     <div id="panel">
       <div id="ci-header">
         <img id="ci-favicon" alt="">
@@ -294,14 +294,20 @@
     panel.style.top = clamped + 'px';
   }
 
+  const ICON_SEARCH = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>`;
+  const ICON_CLOSE  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+
+  function setTriggerIcon(open) {
+    trigger.innerHTML = open ? ICON_CLOSE : ICON_SEARCH;
+  }
+
   // ── Toggle ───────────────────────────────────────────────────────────────
   trigger.addEventListener('click', () => {
     if (didDrag) { didDrag = false; return; }
     isOpen = !isOpen;
     panel.classList.toggle('open', isOpen);
     trigger.classList.toggle('open', isOpen);
-    if (!isOpen) trigger.classList.remove('ci-expanded');
-    trigger.textContent = isOpen ? '✕' : 'CI';
+    setTriggerIcon(isOpen);
     if (isOpen) updatePanelPosition();
     if (isOpen && !hasResearched) {
       const detected = detectCompany();
@@ -316,8 +322,7 @@
     isOpen = false;
     panel.classList.remove('open');
     trigger.classList.remove('open');
-    trigger.classList.remove('ci-expanded');
-    trigger.textContent = 'CI';
+    setTriggerIcon(false);
   });
 
   refreshBtn.addEventListener('click', () => {
@@ -333,7 +338,6 @@
     didDrag = false;
     triggerDragStartY = e.clientY;
     triggerDragStartTop = triggerTop;
-    trigger.classList.add('ci-expanded');
   });
 
   document.addEventListener('mousemove', e => {
@@ -352,35 +356,48 @@
     if (isDraggingTrigger) {
       isDraggingTrigger = false;
       panel.classList.remove('repositioning');
-      if (!isOpen) trigger.classList.remove('ci-expanded');
     }
   });
 
   // ── Research ─────────────────────────────────────────────────────────────
   function research(company, domain, forceRefresh = false) {
+    // Guard against invalidated extension context (e.g. after extension reload)
+    if (!chrome?.storage?.local || !chrome?.runtime?.sendMessage) {
+      const body = shadow.getElementById('ci-body');
+      if (body) body.innerHTML = '<div style="padding:16px;font-size:13px;color:#94a3b8;text-align:center">Extension reloaded — refresh page to continue.</div>';
+      return;
+    }
+
     showSkeleton(company);
 
-    if (!forceRefresh) {
-      chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
-        const cached = researchCache?.[company.toLowerCase()];
-        const TTL = 24 * 60 * 60 * 1000;
-        if (cached && Date.now() - cached.ts < TTL) {
-          hasResearched = true;
-          currentResearch = cached.data;
-          render(cached.data);
-          return;
-        }
-        fetchResearch(company, domain);
-      });
-    } else {
-      chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
-        if (researchCache?.[company.toLowerCase()]) {
-          const pruned = { ...researchCache };
-          delete pruned[company.toLowerCase()];
-          chrome.storage.local.set({ researchCache: pruned });
-        }
-        fetchResearch(company, domain);
-      });
+    try {
+      if (!forceRefresh) {
+        chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
+          void chrome.runtime.lastError;
+          const cached = researchCache?.[company.toLowerCase()];
+          const TTL = 24 * 60 * 60 * 1000;
+          if (cached && Date.now() - cached.ts < TTL) {
+            hasResearched = true;
+            currentResearch = cached.data;
+            render(cached.data);
+            return;
+          }
+          fetchResearch(company, domain);
+        });
+      } else {
+        chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
+          void chrome.runtime.lastError;
+          if (researchCache?.[company.toLowerCase()]) {
+            const pruned = { ...researchCache };
+            delete pruned[company.toLowerCase()];
+            chrome.storage.local.set({ researchCache: pruned });
+          }
+          fetchResearch(company, domain);
+        });
+      }
+    } catch(e) {
+      const body = shadow.getElementById('ci-body');
+      if (body) body.innerHTML = '<div style="padding:16px;font-size:13px;color:#94a3b8;text-align:center">Extension reloaded — refresh page to continue.</div>';
     }
   }
 
@@ -500,7 +517,6 @@
         ${statsHtml}
       </div>
 
-      ${intel.eli5 ? `<details open><summary>Simple Explanation</summary><div class="ci-detail-body">${intel.eli5}</div></details>` : ''}
       ${intel.whosBuyingIt ? `<details><summary>Who Buys It</summary><div class="ci-detail-body">${intel.whosBuyingIt}</div></details>` : ''}
       ${intel.howItWorks ? `<details><summary>How It Works</summary><div class="ci-detail-body">${intel.howItWorks}</div></details>` : ''}
 
@@ -541,12 +557,37 @@
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  function normalizeCompanyName(name) {
+    return (name || '').toLowerCase()
+      .replace(/\b(inc|llc|ltd|corp|co|ai|the|a|an)\b/g, '')
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  }
+
+  function companiesMatch(a, b) {
+    if (!a || !b) return false;
+    const na = normalizeCompanyName(a);
+    const nb = normalizeCompanyName(b);
+    if (na === nb) return true;
+    if (na.includes(nb) || nb.includes(na)) return true;
+    return false;
+  }
+
   function checkSaved(company, btn) {
+    if (!chrome?.storage?.local) return;
     chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-      const isSaved = (savedCompanies || []).some(
-        c => (c.type || 'company') === 'company' && c.company.toLowerCase() === company.toLowerCase()
-      );
-      if (isSaved && btn) { btn.textContent = '✓ Saved'; btn.classList.add('saved'); }
+      const match = (savedCompanies || []).find(c => companiesMatch(c.company, company));
+      if (!match || !btn) return;
+      btn.textContent = '✓ Saved';
+      btn.classList.add('saved');
+      // Add "View in CRM" link below the button
+      const crmUrl = chrome.runtime.getURL(`company.html?id=${match.id}`);
+      const link = document.createElement('a');
+      link.href = crmUrl;
+      link.target = '_blank';
+      link.className = 'ci-crm-link';
+      link.textContent = 'View full profile →';
+      btn.insertAdjacentElement('afterend', link);
     });
   }
 
@@ -569,15 +610,21 @@
       status: 'needs_review'
     };
 
+    if (!chrome?.storage?.local) return;
     chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
       const existing = savedCompanies || [];
-      const dup = existing.some(
-        c => (c.type || 'company') === 'company' && c.company.toLowerCase() === currentCompany.toLowerCase()
-      );
+      const dup = existing.some(c => companiesMatch(c.company, currentCompany));
       if (dup) { btn.textContent = '✓ Saved'; btn.classList.add('saved'); return; }
       chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, () => {
         btn.textContent = '✓ Saved';
         btn.classList.add('saved');
+        const crmUrl = chrome.runtime.getURL(`company.html?id=${entry.id}`);
+        const link = document.createElement('a');
+        link.href = crmUrl;
+        link.target = '_blank';
+        link.className = 'ci-crm-link';
+        link.textContent = 'View full profile →';
+        btn.insertAdjacentElement('afterend', link);
       });
     });
   }

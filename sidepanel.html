@@ -47,7 +47,7 @@
     .company-bar-left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
     #company-favicon { width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0; display: none; background: #2D3E50; object-fit: contain; }
     .company-bar-meta { display: flex; flex-direction: column; min-width: 0; }
-    .detected-label { font-size: 10px; font-weight: 700; color: #7da8c4; text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; }
+    .detected-label { font-size: 11px; font-weight: 800; color: #FF7A59; text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; }
     #company-name { font-size: 14px; font-weight: 700; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* Job bar */
     #job-bar { padding: 8px 16px; background: #243342; border-bottom: 1px solid #2D3E50; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -68,7 +68,7 @@
     .save-stars { display: flex; gap: 5px; }
     .save-star { font-size: 20px; color: #2D3E50; cursor: pointer; transition: color 0.1s; line-height: 1; }
     .save-star.filled { color: #f59e0b; }
-    .save-star:hover { color: #f59e0b; }
+    .save-star.hovered { color: #f59e0b; }
     .save-panel-label { font-size: 11px; font-weight: 600; color: #7da8c4; text-transform: uppercase; letter-spacing: 0.07em; }
     #save-notes { width: 100%; background: #2D3E50; border: 1px solid #3d5468; border-radius: 6px; color: #cbd5e1; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: none; height: 52px; line-height: 1.5; margin-bottom: 10px; }
     #save-notes:focus { outline: none; border-color: #FF7A59; }
@@ -91,6 +91,14 @@
     #save-confirm-btn { width: 100%; background: #FF7A59; color: #fff; border: none; padding: 8px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
     #save-confirm-btn:hover { background: #e8623f; }
     #save-confirm-btn.saved { background: #2D3E50; color: #FF7A59; border: 1px solid #3d5468; cursor: default; }
+
+    /* Opportunity fields strip */
+    #sp-opp-fields { display: none; padding: 8px 16px 10px; background: #1e2d3c; border-bottom: 1px solid #2D3E50; }
+    .sp-opp-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+    .sp-opp-key { font-size: 10px; font-weight: 600; color: #64748b; min-width: 100px; flex-shrink: 0; }
+    .sp-opp-val { font-size: 11px; color: #cbd5e1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-opp-val a { color: #FF7A59; text-decoration: none; }
+    .sp-opp-val a:hover { text-decoration: underline; }
 
     /* Company links */
     #company-links { }
@@ -156,6 +164,9 @@
     .salary-display { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(52,211,153,0.07); border: 1px solid rgba(52,211,153,0.2); border-radius: 8px; margin-bottom: 8px; }
     .salary-label { font-size: 10px; font-weight: 800; color: #34d399; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
     .salary-value { font-size: 14px; font-weight: 700; color: #f1f5f9; }
+    .perks-display { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .perk-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #cbd5e1; background: rgba(148,163,184,0.08); border: 1px solid rgba(148,163,184,0.18); border-radius: 20px; padding: 3px 9px; }
+    .job-snap-item.perk { color: #94a3b8; }
 
     /* Strong Fits / Red Flags bullets */
     .match-bullets { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 7px; }
@@ -199,6 +210,8 @@
     .leader-links { display: flex; gap: 8px; flex-shrink: 0; }
     .leader-link { font-size: 11px; color: #FF7A59; text-decoration: none; font-weight: 600; }
     .leader-link:hover { color: #ffaa94; }
+    .copy-email-btn { background: none; border: none; cursor: pointer; color: #7da8c4; font-size: 11px; padding: 0 2px; line-height: 1; }
+    .copy-email-btn:hover { color: #FF7A59; }
 
     /* Jobs */
     .job-item { display: block; text-decoration: none; padding: 10px 12px; background: #243342; border-radius: 8px; margin-bottom: 8px; color: inherit; border: 1px solid #2D3E50; }
@@ -277,9 +290,9 @@
   <div class="header">
     <div class="logo">Company<span>Intel</span></div>
     <div class="header-actions">
-      <button id="saved-btn" class="header-icon-btn" data-tooltip="Open your saved companies &amp; jobs — your full research history in one place">
-        <span class="header-icon">📋</span>
-        <span class="header-icon-label">Saved</span>
+      <button id="saved-btn" class="header-icon-btn">
+        <span class="header-icon" style="font-style:normal;font-size:16px">⊞</span>
+        <span class="header-icon-label">View All</span>
       </button>
       <button id="settings-btn" class="header-icon-btn" data-tooltip="Setup — job preferences, integrations &amp; settings">
         <span class="header-icon">⚙️</span>
@@ -297,6 +310,7 @@
         <span class="detected-label">Detected</span>
         <span id="company-name">—</span>
         <a id="crm-link" href="#" target="_blank" style="display:none;font-size:10px;font-weight:600;color:#FF7A59;text-decoration:none;margin-top:1px;letter-spacing:0.02em;">View in CRM →</a>
+        <span id="crm-stage" style="display:none;font-size:11px;font-weight:600;color:#99afc4;margin-top:1px;letter-spacing:0.01em;"></span>
       </div>
     </div>
     <div class="bar-actions">
@@ -304,6 +318,9 @@
       <span class="bar-chevron open" id="company-chevron">›</span>
     </div>
   </div>
+
+  <!-- Opportunity fields strip — shown below company bar when saved as opportunity -->
+  <div id="sp-opp-fields"></div>
 
   <!-- Job bar — only shown when a job posting is detected, click to expand/collapse job content -->
   <div id="job-bar" style="display:none">
