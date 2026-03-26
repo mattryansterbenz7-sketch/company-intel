@@ -204,7 +204,7 @@ ${prefs.roleLoved ? `- A role they loved: ${prefs.roleLoved}` : ''}
 ${prefs.roleHated ? `- A role that was a bad fit: ${prefs.roleHated}` : ''}
 
 Analysis rules:
-1. Work arrangement and location are QUALIFIERS, not flags — they are already evaluated separately. Do NOT put remote/hybrid/on-site or location eligibility in strongFits or redFlags under any circumstances.
+1. Work arrangement and location are DEALBREAKERS. If the user prefers Remote and the job is On-site or Hybrid-only, this is a MAJOR mismatch — drop the score by at least 3 points and add it as a red flag (e.g., "On-site role conflicts with Remote preference"). If the user prefers Hybrid and the job is On-site, drop by 2 points. A matching work arrangement is a strong fit worth noting.
 2. Only flag things explicitly stated or directly evidenced in the posting. Do NOT flag the absence of information — if equity isn't mentioned, that is not a red flag. If reporting structure isn't mentioned, do not speculate. No "Unclear:" prefixes — if you can't support it with evidence from the posting, leave it out.
 3. Red flags must be genuine concerns a reasonable person would want to know — not stylistic differences or things the user said they're okay with. If the user hasn't flagged something as a dealbreaker, don't treat it as one.
 4. Travel: if the posting explicitly mentions travel requirements, compare against max travel preference and flag only if it clearly exceeds it.
@@ -214,6 +214,7 @@ Analysis rules:
 8. Salary: extract the BASE salary or base salary range if stated anywhere in the posting (including legal/compliance disclosure sections at the bottom). If multiple figures are given (e.g., base + OTE/commission), extract the base salary only and set salaryType to "base". If only total/OTE compensation is mentioned, extract that and set salaryType to "ote". If no number is mentioned anywhere, use null for both.
 9. Do NOT flag missing salary information as a red flag. Most job postings don't include salary — it's normal and expected, not a negative signal.
 10. If a salary IS disclosed in the posting, compare it against the candidate's salary floor. If the disclosed base salary (or the top of the range) is below the candidate's floor, this is a MAJOR red flag — include it in redFlags with the specific numbers (e.g., "Base salary $70-80K is well below your $150K floor"). This should also significantly lower the score (at least -2 points). Salary below floor is one of the strongest disqualifying signals.
+11. OTE (On-Target Earnings) ranges without explicit base salary separation are COMPLETELY NORMAL for sales roles — do NOT flag this as a red flag. "Wide OTE range" is not a red flag. "Base not separated from OTE" is not a red flag. Only flag compensation as a red flag if the OTE or base is clearly below the candidate's salary floor.
 
 {
   "jobMatch": {
