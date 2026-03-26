@@ -1219,7 +1219,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
       <details class="jopp-dropdown">
         <summary class="jopp-summary">
           <span class="jopp-summary-left">Job Opportunity</span>
-          <span class="jopp-summary-right"><span class="jopp-loader"><span class="jopp-loader-icon">🔍</span><span class="jopp-loader-text"></span></span></span>
+          <span class="jopp-summary-right"><span class="jopp-loader"><span class="jopp-loader-icon">🔍</span><span class="jopp-loader-text"></span></span></span><span class="jopp-chevron">›</span>
         </summary>
         <div class="jopp-body"><div class="jopp-loading-area"><span class="jopp-loader-icon jopp-loader-lg">🔍</span><span class="jopp-loader-text"></span></div></div>
       </details>`;
@@ -1233,7 +1233,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
     <details class="jopp-dropdown">
       <summary class="jopp-summary">
         <span class="jopp-summary-left">Job Opportunity</span>
-        <span class="jopp-summary-right">${locationSummary}${summaryBadge}</span>
+        <span class="jopp-summary-right">${locationSummary}${summaryBadge}</span><span class="jopp-chevron">›</span>
       </summary>
       <div class="jopp-body">
         ${locationMatchHtml}
