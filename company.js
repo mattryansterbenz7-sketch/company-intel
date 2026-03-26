@@ -404,7 +404,9 @@ function buildOpportunity() {
     <div class="prop-row">
       <span class="prop-label">Role</span>
       <div class="prop-val-wrap">
-        <input class="prop-input ${!title ? 'prop-empty' : ''}" id="opp-title-input" value="${title}" placeholder="Add job title…">
+        ${title && entry.jobUrl
+          ? `<a href="${entry.jobUrl}" target="_blank" class="prop-link-display" id="opp-title-link" style="font-weight:600;font-size:13px">${title}</a><button class="prop-link-edit" id="opp-title-edit-btn" title="Edit">✎</button>`
+          : `<input class="prop-input ${!title ? 'prop-empty' : ''}" id="opp-title-input" value="${title}" placeholder="Add job title…">`}
       </div>
     </div>
     ${jobUrlHtml}
@@ -1916,6 +1918,19 @@ function bindPanelBodyEvents(pid) {
     if (titleInput) {
       titleInput.addEventListener('blur', () => saveEntry({ jobTitle: titleInput.value.trim() || null }));
       titleInput.addEventListener('keydown', e => { if (e.key === 'Enter') titleInput.blur(); });
+    }
+    // Edit button for linked role title — swaps link for input
+    const titleEditBtn = document.getElementById('opp-title-edit-btn');
+    if (titleEditBtn) {
+      titleEditBtn.addEventListener('click', () => {
+        const wrap = titleEditBtn.parentElement;
+        const val = entry.jobTitle || '';
+        wrap.innerHTML = `<input class="prop-input" id="opp-title-input" value="${val.replace(/"/g, '&quot;')}">`;
+        const inp = document.getElementById('opp-title-input');
+        inp.focus();
+        inp.addEventListener('blur', () => { saveEntry({ jobTitle: inp.value.trim() || null }); renderPanel('opportunity'); bindPanelBodyEvents('opportunity'); });
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+      });
     }
 
     // Comp field bindings
