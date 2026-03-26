@@ -246,7 +246,7 @@ function renderHeader() {
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('docs.html')}" target="_blank" style="margin-left:4px">Docs</a>
   `;
 
-  document.getElementById('hdr-back').addEventListener('click', () => window.close());
+  document.getElementById('hdr-back')?.addEventListener('click', () => window.close());
 
   // Editable company name
   const nameInput = document.getElementById('hdr-name');
