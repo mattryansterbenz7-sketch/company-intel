@@ -179,10 +179,12 @@
     /* Job Opportunity collapsible dropdown */
     .jopp-dropdown { margin-bottom: 8px; }
     .jopp-dropdown[open] { margin-bottom: 10px; }
-    .jopp-summary { font-size: 11px; font-weight: 700; color: #FF7A59; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; padding: 8px 12px; background: rgba(255,122,89,0.06); border-radius: 6px; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; border: 1px solid rgba(255,122,89,0.25); gap: 8px; }
+    .jopp-summary { font-size: 11px; font-weight: 700; color: #FF7A59; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; padding: 8px 10px 8px 12px; background: rgba(255,122,89,0.06); border-radius: 6px; list-style: none; display: flex; align-items: center; user-select: none; border: 1px solid rgba(255,122,89,0.25); gap: 6px; }
     .jopp-summary:hover { border-color: #FF7A59; color: #ff9472; }
     .jopp-summary::after { content: none; }
-    .jopp-chevron { font-size: 16px; transition: transform 0.2s; flex-shrink: 0; color: #FF7A59; margin-left: 4px; }
+    .jopp-summary-left { flex-shrink: 0; }
+    .jopp-summary-right { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; overflow: hidden; }
+    .jopp-chevron { font-size: 18px; font-weight: 700; transition: transform 0.2s; flex-shrink: 0; color: #FF7A59; width: 18px; text-align: center; }
     .jopp-dropdown[open] .jopp-chevron { transform: rotate(90deg); }
     .jopp-summary-left { flex-shrink: 0; }
     .jopp-summary-right { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
