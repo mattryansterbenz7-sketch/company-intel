@@ -786,7 +786,8 @@ function triggerResearch(company, forceRefresh = false) {
         <div class="skeleton-stat"></div><div class="skeleton-stat"></div>
       </div>
     </div>
-    <div class="loading" style="padding:24px 16px"><div class="spinner"></div>Analyzing ${company}...</div>`;
+    <div class="research-loader" id="research-loader"><span class="research-loader-icon">🔍</span><span class="research-loader-text" id="research-loader-text"></span></div>`;
+  startResearchLoaderCycle(company);
 
   chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
     loadPrefsWithMigration((prefs) => {
@@ -1252,6 +1253,26 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
     </details>`;
 }
 
+function startResearchLoaderCycle(company) {
+  const phrases = [
+    `Researching ${company}...`,
+    'Pulling company intel...',
+    'Scanning for leadership...',
+    'Checking reviews & signals...',
+    'Analyzing fit...',
+    'Scoring match...',
+  ];
+  let idx = 0;
+  const el = document.getElementById('research-loader-text');
+  if (!el) return;
+  const update = () => { el.textContent = phrases[idx]; idx = (idx + 1) % phrases.length; };
+  update();
+  const interval = setInterval(() => {
+    if (!el.isConnected) { clearInterval(interval); return; }
+    update();
+  }, 1800);
+}
+
 function startLoaderTextCycle(container) {
   const phrases = ['Researching role...', 'Analyzing fit...', 'Scoring match...', 'Checking alignment...'];
   let idx = 0;
@@ -1295,7 +1316,8 @@ function renderQuickData(data) {
       <div class="section-title">Company Overview</div>
       <div class="stat-grid">${statsHtml}</div>
     </div>
-    <div class="loading" style="padding:24px 16px"><div class="spinner"></div>Analyzing ${companyNameEl.textContent}...</div>`;
+    <div class="research-loader" id="research-loader"><span class="research-loader-icon">🔍</span><span class="research-loader-text" id="research-loader-text"></span></div>`;
+  startResearchLoaderCycle(companyNameEl.textContent);
 }
 
 function renderBullets(items, type) {
