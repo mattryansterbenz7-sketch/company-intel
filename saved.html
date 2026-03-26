@@ -387,8 +387,8 @@
     #gc-float .gc-msg-assistant .gc-bubble ul { margin: 6px 0 6px 2px; padding: 0; list-style: none; }
     #gc-float .gc-msg-assistant .gc-bubble li { padding-left: 16px; position: relative; margin-bottom: 3px; }
     #gc-float .gc-msg-assistant .gc-bubble li::before { content: '\2022'; position: absolute; left: 3px; color: #99acc2; }
-    #gc-float .gc-input-row { padding: 8px 12px; border-top: 1px solid #f0f3f8; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
-    #gc-float .gc-input { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #33475b; font-size: 13px; padding: 8px 10px; resize: none; font-family: inherit; flex: 1; min-width: 0; }
+    #gc-float .gc-input-row { padding: 10px 14px; border-top: 1px solid #f0f3f8; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+    #gc-float .gc-input { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; color: #33475b; font-size: 14px; padding: 12px 14px; resize: none; font-family: inherit; flex: 1; min-width: 0; min-height: 48px; line-height: 1.5; }
     #gc-float .gc-input:focus { outline: none; border-color: #FF7A59; }
     #gc-float .gc-send { background: #FF7A59; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: inherit; }
     #gc-float .gc-send:hover { background: #e8623f; }
@@ -525,7 +525,7 @@
     <div class="gc-body">
       <div class="gc-messages" id="gc-messages"></div>
       <div class="gc-input-row">
-        <textarea class="gc-input" id="gc-input" placeholder="Ask about your pipeline, compare companies, draft follow-ups..." rows="1"></textarea>
+        <textarea class="gc-input" id="gc-input" placeholder="Ask anything about your pipeline..." rows="2"></textarea>
         <button class="gc-send" id="gc-send">Send</button>
       </div>
       <div class="gc-actions">
