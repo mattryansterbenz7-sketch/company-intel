@@ -181,6 +181,7 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
   if (rc.transcript) richSection += `\nMeeting Transcript (summary):\n${rc.transcript.slice(0, 1500)}\n`;
   if (rc.storyTime) richSection += `\nUser Story Time Profile:\n${rc.storyTime.slice(0, 1500)}\n`;
   if (rc.notes) richSection += `\nUser Notes on This Company:\n${rc.notes}\n`;
+  if (rc.knownComp) richSection += `\n${rc.knownComp}\n`;
 
   const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
 
@@ -227,6 +228,9 @@ Analysis rules:
   "jobSnapshot": {
     "salary": "<base salary range as written in the posting, e.g. '$125,000' or '$133,500 - $200,500' — null only if truly not mentioned>",
     "salaryType": "<'base' if this is base pay, 'ote' if this is OTE/total comp only, null if no salary>",
+    "baseSalaryRange": "<base salary range ONLY if explicitly stated as base/salary, e.g. '$130,000 - $160,000' — null if not separated from OTE>",
+    "oteTotalComp": "<OTE or total compensation if stated, e.g. '$200,000 - $250,000 OTE' — null if not mentioned>",
+    "equity": "<equity/stock info if mentioned, e.g. '0.05% - 0.10%' or '$50K RSUs over 4 years' — null if not mentioned>",
     "workArrangement": "<Remote/Hybrid/On-site or null>",
     "location": "<city/state if hybrid or on-site, null if remote>",
     "employmentType": "<Full-time/Part-time/Contract or null>"
@@ -244,7 +248,7 @@ Analysis rules:
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 900,
+        max_tokens: 1100,
         messages: [{ role: 'user', content: prompt }]
       })
     });

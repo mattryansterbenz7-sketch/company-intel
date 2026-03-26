@@ -304,15 +304,23 @@ saveConfirmBtn.addEventListener('click', () => {
       reviews:        currentResearch?.reviews      || null,
       leaders:        currentResearch?.leaders      || null,
       status:         isJobSave ? 'co_watchlist' : 'co_watchlist',
-      ...(isJobSave ? {
-        isOpportunity:  true,
-        jobStage:       jobStageValue,
-        jobTitle:       currentJobTitle || null,
-        jobUrl:         currentUrl || null,
-        jobMatch:       currentResearch?.jobMatch    || null,
-        jobSnapshot:    currentResearch?.jobSnapshot || null,
-        jobDescription: currentJobDescription        || null,
-      } : {}),
+      ...(isJobSave ? (() => {
+        const snap = currentResearch?.jobSnapshot;
+        return {
+          isOpportunity:  true,
+          jobStage:       jobStageValue,
+          jobTitle:       currentJobTitle || null,
+          jobUrl:         currentUrl || null,
+          jobMatch:       currentResearch?.jobMatch    || null,
+          jobSnapshot:    snap || null,
+          jobDescription: currentJobDescription        || null,
+          baseSalaryRange:  snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,
+          oteTotalComp:     snap?.oteTotalComp || (snap?.salaryType === 'ote' ? snap?.salary : null) || null,
+          equity:           snap?.equity || null,
+          compSource:       snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp ? 'Job posting' : null,
+          compAutoExtracted: !!(snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp),
+        };
+      })() : {}),
     };
 
     // Persist any new tags
@@ -391,6 +399,19 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
   enriched.reviews = prev.reviews?.length ? prev.reviews : (currentResearch?.reviews || null);
   enriched.leaders = prev.leaders?.length ? prev.leaders : (currentResearch?.leaders || null);
   enriched.tags = [...new Set([...(prev.tags || []), ...currentSaveTags])];
+  // Backfill comp fields (don't overwrite existing)
+  const snap = currentResearch?.jobSnapshot;
+  if (!enriched.baseSalaryRange && (snap?.baseSalaryRange || (snap?.salaryType === 'base' && snap?.salary))) {
+    enriched.baseSalaryRange = snap.baseSalaryRange || snap.salary;
+    enriched.compSource = enriched.compSource || 'Job posting';
+    enriched.compAutoExtracted = true;
+  }
+  if (!enriched.oteTotalComp && (snap?.oteTotalComp || (snap?.salaryType === 'ote' && snap?.salary))) {
+    enriched.oteTotalComp = snap.oteTotalComp || snap.salary;
+    enriched.compSource = enriched.compSource || 'Job posting';
+    enriched.compAutoExtracted = true;
+  }
+  if (!enriched.equity && snap?.equity) enriched.equity = snap.equity;
 
   const updated = [enriched, ...existing.filter((_, i) => i !== dupIdx)];
   chrome.storage.local.set({ savedCompanies: updated }, () => {

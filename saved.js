@@ -400,10 +400,15 @@ function render() {
               <a class="card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}</a>
             </div>
             ${isJob && c.jobTitle ? `<div class="card-job" style="font-size:13px;font-weight:500;margin-bottom:2px">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : `<span style="color:#cbd5e1">${c.jobTitle}</span>`}</div>` : ''}
-            ${isJob && (c.salary || c.workArrangement) ? `<div class="card-job-chips">
-              ${c.salary ? `<span class="job-chip salary">💰 ${c.salary}</span>` : ''}
-              ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}${c.location ? ' · ' + c.location : ''}</span>` : ''}
-            </div>` : ''}
+            ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
+              const compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary;
+              const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
+              return `<div class="card-job-chips">
+                ${compText ? `<span class="job-chip salary ${compLabel.toLowerCase()}">💰 ${compLabel}: ${compText}</span>` : ''}
+                ${c.equity ? `<span class="job-chip equity">📈 ${c.equity}</span>` : ''}
+                ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}${c.location ? ' · ' + c.location : ''}</span>` : ''}
+              </div>`;
+            })() : ''}
             ${isJob && c.jobMatch?.score ? (() => {
               const v = scoreToVerdict(c.jobMatch.score);
               return `<div class="card-job-overview">
@@ -967,6 +972,7 @@ function renderKanban(filtered) {
               transcript: c.cachedMeetingTranscript || null,
               storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
               notes: c.notes || null,
+              knownComp: c.baseSalaryRange || c.oteTotalComp ? `Known comp: ${c.baseSalaryRange ? 'Base ' + c.baseSalaryRange : ''} ${c.oteTotalComp ? 'OTE ' + c.oteTotalComp : ''} ${c.equity ? 'Equity ' + c.equity : ''} (source: ${c.compSource || 'unknown'})`.trim() : null,
             };
             chrome.runtime.sendMessage(
               { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {}, richContext },
@@ -977,7 +983,19 @@ function renderKanban(filtered) {
                 const idx = allCompanies.findIndex(x => x.id === c.id);
                 if (idx === -1) return;
                 allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
-                if (result.jobSnapshot) allCompanies[idx].jobSnapshot = result.jobSnapshot;
+                if (result.jobSnapshot) {
+                  allCompanies[idx].jobSnapshot = result.jobSnapshot;
+                  const s = result.jobSnapshot;
+                  if (!allCompanies[idx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
+                    allCompanies[idx].baseSalaryRange = s.baseSalaryRange || s.salary;
+                    allCompanies[idx].compSource = allCompanies[idx].compSource || 'Job posting';
+                    allCompanies[idx].compAutoExtracted = true;
+                  }
+                  if (!allCompanies[idx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
+                    allCompanies[idx].oteTotalComp = s.oteTotalComp || s.salary;
+                  }
+                  if (!allCompanies[idx].equity && s.equity) allCompanies[idx].equity = s.equity;
+                }
                 chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
                   void chrome.runtime.lastError;
                   render();
@@ -1045,10 +1063,15 @@ function renderKanbanCard(c) {
         })() : '';
         return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring…</span>' : '')}</div>
-      ${isJob && (c.salary || c.workArrangement) ? `<div class="card-job-chips">
-        ${c.salary ? `<span class="job-chip salary">💰 ${c.salary}</span>` : ''}
-        ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}</span>` : ''}
-      </div>` : ''}
+      ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
+        const compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary;
+        const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
+        return `<div class="card-job-chips">
+          ${compText ? `<span class="job-chip salary ${compLabel.toLowerCase()}">💰 ${compLabel}: ${compText}</span>` : ''}
+          ${c.equity ? `<span class="job-chip equity">📈 ${c.equity}</span>` : ''}
+          ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}</span>` : ''}
+        </div>`;
+      })() : ''}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
       ${detailsHtml}
       ${(() => {

@@ -409,6 +409,26 @@ function buildOpportunity() {
     </div>
     ${jobUrlHtml}
     ${matchHtml}
+    ${entry.baseSalaryRange || entry.oteTotalComp || entry.equity ? `
+    <div class="prop-row">
+      <span class="prop-label">Base Salary</span>
+      <div class="prop-val-wrap"><input class="prop-input${entry.baseSalaryRange ? '' : ' prop-empty'}" id="opp-base-salary" value="${(entry.baseSalaryRange || '').replace(/"/g,'&quot;')}" placeholder="e.g. $150K - $180K"></div>
+    </div>
+    <div class="prop-row">
+      <span class="prop-label">OTE / Total</span>
+      <div class="prop-val-wrap"><input class="prop-input${entry.oteTotalComp ? '' : ' prop-empty'}" id="opp-ote" value="${(entry.oteTotalComp || '').replace(/"/g,'&quot;')}" placeholder="e.g. $250K OTE"></div>
+    </div>
+    <div class="prop-row">
+      <span class="prop-label">Equity</span>
+      <div class="prop-val-wrap"><input class="prop-input${entry.equity ? '' : ' prop-empty'}" id="opp-equity" value="${(entry.equity || '').replace(/"/g,'&quot;')}" placeholder="e.g. 0.1% - 0.2%"></div>
+    </div>
+    ${entry.compSource ? `<div class="prop-row"><span class="prop-label" style="font-size:10px;color:#94a3b8">Comp Source</span><div class="prop-val-wrap"><span style="font-size:11px;color:#94a3b8">${entry.compAutoExtracted ? '✨ ' : ''}${entry.compSource}</span></div></div>` : ''}
+    ` : `
+    <div class="prop-row">
+      <span class="prop-label">Base Salary</span>
+      <div class="prop-val-wrap"><input class="prop-input prop-empty" id="opp-base-salary" value="" placeholder="e.g. $150K - $180K"></div>
+    </div>
+    `}
     <div class="prop-row">
       <span class="prop-label">Next Step</span>
       <div class="prop-val-wrap">
@@ -1865,6 +1885,23 @@ function bindPanelBodyEvents(pid) {
     if (titleInput) {
       titleInput.addEventListener('blur', () => saveEntry({ jobTitle: titleInput.value.trim() || null }));
       titleInput.addEventListener('keydown', e => { if (e.key === 'Enter') titleInput.blur(); });
+    }
+
+    // Comp field bindings
+    const baseSalaryInput = document.getElementById('opp-base-salary');
+    if (baseSalaryInput) {
+      baseSalaryInput.addEventListener('blur', () => saveEntry({ baseSalaryRange: baseSalaryInput.value.trim() || null, compSource: 'Manual', compAutoExtracted: false }));
+      baseSalaryInput.addEventListener('keydown', e => { if (e.key === 'Enter') baseSalaryInput.blur(); });
+    }
+    const oteInput = document.getElementById('opp-ote');
+    if (oteInput) {
+      oteInput.addEventListener('blur', () => saveEntry({ oteTotalComp: oteInput.value.trim() || null, compSource: 'Manual', compAutoExtracted: false }));
+      oteInput.addEventListener('keydown', e => { if (e.key === 'Enter') oteInput.blur(); });
+    }
+    const equityInput = document.getElementById('opp-equity');
+    if (equityInput) {
+      equityInput.addEventListener('blur', () => saveEntry({ equity: equityInput.value.trim() || null }));
+      equityInput.addEventListener('keydown', e => { if (e.key === 'Enter') equityInput.blur(); });
     }
 
     const nextStepInput = document.getElementById('opp-next-step-input');
