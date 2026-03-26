@@ -1609,22 +1609,22 @@ function renderActivitySection() {
   section.innerHTML = `
     <div class="activity-head">
       <div class="activity-head-left">
-        <span class="activity-section-title">Pipeline Overview (all-time) &nbsp;·&nbsp; Goals tracking: ${periodName.toLowerCase()}</span>
-        <div class="activity-date-row">
-          <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">📅 ${label}${range.custom ? '' : ' <span class="act-auto-badge">auto</span>'}</span>
-          <div class="act-date-picker" id="act-date-picker" style="display:none">
-            <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
-            <span style="color:#7c98b6;font-size:13px">–</span>
-            <input type="date" id="act-date-end" class="act-date-input" value="${toInputDate(end)}">
-            <button class="act-date-apply">Apply</button>
-            ${range.custom ? `<button class="act-date-reset">Reset to auto</button>` : ''}
-          </div>
-        </div>
+        <span class="activity-section-title">Pipeline Overview</span>
       </div>
-      <div class="period-tabs">
-        <button class="period-tab${activityPeriod==='daily'?' active':''}" data-period="daily">Daily</button>
-        <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
-        <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
+      <div class="period-toggle">
+        <div class="period-tabs">
+          <button class="period-tab${activityPeriod==='daily'?' active':''}" data-period="daily">Daily</button>
+          <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
+          <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
+        </div>
+        <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">📅 ${label}${range.custom ? '' : ' <span class="act-auto-badge">auto</span>'}</span>
+        <div class="act-date-picker" id="act-date-picker" style="display:none">
+          <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
+          <span style="color:#7c98b6;font-size:13px">–</span>
+          <input type="date" id="act-date-end" class="act-date-input" value="${toInputDate(end)}">
+          <button class="act-date-apply">Apply</button>
+          ${range.custom ? `<button class="act-date-reset">Reset to auto</button>` : ''}
+        </div>
       </div>
     </div>
     <div class="activity-funnel">${funnelHtml}</div>
