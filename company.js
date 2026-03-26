@@ -1112,9 +1112,10 @@ function buildProperties() {
     }
 
     const val = (entry[f.id] || '').replace(/"/g, '&quot;');
-    // Hide empty default metadata fields — only show if they have a value
+    // Always show employees and industry; hide other empty metadata fields
+    const alwaysShow = ['employees', 'industry'].includes(f.id);
     const isMetadataField = ['employees', 'funding', 'founded', 'industry'].includes(f.id);
-    if (isMetadataField && !val) return '';
+    if (isMetadataField && !val && !alwaysShow) return '';
     const isUrl = f.type === 'url';
     const openLink = isUrl && entry[f.id]
       ? `<a class="prop-open-link" href="${entry[f.id]}" target="_blank">↗</a>` : '';
