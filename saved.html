@@ -253,7 +253,9 @@
     .funnel-label { font-size: 9px; font-weight: 700; color: #7c98b6; letter-spacing: 0.05em; text-transform: uppercase; margin-top: 5px; text-align: center; line-height: 1.3; }
     .funnel-arrow { align-self: center; color: #dfe3eb; font-size: 18px; flex-shrink: 0; padding: 0 2px; }
     .activity-goals-row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .goal-card { display: flex; align-items: center; gap: 14px; background: #fff; border: 1.5px solid #dfe3eb; border-radius: 12px; padding: 14px 18px; cursor: pointer; transition: border-color 0.15s; user-select: none; min-width: 155px; }
+    .goal-card { position: relative; display: flex; align-items: center; gap: 14px; background: #fff; border: 1.5px solid #dfe3eb; border-radius: 12px; padding: 14px 18px; cursor: pointer; transition: border-color 0.15s; user-select: none; min-width: 155px; }
+    .goal-info-icon { position: absolute; top: 7px; right: 9px; font-size: 11px; font-weight: 700; color: #b0c1d4; cursor: help; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #dfe3eb; display: flex; align-items: center; justify-content: center; font-style: italic; font-family: Georgia, serif; line-height: 1; }
+    .goal-info-icon:hover { color: #516f90; border-color: #99acc2; }
     .goal-card:hover { border-color: #b0c1d4; }
     .goal-card.editing { border-color: #FF7A59; cursor: default; }
     .goal-ring { flex-shrink: 0; }
@@ -276,6 +278,33 @@
     .act-date-input:focus { border-color: #FF7A59; }
     .act-date-apply { background: #FF7A59; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .act-date-reset { background: none; border: 1px solid #dfe3eb; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #7c98b6; cursor: pointer; font-family: inherit; }
+    .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid #dfe3eb; background: #fff; color: #7c98b6; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+    .stat-cards-edit-btn:hover { border-color: #FF7A59; color: #FF7A59; }
+    .sc-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1001; align-items: center; justify-content: center; }
+    .sc-editor-modal { background: #fff; border-radius: 16px; width: 480px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(45,62,80,0.2); }
+    .sc-editor-header { padding: 20px 24px 16px; border-bottom: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; }
+    .sc-editor-header h3 { font-size: 16px; font-weight: 800; color: #2d3e50; margin: 0; }
+    .sc-editor-body { padding: 16px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+    .sc-card-row { background: #f8fafc; border: 1px solid #eaf0f6; border-radius: 10px; padding: 12px 14px; }
+    .sc-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .sc-card-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+    .sc-card-label-input { flex: 1; border: 1px solid #dfe3eb; border-radius: 6px; padding: 5px 8px; font-size: 13px; font-weight: 600; color: #2d3e50; font-family: inherit; outline: none; }
+    .sc-card-label-input:focus { border-color: #FF7A59; }
+    .sc-card-delete { background: none; border: none; color: #e74c3c; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; }
+    .sc-card-stages { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+    .sc-stage-check { font-size: 12px; color: #516f90; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .sc-stage-check input { margin: 0; cursor: pointer; }
+    .sc-stage-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .sc-editor-footer { padding: 14px 24px; border-top: 1px solid #eaf0f6; display: flex; justify-content: space-between; align-items: center; }
+    .sc-footer-left { display: flex; gap: 8px; }
+    .sc-footer-right { display: flex; gap: 8px; }
+    .sc-btn { padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; border: none; }
+    .sc-btn-primary { background: #FF7A59; color: #fff; }
+    .sc-btn-primary:hover { background: #e8623f; }
+    .sc-btn-secondary { background: #f0f4f8; color: #516f90; border: 1px solid #dfe3eb; }
+    .sc-btn-secondary:hover { border-color: #99acc2; }
+    .sc-btn-text { background: none; border: none; color: #7c98b6; font-size: 12px; cursor: pointer; font-family: inherit; padding: 4px 8px; }
+    .sc-btn-text:hover { color: #FF7A59; }
     .stage-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1000; align-items: center; justify-content: center; }
     .stage-editor-modal { background: #fff; border: 1px solid #dfe3eb; border-radius: 16px; width: 540px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(45,62,80,0.2); }
     .stage-editor-header { padding: 20px 24px 16px; border-bottom: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; }
@@ -348,6 +377,25 @@
 
   <div id="activity-section" class="activity-section"></div>
   <div id="color-picker-popover"></div>
+
+  <div class="sc-editor-overlay" id="stat-card-editor-overlay">
+    <div class="sc-editor-modal">
+      <div class="sc-editor-header">
+        <h3>Configure Stat Cards</h3>
+      </div>
+      <div class="sc-editor-body" id="stat-card-editor-list"></div>
+      <div class="sc-editor-footer">
+        <div class="sc-footer-left">
+          <button class="sc-btn sc-btn-secondary" id="sc-add-card">+ Add Card</button>
+          <button class="sc-btn-text" id="sc-reset-defaults">Reset to defaults</button>
+        </div>
+        <div class="sc-footer-right">
+          <button class="sc-btn sc-btn-secondary" id="sc-cancel">Cancel</button>
+          <button class="sc-btn sc-btn-primary" id="sc-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="stage-editor-overlay" id="stage-editor-modal">
     <div class="stage-editor-modal">

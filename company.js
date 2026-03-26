@@ -270,13 +270,15 @@ function renderHeader() {
     const sel = e.target;
     const c = stageColor(sel.value, customOpportunityStages);
     sel.style.borderColor = c; sel.style.color = c;
+    // Record stage entry timestamp + clear timestamps for stages ahead when moving backward
     const toIdx = customOpportunityStages.findIndex(s => s.key === sel.value);
-    const idx = k => customOpportunityStages.findIndex(s => s.key === k);
-    const clears = {};
-    if (entry.appliedAt     && toIdx < idx(customOpportunityStages.find(s => /applied/i.test(s.key))?.key))        clears.appliedAt     = null;
-    if (entry.introAt       && toIdx < idx(customOpportunityStages.find(s => /intro_request/i.test(s.key))?.key))  clears.introAt       = null;
-    if (entry.interviewedAt && toIdx < idx(customOpportunityStages.find(s => /^conversations?$/i.test(s.key))?.key)) clears.interviewedAt = null;
-    saveEntry({ jobStage: sel.value, ...clears });
+    const ts = { ...(entry.stageTimestamps || {}) };
+    if (!ts[sel.value]) ts[sel.value] = Date.now();
+    for (const s of customOpportunityStages) {
+      const sIdx = customOpportunityStages.findIndex(st => st.key === s.key);
+      if (sIdx > toIdx && ts[s.key]) delete ts[s.key];
+    }
+    saveEntry({ jobStage: sel.value, stageTimestamps: ts });
   });
 
   document.getElementById('hdr-stars').querySelectorAll('.hdr-star').forEach(btn => {

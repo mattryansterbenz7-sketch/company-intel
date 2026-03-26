@@ -36,6 +36,21 @@ let activityGoals = {
   monthly: { saved: 60, applied: 20, intro: 12, interviewed: 8 }
 };
 
+const DEFAULT_STAT_CARDS = [
+  { key: 'saved',       label: 'Jobs Saved',                stages: ['*'],               color: '#0ea5e9' },
+  { key: 'applied',     label: 'Applications',              stages: ['applied'],         color: '#FF7A59' },
+  { key: 'intro',       label: 'Reached Out / Intro Asked', stages: ['intro_requested'], color: '#a78bfa' },
+  { key: 'interviewed', label: 'New Conversations Started', stages: ['conversations'],   color: '#fb923c' },
+];
+let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
+
+// Helper: record timestamp when entry first reaches a stage
+function stageEnterTimestamp(entry, stageKey) {
+  const ts = { ...(entry.stageTimestamps || {}) };
+  if (!ts[stageKey]) ts[stageKey] = Date.now();
+  return { stageTimestamps: ts };
+}
+
 function currentStages() {
   return activePipeline === 'company' ? customCompanyStages : customOpportunityStages;
 }
@@ -142,7 +157,7 @@ document.addEventListener('click', () => {
 });
 
 function load() {
-  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations'], (data) => {
+  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs'], (data) => {
     const { savedCompanies, allTags } = data;
     // Migration: old customStages → opportunityStages
     const storedOpp = data.opportunityStages || data.customStages;
@@ -155,26 +170,27 @@ function load() {
       activityGoals.monthly   = { ...activityGoals.monthly,   ...(data.activityGoals.monthly   || {}) };
     }
     if (data.stageCelebrations) stageCelebrations = data.stageCelebrations;
+    if (data.statCardConfigs?.length) statCardConfigs = data.statCardConfigs;
     updateStageDynamicCSS();
     allCompanies = (savedCompanies || []).sort((a, b) => b.savedAt - a.savedAt);
 
-    // One-time backfill: stamp appliedAt/interviewedAt for entries already in those stages
-    // that predate the stamping logic. Uses savedAt as best available approximation.
+    // Migrate old per-field timestamps → generic stageTimestamps map
     let needsBackfill = false;
     allCompanies = allCompanies.map(c => {
       if (!c.isOpportunity) return c;
       const stage = c.jobStage || '';
-      if (!c.appliedAt && /applied/i.test(stage)) {
+      let st = c.stageTimestamps ? { ...c.stageTimestamps } : {};
+      let migrated = false;
+      // Migrate old fields
+      if (c.appliedAt && !st['applied'])        { st['applied'] = c.appliedAt; migrated = true; }
+      if (c.introAt && !st['intro_requested'])   { st['intro_requested'] = c.introAt; migrated = true; }
+      if (c.interviewedAt && !st['conversations']) { st['conversations'] = c.interviewedAt; migrated = true; }
+      // Backfill: if entry is at a stage but has no timestamp for it, stamp it
+      if (stage && !st[stage]) { st[stage] = c.savedAt || Date.now(); migrated = true; }
+      if (migrated) {
         needsBackfill = true;
-        return { ...c, appliedAt: c.savedAt || Date.now() };
-      }
-      if (!c.introAt && /intro_request/i.test(stage)) {
-        needsBackfill = true;
-        return { ...c, introAt: c.savedAt || Date.now() };
-      }
-      if (!c.interviewedAt && /^conversations?$/i.test(stage)) {
-        needsBackfill = true;
-        return { ...c, interviewedAt: c.savedAt || Date.now() };
+        const { appliedAt, introAt, interviewedAt, ...rest } = c;
+        return { ...rest, stageTimestamps: st };
       }
       return c;
     });
@@ -510,10 +526,12 @@ function render() {
       const field = sel.dataset.stageField || 'status';
       const entry = allCompanies.find(c => c.id === sel.dataset.id);
       const now = Date.now();
-      const changes = { [field]: sel.value, ...(entry ? backfillClearTimestamps(entry, sel.value) : {}) };
-      if (/applied/i.test(sel.value)) { changes.lastActivity = now; if (!entry?.appliedAt) changes.appliedAt = now; }
-      if (/intro_request/i.test(sel.value) && !entry?.introAt) changes.introAt = now;
-      if (/^conversations?$/i.test(sel.value) && !entry?.interviewedAt) changes.interviewedAt = now;
+      const changes = {
+        [field]: sel.value,
+        lastActivity: now,
+        ...(entry ? stageEnterTimestamp(entry, sel.value) : { stageTimestamps: { [sel.value]: now } }),
+        ...(entry ? backfillClearTimestamps(entry, sel.value) : {}),
+      };
       updateCompany(sel.dataset.id, changes);
     });
   });
@@ -825,16 +843,21 @@ function fireConfetti(config) {
   requestAnimationFrame(animate);
 }
 
-// Returns changes that clear activity timestamps when moving backwards in the pipeline
+// Clear stage timestamps for stages ahead of the destination when moving backwards
 function backfillClearTimestamps(entry, toKey) {
   const stages = customOpportunityStages;
-  const idx = k => stages.findIndex(s => s.key === k);
-  const toIdx = idx(toKey);
-  const clears = {};
-  if (entry.appliedAt    && toIdx < idx(stages.find(s => /applied/i.test(s.key))?.key))       clears.appliedAt    = null;
-  if (entry.introAt      && toIdx < idx(stages.find(s => /intro_request/i.test(s.key))?.key)) clears.introAt      = null;
-  if (entry.interviewedAt && toIdx < idx(stages.find(s => /^conversations?$/i.test(s.key))?.key)) clears.interviewedAt = null;
-  return clears;
+  const toIdx = stages.findIndex(s => s.key === toKey);
+  if (toIdx < 0) return {};
+  const ts = { ...(entry.stageTimestamps || {}) };
+  let changed = false;
+  for (const s of stages) {
+    const sIdx = stages.findIndex(st => st.key === s.key);
+    if (sIdx > toIdx && ts[s.key]) {
+      delete ts[s.key];
+      changed = true;
+    }
+  }
+  return changed ? { stageTimestamps: ts } : {};
 }
 
 function updateCompany(id, changes) {
@@ -1041,10 +1064,12 @@ function bindKanbanEvents(board) {
     const curStage = activePipeline === 'opportunity' ? entry.jobStage : entry.status;
     if (curStage !== newStatus) {
       const now = Date.now();
-      const changes = { [stageField]: newStatus, ...backfillClearTimestamps(entry, newStatus) };
-      if (/applied/i.test(newStatus)) { changes.lastActivity = now; if (!entry.appliedAt) changes.appliedAt = now; }
-      if (/intro_request/i.test(newStatus) && !entry.introAt) changes.introAt = now;
-      if (/^conversations?$/i.test(newStatus) && !entry.interviewedAt) changes.interviewedAt = now;
+      const changes = {
+        [stageField]: newStatus,
+        lastActivity: now,
+        ...stageEnterTimestamp(entry, newStatus),
+        ...backfillClearTimestamps(entry, newStatus),
+      };
       updateCompany(draggingId, changes);
       if (activePipeline !== 'company') {
         const confettiConfig = getConfettiConfig(newStatus);
@@ -1530,10 +1555,22 @@ function renderActivitySection() {
   const opps = allCompanies.filter(c => c.isOpportunity);
   const inPeriod = ts => ts && ts >= start && ts <= end;
 
-  const savedCount     = opps.filter(c => inPeriod(c.savedAt)).length;
-  const appliedCount   = opps.filter(c => inPeriod(c.appliedAt)).length;
-  const introCount     = opps.filter(c => inPeriod(c.introAt)).length;
-  const interviewCount = opps.filter(c => inPeriod(c.interviewedAt)).length;
+  // Config-driven stat counting
+  const smap = Object.fromEntries(customOpportunityStages.map(s => [s.key, s.label]));
+  const goalDefs = statCardConfigs.map(card => {
+    let count;
+    if (card.stages.includes('*')) {
+      count = opps.filter(c => inPeriod(c.savedAt)).length;
+    } else {
+      count = opps.filter(c =>
+        card.stages.some(sk => inPeriod(c.stageTimestamps?.[sk]))
+      ).length;
+    }
+    const tooltip = card.stages.includes('*')
+      ? 'Counts all opportunities saved in this period'
+      : 'Counts entries reaching: ' + card.stages.map(k => smap[k] || k).join(', ');
+    return { ...card, count, goal: goals[card.key] || 0, tooltip };
+  });
 
   const funnelStages = customOpportunityStages
     .filter(s => s.key !== 'rejected')
@@ -1546,15 +1583,9 @@ function renderActivitySection() {
     </div>${i < funnelStages.length - 1 ? '<div class="funnel-arrow">›</div>' : ''}
   `).join('');
 
-  const goalDefs = [
-    { key: 'saved',       label: 'Jobs Saved',                count: savedCount,     goal: goals.saved,       color: '#0ea5e9' },
-    { key: 'applied',     label: 'Applications',              count: appliedCount,   goal: goals.applied,     color: '#FF7A59' },
-    { key: 'intro',       label: 'Reached Out / Intro Asked', count: introCount,     goal: goals.intro,       color: '#a78bfa' },
-    { key: 'interviewed', label: 'New Conversations Started', count: interviewCount, goal: goals.interviewed, color: '#fb923c' },
-  ];
-
   const goalCardsHtml = goalDefs.map(g => `
     <div class="goal-card" data-goal-key="${g.key}">
+      <span class="goal-info-icon" title="${g.tooltip}">i</span>
       <div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>
       <div class="goal-text">
         <div class="goal-fraction">${g.count}<span class="goal-denom">/${g.goal}</span></div>
@@ -1597,7 +1628,10 @@ function renderActivitySection() {
       </div>
     </div>
     <div class="activity-funnel">${funnelHtml}</div>
-    <div class="activity-goals-row">${goalCardsHtml}</div>
+    <div class="activity-goals-row">
+      ${goalCardsHtml}
+      <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
+    </div>
   `;
 
   section.querySelectorAll('.period-tab').forEach(btn => {
@@ -1661,6 +1695,122 @@ function renderActivitySection() {
       if (e.key === 'Escape') renderActivitySection();
     });
     inp.addEventListener('click', e => e.stopPropagation());
+  });
+
+  // Stat card editor button
+  section.querySelector('#stat-cards-edit-btn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    openStatCardEditor();
+  });
+}
+
+function openStatCardEditor() {
+  const overlay = document.getElementById('stat-card-editor-overlay');
+  if (!overlay) return;
+  const stages = customOpportunityStages;
+
+  function renderEditor() {
+    const list = overlay.querySelector('#stat-card-editor-list');
+    list.innerHTML = statCardConfigs.map((card, i) => {
+      const stageChecks = stages.map(s => {
+        const checked = card.stages.includes(s.key) ? 'checked' : '';
+        return `<label class="sc-stage-check"><input type="checkbox" data-card="${i}" data-stage="${s.key}" ${checked}> <span class="sc-stage-dot" style="background:${s.color}"></span>${s.label}</label>`;
+      }).join('');
+      const isSaved = card.stages.includes('*');
+      return `
+        <div class="sc-card-row" data-idx="${i}">
+          <div class="sc-card-head">
+            <span class="sc-card-swatch" style="background:${card.color}"></span>
+            <input class="sc-card-label-input" type="text" value="${card.label}" data-card="${i}" placeholder="Card name">
+            <button class="sc-card-delete" data-card="${i}" title="Remove card">&times;</button>
+          </div>
+          <div class="sc-card-stages">
+            <label class="sc-stage-check"><input type="checkbox" data-card="${i}" data-stage="*" ${isSaved ? 'checked' : ''}> All saved (savedAt)</label>
+            ${stageChecks}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  renderEditor();
+  overlay.style.display = 'flex';
+
+  // Delegate events
+  const listEl = overlay.querySelector('#stat-card-editor-list');
+  listEl.onclick = e => {
+    const del = e.target.closest('.sc-card-delete');
+    if (del) {
+      const idx = parseInt(del.dataset.card);
+      statCardConfigs.splice(idx, 1);
+      renderEditor();
+    }
+  };
+  listEl.onchange = e => {
+    const inp = e.target;
+    if (inp.type === 'checkbox') {
+      const ci = parseInt(inp.dataset.card);
+      const sk = inp.dataset.stage;
+      const card = statCardConfigs[ci];
+      if (!card) return;
+      if (sk === '*') {
+        // Toggle "all saved" mode
+        if (inp.checked) { card.stages = ['*']; }
+        else { card.stages = card.stages.filter(s => s !== '*'); }
+      } else {
+        card.stages = card.stages.filter(s => s !== '*'); // uncheck "all saved" if picking specific
+        if (inp.checked) { if (!card.stages.includes(sk)) card.stages.push(sk); }
+        else { card.stages = card.stages.filter(s => s !== sk); }
+      }
+      renderEditor();
+    }
+  };
+  listEl.oninput = e => {
+    if (e.target.classList.contains('sc-card-label-input')) {
+      const ci = parseInt(e.target.dataset.card);
+      if (statCardConfigs[ci]) statCardConfigs[ci].label = e.target.value;
+    }
+  };
+
+  // Add card button
+  overlay.querySelector('#sc-add-card').onclick = () => {
+    const key = 'custom_' + Date.now();
+    statCardConfigs.push({ key, label: 'New Metric', stages: [], color: '#94a3b8' });
+    // Ensure goals have an entry for this key
+    for (const p of ['daily', 'weekly', 'monthly']) {
+      if (!activityGoals[p][key]) activityGoals[p][key] = 0;
+    }
+    renderEditor();
+  };
+
+  // Reset to defaults
+  overlay.querySelector('#sc-reset-defaults').onclick = () => {
+    statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
+    renderEditor();
+  };
+
+  // Save
+  overlay.querySelector('#sc-save').onclick = () => {
+    // Remove cards with no label
+    statCardConfigs = statCardConfigs.filter(c => c.label.trim());
+    chrome.storage.local.set({ statCardConfigs }, () => {
+      void chrome.runtime.lastError;
+      overlay.style.display = 'none';
+      renderActivitySection();
+    });
+  };
+
+  // Cancel
+  overlay.querySelector('#sc-cancel').onclick = () => {
+    // Reload from storage to discard edits
+    chrome.storage.local.get(['statCardConfigs'], d => {
+      statCardConfigs = d.statCardConfigs?.length ? d.statCardConfigs : DEFAULT_STAT_CARDS.map(c => ({ ...c }));
+      overlay.style.display = 'none';
+    });
+  };
+
+  // Close on overlay click
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.querySelector('#sc-cancel').click();
   });
 }
 
