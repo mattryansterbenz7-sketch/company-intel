@@ -667,13 +667,21 @@ function extractLinkedInJobMeta() {
     }
     if (/\$[\d,K]+/.test(t) && t.length < 60) {
       if (PERK_RE.test(t)) result.perks.push(t);
-      else if (!result.salary && SALARY_RE.test(t)) result.salary = t;
+      // Don't extract salary from insight chips — LinkedIn shows market estimates
+      // (e.g. "$70K/yr - $80K/yr") that aren't from the posting. Salary is only
+      // extracted from the job description body in the dedicated scan below.
+      else if (/\$[\d,K]+/.test(t)) {
+        console.log('[Salary] Skipped insight chip (may be LinkedIn estimate):', t);
+      }
     }
   }
 
-  // Dedicated salary scan — runs regardless of chip results, catches salary in description body (p/div elements)
+  // Dedicated salary scan — only scans the job description BODY (not insight chips)
+  // Look for explicit salary ranges or annual salary mentions
   if (!result.salary) {
-    for (const el of scope.querySelectorAll('p, div, span, li')) {
+    const descEl = scope.querySelector('#job-details, .jobs-description__content, [class*="jobs-description"]');
+    const scanScope = descEl || scope;
+    for (const el of scanScope.querySelectorAll('p, div, span, li')) {
       if (el.children.length > 0) continue;
       const t = el.textContent?.trim();
       if (!t || !/\$[\d,]/.test(t) || t.length > 100) continue;
@@ -681,10 +689,13 @@ function extractLinkedInJobMeta() {
       if (/\$[\d,]+(?:K)?\s*[-–—]\s*\$[\d,]+/.test(t) ||
           /\$[\d,]+(?:K)?(?:\s*(?:per year|\/yr|annually|USD|a year))/i.test(t)) {
         result.salary = t;
+        console.log('[Salary] Extracted from job description body:', t);
         break;
       }
     }
   }
+  if (result.salary) console.log('[Salary] Final result:', result.salary);
+  else console.log('[Salary] No salary found in posting');
 
   // Location — specific selectors then broad fallback
   const locationSelectors = [

@@ -212,7 +212,8 @@ Analysis rules:
 6. Read between the lines on culture, scope, and autonomy — but only from what the posting actually implies, not from what it omits.
 7. Use loved/hated role examples as calibration for concrete signals you find in the posting.
 8. Salary: extract the BASE salary or base salary range if stated anywhere in the posting (including legal/compliance disclosure sections at the bottom). If multiple figures are given (e.g., base + OTE/commission), extract the base salary only and set salaryType to "base". If only total/OTE compensation is mentioned, extract that and set salaryType to "ote". If no number is mentioned anywhere, use null for both.
-9. Do NOT flag missing salary information as a red flag. Most job postings don't include salary — it's normal and expected, not a negative signal. Only flag salary as a red flag if a salary IS disclosed and it's clearly below the candidate's floor.
+9. Do NOT flag missing salary information as a red flag. Most job postings don't include salary — it's normal and expected, not a negative signal.
+10. If a salary IS disclosed in the posting, compare it against the candidate's salary floor. If the disclosed base salary (or the top of the range) is below the candidate's floor, this is a MAJOR red flag — include it in redFlags with the specific numbers (e.g., "Base salary $70-80K is well below your $150K floor"). This should also significantly lower the score (at least -2 points). Salary below floor is one of the strongest disqualifying signals.
 
 {
   "jobMatch": {
