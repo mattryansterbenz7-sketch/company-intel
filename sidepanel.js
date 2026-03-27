@@ -909,19 +909,23 @@ function updateJobTitleBar() {
     jobBar.style.display = 'flex';
     if (jobContent) jobContent.style.display = 'block';
     if (jobChevron) jobChevron.classList.add('open');
-    saveJobBtn.classList.remove('saved');
-    saveJobBtn.textContent = '+ Save Job Posting';
-    // Check if this job posting was already saved
-    const company = companyNameEl?.textContent;
-    if (company && currentJobTitle) {
-      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-        const dup = (savedCompanies || []).find(
-          c => c.isOpportunity &&
-            c.company.toLowerCase() === company.toLowerCase() &&
-            (c.jobTitle || '').toLowerCase() === currentJobTitle.toLowerCase()
-        );
-        if (dup) { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
-      });
+    // Check if this company already has a saved opportunity (any role)
+    if (currentSavedEntry?.isOpportunity) {
+      saveJobBtn.textContent = '✓ Saved';
+      saveJobBtn.classList.add('saved');
+    } else {
+      saveJobBtn.classList.remove('saved');
+      saveJobBtn.textContent = '+ Save Job Posting';
+      // Also check storage in case currentSavedEntry hasn't been set yet
+      const company = companyNameEl?.textContent;
+      if (company) {
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+          const dup = (savedCompanies || []).find(
+            c => c.isOpportunity && companiesMatch(c.company, company)
+          );
+          if (dup) { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
+        });
+      }
     }
   } else {
     jobBar.style.display = 'none';
