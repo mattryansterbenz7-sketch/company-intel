@@ -1054,7 +1054,7 @@ function renderKanbanCard(c) {
     || c.intelligence?.eli5 || c.intelligence?.whosBuyingIt || c.reviews?.length;
   const detailsHtml = hasDetails ? `
     <details class="kanban-details">
-      <summary class="kanban-details-toggle">Details</summary>
+      <summary class="kanban-details-toggle">Company Intel</summary>
       <div class="kanban-details-body">
         ${c.jobMatch?.jobSummary ? `<div class="kanban-detail-summary">${c.jobMatch.jobSummary}</div>` : ''}
         ${c.jobMatch?.verdict ? `<div class="kanban-detail-verdict">${c.jobMatch.verdict}</div>` : ''}
@@ -1100,7 +1100,6 @@ function renderKanbanCard(c) {
         </div>`;
       })() : ''}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
-      ${detailsHtml}
       ${(() => {
         const events = c.cachedCalendarEvents || [];
         const past = events.filter(e => new Date(e.start) <= new Date()).sort((a, b) => new Date(b.start) - new Date(a.start));
@@ -1143,6 +1142,7 @@ function renderKanbanCard(c) {
           ${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}
         </div>
       </div>
+      ${detailsHtml}
     </div>`;
 }
 
