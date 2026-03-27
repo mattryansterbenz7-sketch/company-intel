@@ -1357,6 +1357,13 @@ function applyContactsFromEmails(emails) {
   bindPanelBodyEvents('leadership');
 }
 
+// Filter out non-human / mass email addresses
+function isNonHumanEmail(email) {
+  const local = email.split('@')[0].toLowerCase();
+  return /^(noreply|no-reply|no\.reply|donotreply|alerts?|notifications?|newsletter|marketing|updates?|digest|mailer|support|info|hello|team|news|feedback|billing|admin|postmaster|webmaster|contact|sales|help|service|system|bot|automated|unsubscribe)$/.test(local)
+    || /noreply|no-reply|donotreply|notification|newsletter|mailer-daemon|bounce/i.test(local);
+}
+
 // Extracts contacts from all participants in company-related emails
 function extractContactsFromEmails(emails) {
   const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
@@ -1401,6 +1408,10 @@ function extractContactsFromEmails(emails) {
       if (!email) return;
       if (detectedUserEmail && email === detectedUserEmail) return;
       if (existing.has(email)) return;
+      // Only add contacts from the company's domain
+      if (domain && !isCompanyEmail(email)) return;
+      // Filter out non-human / mass email senders
+      if (isNonHumanEmail(email)) return;
       existing.add(email);
       newContacts.push({ name: name || email.split('@')[0], email, source: 'email', detectedAt: Date.now() });
     });

@@ -203,6 +203,32 @@ function load() {
       return c;
     });
     if (needsBackfill) chrome.storage.local.set({ savedCompanies: allCompanies });
+
+    // One-time cleanup: remove non-human and non-domain contacts from knownContacts
+    if (!localStorage.getItem('ci_contactCleanupDone')) {
+      const NON_HUMAN_RE = /^(noreply|no-reply|no\.reply|donotreply|alerts?|notifications?|newsletter|marketing|updates?|digest|mailer|support|info|hello|team|news|feedback|billing|admin|postmaster|webmaster|contact|sales|help|service|system|bot|automated|unsubscribe)$/i;
+      const NON_HUMAN_PART_RE = /noreply|no-reply|donotreply|notification|newsletter|mailer-daemon|bounce/i;
+      let cleaned = false;
+      allCompanies = allCompanies.map(c => {
+        if (!c.knownContacts?.length) return c;
+        const domain = (c.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').toLowerCase();
+        const baseDomain = domain ? domain.split('.')[0] : '';
+        const filtered = c.knownContacts.filter(k => {
+          const emailDomain = (k.email?.split('@')[1] || '').toLowerCase();
+          const local = (k.email?.split('@')[0] || '').toLowerCase();
+          // Must match company domain
+          if (domain && emailDomain !== domain && (!baseDomain || emailDomain.split('.')[0] !== baseDomain)) return false;
+          // Must not be a non-human address
+          if (NON_HUMAN_RE.test(local) || NON_HUMAN_PART_RE.test(local)) return false;
+          return true;
+        });
+        if (filtered.length !== c.knownContacts.length) { cleaned = true; return { ...c, knownContacts: filtered }; }
+        return c;
+      });
+      if (cleaned) chrome.storage.local.set({ savedCompanies: allCompanies });
+      localStorage.setItem('ci_contactCleanupDone', '1');
+    }
+
     allKnownTags = allTags || [];
     // Sync any tags from saved entries that aren't in allTags yet
     const tagsFromEntries = [...new Set(allCompanies.flatMap(c => c.tags || []))];
