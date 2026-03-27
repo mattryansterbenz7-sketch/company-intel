@@ -71,7 +71,7 @@ function openFloatingChatWidget(context) {
   widget._ciContext = context;
   widget.innerHTML = `
     <style>
-      #ci-sp-float-chat { position: fixed; bottom: 24px; right: 24px; width: 420px; height: 520px; max-height: 80vh; background: #fff; border-radius: 14px; box-shadow: 0 12px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: column; z-index: 2147483647; border: 1px solid #dfe3eb; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; resize: both; min-width: 320px; min-height: 300px; }
+      #ci-sp-float-chat { position: fixed; bottom: 24px; right: 24px; width: 420px; height: 520px; background: #fff; border-radius: 14px; box-shadow: 0 12px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: column; z-index: 2147483647; border: 1px solid #dfe3eb; overflow: auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; resize: both; min-width: 300px; min-height: 250px; overflow: hidden; }
       .ci-fc-header { height: 48px; padding: 0 10px 0 14px; background: #2D3E50; display: flex; align-items: center; justify-content: space-between; cursor: grab; flex-shrink: 0; border-radius: 14px 14px 0 0; user-select: none; }
       .ci-fc-header:active { cursor: grabbing; }
       .ci-fc-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; color: #fff; font-size: 14px; font-weight: 700; }
@@ -211,8 +211,8 @@ function openFloatingChatWidget(context) {
   });
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    widget.style.right = Math.max(0, sr - (e.clientX - sx)) + 'px';
-    widget.style.bottom = Math.max(0, sb - (e.clientY - sy)) + 'px';
+    widget.style.right = (sr - (e.clientX - sx)) + 'px';
+    widget.style.bottom = (sb - (e.clientY - sy)) + 'px';
   });
   document.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = ''; });
 
