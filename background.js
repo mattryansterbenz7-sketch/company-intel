@@ -117,14 +117,31 @@ async function enrichFromWebResearch(company, domain) {
       fetchSerperResults(qd + ' official website', 2),
       fetchSerperResults('site:linkedin.com/company ' + q, 2),
     ]);
-    // Try Apollo with discovered domain if we don't have one
+    console.log('[Enrich] Serper results:', {
+      product: productResults.length,
+      website: websiteResults.length,
+      linkedin: linkedinResults.length,
+    });
+
+    // Try Apollo with a discovered domain (handles cases where original domain was wrong or missing)
     let apolloFallback = null;
-    if (!domain) {
-      const foundDomain = extractDomainFromResults([...websiteResults, ...productResults], company);
-      if (foundDomain) apolloFallback = await fetchApolloData(foundDomain, company);
+    const discoveredDomain = extractDomainFromResults([...websiteResults, ...productResults], company);
+    if (discoveredDomain && discoveredDomain !== domain) {
+      console.log('[Enrich] Discovered domain:', discoveredDomain, '(original:', domain, ')');
+      try {
+        apolloFallback = await fetchApolloData(discoveredDomain, company);
+        if (apolloFallback?.estimated_num_employees) {
+          console.log('[Enrich] Apollo succeeded with discovered domain:', discoveredDomain);
+        }
+      } catch(e) { console.log('[Enrich] Apollo retry failed:', e.message); }
     }
+
     const linkedinFirmo = parseLinkedInCompanySnippet(linkedinResults);
+    console.log('[Enrich] LinkedIn firmo:', linkedinFirmo);
+
     const snippets = [...productResults, ...websiteResults].map(r => `${r.title}: ${r.snippet}`).join('\n');
+    console.log('[Enrich] Snippets for Haiku:', snippets.length, 'chars');
+
     // Lightweight Claude call just for firmographics from web snippets
     let aiEstimate = {};
     if (snippets.length > 50) {
@@ -135,10 +152,18 @@ async function enrichFromWebResearch(company, domain) {
           body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }] })
         });
         const d = await res.json();
-        const t = (d.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-        aiEstimate = JSON.parse(t);
-      } catch(e) {}
+        if (!res.ok) { console.log('[Enrich] Haiku API error:', res.status, d); }
+        else {
+          const t = (d.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+          console.log('[Enrich] Haiku raw response:', t);
+          aiEstimate = JSON.parse(t);
+          console.log('[Enrich] Haiku parsed:', aiEstimate);
+        }
+      } catch(e) { console.log('[Enrich] Haiku parse error:', e.message); }
+    } else {
+      console.log('[Enrich] Skipping Haiku — snippets too short:', snippets.length);
     }
+
     const result = {
       source: 'Web research',
       company,
@@ -147,12 +172,12 @@ async function enrichFromWebResearch(company, domain) {
       employees: apolloFallback?.estimated_num_employees ? String(apolloFallback.estimated_num_employees) : (linkedinFirmo?.employees || aiEstimate.employees || null),
       funding: apolloFallback?.total_funding_printed || linkedinFirmo?.funding || aiEstimate.funding || null,
       foundedYear: apolloFallback?.founded_year || (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
-      companyWebsite: apolloFallback?.website_url || null,
+      companyWebsite: apolloFallback?.website_url || discoveredDomain ? `https://${discoveredDomain}` : null,
       companyLinkedin: (apolloFallback?.linkedin_url && !apolloFallback.linkedin_url.includes('/company/unavailable')) ? apolloFallback.linkedin_url : null,
       leaders: [],
       raw: { apolloFallback, linkedinFirmo, aiEstimate },
     };
-    console.log('[Enrich] Web Research result:', { employees: result.employees, industry: result.industry, funding: result.funding });
+    console.log('[Enrich] Web Research final:', { employees: result.employees, industry: result.industry, funding: result.funding, website: result.companyWebsite });
     return result;
   } catch (e) {
     console.log('[Enrich] Web Research failed:', e.message);
@@ -160,13 +185,21 @@ async function enrichFromWebResearch(company, domain) {
   }
 }
 
-// Pipeline: try providers in order, return first success
+// Pipeline: try providers in order, return first with actual data
 const ENRICHMENT_PROVIDERS = [enrichFromApollo, enrichFromWebResearch];
+
+function hasEnrichmentData(result) {
+  return result && (result.employees || result.industry || result.funding || result.foundedYear || result.companyWebsite);
+}
 
 async function runEnrichmentPipeline(company, domain) {
   for (const provider of ENRICHMENT_PROVIDERS) {
     const result = await provider(company, domain);
-    if (result) return result;
+    if (hasEnrichmentData(result)) {
+      console.log('[Enrich] Pipeline success from:', result.source);
+      return result;
+    }
+    if (result) console.log('[Enrich] Provider returned empty data, trying next');
   }
   console.log('[Enrich] All providers failed for:', company);
   return emptyEnrichment();
