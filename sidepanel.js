@@ -964,46 +964,24 @@ function renderOppFields(savedEntry) {
     const oppStages = data.opportunityStages || data.customStages || Object.entries(JOB_STATUSES).map(([key, label]) => ({ key, label }));
     const coStages = data.companyStages || Object.entries(COMPANY_STATUSES).map(([key, label]) => ({ key, label }));
 
+    // Only show stage dropdowns and next step — other fields are in Company Overview below
     const fields = [];
-    if (savedEntry.companyWebsite) {
-      const display = savedEntry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      fields.push(['Website', `<a href="${savedEntry.companyWebsite}" target="_blank">${display}</a>`]);
-    }
-    if (savedEntry.companyLinkedin) {
-      fields.push(['LinkedIn', `<a href="${savedEntry.companyLinkedin}" target="_blank">LinkedIn ↗</a>`]);
-    }
-    if (savedEntry.founded) fields.push(['Founded', savedEntry.founded]);
-    if (savedEntry.funding) fields.push(['Funding', savedEntry.funding]);
-    if (savedEntry.industry) fields.push(['Industry', savedEntry.industry]);
-    if (savedEntry.employees) fields.push(['Employees', savedEntry.employees]);
 
-    // Company stage dropdown (always show)
+    // Opportunity stage dropdown (most important — show first)
+    if (savedEntry.isOpportunity) {
+      const oppOptions = oppStages.map(s =>
+        `<option value="${s.key}" ${(savedEntry.jobStage || 'needs_review') === s.key ? 'selected' : ''}>${s.label}</option>`
+      ).join('');
+      fields.push(['Stage', `<select class="sp-stage-select sp-stage-opp" id="sp-opp-stage">${oppOptions}</select>`]);
+    }
+
+    // Company stage dropdown
     const coOptions = coStages.map(s =>
       `<option value="${s.key}" ${(savedEntry.status || 'co_watchlist') === s.key ? 'selected' : ''}>${s.label}</option>`
     ).join('');
     fields.push(['Company', `<select class="sp-stage-select" id="sp-co-stage">${coOptions}</select>`]);
 
-    // Opportunity stage dropdown (show if opportunity)
-    if (savedEntry.isOpportunity) {
-      const oppOptions = oppStages.map(s =>
-        `<option value="${s.key}" ${(savedEntry.jobStage || 'needs_review') === s.key ? 'selected' : ''}>${s.label}</option>`
-      ).join('');
-      fields.push(['Opp Stage', `<select class="sp-stage-select sp-stage-opp" id="sp-opp-stage">${oppOptions}</select>`]);
-    }
-
-    const role = (savedEntry.jobTitle && savedEntry.jobTitle !== 'New Opportunity') ? savedEntry.jobTitle : null;
-    if (role) fields.push(['Role', role]);
     if (savedEntry.nextStep) fields.push(['Next Step', savedEntry.nextStep]);
-    if (savedEntry.nextStepDate) {
-      const d = new Date(savedEntry.nextStepDate);
-      const formatted = isNaN(d) ? savedEntry.nextStepDate : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      fields.push(['Next Step Date', formatted]);
-    }
-    const lastActivityTs = Math.max(savedEntry.cachedEmailsAt || 0, savedEntry.cachedMeetingNotesAt || 0, savedEntry.cachedGranolaAt || 0, savedEntry.savedAt || 0);
-    if (lastActivityTs) {
-      const d = new Date(lastActivityTs);
-      fields.push(['Last Activity', d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })]);
-    }
 
     if (!fields.length) { el.style.display = 'none'; return; }
 
@@ -1062,17 +1040,9 @@ function showCrmLink(savedEntry) {
   crmLink.href = chrome.runtime.getURL(`company.html?id=${savedEntry.id}${focusParam}`);
   crmLink.style.display = 'inline';
   crmLink.onclick = () => window.close();
+  // Stage is now shown as dropdown in sp-opp-fields — hide the header text
   const stageEl = document.getElementById('crm-stage');
-  if (stageEl) {
-    let stageLabel = '';
-    if (savedEntry.isOpportunity && savedEntry.jobStage) {
-      stageLabel = JOB_STATUSES[savedEntry.jobStage] || savedEntry.jobStage;
-    } else if (savedEntry.status) {
-      stageLabel = COMPANY_STATUSES[savedEntry.status] || savedEntry.status;
-    }
-    stageEl.textContent = stageLabel || '';
-    stageEl.style.display = stageLabel ? 'block' : 'none';
-  }
+  if (stageEl) stageEl.style.display = 'none';
   renderOppFields(savedEntry);
 }
 
