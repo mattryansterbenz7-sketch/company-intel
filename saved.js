@@ -37,7 +37,7 @@ let activityGoals = {
 };
 
 const DEFAULT_STAT_CARDS = [
-  { key: 'saved',       label: 'Jobs Saved',                stages: ['*'],               color: '#0ea5e9' },
+  { key: 'saved',       label: 'Opportunities Saved',        stages: ['*'],               color: '#0ea5e9' },
   { key: 'applied',     label: 'Applications',              stages: ['applied'],         color: '#FF7A59' },
   { key: 'intro',       label: 'Reached Out / Intro Asked', stages: ['intro_requested'], color: '#a78bfa' },
   { key: 'interviewed', label: 'New Conversations Started', stages: ['conversations'],   color: '#fb923c' },
