@@ -111,10 +111,11 @@ async function enrichFromWebResearch(company, domain) {
   console.log('[Enrich] Trying Web Research for:', company);
   try {
     const q = `"${company}"`;
-    const qd = domain ? `"${company}" ${domain}` : q;
+    // When no domain, add "company" or "software" to disambiguate generic names
+    const qd = domain ? `"${company}" ${domain}` : `"${company}" company software`;
     const [productResults, websiteResults, linkedinResults] = await Promise.all([
-      fetchSerperResults(qd + ' what does it do product overview company', 3),
-      fetchSerperResults(qd + ' official website', 2),
+      fetchSerperResults(qd + ' what does it do product overview', 3),
+      fetchSerperResults(domain ? `"${company}" ${domain} official website` : `"${company}" company official website`, 2),
       fetchSerperResults('site:linkedin.com/company ' + q, 2),
     ]);
     console.log('[Enrich] Serper results:', {
@@ -123,18 +124,8 @@ async function enrichFromWebResearch(company, domain) {
       linkedin: linkedinResults.length,
     });
 
-    // Try Apollo with a discovered domain (handles cases where original domain was wrong or missing)
-    let apolloFallback = null;
+    // Extract domain from search results for website field
     const discoveredDomain = extractDomainFromResults([...websiteResults, ...productResults], company);
-    if (discoveredDomain && discoveredDomain !== domain) {
-      console.log('[Enrich] Discovered domain:', discoveredDomain, '(original:', domain, ')');
-      try {
-        apolloFallback = await fetchApolloData(discoveredDomain, company);
-        if (apolloFallback?.estimated_num_employees) {
-          console.log('[Enrich] Apollo succeeded with discovered domain:', discoveredDomain);
-        }
-      } catch(e) { console.log('[Enrich] Apollo retry failed:', e.message); }
-    }
 
     const linkedinFirmo = parseLinkedInCompanySnippet(linkedinResults);
     console.log('[Enrich] LinkedIn firmo:', linkedinFirmo);
@@ -168,14 +159,14 @@ async function enrichFromWebResearch(company, domain) {
       source: 'Web research',
       company,
       description: null,
-      industry: apolloFallback?.industry || linkedinFirmo?.industry || aiEstimate.industry || null,
-      employees: apolloFallback?.estimated_num_employees ? String(apolloFallback.estimated_num_employees) : (linkedinFirmo?.employees || aiEstimate.employees || null),
-      funding: apolloFallback?.total_funding_printed || linkedinFirmo?.funding || aiEstimate.funding || null,
-      foundedYear: apolloFallback?.founded_year || (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
-      companyWebsite: apolloFallback?.website_url || discoveredDomain ? `https://${discoveredDomain}` : null,
-      companyLinkedin: (apolloFallback?.linkedin_url && !apolloFallback.linkedin_url.includes('/company/unavailable')) ? apolloFallback.linkedin_url : null,
+      industry: linkedinFirmo?.industry || aiEstimate.industry || null,
+      employees: linkedinFirmo?.employees || aiEstimate.employees || null,
+      funding: linkedinFirmo?.funding || aiEstimate.funding || null,
+      foundedYear: (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
+      companyWebsite: discoveredDomain ? `https://${discoveredDomain}` : null,
+      companyLinkedin: null,
       leaders: [],
-      raw: { apolloFallback, linkedinFirmo, aiEstimate },
+      raw: { linkedinFirmo, aiEstimate },
     };
     console.log('[Enrich] Web Research final:', { employees: result.employees, industry: result.industry, funding: result.funding, website: result.companyWebsite });
     return result;
@@ -193,16 +184,29 @@ function hasEnrichmentData(result) {
 }
 
 async function runEnrichmentPipeline(company, domain, companyLinkedin) {
-  // Derive domain hints from LinkedIn URL slug if no domain given
-  // e.g., "https://linkedin.com/company/prophecy-io" → try "prophecy.io"
+  // Derive domain from LinkedIn URL slug if no domain given
   let derivedDomain = domain;
-  if (!derivedDomain && companyLinkedin) {
-    const slug = companyLinkedin.replace(/\/$/, '').split('/').pop();
-    if (slug && slug.includes('-') && /\.(io|ai|com|co|dev|app|tech|so)$/.test(slug.replace(/-/g, '.'))) {
-      derivedDomain = slug.replace(/-/g, '.');
-      console.log('[Enrich] Derived domain from LinkedIn slug:', derivedDomain);
+  let linkedinSlug = null;
+  if (companyLinkedin) {
+    linkedinSlug = companyLinkedin.replace(/\/$/, '').split('/').pop();
+    if (!derivedDomain && linkedinSlug) {
+      // Try common TLD patterns: prophecy-io → prophecy.io, kapa-ai → kapa.ai
+      const withDots = linkedinSlug.replace(/-/g, '.');
+      if (/\.(io|ai|com|co|dev|app|tech|so|org|net|xyz)$/.test(withDots)) {
+        derivedDomain = withDots;
+        console.log('[Enrich] Derived domain from LinkedIn slug (dot pattern):', derivedDomain);
+      } else {
+        // Use slug + .com as a single guess (conserve API credits)
+        derivedDomain = `${linkedinSlug}.com`;
+        console.log('[Enrich] Guessing domain from slug:', derivedDomain);
+      }
     }
   }
+  if (_apolloExhausted && _serperExhausted) {
+    console.warn('[Enrich] All API credits exhausted — skipping pipeline');
+    return { ...emptyEnrichment(), source: null, _creditsExhausted: true };
+  }
+  console.log('[Enrich] Pipeline starting for:', company, '| domain:', derivedDomain || '(none)', '| linkedin:', linkedinSlug || '(none)');
   for (const provider of ENRICHMENT_PROVIDERS) {
     const result = await provider(company, derivedDomain);
     if (hasEnrichmentData(result)) {
@@ -256,16 +260,21 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
   if (cached) return cached;
 
   try {
-    const domainQualifier = domain ? ` ${domain}` : '';
     const q = `"${company}"`;
-    const qd = `"${company}"${domainQualifier}`;
 
-    // Run enrichment pipeline + Serper searches in parallel
-    const [enrichment, reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
-      runEnrichmentPipeline(company, domain, companyLinkedin),
-      fetchSerperResults(`${q} (site:glassdoor.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees culture`, 8),
-      fetchSerperResults('site:linkedin.com/in ' + q + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
-      fetchSerperResults(q + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
+    // Run enrichment pipeline first to discover the domain
+    const enrichment = await runEnrichmentPipeline(company, domain, companyLinkedin);
+    if (enrichment._creditsExhausted) {
+      return { error: 'API credits exhausted — Apollo and Serper limits reached. Research data unavailable until credits renew.', _creditsExhausted: true };
+    }
+    const effectiveDomain = enrichment.companyWebsite?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || domain || '';
+    const qd = effectiveDomain ? `"${company}" ${effectiveDomain}` : `"${company}" company`;
+
+    // Now run Serper searches with the best domain info available
+    const [reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
+      fetchSerperResults(`${qd} (site:glassdoor.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees culture`, 8),
+      fetchSerperResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
+      fetchSerperResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
       fetchSerperResults(qd + ' what does it do product overview how it works category', 3),
     ]);
 
@@ -445,7 +454,11 @@ function parseLinkedInCompanySnippet(results) {
   return (out.employees || out.founded || out.industry) ? out : null;
 }
 
+let _apolloExhausted = false;
+let _serperExhausted = false;
+
 async function fetchApolloData(domain, companyName) {
+  if (_apolloExhausted) { console.log('[Apollo] Skipped — credits exhausted'); return {}; }
   const param = domain
     ? 'domain=' + encodeURIComponent(domain)
     : 'name=' + encodeURIComponent(companyName);
@@ -456,6 +469,11 @@ async function fetchApolloData(domain, companyName) {
       'x-api-key': APOLLO_KEY
     }
   });
+  if (res.status === 429 || res.status === 402 || res.status === 403) {
+    console.warn('[Apollo] Credits exhausted (HTTP', res.status, ')');
+    _apolloExhausted = true;
+    return {};
+  }
   const data = await res.json();
   return data.organization || {};
 }
@@ -480,6 +498,7 @@ async function fetchLeaderPhoto(name, company) {
 }
 
 async function fetchSerperResults(query, num = 5) {
+  if (_serperExhausted) { console.log('[Serper] Skipped — credits exhausted'); return []; }
   const res = await fetch('https://google.serper.dev/search', {
     method: 'POST',
     headers: {
@@ -488,6 +507,11 @@ async function fetchSerperResults(query, num = 5) {
     },
     body: JSON.stringify({ q: query, num })
   });
+  if (res.status === 429 || res.status === 402 || res.status === 403) {
+    console.warn('[Serper] Credits exhausted (HTTP', res.status, ')');
+    _serperExhausted = true;
+    return [];
+  }
   const data = await res.json();
   return data.organic || [];
 }
