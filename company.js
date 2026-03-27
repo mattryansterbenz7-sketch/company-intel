@@ -261,7 +261,9 @@ function renderHeader() {
     <div class="hdr-divider"></div>
     ${favicon}
     <input class="hdr-name-input" id="hdr-name" value="${nameVal}" placeholder="Company name">
-    <div class="hdr-divider"></div>
+    ${entry.isOpportunity
+      ? `<div class="hdr-stage-group" style="margin-left:8px"><span class="hdr-stage-label">Opportunity</span><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor};color:${oppStageColor}">${oppStageOptions}</select></div>`
+      : `<button class="hdr-opp-btn" id="hdr-add-opp" style="margin-left:8px">+ Add to Pipeline</button>`}
     <div class="hdr-spacer"></div>
     <div class="hdr-stage-group">
       <span class="hdr-stage-label">Company</span>
@@ -270,9 +272,6 @@ function renderHeader() {
       </select>
     </div>
     <div class="hdr-stars" id="hdr-stars"><span class="hdr-stars-label">Excitement</span>${stars}</div>
-    ${entry.isOpportunity
-      ? `<div class="hdr-stage-group"><span class="hdr-stage-label">Opportunity</span><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor};color:${oppStageColor}">${oppStageOptions}</select></div>`
-      : `<button class="hdr-opp-btn" id="hdr-add-opp">+ Add to Pipeline</button>`}
     <button class="hdr-refresh-btn" id="hdr-refresh-btn" title="Refresh emails &amp; meetings"><span class="hdr-refresh-icon">↻</span></button>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Setup</a>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('docs.html')}" target="_blank" style="margin-left:4px">Docs</a>
