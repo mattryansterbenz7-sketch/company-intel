@@ -16,7 +16,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'OPEN_FLOATING_CHAT') {
-    openFloatingChatWidget(message.context);
+    // Enrich context with page JD if sidepanel didn't have it
+    const ctx = message.context || {};
+    if (!ctx.jobDescription) {
+      // Extract JD directly from the page
+      const jd = extractJobDescriptionFromPage();
+      if (jd) ctx.jobDescription = jd;
+    }
+    openFloatingChatWidget(ctx);
     sendResponse({ ok: true });
     return true;
   }
@@ -25,6 +32,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // ── Floating Chat Widget (injected into page from sidepanel) ────────────────
+
+// Quick synchronous JD extraction from the current page
+function extractJobDescriptionFromPage() {
+  // Greenhouse
+  let el = document.querySelector('#content .posting-page, #content, .job__description, .job-post-content');
+  // Lever
+  if (!el) el = document.querySelector('.posting-page .content, .section-wrapper');
+  // Workday
+  if (!el) el = document.querySelector('[data-automation-id="jobPostingDescription"]');
+  // Work at a Startup
+  if (!el) el = document.querySelector('.prose, .job-description, [class*="description"]');
+  // LinkedIn
+  if (!el) el = document.querySelector('#job-details, .jobs-description__content');
+  // Generic fallback: main content area
+  if (!el) el = document.querySelector('main, article, [role="main"]');
+  if (!el) return null;
+  const text = el.innerText?.trim();
+  return text && text.length > 100 ? text.slice(0, 8000) : null;
+}
 
 function openFloatingChatWidget(context) {
   // If already open, bring to front
