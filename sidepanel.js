@@ -1401,10 +1401,12 @@ function renderQuickData(data) {
     return s.url ? `<a class="stat" href="${s.url}" target="_blank">${inner}</a>` : `<div class="stat">${inner}</div>`;
   }).join('');
 
+  const sourceTag = data.enrichmentSource ? `<div style="font-size:10px;color:#4a6580;margin-top:6px">Source: ${data.enrichmentSource}</div>` : '';
   contentEl.innerHTML = `
     <div class="section">
       <div class="section-title">Company Overview</div>
       <div class="stat-grid">${statsHtml}</div>
+      ${sourceTag}
     </div>
     <div class="research-loader" id="research-loader"><span class="research-loader-icon">🔍</span><span class="research-loader-text" id="research-loader-text"></span></div>`;
   startResearchLoaderCycle(companyNameEl.textContent);
@@ -1553,10 +1555,12 @@ function renderResults(data) {
       }).join('')
     : null;
 
+  const resSourceTag = data.enrichmentSource ? `<div style="font-size:10px;color:#4a6580;margin-top:4px">Source: ${data.enrichmentSource}</div>` : '';
   contentEl.innerHTML = `
     <div class="section section-overview">
       <div class="section-title">Company Overview</div>
       <div class="stat-grid">${statsHtml}</div>
+      ${resSourceTag}
       ${intelHtml}
     </div>
     <div class="section section-signals">

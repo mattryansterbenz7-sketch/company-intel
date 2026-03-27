@@ -70,20 +70,119 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function quickLookup(company, domain) {
+// ── Enrichment Pipeline (provider-agnostic with fallback) ────────────────────
+
+// Standardized enrichment result shape — all providers return this
+function emptyEnrichment() {
+  return { source: null, company: null, description: null, industry: null, employees: null, funding: null, foundedYear: null, companyWebsite: null, companyLinkedin: null, leaders: [], raw: null };
+}
+
+// Provider: Apollo
+async function enrichFromApollo(company, domain) {
+  console.log('[Enrich] Trying Apollo for:', company);
   try {
-    const apolloData = await fetchApolloData(domain, company);
+    const data = await fetchApolloData(domain, company);
+    if (!data || (!data.estimated_num_employees && !data.website_url && !data.industry)) {
+      console.log('[Enrich] Apollo returned empty for:', company);
+      return null; // signal fallback
+    }
+    console.log('[Enrich] Apollo succeeded for:', company);
     return {
-      employees: apolloData.estimated_num_employees ? String(apolloData.estimated_num_employees) : null,
-      funding: apolloData.total_funding_printed || null,
-      industry: apolloData.industry || null,
-      founded: apolloData.founded_year ? String(apolloData.founded_year) : null,
-      companyWebsite: apolloData.website_url || null,
-      companyLinkedin: (apolloData.linkedin_url && !apolloData.linkedin_url.includes('/company/unavailable')) ? apolloData.linkedin_url : null
+      source: 'Apollo',
+      company,
+      description: data.short_description || null,
+      industry: data.industry || null,
+      employees: data.estimated_num_employees ? String(data.estimated_num_employees) : null,
+      funding: data.total_funding_printed || null,
+      foundedYear: data.founded_year || null,
+      companyWebsite: data.website_url || null,
+      companyLinkedin: (data.linkedin_url && !data.linkedin_url.includes('/company/unavailable')) ? data.linkedin_url : null,
+      leaders: [],
+      raw: data,
     };
   } catch (e) {
-    return {};
+    console.log('[Enrich] Apollo failed:', e.message);
+    return null;
   }
+}
+
+// Provider: Serper + Claude (web research synthesis)
+async function enrichFromWebResearch(company, domain) {
+  console.log('[Enrich] Trying Web Research for:', company);
+  try {
+    const q = `"${company}"`;
+    const qd = domain ? `"${company}" ${domain}` : q;
+    const [productResults, websiteResults, linkedinResults] = await Promise.all([
+      fetchSerperResults(qd + ' what does it do product overview company', 3),
+      fetchSerperResults(qd + ' official website', 2),
+      fetchSerperResults('site:linkedin.com/company ' + q, 2),
+    ]);
+    // Try Apollo with discovered domain if we don't have one
+    let apolloFallback = null;
+    if (!domain) {
+      const foundDomain = extractDomainFromResults([...websiteResults, ...productResults], company);
+      if (foundDomain) apolloFallback = await fetchApolloData(foundDomain, company);
+    }
+    const linkedinFirmo = parseLinkedInCompanySnippet(linkedinResults);
+    const snippets = [...productResults, ...websiteResults].map(r => `${r.title}: ${r.snippet}`).join('\n');
+    // Lightweight Claude call just for firmographics from web snippets
+    let aiEstimate = {};
+    if (snippets.length > 50) {
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }] })
+        });
+        const d = await res.json();
+        const t = (d.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+        aiEstimate = JSON.parse(t);
+      } catch(e) {}
+    }
+    const result = {
+      source: 'Web research',
+      company,
+      description: null,
+      industry: apolloFallback?.industry || linkedinFirmo?.industry || aiEstimate.industry || null,
+      employees: apolloFallback?.estimated_num_employees ? String(apolloFallback.estimated_num_employees) : (linkedinFirmo?.employees || aiEstimate.employees || null),
+      funding: apolloFallback?.total_funding_printed || linkedinFirmo?.funding || aiEstimate.funding || null,
+      foundedYear: apolloFallback?.founded_year || (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
+      companyWebsite: apolloFallback?.website_url || null,
+      companyLinkedin: (apolloFallback?.linkedin_url && !apolloFallback.linkedin_url.includes('/company/unavailable')) ? apolloFallback.linkedin_url : null,
+      leaders: [],
+      raw: { apolloFallback, linkedinFirmo, aiEstimate },
+    };
+    console.log('[Enrich] Web Research result:', { employees: result.employees, industry: result.industry, funding: result.funding });
+    return result;
+  } catch (e) {
+    console.log('[Enrich] Web Research failed:', e.message);
+    return null;
+  }
+}
+
+// Pipeline: try providers in order, return first success
+const ENRICHMENT_PROVIDERS = [enrichFromApollo, enrichFromWebResearch];
+
+async function runEnrichmentPipeline(company, domain) {
+  for (const provider of ENRICHMENT_PROVIDERS) {
+    const result = await provider(company, domain);
+    if (result) return result;
+  }
+  console.log('[Enrich] All providers failed for:', company);
+  return emptyEnrichment();
+}
+
+async function quickLookup(company, domain) {
+  const enrichment = await runEnrichmentPipeline(company, domain);
+  return {
+    employees: enrichment.employees,
+    funding: enrichment.funding,
+    industry: enrichment.industry,
+    founded: enrichment.foundedYear ? String(enrichment.foundedYear) : null,
+    companyWebsite: enrichment.companyWebsite,
+    companyLinkedin: enrichment.companyLinkedin,
+    enrichmentSource: enrichment.source,
+  };
 }
 
 async function getCached(key) {
@@ -117,40 +216,32 @@ async function researchCompany(company, domain, prefs) {
     const domainQualifier = domain ? ` ${domain}` : '';
     const q = `"${company}"`;
     const qd = `"${company}"${domainQualifier}`;
-    const [apolloData, reviewResults, leaderResults, jobResults, productResults, websiteResults, linkedinCompanyResults] = await Promise.all([
-      fetchApolloData(domain, company),
+
+    // Run enrichment pipeline + Serper searches in parallel
+    const [enrichment, reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
+      runEnrichmentPipeline(company, domain),
       fetchSerperResults(`${q} (site:glassdoor.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees culture`, 8),
       fetchSerperResults('site:linkedin.com/in ' + q + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
       fetchSerperResults(q + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
       fetchSerperResults(qd + ' what does it do product overview how it works category', 3),
-      fetchSerperResults(qd + ' official website', 2),
-      fetchSerperResults('site:linkedin.com/company ' + q, 2)
     ]);
 
-    let finalApolloData = apolloData;
-    if (!apolloData.estimated_num_employees && !apolloData.website_url) {
-      const foundDomain = extractDomainFromResults(websiteResults.concat(productResults).concat(reviewResults), company);
-      if (foundDomain) finalApolloData = await fetchApolloData(foundDomain, company);
-    }
-
-    // LinkedIn company page fallback when Apollo has no firmographic data
-    const linkedinFirmo = (!finalApolloData.estimated_num_employees && !finalApolloData.total_funding_printed)
-      ? parseLinkedInCompanySnippet(linkedinCompanyResults)
-      : null;
-
-    const aiSummary = await fetchClaudeSummary(company, finalApolloData, reviewResults, leaderResults, productResults, domain);
+    // Use Apollo raw data for Claude synthesis if available, otherwise pass empty
+    const apolloRaw = enrichment.raw?.estimated_num_employees ? enrichment.raw : {};
+    const aiSummary = await fetchClaudeSummary(company, apolloRaw, reviewResults, leaderResults, productResults, domain);
 
     const claudeFirmo = aiSummary.firmographics || {};
     const result = {
       ...aiSummary,
-      // Priority: Apollo → LinkedIn snippet → Claude estimate
-      employees: finalApolloData.estimated_num_employees ? String(finalApolloData.estimated_num_employees) : (linkedinFirmo?.employees || claudeFirmo.employees || null),
-      funding: finalApolloData.total_funding_printed || linkedinFirmo?.funding || claudeFirmo.funding || null,
-      industry: finalApolloData.industry || linkedinFirmo?.industry || claudeFirmo.industry || null,
-      founded: finalApolloData.founded_year ? String(finalApolloData.founded_year) : (linkedinFirmo?.founded || claudeFirmo.founded || null),
-      companyWebsite: finalApolloData.website_url || null,
-      companyLinkedin: (finalApolloData.linkedin_url && !finalApolloData.linkedin_url.includes('/company/unavailable')) ? finalApolloData.linkedin_url : null,
-      jobListings: jobResults.map(r => ({ title: r.title, url: r.link, snippet: r.snippet }))
+      // Priority: enrichment pipeline → Claude estimate
+      employees: enrichment.employees || claudeFirmo.employees || null,
+      funding: enrichment.funding || claudeFirmo.funding || null,
+      industry: enrichment.industry || claudeFirmo.industry || null,
+      founded: enrichment.foundedYear ? String(enrichment.foundedYear) : (claudeFirmo.founded || null),
+      companyWebsite: enrichment.companyWebsite || null,
+      companyLinkedin: enrichment.companyLinkedin || null,
+      jobListings: jobResults.map(r => ({ title: r.title, url: r.link, snippet: r.snippet })),
+      enrichmentSource: enrichment.source,
     };
     await setCached(cacheKey, result);
     return result;
