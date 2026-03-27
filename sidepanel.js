@@ -828,9 +828,12 @@ function triggerResearch(company, forceRefresh = false) {
       return;
     }
 
+    // Derive a usable domain — LinkedIn pages have domain=null but may have a LinkedIn company URL
+    const enrichDomain = (detectedDomain && !/linkedin\.com/i.test(detectedDomain)) ? detectedDomain : null;
+
     // Phase 1: Apollo quick lookup — renders stats while Claude runs
     chrome.runtime.sendMessage(
-      { type: 'QUICK_LOOKUP', company, domain: detectedDomain },
+      { type: 'QUICK_LOOKUP', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin },
       (quick) => {
         void chrome.runtime.lastError;
         if (quick && (quick.employees || quick.funding || quick.companyWebsite)) {
@@ -842,7 +845,7 @@ function triggerResearch(company, forceRefresh = false) {
 
     // Phase 2: Full research — fills in the rest when ready
     chrome.runtime.sendMessage(
-      { type: 'RESEARCH_COMPANY', company, domain: detectedDomain, prefs: prefs || null },
+      { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, prefs: prefs || null },
       (response) => {
         void chrome.runtime.lastError;
         if (!response || response.error) {

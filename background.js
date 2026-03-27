@@ -10,11 +10,11 @@ const photoCache = {}; // in-memory, per service worker lifetime
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'QUICK_LOOKUP') {
-    quickLookup(message.company, message.domain).then(sendResponse);
+    quickLookup(message.company, message.domain, message.companyLinkedin).then(sendResponse);
     return true;
   }
   if (message.type === 'RESEARCH_COMPANY') {
-    researchCompany(message.company, message.domain, message.prefs).then(sendResponse);
+    researchCompany(message.company, message.domain, message.prefs, message.companyLinkedin).then(sendResponse);
     return true;
   }
   if (message.type === 'ANALYZE_JOB') {
@@ -192,9 +192,19 @@ function hasEnrichmentData(result) {
   return result && (result.employees || result.industry || result.funding || result.foundedYear || result.companyWebsite);
 }
 
-async function runEnrichmentPipeline(company, domain) {
+async function runEnrichmentPipeline(company, domain, companyLinkedin) {
+  // Derive domain hints from LinkedIn URL slug if no domain given
+  // e.g., "https://linkedin.com/company/prophecy-io" → try "prophecy.io"
+  let derivedDomain = domain;
+  if (!derivedDomain && companyLinkedin) {
+    const slug = companyLinkedin.replace(/\/$/, '').split('/').pop();
+    if (slug && slug.includes('-') && /\.(io|ai|com|co|dev|app|tech|so)$/.test(slug.replace(/-/g, '.'))) {
+      derivedDomain = slug.replace(/-/g, '.');
+      console.log('[Enrich] Derived domain from LinkedIn slug:', derivedDomain);
+    }
+  }
   for (const provider of ENRICHMENT_PROVIDERS) {
-    const result = await provider(company, domain);
+    const result = await provider(company, derivedDomain);
     if (hasEnrichmentData(result)) {
       console.log('[Enrich] Pipeline success from:', result.source);
       return result;
@@ -205,8 +215,8 @@ async function runEnrichmentPipeline(company, domain) {
   return emptyEnrichment();
 }
 
-async function quickLookup(company, domain) {
-  const enrichment = await runEnrichmentPipeline(company, domain);
+async function quickLookup(company, domain, companyLinkedin) {
+  const enrichment = await runEnrichmentPipeline(company, domain, companyLinkedin);
   return {
     employees: enrichment.employees,
     funding: enrichment.funding,
@@ -240,7 +250,7 @@ async function setCached(key, data) {
   );
 }
 
-async function researchCompany(company, domain, prefs) {
+async function researchCompany(company, domain, prefs, companyLinkedin) {
   const cacheKey = company.toLowerCase();
   const cached = await getCached(cacheKey);
   if (cached) return cached;
@@ -252,7 +262,7 @@ async function researchCompany(company, domain, prefs) {
 
     // Run enrichment pipeline + Serper searches in parallel
     const [enrichment, reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
-      runEnrichmentPipeline(company, domain),
+      runEnrichmentPipeline(company, domain, companyLinkedin),
       fetchSerperResults(`${q} (site:glassdoor.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees culture`, 8),
       fetchSerperResults('site:linkedin.com/in ' + q + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
       fetchSerperResults(q + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
