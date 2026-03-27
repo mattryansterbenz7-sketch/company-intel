@@ -673,14 +673,48 @@ function extractLinkedInCompanyUrlFromJobPage() {
 }
 
 function detectGreenhouse() {
-  const company = document.querySelector('.company-name, #header .company-name, .greenhouse-header');
-  const job = document.querySelector('#app_body h1, .app-title');
-  return {
-    company: company ? company.textContent.trim() : extractDomain(),
-    jobTitle: job ? job.textContent.trim() : null,
-    source: 'greenhouse',
-    domain: null
-  };
+  let company = null;
+  let jobTitle = null;
+
+  // 1. Explicit company name element
+  const companyEl = document.querySelector('.company-name, #header .company-name, .greenhouse-header');
+  if (companyEl) company = companyEl.textContent.trim();
+
+  // 2. URL path: /octopusdeploy/jobs/... or boards.greenhouse.io/octopusdeploy
+  if (!company) {
+    const pathMatch = window.location.pathname.match(/^\/([a-z0-9_-]+)\/(?:jobs|embed)/i)
+      || window.location.pathname.match(/^\/([a-z0-9_-]+)\/?$/i);
+    if (pathMatch && pathMatch[1] !== 'jobs') {
+      company = pathMatch[1].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+  }
+
+  // 3. Look for "About [Company]" heading on the page
+  if (!company) {
+    for (const h of document.querySelectorAll('h2, h3, strong')) {
+      const m = h.textContent?.trim().match(/^About\s+(.+?)[:.]?$/i);
+      if (m && m[1].length > 1 && m[1].length < 60) { company = m[1]; break; }
+    }
+  }
+
+  // 4. og:title: "Strategic Account Executive at Octopus Deploy"
+  if (!company) {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
+    const atMatch = ogTitle?.match(/\bat\s+(.+?)$/i);
+    if (atMatch) company = atMatch[1].trim();
+  }
+
+  if (!company) company = extractDomain();
+
+  // Job title
+  const jobEl = document.querySelector('#app_body h1, .app-title, h1');
+  if (jobEl) jobTitle = jobEl.textContent.trim();
+  // Strip "at Company" from job title if present
+  if (jobTitle && company && jobTitle.toLowerCase().includes(' at ')) {
+    jobTitle = jobTitle.replace(new RegExp('\\s+at\\s+' + company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i'), '').trim();
+  }
+
+  return { company, jobTitle: jobTitle || null, source: 'greenhouse', domain: null };
 }
 
 function detectLever() {
