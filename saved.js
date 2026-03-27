@@ -1122,7 +1122,7 @@ function renderKanbanCard(c) {
       <div class="kanban-next-step">
         <div class="kanban-next-step-row">
           <label class="kanban-field-label">Next Step</label>
-          <input class="kanban-next-step-input" data-id="${c.id}" type="text" placeholder="e.g. Send proposal…" value="${(c.nextStep || '').replace(/"/g, '&quot;')}">
+          <input class="kanban-next-step-input" data-id="${c.id}" type="text" placeholder="" value="${(c.nextStep || '').replace(/"/g, '&quot;')}">
         </div>
         <div class="kanban-next-step-row">
           <label class="kanban-field-label">Next Step Date</label>
