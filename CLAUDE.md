@@ -1,59 +1,245 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## What this is
 
-A Chrome Extension (Manifest V3) called **Company Intel** that auto-detects the company name from the active tab and researches it using Apollo.io, Google Custom Search, and Claude AI. Results appear in Chrome's side panel.
+**CompanyIntel** — a Chrome Extension (Manifest V3) that functions as a personal CRM for job searching. It auto-detects companies from any website, enriches them with multi-source research, scores job postings against user preferences, manages a pipeline with Kanban workflow, and provides AI-powered chat with full context (emails, meetings, notes, transcripts).
+
+Built by Matt Sterbenz as a personal tool for managing a GTM job search. All data stays local in the browser — no backend server, no infrastructure cost, no data leaving the machine.
+
+### Core value proposition
+
+1. **Instant research**: Visit any company page, get a full profile without manual data entry
+2. **Pipeline management**: Track companies and opportunities through customizable Kanban stages
+3. **Relationship context**: Emails, meeting transcripts, and contacts surface automatically
+4. **AI-powered analysis**: Job match scoring, company intelligence, contextual chat with full history
+
+## Why This Exists
+
+A typical job search involves a painful stack of manual workflows:
+
+**Manual research** — every new company means opening tabs, checking LinkedIn, Glassdoor, the company site, trying to piece together what they do, how big they are, who works there, and whether they're worth pursuing. This repeats for every single opportunity.
+
+**Spreadsheet pipeline tracking** — an Excel sheet with columns for stage, next steps, dates, key players, notes, comp details, drop-down statuses. Works as a snapshot but breaks down the moment things start moving. Impossible to keep current across dozens of active opportunities.
+
+**Bookmark tools** — extensions like Teal that let you save job postings to apply to later, but with no research, no context, no pipeline management attached.
+
+**Manual AI advisor sessions** — copying Granola meeting transcripts into ChatGPT projects, screenshotting email threads, re-explaining professional background and goals every conversation, just to get help with "what should I say next" or "does this opportunity make sense for me." The AI never had the full picture, couldn't hold the timeline straight, and the context had to be manually rebuilt constantly.
+
+**Application free-form questions** — every application asks things like "why are you interested in this role" which requires synthesizing your own story, what the company is about, and why the role connects the two. Doing this well for every application is hours of work with no leverage.
+
+**Qualification guesswork** — trying to assess whether a company and role are actually a fit before investing time, based on a job description that's always an incomplete picture of the real role.
+
+CompanyIntel replaces all of this with a single surface where research happens automatically, the pipeline stays current, communication history (emails, meetings, transcripts) attaches itself to each opportunity, and an AI advisor already has the full context — your professional profile, the company data, the job details, the relationship history — so you ask the question instead of spending 20 minutes rebuilding context first.
+
+## Rules & Principles
+
+### API Discipline
+- NEVER make API calls (enrichment, scoring, search) without explicit user action. No auto-firing on page load, popup open, or sidebar load.
+- If a company has cached or saved data, load that first. Only hit APIs when the user clicks a button to research, refresh, or enrich.
+- The enrichment fallback chain (Apollo → Serper → Google → OpenAI → Claude) means one lookup can burn multiple API calls. Treat every chain trigger as expensive.
+- Provider exhaustion flags (`_apolloExhausted`, `_serperExhausted`) must be respected. Never retry an exhausted provider in the same session.
+
+### Design Direction
+- Visual style matches the claude.ai web app: warm off-white backgrounds, clean typography, minimal borders, calm and spacious feel.
+- Objective company data (firmographics, leadership, reviews, hiring signals) is the hero output. Fit scoring is secondary context, not the primary signal.
+
+### Development Guardrails
+- Don't refactor files outside the scope of the current task.
+- Don't add new dependencies or libraries without asking first.
+- Don't ask clarifying questions unless genuinely blocked — make reasonable assumptions and note them.
+- Always use the Integrations page / `chrome.storage.local` for API keys. Never hardcode keys or add new `config.js` entries.
+- When adding new API calls, always route through the existing wrapper functions (`claudeApiCall`, `openAiChatCall`, `chatWithFallback`) — never call APIs directly.
+- `confirm()` dialogs don't work in Chrome extension pages — never use them.
+
+### Known Patterns to Preserve
+- Session-only chat history — don't add persistent chat storage
+- Single `savedCompanies[]` array — don't create separate data stores
+- Generic `stageTimestamps` — don't add hardcoded timestamp fields for specific stages
+- Message-based IPC through `chrome.runtime.sendMessage` — all side effects go through background.js
 
 ## Loading the extension
 
-There is no build step. Load it directly in Chrome:
+No build step. Load directly in Chrome:
 
-1. Go to `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked" and select this directory
-
-After any code change, click the reload icon on the extension card in `chrome://extensions`.
+1. `chrome://extensions` → Enable "Developer mode"
+2. "Load unpacked" → select this directory
+3. After code changes, click the reload icon on the extension card. To force-restart the service worker, click the "service worker" link and close/reopen DevTools.
 
 ## Configuration
 
-API keys live in `config.js`, which is imported as a plain script by the service worker (`importScripts('config.js')`). Fill in the four values:
+API keys are set via the Integrations page in the extension UI (stored in `chrome.storage.local`). `config.js` exists only as a fallback for initial setup:
 
 ```js
 const CONFIG = {
   ANTHROPIC_KEY: '...',
   APOLLO_KEY: '...',
-  GOOGLE_KEY: '...',
-  GOOGLE_CX: '...'   // Custom Search Engine ID
+  SERPER_KEY: '...',
+  OPENAI_KEY: '...'
 };
 ```
 
-The `.env` file is not used by the extension itself — it exists only as a reference for the key values.
+Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's `identity` API for OAuth.
+
+## File structure
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `background.js` | ~1950 | Service worker. All API calls, research pipeline, chat handling, scoring, caching, fallback chain |
+| `saved.js` | ~2400 | Dashboard — Kanban/grid views, stage columns, drag-drop, filtering, stat cards, global chat |
+| `company.js` | ~2500 | Full-screen company detail — three-column layout, meetings tab, emails tab, floating chat |
+| `sidepanel.js` | ~2200 | Side panel UI — company detection, research display, save flow, inline chat, settings |
+| `content.js` | ~1400 | Runs on all pages. Detects company/job from LinkedIn, Greenhouse, Lever, Workday, Ashby, generic sites |
+| `chat.js` | ~460 | Shared AI chat panel component, used by company.js and opportunity.js |
+| `opportunity.js` | ~640 | Opportunity detail view (job-focused variant of company.js) |
+| `integrations.js` | ~410 | Integrations config page — API key CRUD, test connection, provider status |
+| `preferences.js` | ~410 | Settings page — job match prefs, Story Time profile, salary/OTE |
+| `widget.js` | ~630 | Floating button (currently disabled, replaced by content.js sidebar) |
+
+HTML pages: `sidepanel.html`, `saved.html`, `company.html`, `opportunity.html`, `preferences.html`, `integrations.html`
 
 ## Architecture
 
-Message flow across the three extension contexts:
+### Platform
+- **Chrome Extension, Manifest V3** — service worker background, content scripts, side panel
+- **No backend** — all data in `chrome.storage.local` / `chrome.storage.sync`
+- **No module system** — standalone JS files, shared functions duplicated where needed
+- **No build step** — raw HTML/JS/CSS, load directly as unpacked extension
+
+### Message-based IPC
+
+All communication uses `chrome.runtime.sendMessage`. The service worker (`background.js`) handles all side effects.
+
+| Type | Purpose |
+|------|---------|
+| `QUICK_LOOKUP` | Fast enrichment (employees, funding, industry) |
+| `RESEARCH_COMPANY` | Full research pipeline (Apollo → Serper → Claude synthesis) |
+| `ANALYZE_JOB` | Score job match 1-10 with fit analysis |
+| `CHAT_MESSAGE` | Company-scoped AI chat with full context |
+| `GLOBAL_CHAT_MESSAGE` | Pipeline-wide AI chat (saved.js "Pipeline Advisor") |
+| `GMAIL_FETCH_EMAILS` | Fetch email threads by company domain |
+| `CALENDAR_FETCH_EVENTS` | Get calendar events with company contacts |
+| `GRANOLA_SEARCH` | Search Granola meeting notes by company/contact |
+| `GET_COMPANY` | Content script → detect company from current page DOM |
+| `GET_JOB_DESCRIPTION` | Content script → extract job posting text |
+| `DEEP_FIT_ANALYSIS` | Narrative fit analysis combining all signals |
+| `EXTRACT_NEXT_STEPS` | AI-generated next steps from meeting data |
+
+### Research pipeline
 
 ```
-sidepanel.js (side panel UI)
-  → chrome.tabs.sendMessage({ type: 'GET_COMPANY' })
-      → content.js detects company from DOM, returns { company, jobTitle, source }
-  → chrome.runtime.sendMessage({ type: 'RESEARCH_COMPANY', company })
-      → background.js (service worker) calls Apollo + Google in parallel,
-         then Claude with the combined data, returns structured JSON
-  → sidepanel.js renders the result
+RESEARCH_COMPANY
+  → enrichFromApollo(company, domain)          // firmographics, leaders, linkedin
+  → [fallback] enrichFromWebResearch()          // Serper search + Claude Haiku synthesis
+  → parallel searches via Serper:
+      reviews, leadership, job listings, product overview
+  → Claude Haiku synthesis → structured JSON
+  → result cached 24h in researchCache
 ```
 
-**`content.js`** — runs on every page. Has platform-specific detectors for LinkedIn, Greenhouse, and Lever, plus a generic fallback using `og:site_name`, page title, or domain extraction.
+### External APIs
 
-**`background.js`** — service worker. Orchestrates three external API calls:
-- Apollo.io `/organizations/enrich?domain=` for company firmographics
-- Google Custom Search for Glassdoor/Repvue reviews
-- Anthropic Messages API (`claude-sonnet-4-20250514`) with a prompt tuned for a senior GTM operator evaluating companies; expects a raw JSON response (no markdown fencing)
+| Service | Used for | Auth |
+|---------|----------|------|
+| **Anthropic (Claude)** | Research synthesis, job scoring, chat, insight extraction | API key via Integrations |
+| **OpenAI** | Chat (default GPT-4.1 mini), fallback for Claude rate limits | API key via Integrations |
+| **Apollo.io** | Company firmographics (employees, funding, industry) | API key via Integrations |
+| **Serper** | Web search (reviews, leadership, jobs, product info) | API key via Integrations |
+| **Gmail API** | Email threads by company domain | Chrome OAuth (`chrome.identity`) |
+| **Google Calendar** | Meeting events with company contacts | Chrome OAuth (`chrome.identity`) |
+| **Granola** | Meeting notes and transcripts | REST API key via Integrations |
 
-**`sidepanel.html` / `sidepanel.js`** — the UI. On open, queries the active tab's content script for the detected company, then on "Research" click fires the background worker and renders the returned JSON.
+### Chat model fallback chain
 
-## Claude prompt behavior
+`chatWithFallback()` in background.js tries the user's selected model first, then cycles through all available models if it fails (rate limit, quota, network error):
 
-The prompt in `background.js:fetchClaudeSummary` is persona-driven: it scores companies 1–10 for fit as a senior GTM operator who values autonomy, early stage, and technical product. The response schema is fixed JSON with fields: `fitScore`, `fitSummary`, `stage`, `employees`, `industry`, `founded`, `summary`, `reviews[]`.
+**GPT-4.1 mini → Haiku → Sonnet → GPT-4.1**
+
+Skips providers with no API key configured. The UI shows a fallback note when a different model answers. The user can manually switch models via a click-to-cycle toggle in the chat header.
+
+## Data model
+
+Single `savedCompanies[]` array in `chrome.storage.local`. Each entry is either a company or opportunity (`isOpportunity: true`).
+
+Key fields: `company`, `companyWebsite`, `companyLinkedin`, `employees`, `funding`, `industry`, `intelligence`, `leaders[]`, `reviews[]`, `knownContacts[]`, `cachedEmails[]`, `cachedMeetings[]`, `notes`, `tags[]`, `rating`, `status`, `jobStage`, `jobTitle`, `jobDescription`, `jobMatch`, `stageTimestamps`, `actionStatus` (my_court/their_court).
+
+User preferences in `chrome.storage.sync` (syncs across devices): `prefs` object with resume, roles, salary floors, work arrangement, etc.
+
+Story Time profile in `chrome.storage.local`: `storyTime` with `rawInput`, `profileSummary`, `learnedInsights[]`.
+
+Research cache: separate `researchCache` object in `chrome.storage.local`, keyed by normalized company name, 24h TTL.
+
+## Key patterns
+
+- **Session-only chat history** — fresh context each page visit, avoids stale data
+- **Excitement score modifier** — post-processes job match scores based on user rating
+- **Stage timestamps** — generic `stageTimestamps` object tracks when each stage was entered
+- **Action On auto-set** — `defaultActionStatus(stageKey)` maps stages to my_court/their_court (defined in saved.js, company.js, sidepanel.js)
+- **Research cache** — 24h TTL in `researchCache`, keyed by normalized company name
+- **Provider exhaustion flags** — `_apolloExhausted`, `_serperExhausted` prevent repeated calls to exhausted APIs
+- **`claudeApiCall()`** — wrapper with exponential backoff on 429
+- **`openAiChatCall()`** — mirror of claudeApiCall for OpenAI
+- **`chatWithFallback()`** — unified chat call that cycles through all providers on failure
+
+## Content detection
+
+`content.js` has platform-specific detectors:
+- **LinkedIn**: profiles, job postings, company pages (CSS selectors, fragile)
+- **Greenhouse, Lever, Workday, Ashby**: ATS career pages
+- **Generic**: `og:site_name`, page title, domain extraction
+
+Known fragility: LinkedIn selectors change frequently. Falls back to domain name.
+
+## Key design decisions
+
+### Why companies and opportunities share one record
+Early versions had separate `savedCompanies` and `savedJobs` arrays. This caused constant sync issues — update a company's notes and the linked job wouldn't reflect it. Unifying them into a single entry with `isOpportunity: true` eliminated the problem entirely.
+
+### Why `stageTimestamps` instead of `appliedAt` / `introAt` / `interviewedAt`
+The original approach hard-coded three activity timestamps with brittle regex matching. When users renamed stages or added custom ones, tracking silently broke. The generic `stageTimestamps: { [stageKey]: timestamp }` map scales to any pipeline configuration without code changes.
+
+### Why session-only chat history
+Persistent chat history (via localStorage) caused stale context — conversations about a company's old status bled into new sessions. Fresh history per page visit ensures the AI always works from current data.
+
+### Why no backend
+This is a personal tool. All data stays in the browser. API keys are stored locally. Gmail uses Chrome's built-in OAuth. Zero infrastructure cost, zero privacy concerns with data leaving the machine.
+
+### Why no build step
+Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No webpack, no React, no npm. Edit a file, reload the extension, see the change.
+
+## Known issues & technical debt
+
+### Architecture
+- **Research cache vs entry data drift**: Research data (leaders, jobListings, intelligence) is stored in both `researchCache` and on the entry. They can drift out of sync. The fix is to have the company detail view read research fields from `researchCache` rather than the entry.
+- **LinkedIn URL not persisting**: Apollo returns `companyLinkedin` in fresh research but cache hits don't backfill missing fields on the entry.
+- **Shared functions duplicated**: `stageColor()`, `scoreToVerdict()`, `defaultActionStatus()`, `escapeHtml()` etc. are copy-pasted across files. A shared utility file would reduce drift.
+- **No test coverage**: The extension has no automated tests.
+
+### Content detection
+- **LinkedIn detection is fragile**: CSS class selectors change frequently. No wait/retry for dynamic React content. Falls back to domain name when selectors miss.
+
+### Data
+- **Dirty jobTitle data**: Some entries have "Undefined [title]" or "New Opportunity" as placeholder data from early saves. Needs a one-time cleanup migration.
+- **Old timestamp fields**: `appliedAt`/`introAt`/`interviewedAt` still exist on migrated entries (harmless but messy).
+
+## Things to watch out for
+
+- The user's own name appears in all Granola meeting titles — the matching logic filters it out by detecting names that appear in >60% of notes
+- `saveEntry()` in company.js does `Object.assign(entry, changes)` — updates both in-memory and storage
+- Content script can be injected twice — use `if (typeof x === 'undefined') var x = null;` guards
+
+## What's left to build
+
+### High priority
+1. **LinkedIn detection reliability** — wait for React content, use URL structure as signal, handle auth vs public DOM differences
+2. **Research cache as source of truth** — company detail view should read from cache, entry stores only user data
+
+### Medium priority
+3. **Shared utility file** — extract duplicated functions into a common module
+4. **jobTitle data cleanup** — migration to strip "Undefined" prefix and null out "New Opportunity"
+
+### Nice to have
+5. **Export/import** — backup and restore pipeline data
+6. **Multi-device sync** — move more data to `chrome.storage.sync`
+7. **Analytics dashboard** — conversion rates through funnel stages, response rate tracking

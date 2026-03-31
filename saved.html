@@ -142,6 +142,9 @@
     .card-score-denom { font-size: 12px; font-weight: 600; opacity: 0.6; }
     .card-score-ago { font-size: 10px; color: #b0c1d4; margin-left: auto; }
     .card-scoring-indicator { font-size: 11px; color: #94a3b8; font-style: italic; }
+    .score-match-btn { font-size: 11px; font-weight: 600; color: #e8714a; background: rgba(232,113,74,0.10); border: 1px solid rgba(232,113,74,0.25); border-radius: 12px; padding: 2px 10px; cursor: pointer; transition: background 0.15s, border-color 0.15s; line-height: 1.4; }
+    .score-match-btn:hover { background: rgba(232,113,74,0.18); border-color: rgba(232,113,74,0.45); }
+    .score-match-btn:disabled { opacity: 0.6; cursor: default; color: #94a3b8; background: rgba(148,163,184,0.10); border-color: rgba(148,163,184,0.2); }
     .card-score-mod { font-size: 10px; font-weight: 700; margin-left: -2px; }
     .card-score-mod.up { color: #00897b; }
     .card-score-mod.down { color: #e5483b; }
@@ -421,6 +424,12 @@
     .gc-spark { color: #FF7A59; font-size: 15px; flex-shrink: 0; }
     .gc-title { color: #fff; font-size: 14px; font-weight: 700; }
     .gc-subtitle { color: #7da8c4; font-size: 12px; }
+    .gc-model-toggle { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 1px 10px 1px 8px; border-radius: 10px; cursor: pointer; font: inherit; margin-left: 4px; }
+    .gc-model-label { color: #7da8c4; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .gc-model-toggle::after { content: ' ▾'; font-size: 8px; color: #7da8c4; opacity: 0.6; }
+    .gc-model-toggle:hover { background: rgba(255,122,89,0.3); border-color: #FF7A59; }
+    .gc-model-toggle:hover .gc-model-label { color: #fff; }
+    .gc-model-toggle:hover::after { color: #fff; opacity: 1; }
     .gc-btns { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
     .gc-btn { background: none; border: none; color: #7da8c4; font-size: 15px; cursor: pointer; padding: 5px 7px; border-radius: 6px; line-height: 1; transition: all 0.1s; font-family: inherit; }
     .gc-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
@@ -452,6 +461,56 @@
     .gc-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
     .gc-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
     @keyframes gcDotPulse { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+
+    /* Compact card */
+    .compact-card {
+      display: flex; align-items: stretch; gap: 0;
+      background: #fff; border: 0.5px solid #E8E5E0; border-radius: 8px;
+      margin-bottom: 6px; overflow: hidden; transition: opacity 0.2s;
+      border-left: 3px solid #ccc; cursor: pointer;
+    }
+    .compact-card.score-green { border-left-color: #1D9E75; }
+    .compact-card.score-amber { border-left-color: #BA7517; }
+    .compact-card.score-red { border-left-color: #E24B4A; }
+    .compact-card-score {
+      width: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      flex-shrink: 0; padding: 8px 0;
+    }
+    .compact-score-num { font-size: 18px; font-weight: 800; line-height: 1; }
+    .compact-score-den { font-size: 10px; color: #A09A94; font-weight: 600; }
+    .compact-score-num.green { color: #0F6E56; }
+    .compact-score-num.amber { color: #854F0B; }
+    .compact-score-num.red { color: #A32D2D; }
+    .compact-card-body {
+      flex: 1; padding: 8px 10px; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+    }
+    .compact-company { font-size: 13px; font-weight: 700; color: #2D2D2D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .compact-title { font-size: 11px; color: #7c98b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .compact-meta { font-size: 11px; color: #A09A94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .compact-actions { display: flex; gap: 6px; margin-top: 4px; }
+    .compact-apply-btn {
+      font-size: 10px; font-weight: 700; color: #fff; background: #1D9E75;
+      border: none; border-radius: 10px; padding: 3px 10px; cursor: pointer; font-family: inherit;
+    }
+    .compact-apply-btn:hover { background: #178A68; }
+    .compact-dismiss-btn {
+      font-size: 10px; font-weight: 600; color: #A09A94; background: none;
+      border: 1px solid #E8E5E0; border-radius: 10px; padding: 3px 10px; cursor: pointer; font-family: inherit;
+    }
+    .compact-dismiss-btn:hover { border-color: #ccc; color: #7c98b6; }
+    .compact-card.scoring { opacity: 0.5; }
+    .compact-card.queued { opacity: 0.35; }
+    .compact-spinner {
+      width: 16px; height: 16px; border: 2px solid rgba(29,158,117,0.2);
+      border-top-color: #1D9E75; border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .compact-queue-dot { width: 8px; height: 8px; background: #DDD9D4; border-radius: 50%; }
+    /* View toggle in column header */
+    .col-view-toggle {
+      background: none; border: none; color: #A09A94; font-size: 13px; cursor: pointer; padding: 2px 4px; border-radius: 4px; margin-left: auto;
+    }
+    .col-view-toggle:hover { color: #2D2D2D; background: rgba(0,0,0,0.05); }
   </style>
 </head>
 <body>
@@ -573,6 +632,7 @@
         <span class="gc-spark">&#10038;</span>
         <span class="gc-title">Pipeline Advisor</span>
         <span class="gc-subtitle">— all companies</span>
+        <button class="gc-model-toggle" id="gc-model-toggle" title="Click to switch model"><span class="gc-model-label" id="gc-model-label">◆ GPT-4.1 mini</span></button>
       </div>
       <div class="gc-btns">
         <button class="gc-btn" id="gc-size" title="Maximize">&#10530;</button>

@@ -8,6 +8,14 @@ let customOpportunityStages = [];
 let customFieldDefs = []; // user-created fields
 let gmailUserEmail = ''; // user's own Gmail address, used to exclude self from Known Contacts
 let _stageCelebrations = {}; // loaded from storage for confetti/sound on stage changes
+let _researchAttempted = false; // guards against repeated RESEARCH_COMPANY calls per page session
+
+// Auto-set "Action On" based on stage
+function defaultActionStatus(stageKey) {
+  if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
+  if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
+  return null;
+}
 
 const DEFAULT_FIELD_DEFS = [
   { id: 'companyWebsite',  label: 'Website',   type: 'url'  },
@@ -310,7 +318,14 @@ function renderHeader() {
       const sIdx = customOpportunityStages.findIndex(st => st.key === s.key);
       if (sIdx > toIdx && ts[s.key]) delete ts[s.key];
     }
-    saveEntry({ jobStage: sel.value, stageTimestamps: ts });
+    const stageChanges = { jobStage: sel.value, stageTimestamps: ts };
+    // Auto-set Action On based on stage
+    const autoAction = defaultActionStatus(sel.value);
+    if (autoAction) stageChanges.actionStatus = autoAction;
+    saveEntry(stageChanges);
+    // Update Action On dropdown if visible
+    const actionSel = document.getElementById('opp-action-status');
+    if (actionSel && autoAction) actionSel.value = autoAction;
     // Fire celebration if configured
     const celebCfg = _getCelebrationConfig(sel.value);
     if (celebCfg) _fireCelebration(celebCfg);
@@ -571,7 +586,8 @@ function buildIntelTab() {
 function initIntelTab() {
   // Trigger fresh research if reviews or hiring signals are missing
   const needsResearch = !entry.reviews?.length || !entry.jobListings?.length;
-  if (needsResearch) {
+  if (needsResearch && !_researchAttempted) {
+    _researchAttempted = true;
     const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
     chrome.runtime.sendMessage({ type: 'RESEARCH_COMPANY', company: entry.company, domain }, data => {
       void chrome.runtime.lastError;
@@ -1018,6 +1034,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
           <button class="mtg-quick-btn" data-prompt="Summarize all my meetings with this company">Summarize all</button>
           <button class="mtg-quick-btn" data-prompt="What were the key decisions from my meetings with this company?">Key decisions</button>
           <button class="mtg-quick-btn" data-prompt="List all action items from my meetings with this company">Action items</button>
+          <button class="mtg-refresh-btn" id="mtg-refresh-btn" title="Clear cached meetings and re-fetch from Granola">↻ Refresh meetings</button>
         </div>
       </div>`;
   }
@@ -1094,13 +1111,43 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   // Init "ask all meetings" chat panel
   if (typeof initChatPanels === 'function') initChatPanels(entry);
 
-  // Quick-action chips → pre-fill input
+  // Quick-action chips → fill input and send
   contentEl.querySelectorAll('.mtg-quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = contentEl.querySelector('.chat-input');
-      if (input) { input.value = btn.dataset.prompt; input.focus(); input.dispatchEvent(new Event('input')); }
+      if (input) {
+        input.value = btn.dataset.prompt;
+        input.focus();
+        input.dispatchEvent(new Event('input'));
+        // Trigger send by clicking the send button
+        const sendBtn = contentEl.querySelector('.chat-send-btn');
+        if (sendBtn) sendBtn.click();
+      }
     });
   });
+
+  // Refresh meetings — clear cache and re-fetch from Granola
+  const refreshBtn = contentEl.querySelector('#mtg-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '↻ Refreshing…';
+      // Clear cached meetings from saved entry
+      entry.cachedMeetings = [];
+      entry.cachedMeetingNotes = null;
+      entry.cachedMeetingNotesAt = null;
+      entry.cachedMeetingTranscript = null;
+      // Persist the cleared cache
+      saveEntry({
+        cachedMeetings: [],
+        cachedMeetingNotes: null,
+        cachedMeetingNotesAt: null,
+        cachedMeetingTranscript: null,
+      });
+      // Re-fetch by re-running loadHubMeetings with forceRefresh
+      loadHubMeetings(true);
+    });
+  }
 
   // Meeting card click → detail view
   contentEl.querySelectorAll('.mtg-card[data-meeting-id]').forEach(card => {

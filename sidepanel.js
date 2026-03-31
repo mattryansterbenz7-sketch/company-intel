@@ -26,6 +26,14 @@ let currentJobDescription = null;
 let currentJobMeta = null;
 let currentPrefs = null;
 let saveRating = 0;
+let _sessionSaves = [];
+
+// Auto-set "Action On" based on stage
+function defaultActionStatus(stageKey) {
+  if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
+  if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
+  return null;
+}
 let currentTabId = null;
 
 // Load prefs from sync, falling back to local (migration path for pre-sync installs).
@@ -94,11 +102,12 @@ loadPrefsWithMigration((prefs) => {
   applyPrefsToForm(prefs);
 });
 
-// Open full saved view and close the side panel so they don't compete
-savedBtn.addEventListener('click', () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL('saved.html') });
-  window.close();
-});
+// Open full saved view
+function openDashboard() {
+  window.open(chrome.runtime.getURL('saved.html'), '_blank');
+}
+savedBtn.addEventListener('click', openDashboard);
+document.getElementById('sp-logo')?.addEventListener('click', openDashboard);
 
 
 function openSavePanel(mode) {
@@ -283,6 +292,11 @@ saveConfirmBtn.addEventListener('click', () => {
       return;
     }
 
+    // Auto-tag Easy Apply jobs
+    if (isJobSave && currentJobMeta?.easyApply && !currentSaveTags.includes('linkedin easy apply')) {
+      currentSaveTags.push('linkedin easy apply');
+    }
+
     // New record (always type:'company')
     const entry = {
       id:             Date.now().toString(36) + Math.random().toString(36).substr(2),
@@ -346,6 +360,11 @@ function mergeAndSave(prev, existing, dupIdx) {
   const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
   const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
 
+  // Auto-tag Easy Apply jobs
+  if (isJobSave && currentJobMeta?.easyApply && !currentSaveTags.includes('linkedin easy apply')) {
+    currentSaveTags.push('linkedin easy apply');
+  }
+
   const merged = {
     ...prev,
     notes:          saveNotes.value.trim() || prev.notes,
@@ -380,6 +399,10 @@ function mergeAndSave(prev, existing, dupIdx) {
 }
 
 function enrichExistingOpportunity(prev, existing, dupIdx) {
+  // Auto-tag Easy Apply jobs
+  if (currentJobMeta?.easyApply && !currentSaveTags.includes('linkedin easy apply')) {
+    currentSaveTags.push('linkedin easy apply');
+  }
   // Silently enrich — keep existing jobMatch untouched, backfill missing data
   const enriched = { ...prev };
   // Use longer/more detailed job description
@@ -445,6 +468,10 @@ function showDuplicateDialog(prev, existing, dupIdx) {
   });
   newNewBtn.addEventListener('click', () => {
     dialog.classList.remove('visible');
+    // Auto-tag Easy Apply jobs
+    if (currentJobMeta?.easyApply && !currentSaveTags.includes('linkedin easy apply')) {
+      currentSaveTags.push('linkedin easy apply');
+    }
     // Create brand new opportunity entry for the different role
     const company = companyNameEl.textContent;
     const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
@@ -566,7 +593,7 @@ function showPipelineStats() {
 
     // Click to open dashboard
     el.onclick = () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('saved.html') });
+      window.open(chrome.runtime.getURL('saved.html'), '_blank');
       window.close();
     };
   });
@@ -593,6 +620,10 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     companyNameEl.textContent = response.company;
     currentJobTitle = response.jobTitle || null;
     currentJobMeta = response.jobMeta || null;
+    if (response.easyApply != null) {
+      if (!currentJobMeta) currentJobMeta = {};
+      currentJobMeta.easyApply = response.easyApply;
+    }
     detectedDomain = response.domain || null;
     detectedCompanyLinkedin = response.companyLinkedinUrl || null;
     updateJobTitleBar();
@@ -640,7 +671,7 @@ function startJobDescriptionFlow(tabId) {
 
 // Open Setup page in a new tab
 settingsBtn.addEventListener('click', () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL('preferences.html') });
+  window.open(chrome.runtime.getURL('preferences.html'), '_blank');
 });
 
 // Job match toggle
@@ -1124,11 +1155,13 @@ function renderOppFields(savedEntry) {
       fields.push(['Stage', `<select class="sp-stage-select sp-stage-opp" id="sp-opp-stage">${oppOptions}</select>`]);
     }
 
-    // Company stage dropdown
-    const coOptions = coStages.map(s =>
-      `<option value="${s.key}" ${(savedEntry.status || 'co_watchlist') === s.key ? 'selected' : ''}>${s.label}</option>`
-    ).join('');
-    fields.push(['Company', `<select class="sp-stage-select" id="sp-co-stage">${coOptions}</select>`]);
+    // Company stage dropdown — only show if NOT an opportunity (opportunity stage is primary)
+    if (!savedEntry.isOpportunity) {
+      const coOptions = coStages.map(s =>
+        `<option value="${s.key}" ${(savedEntry.status || 'co_watchlist') === s.key ? 'selected' : ''}>${s.label}</option>`
+      ).join('');
+      fields.push(['Company', `<select class="sp-stage-select" id="sp-co-stage">${coOptions}</select>`]);
+    }
 
     // Action On dropdown
     const actionOpts = '<option value="my_court"' + ((savedEntry.actionStatus || 'my_court') === 'my_court' ? ' selected' : '') + '>🏀 My Court</option><option value="their_court"' + (savedEntry.actionStatus === 'their_court' ? ' selected' : '') + '>⏳ Their Court</option>';
@@ -1173,7 +1206,14 @@ function renderOppFields(savedEntry) {
       oppSelect.addEventListener('change', () => {
         const ts = { ...(savedEntry.stageTimestamps || {}) };
         if (!ts[oppSelect.value]) ts[oppSelect.value] = Date.now();
-        updateEntry({ jobStage: oppSelect.value, stageTimestamps: ts, lastActivity: Date.now() });
+        const stageChanges = { jobStage: oppSelect.value, stageTimestamps: ts, lastActivity: Date.now() };
+        // Auto-set Action On based on stage
+        const autoAction = defaultActionStatus(oppSelect.value);
+        if (autoAction) stageChanges.actionStatus = autoAction;
+        updateEntry(stageChanges);
+        // Update Action On dropdown if visible
+        const actionSel = el.querySelector('#sp-action-status');
+        if (actionSel && autoAction) actionSel.value = autoAction;
         oppSelect.style.animation = 'sp-stage-flash 0.4s ease';
         setTimeout(() => oppSelect.style.animation = '', 400);
         // Update the header stage text
@@ -1231,6 +1271,24 @@ function showSaveBar() {
   if (stageEl) stageEl.style.display = 'none';
   const oppFields = document.getElementById('sp-opp-fields');
   if (oppFields) oppFields.style.display = 'none';
+
+  // Show queue buttons when job is detected, hide Save Company
+  const queuePanel = document.getElementById('queue-save-panel');
+  const queueConfirm = document.getElementById('queue-save-confirm');
+  if (currentJobTitle) {
+    saveBtn.style.display = 'none';
+    if (queuePanel) queuePanel.style.display = 'block';
+    if (queueConfirm) queueConfirm.style.display = 'none';
+    // Reset queue button states
+    const qBtn = document.getElementById('save-queue-btn');
+    const rBtn = document.getElementById('save-research-btn');
+    if (qBtn) { qBtn.disabled = false; qBtn.textContent = 'Save to AI queue'; }
+    if (rBtn) { rBtn.disabled = false; rBtn.textContent = 'Save + research now'; }
+  } else {
+    saveBtn.style.display = '';
+    if (queuePanel) queuePanel.style.display = 'none';
+    if (queueConfirm) queueConfirm.style.display = 'none';
+  }
 }
 
 function checkAlreadySaved(company) {
@@ -1246,6 +1304,15 @@ function checkAlreadySaved(company) {
       }
       saveBtn.textContent = '✓ Saved';
       saveBtn.classList.add('saved');
+      // Also mark queue buttons as saved if job detected
+      if (currentJobTitle && match.isOpportunity) {
+        const queuePanel = document.getElementById('queue-save-panel');
+        if (queuePanel) queuePanel.style.display = 'none';
+        const qBtn = document.getElementById('save-queue-btn');
+        const rBtn = document.getElementById('save-research-btn');
+        if (qBtn) { qBtn.disabled = true; qBtn.textContent = 'Saved'; }
+        if (rBtn) { rBtn.disabled = true; rBtn.textContent = 'Saved'; }
+      }
       showCrmLink(match);
 
       // Use saved research data instead of re-fetching from API
@@ -1474,13 +1541,14 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
   }
 
   const summaryBadge = v ? `<span class="verdict-badge-sm ${v.cls}">${v.label}</span>` : '';
+  const easyApplyBadge = currentJobMeta?.easyApply ? '<span class="easy-apply-badge">⚡ Easy Apply</span>' : '';
 
   const autoOpen = hasMatch || locationMatchHtml;
   jobOpportunityEl.innerHTML = `
     <details class="jopp-dropdown"${autoOpen ? ' open' : ''}>
       <summary class="jopp-summary">
         <span class="jopp-summary-left">Job Opportunity</span>
-        <span class="jopp-summary-right">${locationSummary}${summaryBadge}</span><span class="jopp-chevron">›</span>
+        <span class="jopp-summary-right">${easyApplyBadge}${locationSummary}${summaryBadge}</span><span class="jopp-chevron">›</span>
       </summary>
       <div class="jopp-body">
         ${locationMatchHtml}
@@ -1892,6 +1960,27 @@ function renderContactsSection(el, contacts) {
   let history = [];
   let isApplicationMode = false;
 
+  // Model switcher — default GPT-4.1 mini, click to cycle
+  const CHAT_MODELS = [
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
+    { id: 'claude-sonnet-4-5-20250514', label: 'Sonnet', icon: '✦' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
+  ];
+  let chatModelIdx = 0;
+  const modelToggle = document.getElementById('sp-model-toggle');
+  const modelLabel = document.getElementById('sp-model-label');
+  function updateModelLabel() {
+    if (modelLabel) modelLabel.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
+  }
+  updateModelLabel();
+  if (modelToggle) {
+    modelToggle.addEventListener('click', () => {
+      chatModelIdx = (chatModelIdx + 1) % CHAT_MODELS.length;
+      updateModelLabel();
+    });
+  }
+
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
   }
@@ -2033,7 +2122,7 @@ function renderContactsSection(el, contacts) {
     try {
       result = await Promise.race([
         new Promise(resolve => {
-          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context }, r => {
+          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context, chatModel: CHAT_MODELS[chatModelIdx].id }, r => {
             if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
             else resolve(r);
           });
@@ -2045,7 +2134,12 @@ function renderContactsSection(el, contacts) {
     }
 
     sendBtn.disabled = false;
-    history.push({ role: 'assistant', content: result?.reply || result?.error || 'Something went wrong.' });
+    // If the backend fell back to a different model, show which one was used
+    const replyText = result?.reply || result?.error || 'Something went wrong.';
+    const fallbackNote = (result?.model && result.model !== CHAT_MODELS[chatModelIdx].id)
+      ? `\n\n*— answered by ${result.model.includes('gpt') ? 'GPT-4.1 mini' : result.model} (fallback)*`
+      : '';
+    history.push({ role: 'assistant', content: replyText + fallbackNote });
     renderMessages();
   }
 
@@ -2155,3 +2249,307 @@ function _spFireCelebration(stageKey) {
   }
   requestAnimationFrame(animate);
 }
+
+// ── Queue Save Buttons ──────────────────────────────────────────────────────
+
+function buildQueueEntry() {
+  const company = companyNameEl.textContent;
+  const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
+  const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
+  const snap = currentResearch?.jobSnapshot || currentJobMeta;
+  const tags = ['Job Posted'];
+  if (currentJobMeta?.easyApply && !tags.includes('linkedin easy apply')) {
+    tags.push('linkedin easy apply');
+  }
+
+  return {
+    id:               Date.now().toString(36) + Math.random().toString(36).substr(2),
+    type:             'company',
+    company,
+    savedAt:          Date.now(),
+    notes:            '',
+    rating:           null,
+    tags,
+    url:              null,
+    oneLiner:         currentResearch?.intelligence?.oneLiner || null,
+    category:         currentResearch?.intelligence?.category || null,
+    employees:        currentResearch?.employees || null,
+    funding:          currentResearch?.funding   || null,
+    founded:          currentResearch?.founded   || null,
+    companyWebsite,
+    companyLinkedin,
+    intelligence:     currentResearch?.intelligence || null,
+    reviews:          currentResearch?.reviews      || null,
+    leaders:          currentResearch?.leaders      || null,
+    status:           'co_watchlist',
+    isOpportunity:    true,
+    jobStage:         'needs_review',
+    jobTitle:         currentJobTitle || null,
+    jobUrl:           currentUrl || null,
+    jobMatch:         currentResearch?.jobMatch    || null,
+    jobSnapshot:      snap || null,
+    jobDescription:   currentJobDescription        || null,
+    baseSalaryRange:  snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,
+    oteTotalComp:     snap?.oteTotalComp || (snap?.salaryType === 'ote' ? snap?.salary : null) || null,
+    equity:           snap?.equity || null,
+    compSource:       snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp ? 'Job posting' : null,
+    compAutoExtracted: !!(snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp),
+  };
+}
+
+function queueSaveEntry(callback) {
+  const company = companyNameEl.textContent;
+
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    void chrome.runtime.lastError;
+    const existing = savedCompanies || [];
+
+    // Duplicate check
+    const dupIdx = existing.findIndex(c => companiesMatch(c.company, company));
+    if (dupIdx !== -1) {
+      const prev = existing[dupIdx];
+      if (prev.isOpportunity && prev.jobTitle && currentJobTitle && titlesAreSimilar(prev.jobTitle, currentJobTitle)) {
+        // Same role — silently enrich
+        enrichExistingOpportunity(prev, existing, dupIdx);
+        showToast(`Updated existing opportunity at ${prev.company}`);
+        callback(prev);
+        return;
+      }
+      // Different role or company-only save — create new entry alongside
+    }
+
+    const entry = buildQueueEntry();
+
+    // Persist
+    chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, () => {
+      void chrome.runtime.lastError;
+
+      // Mark UI as saved
+      saveJobBtn.textContent = '✓ Saved';
+      saveJobBtn.classList.add('saved');
+      saveBtn.textContent = '✓ Saved';
+      saveBtn.classList.add('saved');
+
+      // Queue quick fit scoring
+      chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
+
+      // Compute structural matches
+      loadPrefsWithMigration((prefs) => {
+        chrome.runtime.sendMessage(
+          { type: 'COMPUTE_STRUCTURAL_MATCHES', entry, prefs: prefs || currentPrefs || {} },
+          (matches) => {
+            void chrome.runtime.lastError;
+            if (matches) {
+              // Save structural matches back onto entry
+              chrome.storage.local.get(['savedCompanies'], ({ savedCompanies: latest }) => {
+                const entries = latest || [];
+                const idx = entries.findIndex(c => c.id === entry.id);
+                if (idx !== -1) {
+                  Object.assign(entries[idx], { structuralMatches: matches });
+                  chrome.storage.local.set({ savedCompanies: entries });
+                }
+              });
+            }
+          }
+        );
+      });
+
+      // Track in session
+      _sessionSaves.push({
+        id: entry.id,
+        company: entry.company,
+        jobTitle: entry.jobTitle,
+        quickFitScore: null,
+        quickFitReason: null,
+      });
+
+      showPipelineStats();
+      showCrmLink(entry);
+      callback(entry);
+    });
+  });
+}
+
+function renderQueueConfirmation(entry) {
+  const panel = document.getElementById('queue-save-confirm');
+  const queuePanel = document.getElementById('queue-save-panel');
+  if (!panel) return;
+  if (queuePanel) queuePanel.style.display = 'none';
+  savePanel.classList.remove('visible');
+
+  let confirmRating = 0;
+  let confirmTags = [...(entry.tags || [])];
+
+  function renderTags() {
+    const tagsEl = panel.querySelector('.confirm-tags');
+    if (!tagsEl) return;
+    tagsEl.innerHTML = confirmTags.map(t =>
+      `<span class="confirm-tag">${t}<span class="remove-tag" data-tag="${t}">✕</span></span>`
+    ).join('') + `<span class="confirm-add-tag" id="confirm-add-tag-btn">+ Add</span>`;
+    tagsEl.querySelectorAll('.remove-tag').forEach(el => {
+      el.addEventListener('click', () => {
+        confirmTags = confirmTags.filter(t => t !== el.dataset.tag);
+        renderTags();
+        autoSaveConfirmField(entry.id, { tags: [...confirmTags] });
+      });
+    });
+    const addBtn = tagsEl.querySelector('#confirm-add-tag-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const tag = prompt('Add tag:');
+        if (tag && tag.trim() && !confirmTags.includes(tag.trim())) {
+          confirmTags.push(tag.trim());
+          renderTags();
+          autoSaveConfirmField(entry.id, { tags: [...confirmTags] });
+        }
+      });
+    }
+  }
+
+  function renderStars() {
+    const starsEl = panel.querySelector('.confirm-stars');
+    if (!starsEl) return;
+    starsEl.innerHTML = [1,2,3,4,5].map(v =>
+      `<span class="confirm-star${v <= confirmRating ? ' filled' : ''}" data-val="${v}">&#9733;</span>`
+    ).join('');
+    starsEl.querySelectorAll('.confirm-star').forEach(star => {
+      star.addEventListener('mouseenter', () => {
+        const hv = parseInt(star.dataset.val);
+        starsEl.querySelectorAll('.confirm-star').forEach((s, i) => s.classList.toggle('hovered', i < hv));
+      });
+      star.addEventListener('click', () => {
+        confirmRating = parseInt(star.dataset.val);
+        renderStars();
+        autoSaveConfirmField(entry.id, { rating: confirmRating });
+      });
+    });
+    starsEl.addEventListener('mouseleave', () => {
+      starsEl.querySelectorAll('.confirm-star').forEach(s => s.classList.remove('hovered'));
+    });
+  }
+
+  function renderSessionFeed() {
+    if (_sessionSaves.length === 0) return '';
+    const items = _sessionSaves.slice().reverse().map(s => {
+      let scoreCls = 'pending';
+      let scoreText = '...';
+      if (s.quickFitScore != null) {
+        scoreText = s.quickFitScore + '/10';
+        scoreCls = s.quickFitScore >= 7 ? 'high' : s.quickFitScore >= 4 ? 'mid' : 'low';
+      }
+      return `<div class="save-session-item" data-session-id="${s.id}">
+        <div class="item-info">
+          <div class="item-company">${s.company}</div>
+          <div class="item-title">${s.jobTitle || ''}</div>
+        </div>
+        <span class="item-score ${scoreCls}">${scoreText}</span>
+      </div>`;
+    }).join('');
+    return `<div class="save-session-feed" id="session-feed">
+      <div class="feed-label">Saved this session</div>
+      ${items}
+    </div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="confirm-banner">Saved — AI fit scoring queued</div>
+    <div class="confirm-company">${entry.company}</div>
+    <div class="confirm-title">${entry.jobTitle || ''}</div>
+    <div class="confirm-stars"></div>
+    <textarea class="confirm-note" placeholder="Quick note... (optional)"></textarea>
+    <div class="confirm-tags"></div>
+    ${renderSessionFeed()}
+  `;
+  panel.style.display = 'block';
+
+  renderStars();
+  renderTags();
+
+  // Auto-save note on blur
+  const noteEl = panel.querySelector('.confirm-note');
+  if (noteEl) {
+    noteEl.addEventListener('blur', () => {
+      autoSaveConfirmField(entry.id, { notes: noteEl.value.trim() });
+    });
+  }
+}
+
+function autoSaveConfirmField(entryId, changes) {
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const entries = savedCompanies || [];
+    const idx = entries.findIndex(c => c.id === entryId);
+    if (idx === -1) return;
+    Object.assign(entries[idx], changes);
+    chrome.storage.local.set({ savedCompanies: entries });
+  });
+}
+
+function updateSessionFeedScore(entryId, score, reason) {
+  const item = _sessionSaves.find(s => s.id === entryId);
+  if (item) {
+    item.quickFitScore = score;
+    item.quickFitReason = reason;
+  }
+  // Re-render feed items in DOM if visible
+  const feedEl = document.getElementById('session-feed');
+  if (!feedEl) return;
+  const itemEl = feedEl.querySelector(`[data-session-id="${entryId}"]`);
+  if (!itemEl) return;
+  const scoreEl = itemEl.querySelector('.item-score');
+  if (scoreEl && score != null) {
+    scoreEl.textContent = score + '/10';
+    scoreEl.className = 'item-score ' + (score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low');
+  }
+}
+
+// Listen for QUICK_FIT_COMPLETE messages
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'QUICK_FIT_COMPLETE' && message.entryId) {
+    updateSessionFeedScore(message.entryId, message.score, message.reason);
+  }
+});
+
+// "Save to AI queue" button
+document.getElementById('save-queue-btn')?.addEventListener('click', function() {
+  if (this.disabled) return;
+  this.disabled = true;
+  this.textContent = 'Saving...';
+  queueSaveEntry((entry) => {
+    renderQueueConfirmation(entry);
+  });
+});
+
+// "Save + research now" button
+document.getElementById('save-research-btn')?.addEventListener('click', function() {
+  if (this.disabled) return;
+  this.disabled = true;
+  this.textContent = 'Saving & researching...';
+  const qBtn = document.getElementById('save-queue-btn');
+  if (qBtn) { qBtn.disabled = true; qBtn.textContent = 'Saved'; }
+
+  queueSaveEntry((entry) => {
+    // Hide confirmation — keep the existing research/scoring view
+    const queueConfirm = document.getElementById('queue-save-confirm');
+    if (queueConfirm) queueConfirm.style.display = 'none';
+    const queuePanel = document.getElementById('queue-save-panel');
+    if (queuePanel) queuePanel.style.display = 'none';
+
+    // Trigger full research
+    const company = companyNameEl.textContent;
+    const enrichDomain = (detectedDomain && !/linkedin\.com/i.test(detectedDomain)) ? detectedDomain : null;
+    chrome.runtime.sendMessage(
+      { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, prefs: currentPrefs || null },
+      (response) => {
+        void chrome.runtime.lastError;
+        if (!response || response.error) return;
+        currentResearch = response;
+        renderResults(response);
+
+        // Now trigger job analysis with the research context
+        if (currentJobDescription) {
+          triggerJobAnalysis(company, currentJobDescription);
+        }
+      }
+    );
+  });
+});

@@ -89,6 +89,8 @@ async function detectCompanyAndJob() {
     result = detectWorkAtAStartup();
   } else if (url.includes('ashbyhq.com') || url.includes('jobs.ashbyhq.com')) {
     result = detectAshby();
+  } else if (url.includes('ats.rippling.com')) {
+    result = detectRippling();
   } else {
     result = detectGeneric();
   }
@@ -104,6 +106,24 @@ async function detectCompanyAndJob() {
       await new Promise(r => setTimeout(r, 200));
     }
     if (!result.jobMeta) result.jobMeta = extractLinkedInJobMeta();
+  }
+
+  // Detect Easy Apply — check after meta extraction when DOM is more fully rendered
+  if (result && /linkedin/i.test(result.source)) {
+    const easyApplyBtn = document.querySelector(
+      'button[aria-label*="Easy Apply"],' +
+      'button.jobs-apply-button[aria-label*="Easy Apply"],' +
+      '.jobs-apply-button--top-card button,' +
+      '.jobs-s-apply button[aria-label*="Easy Apply"],' +
+      'button[data-control-name="jobdetails_topcard_inapply"]'
+    );
+    // Also check by button text content as a fallback
+    if (easyApplyBtn) {
+      result.easyApply = true;
+    } else {
+      const allBtns = document.querySelectorAll('button');
+      result.easyApply = [...allBtns].some(b => /easy\s*apply/i.test(b.textContent));
+    }
   }
 
   // Return immediately — description extracted separately via GET_JOB_DESCRIPTION
@@ -541,10 +561,49 @@ function detectWorkday() {
   // Company: og:site_name is most reliable ("DataRobot Careers" → strip "Careers")
   let company = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.trim();
   if (company) company = company.replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+
+  // Page title: "Account Executive | Rocket Software Careers" → last segment, strip "Careers"
   if (!company) {
-    // Page title: "Account Executive | DataRobot Careers" — take last segment, strip "Careers"
     const segs = document.title.replace(/^\(\d+\)\s*/, '').split(/\s*[|·—–]\s*/);
     if (segs.length > 1) company = segs[segs.length - 1].replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+  }
+
+  // Workday logo / branding: look for company logo alt text or aria-label
+  if (!company) {
+    const logo = document.querySelector('[data-automation-id="logo"] img, [data-automation-id="companyLogo"] img, .css-1oqqr0l img, header img[alt]');
+    const alt = logo?.getAttribute('alt')?.trim();
+    if (alt && alt.length > 1 && alt.length < 60 && !/workday/i.test(alt)) {
+      company = alt.replace(/\s*(careers|jobs|hiring|logo)\s*$/i, '').trim();
+    }
+  }
+
+  // URL path: "/rocket_careers/job/..." → "Rocket" (capitalize, strip _careers suffix)
+  if (!company) {
+    const pathMatch = window.location.pathname.match(/^\/([a-z][a-z0-9_]+?)(?:_careers|_jobs)?\//i);
+    if (pathMatch && pathMatch[1].length > 1 && !/^(job|jobs|en|us)$/i.test(pathMatch[1])) {
+      company = pathMatch[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+  }
+
+  // First mention of company in job description body (e.g., "Rocket Software is seeking...")
+  if (!company) {
+    const descEl = document.querySelector('[data-automation-id="jobPostingDescription"]');
+    if (descEl) {
+      // Look for "CompanyName is seeking/looking/hiring" pattern in first 500 chars
+      const descText = descEl.textContent?.slice(0, 500) || '';
+      const nameMatch = descText.match(/^([A-Z][A-Za-z\s&.]+?)\s+(?:is\s+(?:seeking|looking|hiring|a\s)|seeks\s|has\s)/);
+      if (nameMatch && nameMatch[1].length > 2 && nameMatch[1].length < 50) {
+        company = nameMatch[1].trim();
+      }
+    }
+  }
+
+  // Workday subdomain: "rocket.wd5.myworkdayjobs.com" → "Rocket"
+  if (!company) {
+    const subMatch = domain.match(/^([a-z][a-z0-9]+)\.wd\d+\.myworkdayjobs\.com$/i);
+    if (subMatch) {
+      company = subMatch[1].charAt(0).toUpperCase() + subMatch[1].slice(1);
+    }
   }
   if (!company) company = extractDomain();
 
@@ -700,11 +759,43 @@ function detectAshby() {
   return { company, jobTitle: jobTitle || null, source: 'ashby', domain: null };
 }
 
+function detectRippling() {
+  // URL: ats.rippling.com/{company-slug}/jobs/{id}
+  const pathMatch = window.location.pathname.match(/^\/([^/]+)\/jobs\//);
+  let company = null;
+  if (pathMatch && pathMatch[1]) {
+    company = pathMatch[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Page title: "Enterprise Account Executive - Consensus" or og:title
+  if (!company) {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim();
+    if (ogTitle) {
+      const parts = ogTitle.split(/\s*[-–—|]\s*/);
+      if (parts.length > 1) company = parts[parts.length - 1].trim();
+    }
+  }
+  if (!company) {
+    const parts = document.title.split(/\s*[-–—|]\s*/);
+    if (parts.length > 1) company = parts[parts.length - 1].replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+  }
+
+  // Job title from h1 or breadcrumb
+  let jobTitle = document.querySelector('h1')?.textContent?.trim();
+  if (!jobTitle) {
+    const breadcrumb = document.querySelector('nav a:last-child, .breadcrumb :last-child');
+    jobTitle = breadcrumb?.textContent?.trim();
+  }
+
+  if (!company) company = 'Unknown Company';
+  return { company, jobTitle: jobTitle || null, source: 'rippling', domain: null };
+}
+
 function detectGeneric() {
   const domain = window.location.hostname.replace('www.', '');
 
   // Known ATS domains — never use these as the company name
-  const ATS_DOMAINS = ['ashbyhq.com', 'greenhouse.io', 'lever.co', 'workday.com', 'myworkdayjobs.com', 'smartrecruiters.com', 'icims.com', 'jobvite.com', 'breezy.hr', 'recruitee.com', 'bamboohr.com', 'jazz.co', 'applytojob.com', 'workable.com'];
+  const ATS_DOMAINS = ['ashbyhq.com', 'greenhouse.io', 'lever.co', 'workday.com', 'myworkdayjobs.com', 'rippling.com', 'smartrecruiters.com', 'icims.com', 'jobvite.com', 'breezy.hr', 'recruitee.com', 'bamboohr.com', 'jazz.co', 'applytojob.com', 'workable.com'];
   const isATS = ATS_DOMAINS.some(d => domain.includes(d));
 
   // 1. og:site_name is the most authoritative signal (skip if it's the ATS name)

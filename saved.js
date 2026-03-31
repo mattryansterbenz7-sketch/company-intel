@@ -1,3 +1,8 @@
+const QUEUE_STAGE = 'needs_review';
+const DISMISS_STAGE = 'rejected';
+const DISMISS_TAG = "Didn't apply";
+const SCORE_THRESHOLDS = { green: 7, amber: 4 };
+
 let allCompanies = [];
 let allKnownTags = [];
 let activeType = 'all';
@@ -8,7 +13,7 @@ let activeActionFilter = 'all'; // 'all' | 'my_court' | 'their_court'
 let viewMode = localStorage.getItem('ci_viewMode') || 'grid';
 
 const DEFAULT_OPPORTUNITY_STAGES = [
-  { key: 'needs_review',    label: 'Saved — Needs Review',      color: '#64748b' },
+  { key: 'needs_review',    label: 'AI Scoring Queue',           color: '#64748b' },
   { key: 'want_to_apply',   label: 'I Want to Apply',           color: '#22d3ee' },
   { key: 'applied',         label: 'Applied',                   color: '#60a5fa' },
   { key: 'intro_requested', label: 'Intro Requested',           color: '#a78bfa' },
@@ -96,6 +101,66 @@ function boldKeyPhrase(text) {
   const dashSplit = text.match(/^(.+?)\s*[;—–]\s*(.+)$/);
   if (dashSplit) return `<strong>${dashSplit[1]}</strong> — ${dashSplit[2]}`;
   return text;
+}
+
+function escHtmlGlobal(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+}
+
+// Column view modes (compact vs standard) stored in localStorage
+const _colViewModes = JSON.parse(localStorage.getItem('ci_colViewModes') || '{}');
+function getColViewMode(stageKey) {
+  if (_colViewModes[stageKey]) return _colViewModes[stageKey];
+  return stageKey === QUEUE_STAGE ? 'compact' : 'standard';
+}
+function setColViewMode(stageKey, mode) {
+  _colViewModes[stageKey] = mode;
+  localStorage.setItem('ci_colViewModes', JSON.stringify(_colViewModes));
+}
+
+function renderCompactCard(c) {
+  const score = c.quickFitScore ?? c.jobMatch?.score ?? null;
+  const isScoring = c._queuedForScoring && score === null;
+  const isQueued = !c._queuedForScoring && !c.quickFitScoredAt && score === null;
+
+  const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
+  const stateClass = isScoring ? ' scoring' : isQueued ? ' queued' : '';
+
+  // Score display
+  let scoreHtml;
+  if (score != null) {
+    scoreHtml = `<span class="compact-score-num ${tier}">${score}</span><span class="compact-score-den">/10</span>`;
+  } else if (isScoring) {
+    scoreHtml = '<span class="compact-spinner"></span>';
+  } else {
+    scoreHtml = '<span class="compact-queue-dot"></span>';
+  }
+
+  // Meta line: salary + arrangement
+  const salary = c.baseSalaryRange || c.oteTotalComp || c.jobMatch?.salary?.base || c.jobSnapshot?.salary || '';
+  const arr = c.jobSnapshot?.workArrangement || c.jobMatch?.workArrangement || '';
+  const meta = [salary, arr].filter(Boolean).join(' \u00b7 ');
+
+  // Action buttons (only in queue stage)
+  const inQueue = (c.jobStage || 'needs_review') === QUEUE_STAGE;
+  const actionsHtml = inQueue && score != null ? `
+    <div class="compact-actions">
+      <button class="compact-apply-btn" data-id="${c.id}">Apply</button>
+      <button class="compact-dismiss-btn" data-id="${c.id}">Dismiss</button>
+    </div>` : '';
+
+  return `
+    <div class="compact-card score-${tier}${stateClass}" data-id="${c.id}" draggable="true">
+      <div class="compact-card-score">${scoreHtml}</div>
+      <div class="compact-card-body">
+        <div class="compact-company">${escHtmlGlobal(c.company)}</div>
+        <div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>
+        ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
+        ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
+        ${isQueued ? '<div class="compact-meta">In queue</div>' : ''}
+        ${actionsHtml}
+      </div>
+    </div>`;
 }
 
 function scoreToVerdict(score) {
@@ -1036,6 +1101,23 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// Real-time score updates from background.js
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === 'QUICK_FIT_COMPLETE' && msg.companyId) {
+    const idx = allCompanies.findIndex(c => c.id === msg.companyId);
+    if (idx !== -1) {
+      const updates = {};
+      if (msg.score != null) updates.quickFitScore = msg.score;
+      if (msg.scoredAt) updates.quickFitScoredAt = msg.scoredAt;
+      if (msg.jobSnapshot) updates.jobSnapshot = msg.jobSnapshot;
+      allCompanies[idx] = { ...allCompanies[idx], ...updates, _queuedForScoring: false };
+      // Re-render just the kanban if active, otherwise full render
+      render();
+    }
+    sendResponse({ ok: true });
+  }
+});
+
 // Kanban view
 function renderKanban(filtered) {
   const board = document.getElementById('kanban-board');
@@ -1046,8 +1128,24 @@ function renderKanban(filtered) {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
       return validKeys.has(s) ? s === statusKey : statusKey === stages[0].key;
     });
-    // Sort: My Court first, then by job match score (highest first), then by most recent activity
-    if (activePipeline === 'opportunity') {
+    // Queue column: scored first (by quickFitScore desc), then scoring, then unscored
+    if (statusKey === QUEUE_STAGE && activePipeline === 'opportunity') {
+      cards.sort((a, b) => {
+        const aScore = a.quickFitScore ?? a.jobMatch?.score ?? null;
+        const bScore = b.quickFitScore ?? b.jobMatch?.score ?? null;
+        const aScoring = a._queuedForScoring && aScore === null;
+        const bScoring = b._queuedForScoring && bScore === null;
+        // Scored first
+        if ((aScore != null) !== (bScore != null)) return aScore != null ? -1 : 1;
+        // Both scored — sort by score desc
+        if (aScore != null && bScore != null) return bScore - aScore;
+        // Scoring before queued
+        if (aScoring !== bScoring) return aScoring ? -1 : 1;
+        // Fallback: most recent first
+        return (b.savedAt || 0) - (a.savedAt || 0);
+      });
+    } else if (activePipeline === 'opportunity') {
+      // Sort: My Court first, then by job match score (highest first), then by most recent activity
       cards.sort((a, b) => {
         // My Court items float to top
         const aMyC = (a.actionStatus || 'my_court') === 'my_court' ? 1 : 0;
@@ -1061,15 +1159,20 @@ function renderKanban(filtered) {
     }
     const s = stageStyle(statusKey);
     const isCollapsed = _collapsedCols.has(statusKey);
+    const colMode = getColViewMode(statusKey);
+    const toggleIcon = colMode === 'compact' ? '☰' : '▤';
+    const toggleTitle = colMode === 'compact' ? 'Switch to standard view' : 'Switch to compact view';
+    const renderCard = colMode === 'compact' ? renderCompactCard : renderKanbanCard;
     return `
       <div class="kanban-col${isCollapsed ? ' collapsed' : ''}" data-col-key="${statusKey}">
         <div class="kanban-col-header" data-status="${statusKey}" style="border-color:${s.border};background:${s.bg};color:${s.color}">
           <span class="kanban-col-title">${statusLabel}</span>
           <span class="kanban-col-count">${cards.length}</span>
+          <button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>
           <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}">‹</button>
         </div>
         <div class="kanban-cards" data-status="${statusKey}" style="border-color:${s.border};background:rgba(0,0,0,0.15)">
-          ${cards.length ? cards.map(c => renderKanbanCard(c)).join('') : '<div class="kanban-empty">Empty</div>'}
+          ${cards.length ? cards.map(c => renderCard(c)).join('') : '<div class="kanban-empty">Empty</div>'}
         </div>
       </div>`;
   }).join('');
@@ -1096,60 +1199,6 @@ function renderKanban(filtered) {
     );
   });
 
-  // Auto-score unscored opportunities in background
-  if (activePipeline === 'opportunity') {
-    const unscored = filtered.filter(c => c.isOpportunity && !c.jobMatch && c.jobDescription && !c._scoring);
-    if (unscored.length) {
-      chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-        chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
-          unscored.slice(0, 3).forEach(c => {
-            c._scoring = true;
-            const cardEl = board.querySelector(`.card-match-area[data-id="${c.id}"]`);
-            if (cardEl) cardEl.innerHTML = '<span class="card-scoring-indicator">Scoring…</span>';
-            const richContext = {
-              intelligence: c.intelligence?.eli5 || c.oneLiner || null,
-              reviews: c.reviews || [],
-              emails: (c.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
-              meetings: (c.cachedMeetings || []).slice(0, 3),
-              transcript: c.cachedMeetingTranscript || null,
-              storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
-              notes: c.notes || null,
-              knownComp: c.baseSalaryRange || c.oteTotalComp ? `Known comp: ${c.baseSalaryRange ? 'Base ' + c.baseSalaryRange : ''} ${c.oteTotalComp ? 'OTE ' + c.oteTotalComp : ''} ${c.equity ? 'Equity ' + c.equity : ''} (source: ${c.compSource || 'unknown'})`.trim() : null,
-              matchFeedback: c.matchFeedback ? `User ${c.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${c.matchFeedback.note ? ': "' + c.matchFeedback.note + '"' : ''}` : null,
-            };
-            chrome.runtime.sendMessage(
-              { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {}, richContext },
-              result => {
-                void chrome.runtime.lastError;
-                delete c._scoring;
-                if (!result?.jobMatch) return;
-                const idx = allCompanies.findIndex(x => x.id === c.id);
-                if (idx === -1) return;
-                allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
-                if (result.jobSnapshot) {
-                  allCompanies[idx].jobSnapshot = result.jobSnapshot;
-                  const s = result.jobSnapshot;
-                  if (!allCompanies[idx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
-                    allCompanies[idx].baseSalaryRange = s.baseSalaryRange || s.salary;
-                    allCompanies[idx].compSource = allCompanies[idx].compSource || 'Job posting';
-                    allCompanies[idx].compAutoExtracted = true;
-                  }
-                  if (!allCompanies[idx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
-                    allCompanies[idx].oteTotalComp = s.oteTotalComp || s.salary;
-                  }
-                  if (!allCompanies[idx].equity && s.equity) allCompanies[idx].equity = s.equity;
-                }
-                chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
-                  void chrome.runtime.lastError;
-                  render();
-                });
-              }
-            );
-          });
-        });
-      });
-    }
-  }
 }
 
 function renderKanbanCard(c) {
@@ -1205,7 +1254,7 @@ function renderKanbanCard(c) {
           return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
         })() : '';
         return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
-      })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring…</span>' : '')}</div>
+      })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
       ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
         const compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary;
         const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
@@ -1377,6 +1426,59 @@ function bindKanbanEvents(board) {
     });
   });
 
+  board.querySelectorAll('.score-match-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const c = allCompanies.find(x => x.id === id);
+      if (!c || !c.jobDescription) return;
+      btn.disabled = true;
+      btn.textContent = 'Scoring\u2026';
+      chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+        chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+          const richContext = {
+            intelligence: c.intelligence?.eli5 || c.oneLiner || null,
+            reviews: c.reviews || [],
+            emails: (c.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
+            meetings: (c.cachedMeetings || []).slice(0, 3),
+            transcript: c.cachedMeetingTranscript || null,
+            storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
+            notes: c.notes || null,
+            knownComp: c.baseSalaryRange || c.oteTotalComp ? `Known comp: ${c.baseSalaryRange ? 'Base ' + c.baseSalaryRange : ''} ${c.oteTotalComp ? 'OTE ' + c.oteTotalComp : ''} ${c.equity ? 'Equity ' + c.equity : ''} (source: ${c.compSource || 'unknown'})`.trim() : null,
+            matchFeedback: c.matchFeedback ? `User ${c.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${c.matchFeedback.note ? ': "' + c.matchFeedback.note + '"' : ''}` : null,
+          };
+          chrome.runtime.sendMessage(
+            { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {}, richContext },
+            result => {
+              void chrome.runtime.lastError;
+              if (!result?.jobMatch) { btn.disabled = false; btn.textContent = 'Score match'; return; }
+              const idx = allCompanies.findIndex(x => x.id === id);
+              if (idx === -1) return;
+              allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
+              if (result.jobSnapshot) {
+                allCompanies[idx].jobSnapshot = result.jobSnapshot;
+                const s = result.jobSnapshot;
+                if (!allCompanies[idx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
+                  allCompanies[idx].baseSalaryRange = s.baseSalaryRange || s.salary;
+                  allCompanies[idx].compSource = allCompanies[idx].compSource || 'Job posting';
+                  allCompanies[idx].compAutoExtracted = true;
+                }
+                if (!allCompanies[idx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
+                  allCompanies[idx].oteTotalComp = s.oteTotalComp || s.salary;
+                }
+                if (!allCompanies[idx].equity && s.equity) allCompanies[idx].equity = s.equity;
+              }
+              chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+                void chrome.runtime.lastError;
+                render();
+              });
+            }
+          );
+        });
+      });
+    });
+  });
+
   board.querySelectorAll('.card-notes').forEach(ta => {
     ta.addEventListener('mousedown', (e) => e.stopPropagation());
     ta.addEventListener('blur', () => updateCompany(ta.dataset.id, { notes: ta.value }));
@@ -1424,6 +1526,132 @@ function bindKanbanEvents(board) {
     cardEl.addEventListener('click', (e) => {
       if (e.target.closest('a, button, select, textarea, input, .card-tag, .star, .card-stars, details, summary')) return;
       window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+    });
+  });
+
+  // Column view toggle
+  board.querySelectorAll('.col-view-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const col = btn.dataset.col;
+      const cur = getColViewMode(col);
+      setColViewMode(col, cur === 'compact' ? 'standard' : 'compact');
+      render();
+    });
+  });
+
+  // Compact card Apply button
+  board.querySelectorAll('.compact-apply-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const entry = allCompanies.find(c => c.id === id);
+      if (!entry) return;
+      const stages = currentStages();
+      const queueIdx = stages.findIndex(s => s.key === QUEUE_STAGE);
+      const nextStage = queueIdx >= 0 && queueIdx + 1 < stages.length ? stages[queueIdx + 1].key : 'want_to_apply';
+      const now = Date.now();
+      const changes = {
+        jobStage: nextStage,
+        lastActivity: now,
+        ...stageEnterTimestamp(entry, nextStage),
+      };
+      const autoAction = defaultActionStatus(nextStage);
+      if (autoAction) changes.actionStatus = autoAction;
+      updateCompany(id, changes);
+      // Trigger RESEARCH_COMPANY if no intelligence data
+      if (!entry.intelligence) {
+        chrome.runtime.sendMessage({ type: 'RESEARCH_COMPANY', companyId: id, company: entry.company, website: entry.companyWebsite || '' }, () => void chrome.runtime.lastError);
+      }
+      // Trigger ANALYZE_JOB for deep scoring
+      if (entry.jobDescription) {
+        chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+          chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+            const richContext = {
+              intelligence: entry.intelligence?.eli5 || entry.oneLiner || null,
+              reviews: entry.reviews || [],
+              emails: (entry.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
+              meetings: (entry.cachedMeetings || []).slice(0, 3),
+              transcript: entry.cachedMeetingTranscript || null,
+              storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
+              notes: entry.notes || null,
+              knownComp: entry.baseSalaryRange || entry.oteTotalComp ? `Known comp: ${entry.baseSalaryRange ? 'Base ' + entry.baseSalaryRange : ''} ${entry.oteTotalComp ? 'OTE ' + entry.oteTotalComp : ''} ${entry.equity ? 'Equity ' + entry.equity : ''} (source: ${entry.compSource || 'unknown'})`.trim() : null,
+              matchFeedback: entry.matchFeedback ? `User ${entry.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${entry.matchFeedback.note ? ': "' + entry.matchFeedback.note + '"' : ''}` : null,
+            };
+            chrome.runtime.sendMessage(
+              { type: 'ANALYZE_JOB', company: entry.company, jobTitle: entry.jobTitle, jobDescription: entry.jobDescription, prefs: prefs || {}, richContext },
+              result => {
+                void chrome.runtime.lastError;
+                if (!result?.jobMatch) return;
+                const idx = allCompanies.findIndex(x => x.id === id);
+                if (idx === -1) return;
+                allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
+                if (result.jobSnapshot) {
+                  allCompanies[idx].jobSnapshot = result.jobSnapshot;
+                  const s = result.jobSnapshot;
+                  if (!allCompanies[idx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
+                    allCompanies[idx].baseSalaryRange = s.baseSalaryRange || s.salary;
+                    allCompanies[idx].compSource = allCompanies[idx].compSource || 'Job posting';
+                    allCompanies[idx].compAutoExtracted = true;
+                  }
+                  if (!allCompanies[idx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
+                    allCompanies[idx].oteTotalComp = s.oteTotalComp || s.salary;
+                  }
+                  if (!allCompanies[idx].equity && s.equity) allCompanies[idx].equity = s.equity;
+                }
+                chrome.storage.local.set({ savedCompanies: allCompanies }, () => { void chrome.runtime.lastError; render(); });
+              }
+            );
+          });
+        });
+      }
+    });
+  });
+
+  // Compact card Dismiss button
+  board.querySelectorAll('.compact-dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const entry = allCompanies.find(c => c.id === id);
+      if (!entry) return;
+      const now = Date.now();
+      const existingTags = entry.tags || [];
+      const tags = existingTags.includes(DISMISS_TAG) ? existingTags : [...existingTags, DISMISS_TAG];
+      updateCompany(id, {
+        jobStage: DISMISS_STAGE,
+        lastActivity: now,
+        tags,
+        ...stageEnterTimestamp(entry, DISMISS_STAGE),
+      });
+    });
+  });
+
+  // Compact card click navigation (body area, not buttons)
+  board.querySelectorAll('.compact-card').forEach(cardEl => {
+    cardEl.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+    });
+  });
+
+  // Compact card drag-and-drop
+  board.querySelectorAll('.compact-card').forEach(card => {
+    card.addEventListener('mousedown', (e) => {
+      dragAllowed = !e.target.closest('button');
+    });
+    card.addEventListener('dragstart', (e) => {
+      if (!dragAllowed) { e.preventDefault(); return; }
+      draggingId = card.dataset.id;
+      card.style.opacity = '0.35';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+    });
+    card.addEventListener('dragend', () => {
+      card.style.opacity = '';
+      draggingId = null;
+      dragAllowed = false;
+      board.querySelectorAll('.kanban-cards, .kanban-col-header').forEach(el => el.classList.remove('drag-over'));
     });
   });
 
@@ -2162,6 +2390,27 @@ function openStatCardEditor() {
 
   let history = [];
   let isMinimized = false;
+
+  // Model switcher — default GPT-4.1 mini, click to cycle
+  const GC_MODELS = [
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
+    { id: 'claude-sonnet-4-5-20250514', label: 'Sonnet', icon: '✦' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
+  ];
+  let gcModelIdx = 0;
+  const gcModelToggle = document.getElementById('gc-model-toggle');
+  const gcModelLabel = document.getElementById('gc-model-label');
+  function updateGcModelLabel() {
+    if (gcModelLabel) gcModelLabel.textContent = GC_MODELS[gcModelIdx].icon + ' ' + GC_MODELS[gcModelIdx].label;
+  }
+  updateGcModelLabel();
+  if (gcModelToggle) {
+    gcModelToggle.addEventListener('click', () => {
+      gcModelIdx = (gcModelIdx + 1) % GC_MODELS.length;
+      updateGcModelLabel();
+    });
+  }
   let sizeState = 0;
   const SIZE_ICONS = ['\u2922', '\u2921', '\u22A1'];
   const SIZE_CLASSES = ['', 'gc-maximized', 'gc-fullscreen'];
@@ -2270,6 +2519,7 @@ function openStatCardEditor() {
             messages: apiMessages,
             pipeline,
             enrichments,
+            chatModel: GC_MODELS[gcModelIdx].id,
           }, r => {
             if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
             else resolve(r);
@@ -2285,7 +2535,10 @@ function openStatCardEditor() {
     sendBtn.textContent = 'Send';
 
     if (result?.reply) {
-      history.push({ role: 'assistant', content: result.reply });
+      const fallbackNote = (result.model && result.model !== GC_MODELS[gcModelIdx].id)
+        ? `\n\n*— answered by ${result.model.startsWith('gpt') ? result.model : result.model.replace('claude-', '').replace(/-\d+$/, '')} (fallback)*`
+        : '';
+      history.push({ role: 'assistant', content: result.reply + fallbackNote });
     } else {
       history.push({ role: 'assistant', content: result?.error || 'Something went wrong. Try again.' });
     }

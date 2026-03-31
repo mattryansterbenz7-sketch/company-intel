@@ -20,6 +20,15 @@ function buildChatPanel(container, entry) {
   // This keeps each company's chat isolated and avoids stale context from prior sessions.
   let history = [];
 
+  // Model switcher — default GPT-4.1 mini, click to cycle
+  const CHAT_MODELS = [
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
+    { id: 'claude-sonnet-4-5-20250514', label: 'Sonnet', icon: '✦' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
+  ];
+  let chatModelIdx = 0;
+
   const panelId = chatKey.replace(/[^a-z0-9]/gi, '_');
   const placeholder = container.dataset.chatPlaceholder || 'Ask anything about this company or role…';
   const minimal = container.dataset.chatMinimal === '1';
@@ -28,6 +37,7 @@ function buildChatPanel(container, entry) {
     <div class="chat-email-status" id="chat-email-status-${panelId}" style="display:none"></div>
     <div class="chat-input-row">
       <textarea class="chat-input" id="chat-input-${panelId}" placeholder="${placeholder}" rows="1"></textarea>
+      <button class="chat-model-btn" id="chat-model-${panelId}" title="Click to switch model" style="background:none;border:1px solid #DDD9D4;color:#8B8680;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">Haiku</button>
       <button class="chat-send-btn" id="chat-send-${panelId}">Send</button>
     </div>
     ${minimal ? `<div class="chat-actions"><button class="chat-action-btn chat-clear-btn" data-action="clear">Clear chat</button></div>` : `
@@ -42,6 +52,17 @@ function buildChatPanel(container, entry) {
   const inputEl   = container.querySelector(`#chat-input-${panelId}`);
   const sendBtn   = container.querySelector(`#chat-send-${panelId}`);
   const statusEl  = container.querySelector(`#chat-email-status-${panelId}`);
+  const modelBtn  = container.querySelector(`#chat-model-${panelId}`);
+  function updateChatModelBtn() {
+    if (modelBtn) modelBtn.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
+  }
+  updateChatModelBtn();
+  if (modelBtn) {
+    modelBtn.addEventListener('click', () => {
+      chatModelIdx = (chatModelIdx + 1) % CHAT_MODELS.length;
+      updateChatModelBtn();
+    });
+  }
 
   // Auto-include cached emails so context is always rich without manual "Load emails"
   let emailContext = (entry.cachedEmails?.length)
@@ -118,7 +139,7 @@ function buildChatPanel(container, entry) {
     try {
       result = await Promise.race([
         new Promise(resolve => {
-          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context }, r => {
+          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context, chatModel: CHAT_MODELS[chatModelIdx].id }, r => {
             if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
             else resolve(r);
           });
@@ -159,11 +180,9 @@ function buildChatPanel(container, entry) {
     const action = btn.dataset.action;
 
     if (action === 'clear') {
-      if (confirm('Clear chat history for this entry?')) {
-        history = [];
-        saveHistory();
-        renderHistory();
-      }
+      history = [];
+      saveHistory();
+      renderHistory();
       return;
     }
 

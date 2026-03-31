@@ -1,197 +1,288 @@
-// preferences.js — full-screen preferences editor
+// preferences.js — Career OS preferences editor
 
-function loadPrefsWithMigration(callback) {
-  chrome.storage.sync.get(['prefs'], syncResult => {
+// ── Storage helpers ──────────────────────────────────────────────────────────
+
+function showSaveStatus() {
+  const el = document.getElementById('save-status');
+  const textEl = document.getElementById('save-status-text');
+  if (!el) return;
+  clearTimeout(el._timer);
+  clearTimeout(el._doneTimer);
+  // Show spinner
+  el.classList.add('show', 'saving');
+  if (textEl) textEl.textContent = 'Saving…';
+  // After brief spin, show checkmark
+  el._doneTimer = setTimeout(() => {
+    el.classList.remove('saving');
+    if (textEl) textEl.textContent = 'Saved';
+  }, 400);
+  // Hide after delay
+  el._timer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// Save new bucket keys to chrome.storage.local
+function saveBucket(key, value) {
+  chrome.storage.local.set({ [key]: value }, () => {
     void chrome.runtime.lastError;
-    if (syncResult.prefs && Object.keys(syncResult.prefs).length > 0) {
-      callback(syncResult.prefs);
-      return;
-    }
-    chrome.storage.local.get(['prefs'], localResult => {
-      void chrome.runtime.lastError;
-      if (localResult.prefs && Object.keys(localResult.prefs).length > 0) {
-        chrome.storage.sync.set({ prefs: localResult.prefs }, () => void chrome.runtime.lastError);
-      }
-      callback(localResult.prefs || {});
-    });
+    showSaveStatus();
   });
 }
 
-function savePrefs(showConfirm = true) {
+// Save sync prefs (location, salary, work arrangement, job match toggle)
+function saveSyncPrefs(showConfirm = true) {
   const cityVal  = document.getElementById('pref-location-city').value.trim();
   const stateVal = document.getElementById('pref-location-state').value.trim();
 
-  const prefs = {
-    roles:             document.getElementById('pref-roles').value.trim(),
-    avoid:             document.getElementById('pref-avoid').value.trim(),
-    interests:         document.getElementById('pref-interests').value.trim(),
-    jobMatchEnabled:   document.getElementById('pref-job-match-toggle').checked,
-    linkedinUrl:       document.getElementById('pref-linkedin-url').value.trim(),
-    resumeText:        document.getElementById('pref-resume-text').value.trim(),
-    jobMatchBackground:document.getElementById('pref-job-match-bg').value.trim(),
-    roleLoved:         document.getElementById('pref-role-loved').value.trim(),
-    roleHated:         document.getElementById('pref-role-hated').value.trim(),
-    workArrangement:   [...document.querySelectorAll('input[name="work-arr"]:checked')].map(el => el.value),
-    locationCity:      cityVal,
-    locationState:     stateVal,
-    userLocation:      [cityVal, stateVal].filter(Boolean).join(', '),
-    maxTravel:         document.getElementById('pref-max-travel').value.trim(),
-    salaryFloor:       document.getElementById('pref-salary-floor').value.trim(),
-    salaryStrong:      document.getElementById('pref-salary-strong').value.trim(),
-    oteFloor:          document.getElementById('pref-ote-floor').value.trim(),
-    oteStrong:         document.getElementById('pref-ote-strong').value.trim(),
-  };
-
-  chrome.storage.sync.set({ prefs }, () => {
+  // Read existing sync prefs first to preserve any keys we don't manage here
+  chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
     void chrome.runtime.lastError;
-    if (showConfirm) {
-      ['save-confirm', 'save-confirm-bar'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.classList.add('show');
-        setTimeout(() => el.classList.remove('show'), 2500);
-      });
-    }
+    const prefs = Object.assign({}, existing || {}, {
+      jobMatchEnabled:   document.getElementById('pref-job-match-toggle').checked,
+      linkedinUrl:       document.getElementById('link-linkedin').value.trim(),
+      workArrangement:   [...document.querySelectorAll('input[name="work-arr"]:checked')].map(el => el.value),
+      locationCity:      cityVal,
+      locationState:     stateVal,
+      userLocation:      [cityVal, stateVal].filter(Boolean).join(', '),
+      maxTravel:         document.getElementById('pref-max-travel').value.trim(),
+      salaryFloor:       document.getElementById('pref-salary-floor').value.trim(),
+      salaryStrong:      document.getElementById('pref-salary-strong').value.trim(),
+      oteFloor:          document.getElementById('pref-ote-floor').value.trim(),
+      oteStrong:         document.getElementById('pref-ote-strong').value.trim(),
+    });
+    chrome.storage.sync.set({ prefs }, () => {
+      void chrome.runtime.lastError;
+      if (showConfirm) showSaveStatus();
+    });
   });
 }
 
-// ── Boot ───────────────────────────────────────────────────────────────────
+// Save profile links bucket
+function saveProfileLinks() {
+  const data = {
+    linkedin:    document.getElementById('link-linkedin').value.trim(),
+    github:      document.getElementById('link-github').value.trim(),
+    website:     document.getElementById('link-website').value.trim(),
+    email:       document.getElementById('link-email').value.trim(),
+    phone:       document.getElementById('link-phone').value.trim(),
+    bookingLink: document.getElementById('link-booking').value.trim(),
+  };
+  saveBucket('profileLinks', data);
+  // Also keep linkedinUrl in sync prefs for backward compat
+  saveSyncPrefs(false);
+}
 
-loadPrefsWithMigration(prefs => {
-  if (!prefs) return;
+// ── Collapsible cards ────────────────────────────────────────────────────────
 
-  document.getElementById('pref-job-match-toggle').checked = !!prefs.jobMatchEnabled;
-  document.getElementById('pref-linkedin-url').value    = prefs.linkedinUrl        || '';
-  document.getElementById('pref-resume-text').value     = prefs.resumeText         || '';
-  document.getElementById('pref-job-match-bg').value    = prefs.jobMatchBackground || '';
-  document.getElementById('pref-role-loved').value      = prefs.roleLoved          || '';
-  document.getElementById('pref-role-hated').value      = prefs.roleHated          || '';
-  document.getElementById('pref-roles').value           = prefs.roles              || '';
-  document.getElementById('pref-avoid').value           = prefs.avoid              || '';
-  document.getElementById('pref-interests').value       = prefs.interests          || '';
-  document.getElementById('pref-location-city').value   = prefs.locationCity       || '';
-  document.getElementById('pref-location-state').value  = prefs.locationState      || '';
-  document.getElementById('pref-max-travel').value      = prefs.maxTravel          || '';
-  document.getElementById('pref-salary-floor').value    = prefs.salaryFloor        || '';
-  document.getElementById('pref-salary-strong').value   = prefs.salaryStrong       || '';
-  document.getElementById('pref-ote-floor').value       = prefs.oteFloor           || '';
-  document.getElementById('pref-ote-strong').value      = prefs.oteStrong          || '';
+function initCollapsibleCards() {
+  const cards = document.querySelectorAll('.card[data-card]');
+  const stored = JSON.parse(localStorage.getItem('careerOS_collapsed') || '{}');
 
-  const arr = prefs.workArrangement || [];
-  document.querySelectorAll('input[name="work-arr"]').forEach(cb => {
-    cb.checked = arr.includes(cb.value);
+  cards.forEach(card => {
+    const key = card.dataset.card;
+    if (stored[key]) card.classList.add('collapsed');
+
+    card.querySelector('.card-header').addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+      const state = JSON.parse(localStorage.getItem('careerOS_collapsed') || '{}');
+      state[key] = card.classList.contains('collapsed');
+      localStorage.setItem('careerOS_collapsed', JSON.stringify(state));
+    });
   });
-});
+}
 
-// ── Story Time ────────────────────────────────────────────────────────────
+// ── "How the AI reads this" toggles ──────────────────────────────────────────
 
-(function initStoryTime() {
-  const inputEl = document.getElementById('story-time-input');
-  const saveBtn = document.getElementById('story-time-save');
-  const statusEl = document.getElementById('story-time-status');
-  const toggleEl = document.getElementById('story-time-profile-toggle');
-  const chevronEl = document.getElementById('story-time-chevron');
-  const bodyEl = document.getElementById('story-time-profile-body');
-  const textEl = document.getElementById('story-time-profile-text');
-  const refreshBtn = document.getElementById('story-time-refresh');
-
-  // Load existing Story Time data
-  chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
-    const st = storyTime || {};
-    inputEl.value = st.rawInput || '';
-    // Auto-size to fit content
-    requestAnimationFrame(() => { inputEl.style.height = ''; inputEl.style.height = Math.max(200, inputEl.scrollHeight) + 'px'; });
-    renderProfile(st);
+function initAIToggles() {
+  document.querySelectorAll('.ai-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('open');
+      // Update panel content based on whether parent textarea has content
+      const card = toggle.closest('.card-body') || toggle.closest('.card');
+      const textarea = card ? card.querySelector('textarea') : null;
+      const panelKey = toggle.dataset.ai;
+      const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
+      if (panel && textarea && !textarea.value.trim()) {
+        panel.textContent = 'Nothing here yet — add content above to see the AI\'s interpretation';
+      }
+    });
   });
+}
 
-  function renderProfile(st) {
-    const insights = st.learnedInsights || [];
-    const insightCount = insights.length;
-    const toggleLabel = insightCount > 0
-      ? `What the AI has learned about you (${insightCount} insight${insightCount === 1 ? '' : 's'})`
-      : 'What the AI has learned about you';
-    toggleEl.innerHTML = `<span id="story-time-chevron">${bodyEl.classList.contains('open') ? '\u25BC' : '\u25B6'}</span> ${toggleLabel}`;
+// ── Page header: user's first name ───────────────────────────────────────────
 
-    if (st.profileSummary) {
-      textEl.textContent = st.profileSummary;
-      textEl.classList.remove('story-time-profile-empty');
-    } else {
-      textEl.textContent = 'No profile generated yet. Write about yourself above, save it, then click "Refresh Profile" to generate a consolidated AI summary.';
-      textEl.classList.add('story-time-profile-empty');
-    }
+function setHeaderName() {
+  // Try profileLinks first, then storyTime, then sync prefs
+  chrome.storage.local.get(['profileLinks', 'storyTime'], data => {
+    void chrome.runtime.lastError;
+    let firstName = '';
+
+    // Check if we have a name from LinkedIn import stored in storyTime or elsewhere
+    chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+      void chrome.runtime.lastError;
+      // Try to extract name from LinkedIn URL or profile data
+      const links = data.profileLinks || {};
+      const st = data.storyTime || {};
+
+      // If we have a profileSummary, try to extract name from it
+      if (st.profileSummary) {
+        const nameMatch = st.profileSummary.match(/^(?:Name:\s*)(.+?)(?:\n|$)/i);
+        if (nameMatch) firstName = nameMatch[1].split(' ')[0];
+      }
+
+      // If we have raw input that starts with "Name:", extract it
+      if (!firstName && st.rawInput) {
+        const nameMatch = st.rawInput.match(/^(?:Name:\s*)(.+?)(?:\n|$)/im);
+        if (nameMatch) firstName = nameMatch[1].split(' ')[0];
+      }
+
+      // Check if name is in profileLinks email (before @)
+      if (!firstName && links.email) {
+        const emailName = links.email.split('@')[0];
+        // Only use if it looks like a real name (not a username with numbers)
+        if (emailName && /^[a-zA-Z]+$/.test(emailName) && emailName.length > 2) {
+          firstName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        }
+      }
+
+      const titleEl = document.getElementById('page-title');
+      if (firstName && titleEl) {
+        titleEl.textContent = `${firstName}'s Career OS`;
+      }
+    });
+  });
+}
+
+// ── Resume upload ────────────────────────────────────────────────────────────
+
+function initResumeUpload() {
+  const fileInput = document.getElementById('resume-file-input');
+  const uploadBtn = document.getElementById('resume-upload-btn');
+  const replaceBtn = document.getElementById('resume-replace-btn');
+  const dropZone = document.getElementById('resume-drop-zone');
+  const fileInfo = document.getElementById('resume-file-info');
+  const filenameEl = document.getElementById('resume-filename');
+
+  function handleFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const content = ev.target.result?.trim();
+      if (content) {
+        saveBucket('profileResume', { filename: file.name, content });
+        showResumeFile(file.name);
+      }
+    };
+    reader.readAsText(file);
   }
 
-  // Save raw input
-  saveBtn.addEventListener('click', () => {
-    chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
-      const st = storyTime || {};
-      st.rawInput = inputEl.value.trim();
-      chrome.storage.local.set({ storyTime: st }, () => {
-        void chrome.runtime.lastError;
-        statusEl.classList.add('show');
-        setTimeout(() => statusEl.classList.remove('show'), 2000);
+  function showResumeFile(name) {
+    dropZone.style.display = 'none';
+    fileInfo.style.display = 'flex';
+    filenameEl.textContent = name;
+  }
+
+  function showUploadZone() {
+    dropZone.style.display = 'block';
+    fileInfo.style.display = 'none';
+  }
+
+  uploadBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => handleFile(e.target.files?.[0]));
+
+  replaceBtn.addEventListener('click', () => {
+    showUploadZone();
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = '#AFA9EC'; });
+  dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#d8d5d0'; });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#d8d5d0';
+    handleFile(e.dataTransfer.files?.[0]);
+  });
+
+  // Load existing resume
+  chrome.storage.local.get(['profileResume'], ({ profileResume }) => {
+    void chrome.runtime.lastError;
+    if (profileResume?.filename) showResumeFile(profileResume.filename);
+  });
+}
+
+// ── LinkedIn import from tab ─────────────────────────────────────────────────
+
+function initLinkedInImport() {
+  document.getElementById('import-linkedin-btn').addEventListener('click', () => {
+    const status = document.getElementById('import-status');
+    status.textContent = 'Looking for your LinkedIn tab...';
+    status.className = 'import-status';
+
+    chrome.tabs.query({ url: 'https://www.linkedin.com/in/*' }, tabs => {
+      if (!tabs.length) {
+        status.textContent = 'No LinkedIn profile tab found. Open your profile in LinkedIn first.';
+        status.className = 'import-status err';
+        return;
+      }
+      const tab = tabs[0];
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          function sectionText(keyword) {
+            const headings = [...document.querySelectorAll('section h2, section h3')];
+            const h = headings.find(el => el.textContent.trim().toLowerCase().includes(keyword.toLowerCase()));
+            return h ? h.closest('section')?.innerText?.trim() : null;
+          }
+          const parts = [];
+          const name = document.querySelector('h1')?.innerText?.trim();
+          if (name) parts.push('Name: ' + name);
+          const headline = document.querySelector('.text-body-medium')?.innerText?.trim();
+          if (headline) parts.push('Headline: ' + headline);
+          const about = sectionText('about');
+          if (about) parts.push('About:\n' + about.replace(/^About\s*\n/, ''));
+          const exp = sectionText('experience');
+          if (exp) parts.push('Experience:\n' + exp.replace(/^Experience\s*\n/, ''));
+          const edu = sectionText('education');
+          if (edu) parts.push('Education:\n' + edu.replace(/^Education\s*\n/, ''));
+          const skills = sectionText('skills');
+          if (skills) parts.push('Skills:\n' + skills.replace(/^Skills\s*\n/, ''));
+          return parts.join('\n\n');
+        }
+      }, results => {
+        const text = results?.[0]?.result?.trim();
+        if (text) {
+          // Store the imported text in profileExperience (the new bucket for this data)
+          document.getElementById('profile-experience').value = text;
+          saveBucket('profileExperience', text);
+
+          // Try to extract name for the header
+          const nameMatch = text.match(/^Name:\s*(.+?)$/m);
+          if (nameMatch) {
+            const firstName = nameMatch[1].split(' ')[0];
+            const titleEl = document.getElementById('page-title');
+            if (firstName && titleEl) titleEl.textContent = `${firstName}'s Career OS`;
+          }
+
+          // Also keep in sync prefs for backward compat
+          chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
+            void chrome.runtime.lastError;
+            const prefs = Object.assign({}, existing || {}, { resumeText: text });
+            chrome.storage.sync.set({ prefs });
+          });
+
+          status.textContent = 'Imported from LinkedIn';
+          status.className = 'import-status';
+        } else {
+          status.textContent = 'Could not read profile. Make sure the tab is fully loaded.';
+          status.className = 'import-status err';
+        }
       });
     });
   });
+}
 
-  // Toggle profile visibility
-  toggleEl.addEventListener('click', () => {
-    const isOpen = bodyEl.classList.toggle('open');
-    chevronEl.innerHTML = isOpen ? '&#9660;' : '&#9654;';
-  });
-
-  // Refresh Profile (consolidation) — will be fully implemented in Step 3
-  refreshBtn.addEventListener('click', async () => {
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = 'Generating...';
-
-    const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
-    const st = storyTime || {};
-    const rawInput = st.rawInput || '';
-    const insights = (st.learnedInsights || []).map(i => i.insight).join('\n');
-
-    if (!rawInput && !insights) {
-      refreshBtn.disabled = false;
-      refreshBtn.textContent = 'Refresh Profile';
-      textEl.textContent = 'Write about yourself first, then refresh.';
-      return;
-    }
-
-    const result = await new Promise(resolve =>
-      chrome.runtime.sendMessage({
-        type: 'CONSOLIDATE_PROFILE',
-        rawInput,
-        insights
-      }, resolve)
-    );
-
-    refreshBtn.disabled = false;
-    refreshBtn.textContent = 'Refresh Profile';
-
-    if (result?.profileSummary) {
-      st.profileSummary = result.profileSummary;
-      st.lastConsolidated = Date.now();
-      chrome.storage.local.set({ storyTime: st });
-      renderProfile(st);
-    } else {
-      textEl.textContent = result?.error || 'Could not generate profile. Try again.';
-    }
-  });
-})();
-
-// ── Save ───────────────────────────────────────────────────────────────────
-
-document.getElementById('save-btn').addEventListener('click', () => savePrefs(true));
-
-// Auto-save on blur for all inputs/textareas/selects
-document.querySelectorAll('.pref-input, input[name="work-arr"], #pref-job-match-toggle').forEach(el => {
-  el.addEventListener('change', () => savePrefs(false));
-  if (el.tagName === 'TEXTAREA' || el.type === 'text' || el.type === 'url') {
-    el.addEventListener('blur', () => savePrefs(false));
-  }
-});
-
-// ── Stages & Colors editor ─────────────────────────────────────────────────
+// ── Stages & Colors ──────────────────────────────────────────────────────────
 
 const PRESET_COLORS = [
   '#64748b','#94a3b8','#374151','#1e293b',
@@ -245,36 +336,34 @@ function renderStagesSection(companyStages, oppStages) {
     </div>`).join('');
 
   section.innerHTML = `
-    <div class="pref-card-title" style="font-size:13px;font-weight:800;color:#516f90;text-transform:uppercase;letter-spacing:0.09em;padding-bottom:14px;border-bottom:1px solid #eaf0f6;margin-bottom:20px">Stages &amp; Colors</div>
+    <div class="section-label" style="margin-top:20px;">STAGES &amp; COLORS</div>
     <div class="stages-grid">
-      <div class="pref-card">
-        <div class="pref-card-title">Company Stages</div>
+      <div class="stage-card">
+        <div class="stage-card-title">Company Stages</div>
         <div id="company-stage-rows">${stageRows(companyStages, 'company')}</div>
       </div>
-      <div class="pref-card">
-        <div class="pref-card-title">Opportunity Stages</div>
+      <div class="stage-card">
+        <div class="stage-card-title">Opportunity Stages</div>
         <div id="opp-stage-rows">${stageRows(oppStages, 'opp')}</div>
       </div>
     </div>
-    <div class="pref-card" style="margin-bottom:28px">
-      <div class="pref-card-title">Color Palette</div>
+    <div class="stage-card" style="margin-bottom:12px">
+      <div class="stage-card-title">Color Palette</div>
       <div class="color-palette-label">Click a color below, then click the dot on any stage to apply it</div>
       <div class="color-palette">${palette}</div>
     </div>`;
 
   let selectedColor = null;
 
-  // Palette swatch click — select a color
   section.querySelectorAll('.color-swatch').forEach(sw => {
     sw.addEventListener('click', () => {
       section.querySelectorAll('.color-swatch').forEach(s => s.style.outline = '');
-      sw.style.outline = '3px solid #FF7A59';
+      sw.style.outline = '3px solid #AFA9EC';
       sw.style.outlineOffset = '2px';
       selectedColor = sw.dataset.color;
     });
   });
 
-  // Color dot click — apply selected palette color, or open native picker
   section.querySelectorAll('.stage-color-dot').forEach(dot => {
     dot.addEventListener('click', () => {
       if (selectedColor) {
@@ -285,12 +374,11 @@ function renderStagesSection(companyStages, oppStages) {
         selectedColor = null;
         section.querySelectorAll('.color-swatch').forEach(s => s.style.outline = '');
       } else {
-        dot.nextElementSibling.click(); // open native color picker
+        dot.nextElementSibling.click();
       }
     });
   });
 
-  // Native color picker change
   section.querySelectorAll('.stage-color-input').forEach(input => {
     input.addEventListener('input', () => {
       input.previousElementSibling.style.background = input.value;
@@ -298,7 +386,6 @@ function renderStagesSection(companyStages, oppStages) {
     });
   });
 
-  // Label input
   section.querySelectorAll('.stage-label-input').forEach(input => {
     input.addEventListener('blur', saveStages);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
@@ -319,12 +406,200 @@ function saveStages() {
   const oppStages = readGroup('opp');
   chrome.storage.local.set({ companyStages, opportunityStages: oppStages }, () => {
     void chrome.runtime.lastError;
-    const el = document.getElementById('save-confirm');
-    if (el) { el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
+    showSaveStatus();
   });
 }
 
-// Load and render stages
+// ── Data migration ───────────────────────────────────────────────────────────
+
+function migrateOldData(syncPrefs, callback) {
+  chrome.storage.local.get([
+    'storyTime',
+    'profileStory', 'profileExperience', 'profilePrinciples', 'profileMotivators',
+    'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
+    'profileSkills', 'profileBackgroundStrengths', 'profileLinks', 'profileResume'
+  ], data => {
+    void chrome.runtime.lastError;
+    const migrations = {};
+    const hasNewBuckets = data.profileStory || data.profileExperience || data.profileGreenLights || data.profileRedLights;
+
+    // Only migrate if old data exists and new buckets are empty
+    if (!hasNewBuckets) {
+      // Migrate storyTime rawInput -> profileStory
+      if (data.storyTime?.rawInput && !data.profileStory) {
+        migrations.profileStory = data.storyTime.rawInput;
+      }
+
+      // Merge roles + roleLoved + interests -> Green Lights
+      if (!data.profileGreenLights) {
+        const parts = [syncPrefs.roles, syncPrefs.roleLoved, syncPrefs.interests].filter(Boolean);
+        if (parts.length) migrations.profileGreenLights = parts.join('\n\n');
+      }
+
+      // Merge avoid + roleHated -> Red Lights
+      if (!data.profileRedLights) {
+        const parts = [syncPrefs.avoid, syncPrefs.roleHated].filter(Boolean);
+        if (parts.length) migrations.profileRedLights = parts.join('\n\n');
+      }
+
+      // Migrate jobMatchBackground or old profileBackgroundStrengths -> profileSkills
+      if (!data.profileSkills) {
+        const legacy = data.profileBackgroundStrengths || syncPrefs.jobMatchBackground;
+        if (legacy) migrations.profileSkills = legacy;
+      }
+
+      // Migrate linkedinUrl into profileLinks if profileLinks doesn't exist
+      if (syncPrefs.linkedinUrl && !data.profileLinks) {
+        migrations.profileLinks = {
+          linkedin: syncPrefs.linkedinUrl,
+          github: '', website: '', email: '', phone: '', bookingLink: ''
+        };
+      }
+    }
+
+    if (Object.keys(migrations).length > 0) {
+      chrome.storage.local.set(migrations, () => {
+        void chrome.runtime.lastError;
+        callback(Object.assign({}, data, migrations));
+      });
+    } else {
+      callback(data);
+    }
+  });
+}
+
+// ── Auto-save on blur ────────────────────────────────────────────────────────
+
+function initAutoSave() {
+  // Bucket textarea fields
+  const bucketFields = {
+    'profile-story':               'profileStory',
+    'profile-experience':          'profileExperience',
+    'profile-principles':          'profilePrinciples',
+    'profile-motivators':          'profileMotivators',
+    'profile-voice':               'profileVoice',
+    'profile-faq':                 'profileFAQ',
+    'profile-green-lights':        'profileGreenLights',
+    'profile-red-lights':          'profileRedLights',
+    'profile-skills':              'profileSkills',
+  };
+
+  Object.entries(bucketFields).forEach(([elId, storageKey]) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.addEventListener('blur', () => {
+      saveBucket(storageKey, el.value.trim());
+    });
+  });
+
+  // Profile links fields — save all on any blur
+  const linkIds = ['link-linkedin', 'link-github', 'link-website', 'link-email', 'link-phone', 'link-booking'];
+  linkIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('blur', saveProfileLinks);
+  });
+
+  // Sync prefs fields — save on blur/change
+  const syncFields = [
+    'pref-location-city', 'pref-location-state', 'pref-max-travel',
+    'pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong'
+  ];
+  syncFields.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('blur', () => saveSyncPrefs(true));
+    el.addEventListener('change', () => saveSyncPrefs(true));
+  });
+
+  // Work arrangement checkboxes
+  document.querySelectorAll('input[name="work-arr"]').forEach(cb => {
+    cb.addEventListener('change', () => saveSyncPrefs(true));
+  });
+
+  // Job match toggle
+  document.getElementById('pref-job-match-toggle').addEventListener('change', () => saveSyncPrefs(true));
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+
+function loadPrefsWithMigration(callback) {
+  chrome.storage.sync.get(['prefs'], syncResult => {
+    void chrome.runtime.lastError;
+    if (syncResult.prefs && Object.keys(syncResult.prefs).length > 0) {
+      callback(syncResult.prefs);
+      return;
+    }
+    chrome.storage.local.get(['prefs'], localResult => {
+      void chrome.runtime.lastError;
+      if (localResult.prefs && Object.keys(localResult.prefs).length > 0) {
+        chrome.storage.sync.set({ prefs: localResult.prefs }, () => void chrome.runtime.lastError);
+      }
+      callback(localResult.prefs || {});
+    });
+  });
+}
+
+// Initialize everything
+loadPrefsWithMigration(syncPrefs => {
+  // Load sync prefs into fields
+  document.getElementById('pref-job-match-toggle').checked = !!syncPrefs.jobMatchEnabled;
+  document.getElementById('pref-location-city').value   = syncPrefs.locationCity  || '';
+  document.getElementById('pref-location-state').value  = syncPrefs.locationState || '';
+  document.getElementById('pref-max-travel').value      = syncPrefs.maxTravel     || '';
+  document.getElementById('pref-salary-floor').value    = syncPrefs.salaryFloor   || '';
+  document.getElementById('pref-salary-strong').value   = syncPrefs.salaryStrong  || '';
+  document.getElementById('pref-ote-floor').value       = syncPrefs.oteFloor      || '';
+  document.getElementById('pref-ote-strong').value      = syncPrefs.oteStrong     || '';
+
+  const arr = syncPrefs.workArrangement || [];
+  document.querySelectorAll('input[name="work-arr"]').forEach(cb => {
+    cb.checked = arr.includes(cb.value);
+  });
+
+  // Run migration, then load bucket data
+  migrateOldData(syncPrefs, localData => {
+    // Profile links
+    const links = localData.profileLinks || {};
+    document.getElementById('link-linkedin').value = links.linkedin || syncPrefs.linkedinUrl || '';
+    document.getElementById('link-github').value   = links.github   || '';
+    document.getElementById('link-website').value   = links.website  || '';
+    document.getElementById('link-email').value     = links.email    || '';
+    document.getElementById('link-phone').value     = links.phone    || '';
+    document.getElementById('link-booking').value   = links.bookingLink || '';
+
+    // Bucket textareas
+    document.getElementById('profile-story').value               = localData.profileStory              || '';
+    document.getElementById('profile-experience').value           = localData.profileExperience         || syncPrefs.resumeText || '';
+    document.getElementById('profile-principles').value           = localData.profilePrinciples         || '';
+    document.getElementById('profile-motivators').value           = localData.profileMotivators         || '';
+    document.getElementById('profile-voice').value                = localData.profileVoice              || '';
+    document.getElementById('profile-faq').value                  = localData.profileFAQ                || '';
+    document.getElementById('profile-green-lights').value         = localData.profileGreenLights        || '';
+    document.getElementById('profile-red-lights').value           = localData.profileRedLights          || '';
+    document.getElementById('profile-skills').value               = localData.profileSkills             || localData.profileBackgroundStrengths || '';
+
+    // Update "How the AI reads this" panels for empty motivators
+    const motivatorsVal = document.getElementById('profile-motivators').value.trim();
+    if (!motivatorsVal) {
+      const panel = document.querySelector('.ai-panel[data-ai-panel="motivators"]');
+      if (panel) panel.textContent = 'Nothing here yet — add your motivators to see the AI\'s interpretation';
+    }
+
+    // Set header name
+    setHeaderName();
+  });
+
+  // Init UI behaviors
+  initCollapsibleCards();
+  initAIToggles();
+  initResumeUpload();
+  initLinkedInImport();
+  initAutoSave();
+});
+
+// ── Stages ───────────────────────────────────────────────────────────────────
+
 chrome.storage.local.get(['companyStages', 'opportunityStages', 'customStages'], data => {
   void chrome.runtime.lastError;
   const companyStages = data.companyStages || DEFAULT_COMPANY_STAGES;
@@ -332,78 +607,9 @@ chrome.storage.local.get(['companyStages', 'opportunityStages', 'customStages'],
   renderStagesSection(companyStages, oppStages);
 });
 
-document.getElementById('btn-back').addEventListener('click', () => {
+// ── Back button ──────────────────────────────────────────────────────────────
+
+document.getElementById('btn-back').addEventListener('click', (e) => {
+  e.preventDefault();
   window.location.href = chrome.runtime.getURL('saved.html');
 });
-
-// ── Import from LinkedIn tab ───────────────────────────────────────────────
-
-document.getElementById('import-linkedin-btn').addEventListener('click', () => {
-  const status = document.getElementById('import-status');
-  status.textContent = 'Looking for your LinkedIn tab…';
-  status.className = 'import-status';
-
-  chrome.tabs.query({ url: 'https://www.linkedin.com/in/*' }, tabs => {
-    if (!tabs.length) {
-      status.textContent = 'No LinkedIn profile tab found. Open your profile in LinkedIn first.';
-      status.className = 'import-status err';
-      return;
-    }
-    const tab = tabs[0];
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        function sectionText(keyword) {
-          const headings = [...document.querySelectorAll('section h2, section h3')];
-          const h = headings.find(el => el.textContent.trim().toLowerCase().includes(keyword.toLowerCase()));
-          return h ? h.closest('section')?.innerText?.trim() : null;
-        }
-        const parts = [];
-        const name = document.querySelector('h1')?.innerText?.trim();
-        if (name) parts.push('Name: ' + name);
-        const headline = document.querySelector('.text-body-medium')?.innerText?.trim();
-        if (headline) parts.push('Headline: ' + headline);
-        const about = sectionText('about');
-        if (about) parts.push('About:\n' + about.replace(/^About\s*\n/, ''));
-        const exp = sectionText('experience');
-        if (exp) parts.push('Experience:\n' + exp.replace(/^Experience\s*\n/, ''));
-        const edu = sectionText('education');
-        if (edu) parts.push('Education:\n' + edu.replace(/^Education\s*\n/, ''));
-        const skills = sectionText('skills');
-        if (skills) parts.push('Skills:\n' + skills.replace(/^Skills\s*\n/, ''));
-        return parts.join('\n\n');
-      }
-    }, results => {
-      const text = results?.[0]?.result?.trim();
-      if (text) {
-        document.getElementById('pref-resume-text').value = text;
-        status.textContent = 'Imported from LinkedIn ✓';
-        status.className = 'import-status';
-        savePrefs(false);
-      } else {
-        status.textContent = 'Could not read profile. Make sure the tab is fully loaded.';
-        status.className = 'import-status err';
-      }
-    });
-  });
-});
-
-// ── Upload resume file ─────────────────────────────────────────────────────
-
-document.getElementById('upload-resume-file').addEventListener('change', e => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const status = document.getElementById('import-status');
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const text = ev.target.result?.trim();
-    if (text) {
-      document.getElementById('pref-resume-text').value = text;
-      status.textContent = `Loaded: ${file.name} ✓`;
-      status.className = 'import-status';
-      savePrefs(false);
-    }
-  };
-  reader.readAsText(file);
-});
-

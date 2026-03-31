@@ -211,6 +211,7 @@
     .verdict-badge-sm.mid   { background: rgba(99,102,241,0.1); color: #6366f1; border-color: rgba(99,102,241,0.35); }
     .verdict-badge-sm.mixed { background: rgba(245,158,11,0.1); color: #d97706; border-color: rgba(245,158,11,0.35); }
     .verdict-badge-sm.low   { background: rgba(229,72,59,0.08); color: #e5483b; border-color: rgba(229,72,59,0.3); }
+    .easy-apply-badge { font-size: 10px; font-weight: 700; border-radius: 12px; padding: 2px 8px; white-space: nowrap; background: rgba(10,102,194,0.1); color: #0a66c2; border: 1px solid rgba(10,102,194,0.3); }
     .jopp-body { padding: 12px; background: #FAF9F7; border-radius: 0 0 6px 6px; margin-top: -2px; border: 1px solid rgba(255,122,89,0.15); border-top: none; animation: joppFadeIn 0.2s ease; }
     @keyframes joppFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -385,6 +386,10 @@
     .sp-stat-denom { font-size: 10px; color: #A09A94; font-weight: 600; }
     .sp-stat-label { font-size: 9px; color: #A09A94; text-transform: uppercase; letter-spacing: 0.05em; }
 
+    .sp-model-toggle { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
+    .sp-model-toggle .data-src { cursor: pointer; transition: all 0.15s; padding: 1px 8px 1px 6px; }
+    .sp-model-toggle .data-src::after { content: ' ▾'; font-size: 8px; opacity: 0.6; }
+    .sp-model-toggle:hover .data-src { background: #FF7A59; color: #fff; }
     .sp-chat-header-btns { display: flex; gap: 4px; }
     .sp-chat-detach { background: none; border: 1px solid #DDD9D4; color: #8B8680; font-size: 14px; cursor: pointer; padding: 3px 6px; border-radius: 4px; transition: all 0.12s; line-height: 1; }
     .sp-chat-detach:hover { color: #FF7A59; border-color: #FF7A59; }
@@ -443,13 +448,48 @@
     .sp-code-copy { position: absolute; top: 6px; right: 6px; background: #E8E5E0; border: none; color: #6B6560; padding: 2px 5px; border-radius: 3px; font-size: 11px; cursor: pointer; }
     .sp-code-copy:hover { color: #FF7A59; }
     .sp-chat-img { max-width: 100%; border-radius: 6px; margin: 6px 0; }
+
+    /* Queue save buttons */
+    .save-queue-btn { background: #1D9E75; color: #fff; border: none; width: 100%; font-size: 13px; font-weight: 700; padding: 10px 0; border-radius: 8px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .save-queue-btn:hover { background: #178A68; }
+    .save-research-btn { background: transparent; color: #7c98b6; border: 1px solid #DDD9D4; width: 100%; font-size: 13px; font-weight: 700; padding: 10px 0; border-radius: 8px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .save-research-btn:hover { border-color: #8B8680; color: #4A4A4A; }
+    .save-queue-confirm { padding: 14px 16px; background: #fff; border-bottom: 1px solid #E8E5E0; }
+    .save-queue-confirm .confirm-banner { background: rgba(29,158,117,0.1); color: #1D9E75; font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(29,158,117,0.25); }
+    .save-queue-confirm .confirm-company { font-size: 14px; font-weight: 700; color: #1A1A1A; }
+    .save-queue-confirm .confirm-title { font-size: 12px; color: #6B6560; margin-bottom: 10px; }
+    .save-queue-confirm .confirm-stars { display: flex; gap: 5px; margin-bottom: 10px; }
+    .save-queue-confirm .confirm-star { font-size: 20px; color: #2D3E50; cursor: pointer; transition: color 0.1s; line-height: 1; }
+    .save-queue-confirm .confirm-star.filled { color: #f59e0b; }
+    .save-queue-confirm .confirm-star.hovered { color: #f59e0b; }
+    .save-queue-confirm .confirm-note { width: 100%; background: #F0EEEB; border: 1px solid #DDD9D4; border-radius: 6px; color: #4A4A4A; font-size: 12px; font-family: inherit; padding: 8px 10px; resize: none; height: 52px; line-height: 1.5; margin-bottom: 10px; }
+    .save-queue-confirm .confirm-note:focus { outline: none; border-color: #FF7A59; }
+    .save-queue-confirm .confirm-note::placeholder { color: #8B8680; }
+    .save-queue-confirm .confirm-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    .save-queue-confirm .confirm-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; background: rgba(255,122,89,0.15); border: 1px solid rgba(255,122,89,0.4); color: #FF7A59; cursor: pointer; }
+    .save-queue-confirm .confirm-tag .remove-tag { cursor: pointer; font-size: 10px; color: #FF7A59; line-height: 1; margin-left: 2px; }
+    .save-queue-confirm .confirm-tag .remove-tag:hover { color: #f87171; }
+    .save-queue-confirm .confirm-add-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; background: #F0EEEB; border: 1px solid #DDD9D4; color: #8B8680; cursor: pointer; }
+    .save-queue-confirm .confirm-add-tag:hover { border-color: #FF7A59; color: #FF7A59; }
+    .save-session-feed { margin-top: 12px; border-top: 1px solid #E8E5E0; padding-top: 10px; }
+    .save-session-feed .feed-label { font-size: 10px; font-weight: 700; color: #8B8680; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .save-session-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #F0EEEB; gap: 8px; }
+    .save-session-item:last-child { border-bottom: none; }
+    .save-session-item .item-info { min-width: 0; flex: 1; }
+    .save-session-item .item-company { font-size: 12px; font-weight: 600; color: #1A1A1A; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .save-session-item .item-title { font-size: 11px; color: #8B8680; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .save-session-item .item-score { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; white-space: nowrap; flex-shrink: 0; }
+    .save-session-item .item-score.pending { background: #F0EEEB; color: #8B8680; }
+    .save-session-item .item-score.high { background: rgba(0,189,165,0.1); color: #00897b; }
+    .save-session-item .item-score.mid { background: rgba(99,102,241,0.1); color: #6366f1; }
+    .save-session-item .item-score.low { background: rgba(229,72,59,0.08); color: #e5483b; }
     .sp-chat-copy { background: none; border: 1px solid #DDD9D4; border-radius: 4px; padding: 2px 6px; font-size: 12px; cursor: pointer; color: #8B8680; transition: all 0.12s; margin-top: 4px; line-height: 1; }
     .sp-chat-copy:hover { border-color: #FF7A59; color: #FF7A59; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">Company<span>Intel</span></div>
+    <div class="logo" id="sp-logo" style="cursor:pointer" title="Open dashboard">Company<span>Intel</span></div>
     <div class="header-actions">
       <button id="saved-btn" class="header-icon-btn">
         <span class="header-icon" style="font-style:normal;font-size:16px">⊞</span>
@@ -521,6 +561,17 @@
     </div>
     <button id="save-confirm-btn">Save</button>
   </div>
+
+  <!-- Queue save buttons — shown when job detected instead of Save Company -->
+  <div id="queue-save-panel" style="display:none; padding: 10px 16px; background: #fff; border-bottom: 1px solid #E8E5E0;">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="save-queue-btn" id="save-queue-btn">Save to AI queue</button>
+      <button class="save-research-btn" id="save-research-btn">Save + research now</button>
+    </div>
+  </div>
+
+  <!-- Queue save confirmation — replaces queue-save-panel after save -->
+  <div id="queue-save-confirm" class="save-queue-confirm" style="display:none"></div>
 
   <!-- Job expandable content — directly under job bar, only shown when job detected -->
   <div id="job-content" style="display:none">
@@ -656,7 +707,7 @@
     <div class="sp-inline-chat" id="sp-inline-chat">
       <div class="sp-chat-resize-handle" id="sp-chat-resize"></div>
       <div class="sp-chat-header">
-        <span class="sp-chat-header-title">&#10038; Ask AI <span class="data-src" style="margin-left:6px">Claude Sonnet</span></span>
+        <span class="sp-chat-header-title">&#10038; Ask AI <button class="sp-model-toggle" id="sp-model-toggle" title="Click to switch model"><span class="data-src" style="margin-left:6px" id="sp-model-label">◆ GPT-4.1 mini</span></button></span>
         <div class="sp-chat-header-btns">
           <button class="sp-chat-detach" id="sp-chat-detach" title="Pop out to floating window">&#x2922;</button>
         </div>

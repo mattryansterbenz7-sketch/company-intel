@@ -44,6 +44,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persisted to storage, survives SW restarts
 
+// ── AI Scoring Queue Config ─────────────────────────────────────────────────
+const QUICK_FIT_MODEL = 'claude-haiku-4-5-20251001';
+const QUEUE_AUTO_PROCESS = true;
+const SCORE_THRESHOLDS = { green: 7, amber: 4 }; // 7+ green, 4-6 amber, below 4 red
+const DISMISS_STAGE = 'rejected';
+const DISMISS_TAG = "Didn't apply";
+const QUEUE_STAGE = 'needs_review'; // first pipeline stage = AI scoring queue
+
+// ── Background Scoring Queue ────────────────────────────────────────────────
+let _scoringQueue = []; // array of entry IDs waiting to be scored
+let _scoringInProgress = false;
+
 // Retry wrapper for Claude API calls with exponential backoff on 429
 async function claudeApiCall(body, maxRetries = 3) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -66,6 +78,84 @@ async function claudeApiCall(body, maxRetries = 3) {
     return res;
   }
 }
+// OpenAI chat API call (mirrors claudeApiCall pattern)
+async function openAiChatCall({ model, system, messages, max_tokens }, maxRetries = 3) {
+  const oaiMessages = [{ role: 'system', content: system }];
+  for (const m of messages) {
+    oaiMessages.push({ role: m.role, content: m.content });
+  }
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_KEY}`
+      },
+      body: JSON.stringify({ model, messages: oaiMessages, max_tokens })
+    });
+    if (res.status === 429 && attempt < maxRetries) {
+      const delay = Math.pow(2, attempt + 1) * 1000;
+      console.warn(`[OpenAI] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return res;
+  }
+}
+
+// Unified chat call with automatic fallback across providers.
+// Tries the requested model first; on any error (rate limit, quota, etc.) falls back
+// through the chain: GPT-4.1-mini → Haiku → Sonnet → GPT-4.1.
+// Returns { reply, usedModel } or { error }.
+async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
+  const fallbackChain = [
+    { id: 'gpt-4.1-mini', type: 'openai' },
+    { id: 'claude-haiku-4-5-20251001', type: 'claude' },
+    { id: 'claude-sonnet-4-5-20250514', type: 'claude' },
+    { id: 'gpt-4.1', type: 'openai' },
+  ];
+  // Put the requested model first, then the rest in order
+  const ordered = [{ id: model, type: model.startsWith('gpt-') ? 'openai' : 'claude' }];
+  for (const fb of fallbackChain) {
+    if (fb.id !== model) ordered.push(fb);
+  }
+
+  let lastError = null;
+  for (const candidate of ordered) {
+    // Skip if we don't have the key for this provider
+    if (candidate.type === 'openai' && !OPENAI_KEY) continue;
+    if (candidate.type === 'claude' && !ANTHROPIC_KEY) continue;
+
+    try {
+      if (candidate.type === 'openai') {
+        const res = await openAiChatCall({ model: candidate.id, system, messages, max_tokens });
+        const data = await res.json();
+        if (res.ok) {
+          const reply = data.choices?.[0]?.message?.content || 'No response.';
+          if (candidate.id !== model) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
+          return { reply, usedModel: candidate.id };
+        }
+        lastError = data?.error?.message || `OpenAI error ${res.status}`;
+        console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
+      } else {
+        const res = await claudeApiCall({ model: candidate.id, max_tokens, system, messages });
+        const data = await res.json();
+        if (res.ok) {
+          const reply = data.content?.[0]?.text || 'No response.';
+          if (candidate.id !== model) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
+          return { reply, usedModel: candidate.id };
+        }
+        lastError = data?.error?.message || `Claude error ${res.status}`;
+        console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
+      }
+    } catch (err) {
+      lastError = err.message;
+      console.warn(`[${tag}] ${candidate.id} threw: ${err.message}, trying next...`);
+    }
+  }
+  return { error: `All models failed. Last error: ${lastError}` };
+}
+
 const photoCache = {}; // in-memory, per service worker lifetime
 let _apolloExhausted = false;
 let _serperExhausted = false;
@@ -146,7 +236,207 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     testApiKey(message.provider, message.key).then(sendResponse);
     return true;
   }
+
+  // ── Quick Fit Scoring Handlers ──────────────────────────────────────────────
+  if (message.type === 'QUICK_FIT_SCORE') {
+    processQuickFitScore(message.entryId).then(sendResponse).catch(err => {
+      console.error('[QuickFit] QUICK_FIT_SCORE error:', err.message);
+      sendResponse({ error: err.message });
+    });
+    return true;
+  }
+  if (message.type === 'QUEUE_QUICK_FIT') {
+    _scoringQueue.push(message.entryId);
+    if (QUEUE_AUTO_PROCESS) processQueue();
+    sendResponse({ queued: true });
+    return true;
+  }
+  if (message.type === 'COMPUTE_STRUCTURAL_MATCHES') {
+    const matches = computeStructuralMatches(message.entry, message.prefs);
+    sendResponse(matches);
+    return true;
+  }
 });
+
+// ── Quick Fit Scoring ────────────────────────────────────────────────────────
+
+async function processQuickFitScore(entryId) {
+  // Load entry from storage
+  const { savedCompanies } = await new Promise(resolve =>
+    chrome.storage.local.get(['savedCompanies'], resolve)
+  );
+  const entries = savedCompanies || [];
+  const entry = entries.find(e => e.id === entryId);
+  if (!entry) throw new Error(`Entry ${entryId} not found`);
+
+  // Load user profile data
+  const localData = await new Promise(resolve =>
+    chrome.storage.local.get(['profileGreenLights', 'profileRedLights', 'profileSkills'], resolve)
+  );
+  const syncData = await new Promise(resolve =>
+    chrome.storage.sync.get(['prefs'], resolve)
+  );
+  const prefs = syncData.prefs || {};
+  const greenLights = localData.profileGreenLights || 'Not specified';
+  const redLights = localData.profileRedLights || 'Not specified';
+  const skills = localData.profileSkills || 'Not specified';
+
+  const jobDesc = (entry.jobDescription || '').slice(0, 3000);
+
+  const prompt = `You are a job fit screener. Based on the candidate's preferences and the job posting, give a quick fit score from 1-10 and a one-sentence reason.
+
+[Candidate Preferences]
+Green lights: ${greenLights}
+Red lights: ${redLights}
+Background: ${skills}
+Compensation: Base floor $${prefs.salaryFloor || 'Not specified'}, OTE floor $${prefs.oteFloor || 'Not specified'}
+Location: ${prefs.userLocation || 'Not specified'}, prefers ${prefs.workArrangement || 'Not specified'}
+
+[Job Posting]
+Company: ${entry.company || 'Unknown'}
+Title: ${entry.jobTitle || 'Unknown'}
+Compensation: ${entry.salary || 'Not specified'}
+Arrangement: ${entry.workArrangement || 'Not specified'}
+Description (first 3000 chars): ${jobDesc}
+
+Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining the score"}`;
+
+  const { reply, error } = await chatWithFallback({
+    model: QUICK_FIT_MODEL,
+    system: 'You are a precise job-fit scoring assistant. Respond with valid JSON only.',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 150,
+    tag: 'QuickFit'
+  });
+
+  if (error) throw new Error(error);
+
+  // Parse response
+  let score = null;
+  let reason = 'Could not parse response';
+  try {
+    const jsonMatch = reply.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      score = Number(parsed.score);
+      reason = parsed.reason || 'No reason provided';
+    }
+  } catch (parseErr) {
+    console.warn('[QuickFit] Failed to parse response:', reply);
+    throw new Error('Failed to parse scoring response');
+  }
+
+  // Save result to the entry
+  const freshData = await new Promise(resolve =>
+    chrome.storage.local.get(['savedCompanies'], resolve)
+  );
+  const freshEntries = freshData.savedCompanies || [];
+  const idx = freshEntries.findIndex(e => e.id === entryId);
+  if (idx !== -1) {
+    freshEntries[idx].quickFitScore = score;
+    freshEntries[idx].quickFitReason = reason;
+    freshEntries[idx].quickFitScoredAt = Date.now();
+    await new Promise(resolve =>
+      chrome.storage.local.set({ savedCompanies: freshEntries }, resolve)
+    );
+  }
+
+  // Broadcast completion to all extension views
+  chrome.runtime.sendMessage({
+    type: 'QUICK_FIT_COMPLETE',
+    entryId,
+    quickFitScore: score,
+    quickFitReason: reason
+  }).catch(() => {}); // ignore if no listeners
+
+  return { quickFitScore: score, quickFitReason: reason };
+}
+
+async function processQueue() {
+  if (_scoringInProgress || _scoringQueue.length === 0) return;
+  _scoringInProgress = true;
+
+  while (_scoringQueue.length > 0) {
+    const entryId = _scoringQueue.shift();
+    try {
+      await processQuickFitScore(entryId);
+    } catch (err) {
+      console.error('[QuickFit] Error scoring', entryId, err.message);
+      // Retry once after 5 seconds
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        await processQuickFitScore(entryId);
+      } catch (retryErr) {
+        console.error('[QuickFit] Retry failed for', entryId);
+        // Mark as failed
+        const failData = await new Promise(resolve =>
+          chrome.storage.local.get(['savedCompanies'], resolve)
+        );
+        const failEntries = failData.savedCompanies || [];
+        const failIdx = failEntries.findIndex(e => e.id === entryId);
+        if (failIdx !== -1) {
+          failEntries[failIdx].quickFitScore = null;
+          failEntries[failIdx].quickFitReason = 'Scoring failed — tap to retry';
+          failEntries[failIdx].quickFitScoredAt = Date.now();
+          await new Promise(resolve =>
+            chrome.storage.local.set({ savedCompanies: failEntries }, resolve)
+          );
+        }
+        // Broadcast failure so UI can update
+        chrome.runtime.sendMessage({
+          type: 'QUICK_FIT_COMPLETE',
+          entryId,
+          quickFitScore: null,
+          quickFitReason: 'Scoring failed — tap to retry'
+        }).catch(() => {});
+      }
+    }
+  }
+
+  _scoringInProgress = false;
+}
+
+// ── Structural Matching (no API calls) ──────────────────────────────────────
+
+function computeStructuralMatches(entry, prefs) {
+  const result = { compMatch: null, arrangementMatch: null, locationMatch: null };
+
+  // Compensation match: check if job salary is within user's floor
+  if (prefs.salaryFloor && entry.salary) {
+    const salaryStr = String(entry.salary).replace(/[^0-9.kKmM]/g, '');
+    let salaryNum = parseFloat(salaryStr);
+    if (/[kK]/.test(entry.salary)) salaryNum *= 1000;
+    if (/[mM]/.test(entry.salary)) salaryNum *= 1000000;
+    if (!isNaN(salaryNum) && salaryNum > 0) {
+      result.compMatch = salaryNum >= Number(prefs.salaryFloor);
+    }
+  }
+
+  // Work arrangement match
+  if (prefs.workArrangement && entry.workArrangement) {
+    const userPref = prefs.workArrangement.toLowerCase();
+    const jobArr = entry.workArrangement.toLowerCase();
+    if (userPref === 'remote') {
+      result.arrangementMatch = jobArr.includes('remote');
+    } else if (userPref === 'hybrid') {
+      result.arrangementMatch = jobArr.includes('hybrid') || jobArr.includes('remote');
+    } else if (userPref === 'onsite' || userPref === 'on-site') {
+      result.arrangementMatch = true; // onsite is compatible with everything
+    } else {
+      result.arrangementMatch = jobArr.includes(userPref);
+    }
+  }
+
+  // Location match
+  if (prefs.userLocation && entry.location) {
+    const userLoc = prefs.userLocation.toLowerCase().trim();
+    const jobLoc = entry.location.toLowerCase().trim();
+    result.locationMatch = jobLoc.includes(userLoc) || userLoc.includes(jobLoc) ||
+      jobLoc.includes('remote') || jobLoc.includes('anywhere');
+  }
+
+  return result;
+}
 
 // ── Enrichment Pipeline (provider-agnostic with fallback) ────────────────────
 
@@ -355,12 +645,24 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
     const qd = effectiveDomain ? `"${company}" ${effectiveDomain}` : `"${company}" company`;
 
     // Now run Serper searches with the best domain info available
-    const [reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
-      fetchSearchResults(`${qd} (site:glassdoor.com/Reviews OR site:glassdoor.com/Overview OR site:repvue.com OR site:blind.app OR reddit.com "${company}" reviews culture)`, 8),
-      fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
-      fetchSearchResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
-      fetchSearchResults(qd + ' what does it do product overview how it works category', 3),
-    ]);
+    // When Serper is exhausted, skip jobs & product searches to reduce expensive fallback calls
+    let reviewResults, leaderResults, jobResults, productResults;
+    if (_serperExhausted) {
+      console.warn('[Research] Serper exhausted — running only 2 of 4 searches (reviews + leadership); skipping jobs & product to limit expensive fallback usage');
+      [reviewResults, leaderResults] = await Promise.all([
+        fetchSearchResults(`${qd} (site:glassdoor.com/Reviews OR site:glassdoor.com/Overview OR site:repvue.com OR site:blind.app OR reddit.com "${company}" reviews culture)`, 8),
+        fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
+      ]);
+      jobResults = [];
+      productResults = [];
+    } else {
+      [reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
+        fetchSearchResults(`${qd} (site:glassdoor.com/Reviews OR site:glassdoor.com/Overview OR site:repvue.com OR site:blind.app OR reddit.com "${company}" reviews culture)`, 8),
+        fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
+        fetchSearchResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
+        fetchSearchResults(qd + ' what does it do product overview how it works category', 3),
+      ]);
+    }
 
     // Use Apollo raw data for Claude synthesis if available, otherwise pass empty
     const apolloRaw = enrichment.raw?.estimated_num_employees ? enrichment.raw : {};
@@ -378,6 +680,7 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
       companyLinkedin: enrichment.companyLinkedin || null,
       jobListings: jobResults.map(r => ({ title: r.title, url: r.link, snippet: r.snippet })),
       enrichmentSource: src,
+      _usedExpensiveFallback: !!(reviewResults._usedExpensiveFallback || leaderResults._usedExpensiveFallback || jobResults._usedExpensiveFallback || productResults._usedExpensiveFallback),
       // Per-field source attribution
       dataSources: {
         employees: enrichment.employees ? src : claudeFirmo.employees ? 'Claude estimate' : null,
@@ -492,6 +795,16 @@ Analysis rules:
         messages: [{ role: 'user', content: prompt }]
     });
     const data = await res.json();
+    // Fallback to OpenAI on rate limit
+    if ((res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) && OPENAI_KEY) {
+      console.warn('[AnalyzeJob] Claude rate limited, falling back to OpenAI');
+      const fbRes = await openAiChatCall({ model: 'gpt-4.1-mini', system: 'You are a JSON-only analyst. Respond with valid JSON only.', messages: [{ role: 'user', content: prompt }], max_tokens: 1100 });
+      const fbData = await fbRes.json();
+      if (fbRes.ok) {
+        const fbRaw = fbData.choices?.[0]?.message?.content || '';
+        return JSON.parse(fbRaw.replace(/```json|```/g, '').trim());
+      }
+    }
     const clean = data.content[0].text.replace(/```json|```/g, '').trim();
     return JSON.parse(clean);
   } catch (err) {
@@ -762,16 +1075,16 @@ async function fetchSearchResults(query, num = 5) {
   }
   // 2. OpenAI Web Search (separate rate limits from Claude)
   if (OPENAI_KEY) {
-    console.log('[Search] Trying OpenAI Web Search...');
+    console.warn('[Search] Using expensive fallback: OpenAI web search (Serper exhausted)');
     const results = await fetchOpenAIWebSearch(query, num);
-    if (results.length > 0) { console.log('[Search] OpenAI returned', results.length, 'results'); return results; }
+    if (results.length > 0) { console.log('[Search] OpenAI returned', results.length, 'results'); results._usedExpensiveFallback = true; return results; }
     console.log('[Search] OpenAI returned 0 results');
   }
   // 3. Claude Web Search (last resort)
   if (ANTHROPIC_KEY) {
-    console.log('[Search] Trying Claude Web Search...');
+    console.warn('[Search] Using expensive fallback: Claude web search (Serper exhausted)');
     const results = await fetchClaudeWebSearch(query, num);
-    if (results.length > 0) { console.log('[Search] Claude returned', results.length, 'results'); return results; }
+    if (results.length > 0) { console.log('[Search] Claude returned', results.length, 'results'); results._usedExpensiveFallback = true; return results; }
     console.log('[Search] Claude returned 0 results');
   }
   console.log('[Search] All providers exhausted for:', query);
@@ -822,13 +1135,27 @@ Respond with a JSON object only, no markdown:
   "leaders": [{"name": "<full name>", "title": "<role at this company>", "newsUrl": "<URL or null>"}]
 }`;
 
-  const res = await claudeApiCall({
+  let res = await claudeApiCall({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
   });
 
-  const data = await res.json();
+  let data = await res.json();
+  // On Claude rate limit, fall back to OpenAI
+  if ((res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) && OPENAI_KEY) {
+    console.warn('[Research] Claude rate limited, falling back to OpenAI gpt-4.1-mini');
+    const fbRes = await openAiChatCall({ model: 'gpt-4.1-mini', system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.', messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
+    data = await fbRes.json();
+    if (!fbRes.ok) {
+      console.error('[Research] OpenAI fallback also failed:', fbRes.status, data);
+      throw new Error('AI is busy — too many requests. Try again in a moment.');
+    }
+    const fbRaw = data.choices?.[0]?.message?.content;
+    if (!fbRaw) throw new Error('Empty response from fallback');
+    const fbClean = fbRaw.replace(/```json|```/g, '').trim();
+    try { return JSON.parse(fbClean); } catch { return JSON.parse(fbClean.slice(0, fbClean.lastIndexOf('}') + 1)); }
+  }
   // Surface API-level errors with friendly messages
   if (data.error) {
     const msg = data.error.message || data.error.type || '';
@@ -1024,7 +1351,7 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
 
 // ── Chat ────────────────────────────────────────────────────────────────────
 
-async function handleChatMessage({ messages, context }) {
+async function handleChatMessage({ messages, context, chatModel }) {
   chrome.storage.sync.get(['prefs'], async ({ prefs }) => {});
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
 
@@ -1165,63 +1492,83 @@ When the user first enters this mode, respond: "Paste the application question a
     systemParts.push(`\n=== MEETING NOTES / TRANSCRIPTS ===\n${context.granolaNote.slice(0, 12000)}`);
   }
 
-  // ── User profile & preferences (everything from preferences page) ────────
-  const userParts = [];
-  // Resume / LinkedIn
-  if (prefs.resumeText)          userParts.push(`Resume / LinkedIn profile:\n${prefs.resumeText.slice(0, 3000)}`);
-  if (prefs.linkedinUrl)         userParts.push(`LinkedIn URL: ${prefs.linkedinUrl}`);
-  // Role context
-  if (prefs.jobMatchBackground)  userParts.push(`Background & strengths: ${prefs.jobMatchBackground}`);
-  if (prefs.roleLoved)           userParts.push(`Responsibilities & attributes they enjoy: ${prefs.roleLoved}`);
-  if (prefs.roleHated)           userParts.push(`Responsibilities & attributes to avoid: ${prefs.roleHated}`);
-  // Career preferences
-  if (prefs.roles)               userParts.push(`Roles looking for: ${prefs.roles}`);
-  if (prefs.avoid)               userParts.push(`Want to avoid: ${prefs.avoid}`);
-  if (prefs.interests)           userParts.push(`Industries/products that excite: ${prefs.interests}`);
-  // Location & logistics
-  if (prefs.userLocation)        userParts.push(`Location: ${prefs.userLocation}`);
-  const wa = (prefs.workArrangement || []).join(', ');
-  if (wa)                        userParts.push(`Work arrangement preference: ${wa}`);
-  if (prefs.maxTravel)           userParts.push(`Max travel: ${prefs.maxTravel}`);
-  // Compensation
-  if (prefs.salaryFloor)         userParts.push(`Base salary floor (walk away below): $${prefs.salaryFloor}`);
-  if (prefs.salaryStrong)        userParts.push(`Base salary strong offer (exciting above): $${prefs.salaryStrong}`);
-  if (prefs.oteFloor)            userParts.push(`OTE floor (walk away below): $${prefs.oteFloor}`);
-  if (prefs.oteStrong)           userParts.push(`OTE strong offer (exciting above): $${prefs.oteStrong}`);
-  if (userParts.length)          systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
+  // ── User profile (Career OS buckets + legacy prefs) ──────────────────────
+  const profileKeys = ['profileLinks', 'profileStory', 'profileExperience', 'profilePrinciples',
+    'profileMotivators', 'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
+    'profileResume', 'profileSkills', 'storyTime'];
+  const profileData = await new Promise(r => chrome.storage.local.get(profileKeys, r));
 
-  // ── Story Time (persistent personal context) ───────────────────────────────
-  const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
-  if (storyTime) {
-    const storyText = storyTime.profileSummary || storyTime.rawInput;
-    if (storyText) {
-      systemParts.push(`\n=== YOUR STORY (from Story Time) ===\n${storyText.slice(0, 4000)}`);
-    }
-    const insights = (storyTime.learnedInsights || []).slice(-20);
-    if (insights.length) {
-      systemParts.push(`\n=== AI-LEARNED INSIGHTS ===\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
-    }
+  // Personal Info
+  const links = profileData.profileLinks || {};
+  const linkParts = [];
+  if (links.linkedin) linkParts.push(`LinkedIn: ${links.linkedin}`);
+  if (links.github)   linkParts.push(`GitHub: ${links.github}`);
+  if (links.website)  linkParts.push(`Website: ${links.website}`);
+  if (links.email)    linkParts.push(`Email: ${links.email}`);
+  if (links.phone)    linkParts.push(`Phone: ${links.phone}`);
+  if (linkParts.length) systemParts.push(`\n[Personal Info]\n${linkParts.join('\n')}`);
+  // Fallback to legacy linkedinUrl
+  else if (prefs.linkedinUrl) systemParts.push(`\n[Personal Info]\nLinkedIn: ${prefs.linkedinUrl}`);
+
+  // Career OS text buckets
+  const story = profileData.profileStory || (profileData.storyTime?.profileSummary || profileData.storyTime?.rawInput || '');
+  if (story) systemParts.push(`\n[Your Story]\n${story.slice(0, 4000)}`);
+
+  if (profileData.profileExperience) systemParts.push(`\n[Experience & Accomplishments]\n${profileData.profileExperience.slice(0, 4000)}`);
+  if (profileData.profilePrinciples) systemParts.push(`\n[Operating Principles]\n${profileData.profilePrinciples.slice(0, 2000)}`);
+  if (profileData.profileMotivators) systemParts.push(`\n[What Drives You]\n${profileData.profileMotivators.slice(0, 2000)}`);
+  if (profileData.profileVoice)      systemParts.push(`\n[Voice & Style]\n${profileData.profileVoice.slice(0, 2000)}`);
+  if (profileData.profileFAQ)        systemParts.push(`\n[FAQ / Polished Responses]\n${profileData.profileFAQ.slice(0, 3000)}`);
+
+  // Resume
+  const resume = profileData.profileResume?.content || prefs.resumeText;
+  if (resume) systemParts.push(`\n[Resume]\n${resume.slice(0, 3000)}`);
+
+  // Green & Red Lights (or fallback to legacy prefs)
+  const greenLights = profileData.profileGreenLights || [prefs.roles, prefs.roleLoved, prefs.interests].filter(Boolean).join('\n');
+  if (greenLights) systemParts.push(`\n[Green Lights]\n${greenLights.slice(0, 2000)}`);
+
+  const redLights = profileData.profileRedLights || [prefs.avoid, prefs.roleHated].filter(Boolean).join('\n');
+  if (redLights) systemParts.push(`\n[Red Lights]\n${redLights.slice(0, 2000)}`);
+
+  // Skills & Intangibles
+  const skills = profileData.profileSkills || prefs.jobMatchBackground;
+  if (skills) systemParts.push(`\n[Skills & Intangibles]\n${skills}`);
+
+  // Location & logistics
+  const locParts = [];
+  if (prefs.userLocation)        locParts.push(`Location: ${prefs.userLocation}`);
+  const wa = (prefs.workArrangement || []).join(', ');
+  if (wa)                        locParts.push(`Work arrangement: ${wa}`);
+  if (prefs.maxTravel)           locParts.push(`Max travel: ${prefs.maxTravel}`);
+  if (locParts.length) systemParts.push(`\n[Location]\n${locParts.join('\n')}`);
+
+  // Compensation
+  const compParts = [];
+  if (prefs.salaryFloor)  compParts.push(`Base salary floor (walk away below): $${prefs.salaryFloor}`);
+  if (prefs.salaryStrong) compParts.push(`Base salary strong offer (exciting above): $${prefs.salaryStrong}`);
+  if (prefs.oteFloor)     compParts.push(`OTE floor (walk away below): $${prefs.oteFloor}`);
+  if (prefs.oteStrong)    compParts.push(`OTE strong offer (exciting above): $${prefs.oteStrong}`);
+  if (compParts.length) systemParts.push(`\n[Compensation]\n${compParts.join('\n')}`);
+
+  // AI-learned insights (from passive learning)
+  const storyTime = profileData.storyTime;
+  if (storyTime?.learnedInsights?.length) {
+    const insights = storyTime.learnedInsights.slice(-20);
+    systemParts.push(`\n[AI-Learned Insights]\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
   }
 
   try {
     const systemText = systemParts.join('\n');
     console.log('[Chat] System prompt length:', systemText.length, 'chars');
-    const res = await claudeApiCall({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
-        system: systemText,
-        messages
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      console.error('[Chat] API error:', res.status, data);
-      return { error: data?.error?.message || `API error ${res.status}` };
-    }
-    const reply = data.content?.[0]?.text || 'No response.';
+    const model = chatModel || 'gpt-4.1-mini';
+    console.log('[Chat] Using model:', model);
+    const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'Chat' });
+    if (result.error) return result;
     // Passive learning: extract insights in background (non-blocking)
     const lastUserMsg = messages[messages.length - 1]?.content || '';
-    extractInsightsFromChat(lastUserMsg, reply, `chat:${context.company || 'unknown'}`);
-    return { reply };
+    extractInsightsFromChat(lastUserMsg, result.reply, `chat:${context.company || 'unknown'}`);
+    return { reply: result.reply, model: result.usedModel };
   } catch (err) {
     console.error('[Chat] Error:', err);
     return { error: err.message };
@@ -1230,9 +1577,9 @@ When the user first enters this mode, respond: "Paste the application question a
 
 // ── Global Chat (Pipeline Advisor) ───────────────────────────────────────────
 
-async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
+async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatModel }) {
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
-  const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
+  const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r)); // for learnedInsights
 
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -1242,33 +1589,55 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
     `\n=== TODAY ===\n${todayStr}`
   ];
 
-  // Story Time
-  if (storyTime) {
-    const storyText = storyTime.profileSummary || storyTime.rawInput;
-    if (storyText) systemParts.push(`\n=== YOUR STORY ===\n${storyText.slice(0, 4000)}`);
-    const insights = (storyTime.learnedInsights || []).slice(-20);
-    if (insights.length) systemParts.push(`\n=== AI-LEARNED INSIGHTS ===\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
-  }
+  // ── User profile (Career OS buckets + legacy prefs) ──────────────────────
+  const gcProfileKeys = ['profileLinks', 'profileStory', 'profileExperience', 'profilePrinciples',
+    'profileMotivators', 'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
+    'profileResume', 'profileSkills'];
+  const gcProfile = await new Promise(r => chrome.storage.local.get(gcProfileKeys, r));
 
-  // User profile & preferences (full)
-  const userParts = [];
-  if (prefs.resumeText)          userParts.push(`Resume / LinkedIn profile:\n${prefs.resumeText.slice(0, 3000)}`);
-  if (prefs.linkedinUrl)         userParts.push(`LinkedIn URL: ${prefs.linkedinUrl}`);
-  if (prefs.jobMatchBackground)  userParts.push(`Background & strengths: ${prefs.jobMatchBackground}`);
-  if (prefs.roleLoved)           userParts.push(`Responsibilities & attributes they enjoy: ${prefs.roleLoved}`);
-  if (prefs.roleHated)           userParts.push(`Responsibilities & attributes to avoid: ${prefs.roleHated}`);
-  if (prefs.roles)               userParts.push(`Roles looking for: ${prefs.roles}`);
-  if (prefs.avoid)               userParts.push(`Want to avoid: ${prefs.avoid}`);
-  if (prefs.interests)           userParts.push(`Industries/products that excite: ${prefs.interests}`);
-  if (prefs.userLocation)        userParts.push(`Location: ${prefs.userLocation}`);
-  const wa = (prefs.workArrangement || []).join(', ');
-  if (wa)                        userParts.push(`Work arrangement preference: ${wa}`);
-  if (prefs.maxTravel)           userParts.push(`Max travel: ${prefs.maxTravel}`);
-  if (prefs.salaryFloor)         userParts.push(`Base salary floor: $${prefs.salaryFloor}`);
-  if (prefs.salaryStrong)        userParts.push(`Base salary strong offer: $${prefs.salaryStrong}`);
-  if (prefs.oteFloor)            userParts.push(`OTE floor: $${prefs.oteFloor}`);
-  if (prefs.oteStrong)           userParts.push(`OTE strong offer: $${prefs.oteStrong}`);
-  if (userParts.length) systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
+  const gcLinks = gcProfile.profileLinks || {};
+  const gcLinkParts = [];
+  if (gcLinks.linkedin || prefs.linkedinUrl) gcLinkParts.push(`LinkedIn: ${gcLinks.linkedin || prefs.linkedinUrl}`);
+  if (gcLinks.website)  gcLinkParts.push(`Website: ${gcLinks.website}`);
+  if (gcLinks.email)    gcLinkParts.push(`Email: ${gcLinks.email}`);
+  if (gcLinkParts.length) systemParts.push(`\n[Personal Info]\n${gcLinkParts.join('\n')}`);
+
+  const gcStory = gcProfile.profileStory || (storyTime?.profileSummary || storyTime?.rawInput || '');
+  if (gcStory) systemParts.push(`\n[Your Story]\n${gcStory.slice(0, 4000)}`);
+  if (gcProfile.profileExperience) systemParts.push(`\n[Experience & Accomplishments]\n${gcProfile.profileExperience.slice(0, 4000)}`);
+  if (gcProfile.profilePrinciples) systemParts.push(`\n[Operating Principles]\n${gcProfile.profilePrinciples.slice(0, 2000)}`);
+  if (gcProfile.profileMotivators) systemParts.push(`\n[What Drives You]\n${gcProfile.profileMotivators.slice(0, 2000)}`);
+  if (gcProfile.profileVoice)      systemParts.push(`\n[Voice & Style]\n${gcProfile.profileVoice.slice(0, 2000)}`);
+  if (gcProfile.profileFAQ)        systemParts.push(`\n[FAQ / Polished Responses]\n${gcProfile.profileFAQ.slice(0, 3000)}`);
+
+  const gcResume = gcProfile.profileResume?.content || prefs.resumeText;
+  if (gcResume) systemParts.push(`\n[Resume]\n${gcResume.slice(0, 3000)}`);
+
+  const gcGreen = gcProfile.profileGreenLights || [prefs.roles, prefs.roleLoved, prefs.interests].filter(Boolean).join('\n');
+  if (gcGreen) systemParts.push(`\n[Green Lights]\n${gcGreen.slice(0, 2000)}`);
+  const gcRed = gcProfile.profileRedLights || [prefs.avoid, prefs.roleHated].filter(Boolean).join('\n');
+  if (gcRed) systemParts.push(`\n[Red Lights]\n${gcRed.slice(0, 2000)}`);
+
+  const gcSkills = gcProfile.profileSkills || prefs.jobMatchBackground;
+  if (gcSkills) systemParts.push(`\n[Skills & Intangibles]\n${gcSkills}`);
+
+  const gcLocParts = [];
+  if (prefs.userLocation) gcLocParts.push(`Location: ${prefs.userLocation}`);
+  const gcWa = (prefs.workArrangement || []).join(', ');
+  if (gcWa) gcLocParts.push(`Work arrangement: ${gcWa}`);
+  if (prefs.maxTravel) gcLocParts.push(`Max travel: ${prefs.maxTravel}`);
+  if (gcLocParts.length) systemParts.push(`\n[Location]\n${gcLocParts.join('\n')}`);
+
+  const gcCompParts = [];
+  if (prefs.salaryFloor)  gcCompParts.push(`Base salary floor: $${prefs.salaryFloor}`);
+  if (prefs.salaryStrong) gcCompParts.push(`Base salary strong offer: $${prefs.salaryStrong}`);
+  if (prefs.oteFloor)     gcCompParts.push(`OTE floor: $${prefs.oteFloor}`);
+  if (prefs.oteStrong)    gcCompParts.push(`OTE strong offer: $${prefs.oteStrong}`);
+  if (gcCompParts.length) systemParts.push(`\n[Compensation]\n${gcCompParts.join('\n')}`);
+
+  if (storyTime?.learnedInsights?.length) {
+    systemParts.push(`\n[AI-Learned Insights]\n${storyTime.learnedInsights.slice(-20).map(i => `- ${i.insight}`).join('\n')}`);
+  }
 
   // Pipeline summary
   if (pipeline) {
@@ -1281,23 +1650,14 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
 
   try {
     const systemText = systemParts.join('\n');
-    console.log('[GlobalChat] System prompt length:', systemText.length, 'chars');
-    const res = await claudeApiCall({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
-        system: systemText,
-        messages
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      console.error('[GlobalChat] API error:', res.status, data);
-      return { error: data?.error?.message || `API error ${res.status}` };
-    }
-    const reply = data.content?.[0]?.text || 'No response.';
+    const model = chatModel || 'gpt-4.1-mini';
+    console.log('[GlobalChat] Using model:', model, '| prompt length:', systemText.length);
+    const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'GlobalChat' });
+    if (result.error) return result;
     // Passive learning: extract insights in background (non-blocking)
     const lastUserMsg = messages[messages.length - 1]?.content || '';
-    extractInsightsFromChat(lastUserMsg, reply, 'global-chat');
-    return { reply };
+    extractInsightsFromChat(lastUserMsg, result.reply, 'global-chat');
+    return { reply: result.reply, model: result.usedModel };
   } catch (err) {
     console.error('[GlobalChat] Error:', err);
     return { error: err.message };
@@ -1306,7 +1666,22 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
 
 // ── Story Time: Passive Learning (insight extraction after every chat) ───────
 
-async function extractInsightsFromChat(userMessage, assistantResponse, source) {
+let _insightExtractionTimer = null;
+let _pendingInsightArgs = null;   // { userMessage, assistantResponse, source }
+
+function extractInsightsFromChat(userMessage, assistantResponse, source) {
+  // Debounce: accumulate latest message pair, fire after 60s of chat inactivity
+  _pendingInsightArgs = { userMessage, assistantResponse, source };
+  if (_insightExtractionTimer) clearTimeout(_insightExtractionTimer);
+  _insightExtractionTimer = setTimeout(() => {
+    const args = _pendingInsightArgs;
+    _pendingInsightArgs = null;
+    _insightExtractionTimer = null;
+    if (args) _doExtractInsightsFromChat(args.userMessage, args.assistantResponse, args.source);
+  }, 60_000);
+}
+
+async function _doExtractInsightsFromChat(userMessage, assistantResponse, source) {
   try {
     const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
     const st = storyTime || {};
@@ -1613,10 +1988,10 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
   if (!GRANOLA_KEY) return { notes: null, error: 'not_connected' };
 
   try {
-    console.log('[Granola] Searching notes for:', companyName);
+    console.log('[Granola] Searching notes for:', companyName, '| contacts:', contactNames, '| handles:', attendeeHandles);
     // Fetch recent notes (last 90 days)
     const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-    const data = await granolaFetch('/v1/notes?page_size=30&created_after=' + since);
+    const data = await granolaFetch('/v1/notes?page_size=50&created_after=' + since);
     if (!data?.notes?.length) {
       console.log('[Granola] No notes found');
       return { notes: null, transcript: null, meetings: [] };
@@ -1624,23 +1999,65 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
 
     const lowerCompany = companyName.toLowerCase();
     const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?)$/i, '').trim().toLowerCase();
-    const contactLower = contactNames.map(n => n.toLowerCase());
+    // Filter out the user's own name from contact matching to avoid matching every meeting
+    // (the user appears in the title of all their meetings)
+    const contactLower = contactNames
+      .map(n => n.toLowerCase())
+      .filter(n => {
+        // Exclude names that look like the user's own name (appears in most meeting titles)
+        // Heuristic: if a name appears in more than 60% of all note titles, it's probably the user
+        const words = n.split(' ').filter(Boolean);
+        if (words.length < 2) return true;
+        const appearances = data.notes.filter(note => {
+          const t = (note.title || '').toLowerCase();
+          return words.every(w => t.includes(w));
+        }).length;
+        const isLikelyUser = appearances > data.notes.length * 0.6;
+        if (isLikelyUser) console.log('[Granola] Excluding likely user name from matching:', n);
+        return !isLikelyUser;
+      });
+    const handlesLower = attendeeHandles.map(h => h.toLowerCase()).filter(Boolean);
 
-    // Match notes by title, attendees, or calendar event
+    // Match notes by: company name in title, contact full name in title,
+    // or attendee email handles matching known calendar attendees
     const matched = [];
     for (const note of data.notes) {
       const title = (note.title || '').toLowerCase();
-      const matchesCompany = title.includes(lowerCompany) || (shortName.length > 3 && title.includes(shortName));
+      const noteAttendees = (note.attendees || []).map(a => ((a.email || '').split('@')[0] || '').toLowerCase()).filter(Boolean);
+      const noteAttendeeEmails = (note.attendees || []).map(a => (a.email || '').toLowerCase()).filter(Boolean);
+      const calTitle = ((note.calendar_event?.event_title) || '').toLowerCase();
+
+      // 1. Company name in title or calendar event title
+      const matchesCompany = title.includes(lowerCompany)
+        || (shortName.length > 3 && title.includes(shortName))
+        || calTitle.includes(lowerCompany)
+        || (shortName.length > 3 && calTitle.includes(shortName));
+
+      // 2. Contact full name in title (require all name parts)
       const matchesContact = contactLower.some(n => {
         if (!n || n.length < 3) return false;
         const words = n.split(' ').filter(Boolean);
-        if (words.length >= 2) return words.every(w => w.length > 1 && title.includes(w)) || (words[0].length >= 3 && title.includes(words[0]));
-        return n.length >= 4 && title.includes(n);
+        if (words.length >= 2) return words.every(w => w.length > 1 && title.includes(w));
+        return n.length >= 5 && title.includes(n);
       });
-      if (matchesCompany || matchesContact) matched.push(note);
+
+      // 3. Attendee email handles from calendar events match note attendees
+      const matchesAttendee = handlesLower.length > 0 && handlesLower.some(h =>
+        noteAttendees.includes(h) || noteAttendeeEmails.some(e => e.startsWith(h + '@'))
+      );
+
+      // 4. Note date matches a known calendar event date for this company
+      const noteDate = (note.created_at || '').slice(0, 10);
+      const matchesCalDate = noteDate && calendarDates.includes(noteDate);
+
+      if (matchesCompany || matchesContact || matchesAttendee || matchesCalDate) {
+        const reason = matchesCompany ? 'company' : matchesContact ? 'contact' : matchesAttendee ? 'attendee' : 'calDate';
+        console.log('[Granola] Matched note:', title.slice(0, 60), '| reason:', reason);
+        matched.push(note);
+      }
     }
 
-    console.log('[Granola] Matched', matched.length, 'notes for', companyName);
+    console.log('[Granola] Matched', matched.length, 'of', data.notes.length, 'notes for', companyName);
     if (!matched.length) return { notes: null, transcript: null, meetings: [] };
 
     // Fetch full content with transcripts for matched notes (max 5)
