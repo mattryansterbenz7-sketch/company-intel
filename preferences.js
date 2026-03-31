@@ -221,8 +221,21 @@ function loadStoredInterpretations() {
         _interpretedHashes[panelKey] = stored.sourceHash || 0;
         renderInterpretation(panelKey, stored.data);
       } else {
-        const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
-        if (panel) panel.innerHTML = '<div style="color:#A09A94;font-size:12px">Save your changes to generate an AI interpretation</div>';
+        // No stored interpretation — auto-generate if the section has content
+        const fieldId = {
+          story: 'profile-story', experience: 'profile-experience', skills: 'profile-skills',
+          principles: 'profile-principles', motivators: 'profile-motivators',
+          voice: 'profile-voice', faq: 'profile-faq',
+          greenLights: 'profile-green-lights', redLights: 'profile-red-lights',
+        }[panelKey];
+        const el = fieldId ? document.getElementById(fieldId) : null;
+        const content = el?.value?.trim();
+        if (content) {
+          requestInterpretation(panelKey, storageKey, content);
+        } else {
+          const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
+          if (panel) panel.innerHTML = '<div style="color:#A09A94;font-size:12px">Add content above to generate an AI interpretation</div>';
+        }
       }
     });
   });
