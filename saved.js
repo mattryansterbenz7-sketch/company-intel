@@ -156,6 +156,7 @@ function renderCompactCard(c) {
         <div class="compact-company">${escHtmlGlobal(c.company)}</div>
         <div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>
         ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
+        ${c.quickFitReason && score != null ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(c.quickFitReason)}</div>` : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
         ${isQueued ? '<div class="compact-meta">In queue</div>' : ''}
         ${actionsHtml}

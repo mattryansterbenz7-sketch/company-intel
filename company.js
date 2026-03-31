@@ -666,9 +666,14 @@ function buildFitSection() {
   const deep       = entry.deepFitAnalysis || '';
   const v          = score ? scoreToVerdict(score) : null;
 
+  // Quick fit score (from AI scoring queue) — shown when no deep analysis exists
+  const qfs = entry.quickFitScore;
+  const qfr = entry.quickFitReason;
+  const hasQuickFit = qfs != null && !score;
+
   let html = `<div class="hub-section-label">Job Fit Analysis</div>`;
 
-  // Score + verdict row
+  // Full deep score + verdict row
   if (score) {
     const fb = entry.matchFeedback;
     const upA = fb?.type === 'up' ? ' active up' : '';
@@ -684,6 +689,21 @@ function buildFitSection() {
       </span>
     </div>
     <div id="co-thumb-form" style="display:none"></div>`;
+    // Show quick screen as secondary reference if it also exists
+    if (qfs != null) {
+      html += `<div style="font-size:11px;color:#A09A94;margin-top:4px">Quick screen: ${qfs}/10${qfr ? ' — ' + escapeHtml(qfr) : ''}</div>`;
+    }
+  } else if (hasQuickFit) {
+    // Quick fit only — no deep analysis yet
+    const qfColor = qfs >= 7 ? '#0F6E56' : qfs >= 4 ? '#854F0B' : '#A32D2D';
+    html += `<div class="fit-score-row">
+      <span class="fit-score" style="color:${qfColor}">${qfs}<span class="fit-score-denom">/10</span></span>
+      <span class="fit-verdict" style="color:${qfColor}">Quick Fit Screen</span>
+    </div>`;
+    if (qfr) {
+      html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5">${escapeHtml(qfr)}</div>`;
+    }
+    html += `<div style="font-size:12px;color:#A09A94;margin:6px 0;line-height:1.5">Quick screening — move to a later stage or click "Run fit analysis" for the full deep analysis with green flags, red flags, and detailed breakdown.</div>`;
   }
 
   // Refresh button — always available for opportunities
@@ -699,23 +719,25 @@ function buildFitSection() {
   // Deep analysis narrative (generated from full context)
   if (deep) {
     html += `<div class="fit-deep-analysis">${renderMarkdown(deep)}</div>`;
-  } else if (!score) {
+  } else if (!score && !hasQuickFit) {
     html += `<div class="p-empty" style="text-align:left;margin:8px 0">No fit analysis yet. Click "Run fit analysis" above — or save a job posting to automatically generate one.</div>`;
   }
 
   // Green flags / Red flags — always shown as side-by-side grid
+  const greenLabel = hasQuickFit && !strongFits.length ? 'Run full analysis to generate' : 'None identified yet';
+  const redLabel = hasQuickFit && !redFlags.length ? 'Run full analysis to generate' : 'None identified yet';
   html += `<div class="fit-flags-grid">
     <div class="fit-flags-col fit-flags-green">
       <div class="fit-flags-header">✓ Green Flags</div>
       ${strongFits.length
         ? strongFits.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
-        : '<div class="fit-flag-none">None identified yet</div>'}
+        : `<div class="fit-flag-none">${greenLabel}</div>`}
     </div>
     <div class="fit-flags-col fit-flags-red">
       <div class="fit-flags-header">⚠ Red Flags</div>
       ${redFlags.length
         ? redFlags.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
-        : '<div class="fit-flag-none">None identified yet</div>'}
+        : `<div class="fit-flag-none">${redLabel}</div>`}
     </div>
   </div>`;
 
