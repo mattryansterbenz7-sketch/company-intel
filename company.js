@@ -2836,7 +2836,7 @@ function openChatPanel() {
 }
 
 function sanitizeNotesHtml(html) {
-  const allowed = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'del'];
+  const allowed = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'del', 'div', 'span'];
   const div = document.createElement('div');
   div.innerHTML = html;
   div.querySelectorAll('a').forEach(a => {
@@ -2847,122 +2847,125 @@ function sanitizeNotesHtml(html) {
     if (!allowed.includes(el.tagName.toLowerCase())) {
       el.replaceWith(...el.childNodes);
     }
+    // Strip style/class attributes except on allowed elements
+    el.removeAttribute('class');
+    el.removeAttribute('style');
   });
   return div.innerHTML;
+}
+
+// Convert old plain text / markdown notes to simple HTML for the WYSIWYG editor
+function notesToHtml(raw) {
+  if (!raw) return '';
+  // If it already looks like HTML, return sanitized
+  if (/<[a-z][\s>]/i.test(raw)) return sanitizeNotesHtml(raw);
+  // Convert markdown-ish patterns to HTML
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+    return sanitizeNotesHtml(marked.parse(raw));
+  }
+  // Plain text fallback
+  return raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
 
 function renderNotesEditor() {
   const container = document.getElementById('hub-notes-container');
   if (!container) return;
-  const isEditing = container.dataset.editing === '1';
 
-  if (typeof marked !== 'undefined') {
-    marked.setOptions({ breaks: true, gfm: true, headerIds: false });
+  const raw = entry.notes || '';
+  const htmlContent = notesToHtml(raw);
+
+  container.innerHTML = `
+    <div class="notes-toolbar">
+      <button class="notes-tb-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+      <button class="notes-tb-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+      <button class="notes-tb-btn" data-cmd="formatBlock:H2" title="Heading">H</button>
+      <span class="notes-tb-sep"></span>
+      <button class="notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+      <button class="notes-tb-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+      <button class="notes-tb-btn" data-cmd="createLink" title="Link">🔗</button>
+    </div>
+    <div class="notes-editable" id="hub-notes-editable" contenteditable="true">${htmlContent || '<p><br></p>'}</div>`;
+
+  const editable = container.querySelector('#hub-notes-editable');
+
+  // Show placeholder when empty
+  function updatePlaceholder() {
+    const text = editable.textContent.trim();
+    editable.classList.toggle('notes-empty-edit', !text);
   }
+  updatePlaceholder();
+  editable.addEventListener('input', updatePlaceholder);
 
-  if (isEditing) {
-    container.innerHTML = `
-      <div class="notes-toolbar">
-        <button class="notes-tb-btn" data-action="bold" title="Bold (Ctrl+B)"><b>B</b></button>
-        <button class="notes-tb-btn" data-action="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-        <button class="notes-tb-btn" data-action="heading" title="Heading">H</button>
-        <span class="notes-tb-sep"></span>
-        <button class="notes-tb-btn" data-action="ul" title="Bullet list">•</button>
-        <button class="notes-tb-btn" data-action="ol" title="Numbered list">1.</button>
-        <button class="notes-tb-btn" data-action="link" title="Link">🔗</button>
-      </div>
-      <textarea class="hub-notes-ta notes-edit-ta" id="hub-notes-ta">${escapeHtml(entry.notes || '')}</textarea>`;
-    const ta = container.querySelector('#hub-notes-ta');
-    ta.focus();
-    // Put cursor at end
-    ta.selectionStart = ta.selectionEnd = ta.value.length;
-    bindNotesToolbar(container, ta);
-    ta.addEventListener('blur', (e) => {
-      if (e.relatedTarget?.closest('.notes-toolbar')) return;
-      const prev = entry.notes || '';
-      saveEntry({ notes: ta.value });
-      if (ta.value.trim() !== prev.trim()) maybeRescore('notes_updated');
-      container.dataset.editing = '0';
-      renderNotesEditor();
-    });
-  } else {
-    const raw = entry.notes || '';
-    if (!raw.trim()) {
-      container.innerHTML = '<div class="notes-rendered notes-empty" id="notes-view">Click to add notes…</div>';
-    } else if (typeof marked !== 'undefined') {
-      container.innerHTML = `<div class="notes-rendered" id="notes-view">${sanitizeNotesHtml(marked.parse(raw))}</div>`;
-    } else {
-      container.innerHTML = `<div class="notes-rendered" id="notes-view">${escapeHtml(raw).replace(/\n/g, '<br>')}</div>`;
-    }
-    container.querySelector('#notes-view').addEventListener('click', (e) => {
-      // Let links open normally
-      if (e.target.closest('a')) return;
-      container.dataset.editing = '1';
-      renderNotesEditor();
-    });
-  }
-}
-
-function bindNotesToolbar(container, textarea) {
+  // Toolbar button handlers
   container.querySelectorAll('.notes-tb-btn').forEach(btn => {
-    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('mousedown', e => e.preventDefault()); // don't steal focus
     btn.addEventListener('click', () => {
-      const action = btn.dataset.action;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = textarea.value;
-      const selected = text.slice(start, end);
-      let replacement, newCursorPos;
-
-      switch (action) {
-        case 'bold':
-          replacement = `**${selected || 'bold text'}**`;
-          newCursorPos = selected ? start + replacement.length : start + 2;
-          break;
-        case 'italic':
-          replacement = `*${selected || 'italic text'}*`;
-          newCursorPos = selected ? start + replacement.length : start + 1;
-          break;
-        case 'heading': {
-          const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-          const lineText = text.slice(lineStart);
-          if (lineText.startsWith('## ')) {
-            textarea.value = text.slice(0, lineStart) + lineText.slice(3);
-          } else {
-            textarea.value = text.slice(0, lineStart) + '## ' + text.slice(lineStart);
-          }
-          textarea.focus();
-          return;
+      const cmd = btn.dataset.cmd;
+      if (cmd.startsWith('formatBlock:')) {
+        const tag = cmd.split(':')[1];
+        // Toggle: if already in that block, remove it
+        const current = document.queryCommandValue('formatBlock');
+        if (current.toLowerCase() === tag.toLowerCase()) {
+          document.execCommand('formatBlock', false, 'P');
+        } else {
+          document.execCommand('formatBlock', false, tag);
         }
-        case 'ul':
-          replacement = selected ? selected.split('\n').map(l => `- ${l}`).join('\n') : '- ';
-          newCursorPos = start + replacement.length;
-          break;
-        case 'ol':
-          replacement = selected ? selected.split('\n').map((l, i) => `${i + 1}. ${l}`).join('\n') : '1. ';
-          newCursorPos = start + replacement.length;
-          break;
-        case 'link':
-          replacement = selected ? `[${selected}](url)` : '[link text](url)';
-          newCursorPos = selected ? start + selected.length + 3 : start + 1;
-          break;
-        default: return;
+      } else if (cmd === 'createLink') {
+        const url = prompt('Enter URL:');
+        if (url) document.execCommand('createLink', false, url);
+      } else {
+        document.execCommand(cmd, false, null);
       }
-
-      textarea.value = text.slice(0, start) + replacement + text.slice(end);
-      textarea.focus();
-      textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+      editable.focus();
     });
   });
 
-  textarea.addEventListener('keydown', e => {
+  // Auto-save on blur
+  let _notesSaveTimer = null;
+  function saveNotes() {
+    const html = sanitizeNotesHtml(editable.innerHTML);
+    const prev = entry.notes || '';
+    if (html !== prev) {
+      saveEntry({ notes: html });
+      maybeRescore('notes_updated');
+    }
+  }
+
+  editable.addEventListener('blur', (e) => {
+    if (e.relatedTarget?.closest('.notes-toolbar')) return;
+    clearTimeout(_notesSaveTimer);
+    saveNotes();
+  });
+
+  // Also auto-save periodically while typing (every 3s)
+  editable.addEventListener('input', () => {
+    clearTimeout(_notesSaveTimer);
+    _notesSaveTimer = setTimeout(saveNotes, 3000);
+  });
+
+  // Keyboard shortcuts
+  editable.addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
       e.preventDefault();
-      container.querySelector('[data-action="bold"]').click();
+      document.execCommand('bold', false, null);
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
       e.preventDefault();
-      container.querySelector('[data-action="italic"]').click();
+      document.execCommand('italic', false, null);
+    }
+  });
+
+  // Paste as plain text + basic formatting (strip complex HTML from clipboard)
+  editable.addEventListener('paste', e => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+    if (html) {
+      // Insert sanitized HTML
+      document.execCommand('insertHTML', false, sanitizeNotesHtml(html));
+    } else {
+      document.execCommand('insertText', false, text);
     }
   });
 }

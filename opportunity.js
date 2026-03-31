@@ -305,54 +305,56 @@ function commitTag(val) {
 function renderSidebarNotes() {
   const container = document.getElementById('sb-notes-container');
   if (!container) return;
-  const isEditing = container.dataset.editing === '1';
 
-  if (typeof marked !== 'undefined') {
-    marked.setOptions({ breaks: true, gfm: true, headerIds: false });
-  }
-
-  if (isEditing) {
-    container.innerHTML = `<textarea class="sb-notes" id="sb-notes" placeholder="Add notes…">${escapeHtml(entry.notes || '')}</textarea>`;
-    const ta = container.querySelector('#sb-notes');
-    ta.focus();
-    ta.selectionStart = ta.selectionEnd = ta.value.length;
-    ta.addEventListener('blur', () => {
-      saveEntry({ notes: ta.value });
-      container.dataset.editing = '0';
-      renderSidebarNotes();
-    });
-  } else {
-    const raw = entry.notes || '';
-    if (!raw.trim()) {
-      container.innerHTML = '<div class="sb-notes-view sb-notes-empty" id="sb-notes-view" style="color:#b0c1d4;font-style:italic;font-size:13px;cursor:text;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa">Click to add notes…</div>';
-    } else if (typeof marked !== 'undefined') {
-      const safeHtml = sanitizeSidebarNotesHtml(marked.parse(raw));
-      container.innerHTML = `<div class="sb-notes-view" id="sb-notes-view" style="font-size:13px;color:#33475b;line-height:1.6;cursor:text;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa">${safeHtml}</div>`;
+  // Convert old plain text / markdown to HTML
+  let htmlContent = entry.notes || '';
+  if (htmlContent && !/<[a-z][\s>]/i.test(htmlContent)) {
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({ breaks: true, gfm: true });
+      htmlContent = marked.parse(htmlContent);
     } else {
-      container.innerHTML = `<div class="sb-notes-view" id="sb-notes-view" style="font-size:13px;color:#33475b;line-height:1.6;cursor:text;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa">${escapeHtml(raw).replace(/\n/g, '<br>')}</div>`;
+      htmlContent = htmlContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
     }
-    container.querySelector('#sb-notes-view').addEventListener('click', (e) => {
-      if (e.target.closest('a')) return;
-      container.dataset.editing = '1';
-      renderSidebarNotes();
-    });
   }
-}
 
-function sanitizeSidebarNotesHtml(html) {
-  const allowed = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'del'];
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  div.querySelectorAll('a').forEach(a => {
-    a.setAttribute('target', '_blank');
-    a.setAttribute('rel', 'noopener noreferrer');
+  container.innerHTML = `<div class="sb-notes-editable" id="sb-notes-editable" contenteditable="true" style="font-size:13px;color:#33475b;line-height:1.6;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa;outline:none">${htmlContent || ''}</div>`;
+
+  const editable = container.querySelector('#sb-notes-editable');
+
+  // Placeholder
+  function updatePlaceholder() {
+    const empty = !editable.textContent.trim();
+    editable.dataset.empty = empty ? '1' : '0';
+    if (empty && !editable.querySelector('*')) editable.style.color = '#b0c1d4';
+    else editable.style.color = '#33475b';
+  }
+  if (!editable.textContent.trim()) {
+    editable.innerHTML = '<p style="color:#b0c1d4;font-style:italic">Add notes…</p>';
+    editable.addEventListener('focus', function clearPlaceholder() {
+      if (editable.dataset.empty === '1') { editable.innerHTML = ''; editable.style.color = '#33475b'; }
+      editable.removeEventListener('focus', clearPlaceholder);
+    }, { once: true });
+  }
+  editable.addEventListener('input', updatePlaceholder);
+  updatePlaceholder();
+
+  // Auto-save
+  let _sbSaveTimer = null;
+  function saveSbNotes() {
+    const html = editable.innerHTML;
+    if (html !== (entry.notes || '')) saveEntry({ notes: html });
+  }
+  editable.addEventListener('blur', () => { clearTimeout(_sbSaveTimer); saveSbNotes(); });
+  editable.addEventListener('input', () => { clearTimeout(_sbSaveTimer); _sbSaveTimer = setTimeout(saveSbNotes, 3000); });
+
+  // Ctrl+B / Ctrl+I
+  editable.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') { e.preventDefault(); document.execCommand('bold', false, null); }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'i') { e.preventDefault(); document.execCommand('italic', false, null); }
   });
-  div.querySelectorAll('*').forEach(el => {
-    if (!allowed.includes(el.tagName.toLowerCase())) {
-      el.replaceWith(...el.childNodes);
-    }
-  });
-  return div.innerHTML;
+
+  editable.addEventListener('focus', () => { editable.style.borderColor = '#7c98b6'; });
+  editable.addEventListener('blur', () => { editable.style.borderColor = '#dfe3eb'; });
 }
 
 // ── Right Sidebar (Leadership) ────────────────────────────────────────────────
