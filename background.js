@@ -256,7 +256,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse(matches);
     return true;
   }
+  if (message.type === 'INTERPRET_PROFILE_SECTION') {
+    interpretProfileSection(message.section, message.content).then(sendResponse);
+    return true;
+  }
 });
+
+// ── Profile Section Interpretation ───────────────────────────────────────────
+
+const SECTION_PROMPTS = {
+  profileStory: `Read this person's career story and summarize what you understand in 2-3 concise bullet points. Focus on: their career arc, what drives their decisions, and where they're headed. Be specific, not generic.\n\nContent: {content}\n\nRespond in JSON only: {"bullets": ["bullet 1", "bullet 2", "bullet 3"]}`,
+  profileExperience: `Read this person's experience and extract the key proof points. For each role or project, summarize: what they did, their specific results, and what it demonstrates about them. Be concise.\n\nContent: {content}\n\nRespond in JSON only: {"entries": [{"role": "role name", "summary": "what they did and achieved"}]}`,
+  profilePrinciples: `Read this person's operating principles and distill them into a concise profile of how they work. What kind of environment do they need? What kind of leadership? What's non-negotiable?\n\nContent: {content}\n\nRespond in JSON only: {"summary": "2-3 sentence distillation"}`,
+  profileMotivators: `Read this person's motivators and extract: their core drivers, what energizes them, and what drains them. Be specific about the personality traits and motivational patterns.\n\nContent: {content}\n\nRespond in JSON only: {"drivers": ["driver 1", "driver 2"], "energizers": ["thing 1"], "drains": ["thing 1"]}`,
+  profileVoice: `Read this description of how someone communicates and summarize their communication style in 1-2 sentences. Note tone, formality level, and any distinctive patterns.\n\nContent: {content}\n\nRespond in JSON only: {"style": "1-2 sentence summary"}`,
+  profileFAQ: `Read these polished responses and list the questions they cover with a brief note on the approach/angle for each.\n\nContent: {content}\n\nRespond in JSON only: {"responses": [{"question": "what question this answers", "approach": "brief note on angle"}]}`,
+  profileGreenLights: `Read this list of things that make job opportunities attractive to this person. Group them into categories and note any that might be ambiguous or could be interpreted multiple ways. Be specific about what each signal means for job matching.\n\nContent: {content}\n\nRespond in JSON only: {"signals": [{"signal": "the item", "interpretation": "what this means for job matching"}]}`,
+  profileRedLights: `Read this list of dealbreakers. Group them into categories and note any that might be ambiguous. Be specific about what would trigger each red flag in a real job posting.\n\nContent: {content}\n\nRespond in JSON only: {"signals": [{"signal": "the item", "interpretation": "what would trigger this in a job posting"}]}`,
+};
+
+async function interpretProfileSection(section, content) {
+  if (!content || !content.trim()) return { error: 'No content to interpret' };
+  const promptTemplate = SECTION_PROMPTS[section];
+  if (!promptTemplate) return { error: `Unknown section: ${section}` };
+
+  const prompt = promptTemplate.replace('{content}', content.slice(0, 3000));
+  try {
+    const result = await chatWithFallback({
+      model: 'claude-haiku-4-5-20251001',
+      system: 'You are a concise profile analyst. Respond in valid JSON only, no markdown fences.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
+      tag: 'ProfileInterpret'
+    });
+    if (result.error) return { error: result.error };
+    const clean = result.reply.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    // Store interpretation
+    const storageKey = section + 'Interpretation';
+    chrome.storage.local.set({ [storageKey]: { data: parsed, generatedAt: Date.now(), sourceHash: simpleHash(content) } });
+    return { interpretation: parsed };
+  } catch (err) {
+    console.error('[ProfileInterpret] Error:', err.message);
+    return { error: err.message };
+  }
+}
+
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
+  return h;
+}
 
 // ── Quick Fit Scoring ────────────────────────────────────────────────────────
 

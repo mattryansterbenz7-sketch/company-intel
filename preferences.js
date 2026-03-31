@@ -90,19 +90,139 @@ function initCollapsibleCards() {
   });
 }
 
-// ── "How the AI reads this" toggles ──────────────────────────────────────────
+// ── "How the AI reads this" toggles + live AI interpretations ────────────────
+
+// Map data-ai keys to storage bucket keys
+const AI_SECTION_MAP = {
+  story: 'profileStory',
+  experience: 'profileExperience',
+  skills: 'profileSkills',
+  principles: 'profilePrinciples',
+  motivators: 'profileMotivators',
+  voice: 'profileVoice',
+  faq: 'profileFAQ',
+  greenLights: 'profileGreenLights',
+  redLights: 'profileRedLights',
+};
+
+// Track last-interpreted content hash to avoid redundant calls
+const _interpretedHashes = {};
+let _interpretTimers = {};
+
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
+  return h;
+}
+
+function renderInterpretation(panelKey, data) {
+  const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
+  if (!panel || !data) return;
+
+  let html = '';
+  if (data.bullets) {
+    html = data.bullets.map(b => `<div style="margin-bottom:6px"><span style="color:#7c98b6;margin-right:4px">•</span>${escHtml(b)}</div>`).join('');
+  } else if (data.entries) {
+    html = data.entries.map(e => `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:#516f90;text-transform:uppercase;letter-spacing:0.03em">${escHtml(e.role)}</div><div style="font-size:12px;color:#33475b;margin-top:2px">${escHtml(e.summary)}</div></div>`).join('');
+  } else if (data.summary) {
+    html = `<div style="font-size:12px;color:#33475b;line-height:1.6">${escHtml(data.summary)}</div>`;
+  } else if (data.drivers || data.energizers || data.drains) {
+    if (data.drivers?.length) html += `<div style="margin-bottom:6px"><span style="font-size:11px;font-weight:600;color:#516f90">Drivers:</span> ${data.drivers.map(d => escHtml(d)).join(', ')}</div>`;
+    if (data.energizers?.length) html += `<div style="margin-bottom:6px"><span style="font-size:11px;font-weight:600;color:#0F6E56">Energizers:</span> ${data.energizers.map(d => escHtml(d)).join(', ')}</div>`;
+    if (data.drains?.length) html += `<div><span style="font-size:11px;font-weight:600;color:#A32D2D">Drains:</span> ${data.drains.map(d => escHtml(d)).join(', ')}</div>`;
+  } else if (data.style) {
+    html = `<div style="font-size:12px;color:#33475b;line-height:1.6">${escHtml(data.style)}</div>`;
+  } else if (data.responses) {
+    html = data.responses.map(r => `<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:#33475b">"${escHtml(r.question)}"</div><div style="font-size:11px;color:#7c98b6;margin-top:2px">${escHtml(r.approach)}</div></div>`).join('');
+  } else if (data.signals) {
+    html = data.signals.map(s => `<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:#33475b">${escHtml(s.signal)}</div><div style="font-size:11px;color:#7c98b6;margin-top:2px">${escHtml(s.interpretation)}</div></div>`).join('');
+  }
+
+  panel.innerHTML = html || '<div style="color:#A09A94;font-size:12px">Could not parse interpretation.</div>';
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function requestInterpretation(panelKey, storageKey, content) {
+  if (!content.trim()) return;
+  const hash = simpleHash(content);
+  if (_interpretedHashes[panelKey] === hash) return; // no change
+
+  const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
+  if (panel) panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#7c98b6;font-size:12px"><span class="ai-spinner"></span> Updating interpretation...</div>';
+
+  chrome.runtime.sendMessage({ type: 'INTERPRET_PROFILE_SECTION', section: storageKey, content }, result => {
+    void chrome.runtime.lastError;
+    if (result?.interpretation) {
+      _interpretedHashes[panelKey] = hash;
+      renderInterpretation(panelKey, result.interpretation);
+    } else if (panel) {
+      panel.innerHTML = `<div style="color:#A09A94;font-size:12px">${result?.error || 'Interpretation failed — try again later.'}</div>`;
+    }
+  });
+}
 
 function initAIToggles() {
+  // Toggle open/close
   document.querySelectorAll('.ai-toggle').forEach(toggle => {
     toggle.addEventListener('click', () => {
       toggle.classList.toggle('open');
-      // Update panel content based on whether parent textarea has content
-      const card = toggle.closest('.card-body') || toggle.closest('.card');
-      const textarea = card ? card.querySelector('textarea') : null;
       const panelKey = toggle.dataset.ai;
+      const card = toggle.closest('.card-body') || toggle.closest('.light-card') || toggle.closest('.card');
+      const textarea = card ? card.querySelector('textarea') : null;
       const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
       if (panel && textarea && !textarea.value.trim()) {
-        panel.textContent = 'Nothing here yet — add content above to see the AI\'s interpretation';
+        panel.innerHTML = '<div style="color:#A09A94;font-size:12px">Nothing here yet — add content above to see the AI\'s interpretation</div>';
+      }
+    });
+  });
+
+  // Trigger interpretation on blur (with debounce)
+  Object.entries(AI_SECTION_MAP).forEach(([panelKey, storageKey]) => {
+    // Find the textarea for this section
+    const fieldId = {
+      story: 'profile-story', experience: 'profile-experience', skills: 'profile-skills',
+      principles: 'profile-principles', motivators: 'profile-motivators',
+      voice: 'profile-voice', faq: 'profile-faq',
+      greenLights: 'profile-green-lights', redLights: 'profile-red-lights',
+    }[panelKey];
+    const el = fieldId ? document.getElementById(fieldId) : null;
+    if (!el) return;
+
+    // On blur: request interpretation if content changed
+    el.addEventListener('blur', () => {
+      const content = el.value.trim();
+      if (!content) return;
+      clearTimeout(_interpretTimers[panelKey]);
+      _interpretTimers[panelKey] = setTimeout(() => requestInterpretation(panelKey, storageKey, content), 500);
+    });
+
+    // Debounce on input: 3 seconds of no typing
+    el.addEventListener('input', () => {
+      clearTimeout(_interpretTimers[panelKey]);
+      _interpretTimers[panelKey] = setTimeout(() => {
+        const content = el.value.trim();
+        if (content) requestInterpretation(panelKey, storageKey, content);
+      }, 3000);
+    });
+  });
+}
+
+// Load stored interpretations on page load
+function loadStoredInterpretations() {
+  const keys = Object.values(AI_SECTION_MAP).map(k => k + 'Interpretation');
+  chrome.storage.local.get(keys, data => {
+    void chrome.runtime.lastError;
+    Object.entries(AI_SECTION_MAP).forEach(([panelKey, storageKey]) => {
+      const stored = data[storageKey + 'Interpretation'];
+      if (stored?.data) {
+        _interpretedHashes[panelKey] = stored.sourceHash || 0;
+        renderInterpretation(panelKey, stored.data);
+      } else {
+        const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
+        if (panel) panel.innerHTML = '<div style="color:#A09A94;font-size:12px">Save your changes to generate an AI interpretation</div>';
       }
     });
   });
@@ -593,6 +713,7 @@ loadPrefsWithMigration(syncPrefs => {
   // Init UI behaviors
   initCollapsibleCards();
   initAIToggles();
+  loadStoredInterpretations();
   initResumeUpload();
   initLinkedInImport();
   initAutoSave();
