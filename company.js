@@ -1195,7 +1195,24 @@ function loadHubMeetings(forceRefresh) {
       }
       statusEl.style.display = 'none';
       renderMeetingsTimeline(calEvents, entry.cachedMeetingNotes);
-      // Auto-populate next step from future calendar events if not set
+      // Auto-populate next step date from nearest future calendar event
+      if (!entry.nextStepDate && calEvents.length) {
+        const now = new Date();
+        const futureEvents = calEvents
+          .filter(e => new Date(e.start) > now)
+          .sort((a, b) => new Date(a.start) - new Date(b.start));
+        if (futureEvents.length) {
+          const nextDate = new Date(futureEvents[0].start).toISOString().slice(0, 10);
+          const updates = { nextStepDate: nextDate };
+          // Also auto-set next step text from calendar event title if not set
+          if (!entry.nextStep) {
+            updates.nextStep = futureEvents[0].summary || futureEvents[0].title || 'Upcoming meeting';
+          }
+          saveEntry(updates);
+          renderPanel('opportunity');
+        }
+      }
+      // If no date found and no next step at all, try AI extraction
       if (!entry.nextStep && !entry.nextStepDate) {
         chrome.runtime.sendMessage({
           type: 'EXTRACT_NEXT_STEPS',
