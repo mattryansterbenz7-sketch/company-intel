@@ -156,16 +156,31 @@ function renderCompactCard(c) {
       <button class="compact-dismiss-btn" data-id="${c.id}">Dismiss</button>
     </div>` : '';
 
+  // Favicon
+  const favDomain = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+  const favHtml = favDomain
+    ? `<img class="compact-favicon" src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" alt="" onerror="this.style.display='none'">`
+    : '';
+
+  // Tags
+  const tagsHtml = (c.tags || []).length
+    ? `<div class="compact-tags">${(c.tags || []).map(t => {
+        const cl = tagColor(t);
+        return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtmlGlobal(t)}</span>`;
+      }).join('')}</div>`
+    : '';
+
   return `
     <div class="compact-card score-${tier}${stateClass}" data-id="${c.id}" draggable="true">
       <div class="compact-card-score">${scoreHtml}</div>
       <div class="compact-card-body">
-        <div class="compact-company">${escHtmlGlobal(c.company)}</div>
-        <div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>
+        <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtmlGlobal(c.company)}</span></div>
+        ${c.jobUrl ? `<a class="compact-title" href="${escHtmlGlobal(c.jobUrl)}" target="_blank" title="Open job posting">${escHtmlGlobal(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>`}
         ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
         ${c.quickFitReason && score != null ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(c.quickFitReason)}</div>` : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
         ${isQueued ? '<div class="compact-meta">In queue</div>' : ''}
+        ${tagsHtml}
         ${actionsHtml}
       </div>
     </div>`;
@@ -1655,7 +1670,7 @@ function bindKanbanEvents(board) {
   // Compact card click navigation (body area, not buttons)
   board.querySelectorAll('.compact-card').forEach(cardEl => {
     cardEl.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button, a')) return;
       window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
     });
   });
@@ -1663,7 +1678,7 @@ function bindKanbanEvents(board) {
   // Compact card drag-and-drop
   board.querySelectorAll('.compact-card').forEach(card => {
     card.addEventListener('mousedown', (e) => {
-      dragAllowed = !e.target.closest('button');
+      dragAllowed = !e.target.closest('button, a');
     });
     card.addEventListener('dragstart', (e) => {
       if (!dragAllowed) { e.preventDefault(); return; }

@@ -484,8 +484,13 @@
     .compact-card-body {
       flex: 1; padding: 8px 10px; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px;
     }
+    .compact-company-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .compact-favicon { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
     .compact-company { font-size: 13px; font-weight: 700; color: #2D2D2D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .compact-title { font-size: 11px; color: #7c98b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .compact-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+    .compact-tag { font-size: 9px; font-weight: 600; border-radius: 4px; padding: 1px 5px; border: 1px solid; white-space: nowrap; }
+    .compact-title { font-size: 11px; color: #7c98b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; display: block; }
+    a.compact-title:hover { color: #FF7A59; text-decoration: underline; }
     .compact-meta { font-size: 11px; color: #A09A94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .compact-actions { display: flex; gap: 6px; margin-top: 4px; }
     .compact-apply-btn {
