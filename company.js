@@ -1167,6 +1167,10 @@ function loadHubMeetings(forceRefresh) {
   if (entry.cachedCalendarEvents?.length) {
     statusEl.style.display = 'none';
     renderMeetingsTimeline(entry.cachedCalendarEvents, entry.cachedMeetingNotes);
+  } else if (entry.manualMeetings?.length) {
+    // Show manual meetings immediately while calendar loads
+    statusEl.style.display = 'none';
+    renderMeetingsTimeline([], null);
   } else {
     statusEl.textContent = 'Loading meetings…';
   }
@@ -1212,8 +1216,9 @@ function loadHubMeetings(forceRefresh) {
         });
       }
     } else if (!entry.cachedCalendarEvents?.length) {
-      statusEl.textContent = calError === 'not_connected' ? 'Connect Gmail in Setup to see calendar events.' : 'No calendar events found.';
-      statusEl.style.display = '';
+      // Still render the meetings timeline so the "+ Add meeting" button is available
+      statusEl.style.display = 'none';
+      renderMeetingsTimeline([], null);
     }
   });
 
