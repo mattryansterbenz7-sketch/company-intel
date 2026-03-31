@@ -318,6 +318,7 @@ function buildContext(entry, emails, granolaNote, meetings) {
     jobTitle: entry.jobTitle || null,
     status: entry.status || null,
     notes: entry.notes || null,
+    notesFeed: entry.notesFeed || [],
     tags: entry.tags || [],
     intelligence: entry.intelligence || null,
     jobMatch: entry.jobMatch || null,

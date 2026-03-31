@@ -1506,7 +1506,18 @@ When the user first enters this mode, respond: "Paste the application question a
   if (context.employees)  overview.push(`Size: ${context.employees}`);
   if (context.funding)    overview.push(`Funding: ${context.funding}`);
   if (context.tags?.length) overview.push(`Tags: ${context.tags.join(', ')}`);
-  if (context.notes)      overview.push(`User notes: ${context.notes}`);
+  if (context.notesFeed?.length) {
+    const noteLines = context.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(n => {
+      const d = new Date(n.createdAt);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const text = (n.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return `[${dateStr}] ${text}`;
+    }).join('\n');
+    overview.push(`User notes:\n${noteLines}`);
+  } else if (context.notes) {
+    const text = (context.notes || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    overview.push(`User notes: ${text}`);
+  }
   systemParts.push(overview.join('\n'));
 
   // ── Company intelligence ──────────────────────────────────────────────────

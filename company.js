@@ -2868,49 +2868,67 @@ function notesToHtml(raw) {
   return raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
 
+function migrateNotesFeed() {
+  // Migrate old single entry.notes string to notesFeed[] array
+  if (!entry.notesFeed && entry.notes) {
+    entry.notesFeed = [{
+      id: 'note_migrated',
+      content: notesToHtml(entry.notes),
+      createdAt: entry.savedAt || Date.now(),
+      updatedAt: entry.savedAt || Date.now(),
+    }];
+    saveEntry({ notesFeed: entry.notesFeed });
+  }
+  if (!entry.notesFeed) entry.notesFeed = [];
+}
+
 function renderNotesEditor() {
   const container = document.getElementById('hub-notes-container');
   if (!container) return;
+  migrateNotesFeed();
 
-  const raw = entry.notes || '';
-  const htmlContent = notesToHtml(raw);
+  const feed = entry.notesFeed || [];
 
+  // Compose area at top + feed below
   container.innerHTML = `
-    <div class="notes-toolbar">
-      <button class="notes-tb-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
-      <button class="notes-tb-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-      <button class="notes-tb-btn" data-cmd="formatBlock:H2" title="Heading">H</button>
-      <span class="notes-tb-sep"></span>
-      <button class="notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
-      <button class="notes-tb-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
-      <button class="notes-tb-btn" data-cmd="createLink" title="Link">🔗</button>
+    <div class="notes-compose">
+      <div class="notes-toolbar">
+        <button class="notes-tb-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="notes-tb-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button class="notes-tb-btn" data-cmd="formatBlock:H2" title="Heading">H</button>
+        <span class="notes-tb-sep"></span>
+        <button class="notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+        <button class="notes-tb-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+        <button class="notes-tb-btn" data-cmd="createLink" title="Link">🔗</button>
+        <div style="margin-left:auto">
+          <button class="notes-save-btn" id="notes-save-btn">+ Add note</button>
+        </div>
+      </div>
+      <div class="notes-editable notes-compose-area" id="hub-notes-editable" contenteditable="true"><p><br></p></div>
     </div>
-    <div class="notes-editable" id="hub-notes-editable" contenteditable="true">${htmlContent || '<p><br></p>'}</div>`;
+    <div class="notes-feed" id="notes-feed">
+      ${feed.length ? feed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(n => renderNoteCard(n)).join('') : '<div class="notes-feed-empty">No notes yet — add one above</div>'}
+    </div>`;
 
   const editable = container.querySelector('#hub-notes-editable');
+  const saveBtn = container.querySelector('#notes-save-btn');
 
-  // Show placeholder when empty
+  // Placeholder
   function updatePlaceholder() {
-    const text = editable.textContent.trim();
-    editable.classList.toggle('notes-empty-edit', !text);
+    editable.classList.toggle('notes-empty-edit', !editable.textContent.trim());
   }
   updatePlaceholder();
   editable.addEventListener('input', updatePlaceholder);
 
-  // Toolbar button handlers
+  // Toolbar
   container.querySelectorAll('.notes-tb-btn').forEach(btn => {
-    btn.addEventListener('mousedown', e => e.preventDefault()); // don't steal focus
+    btn.addEventListener('mousedown', e => e.preventDefault());
     btn.addEventListener('click', () => {
       const cmd = btn.dataset.cmd;
       if (cmd.startsWith('formatBlock:')) {
         const tag = cmd.split(':')[1];
-        // Toggle: if already in that block, remove it
         const current = document.queryCommandValue('formatBlock');
-        if (current.toLowerCase() === tag.toLowerCase()) {
-          document.execCommand('formatBlock', false, 'P');
-        } else {
-          document.execCommand('formatBlock', false, tag);
-        }
+        document.execCommand('formatBlock', false, current.toLowerCase() === tag.toLowerCase() ? 'P' : tag);
       } else if (cmd === 'createLink') {
         const url = prompt('Enter URL:');
         if (url) document.execCommand('createLink', false, url);
@@ -2921,52 +2939,126 @@ function renderNotesEditor() {
     });
   });
 
-  // Auto-save on blur
-  let _notesSaveTimer = null;
-  function saveNotes() {
+  // Save button — add new note
+  saveBtn.addEventListener('mousedown', e => e.preventDefault());
+  saveBtn.addEventListener('click', () => {
     const html = sanitizeNotesHtml(editable.innerHTML);
-    const prev = entry.notes || '';
-    if (html !== prev) {
-      saveEntry({ notes: html });
-      maybeRescore('notes_updated');
-    }
-  }
-
-  editable.addEventListener('blur', (e) => {
-    if (e.relatedTarget?.closest('.notes-toolbar')) return;
-    clearTimeout(_notesSaveTimer);
-    saveNotes();
-  });
-
-  // Also auto-save periodically while typing (every 3s)
-  editable.addEventListener('input', () => {
-    clearTimeout(_notesSaveTimer);
-    _notesSaveTimer = setTimeout(saveNotes, 3000);
+    if (!editable.textContent.trim()) return;
+    const note = {
+      id: 'note_' + Date.now().toString(36) + Math.random().toString(36).substr(2),
+      content: html,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    if (!entry.notesFeed) entry.notesFeed = [];
+    entry.notesFeed.push(note);
+    // Also update legacy notes field with latest for backward compat (chat context, etc.)
+    saveEntry({ notesFeed: entry.notesFeed, notes: html });
+    editable.innerHTML = '<p><br></p>';
+    updatePlaceholder();
+    renderNotesFeed();
   });
 
   // Keyboard shortcuts
   editable.addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-      e.preventDefault();
-      document.execCommand('bold', false, null);
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
-      e.preventDefault();
-      document.execCommand('italic', false, null);
-    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') { e.preventDefault(); document.execCommand('bold', false, null); }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'i') { e.preventDefault(); document.execCommand('italic', false, null); }
+    // Ctrl+Enter to save
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); saveBtn.click(); }
   });
 
-  // Paste as plain text + basic formatting (strip complex HTML from clipboard)
+  // Paste handler
   editable.addEventListener('paste', e => {
     e.preventDefault();
     const html = e.clipboardData.getData('text/html');
     const text = e.clipboardData.getData('text/plain');
     if (html) {
-      // Insert sanitized HTML
       document.execCommand('insertHTML', false, sanitizeNotesHtml(html));
     } else {
       document.execCommand('insertText', false, text);
     }
+  });
+
+  // Bind edit/delete on existing note cards
+  bindNoteCardEvents();
+}
+
+function renderNoteCard(n) {
+  const d = new Date(n.createdAt);
+  const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `
+    <div class="note-card" data-note-id="${n.id}">
+      <div class="note-card-header">
+        <span class="note-card-date">${dateStr} · ${timeStr}</span>
+        <span class="note-card-actions">
+          <button class="note-edit-btn" data-note-id="${n.id}" title="Edit">✏️</button>
+          <button class="note-del-btn" data-note-id="${n.id}" title="Delete">✕</button>
+        </span>
+      </div>
+      <div class="note-card-body" data-note-id="${n.id}">${n.content}</div>
+    </div>`;
+}
+
+function renderNotesFeed() {
+  const feedEl = document.getElementById('notes-feed');
+  if (!feedEl) return;
+  const feed = (entry.notesFeed || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  feedEl.innerHTML = feed.length
+    ? feed.map(n => renderNoteCard(n)).join('')
+    : '<div class="notes-feed-empty">No notes yet — add one above</div>';
+  bindNoteCardEvents();
+}
+
+function bindNoteCardEvents() {
+  const container = document.getElementById('hub-notes-container');
+  if (!container) return;
+
+  // Delete
+  container.querySelectorAll('.note-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.noteId;
+      entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== id);
+      // Update legacy notes to most recent
+      const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+      saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+      renderNotesFeed();
+    });
+  });
+
+  // Edit — make card body contenteditable inline
+  container.querySelectorAll('.note-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.noteId;
+      const bodyEl = container.querySelector(`.note-card-body[data-note-id="${id}"]`);
+      if (!bodyEl || bodyEl.contentEditable === 'true') return;
+      bodyEl.contentEditable = 'true';
+      bodyEl.classList.add('note-card-editing');
+      bodyEl.focus();
+      btn.textContent = '✓';
+      btn.title = 'Save';
+
+      const finishEdit = () => {
+        bodyEl.contentEditable = 'false';
+        bodyEl.classList.remove('note-card-editing');
+        btn.textContent = '✏️';
+        btn.title = 'Edit';
+        const note = (entry.notesFeed || []).find(n => n.id === id);
+        if (note) {
+          note.content = sanitizeNotesHtml(bodyEl.innerHTML);
+          note.updatedAt = Date.now();
+          saveEntry({ notesFeed: entry.notesFeed, notes: note.content });
+        }
+      };
+
+      bodyEl.addEventListener('blur', (e) => {
+        if (e.relatedTarget === btn) return;
+        finishEdit();
+      }, { once: true });
+
+      // Click the same button again to save
+      btn.addEventListener('click', finishEdit, { once: true });
+    });
   });
 }
 
