@@ -1191,6 +1191,11 @@ function loadHubMeetings(forceRefresh) {
     (entry.cachedMeetings || []).forEach(m => {
       if (m.transcript) setChatContext(`${entry.id}-meeting-${m.id}`, m.transcript);
     });
+    // Manual meetings context
+    (entry.manualMeetings || []).forEach(m => {
+      const ctx = m.transcript || m.notes || '';
+      if (ctx) setChatContext(`${entry.id}-meeting-${m.id}`, ctx);
+    });
   }
   applyGranolaContextOverrides();
 
@@ -1264,11 +1269,38 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   const contentEl = document.getElementById('act-meetings-content');
   if (!contentEl) return;
 
-  const meetings = entry.cachedMeetings || [];
+  const granolaM = (entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false }));
+  const manualM = (entry.manualMeetings || []).map(m => ({ ...m, _isManual: true }));
+  const meetings = [...granolaM, ...manualM].sort((a, b) => {
+    const da = a.date || ''; const db = b.date || '';
+    return da < db ? 1 : da > db ? -1 : 0;
+  });
   const allCtx = entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '';
   let html = '';
 
-  // ── "Ask about all meetings" chat (shown if we have any Granola data) ──────
+  // ── "+ Add meeting" button and form ────────────────────────────────────────
+  html += `<button class="mtg-add-btn" id="mtg-add-btn">+ Add meeting</button>`;
+  html += `
+    <div class="mtg-add-form" id="mtg-add-form" style="display:none">
+      <div class="mtg-add-title">Log a meeting</div>
+      <div class="mtg-add-fields">
+        <input type="text" class="mtg-add-input" id="mm-title" placeholder="Meeting title…">
+        <div style="display:flex;gap:8px">
+          <input type="date" class="mtg-add-input" id="mm-date" style="flex:1">
+          <input type="text" class="mtg-add-input" id="mm-time" placeholder="e.g. 2:00 PM" style="flex:1">
+        </div>
+        <input type="text" class="mtg-add-input" id="mm-attendees" placeholder="e.g. Sarah Chen, VP Sales">
+        <textarea class="mtg-add-input" id="mm-notes" rows="4" placeholder="Key takeaways, decisions, action items…"></textarea>
+        <div class="mtg-transcript-toggle" id="mm-transcript-toggle">+ Add full transcript</div>
+        <textarea class="mtg-add-input" id="mm-transcript" rows="8" placeholder="Paste full meeting transcript…" style="display:none"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="mtg-add-save" id="mm-save">Save meeting</button>
+          <button class="mtg-add-cancel" id="mm-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+
+  // ── "Ask about all meetings" chat (shown if we have any data) ──────────────
   if (meetings.length || allCtx) {
     html += `
       <div class="mtg-ask-all">
@@ -1292,7 +1324,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
       </div>`;
   }
 
-  // ── Meeting list (Granola structured) ──────────────────────────────────────
+  // ── Combined meeting list (Granola + Manual, sorted by date desc) ──────────
   if (meetings.length) {
     const byDate = {};
     meetings.forEach(m => {
@@ -1309,13 +1341,17 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
         : 'Unknown date';
       html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
       for (const m of dayMeetings) {
+        const manualBadge = m._isManual ? `<span class="mtg-manual-badge">Manual</span>` : '';
+        const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : '';
         html += `
-          <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}">
-            <span class="mtg-card-icon">▤</span>
+          <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}" data-is-manual="${m._isManual ? '1' : '0'}">
+            <span class="mtg-card-icon">${m._isManual ? '✏️' : '▤'}</span>
             <div class="mtg-card-body">
-              <div class="mtg-card-title">${escapeHtml(m.title)}</div>
+              <div class="mtg-card-title">${escapeHtml(m.title || 'Untitled')}${manualBadge}</div>
+              ${m.attendees ? `<div class="mtg-card-meta">${escapeHtml(m.attendees)}</div>` : ''}
             </div>
             ${m.time ? `<span class="mtg-card-time">${escapeHtml(m.time)}</span>` : ''}
+            ${manualActions}
             <span class="mtg-card-arrow">›</span>
           </div>`;
       }
@@ -1364,6 +1400,122 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   // Init "ask all meetings" chat panel
   if (typeof initChatPanels === 'function') initChatPanels(entry);
 
+  // ── Manual meeting form wiring ─────────────────────────────────────────────
+  let _mmEditId = null; // tracks which manual meeting is being edited
+  const addBtn = contentEl.querySelector('#mtg-add-btn');
+  const addForm = contentEl.querySelector('#mtg-add-form');
+  const mmTitle = contentEl.querySelector('#mm-title');
+  const mmDate = contentEl.querySelector('#mm-date');
+  const mmTime = contentEl.querySelector('#mm-time');
+  const mmAttendees = contentEl.querySelector('#mm-attendees');
+  const mmNotes = contentEl.querySelector('#mm-notes');
+  const mmTranscript = contentEl.querySelector('#mm-transcript');
+  const mmTranscriptToggle = contentEl.querySelector('#mm-transcript-toggle');
+  const mmSave = contentEl.querySelector('#mm-save');
+  const mmCancel = contentEl.querySelector('#mm-cancel');
+
+  if (addBtn && addForm) {
+    // Default date to today
+    mmDate.value = new Date().toISOString().slice(0, 10);
+
+    addBtn.addEventListener('click', () => {
+      _mmEditId = null;
+      mmTitle.value = ''; mmTime.value = ''; mmAttendees.value = '';
+      mmNotes.value = ''; mmTranscript.value = '';
+      mmDate.value = new Date().toISOString().slice(0, 10);
+      mmTranscript.style.display = 'none';
+      mmTranscriptToggle.textContent = '+ Add full transcript';
+      mmSave.textContent = 'Save meeting';
+      addForm.style.display = '';
+      addBtn.style.display = 'none';
+      mmTitle.focus();
+    });
+
+    mmTranscriptToggle.addEventListener('click', () => {
+      const showing = mmTranscript.style.display !== 'none';
+      mmTranscript.style.display = showing ? 'none' : '';
+      mmTranscriptToggle.textContent = showing ? '+ Add full transcript' : '− Hide transcript';
+    });
+
+    mmCancel.addEventListener('click', () => {
+      addForm.style.display = 'none';
+      addBtn.style.display = '';
+      _mmEditId = null;
+    });
+
+    mmSave.addEventListener('click', () => {
+      const title = mmTitle.value.trim();
+      const date = mmDate.value || new Date().toISOString().slice(0, 10);
+      const time = mmTime.value.trim();
+      const attendees = mmAttendees.value.trim();
+      const notes = mmNotes.value.trim();
+      const transcript = mmTranscript.value.trim();
+
+      if (!title && !notes && !transcript) return; // require at least something
+
+      const current = entry.manualMeetings || [];
+
+      if (_mmEditId) {
+        // Update existing
+        const idx = current.findIndex(m => m.id === _mmEditId);
+        if (idx !== -1) {
+          current[idx] = { ...current[idx], title, date, time, attendees, notes, transcript, updatedAt: Date.now() };
+        }
+      } else {
+        // Create new
+        current.unshift({
+          id: 'mm_' + Date.now(),
+          title, date, time, attendees, notes, transcript,
+          createdAt: Date.now(),
+        });
+      }
+
+      saveEntry({ manualMeetings: current });
+
+      // Set chat context for this manual meeting
+      if (typeof setChatContext === 'function') {
+        const m = _mmEditId ? current.find(x => x.id === _mmEditId) : current[0];
+        if (m) setChatContext(`${entry.id}-meeting-${m.id}`, m.transcript || m.notes || '');
+      }
+
+      _mmEditId = null;
+      renderMeetingsTimeline(events, granolaNotes);
+    });
+  }
+
+  // ── Edit / Delete handlers for manual meetings ─────────────────────────────
+  contentEl.querySelectorAll('[data-mm-edit]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const mid = btn.dataset.mmEdit;
+      const m = (entry.manualMeetings || []).find(x => x.id === mid);
+      if (!m || !addForm) return;
+      _mmEditId = mid;
+      mmTitle.value = m.title || '';
+      mmDate.value = m.date || '';
+      mmTime.value = m.time || '';
+      mmAttendees.value = m.attendees || '';
+      mmNotes.value = m.notes || '';
+      mmTranscript.value = m.transcript || '';
+      mmTranscript.style.display = m.transcript ? '' : 'none';
+      mmTranscriptToggle.textContent = m.transcript ? '− Hide transcript' : '+ Add full transcript';
+      mmSave.textContent = 'Update meeting';
+      addForm.style.display = '';
+      addBtn.style.display = 'none';
+      mmTitle.focus();
+    });
+  });
+
+  contentEl.querySelectorAll('[data-mm-del]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const mid = btn.dataset.mmDel;
+      const current = (entry.manualMeetings || []).filter(x => x.id !== mid);
+      saveEntry({ manualMeetings: current });
+      renderMeetingsTimeline(events, granolaNotes);
+    });
+  });
+
   // Quick-action chips → fill input and send
   contentEl.querySelectorAll('.mtg-quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1402,12 +1554,63 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
     });
   }
 
-  // Meeting card click → detail view
+  // Meeting card click → detail view (for both Granola and manual meetings)
   contentEl.querySelectorAll('.mtg-card[data-meeting-id]').forEach(card => {
     card.addEventListener('click', () => {
-      const meeting = meetings.find(m => m.id === card.dataset.meetingId);
-      if (meeting) renderMeetingDetail(contentEl, meeting, events, granolaNotes);
+      const mid = card.dataset.meetingId;
+      const isManual = card.dataset.isManual === '1';
+      let meeting;
+      if (isManual) {
+        meeting = (entry.manualMeetings || []).find(m => m.id === mid);
+        if (meeting) {
+          // Manual meetings render detail with notes as body
+          renderManualMeetingDetail(contentEl, meeting, events, granolaNotes);
+        }
+      } else {
+        meeting = (entry.cachedMeetings || []).find(m => m.id === mid);
+        if (meeting) renderMeetingDetail(contentEl, meeting, events, granolaNotes);
+      }
     });
+  });
+}
+
+function renderManualMeetingDetail(contentEl, meeting, events, granolaNotes) {
+  const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
+  const dateLabel = (d && !isNaN(d))
+    ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : (meeting.date || '');
+
+  // Set context for this meeting's chat before rendering
+  if (typeof setChatContext === 'function') {
+    setChatContext(`${entry.id}-meeting-${meeting.id}`, meeting.transcript || meeting.notes || '');
+  }
+
+  const bodyText = meeting.notes || '';
+  contentEl.innerHTML = `
+    <button class="mtg-detail-back" id="mtg-back">← All meetings</button>
+    <div class="mtg-detail-header">
+      ${dateLabel ? `<div class="mtg-detail-date">${escapeHtml(dateLabel)}${meeting.time ? ' · ' + meeting.time : ''}</div>` : ''}
+      <div class="mtg-detail-title">${escapeHtml(meeting.title || 'Untitled')}<span class="mtg-manual-badge">Manual</span></div>
+      ${meeting.attendees ? `<div class="mtg-card-meta" style="margin-top:4px">${escapeHtml(meeting.attendees)}</div>` : ''}
+    </div>
+    ${bodyText ? `<div style="font-size:13px;color:#33475b;line-height:1.7;margin:12px 0;white-space:pre-wrap">${escapeHtml(bodyText)}</div>` : ''}
+    <div class="mtg-detail-chat">
+      <div data-chat-panel="${entry.id}"
+           data-chat-key="${entry.id}-meeting-${meeting.id}"
+           data-chat-placeholder="Ask about this meeting…"
+           data-chat-minimal="1"></div>
+    </div>
+    ${meeting.transcript ? `
+      <details class="mtg-transcript-wrap">
+        <summary class="mtg-transcript-label">Full transcript</summary>
+        <div class="mtg-transcript">${typeof renderMarkdown === 'function' ? renderMarkdown(meeting.transcript) : escapeHtml(meeting.transcript)}</div>
+      </details>` : ''}
+  `;
+
+  if (typeof initChatPanels === 'function') initChatPanels(entry);
+
+  document.getElementById('mtg-back').addEventListener('click', () => {
+    renderMeetingsTimeline(events, granolaNotes);
   });
 }
 

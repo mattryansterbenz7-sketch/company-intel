@@ -336,6 +336,8 @@ function buildContext(entry, emails, granolaNote, meetings) {
     granolaNote: granolaNote || null,
     // Uploaded context documents
     contextDocuments: entry.contextDocuments || [],
+    // Manually logged meetings (separate from Granola cachedMeetings)
+    manualMeetings: entry.manualMeetings || [],
   };
 }
 

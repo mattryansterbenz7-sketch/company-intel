@@ -2528,6 +2528,10 @@ function openStatCardEditor() {
       } else if (c.cachedMeetingTranscript) {
         parts.push(`Meeting transcript:\n${c.cachedMeetingTranscript.slice(0, 4000)}`);
       }
+      const manualMeetings = (c.manualMeetings || []);
+      if (manualMeetings.length) {
+        parts.push(`Manually logged meetings:\n${manualMeetings.map(m => `--- Meeting (manual): ${m.title || 'Untitled'} | ${m.date || ''} ---\n${(m.transcript || m.notes || '(no notes)').slice(0, 3000)}`).join('\n\n')}`);
+      }
       if (c.reviews?.length) parts.push(`Reviews: ${c.reviews.slice(0, 3).map(r => `"${r.snippet}" (${r.source || ''})`).join('; ')}`);
       return parts.join('\n');
     }));

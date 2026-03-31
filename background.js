@@ -1573,6 +1573,17 @@ When the user first enters this mode, respond: "Paste the application question a
     systemParts.push(`\n=== MEETING NOTES / TRANSCRIPTS ===\n${context.granolaNote.slice(0, 12000)}`);
   }
 
+  // ── Manually logged meetings ───────────────────────────────────────────
+  if (context.manualMeetings?.length) {
+    const manualLines = context.manualMeetings.map(m => {
+      const rel = relTime(m.date);
+      const header = `--- Meeting (manual): ${m.title || 'Untitled'} | ${m.date || 'unknown'}${rel}${m.time ? ' at ' + m.time : ''} ---`;
+      const body = m.transcript || m.notes || '(no notes)';
+      return `${header}\n${body.slice(0, 4000)}`;
+    }).join('\n\n');
+    systemParts.push(`\n=== MANUALLY LOGGED MEETINGS (${context.manualMeetings.length}) ===\n${manualLines}`);
+  }
+
   // ── Uploaded documents ──────────────────────────────────────────────────
   if (context.contextDocuments?.length) {
     const budget = 4000; // token budget
