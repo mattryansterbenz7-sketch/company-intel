@@ -257,7 +257,15 @@ function load() {
     const { savedCompanies, allTags } = data;
     // Migration: old customStages → opportunityStages
     const storedOpp = data.opportunityStages || data.customStages;
-    if (storedOpp && storedOpp.length > 0) customOpportunityStages = storedOpp;
+    if (storedOpp && storedOpp.length > 0) {
+      // Migration: rename old "Needs Review" / "Saved — Needs Review" → "AI Scoring Queue"
+      const first = storedOpp[0];
+      if (first && first.key === 'needs_review' && /needs.review/i.test(first.label)) {
+        first.label = 'AI Scoring Queue';
+        chrome.storage.local.set({ opportunityStages: storedOpp });
+      }
+      customOpportunityStages = storedOpp;
+    }
     if (data.companyStages && data.companyStages.length > 0) customCompanyStages = data.companyStages;
     if (data.tagColors) customTagColors = data.tagColors;
     if (data.activityGoals) {

@@ -5,7 +5,7 @@ let allTags = [];
 let stages = [];
 
 const DEFAULT_STAGES = [
-  { key: 'needs_review',    label: 'Saved — Needs Review',      color: '#64748b' },
+  { key: 'needs_review',    label: 'AI Scoring Queue',           color: '#64748b' },
   { key: 'want_to_apply',   label: 'I Want to Apply',           color: '#22d3ee' },
   { key: 'applied',         label: 'Applied',                   color: '#60a5fa' },
   { key: 'intro_requested', label: 'Intro Requested',           color: '#a78bfa' },

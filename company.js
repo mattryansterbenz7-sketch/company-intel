@@ -58,7 +58,7 @@ const DEFAULT_COMPANY_STAGES = [
   { key: 'co_archived',   label: 'Archived',       color: '#374151' },
 ];
 const DEFAULT_OPP_STAGES = [
-  { key: 'needs_review',    label: 'Needs Review',              color: '#64748b' },
+  { key: 'needs_review',    label: 'AI Scoring Queue',           color: '#64748b' },
   { key: 'want_to_apply',   label: 'Want to Apply',             color: '#22d3ee' },
   { key: 'applied',         label: 'Applied',                   color: '#60a5fa' },
   { key: 'intro_requested', label: 'Intro Requested',           color: '#a78bfa' },
@@ -84,6 +84,11 @@ function init() {
     allKnownTags = [...new Set(allCompanies.flatMap(c => c.tags || []))].sort();
     customCompanyStages     = data.companyStages     || DEFAULT_COMPANY_STAGES;
     customOpportunityStages = data.opportunityStages || data.customStages || DEFAULT_OPP_STAGES;
+    // Migration: rename old "Needs Review" labels → "AI Scoring Queue"
+    if (customOpportunityStages[0]?.key === 'needs_review' && /needs.review/i.test(customOpportunityStages[0].label)) {
+      customOpportunityStages[0].label = 'AI Scoring Queue';
+      chrome.storage.local.set({ opportunityStages: customOpportunityStages });
+    }
     customFieldDefs = data.companyFieldDefs || [];
     entry = allCompanies.find(c => c.id === id);
     if (!entry) { showError('Company not found.'); return; }

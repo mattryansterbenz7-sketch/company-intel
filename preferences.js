@@ -308,7 +308,7 @@ const DEFAULT_COMPANY_STAGES = [
   { key: 'co_archived',    label: 'Archived',        color: '#374151' },
 ];
 const DEFAULT_OPP_STAGES = [
-  { key: 'needs_review',    label: 'Needs Review',              color: '#64748b' },
+  { key: 'needs_review',    label: 'AI Scoring Queue',           color: '#64748b' },
   { key: 'want_to_apply',   label: 'Want to Apply',             color: '#22d3ee' },
   { key: 'applied',         label: 'Applied',                   color: '#60a5fa' },
   { key: 'intro_requested', label: 'Intro Requested',           color: '#a78bfa' },
@@ -604,6 +604,12 @@ chrome.storage.local.get(['companyStages', 'opportunityStages', 'customStages'],
   void chrome.runtime.lastError;
   const companyStages = data.companyStages || DEFAULT_COMPANY_STAGES;
   const oppStages = data.opportunityStages || data.customStages || DEFAULT_OPP_STAGES;
+  // Migration: rename old "Needs Review" / "Saved — Needs Review" → "AI Scoring Queue"
+  const first = oppStages[0];
+  if (first && first.key === 'needs_review' && /needs.review/i.test(first.label)) {
+    first.label = 'AI Scoring Queue';
+    chrome.storage.local.set({ opportunityStages: oppStages });
+  }
   renderStagesSection(companyStages, oppStages);
 });
 

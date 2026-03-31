@@ -663,6 +663,11 @@ function startJobDescriptionFlow(tabId) {
         renderJobOpportunity(currentSavedEntry.jobMatch, currentSavedEntry.jobSnapshot || descResponse.jobMeta || currentJobMeta || null);
         return;
       }
+      // Skip auto-scoring for unsaved job postings — only score after explicit save
+      if (!currentSavedEntry) {
+        console.log('[SP] Unsaved job posting — skipping auto ANALYZE_JOB');
+        return;
+      }
       const run = (prefs) => { currentPrefs = currentPrefs || prefs; triggerJobAnalysis(companyNameEl.textContent, descResponse.jobDescription); };
       if (currentPrefs) { run(currentPrefs); } else { loadPrefsWithMigration((prefs) => run(prefs || null)); }
     }
@@ -954,6 +959,13 @@ function triggerResearch(company, forceRefresh = false) {
     return;
   }
 
+  // For unsaved job postings, skip research on page load — user must click "Save + research now"
+  // checkAlreadySaved runs async and will set currentSavedEntry + render saved data if it exists
+  if (currentJobTitle && !forceRefresh) {
+    console.log('[SP] Job posting detected — skipping auto-research for unsaved entry');
+    return;
+  }
+
   // Phase 1: show skeleton while Apollo loads
   contentEl.innerHTML = `
     <div class="section">
@@ -1089,6 +1101,11 @@ function updateJobTitleBar() {
     jobBar.style.display = 'flex';
     if (jobContent) jobContent.style.display = 'block';
     if (jobChevron) jobChevron.classList.add('open');
+    // Hide Save Job Posting button when queue buttons are visible
+    const qPanel = document.getElementById('queue-save-panel');
+    if (qPanel && (qPanel.style.display === 'block' || qPanel.style.display === '')) {
+      saveJobBtn.style.display = 'none';
+    }
     // Check if this company already has a saved opportunity (any role)
     if (currentSavedEntry?.isOpportunity) {
       saveJobBtn.textContent = '✓ Saved';
@@ -1114,7 +1131,7 @@ function updateJobTitleBar() {
 }
 
 const JOB_STATUSES = {
-  needs_review: 'Saved — Needs Review',
+  needs_review: 'AI Scoring Queue',
   want_to_apply: 'I Want to Apply',
   applied: 'Applied',
   intro_requested: 'Intro Requested',
@@ -1277,6 +1294,7 @@ function showSaveBar() {
   const queueConfirm = document.getElementById('queue-save-confirm');
   if (currentJobTitle) {
     saveBtn.style.display = 'none';
+    saveJobBtn.style.display = 'none';
     if (queuePanel) queuePanel.style.display = 'block';
     if (queueConfirm) queueConfirm.style.display = 'none';
     // Reset queue button states
@@ -2376,6 +2394,19 @@ function renderQueueConfirmation(entry) {
   if (!panel) return;
   if (queuePanel) queuePanel.style.display = 'none';
   savePanel.classList.remove('visible');
+
+  // Bug 2: Hide all research content so confirmation is the only visible content
+  const jobContent = document.getElementById('job-content');
+  const companyContent = document.getElementById('company-content');
+  const jobOpp = document.getElementById('job-opportunity');
+  if (jobContent) jobContent.style.display = 'none';
+  if (companyContent) companyContent.style.display = 'none';
+  if (jobOpp) jobOpp.style.display = 'none';
+  saveJobBtn.style.display = 'none';
+
+  // Bug 6: Reset saveRating and clear old save-panel stars
+  saveRating = 0;
+  document.querySelectorAll('.save-star').forEach(s => s.classList.remove('filled'));
 
   let confirmRating = 0;
   let confirmTags = [...(entry.tags || [])];
