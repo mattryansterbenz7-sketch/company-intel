@@ -253,11 +253,11 @@ function renderSidebar() {
 
     <div class="sb-section" style="flex:1">
       <div class="sb-title">Notes</div>
-      <textarea class="sb-notes" id="sb-notes" placeholder="Add notes…">${e.notes || ''}</textarea>
+      <div id="sb-notes-container" data-editing="0"></div>
     </div>
   `;
 
-  document.getElementById('sb-notes').addEventListener('blur', ev => saveEntry({ notes: ev.target.value }));
+  renderSidebarNotes();
 
   const websiteInput = document.getElementById('sb-website-input');
   if (websiteInput) {
@@ -300,6 +300,59 @@ function commitTag(val) {
     saveEntry({ tags: newTags });
   }
   renderSidebar();
+}
+
+function renderSidebarNotes() {
+  const container = document.getElementById('sb-notes-container');
+  if (!container) return;
+  const isEditing = container.dataset.editing === '1';
+
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true, headerIds: false });
+  }
+
+  if (isEditing) {
+    container.innerHTML = `<textarea class="sb-notes" id="sb-notes" placeholder="Add notes…">${escapeHtml(entry.notes || '')}</textarea>`;
+    const ta = container.querySelector('#sb-notes');
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+    ta.addEventListener('blur', () => {
+      saveEntry({ notes: ta.value });
+      container.dataset.editing = '0';
+      renderSidebarNotes();
+    });
+  } else {
+    const raw = entry.notes || '';
+    if (!raw.trim()) {
+      container.innerHTML = '<div class="sb-notes-view sb-notes-empty" id="sb-notes-view" style="color:#b0c1d4;font-style:italic;font-size:13px;cursor:text;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa">Click to add notes…</div>';
+    } else if (typeof marked !== 'undefined') {
+      const safeHtml = sanitizeSidebarNotesHtml(marked.parse(raw));
+      container.innerHTML = `<div class="sb-notes-view" id="sb-notes-view" style="font-size:13px;color:#33475b;line-height:1.6;cursor:text;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa">${safeHtml}</div>`;
+    } else {
+      container.innerHTML = `<div class="sb-notes-view" id="sb-notes-view" style="font-size:13px;color:#33475b;line-height:1.6;cursor:text;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa">${escapeHtml(raw).replace(/\n/g, '<br>')}</div>`;
+    }
+    container.querySelector('#sb-notes-view').addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;
+      container.dataset.editing = '1';
+      renderSidebarNotes();
+    });
+  }
+}
+
+function sanitizeSidebarNotesHtml(html) {
+  const allowed = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'del'];
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  div.querySelectorAll('a').forEach(a => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  });
+  div.querySelectorAll('*').forEach(el => {
+    if (!allowed.includes(el.tagName.toLowerCase())) {
+      el.replaceWith(...el.childNodes);
+    }
+  });
+  return div.innerHTML;
 }
 
 // ── Right Sidebar (Leadership) ────────────────────────────────────────────────

@@ -593,7 +593,7 @@ function renderMainTabs() {
         ${buildIntelTab()}
       </div>
       <div class="hub-pane" id="hub-notes">
-        <textarea class="hub-notes-ta" id="hub-notes-ta" placeholder="Add notes about this company…">${entry.notes || ''}</textarea>
+        <div id="hub-notes-container" data-editing="0"></div>
       </div>
       <div class="hub-pane" id="hub-emails">
         <div class="p-empty" id="act-emails-status">Loading emails…</div>
@@ -840,12 +840,7 @@ function bindHubTabs() {
     });
   });
 
-  const ta = document.getElementById('hub-notes-ta');
-  if (ta) ta.addEventListener('blur', () => {
-    const prev = entry.notes || '';
-    saveEntry({ notes: ta.value });
-    if (ta.value.trim() !== prev.trim()) maybeRescore('notes_updated');
-  });
+  renderNotesEditor();
 
   // Thumbs feedback on match verdict
   document.addEventListener('click', e => {
@@ -2838,6 +2833,138 @@ function openChatPanel() {
     const input = panel.querySelector('.chat-input');
     if (input) input.focus();
   }, 300);
+}
+
+function sanitizeNotesHtml(html) {
+  const allowed = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'del'];
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  div.querySelectorAll('a').forEach(a => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  });
+  div.querySelectorAll('*').forEach(el => {
+    if (!allowed.includes(el.tagName.toLowerCase())) {
+      el.replaceWith(...el.childNodes);
+    }
+  });
+  return div.innerHTML;
+}
+
+function renderNotesEditor() {
+  const container = document.getElementById('hub-notes-container');
+  if (!container) return;
+  const isEditing = container.dataset.editing === '1';
+
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true, headerIds: false });
+  }
+
+  if (isEditing) {
+    container.innerHTML = `
+      <div class="notes-toolbar">
+        <button class="notes-tb-btn" data-action="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="notes-tb-btn" data-action="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button class="notes-tb-btn" data-action="heading" title="Heading">H</button>
+        <span class="notes-tb-sep"></span>
+        <button class="notes-tb-btn" data-action="ul" title="Bullet list">•</button>
+        <button class="notes-tb-btn" data-action="ol" title="Numbered list">1.</button>
+        <button class="notes-tb-btn" data-action="link" title="Link">🔗</button>
+      </div>
+      <textarea class="hub-notes-ta notes-edit-ta" id="hub-notes-ta">${escapeHtml(entry.notes || '')}</textarea>`;
+    const ta = container.querySelector('#hub-notes-ta');
+    ta.focus();
+    // Put cursor at end
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+    bindNotesToolbar(container, ta);
+    ta.addEventListener('blur', (e) => {
+      if (e.relatedTarget?.closest('.notes-toolbar')) return;
+      const prev = entry.notes || '';
+      saveEntry({ notes: ta.value });
+      if (ta.value.trim() !== prev.trim()) maybeRescore('notes_updated');
+      container.dataset.editing = '0';
+      renderNotesEditor();
+    });
+  } else {
+    const raw = entry.notes || '';
+    if (!raw.trim()) {
+      container.innerHTML = '<div class="notes-rendered notes-empty" id="notes-view">Click to add notes…</div>';
+    } else if (typeof marked !== 'undefined') {
+      container.innerHTML = `<div class="notes-rendered" id="notes-view">${sanitizeNotesHtml(marked.parse(raw))}</div>`;
+    } else {
+      container.innerHTML = `<div class="notes-rendered" id="notes-view">${escapeHtml(raw).replace(/\n/g, '<br>')}</div>`;
+    }
+    container.querySelector('#notes-view').addEventListener('click', (e) => {
+      // Let links open normally
+      if (e.target.closest('a')) return;
+      container.dataset.editing = '1';
+      renderNotesEditor();
+    });
+  }
+}
+
+function bindNotesToolbar(container, textarea) {
+  container.querySelectorAll('.notes-tb-btn').forEach(btn => {
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const selected = text.slice(start, end);
+      let replacement, newCursorPos;
+
+      switch (action) {
+        case 'bold':
+          replacement = `**${selected || 'bold text'}**`;
+          newCursorPos = selected ? start + replacement.length : start + 2;
+          break;
+        case 'italic':
+          replacement = `*${selected || 'italic text'}*`;
+          newCursorPos = selected ? start + replacement.length : start + 1;
+          break;
+        case 'heading': {
+          const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+          const lineText = text.slice(lineStart);
+          if (lineText.startsWith('## ')) {
+            textarea.value = text.slice(0, lineStart) + lineText.slice(3);
+          } else {
+            textarea.value = text.slice(0, lineStart) + '## ' + text.slice(lineStart);
+          }
+          textarea.focus();
+          return;
+        }
+        case 'ul':
+          replacement = selected ? selected.split('\n').map(l => `- ${l}`).join('\n') : '- ';
+          newCursorPos = start + replacement.length;
+          break;
+        case 'ol':
+          replacement = selected ? selected.split('\n').map((l, i) => `${i + 1}. ${l}`).join('\n') : '1. ';
+          newCursorPos = start + replacement.length;
+          break;
+        case 'link':
+          replacement = selected ? `[${selected}](url)` : '[link text](url)';
+          newCursorPos = selected ? start + selected.length + 3 : start + 1;
+          break;
+        default: return;
+      }
+
+      textarea.value = text.slice(0, start) + replacement + text.slice(end);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+    });
+  });
+
+  textarea.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault();
+      container.querySelector('[data-action="bold"]').click();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+      e.preventDefault();
+      container.querySelector('[data-action="italic"]').click();
+    }
+  });
 }
 
 function escapeHtml(s) {
