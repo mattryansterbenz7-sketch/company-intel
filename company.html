@@ -624,6 +624,60 @@
     .chat-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
     .chat-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
     @keyframes chatDotPulse { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+
+    /* ── Documents tab ── */
+    .docs-section { padding: 16px 0; }
+    .docs-upload-zone {
+      border: 2px dashed #DDD9D4; border-radius: 10px; padding: 24px;
+      text-align: center; cursor: pointer; transition: all 0.15s;
+      background: #FAFAF8;
+    }
+    .docs-upload-zone:hover, .docs-upload-zone.dragover {
+      border-color: #AFA9EC; background: rgba(175,169,236,0.05);
+    }
+    .docs-upload-text { font-size: 14px; font-weight: 600; color: #33475b; margin-bottom: 4px; }
+    .docs-upload-sub { font-size: 12px; color: #7c98b6; margin-bottom: 12px; }
+    .docs-upload-btn {
+      font-size: 12px; font-weight: 600; color: #516f90; background: #fff;
+      border: 1px solid #dfe3eb; border-radius: 6px; padding: 6px 16px;
+      cursor: pointer; font-family: inherit;
+    }
+    .docs-upload-btn:hover { border-color: #AFA9EC; color: #33475b; }
+    .docs-paste-zone { margin-top: 12px; display: flex; gap: 8px; align-items: flex-start; }
+    .docs-paste-input {
+      flex: 1; border: 1px solid #dfe3eb; border-radius: 8px; padding: 10px 12px;
+      font-size: 13px; font-family: inherit; resize: vertical; min-height: 60px;
+      background: #fff; color: #33475b;
+    }
+    .docs-paste-input:focus { outline: none; border-color: #AFA9EC; }
+    .docs-paste-btn {
+      font-size: 12px; font-weight: 600; color: #fff; background: #2d3e50;
+      border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer;
+      font-family: inherit; white-space: nowrap;
+    }
+    .docs-paste-btn:hover { background: #FF7A59; }
+    .docs-list { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .doc-card {
+      display: flex; align-items: flex-start; gap: 10px; padding: 12px;
+      background: #fff; border: 1px solid #eaf0f6; border-radius: 8px;
+    }
+    .doc-icon { font-size: 20px; flex-shrink: 0; padding-top: 2px; }
+    .doc-info { flex: 1; min-width: 0; }
+    .doc-filename { font-size: 13px; font-weight: 600; color: #33475b; }
+    .doc-meta { font-size: 11px; color: #7c98b6; margin-top: 2px; }
+    .doc-preview { font-size: 12px; color: #516f90; margin-top: 6px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .doc-delete {
+      background: none; border: none; color: #b0c1d4; font-size: 14px;
+      cursor: pointer; padding: 4px; flex-shrink: 0;
+    }
+    .doc-delete:hover { color: #e5483b; }
+    .doc-card.extracting { opacity: 0.6; }
+    .doc-extracting-text { font-size: 11px; color: #AFA9EC; font-style: italic; }
+    .docs-budget-warn {
+      font-size: 11px; color: #d97706; background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2); border-radius: 6px;
+      padding: 8px 12px; margin-top: 8px;
+    }
   </style>
 </head>
 <body>

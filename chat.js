@@ -334,6 +334,8 @@ function buildContext(entry, emails, granolaNote, meetings) {
     meetings: meetings || entry.cachedMeetings || [],
     // Joined transcript fallback (used if no structured meetings)
     granolaNote: granolaNote || null,
+    // Uploaded context documents
+    contextDocuments: entry.contextDocuments || [],
   };
 }
 

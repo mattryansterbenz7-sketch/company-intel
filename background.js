@@ -216,6 +216,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     consolidateProfile(message.rawInput, message.insights).then(sendResponse);
     return true;
   }
+  if (message.type === 'EXTRACT_IMAGE_TEXT') {
+    (async () => {
+      try {
+        const res = await claudeApiCall({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: message.mediaType, data: message.imageBase64 } },
+              { type: 'text', text: 'Extract all text from this image. Return the text exactly as it appears, preserving formatting. If this is a job description, preserve section headings and bullet points.' }
+            ]
+          }]
+        });
+        const data = await res.json();
+        if (data?.content?.[0]?.text) {
+          sendResponse({ text: data.content[0].text });
+        } else {
+          sendResponse({ error: 'No text extracted', text: '' });
+        }
+      } catch (e) {
+        sendResponse({ error: e.message, text: '' });
+      }
+    })();
+    return true;
+  }
   if (message.type === 'GLOBAL_CHAT_MESSAGE') {
     handleGlobalChatMessage(message).then(sendResponse);
     return true;
@@ -774,6 +800,11 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
   if (rc.storyTime) richSection += `\nUser Story Time Profile:\n${rc.storyTime.slice(0, 1500)}\n`;
   if (rc.notes) richSection += `\nUser Notes on This Company:\n${rc.notes}\n`;
   if (rc.knownComp) richSection += `\n${rc.knownComp}\n`;
+  if (rc.contextDocuments?.length) {
+    richSection += `\nUploaded Documents:\n${rc.contextDocuments.map(d =>
+      `--- ${d.filename} ---\n${d.extractedText.slice(0, 1500)}`
+    ).join('\n\n')}\n`;
+  }
   if (rc.matchFeedback) richSection += `\nPrevious assessment feedback: ${rc.matchFeedback}\n`;
 
   const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
@@ -1540,6 +1571,23 @@ When the user first enters this mode, respond: "Paste the application question a
   } else if (context.granolaNote) {
     // Fallback: joined transcript blob
     systemParts.push(`\n=== MEETING NOTES / TRANSCRIPTS ===\n${context.granolaNote.slice(0, 12000)}`);
+  }
+
+  // ── Uploaded documents ──────────────────────────────────────────────────
+  if (context.contextDocuments?.length) {
+    const budget = 4000; // token budget
+    let used = 0;
+    const docParts = [];
+    for (const doc of context.contextDocuments) {
+      const tokens = doc.tokenEstimate || Math.ceil(doc.extractedText.length / 4);
+      if (used + tokens > budget) {
+        docParts.push(`\n## Uploaded: ${doc.filename} (truncated)\n${doc.extractedText.slice(0, (budget - used) * 4)}`);
+        break;
+      }
+      docParts.push(`\n## Uploaded: ${doc.filename}\n${doc.extractedText}`);
+      used += tokens;
+    }
+    systemParts.push(`\n=== UPLOADED DOCUMENTS ===\n${docParts.join('\n')}`);
   }
 
   // ── User profile (Career OS buckets + legacy prefs) ──────────────────────

@@ -221,6 +221,7 @@ function maybeRescore(reason) {
         transcript: entry.cachedMeetingTranscript || null,
         storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
         notes: entry.notes || null,
+        contextDocuments: entry.contextDocuments || [],
       };
       chrome.runtime.sendMessage(
         { type: 'ANALYZE_JOB', company: entry.company, jobTitle: entry.jobTitle, jobDescription: entry.jobDescription, prefs, richContext },
@@ -549,6 +550,7 @@ function renderMainTabs() {
         <button class="hub-tab" data-tab="notes">Notes</button>
         <button class="hub-tab" data-tab="emails">Emails</button>
         <button class="hub-tab" data-tab="meetings">Meetings</button>
+        <button class="hub-tab" data-tab="docs">Docs</button>
       </div>
       <div class="hub-pane active" id="hub-intel">
         ${buildIntelTab()}
@@ -563,6 +565,21 @@ function renderMainTabs() {
       <div class="hub-pane" id="hub-meetings">
         <div class="p-empty" id="act-meetings-status">Loading meetings…</div>
         <div id="act-meetings-content"></div>
+      </div>
+      <div class="hub-pane" id="hub-docs">
+        <div class="docs-section">
+          <div class="docs-upload-zone" id="docs-drop-zone">
+            <div class="docs-upload-text">Drop files here or click to upload</div>
+            <div class="docs-upload-sub">PDF, images (.png, .jpg), or paste text</div>
+            <input type="file" id="docs-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple style="display:none">
+            <button class="docs-upload-btn" id="docs-upload-btn">Choose files</button>
+          </div>
+          <div class="docs-paste-zone">
+            <textarea class="docs-paste-input" id="docs-paste-input" placeholder="Or paste a job description, offer details, or any text here..." rows="3"></textarea>
+            <button class="docs-paste-btn" id="docs-paste-save">Save text</button>
+          </div>
+          <div class="docs-list" id="docs-list"></div>
+        </div>
       </div>
     </div>`;
   bindHubTabs();
@@ -755,7 +772,7 @@ function bindHubTabs() {
   const container = document.querySelector('.hub-tabs-container');
   if (!container) return;
 
-  let emailsLoaded = false, meetingsLoaded = false, intelInited = false;
+  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false;
 
   // Init intel immediately (starts active)
   setTimeout(() => { if (!intelInited) { intelInited = true; initIntelTab(); } }, 0);
@@ -778,6 +795,10 @@ function bindHubTabs() {
       if (tab.dataset.tab === 'meetings' && !meetingsLoaded) {
         meetingsLoaded = true;
         loadHubMeetings();
+      }
+      if (tab.dataset.tab === 'docs' && !docsInited) {
+        docsInited = true;
+        initDocsTab();
       }
     });
   });
@@ -847,6 +868,196 @@ function bindHubTabs() {
     });
   }, { capture: true });
 
+}
+
+// ── Documents tab ────────────────────────────────────────────────────────────
+
+function initDocsTab() {
+  const dropZone = document.getElementById('docs-drop-zone');
+  const fileInput = document.getElementById('docs-file-input');
+  const uploadBtn = document.getElementById('docs-upload-btn');
+  const pasteInput = document.getElementById('docs-paste-input');
+  const pasteSaveBtn = document.getElementById('docs-paste-save');
+  if (!dropZone) return;
+
+  // Render existing docs
+  renderDocsList();
+
+  // Click to upload
+  uploadBtn.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('click', e => {
+    if (e.target === uploadBtn || e.target === fileInput) return;
+    fileInput.click();
+  });
+
+  // File input change
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) handleFiles(Array.from(fileInput.files));
+    fileInput.value = '';
+  });
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleFiles(Array.from(e.dataTransfer.files));
+  });
+
+  // Paste text save
+  pasteSaveBtn.addEventListener('click', () => {
+    const text = pasteInput.value.trim();
+    if (!text) return;
+    const filename = 'Pasted text — ' + text.slice(0, 30).replace(/\n/g, ' ');
+    const doc = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      filename,
+      type: 'text',
+      extractedText: text,
+      addedAt: new Date().toISOString(),
+      tokenEstimate: Math.ceil(text.length / 4)
+    };
+    const docs = entry.contextDocuments || [];
+    docs.push(doc);
+    saveEntry({ contextDocuments: docs });
+    pasteInput.value = '';
+    renderDocsList();
+  });
+
+  // Delete handler (delegated)
+  document.getElementById('docs-list')?.addEventListener('click', e => {
+    const delBtn = e.target.closest('.doc-delete');
+    if (!delBtn) return;
+    const docId = delBtn.dataset.docId;
+    const docs = (entry.contextDocuments || []).filter(d => d.id !== docId);
+    saveEntry({ contextDocuments: docs });
+    renderDocsList();
+  });
+}
+
+async function handleFiles(files) {
+  for (const file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'pdf') {
+      await handlePdfFile(file);
+    } else if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+      await handleImageFile(file);
+    }
+  }
+}
+
+async function handlePdfFile(file) {
+  // Add placeholder card
+  const placeholderId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+  const docs = entry.contextDocuments || [];
+  const placeholder = { id: placeholderId, filename: file.name, type: 'pdf', extractedText: '', addedAt: new Date().toISOString(), tokenEstimate: 0, _extracting: true };
+  docs.push(placeholder);
+  saveEntry({ contextDocuments: docs });
+  renderDocsList();
+
+  try {
+    const pdfjsLib = await import(chrome.runtime.getURL('lib/pdf.min.mjs'));
+    pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('lib/pdf.worker.min.mjs');
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      pages.push(content.items.map(item => item.str).join(' '));
+    }
+    const text = pages.join('\n\n');
+    // Update placeholder with extracted text
+    const currentDocs = entry.contextDocuments || [];
+    const idx = currentDocs.findIndex(d => d.id === placeholderId);
+    if (idx !== -1) {
+      currentDocs[idx].extractedText = text;
+      currentDocs[idx].tokenEstimate = Math.ceil(text.length / 4);
+      delete currentDocs[idx]._extracting;
+      saveEntry({ contextDocuments: currentDocs });
+    }
+    renderDocsList();
+  } catch (e) {
+    console.error('[Docs] PDF extraction failed:', e);
+    // Remove failed placeholder
+    const currentDocs = (entry.contextDocuments || []).filter(d => d.id !== placeholderId);
+    saveEntry({ contextDocuments: currentDocs });
+    renderDocsList();
+  }
+}
+
+async function handleImageFile(file) {
+  const placeholderId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+  const docs = entry.contextDocuments || [];
+  const placeholder = { id: placeholderId, filename: file.name, type: 'image', extractedText: '', addedAt: new Date().toISOString(), tokenEstimate: 0, _extracting: true };
+  docs.push(placeholder);
+  saveEntry({ contextDocuments: docs });
+  renderDocsList();
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+    const extToMime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+    const ext = file.name.split('.').pop().toLowerCase();
+    const mediaType = extToMime[ext] || 'image/png';
+
+    const result = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ type: 'EXTRACT_IMAGE_TEXT', imageBase64: base64, mediaType, filename: file.name }, resolve);
+    });
+
+    const text = result?.text || '';
+    const currentDocs = entry.contextDocuments || [];
+    const idx = currentDocs.findIndex(d => d.id === placeholderId);
+    if (idx !== -1) {
+      currentDocs[idx].extractedText = text;
+      currentDocs[idx].tokenEstimate = Math.ceil(text.length / 4);
+      delete currentDocs[idx]._extracting;
+      saveEntry({ contextDocuments: currentDocs });
+    }
+    renderDocsList();
+  } catch (e) {
+    console.error('[Docs] Image extraction failed:', e);
+    const currentDocs = (entry.contextDocuments || []).filter(d => d.id !== placeholderId);
+    saveEntry({ contextDocuments: currentDocs });
+    renderDocsList();
+  }
+}
+
+function renderDocsList() {
+  const listEl = document.getElementById('docs-list');
+  if (!listEl) return;
+  const docs = entry.contextDocuments || [];
+  if (!docs.length) {
+    listEl.innerHTML = '';
+    return;
+  }
+
+  const typeIcons = { pdf: '\ud83d\udcc4', image: '\ud83d\uddbc\ufe0f', text: '\ud83d\udcdd' };
+  let totalTokens = 0;
+
+  listEl.innerHTML = docs.map(d => {
+    totalTokens += d.tokenEstimate || 0;
+    const icon = typeIcons[d.type] || '\ud83d\udcc4';
+    const date = d.addedAt ? new Date(d.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    const preview = d._extracting
+      ? '<div class="doc-extracting-text">Extracting text…</div>'
+      : `<div class="doc-preview">${escapeHtml((d.extractedText || '').slice(0, 150))}${d.extractedText?.length > 150 ? '...' : ''}</div>`;
+    return `<div class="doc-card${d._extracting ? ' extracting' : ''}" data-doc-id="${d.id}">
+      <div class="doc-icon">${icon}</div>
+      <div class="doc-info">
+        <div class="doc-filename">${escapeHtml(d.filename)}</div>
+        <div class="doc-meta">${date} · ~${d.tokenEstimate} tokens</div>
+        ${preview}
+      </div>
+      <button class="doc-delete" data-doc-id="${d.id}" title="Remove">\u2715</button>
+    </div>`;
+  }).join('');
+
+  // Token budget warning
+  if (totalTokens > 4000) {
+    listEl.insertAdjacentHTML('beforeend', `<div class="docs-budget-warn">Context budget exceeded (${totalTokens} tokens). Oldest documents may be truncated in AI conversations.</div>`);
+  }
 }
 
 function formatCacheAge(ts) {
