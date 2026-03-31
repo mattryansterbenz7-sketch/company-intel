@@ -251,7 +251,8 @@ async function detectLinkedIn() {
     const titleResult = await waitForJobTitle();
     if (titleResult) {
       const companyLinkedinUrl = extractLinkedInCompanyUrlFromJobPage();
-      return { ...titleResult, source: 'linkedin', domain: null, companyLinkedinUrl };
+      const linkedinFirmo = extractLinkedInCompanyFirmo();
+      return { ...titleResult, source: 'linkedin', domain: null, companyLinkedinUrl, linkedinFirmo };
     }
     // Title never matched — fall through (company-only /jobs/ page or unusual layout)
   }
@@ -276,6 +277,67 @@ async function detectLinkedIn() {
   return { company: null, source: 'linkedin', domain: null };
 }
 
+function classifyFirmoText(text, result) {
+  if (/\d+.*employees?/i.test(text)) {
+    result.employees = text.replace(/\s*employees?/i, '').trim();
+    return;
+  }
+  if (/followers?/i.test(text)) {
+    result.followers = text.replace(/\s*followers?/i, '').trim();
+    return;
+  }
+  if (/,/.test(text) && text.length < 50 && !/\d{2,}/.test(text)) {
+    if (!result.location) result.location = text;
+    return;
+  }
+  if (text.length > 2 && text.length < 60 && !result.industry) {
+    result.industry = text;
+  }
+}
+
+function extractLinkedInCompanyFirmo() {
+  const result = { employees: null, industry: null, location: null, tagline: null, followers: null };
+
+  // Strategy 1: Find subtitle container with structured child elements
+  const subtitleSelectors = [
+    '.org-top-card-summary-info-list',
+    '.org-top-card-summary__info-list',
+    'div[class*="org-top-card-summary"] .text-body-small',
+    'section[class*="org-top-card"] .text-body-small',
+  ];
+  for (const sel of subtitleSelectors) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    const items = el.querySelectorAll('div, span, li');
+    for (const item of items) {
+      const text = item.textContent?.trim();
+      if (!text || text.length > 80) continue;
+      classifyFirmoText(text, result);
+    }
+    if (result.employees || result.industry) break;
+  }
+
+  // Strategy 2: Parse single subtitle string (fallback)
+  if (!result.employees && !result.industry) {
+    const subtitleEl = document.querySelector(
+      '.org-top-card-summary__tagline, div[class*="org-top-card"] .text-body-small'
+    );
+    const fullText = subtitleEl?.textContent?.trim();
+    if (fullText) {
+      fullText.split('·').map(p => p.trim()).forEach(p => classifyFirmoText(p, result));
+    }
+  }
+
+  // Tagline
+  for (const sel of ['.org-top-card-summary__tagline', 'p[class*="org-top-card"][class*="tagline"]']) {
+    const el = document.querySelector(sel);
+    const text = el?.textContent?.trim();
+    if (text && text.length > 3 && text.length < 200) { result.tagline = text; break; }
+  }
+
+  return (result.employees || result.industry || result.location) ? result : null;
+}
+
 async function detectLinkedInCompanyPage() {
   // Try the company name h1 — LinkedIn renders it in the org-top-card section
   const companySelectors = [
@@ -288,7 +350,8 @@ async function detectLinkedInCompanyPage() {
     const el = document.querySelector(sel);
     const text = el?.textContent?.trim();
     if (text && text.length > 1 && text.length < 80 && text.toLowerCase() !== 'linkedin') {
-      return { company: text, jobTitle: null, source: 'linkedin', domain: null };
+      const linkedinFirmo = extractLinkedInCompanyFirmo();
+      return { company: text, jobTitle: null, source: 'linkedin', domain: null, linkedinFirmo };
     }
   }
 
@@ -298,13 +361,15 @@ async function detectLinkedInCompanyPage() {
     const el = document.querySelector(sel);
     const text = el?.textContent?.trim();
     if (text && text.length > 1 && text.length < 80 && text.toLowerCase() !== 'linkedin') {
-      return { company: text, jobTitle: null, source: 'linkedin', domain: null };
+      const linkedinFirmo = extractLinkedInCompanyFirmo();
+      return { company: text, jobTitle: null, source: 'linkedin', domain: null, linkedinFirmo };
     }
   }
 
   // Authoritative fallback: URL slug (e.g. /company/sybill/ → "Sybill")
   const urlResult = extractLinkedInCompanyFromUrl();
-  return { ...(urlResult || { company: null }), jobTitle: null, source: 'linkedin', domain: null };
+  const linkedinFirmo = extractLinkedInCompanyFirmo();
+  return { ...(urlResult || { company: null }), jobTitle: null, source: 'linkedin', domain: null, linkedinFirmo };
 }
 
 function extractJsonLd() {

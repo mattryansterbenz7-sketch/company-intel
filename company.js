@@ -113,6 +113,12 @@ function init() {
     // Extract contacts from cached emails immediately (purges self, finds any missed contacts)
     if (entry.cachedEmails?.length) applyContactsFromEmails(entry.cachedEmails);
 
+    // Backfill from LinkedIn firmographics (persisted)
+    backfillFromLinkedinFirmo();
+
+    // Backfill from research cache (persisted)
+    backfillFromResearchCache();
+
     // Fill missing firmographic fields from research cache (display-only, not persisted)
     const cached = (data.researchCache || {})[entry.company?.toLowerCase()]?.data;
     if (cached) {
@@ -204,6 +210,37 @@ function saveEntry(changes) {
   const idx = allCompanies.findIndex(c => c.id === entry.id);
   if (idx !== -1) allCompanies[idx] = entry;
   chrome.storage.local.set({ savedCompanies: allCompanies });
+}
+
+function backfillFromResearchCache() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
+      const key = entry.company?.toLowerCase();
+      const cached = researchCache?.[key]?.data;
+      if (!cached) { resolve(false); return; }
+      const updates = {};
+      if (!entry.companyWebsite && cached.companyWebsite) updates.companyWebsite = cached.companyWebsite;
+      if (!entry.companyLinkedin && cached.companyLinkedin) updates.companyLinkedin = cached.companyLinkedin;
+      if (!entry.employees && cached.employees) updates.employees = cached.employees;
+      if (!entry.industry && cached.industry) updates.industry = cached.industry;
+      if (!entry.funding && cached.funding) updates.funding = cached.funding;
+      if (Object.keys(updates).length === 0) { resolve(false); return; }
+      saveEntry(updates);
+      resolve(true);
+    });
+  });
+}
+
+function backfillFromLinkedinFirmo() {
+  const f = entry.linkedinFirmo;
+  if (!f) return false;
+  const updates = {};
+  if (!entry.employees && f.employees) updates.employees = f.employees;
+  if (!entry.industry && f.industry) updates.industry = f.industry;
+  if (!entry.location && f.location) updates.location = f.location;
+  if (Object.keys(updates).length === 0) return false;
+  saveEntry(updates);
+  return true;
 }
 
 // Event-driven re-scoring: triggers when new context arrives (meetings, emails, notes)

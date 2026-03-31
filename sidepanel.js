@@ -17,6 +17,7 @@ let currentSaveTags = [];
 let allKnownTags = [];
 let detectedDomain = null;
 let detectedCompanyLinkedin = null;
+let detectedLinkedinFirmo = null;
 let settingsOpen = false;
 let currentResearch = null;
 let currentSavedEntry = null; // saved entry for the current company (for knownContacts etc.)
@@ -337,6 +338,13 @@ saveConfirmBtn.addEventListener('click', () => {
       })() : {}),
     };
 
+    // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
+    if (detectedLinkedinFirmo) {
+      entry.linkedinFirmo = detectedLinkedinFirmo;
+      if (!entry.employees && detectedLinkedinFirmo.employees) entry.employees = detectedLinkedinFirmo.employees;
+      if (!entry.industry && detectedLinkedinFirmo.industry) entry.industry = detectedLinkedinFirmo.industry;
+    }
+
     // Persist any new tags
     const newTags = currentSaveTags.filter(t => !allKnownTags.includes(t));
     if (newTags.length > 0) {
@@ -390,6 +398,12 @@ function mergeAndSave(prev, existing, dupIdx) {
       status: prev.status || 'co_watchlist',
     }),
   };
+  // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
+  if (detectedLinkedinFirmo) {
+    if (!merged.linkedinFirmo) merged.linkedinFirmo = detectedLinkedinFirmo;
+    if (!merged.employees && detectedLinkedinFirmo.employees) merged.employees = detectedLinkedinFirmo.employees;
+    if (!merged.industry && detectedLinkedinFirmo.industry) merged.industry = detectedLinkedinFirmo.industry;
+  }
   const updated = [merged, ...existing.filter((_, i) => i !== dupIdx)];
   chrome.storage.local.set({ savedCompanies: updated }, () => {
     void chrome.runtime.lastError;
@@ -435,6 +449,12 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
     enriched.compAutoExtracted = true;
   }
   if (!enriched.equity && snap?.equity) enriched.equity = snap.equity;
+  // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
+  if (detectedLinkedinFirmo) {
+    if (!enriched.linkedinFirmo) enriched.linkedinFirmo = detectedLinkedinFirmo;
+    if (!enriched.employees && detectedLinkedinFirmo.employees) enriched.employees = detectedLinkedinFirmo.employees;
+    if (!enriched.industry && detectedLinkedinFirmo.industry) enriched.industry = detectedLinkedinFirmo.industry;
+  }
 
   const updated = [enriched, ...existing.filter((_, i) => i !== dupIdx)];
   chrome.storage.local.set({ savedCompanies: updated }, () => {
@@ -442,6 +462,26 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
     markAsSaved();
     showToast(`Updated existing opportunity at ${prev.company} with new details.`);
     showCrmLink(enriched);
+  });
+}
+
+function backfillEntryFromResearch(savedEntry, research) {
+  if (!savedEntry || !research) return;
+  const updates = {};
+  if (!savedEntry.companyWebsite && research.companyWebsite) updates.companyWebsite = research.companyWebsite;
+  if (!savedEntry.companyLinkedin && research.companyLinkedin) updates.companyLinkedin = research.companyLinkedin;
+  if (!savedEntry.employees && research.employees) updates.employees = research.employees;
+  if (!savedEntry.industry && research.industry) updates.industry = research.industry;
+  if (!savedEntry.funding && research.funding) updates.funding = research.funding;
+  if (Object.keys(updates).length === 0) return;
+  // Update in storage
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const entries = savedCompanies || [];
+    const idx = entries.findIndex(c => c.id === savedEntry.id);
+    if (idx === -1) return;
+    Object.assign(entries[idx], updates);
+    Object.assign(savedEntry, updates);
+    chrome.storage.local.set({ savedCompanies: entries });
   });
 }
 
@@ -626,6 +666,7 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     }
     detectedDomain = response.domain || null;
     detectedCompanyLinkedin = response.companyLinkedinUrl || null;
+    detectedLinkedinFirmo = response.linkedinFirmo || null;
     updateJobTitleBar();
     triggerResearch(response.company);
 
@@ -920,6 +961,7 @@ searchBtn.addEventListener('click', () => {
       currentJobMeta = response.jobMeta || null;
       detectedDomain = response.domain || null;
       detectedCompanyLinkedin = response.companyLinkedinUrl || null;
+      detectedLinkedinFirmo = response.linkedinFirmo || null;
       currentResearch = null;
       currentSavedEntry = null;
       const jobOpp = document.getElementById('job-opportunity');
@@ -1022,7 +1064,7 @@ function triggerResearch(company, forceRefresh = false) {
 
     // Phase 1: Apollo quick lookup — renders stats while Claude runs
     chrome.runtime.sendMessage(
-      { type: 'QUICK_LOOKUP', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin },
+      { type: 'QUICK_LOOKUP', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo },
       (quick) => {
         void chrome.runtime.lastError;
         if (quick && (quick.employees || quick.funding || quick.companyWebsite)) {
@@ -1034,7 +1076,7 @@ function triggerResearch(company, forceRefresh = false) {
 
     // Phase 2: Full research — fills in the rest when ready
     chrome.runtime.sendMessage(
-      { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, prefs: prefs || null },
+      { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo, prefs: prefs || null },
       (response) => {
         void chrome.runtime.lastError;
         if (!response || response.error) {
@@ -1043,6 +1085,7 @@ function triggerResearch(company, forceRefresh = false) {
         }
         currentResearch = response;
         renderResults(response);
+        backfillEntryFromResearch(currentSavedEntry, response);
 
         // Write research data back to saved entry if missing
         chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
@@ -2313,6 +2356,15 @@ function buildQueueEntry() {
     compSource:       snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp ? 'Job posting' : null,
     compAutoExtracted: !!(snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp),
   };
+
+  // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
+  if (detectedLinkedinFirmo) {
+    entry.linkedinFirmo = detectedLinkedinFirmo;
+    if (!entry.employees && detectedLinkedinFirmo.employees) entry.employees = detectedLinkedinFirmo.employees;
+    if (!entry.industry && detectedLinkedinFirmo.industry) entry.industry = detectedLinkedinFirmo.industry;
+  }
+
+  return entry;
 }
 
 function queueSaveEntry(callback) {
@@ -2569,12 +2621,13 @@ document.getElementById('save-research-btn')?.addEventListener('click', function
     const company = companyNameEl.textContent;
     const enrichDomain = (detectedDomain && !/linkedin\.com/i.test(detectedDomain)) ? detectedDomain : null;
     chrome.runtime.sendMessage(
-      { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, prefs: currentPrefs || null },
+      { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo, prefs: currentPrefs || null },
       (response) => {
         void chrome.runtime.lastError;
         if (!response || response.error) return;
         currentResearch = response;
         renderResults(response);
+        backfillEntryFromResearch(currentSavedEntry, response);
 
         // Now trigger job analysis with the research context
         if (currentJobDescription) {

@@ -162,11 +162,11 @@ let _serperExhausted = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'QUICK_LOOKUP') {
-    quickLookup(message.company, message.domain, message.companyLinkedin).then(sendResponse);
+    quickLookup(message.company, message.domain, message.companyLinkedin, message.linkedinFirmo).then(sendResponse);
     return true;
   }
   if (message.type === 'RESEARCH_COMPANY') {
-    researchCompany(message.company, message.domain, message.prefs, message.companyLinkedin).then(sendResponse);
+    researchCompany(message.company, message.domain, message.prefs, message.companyLinkedin, message.linkedinFirmo).then(sendResponse);
     return true;
   }
   if (message.type === 'ANALYZE_JOB') {
@@ -669,9 +669,9 @@ async function runEnrichmentPipeline(company, domain, companyLinkedin) {
   return emptyEnrichment();
 }
 
-async function quickLookup(company, domain, companyLinkedin) {
+async function quickLookup(company, domain, companyLinkedin, linkedinFirmo) {
   const enrichment = await runEnrichmentPipeline(company, domain, companyLinkedin);
-  return {
+  const result = {
     employees: enrichment.employees,
     funding: enrichment.funding,
     industry: enrichment.industry,
@@ -680,6 +680,12 @@ async function quickLookup(company, domain, companyLinkedin) {
     companyLinkedin: enrichment.companyLinkedin,
     enrichmentSource: enrichment.source,
   };
+  // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
+  if (linkedinFirmo) {
+    if (!result.employees && linkedinFirmo.employees) { result.employees = linkedinFirmo.employees; result.employeesSource = 'LinkedIn (page)'; }
+    if (!result.industry && linkedinFirmo.industry) { result.industry = linkedinFirmo.industry; result.industrySource = 'LinkedIn (page)'; }
+  }
+  return result;
 }
 
 async function getCached(key) {
@@ -704,7 +710,7 @@ async function setCached(key, data) {
   );
 }
 
-async function researchCompany(company, domain, prefs, companyLinkedin) {
+async function researchCompany(company, domain, prefs, companyLinkedin, linkedinFirmo) {
   const cacheKey = company.toLowerCase();
   const cached = await getCached(cacheKey);
   if (cached) return cached;
@@ -770,6 +776,11 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
         jobMatch: 'Claude Haiku',
       },
     };
+    // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
+    if (linkedinFirmo) {
+      if (!result.employees && linkedinFirmo.employees) { result.employees = linkedinFirmo.employees; result.employeesSource = 'LinkedIn (page)'; }
+      if (!result.industry && linkedinFirmo.industry) { result.industry = linkedinFirmo.industry; result.industrySource = 'LinkedIn (page)'; }
+    }
     await setCached(cacheKey, result);
     return result;
   } catch (err) {
