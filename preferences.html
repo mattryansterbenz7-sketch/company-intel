@@ -151,7 +151,7 @@
     .story-time-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
     .story-time-title { font-size: 18px; font-weight: 800; color: #2d3e50; letter-spacing: -0.01em; }
     .story-time-subtitle { font-size: 13px; color: #7c98b6; line-height: 1.6; margin-bottom: 16px; }
-    .story-time-textarea { width: 100%; min-height: 140px; border: 1.5px solid #dfe3eb; border-radius: 10px; padding: 14px 16px; font-size: 14px; color: #33475b; font-family: inherit; line-height: 1.65; resize: vertical; outline: none; transition: border-color 0.15s; }
+    .story-time-textarea { width: 100%; min-height: 200px; max-height: none; border: 1.5px solid #dfe3eb; border-radius: 10px; padding: 14px 16px; font-size: 14px; color: #33475b; font-family: inherit; line-height: 1.65; resize: vertical; outline: none; transition: border-color 0.15s; overflow-y: auto; field-sizing: content; }
     .story-time-textarea:focus { border-color: #FF7A59; }
     .story-time-textarea::placeholder { color: #b0c1d4; }
     .story-time-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
@@ -177,6 +177,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:12px">
       <span class="save-confirm" id="save-confirm">Saved ✓</span>
+      <a class="header-back" href="integrations.html" style="text-decoration:none">Integrations</a>
       <a class="header-back" href="docs.html" target="_blank" style="text-decoration:none">Docs</a>
       <button class="header-back" id="btn-back">← Back to Saved</button>
     </div>
@@ -309,9 +310,9 @@
         </div>
 
         <div class="pref-card">
-          <div class="pref-card-title">Salary Signals</div>
+          <div class="pref-card-title">Compensation Signals</div>
           <div class="pref-field">
-            <label class="pref-label" style="margin-bottom:4px">Only applied when a posting explicitly lists pay</label>
+            <label class="pref-label" style="margin-bottom:8px">Base Salary <span class="pref-hint" data-tooltip="Guaranteed salary before commission/bonus. Compared against base pay when disclosed.">i</span></label>
             <div class="salary-row">
               <div class="salary-item">
                 <span class="salary-label">🚩 Walk away below</span>
@@ -319,7 +320,20 @@
               </div>
               <div class="salary-item">
                 <span class="salary-label">🟢 Strong offer above</span>
-                <input type="text" class="pref-input" id="pref-salary-strong" placeholder="e.g. $200K" style="flex:1;min-height:0;height:40px;resize:none;">
+                <input type="text" class="pref-input" id="pref-salary-strong" placeholder="e.g. $180K" style="flex:1;min-height:0;height:40px;resize:none;">
+              </div>
+            </div>
+          </div>
+          <div class="pref-field" style="margin-top:12px">
+            <label class="pref-label" style="margin-bottom:8px">OTE / Total Comp <span class="pref-hint" data-tooltip="On-Target Earnings = base + commission at quota. Many sales postings only show OTE. This lets the AI evaluate those.">i</span></label>
+            <div class="salary-row">
+              <div class="salary-item">
+                <span class="salary-label">🚩 OTE walk away below</span>
+                <input type="text" class="pref-input" id="pref-ote-floor" placeholder="e.g. $200K" style="flex:1;min-height:0;height:40px;resize:none;">
+              </div>
+              <div class="salary-item">
+                <span class="salary-label">🟢 OTE strong above</span>
+                <input type="text" class="pref-input" id="pref-ote-strong" placeholder="e.g. $300K" style="flex:1;min-height:0;height:40px;resize:none;">
               </div>
             </div>
           </div>
@@ -327,29 +341,10 @@
 
       </div>
 
-      <!-- Integrations — full width -->
-      <div class="pref-card full" id="integrations-card">
-        <div class="pref-card-title">Integrations</div>
-
-        <div class="pref-field">
-          <label class="pref-label">Gmail <span class="pref-hint" data-tooltip="Connects read-only Gmail access to surface emails from company domains inside each opportunity and company view.">i</span></label>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span class="integration-status" id="gmail-status">Checking…</span>
-            <button class="integration-btn" id="gmail-connect-btn" style="display:none">Connect Gmail</button>
-            <button class="integration-btn integration-btn-danger" id="gmail-disconnect-btn" style="display:none">Disconnect</button>
-          </div>
-          <p class="integration-note">Allows the AI chat to pull in emails from recruiters, founders, and application confirmations associated with each company's domain.</p>
-        </div>
-
-        <div class="pref-field" style="border-top:1px solid #eaf0f6;padding-top:16px">
-          <label class="pref-label">Granola Meeting Notes <span class="pref-hint" data-tooltip="Connects to Granola MCP to surface meeting notes for each company inside the AI chat.">i</span></label>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span class="integration-status" id="granola-status">Not connected</span>
-            <button class="integration-btn" id="granola-connect-btn">Connect Granola</button>
-            <button class="integration-btn integration-btn-danger" id="granola-disconnect-btn" style="display:none">Disconnect</button>
-          </div>
-          <p class="integration-note">When you ask the AI about a company, it will automatically search your Granola notes for that company and include relevant meeting context.</p>
-        </div>
+      <!-- Integrations link -->
+      <div class="pref-card full" style="text-align:center;padding:16px">
+        <a href="integrations.html" style="color:#FF7A59;font-weight:700;font-size:14px;text-decoration:none">🔗 Manage Integrations →</a>
+        <p style="font-size:12px;color:#7c98b6;margin-top:6px">Gmail, Granola, API keys, and all connections</p>
       </div>
 
     </div>

@@ -29,7 +29,7 @@
     .toolbar-status { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
     .toolbar-tags  { overflow-x: auto; flex-wrap: nowrap; padding-top: 8px; padding-bottom: 8px; }
 
-    .filter-label { font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 60px; }
+    .filter-label { font-size: 12px; font-weight: 800; color: #516f90; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 60px; }
     .filter-btn { background: #fff; border: 1px solid #dfe3eb; border-radius: 8px; color: #516f90; font-size: 13px; font-weight: 500; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
     .filter-btn.active { border-color: #FF7A59; color: #fff; background: #FF7A59; }
     .filter-btn:hover:not(.active) { color: #33475b; border-color: #99acc2; }
@@ -74,8 +74,8 @@
     #pipeline-all-btn.active { background: #f5f8fa; border-color: #516f90; color: #33475b; }
 
     /* Edit stages btn */
-    .stage-add-btn { background: none; border: 1px dashed #b0c1d4; border-radius: 8px; color: #7c98b6; font-size: 13px; padding: 7px 16px; cursor: pointer; transition: all 0.15s; }
-    .stage-add-btn:hover { border-color: #FF7A59; color: #FF7A59; }
+    .stage-add-btn { background: #f0f4f8; border: 1.5px solid #dfe3eb; border-radius: 8px; color: #516f90; font-size: 13px; font-weight: 700; padding: 8px 18px; cursor: pointer; transition: all 0.15s; }
+    .stage-add-btn:hover { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.06); }
 
     /* ── Pipeline header ── */
     .pipeline-header { padding: 18px 32px 6px; display: flex; align-items: center; gap: 12px; }
@@ -217,15 +217,28 @@
     .tag-suggestion-inline { padding: 7px 12px; font-size: 12px; color: #516f90; cursor: pointer; }
     .tag-suggestion-inline:hover { background: #f5f8fa; color: #33475b; }
     .tag-inline-wrap { position: relative; display: inline-flex; }
-    .tag-filter-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; border: 1px solid; cursor: pointer; white-space: nowrap; transition: all 0.15s; background: transparent; }
+    .tag-filter-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 20px; border: 1.5px solid; cursor: pointer; white-space: nowrap; transition: all 0.15s; background: transparent; }
     .tag-filter-btn:not(.active):hover { opacity: 0.8; }
 
     /* ── Kanban board ── */
     .kanban-board { display: none; gap: 14px; padding: 20px 32px 40px; overflow-x: auto; height: calc(100vh - 220px); align-items: stretch; background: #f5f8fa; }
-    .kanban-col { flex-shrink: 0; width: 280px; display: flex; flex-direction: column; min-height: 0; }
-    .kanban-col-header { padding: 10px 14px; border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: space-between; border: 1px solid; border-bottom: none; flex-shrink: 0; }
-    .kanban-col-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
-    .kanban-col-count { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 1px 8px; background: rgba(0,0,0,0.12); }
+    .kanban-col { flex-shrink: 0; width: 280px; display: flex; flex-direction: column; min-height: 0; transition: width 0.25s ease; overflow: hidden; }
+    .kanban-col.collapsed { width: 40px; cursor: pointer; min-width: 40px; }
+    .kanban-col.collapsed .kanban-col-header {
+      writing-mode: vertical-rl; text-orientation: mixed;
+      padding: 14px 0; border-radius: 10px; height: 100%;
+      flex-direction: column; gap: 10px; align-items: center; justify-content: flex-start;
+      border: 1px solid; border-bottom: 1px solid;
+    }
+    .kanban-col.collapsed .kanban-col-title { font-size: 10px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; }
+    .kanban-col.collapsed .kanban-col-count { font-size: 10px; padding: 1px 5px; }
+    .kanban-col.collapsed .kanban-cards { display: none; }
+    .kanban-col.collapsed .kanban-col-collapse { transform: rotate(180deg); writing-mode: horizontal-tb; }
+    .kanban-col-header { padding: 12px 14px; border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: space-between; border: 1.5px solid; border-bottom: none; flex-shrink: 0; }
+    .kanban-col-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+    .kanban-col-count { font-size: 12px; font-weight: 800; border-radius: 20px; padding: 2px 10px; background: rgba(0,0,0,0.15); }
+    .kanban-col-collapse { background: none; border: none; color: inherit; opacity: 0.5; cursor: pointer; font-size: 14px; padding: 0 2px; transition: transform 0.2s, opacity 0.15s; line-height: 1; }
+    .kanban-col-collapse:hover { opacity: 1; }
     .kanban-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; border-radius: 0 0 10px 10px; padding: 10px 8px; border: 1px solid; border-top: none; transition: background 0.15s; }
     .kanban-cards.drag-over { background: rgba(255,122,89,0.05) !important; }
     .kanban-col-header.drag-over { filter: brightness(1.1); outline: 2px solid rgba(255,122,89,0.6); outline-offset: -2px; }
@@ -241,6 +254,8 @@
     .kanban-next-step { display: flex; flex-direction: column; gap: 6px; }
     .kanban-next-step-row { display: flex; align-items: center; gap: 8px; }
     .kanban-field-label { font-size: 11px; color: #33475b; white-space: nowrap; width: 88px; flex-shrink: 0; }
+    .kanban-action-status { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; border: 1px solid #dfe3eb; background: #fff; cursor: pointer; font-family: inherit; flex: 1; }
+    .kanban-action-status:focus { outline: none; border-color: #FF7A59; }
     .kanban-next-step-input::placeholder { color: #7c98b6; }
     .kanban-next-step-date::placeholder { color: #7c98b6; }
     .kanban-next-step-input { flex: 1; font-size: 12px; padding: 4px 7px; border: 1px solid #dfe3eb; border-radius: 5px; background: #f5f8fa; color: #2d3e50; outline: none; }
@@ -287,6 +302,11 @@
     .goal-card:hover { border-color: #b0c1d4; }
     .goal-card.editing { border-color: #FF7A59; cursor: default; }
     .goal-ring { flex-shrink: 0; }
+    .goal-ring-plain { font-size: 28px; font-weight: 800; flex-shrink: 0; width: 54px; text-align: center; }
+    .sc-card-goal { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .sc-goal-toggle { font-size: 11px; color: #516f90; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .sc-goal-toggle input { margin: 0; cursor: pointer; }
+    .sc-goal-input { width: 60px; padding: 4px 6px; border: 1px solid #dfe3eb; border-radius: 4px; font-size: 12px; font-weight: 700; color: #2d3e50; text-align: center; font-family: inherit; }
     .goal-text { display: flex; flex-direction: column; gap: 2px; }
     .goal-fraction { font-size: 20px; font-weight: 800; color: #2d3e50; line-height: 1.1; }
     .goal-denom { font-size: 14px; color: #7c98b6; font-weight: 600; }
@@ -319,6 +339,9 @@
     .sc-card-label-input { flex: 1; border: 1px solid #dfe3eb; border-radius: 6px; padding: 5px 8px; font-size: 13px; font-weight: 600; color: #2d3e50; font-family: inherit; outline: none; }
     .sc-card-label-input:focus { border-color: #FF7A59; }
     .sc-card-delete { background: none; border: none; color: #e74c3c; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; }
+    .sc-card-mode { display: flex; gap: 12px; margin-bottom: 6px; }
+    .sc-mode-option { font-size: 11px; color: #516f90; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .sc-mode-option input { margin: 0; cursor: pointer; }
     .sc-card-stages { display: flex; flex-wrap: wrap; gap: 6px 12px; }
     .sc-stage-check { font-size: 12px; color: #516f90; display: flex; align-items: center; gap: 4px; cursor: pointer; }
     .sc-stage-check input { margin: 0; cursor: pointer; }
@@ -438,6 +461,7 @@
       <div class="stat-pill"><b id="company-count">0</b> companies</div>
       <div class="stat-pill"><b id="job-count">0</b> job opportunities</div>
       <a class="prefs-link" href="preferences.html" target="_blank">⚙ Preferences</a>
+      <a class="prefs-link" href="integrations.html" target="_blank">🔗 Integrations</a>
     </div>
   </div>
 
@@ -522,6 +546,12 @@
         <div class="rating-option-divider"></div>
         <button class="rating-clear-btn" id="rating-clear-btn">Clear</button>
       </div>
+    </div>
+    <span class="filter-label" style="margin-left:16px">Action On:</span>
+    <div class="action-filter-btns" id="action-filter-btns">
+      <button class="filter-btn active" data-action-filter="all">All</button>
+      <button class="filter-btn" data-action-filter="my_court">🏀 My Court</button>
+      <button class="filter-btn" data-action-filter="their_court">⏳ Their Court</button>
     </div>
   </div>
   <div class="toolbar toolbar-status" id="status-toolbar">

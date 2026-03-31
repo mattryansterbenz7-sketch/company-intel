@@ -4,6 +4,7 @@ let activeType = 'all';
 let activeRatings = new Set(); // empty = any
 let activeStatus = 'all';
 let activeTag = null;
+let activeActionFilter = 'all'; // 'all' | 'my_court' | 'their_court'
 let viewMode = localStorage.getItem('ci_viewMode') || 'grid';
 
 const DEFAULT_OPPORTUNITY_STAGES = [
@@ -28,6 +29,12 @@ let customOpportunityStages = [...DEFAULT_OPPORTUNITY_STAGES];
 let customCompanyStages = [...DEFAULT_COMPANY_STAGES];
 let activePipeline = localStorage.getItem('ci_activePipeline') || 'all'; // 'all' | 'opportunity' | 'company'
 let stageCelebrations = {}; // { [stageKey]: { confetti, sound } } — loaded from storage
+const DEFAULT_ACTION_STATUSES = [
+  { key: 'my_court', label: '🏀 My Court', color: '#FF7A59' },
+  { key: 'their_court', label: '⏳ Their Court', color: '#0ea5e9' },
+];
+let customActionStatuses = null; // loaded from storage, falls back to DEFAULT
+const _collapsedCols = new Set(JSON.parse(sessionStorage.getItem('ci_collapsed_cols') || '[]'));
 let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
 let activityCustomRange = JSON.parse(localStorage.getItem('ci_activityCustomRange') || 'null'); // {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} or null
 let activityGoals = {
@@ -37,10 +44,10 @@ let activityGoals = {
 };
 
 const DEFAULT_STAT_CARDS = [
-  { key: 'saved',       label: 'Opportunities Saved',        stages: ['*'],               color: '#0ea5e9' },
-  { key: 'applied',     label: 'Applications',              stages: ['applied'],         color: '#FF7A59' },
-  { key: 'intro',       label: 'Reached Out / Intro Asked', stages: ['intro_requested'], color: '#a78bfa' },
-  { key: 'interviewed', label: 'New Conversations Started', stages: ['conversations'],   color: '#fb923c' },
+  { key: 'saved',       label: 'Opportunities Saved',        stages: ['*'],               color: '#0ea5e9', mode: 'activity' },
+  { key: 'applied',     label: 'Applications',              stages: ['applied'],         color: '#FF7A59', mode: 'activity' },
+  { key: 'intro',       label: 'Reached Out / Intro Asked', stages: ['intro_requested'], color: '#a78bfa', mode: 'activity' },
+  { key: 'interviewed', label: 'New Conversations Started', stages: ['conversations'],   color: '#fb923c', mode: 'activity' },
 ];
 let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
 
@@ -49,6 +56,13 @@ function stageEnterTimestamp(entry, stageKey) {
   const ts = { ...(entry.stageTimestamps || {}) };
   if (!ts[stageKey]) ts[stageKey] = Date.now();
   return { stageTimestamps: ts };
+}
+
+// Auto-set "Action On" based on stage — my court for early stages, their court after applying
+function defaultActionStatus(stageKey) {
+  if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
+  if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
+  return null; // don't change for stages we don't recognize
 }
 
 function currentStages() {
@@ -73,6 +87,15 @@ function updateStageDynamicCSS() {
     const r = parseInt(s.color.slice(1,3),16), g = parseInt(s.color.slice(3,5),16), b = parseInt(s.color.slice(5,7),16);
     return `.status-select[data-status="${s.key}"] { background-color: rgba(${r},${g},${b},0.12); border: 1.5px solid ${s.color}; color: ${s.color}; }`;
   }).join('\n');
+}
+
+function boldKeyPhrase(text) {
+  const splitRe = /\s+(matches|signals|aligns|mirrors|fits|exceeds|suggests|indicates|required|doesn't|limits|conflicts|may feel|verify|confirm|typical)\b/i;
+  const m = text.match(splitRe);
+  if (m) { const idx = text.indexOf(m[0]); return `<strong>${text.slice(0, idx)}</strong>${text.slice(idx)}`; }
+  const dashSplit = text.match(/^(.+?)\s*[;—–]\s*(.+)$/);
+  if (dashSplit) return `<strong>${dashSplit[1]}</strong> — ${dashSplit[2]}`;
+  return text;
 }
 
 function scoreToVerdict(score) {
@@ -165,7 +188,7 @@ document.addEventListener('click', () => {
 });
 
 function load() {
-  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs'], (data) => {
+  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs', 'actionStatuses'], (data) => {
     const { savedCompanies, allTags } = data;
     // Migration: old customStages → opportunityStages
     const storedOpp = data.opportunityStages || data.customStages;
@@ -178,6 +201,7 @@ function load() {
       activityGoals.monthly   = { ...activityGoals.monthly,   ...(data.activityGoals.monthly   || {}) };
     }
     if (data.stageCelebrations) stageCelebrations = data.stageCelebrations;
+    if (data.actionStatuses) customActionStatuses = data.actionStatuses;
     if (data.statCardConfigs?.length) statCardConfigs = data.statCardConfigs;
     updateStageDynamicCSS();
     allCompanies = (savedCompanies || []).sort((a, b) => b.savedAt - a.savedAt);
@@ -369,7 +393,8 @@ function render() {
     const matchesRating = activeRatings.size === 0 || activeRatings.has(c.rating || 0);
     const matchesStatus = activeStatus === 'all' || (c.status || 'needs_review') === activeStatus;
     const matchesTag = activeTag === null || (c.tags || []).includes(activeTag);
-    return matchesSearch && matchesType && matchesRating && matchesStatus && matchesTag;
+    const matchesAction = activeActionFilter === 'all' || (c.actionStatus || 'my_court') === activeActionFilter;
+    return matchesSearch && matchesType && matchesRating && matchesStatus && matchesTag && matchesAction;
   });
 
   // Update stats
@@ -467,8 +492,8 @@ function render() {
         <details class="card-analysis">
           <summary>Full Analysis</summary>
           <div class="analysis-body">
-            ${c.jobMatch?.strongFits?.length ? `<div><div class="analysis-section-label">Green Flags</div><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${f}</span></li>`).join('')}</ul></div>` : ''}
-            ${c.jobMatch?.redFlags?.length ? `<div><div class="analysis-section-label">Red Flags</div><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${f}</span></li>`).join('')}</ul></div>` : ''}
+            ${c.jobMatch?.strongFits?.length ? `<div><div class="analysis-section-label">Green Flags</div><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div>` : ''}
+            ${c.jobMatch?.redFlags?.length ? `<div><div class="analysis-section-label">Red Flags</div><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div>` : ''}
             ${c.intelligence?.eli5 ? `<div><div class="analysis-section-label">Simple Explanation</div><div class="analysis-section-body">${c.intelligence.eli5}</div></div>` : ''}
             ${c.intelligence?.whosBuyingIt ? `<div><div class="analysis-section-label">Who Buys It</div><div class="analysis-section-body">${c.intelligence.whosBuyingIt}</div></div>` : ''}
             ${c.intelligence?.howItWorks ? `<div><div class="analysis-section-label">How It Works</div><div class="analysis-section-body">${c.intelligence.howItWorks}</div></div>` : ''}
@@ -571,6 +596,8 @@ function render() {
         ...(entry ? stageEnterTimestamp(entry, sel.value) : { stageTimestamps: { [sel.value]: now } }),
         ...(entry ? backfillClearTimestamps(entry, sel.value) : {}),
       };
+      const autoAction = defaultActionStatus(sel.value);
+      if (autoAction) changes.actionStatus = autoAction;
       updateCompany(sel.dataset.id, changes);
     });
   });
@@ -620,18 +647,42 @@ function commitTag(id, tag) {
 // ── Celebration config ────────────────────────────────────────────────────────
 
 const CONFETTI_OPTIONS = [
-  { value: 'none',     label: '— None' },
-  { value: 'confetti', label: '🎊 Confetti' },
-  { value: 'thumbsup', label: '👍 Thumbs Up' },
-  { value: 'stopsign', label: '🛑 Stop Sign' },
-  { value: 'peace',    label: '✌️ Peace' },
-  { value: 'money',    label: '🤑 Money' },
+  { value: 'none',       label: '— None' },
+  { value: 'confetti',   label: '🎊 Confetti' },
+  { value: 'thumbsup',   label: '👍 Thumbs Up' },
+  { value: 'money',      label: '🤑 Money' },
+  { value: 'peace',      label: '✌️ Peace' },
+  { value: 'stopsign',   label: '🛑 Stop Sign' },
+  { value: 'fire',       label: '🔥 Fire' },
+  { value: 'rocket',     label: '🚀 Rocket' },
+  { value: 'star',       label: '⭐ Stars' },
+  { value: 'heart',      label: '❤️ Hearts' },
+  { value: 'clap',       label: '👏 Clap' },
+  { value: 'trophy',     label: '🏆 Trophy' },
+  { value: 'lightning',  label: '⚡ Lightning' },
+  { value: 'muscle',     label: '💪 Muscle' },
+  { value: 'party',      label: '🥳 Party' },
+  { value: 'champagne',  label: '🍾 Champagne' },
+  { value: 'crown',      label: '👑 Crown' },
+  { value: 'gem',        label: '💎 Gem' },
+  { value: 'skull',      label: '💀 Skull' },
+  { value: 'wave',       label: '👋 Wave' },
+  { value: 'eyes',       label: '👀 Eyes' },
+  { value: 'hundred',    label: '💯 100' },
 ];
 const SOUND_OPTIONS = [
-  { value: 'none',     label: '— None' },
-  { value: 'pop',      label: '🎊 Pop' },
-  { value: 'chaching', label: '💰 Cha-ching' },
-  { value: 'farewell', label: '👋 Farewell Voice' },
+  { value: 'none',       label: '— None' },
+  { value: 'pop',        label: '🎊 Pop' },
+  { value: 'chaching',   label: '💰 Cha-ching' },
+  { value: 'farewell',   label: '👋 Farewell Voice' },
+  { value: 'levelup',    label: '🎮 Level Up' },
+  { value: 'bell',       label: '🔔 Bell' },
+  { value: 'whoosh',     label: '💨 Whoosh' },
+  { value: 'tada',       label: '🎉 Ta-da!' },
+  { value: 'drum',       label: '🥁 Drum Roll' },
+  { value: 'coin',       label: '🪙 Coin Drop' },
+  { value: 'airhorn',    label: '📯 Air Horn' },
+  { value: 'sad',        label: '😢 Sad Trombone' },
 ];
 
 // Smart defaults — used when a stage has no custom config set
@@ -674,6 +725,60 @@ function getConfettiConfig(newStatus) {
   else if (cfg.confetti === 'peace')      count = 35;
 
   return { type: cfg.confetti, sound: cfg.sound || 'none', count };
+}
+
+function playSound(sound) {
+  if (!sound || sound === 'none') return;
+  if (sound === 'pop') playConfettiPop();
+  else if (sound === 'chaching') playChaChingSound();
+  else if (sound === 'farewell') playFarewellVoice();
+  else if (sound === 'levelup') playSynth([440, 554, 659, 880], 0.08, 0.15);
+  else if (sound === 'bell') playSynth([800, 1200], 0.05, 0.3, 'sine');
+  else if (sound === 'whoosh') playNoise(0.15);
+  else if (sound === 'tada') playSynth([523, 659, 784, 1047], 0.1, 0.2);
+  else if (sound === 'drum') playDrumRoll();
+  else if (sound === 'coin') playSynth([1200, 1600], 0.03, 0.12, 'square');
+  else if (sound === 'airhorn') playSynth([400, 500, 400, 500], 0.12, 0.4);
+  else if (sound === 'sad') playSynth([350, 330, 310, 200], 0.2, 0.5);
+}
+
+function playSynth(freqs, gap, dur, wave = 'sine') {
+  try {
+    const c = new AudioContext(); const t = c.currentTime;
+    freqs.forEach((f, i) => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = wave; o.connect(g); g.connect(c.destination);
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.2, t + i * gap);
+      g.gain.exponentialRampToValueAtTime(0.01, t + i * gap + dur);
+      o.start(t + i * gap); o.stop(t + i * gap + dur);
+    });
+  } catch(e) {}
+}
+
+function playNoise(dur) {
+  try {
+    const c = new AudioContext(); const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.max(0, 1 - i / d.length);
+    const s = c.createBufferSource(); s.buffer = buf;
+    const g = c.createGain(); g.gain.value = 0.15;
+    s.connect(g); g.connect(c.destination); s.start();
+  } catch(e) {}
+}
+
+function playDrumRoll() {
+  try {
+    const c = new AudioContext(); const t = c.currentTime;
+    for (let i = 0; i < 12; i++) {
+      const buf = c.createBuffer(1, c.sampleRate * 0.05, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let j = 0; j < d.length; j++) d[j] = (Math.random() * 2 - 1) * (1 - j / d.length);
+      const s = c.createBufferSource(); s.buffer = buf;
+      const g = c.createGain(); g.gain.value = 0.08 + i * 0.015;
+      s.connect(g); g.connect(c.destination); s.start(t + i * 0.06);
+    }
+  } catch(e) {}
 }
 
 function playConfettiPop() {
@@ -794,15 +899,20 @@ function playChaChingSound() {
   } catch(e) {}
 }
 
+const EMOJI_MAP = {
+  thumbsup: '👍', money: '🤑', peace: '✌️', stopsign: '🛑', fire: '🔥', rocket: '🚀',
+  star: '⭐', heart: '❤️', clap: '👏', trophy: '🏆', lightning: '⚡', muscle: '💪',
+  party: '🥳', champagne: '🍾', crown: '👑', gem: '💎', skull: '💀', wave: '👋',
+  eyes: '👀', hundred: '💯',
+};
+
 function fireConfetti(config) {
   const { type, sound, count } = config;
   const colors = ['#ff4444', '#ffbb00', '#00cc88', '#4488ff', '#cc44ff', '#ff8844', '#00ccff', '#ffcc00'];
-  const isEmoji = type === 'thumbsup' || type === 'money' || type === 'stopsign' || type === 'peace';
-  const baseEmoji = type === 'thumbsup' ? '👍' : type === 'stopsign' ? '🛑' : type === 'peace' ? '✌️' : '🤑';
+  const isEmoji = type !== 'confetti' && type in EMOJI_MAP;
+  const baseEmoji = EMOJI_MAP[type] || '🎊';
 
-  if (sound === 'chaching') playChaChingSound();
-  else if (sound === 'pop')      playConfettiPop();
-  else if (sound === 'farewell') playFarewellVoice();
+  playSound(sound);
 
   const particles = [];
   for (let i = 0; i < count; i++) {
@@ -936,9 +1046,13 @@ function renderKanban(filtered) {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
       return validKeys.has(s) ? s === statusKey : statusKey === stages[0].key;
     });
-    // Sort by job match score (highest first), then by most recent activity
+    // Sort: My Court first, then by job match score (highest first), then by most recent activity
     if (activePipeline === 'opportunity') {
       cards.sort((a, b) => {
+        // My Court items float to top
+        const aMyC = (a.actionStatus || 'my_court') === 'my_court' ? 1 : 0;
+        const bMyC = (b.actionStatus || 'my_court') === 'my_court' ? 1 : 0;
+        if (bMyC !== aMyC) return bMyC - aMyC;
         const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : -1;
         const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : -1;
         if (sb !== sa) return sb - sa;
@@ -946,11 +1060,13 @@ function renderKanban(filtered) {
       });
     }
     const s = stageStyle(statusKey);
+    const isCollapsed = _collapsedCols.has(statusKey);
     return `
-      <div class="kanban-col">
+      <div class="kanban-col${isCollapsed ? ' collapsed' : ''}" data-col-key="${statusKey}">
         <div class="kanban-col-header" data-status="${statusKey}" style="border-color:${s.border};background:${s.bg};color:${s.color}">
           <span class="kanban-col-title">${statusLabel}</span>
           <span class="kanban-col-count">${cards.length}</span>
+          <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}">‹</button>
         </div>
         <div class="kanban-cards" data-status="${statusKey}" style="border-color:${s.border};background:rgba(0,0,0,0.15)">
           ${cards.length ? cards.map(c => renderKanbanCard(c)).join('') : '<div class="kanban-empty">Empty</div>'}
@@ -1058,8 +1174,8 @@ function renderKanbanCard(c) {
       <div class="kanban-details-body">
         ${c.jobMatch?.jobSummary ? `<div class="kanban-detail-summary">${c.jobMatch.jobSummary}</div>` : ''}
         ${c.jobMatch?.verdict ? `<div class="kanban-detail-verdict">${c.jobMatch.verdict}</div>` : ''}
-        ${c.jobMatch?.strongFits?.length ? `<details class="card-analysis"><summary>Green Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${f}</span></li>`).join('')}</ul></div></details>` : ''}
-        ${c.jobMatch?.redFlags?.length ? `<details class="card-analysis"><summary>Red Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${f}</span></li>`).join('')}</ul></div></details>` : ''}
+        ${c.jobMatch?.strongFits?.length ? `<details class="card-analysis"><summary>Green Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div></details>` : ''}
+        ${c.jobMatch?.redFlags?.length ? `<details class="card-analysis"><summary>Red Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div></details>` : ''}
         ${c.intelligence?.eli5 ? `<details class="card-analysis"><summary>About the Company</summary><div class="analysis-body"><div class="analysis-section-body">${c.intelligence.eli5}</div></div></details>` : ''}
         ${c.intelligence?.whosBuyingIt ? `<details class="card-analysis"><summary>Who Buys It</summary><div class="analysis-body"><div class="analysis-section-body">${c.intelligence.whosBuyingIt}</div></div></details>` : ''}
         ${c.reviews?.length ? `<details class="card-analysis"><summary>Reviews & Signal</summary><div class="analysis-body">${c.reviews.slice(0,3).map(r => `<div class="analysis-review">"${r.snippet}"<div class="analysis-review-src">${r.source || ''}</div></div>`).join('')}</div></details>` : ''}
@@ -1121,6 +1237,14 @@ function renderKanbanCard(c) {
       </div>
       <div class="kanban-next-step">
         <div class="kanban-next-step-row">
+          <label class="kanban-field-label">Action On</label>
+          <select class="kanban-action-status" data-id="${c.id}">
+            ${(customActionStatuses || DEFAULT_ACTION_STATUSES).map(s =>
+              `<option value="${s.key}" ${(c.actionStatus || 'my_court') === s.key ? 'selected' : ''} style="color:${s.color}">${s.label}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="kanban-next-step-row">
           <label class="kanban-field-label">Next Step</label>
           <input class="kanban-next-step-input" data-id="${c.id}" type="text" placeholder="" value="${(c.nextStep || '').replace(/"/g, '&quot;')}">
         </div>
@@ -1147,6 +1271,31 @@ function renderKanbanCard(c) {
 }
 
 function bindKanbanEvents(board) {
+  // Column collapse/expand (delegated — works for dynamic state changes)
+  board.addEventListener('click', e => {
+    // Collapse button click
+    const collapseBtn = e.target.closest('.kanban-col-collapse');
+    if (collapseBtn) {
+      e.stopPropagation();
+      const key = collapseBtn.dataset.collapse;
+      const col = collapseBtn.closest('.kanban-col');
+      if (!col) return;
+      col.classList.toggle('collapsed');
+      if (col.classList.contains('collapsed')) _collapsedCols.add(key);
+      else _collapsedCols.delete(key);
+      sessionStorage.setItem('ci_collapsed_cols', JSON.stringify([..._collapsedCols]));
+      return;
+    }
+    // Click anywhere on a collapsed column to expand
+    const col = e.target.closest('.kanban-col.collapsed');
+    if (col) {
+      const key = col.dataset.colKey;
+      col.classList.remove('collapsed');
+      _collapsedCols.delete(key);
+      sessionStorage.setItem('ci_collapsed_cols', JSON.stringify([..._collapsedCols]));
+    }
+  });
+
   let draggingId = null;
   let dragAllowed = false;
 
@@ -1187,6 +1336,8 @@ function bindKanbanEvents(board) {
         ...stageEnterTimestamp(entry, newStatus),
         ...backfillClearTimestamps(entry, newStatus),
       };
+      const autoAction = defaultActionStatus(newStatus);
+      if (autoAction) changes.actionStatus = autoAction;
       updateCompany(draggingId, changes);
       if (activePipeline !== 'company') {
         const confettiConfig = getConfettiConfig(newStatus);
@@ -1204,7 +1355,16 @@ function bindKanbanEvents(board) {
 
   // Drop onto column header (always visible, even when scrolled deep)
   board.querySelectorAll('.kanban-col-header[data-status]').forEach(hdr => {
-    hdr.addEventListener('dragover', (e) => { e.preventDefault(); hdr.classList.add('drag-over'); });
+    hdr.addEventListener('dragover', (e) => {
+      e.preventDefault(); hdr.classList.add('drag-over');
+      // Auto-expand collapsed columns on drag hover
+      const col = hdr.closest('.kanban-col');
+      if (col?.classList.contains('collapsed')) {
+        col.classList.remove('collapsed');
+        _collapsedCols.delete(col.dataset.colKey);
+        sessionStorage.setItem('ci_collapsed_cols', JSON.stringify([..._collapsedCols]));
+      }
+    });
     hdr.addEventListener('dragleave', () => hdr.classList.remove('drag-over'));
     hdr.addEventListener('drop', (e) => handleColDrop(hdr, e));
   });
@@ -1220,6 +1380,11 @@ function bindKanbanEvents(board) {
   board.querySelectorAll('.card-notes').forEach(ta => {
     ta.addEventListener('mousedown', (e) => e.stopPropagation());
     ta.addEventListener('blur', () => updateCompany(ta.dataset.id, { notes: ta.value }));
+  });
+
+  board.querySelectorAll('.kanban-action-status').forEach(sel => {
+    sel.addEventListener('mousedown', e => e.stopPropagation());
+    sel.addEventListener('change', () => updateCompany(sel.dataset.id, { actionStatus: sel.value }));
   });
 
   board.querySelectorAll('.kanban-next-step-input').forEach(inp => {
@@ -1672,20 +1837,35 @@ function renderActivitySection() {
   const opps = allCompanies.filter(c => c.isOpportunity);
   const inPeriod = ts => ts && ts >= start && ts <= end;
 
-  // Config-driven stat counting
+  // Config-driven stat counting — supports activity mode (period-based) and snapshot mode (current state)
   const smap = Object.fromEntries(customOpportunityStages.map(s => [s.key, s.label]));
   const goalDefs = statCardConfigs.map(card => {
     let count;
-    if (card.stages.includes('*')) {
-      count = opps.filter(c => inPeriod(c.savedAt)).length;
+    const isSnapshot = card.mode === 'snapshot';
+
+    if (isSnapshot) {
+      // Snapshot: count opps currently sitting in the selected stages
+      if (card.stages.includes('*')) {
+        count = opps.length;
+      } else {
+        count = opps.filter(c =>
+          card.stages.includes(c.jobStage || 'needs_review')
+        ).length;
+      }
     } else {
-      count = opps.filter(c =>
-        card.stages.some(sk => inPeriod(c.stageTimestamps?.[sk]))
-      ).length;
+      // Activity: count opps that entered the stages during the period
+      if (card.stages.includes('*')) {
+        count = opps.filter(c => inPeriod(c.savedAt)).length;
+      } else {
+        count = opps.filter(c =>
+          card.stages.some(sk => inPeriod(c.stageTimestamps?.[sk]))
+        ).length;
+      }
     }
-    const tooltip = card.stages.includes('*')
-      ? 'Counts all opportunities saved in this period'
-      : 'Counts entries reaching: ' + card.stages.map(k => smap[k] || k).join(', ');
+
+    const modeLabel = isSnapshot ? 'Currently in' : 'Entered during period';
+    const stageNames = card.stages.includes('*') ? 'all stages' : card.stages.map(k => smap[k] || k).join(', ');
+    const tooltip = `${modeLabel}: ${stageNames}`;
     return { ...card, count, goal: goals[card.key] || 0, tooltip };
   });
 
@@ -1700,25 +1880,27 @@ function renderActivitySection() {
     </div>${i < funnelStages.length - 1 ? '<div class="funnel-arrow">›</div>' : ''}
   `).join('');
 
-  const goalCardsHtml = goalDefs.map(g => `
+  const goalCardsHtml = goalDefs.map(g => {
+    const showGoal = g.hasGoal !== false && g.goal > 0;
+    return `
     <div class="goal-card" data-goal-key="${g.key}">
-      <span class="goal-info-icon" title="${g.tooltip}">i</span>
-      <div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>
+      <span class="goal-info-icon" title="${g.tooltip}${g.mode === 'snapshot' ? ' (snapshot)' : ''}">i</span>
+      ${showGoal ? `<div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>` : `<div class="goal-ring-plain" style="color:${g.color}">${g.count}</div>`}
       <div class="goal-text">
-        <div class="goal-fraction">${g.count}<span class="goal-denom">/${g.goal}</span></div>
+        <div class="goal-fraction">${g.count}${showGoal ? `<span class="goal-denom">/${g.goal}</span>` : ''}</div>
         <div class="goal-metric-label">${g.label}</div>
-        <div class="goal-edit-hint">click to edit goal</div>
+        ${showGoal ? '<div class="goal-edit-hint">click to edit goal</div>' : `<div class="goal-edit-hint" style="color:#94a3b8">${g.mode === 'snapshot' ? 'live count' : 'tracking'}</div>`}
       </div>
-      <div class="goal-edit-form">
+      ${showGoal ? `<div class="goal-edit-form">
         <label class="goal-edit-label">${g.label} goal</label>
         <div style="display:flex;gap:7px;align-items:center">
           <input class="goal-edit-input" type="number" min="0" max="999" value="${g.goal}" data-goal-key="${g.key}">
           <button class="goal-save-btn-inline" data-goal-key="${g.key}">Save</button>
           <button class="goal-cancel-btn">✕</button>
         </div>
-      </div>
-    </div>
-  `).join('');
+      </div>` : ''}
+    </div>`;
+  }).join('');
 
   // Format dates for <input type="date"> value (YYYY-MM-DD)
   const toInputDate = ts => new Date(ts).toISOString().slice(0, 10);
@@ -1815,9 +1997,12 @@ function renderActivitySection() {
   });
 
   // Stat card editor button
-  section.querySelector('#stat-cards-edit-btn')?.addEventListener('click', e => {
-    e.stopPropagation();
-    openStatCardEditor();
+  // Gear button — use delegation since direct binding sometimes misses
+  section.addEventListener('click', e => {
+    if (e.target.closest('#stat-cards-edit-btn')) {
+      e.stopPropagation();
+      openStatCardEditor();
+    }
   });
 }
 
@@ -1834,12 +2019,21 @@ function openStatCardEditor() {
         return `<label class="sc-stage-check"><input type="checkbox" data-card="${i}" data-stage="${s.key}" ${checked}> <span class="sc-stage-dot" style="background:${s.color}"></span>${s.label}</label>`;
       }).join('');
       const isSaved = card.stages.includes('*');
+      const mode = card.mode || 'activity';
       return `
         <div class="sc-card-row" data-idx="${i}">
           <div class="sc-card-head">
             <span class="sc-card-swatch" style="background:${card.color}"></span>
             <input class="sc-card-label-input" type="text" value="${card.label}" data-card="${i}" placeholder="Card name">
             <button class="sc-card-delete" data-card="${i}" title="Remove card">&times;</button>
+          </div>
+          <div class="sc-card-mode">
+            <label class="sc-mode-option"><input type="radio" name="mode-${i}" value="activity" data-card="${i}" ${mode === 'activity' ? 'checked' : ''}> Activity (entered during period)</label>
+            <label class="sc-mode-option"><input type="radio" name="mode-${i}" value="snapshot" data-card="${i}" ${mode === 'snapshot' ? 'checked' : ''}> Snapshot (currently in stage)</label>
+          </div>
+          <div class="sc-card-goal">
+            <label class="sc-goal-toggle"><input type="checkbox" data-card="${i}" data-goal-toggle="1" ${card.hasGoal !== false ? 'checked' : ''}> Set goal</label>
+            ${card.hasGoal !== false ? `<input class="sc-goal-input" type="number" min="0" max="999" data-card="${i}" data-goal-val="1" value="${(activityGoals[activityPeriod] || {})[card.key] || 0}" placeholder="Goal">` : ''}
           </div>
           <div class="sc-card-stages">
             <label class="sc-stage-check"><input type="checkbox" data-card="${i}" data-stage="*" ${isSaved ? 'checked' : ''}> All saved (savedAt)</label>
@@ -1864,8 +2058,22 @@ function openStatCardEditor() {
   };
   listEl.onchange = e => {
     const inp = e.target;
+    // Mode radio buttons
+    if (inp.type === 'radio' && inp.name.startsWith('mode-')) {
+      const ci = parseInt(inp.dataset.card);
+      if (statCardConfigs[ci]) statCardConfigs[ci].mode = inp.value;
+      return;
+    }
     if (inp.type === 'checkbox') {
       const ci = parseInt(inp.dataset.card);
+      // Goal toggle
+      if (inp.dataset.goalToggle) {
+        if (statCardConfigs[ci]) {
+          statCardConfigs[ci].hasGoal = inp.checked;
+          renderEditor();
+        }
+        return;
+      }
       const sk = inp.dataset.stage;
       const card = statCardConfigs[ci];
       if (!card) return;
@@ -1886,12 +2094,19 @@ function openStatCardEditor() {
       const ci = parseInt(e.target.dataset.card);
       if (statCardConfigs[ci]) statCardConfigs[ci].label = e.target.value;
     }
+    if (e.target.dataset.goalVal) {
+      const ci = parseInt(e.target.dataset.card);
+      const val = Math.max(0, parseInt(e.target.value) || 0);
+      if (statCardConfigs[ci]) {
+        activityGoals[activityPeriod][statCardConfigs[ci].key] = val;
+      }
+    }
   };
 
   // Add card button
   overlay.querySelector('#sc-add-card').onclick = () => {
     const key = 'custom_' + Date.now();
-    statCardConfigs.push({ key, label: 'New Metric', stages: [], color: '#94a3b8' });
+    statCardConfigs.push({ key, label: 'New Metric', stages: [], color: '#94a3b8', mode: 'activity' });
     // Ensure goals have an entry for this key
     for (const p of ['daily', 'weekly', 'monthly']) {
       if (!activityGoals[p][key]) activityGoals[p][key] = 0;
@@ -2150,5 +2365,14 @@ function openStatCardEditor() {
 
   renderMessages();
 })();
+
+// Action On filter
+document.getElementById('action-filter-btns')?.addEventListener('click', e => {
+  const btn = e.target.closest('[data-action-filter]');
+  if (!btn) return;
+  activeActionFilter = btn.dataset.actionFilter;
+  document.querySelectorAll('#action-filter-btns .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.actionFilter === activeActionFilter));
+  render();
+});
 
 load();

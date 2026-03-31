@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CompanyIntel — Integrations</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f8fa; color: #33475b; min-height: 100vh; font-size: 14px; }
+
+    .header { background: #2d3e50; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
+    .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; text-decoration: none; }
+    .logo span { color: #FF7A59; }
+    .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
+    .header-back { color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #4a6580; border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; transition: all 0.15s; font-family: inherit; text-decoration: none; }
+    .header-back:hover { color: #fff; border-color: #7c98b6; }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 36px 40px 60px; }
+    .page-title { font-size: 26px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .page-subtitle { font-size: 14px; color: #7c98b6; margin-bottom: 32px; line-height: 1.6; }
+
+    .category-title { font-size: 11px; font-weight: 800; color: #516f90; text-transform: uppercase; letter-spacing: 0.09em; margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #eaf0f6; }
+    .category-title:first-of-type { margin-top: 0; }
+
+    .provider-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(45,62,80,0.06); transition: box-shadow 0.2s; }
+    .provider-card:hover { box-shadow: 0 3px 12px rgba(45,62,80,0.1); }
+    .provider-card.planned { opacity: 0.55; }
+    .provider-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .provider-name { font-size: 15px; font-weight: 700; color: #2d3e50; display: flex; align-items: center; gap: 8px; }
+    .provider-desc { font-size: 13px; color: #7c98b6; line-height: 1.5; margin-bottom: 12px; }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .status-dot.green { background: #4ade80; }
+    .status-dot.yellow { background: #fbbf24; }
+    .status-dot.red { background: #f87171; }
+    .status-dot.grey { background: #cbd5e1; }
+    .status-label { font-size: 11px; font-weight: 600; color: #7c98b6; }
+    .status-label.connected { color: #059669; }
+    .status-label.exhausted { color: #d97706; }
+    .status-label.error { color: #e5483b; }
+
+    .badge-planned { font-size: 10px; font-weight: 700; color: #94a3b8; background: #f0f4f8; border: 1px solid #dfe3eb; border-radius: 10px; padding: 2px 8px; }
+    .badge-required { font-size: 10px; font-weight: 700; color: #FF7A59; background: rgba(255,122,89,0.08); border: 1px solid rgba(255,122,89,0.25); border-radius: 10px; padding: 2px 8px; }
+
+    .key-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .key-input { flex: 1; border: 1.5px solid #dfe3eb; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #33475b; font-family: 'SF Mono', 'Fira Code', monospace; outline: none; }
+    .key-input:focus { border-color: #FF7A59; }
+    .key-input::placeholder { color: #b0c1d4; font-family: inherit; }
+    .key-toggle { background: none; border: 1px solid #dfe3eb; border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer; color: #7c98b6; transition: all 0.12s; }
+    .key-toggle:hover { border-color: #99acc2; color: #33475b; }
+
+    .provider-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn-save { background: #FF7A59; color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .btn-save:hover { background: #e8623f; }
+    .btn-test { background: #f0f4f8; color: #516f90; border: 1px solid #dfe3eb; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .btn-test:hover { border-color: #99acc2; color: #33475b; }
+    .btn-test:disabled { opacity: 0.5; cursor: default; }
+    .test-result { font-size: 12px; font-weight: 600; margin-left: 4px; }
+    .test-result.ok { color: #059669; }
+    .test-result.fail { color: #e5483b; }
+
+    /* OAuth cards */
+    .oauth-status { display: flex; align-items: center; gap: 8px; }
+    .oauth-btn { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; border: none; }
+    .oauth-connect { background: #2d3e50; color: #fff; }
+    .oauth-connect:hover { background: #FF7A59; }
+    .oauth-disconnect { background: none; color: #e5483b; border: 1px solid rgba(229,72,59,0.4); }
+    .oauth-disconnect:hover { background: rgba(229,72,59,0.06); }
+    .oauth-note { font-size: 12px; color: #7c98b6; line-height: 1.5; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Integrations</span></a>
+  <div style="display:flex;gap:12px">
+    <a class="header-back" href="preferences.html">Preferences</a>
+    <a class="header-back" href="saved.html">← Back to Saved</a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-title">Integrations</div>
+  <div class="page-subtitle">Connect your data sources and API keys. CompanyIntel uses these to research companies, score job postings, and surface your email and meeting context.</div>
+
+  <div id="providers-container"></div>
+</div>
+
+<script src="integrations.js"></script>
+
+</body>
+</html>

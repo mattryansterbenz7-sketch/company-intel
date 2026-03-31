@@ -1,4 +1,6 @@
 (function () {
+  // Disabled — the hover-reveal sidebar in content.js replaces this widget entirely
+  return;
   if (document.getElementById('ci-widget-host')) return;
 
   // ── Company detection (generic pages) ──────────────────────────────────

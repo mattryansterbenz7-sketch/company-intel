@@ -15,15 +15,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ selection: window.getSelection()?.toString()?.trim() || '' });
     return true;
   }
+  if (message.type === 'TOGGLE_SIDEBAR') {
+    toggleFloatingSidebar();
+    sendResponse({ ok: true });
+    return true;
+  }
   if (message.type === 'OPEN_FLOATING_CHAT') {
-    // Enrich context with page JD if sidepanel didn't have it
-    const ctx = message.context || {};
-    if (!ctx.jobDescription) {
-      // Extract JD directly from the page
-      const jd = extractJobDescriptionFromPage();
-      if (jd) ctx.jobDescription = jd;
-    }
-    openFloatingChatWidget(ctx);
+    // Floating chat removed — chat lives inline in sidebar only
     sendResponse({ ok: true });
     return true;
   }
@@ -31,200 +29,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// ── Floating Chat Widget (injected into page from sidepanel) ────────────────
 
-// Quick synchronous JD extraction from the current page
-function extractJobDescriptionFromPage() {
-  // Greenhouse
-  let el = document.querySelector('#content .posting-page, #content, .job__description, .job-post-content');
-  // Lever
-  if (!el) el = document.querySelector('.posting-page .content, .section-wrapper');
-  // Workday
-  if (!el) el = document.querySelector('[data-automation-id="jobPostingDescription"]');
-  // Work at a Startup
-  if (!el) el = document.querySelector('.prose, .job-description, [class*="description"]');
-  // LinkedIn
-  if (!el) el = document.querySelector('#job-details, .jobs-description__content');
-  // Generic fallback: main content area
-  if (!el) el = document.querySelector('main, article, [role="main"]');
-  if (!el) return null;
-  const text = el.innerText?.trim();
-  return text && text.length > 100 ? text.slice(0, 8000) : null;
-}
-
-function openFloatingChatWidget(context) {
-  // If already open, bring to front
-  let widget = document.getElementById('ci-sp-float-chat');
-  if (widget) {
-    widget.style.display = 'flex';
-    widget.querySelector('.ci-fc-input')?.focus();
-    // Update context
-    widget._ciContext = context;
-    return;
-  }
-
-  let history = [];
-
-  // Create widget
-  widget = document.createElement('div');
-  widget.id = 'ci-sp-float-chat';
-  widget._ciContext = context;
-  widget.innerHTML = `
-    <style>
-      #ci-sp-float-chat { position: fixed; bottom: 24px; right: 24px; width: 420px; height: 520px; background: #fff; border-radius: 14px; box-shadow: 0 12px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: column; z-index: 2147483647; border: 1px solid #dfe3eb; overflow: auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; resize: both; min-width: 300px; min-height: 250px; overflow: hidden; }
-      .ci-fc-header { height: 48px; padding: 0 10px 0 14px; background: #2D3E50; display: flex; align-items: center; justify-content: space-between; cursor: grab; flex-shrink: 0; border-radius: 14px 14px 0 0; user-select: none; }
-      .ci-fc-header:active { cursor: grabbing; }
-      .ci-fc-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; color: #fff; font-size: 14px; font-weight: 700; }
-      .ci-fc-header-left span:first-child { color: #FF7A59; }
-      .ci-fc-company { color: #7da8c4; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .ci-fc-btns { display: flex; gap: 1px; }
-      .ci-fc-btn { background: none; border: none; color: #7da8c4; font-size: 15px; cursor: pointer; padding: 5px 7px; border-radius: 6px; line-height: 1; transition: all 0.1s; }
-      .ci-fc-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-      .ci-fc-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-      .ci-fc-messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-      .ci-fc-empty { color: #94a3b8; font-size: 13px; padding: 32px 20px; text-align: center; line-height: 1.6; }
-      .ci-fc-msg { display: flex; flex-direction: column; }
-      .ci-fc-msg-user { align-items: flex-end; }
-      .ci-fc-msg-assistant { align-items: flex-start; }
-      .ci-fc-msg-user .ci-fc-bubble { background: #f0f4f8; color: #33475b; padding: 8px 12px; border-radius: 10px 10px 3px 10px; font-size: 13px; line-height: 1.5; max-width: 85%; }
-      .ci-fc-msg-assistant .ci-fc-bubble { font-size: 13px; line-height: 1.6; color: #2d3e50; padding: 2px 0; max-width: 100%; }
-      .ci-fc-msg-assistant .ci-fc-bubble strong { font-weight: 600; }
-      .ci-fc-thinking { color: #94a3b8 !important; font-style: italic; }
-      .ci-fc-input-row { padding: 10px 14px; border-top: 1px solid #f0f3f8; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
-      .ci-fc-input { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; color: #33475b; font-size: 14px; padding: 10px 12px; resize: none; font-family: inherit; min-height: 42px; line-height: 1.5; outline: none; }
-      .ci-fc-input:focus { border-color: #FF7A59; }
-      .ci-fc-input::placeholder { color: #94a3b8; }
-      .ci-fc-send { background: #FF7A59; color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: inherit; }
-      .ci-fc-send:hover { background: #e8623f; }
-      .ci-fc-send:disabled { background: #ccc; cursor: default; }
-      .ci-fc-actions { padding: 6px 14px 10px; border-top: 1px solid #f0f3f8; display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
-      .ci-fc-action { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #dfe3eb; background: #f8fafc; color: #516f90; cursor: pointer; font-family: inherit; transition: all 0.1s; }
-      .ci-fc-action:hover { border-color: #FF7A59; color: #FF7A59; }
-      .ci-fc-action:active { transform: scale(0.95); }
-    </style>
-    <div class="ci-fc-header" id="ci-fc-header">
-      <div class="ci-fc-header-left">
-        <span>&#10038;</span> Ask AI <span class="ci-fc-company">— ${context.company || ''}</span>
-      </div>
-      <div class="ci-fc-btns">
-        <button class="ci-fc-btn" id="ci-fc-min" title="Minimize">&minus;</button>
-        <button class="ci-fc-btn" id="ci-fc-close" title="Close">&#10005;</button>
-      </div>
-    </div>
-    <div class="ci-fc-body">
-      <div class="ci-fc-messages" id="ci-fc-messages">
-        <div class="ci-fc-empty">Ask about this role, company, or get help with your application.</div>
-      </div>
-      <div class="ci-fc-input-row">
-        <textarea class="ci-fc-input" id="ci-fc-input" placeholder="Ask anything about this opportunity..." rows="2"></textarea>
-        <button class="ci-fc-send" id="ci-fc-send">Send</button>
-      </div>
-      <div class="ci-fc-actions">
-        <button class="ci-fc-action" data-prompt="Help me answer application questions for this role">Help me apply</button>
-        <button class="ci-fc-action" data-prompt="What should I know before interviewing here?">Prep me</button>
-        <button class="ci-fc-action" data-action="clear" style="margin-left:auto;color:#94a3b8">Clear</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(widget);
-
-  const msgsEl = widget.querySelector('#ci-fc-messages');
-  const inputEl = widget.querySelector('#ci-fc-input');
-  const sendBtn = widget.querySelector('#ci-fc-send');
-  const headerEl = widget.querySelector('#ci-fc-header');
-
-  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
-
-  function render(thinking) {
-    if (history.length === 0) {
-      msgsEl.innerHTML = '<div class="ci-fc-empty">Ask about this role, company, or get help with your application.</div>';
-    } else {
-      msgsEl.innerHTML = history.map(m =>
-        `<div class="ci-fc-msg ci-fc-msg-${m.role}"><div class="ci-fc-bubble">${esc(m.content)}</div></div>`
-      ).join('') + (thinking ? '<div class="ci-fc-msg ci-fc-msg-assistant"><div class="ci-fc-bubble ci-fc-thinking">Thinking...</div></div>' : '');
-    }
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-  }
-
-  async function send() {
-    const text = inputEl.value.trim();
-    if (!text) return;
-    inputEl.value = '';
-    history.push({ role: 'user', content: text });
-    render(true);
-    sendBtn.disabled = true;
-
-    const ctx = { ...widget._ciContext };
-    // Check if application mode
-    if (text.toLowerCase().includes('application') || text.toLowerCase().includes('apply')) {
-      ctx._applicationMode = true;
-    }
-    const msgs = history.map(m => ({ role: m.role, content: m.content }));
-
-    let result;
-    try {
-      result = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('timeout')), 60000);
-        chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: msgs, context: ctx }, r => {
-          clearTimeout(timeout);
-          if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
-          else resolve(r);
-        });
-      });
-    } catch (e) {
-      result = { error: e.message === 'timeout' ? 'Request timed out.' : e.message };
-    }
-
-    sendBtn.disabled = false;
-    history.push({ role: 'assistant', content: result?.reply || result?.error || 'Something went wrong.' });
-    render();
-  }
-
-  sendBtn.addEventListener('click', send);
-  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-
-  // Quick actions
-  widget.querySelector('.ci-fc-actions').addEventListener('click', e => {
-    const btn = e.target.closest('[data-prompt]');
-    if (btn) { inputEl.value = btn.dataset.prompt; send(); return; }
-    if (e.target.closest('[data-action="clear"]')) { history = []; render(); }
-  });
-
-  // Close / minimize
-  widget.querySelector('#ci-fc-close').addEventListener('click', () => { widget.style.display = 'none'; });
-  widget.querySelector('#ci-fc-min').addEventListener('click', () => {
-    const body = widget.querySelector('.ci-fc-body');
-    const isMin = body.style.display === 'none';
-    body.style.display = isMin ? 'flex' : 'none';
-    widget.style.height = isMin ? '520px' : '48px';
-    widget.style.resize = isMin ? 'both' : 'none';
-  });
-
-  // Drag to reposition
-  let dragging = false, sx, sy, sr, sb;
-  headerEl.addEventListener('mousedown', e => {
-    if (e.target.closest('.ci-fc-btn')) return;
-    dragging = true; sx = e.clientX; sy = e.clientY;
-    const r = widget.getBoundingClientRect();
-    sr = window.innerWidth - r.right; sb = window.innerHeight - r.bottom;
-    document.body.style.userSelect = 'none';
-  });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    widget.style.right = (sr - (e.clientX - sx)) + 'px';
-    widget.style.bottom = (sb - (e.clientY - sy)) + 'px';
-  });
-  document.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = ''; });
-
-  // Pre-populate with selected text
-  const sel = window.getSelection()?.toString()?.trim();
-  if (sel && sel.length > 3) {
-    inputEl.value = sel;
-    inputEl.placeholder = 'Ask about this text...';
-  }
-
-  inputEl.focus();
-}
 
 function extractMyLinkedInProfile() {
   const parts = [];
@@ -282,6 +87,8 @@ async function detectCompanyAndJob() {
     result = detectWorkday();
   } else if (url.includes('workatastartup.com')) {
     result = detectWorkAtAStartup();
+  } else if (url.includes('ashbyhq.com') || url.includes('jobs.ashbyhq.com')) {
+    result = detectAshby();
   } else {
     result = detectGeneric();
   }
@@ -823,13 +630,88 @@ function detectWorkAtAStartup() {
   return { company, jobTitle: jobTitle || null, source: 'workatastartup', domain };
 }
 
+function detectAshby() {
+  let company = null;
+  let jobTitle = null;
+
+  // 1. Company logo alt text (most reliable on Ashby pages)
+  const logoImg = document.querySelector('img[alt]');
+  if (logoImg?.alt && logoImg.alt.length > 1 && logoImg.alt.length < 50 && !/ashby/i.test(logoImg.alt)) {
+    company = logoImg.alt.trim();
+  }
+
+  // 2. Page title: "Account Manager, Upper Mid-Market | Absorb"
+  if (!company) {
+    const segs = document.title.split(/\s*[|·—–]\s*/);
+    if (segs.length > 1) {
+      const last = segs[segs.length - 1].trim();
+      if (last.length > 1 && last.length < 50 && !/ashby/i.test(last)) company = last;
+    }
+  }
+
+  // 3. og:site_name or og:title
+  if (!company) {
+    const ogSite = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.trim();
+    if (ogSite && !/ashby/i.test(ogSite)) company = ogSite;
+  }
+  if (!company) {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
+    const atMatch = ogTitle?.match(/\bat\s+(.+?)$/i);
+    if (atMatch && !/ashby/i.test(atMatch[1])) company = atMatch[1].trim();
+  }
+
+  // 4. URL path: jobs.ashbyhq.com/meshy/... → "Meshy"
+  if (!company) {
+    const pathSlug = window.location.pathname.split('/').filter(Boolean)[0];
+    if (pathSlug && pathSlug.length > 1 && pathSlug.length < 40 && !/^[0-9a-f-]{20,}$/.test(pathSlug)) {
+      company = pathSlug.charAt(0).toUpperCase() + pathSlug.slice(1);
+    }
+  }
+
+  // 5. Subdomain fallback: absorb.jobs.ashbyhq.com → "Absorb"
+  if (!company) {
+    const host = window.location.hostname;
+    const parts = host.split('.');
+    if (parts.length > 2 && parts[0] !== 'jobs' && parts[0] !== 'www') {
+      company = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    }
+  }
+
+  // 6. Page content: "About Meshy" or "MESHY LLC"
+  if (!company || company === 'Unknown Company') {
+    for (const el of document.querySelectorAll('h1, h2, h3, strong')) {
+      const t = el.textContent?.trim();
+      const aboutMatch = t?.match(/^About\s+(.+?)$/i);
+      if (aboutMatch && aboutMatch[1].length > 1) { company = aboutMatch[1]; break; }
+      // Company name as standalone heading (e.g., "MESHY LLC")
+      if (t && t.length > 1 && t.length < 40 && /^[A-Z]/.test(t) && !/account|manager|executive|engineer|designer|apply|overview|application/i.test(t)) {
+        company = t.replace(/\s*(LLC|Inc\.?|Corp\.?|Ltd\.?)$/i, '').trim();
+        break;
+      }
+    }
+  }
+
+  if (!company) company = 'Unknown Company';
+
+  // Job title from h1
+  const h1 = document.querySelector('h1');
+  if (h1) jobTitle = h1.textContent.trim();
+
+  return { company, jobTitle: jobTitle || null, source: 'ashby', domain: null };
+}
+
 function detectGeneric() {
   const domain = window.location.hostname.replace('www.', '');
 
-  // 1. og:site_name is the most authoritative signal
+  // Known ATS domains — never use these as the company name
+  const ATS_DOMAINS = ['ashbyhq.com', 'greenhouse.io', 'lever.co', 'workday.com', 'myworkdayjobs.com', 'smartrecruiters.com', 'icims.com', 'jobvite.com', 'breezy.hr', 'recruitee.com', 'bamboohr.com', 'jazz.co', 'applytojob.com', 'workable.com'];
+  const isATS = ATS_DOMAINS.some(d => domain.includes(d));
+
+  // 1. og:site_name is the most authoritative signal (skip if it's the ATS name)
   const siteName = document.querySelector('meta[property="og:site_name"]');
-  if (siteName?.getAttribute('content')?.trim()) {
-    return { company: siteName.getAttribute('content').trim(), source: 'generic', domain };
+  const siteNameVal = siteName?.getAttribute('content')?.trim();
+  if (siteNameVal && (!isATS || !ATS_DOMAINS.some(d => siteNameVal.toLowerCase().includes(d.split('.')[0])))) {
+    return { company: siteNameVal, source: 'generic', domain };
   }
 
   // 2. Split page title on separators — brand name is almost always the LAST segment
@@ -1017,17 +899,8 @@ function extractLinkedInJobMeta() {
       result.location = t; break;
     }
   }
-  if (!result.location && scope) {
-    for (const el of scope.querySelectorAll('span, li')) {
-      if (el.querySelector('span, li')) continue;
-      const t = el.textContent?.trim();
-      if (!t || t.length > 80) continue;
-      if (/united states|united kingdom|canada|australia/i.test(t) ||
-          /\b[A-Z][a-z]+,\s*[A-Z]{2}\b/.test(t)) {
-        result.location = t; break;
-      }
-    }
-  }
+  // No broad fallback — the specific LinkedIn selectors above are sufficient.
+  // Scanning all spans for country names causes false matches (e.g., "Australia" from unrelated page elements).
 
   return result;
 }
@@ -1223,3 +1096,329 @@ function extractDomain() {
   const name = stripped.length > 1 ? stripped : raw;
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
+
+// ── Floating Hover-Reveal Sidebar (Superhuman Go style) ─────────────────────
+
+if (typeof _ciSidebarToggle === 'undefined') var _ciSidebarToggle = null;
+function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
+
+(function initFloatingSidebar() {
+  // Don't inject on extension pages
+  if (window.location.protocol === 'chrome-extension:') return;
+  // Remove the old floating widget if present — this sidebar replaces it
+  const oldWidget = document.getElementById('ci-widget-host');
+  if (oldWidget) oldWidget.remove();
+
+  let state = 1; // 1=idle, 2=strip, 3=icons, 4=open
+  let retractTimer = null;
+  let isLocked = false; // true when panel is clicked open
+
+  const container = document.createElement('div');
+  container.id = 'ci-sidebar-host';
+  container.innerHTML = `
+    <style>
+      #ci-sidebar-host {
+        position: fixed; top: 0; right: 0; height: 100vh; z-index: 2147483646;
+        pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+
+      /* Compact trigger button — vertically draggable, width driven by JS proximity */
+      .ci-sb-trigger {
+        position: absolute; right: 0;
+        pointer-events: auto; cursor: pointer;
+        transition: width 0.15s ease-out, opacity 0.2s ease-out, background 0.2s ease, box-shadow 0.2s ease;
+        opacity: 0; width: 0; height: 68px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        background: #2D3E50; border-radius: 10px 0 0 10px;
+      }
+      .ci-sb-trigger:hover {
+        background: #FF7A59;
+        box-shadow: -3px 0 14px rgba(255,122,89,0.25);
+      }
+      .ci-sb-trigger-icon {
+        opacity: 0; transition: opacity 0.15s ease;
+        font-size: 16px; line-height: 1;
+      }
+      .ci-sb-trigger.ci-sb-dragging { transition: none !important; cursor: grabbing; }
+
+      /* State 4: full panel */
+      .ci-sb-panel {
+        position: absolute; top: 0; right: 0; width: 0; height: 100%;
+        transition: width 0.3s ease;
+        overflow: hidden; pointer-events: auto;
+        box-shadow: -8px 0 30px rgba(0,0,0,0.2);
+      }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-panel { width: var(--ci-panel-width, 380px); }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-trigger { opacity: 0; width: 0; pointer-events: none; }
+
+      .ci-sb-panel iframe {
+        width: 100%; height: 100%; border: none; background: #1a2c3a;
+      }
+
+      .ci-sb-close {
+        position: absolute; top: 8px; left: 8px; z-index: 30;
+        background: rgba(45,62,80,0.85); color: #e2e8f0; border: none;
+        width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+        font-size: 14px; display: flex; align-items: center; justify-content: center;
+        transition: all 0.15s; opacity: 0; pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        backdrop-filter: blur(4px);
+      }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-close { opacity: 1; pointer-events: auto; }
+      .ci-sb-close:hover { background: #FF7A59; color: #fff; }
+
+      /* Resize handle on left edge of panel */
+      .ci-sb-resize {
+        position: absolute; top: 0; left: -4px; width: 12px; height: 100%;
+        cursor: col-resize; z-index: 20; opacity: 0; pointer-events: none;
+        transition: opacity 0.15s;
+      }
+      .ci-sb-resize::after {
+        content: ''; position: absolute; top: 50%; left: 4px; transform: translateY(-50%);
+        width: 4px; height: 48px; border-radius: 2px; background: #4a6580;
+      }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-resize { pointer-events: auto; }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-resize:hover { opacity: 1; }
+      .ci-sb-resize.ci-sb-resizing { opacity: 1; }
+
+      /* Backdrop for click-outside-to-close */
+      .ci-sb-backdrop {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        z-index: -1; display: none;
+      }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-backdrop { display: block; }
+    </style>
+
+    <div class="ci-sb-backdrop" id="ci-sb-backdrop"></div>
+    <div class="ci-sb-trigger" id="ci-sb-strip">
+      <span class="ci-sb-trigger-icon">🔍</span>
+    </div>
+    <div class="ci-sb-panel" id="ci-sb-panel">
+      <div class="ci-sb-resize" id="ci-sb-resize"></div>
+      <button class="ci-sb-close" id="ci-sb-close">✕</button>
+    </div>
+  `;
+  document.body.appendChild(container);
+
+  const strip = container.querySelector('#ci-sb-strip');
+  const panel = container.querySelector('#ci-sb-panel');
+  const closeBtn = container.querySelector('#ci-sb-close');
+  const backdrop = container.querySelector('#ci-sb-backdrop');
+  let iframeLoaded = false;
+
+  // Set initial vertical position from localStorage or center
+  const savedY = localStorage.getItem('ci_sidebar_y');
+  strip.style.top = savedY ? savedY + 'px' : '50%';
+  if (!savedY) strip.style.transform = 'translateY(-50%)';
+
+  function setState(s) {
+    if (s === state) return;
+    state = s;
+    container.className = s >= 2 ? `ci-sb-s${s}` : '';
+  }
+
+  // Vertical drag to reposition
+  let isDragging = false, dragStartY, dragStartTop;
+  strip.addEventListener('mousedown', e => {
+    isDragging = false;
+    dragStartY = e.clientY;
+    dragStartTop = strip.getBoundingClientRect().top;
+    const onMove = ev => {
+      const dy = Math.abs(ev.clientY - dragStartY);
+      if (dy > 4) isDragging = true;
+      if (isDragging) {
+        strip.classList.add('ci-sb-dragging');
+        const newTop = Math.max(20, Math.min(window.innerHeight - 70, dragStartTop + (ev.clientY - dragStartY)));
+        strip.style.top = newTop + 'px';
+        strip.style.transform = 'none';
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      strip.classList.remove('ci-sb-dragging');
+      if (isDragging) {
+        localStorage.setItem('ci_sidebar_y', parseInt(strip.style.top));
+        isDragging = false;
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  function pushPage(width) {
+    document.documentElement.style.transition = 'margin-right 0.3s ease';
+    document.documentElement.style.marginRight = width + 'px';
+    document.documentElement.style.overflow = 'auto';
+  }
+
+  function unpushPage() {
+    document.documentElement.style.marginRight = '';
+    setTimeout(() => { document.documentElement.style.transition = ''; }, 300);
+  }
+
+  function openPanel() {
+    isLocked = true;
+    clearTimeout(retractTimer);
+    // Hide trigger
+    strip.style.width = '0px';
+    strip.style.opacity = '0';
+    // Apply saved width
+    const savedWidth = Math.min(500, parseInt(localStorage.getItem('ci_sidebar_width')) || 400);
+    container.style.setProperty('--ci-panel-width', savedWidth + 'px');
+    pushPage(savedWidth);
+    setState(4);
+    // Lazy-load iframe on first open
+    if (!iframeLoaded) {
+      const iframe = document.createElement('iframe');
+      iframe.src = chrome.runtime.getURL('sidepanel.html');
+      iframe.allow = 'clipboard-read; clipboard-write';
+      panel.appendChild(iframe);
+      iframeLoaded = true;
+    }
+  }
+
+  function closePanel() {
+    isLocked = false;
+    strip.style.width = '0px';
+    strip.style.opacity = '0';
+    const icon = strip.querySelector('.ci-sb-trigger-icon');
+    if (icon) icon.style.opacity = '0';
+    unpushPage();
+    setState(1);
+  }
+
+  // Register global toggle for extension icon click
+  _ciSidebarToggle = () => {
+    if (state === 4) closePanel();
+    else openPanel();
+  };
+
+  // Mouse proximity detection
+  const MAX_DIST = 480;  // start revealing at this distance from edge
+  const MAX_WIDTH = 36;  // fully revealed trigger width
+  const MIN_WIDTH = 0;
+
+  document.addEventListener('mousemove', e => {
+    if (isLocked) return;
+    if (isDragging) return;
+    const distFromRight = window.innerWidth - e.clientX;
+
+    clearTimeout(retractTimer);
+
+    if (distFromRight <= MAX_DIST) {
+      // Two-phase reveal:
+      // Phase 1 (far → 70% threshold): gradually reveal to 1/3 max width, then plateau
+      // Phase 2 (past 70% threshold): pop out to full width
+      const rawProgress = (MAX_DIST - distFromRight) / MAX_DIST; // 0 at MAX_DIST, 1 at edge
+      const SNAP_THRESHOLD = 0.85; // at 85% of the way, snap to full
+      const PLATEAU_WIDTH = MAX_WIDTH * 0.33; // 1/3 max width during phase 1
+
+      let w, op;
+      if (rawProgress < SNAP_THRESHOLD) {
+        // Phase 1: ease into plateau
+        const phase1 = rawProgress / SNAP_THRESHOLD; // 0→1 within phase 1
+        w = phase1 * PLATEAU_WIDTH;
+        op = Math.min(0.7, phase1 * 0.9);
+      } else {
+        // Phase 2: snap to full
+        w = MAX_WIDTH;
+        op = 1;
+      }
+
+      strip.style.width = w + 'px';
+      strip.style.opacity = op;
+      const shadowProgress = w / MAX_WIDTH;
+      strip.style.boxShadow = `-${Math.round(shadowProgress * 3)}px 0 ${Math.round(shadowProgress * 12)}px rgba(0,0,0,${(shadowProgress * 0.18).toFixed(2)})`;
+      const icon = strip.querySelector('.ci-sb-trigger-icon');
+      if (icon) icon.style.opacity = rawProgress >= SNAP_THRESHOLD ? 1 : 0;
+      if (state !== 3 && state !== 4) setState(3);
+    } else if (state > 1 && state < 4) {
+      retractTimer = setTimeout(() => {
+        if (!isLocked && state < 4) {
+          strip.style.width = '0px';
+          strip.style.opacity = '0';
+          const icon = strip.querySelector('.ci-sb-trigger-icon');
+          if (icon) icon.style.opacity = '0';
+          setState(1);
+        }
+      }, 400);
+    }
+  });
+
+  // Click strip to open
+  strip.addEventListener('click', () => { if (!isDragging) openPanel(); });
+
+  // Close button
+  closeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    closePanel();
+  });
+
+  // Resize panel by dragging left edge
+  const resizeHandle = container.querySelector('#ci-sb-resize');
+  let panelWidth = parseInt(localStorage.getItem('ci_sidebar_width')) || 400;
+
+  resizeHandle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeHandle.classList.add('ci-sb-resizing');
+    const startX = e.clientX;
+    const startWidth = panel.offsetWidth;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    // Block iframe from stealing mouse events during drag
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:15;cursor:col-resize;';
+    panel.appendChild(overlay);
+
+    const onMove = ev => {
+      const newWidth = Math.max(300, Math.min(800, startWidth + (startX - ev.clientX)));
+      panel.style.width = newWidth + 'px';
+      panel.style.transition = 'none';
+      document.documentElement.style.transition = 'none';
+      document.documentElement.style.marginRight = newWidth + 'px';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      overlay.remove();
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      resizeHandle.classList.remove('ci-sb-resizing');
+      panel.style.transition = '';
+      panelWidth = panel.offsetWidth;
+      localStorage.setItem('ci_sidebar_width', panelWidth);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Click outside to close
+  backdrop.addEventListener('click', closePanel);
+
+  // Prevent hover flicker — keep strip visible when mouse is over it
+  strip.addEventListener('mouseenter', () => {
+    clearTimeout(retractTimer);
+    if (!isLocked && state < 4) {
+      // Fully reveal when hovering directly on the trigger
+      strip.style.width = MAX_WIDTH + 'px';
+      strip.style.opacity = '1';
+      strip.style.boxShadow = '-3px 0 12px rgba(0,0,0,0.18)';
+      const icon = strip.querySelector('.ci-sb-trigger-icon');
+      if (icon) icon.style.opacity = '1';
+    }
+  });
+
+  strip.addEventListener('mouseleave', () => {
+    if (!isLocked && state < 4) {
+      retractTimer = setTimeout(() => {
+        strip.style.width = '0px';
+        strip.style.opacity = '0';
+        const icon = strip.querySelector('.ci-sb-trigger-icon');
+        if (icon) icon.style.opacity = '0';
+        setState(1);
+      }, 400);
+    }
+  });
+})();

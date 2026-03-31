@@ -1,12 +1,74 @@
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+// Floating sidebar is the primary UI — icon click toggles it
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 
-importScripts('config.js');
-const ANTHROPIC_KEY = CONFIG.ANTHROPIC_KEY;
-const APOLLO_KEY = CONFIG.APOLLO_KEY;
-const SERPER_KEY = CONFIG.SERPER_KEY;
+chrome.action.onClicked.addListener((tab) => {
+  if (!tab?.id || !tab.url || /^(chrome|edge|about|chrome-extension):/.test(tab.url)) return;
+  chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' }, () => void chrome.runtime.lastError);
+});
+
+// Load API keys: storage-based (user-configurable) with config.js fallback
+try { importScripts('config.js'); } catch(e) { /* no config.js — keys must be set via Integrations page */ }
+const _cfg = (typeof CONFIG !== 'undefined') ? CONFIG : {};
+
+let ANTHROPIC_KEY = _cfg.ANTHROPIC_KEY || '';
+let APOLLO_KEY = _cfg.APOLLO_KEY || '';
+let SERPER_KEY = _cfg.SERPER_KEY || '';
+let OPENAI_KEY = _cfg.OPENAI_KEY || '';
+let GRANOLA_KEY = '';
+
+// Override with storage-based keys on boot
+chrome.storage.local.get(['integrations'], ({ integrations }) => {
+  if (!integrations) { console.log('[Keys] No integrations in storage, using config.js'); return; }
+  console.log('[Keys] Loading from storage:', Object.keys(integrations).filter(k => !!integrations[k]).join(', '));
+  console.log('[Keys] OpenAI key present:', !!integrations.openai_key, '| length:', (integrations.openai_key || '').length);
+  if (integrations.anthropic_key) ANTHROPIC_KEY = integrations.anthropic_key;
+  if (integrations.openai_key)    OPENAI_KEY = integrations.openai_key;
+  if (integrations.apollo_key)    APOLLO_KEY = integrations.apollo_key;
+  if (integrations.serper_key)    SERPER_KEY = integrations.serper_key;
+  if (integrations.granola_key)   GRANOLA_KEY = integrations.granola_key;
+});
+
+// Live-update keys when user saves them from Integrations page
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.integrations) {
+    const v = changes.integrations.newValue || {};
+    if (v.anthropic_key) ANTHROPIC_KEY = v.anthropic_key;
+    if (v.apollo_key)    APOLLO_KEY = v.apollo_key;
+    if (v.serper_key)    SERPER_KEY = v.serper_key;
+    if (v.openai_key)    OPENAI_KEY = v.openai_key;
+    if (v.granola_key)   GRANOLA_KEY = v.granola_key;
+    _apolloExhausted = false;
+    _serperExhausted = false;
+  }
+});
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persisted to storage, survives SW restarts
+
+// Retry wrapper for Claude API calls with exponential backoff on 429
+async function claudeApiCall(body, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+    if (res.status === 429 && attempt < maxRetries) {
+      const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+      console.warn(`[Claude] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return res;
+  }
+}
 const photoCache = {}; // in-memory, per service worker lifetime
+let _apolloExhausted = false;
+let _serperExhausted = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'QUICK_LOOKUP') {
@@ -68,6 +130,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleGlobalChatMessage(message).then(sendResponse);
     return true;
   }
+  if (message.type === 'GET_KEY_STATUS') {
+    sendResponse({
+      anthropic: !!ANTHROPIC_KEY,
+      apollo: !!APOLLO_KEY,
+      serper: !!SERPER_KEY,
+      openai: !!OPENAI_KEY,
+      granola: !!GRANOLA_KEY,
+      apolloExhausted: _apolloExhausted,
+      serperExhausted: _serperExhausted,
+    });
+    return true;
+  }
+  if (message.type === 'TEST_API_KEY') {
+    testApiKey(message.provider, message.key).then(sendResponse);
+    return true;
+  }
 });
 
 // ── Enrichment Pipeline (provider-agnostic with fallback) ────────────────────
@@ -114,9 +192,9 @@ async function enrichFromWebResearch(company, domain) {
     // When no domain, add "company" or "software" to disambiguate generic names
     const qd = domain ? `"${company}" ${domain}` : `"${company}" company software`;
     const [productResults, websiteResults, linkedinResults] = await Promise.all([
-      fetchSerperResults(qd + ' what does it do product overview', 3),
-      fetchSerperResults(domain ? `"${company}" ${domain} official website` : `"${company}" company official website`, 2),
-      fetchSerperResults('site:linkedin.com/company ' + q, 2),
+      fetchSearchResults(qd + ' what does it do product overview', 3),
+      fetchSearchResults(domain ? `"${company}" ${domain} official website` : `"${company}" company official website`, 2),
+      fetchSearchResults('site:linkedin.com/company ' + q, 2),
     ]);
     console.log('[Enrich] Serper results:', {
       product: productResults.length,
@@ -145,7 +223,10 @@ async function enrichFromWebResearch(company, domain) {
         const d = await res.json();
         if (!res.ok) { console.log('[Enrich] Haiku API error:', res.status, d); }
         else {
-          const t = (d.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+          let t = (d.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+          // Strip trailing text after JSON (Haiku sometimes appends notes)
+          const lastBrace = t.lastIndexOf('}');
+          if (lastBrace > 0) t = t.slice(0, lastBrace + 1);
           console.log('[Enrich] Haiku raw response:', t);
           aiEstimate = JSON.parse(t);
           console.log('[Enrich] Haiku parsed:', aiEstimate);
@@ -155,13 +236,16 @@ async function enrichFromWebResearch(company, domain) {
       console.log('[Enrich] Skipping Haiku — snippets too short:', snippets.length);
     }
 
+    // Sanitize AI estimates — strip "Not found" / "Unknown" / "N/A" values
+    const clean = v => (v && !/not found|unknown|unavailable|n\/a|none/i.test(v)) ? v : null;
+
     const result = {
       source: 'Web research',
       company,
       description: null,
-      industry: linkedinFirmo?.industry || aiEstimate.industry || null,
-      employees: linkedinFirmo?.employees || aiEstimate.employees || null,
-      funding: linkedinFirmo?.funding || aiEstimate.funding || null,
+      industry: clean(linkedinFirmo?.industry) || clean(aiEstimate.industry) || null,
+      employees: clean(linkedinFirmo?.employees) || clean(aiEstimate.employees) || null,
+      funding: clean(linkedinFirmo?.funding) || clean(aiEstimate.funding) || null,
       foundedYear: (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
       companyWebsite: discoveredDomain ? `https://${discoveredDomain}` : null,
       companyLinkedin: null,
@@ -272,10 +356,10 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
 
     // Now run Serper searches with the best domain info available
     const [reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
-      fetchSerperResults(`${qd} (site:glassdoor.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees culture`, 8),
-      fetchSerperResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
-      fetchSerperResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
-      fetchSerperResults(qd + ' what does it do product overview how it works category', 3),
+      fetchSearchResults(`${qd} (site:glassdoor.com/Reviews OR site:glassdoor.com/Overview OR site:repvue.com OR site:blind.app OR reddit.com "${company}" reviews culture)`, 8),
+      fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
+      fetchSearchResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
+      fetchSearchResults(qd + ' what does it do product overview how it works category', 3),
     ]);
 
     // Use Apollo raw data for Claude synthesis if available, otherwise pass empty
@@ -283,9 +367,9 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
     const aiSummary = await fetchClaudeSummary(company, apolloRaw, reviewResults, leaderResults, productResults, domain);
 
     const claudeFirmo = aiSummary.firmographics || {};
+    const src = enrichment.source || 'Unknown';
     const result = {
       ...aiSummary,
-      // Priority: enrichment pipeline → Claude estimate
       employees: enrichment.employees || claudeFirmo.employees || null,
       funding: enrichment.funding || claudeFirmo.funding || null,
       industry: enrichment.industry || claudeFirmo.industry || null,
@@ -293,7 +377,19 @@ async function researchCompany(company, domain, prefs, companyLinkedin) {
       companyWebsite: enrichment.companyWebsite || null,
       companyLinkedin: enrichment.companyLinkedin || null,
       jobListings: jobResults.map(r => ({ title: r.title, url: r.link, snippet: r.snippet })),
-      enrichmentSource: enrichment.source,
+      enrichmentSource: src,
+      // Per-field source attribution
+      dataSources: {
+        employees: enrichment.employees ? src : claudeFirmo.employees ? 'Claude estimate' : null,
+        funding: enrichment.funding ? src : claudeFirmo.funding ? 'Claude estimate' : null,
+        industry: enrichment.industry ? src : claudeFirmo.industry ? 'Claude estimate' : null,
+        founded: enrichment.foundedYear ? src : claudeFirmo.founded ? 'Claude estimate' : null,
+        intelligence: 'Claude synthesis',
+        leaders: leaderResults.length ? 'LinkedIn via search' : null,
+        reviews: reviewResults.length ? 'Web search' : null,
+        jobListings: jobResults.length ? 'Web search' : null,
+        jobMatch: 'Claude Haiku',
+      },
     };
     await setCached(cacheKey, result);
     return result;
@@ -318,7 +414,7 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
   const rc = richContext || {};
   let richSection = '';
   if (rc.intelligence) richSection += `\nCompany Intelligence: ${rc.intelligence}\n`;
-  if (rc.reviews?.length) richSection += `\nEmployee Reviews:\n${rc.reviews.slice(0, 4).map(r => `- "${r.snippet}" (${r.source || ''})`).join('\n')}\n`;
+  if (rc.reviews?.length) richSection += `\nEmployee Reviews:\n${rc.reviews.slice(0, 4).map(r => `- ${r.rating ? r.rating + '★ ' : ''}"${r.snippet}" (${r.source || ''})`).join('\n')}\n`;
   if (rc.emails?.length) richSection += `\nRecent Email Context (${rc.emails.length} emails):\n${rc.emails.slice(0, 5).map(e => `- [${e.date}] "${e.subject}" from ${e.from}`).join('\n')}\n`;
   if (rc.meetings?.length) richSection += `\nMeeting Context (${rc.meetings.length} meetings):\n${rc.meetings.slice(0, 3).map(m => `- ${m.title || 'Meeting'} (${m.date || ''}) — ${(m.transcript || '').slice(0, 500)}`).join('\n')}\n`;
   if (rc.transcript) richSection += `\nMeeting Transcript (summary):\n${rc.transcript.slice(0, 1500)}\n`;
@@ -343,8 +439,10 @@ User Profile:
 - Actual location: ${prefs.userLocation || 'not specified'}
 - Work arrangement preference: ${locationContext || 'not specified'}
 - Max travel willing to do: ${prefs.maxTravel || 'not specified'}
-- Salary floor (walk away below): ${salaryFloor || 'not set'}
-- Salary strong offer (exciting above): ${salaryStrong || 'not set'}
+- BASE salary floor (walk away if base pay is below): ${salaryFloor || 'not set'}
+- BASE salary strong offer (exciting above): ${salaryStrong || 'not set'}
+- OTE floor (walk away if total comp/OTE is below): ${prefs.oteFloor || 'not set'}
+- OTE strong offer (exciting above): ${prefs.oteStrong || 'not set'}
 ${prefs.roleLoved ? `- A role they loved: ${prefs.roleLoved}` : ''}
 ${prefs.roleHated ? `- A role that was a bad fit: ${prefs.roleHated}` : ''}
 
@@ -358,8 +456,14 @@ Analysis rules:
 7. Use loved/hated role examples as calibration for concrete signals you find in the posting.
 8. Salary: extract the BASE salary or base salary range if stated anywhere in the posting (including legal/compliance disclosure sections at the bottom). If multiple figures are given (e.g., base + OTE/commission), extract the base salary only and set salaryType to "base". If only total/OTE compensation is mentioned, extract that and set salaryType to "ote". If no number is mentioned anywhere, use null for both.
 9. Do NOT flag missing salary information as a red flag. Most job postings don't include salary — it's normal and expected, not a negative signal.
-10. If a salary IS disclosed in the posting, compare it against the candidate's salary floor. If the disclosed base salary (or the top of the range) is below the candidate's floor, this is a MAJOR red flag — include it in redFlags with the specific numbers (e.g., "Base salary $70-80K is well below your $150K floor"). This should also significantly lower the score (at least -2 points). Salary below floor is one of the strongest disqualifying signals.
+10. Compensation evaluation — compare disclosed pay against the candidate's thresholds:
+  - If BASE salary is disclosed and is below the candidate's BASE floor → MAJOR red flag with specific numbers (e.g., "Base $80K is below your $150K base floor"). Drop score by 2+ points.
+  - If only OTE/total comp is disclosed and is below the candidate's OTE floor → red flag (e.g., "OTE $160K is below your $200K OTE floor"). Drop score by 1-2 points.
+  - If OTE is disclosed but no base is separated, do NOT compare OTE against the BASE floor — they are different numbers. A $200K OTE does not mean $200K base.
+  - Clearly label extracted compensation as "Base" or "OTE" in the jobSnapshot fields. Never leave ambiguous.
 11. OTE (On-Target Earnings) ranges without explicit base salary separation are COMPLETELY NORMAL for sales roles — do NOT flag this as a red flag. "Wide OTE range" is not a red flag. "Base not separated from OTE" is not a red flag. Only flag compensation as a red flag if the OTE or base is clearly below the candidate's salary floor.
+12. Do NOT flag missing travel information as a red flag. Most job postings don't mention travel requirements — this is normal and not a negative signal. Only flag travel as a red flag if travel is explicitly required AND it exceeds the user's max travel preference.
+13. For workArrangement in jobSnapshot: if the LinkedIn posting explicitly says "Remote" in its chips/tags, set workArrangement to "Remote" even if the job description mentions a specific geography or territory (e.g., "Southeast region"). Territory assignments do NOT mean on-site — they define sales coverage area, not work location.
 
 {
   "jobMatch": {
@@ -382,19 +486,10 @@ Analysis rules:
 }`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
+    const res = await claudeApiCall({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1100,
         messages: [{ role: 'user', content: prompt }]
-      })
     });
     const data = await res.json();
     const clean = data.content[0].text.replace(/```json|```/g, '').trim();
@@ -454,8 +549,47 @@ function parseLinkedInCompanySnippet(results) {
   return (out.employees || out.founded || out.industry) ? out : null;
 }
 
-let _apolloExhausted = false;
-let _serperExhausted = false;
+async function testApiKey(provider, key) {
+  try {
+    if (provider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] })
+      });
+      return { ok: res.ok, status: res.status };
+    }
+    if (provider === 'apollo') {
+      const res = await fetch('https://api.apollo.io/api/v1/organizations/enrich?name=google', {
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key }
+      });
+      return { ok: res.ok, status: res.status };
+    }
+    if (provider === 'serper') {
+      const res = await fetch('https://google.serper.dev/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': key },
+        body: JSON.stringify({ q: 'test', num: 1 })
+      });
+      return { ok: res.ok, status: res.status };
+    }
+    if (provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { ok: res.ok, status: res.status };
+    }
+    if (provider === 'granola') {
+      const res = await fetch('https://public-api.granola.ai/v1/notes?page_size=1', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { ok: res.ok, status: res.status };
+    }
+    return { ok: false, error: 'Unknown provider' };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
 
 async function fetchApolloData(domain, companyName) {
   if (_apolloExhausted) { console.log('[Apollo] Skipped — credits exhausted'); return {}; }
@@ -516,6 +650,134 @@ async function fetchSerperResults(query, num = 5) {
   return data.organic || [];
 }
 
+// Claude Web Search — uses Anthropic's built-in web_search tool
+async function fetchClaudeWebSearch(query, num = 5) {
+  if (!ANTHROPIC_KEY) { console.log('[ClaudeSearch] No API key'); return []; }
+  try {
+    console.log('[ClaudeSearch] Searching:', query);
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: num }],
+        messages: [{ role: 'user', content: `Search the web for: ${query}\n\nReturn the most relevant results.` }]
+      })
+    });
+    if (!res.ok) { console.warn('[ClaudeSearch] API error:', res.status); return []; }
+    const data = await res.json();
+    // Parse search results from the response content blocks
+    const results = [];
+    for (const block of (data.content || [])) {
+      if (block.type === 'web_search_tool_result') {
+        for (const sr of (block.content || [])) {
+          if (sr.type === 'web_search_result') {
+            results.push({ title: sr.title || '', link: sr.url || '', snippet: sr.page_content || sr.snippet || '' });
+          }
+        }
+      }
+    }
+    console.log('[ClaudeSearch] Got', results.length, 'results for:', query);
+    return results.slice(0, num);
+  } catch (e) {
+    console.warn('[ClaudeSearch] Error:', e.message);
+    return [];
+  }
+}
+
+// OpenAI Web Search — uses web_search_preview tool
+async function fetchOpenAIWebSearch(query, num = 5) {
+  if (!OPENAI_KEY) { console.log('[OpenAISearch] No API key'); return []; }
+  try {
+    console.log('[OpenAISearch] Searching:', query, '| key length:', OPENAI_KEY.length);
+    const res = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1-mini',
+        tools: [{ type: 'web_search_preview' }],
+        input: `Search the web for: ${query}\n\nReturn the most relevant results with titles, URLs, and snippets.`
+      })
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.warn('[OpenAISearch] API error:', res.status, errBody.slice(0, 300));
+      return [];
+    }
+    const data = await res.json();
+    console.log('[OpenAISearch] Response output types:', (data.output || []).map(o => o.type).join(', '));
+    // Parse results from the response output
+    const results = [];
+    let fullText = '';
+    for (const item of (data.output || [])) {
+      if (item.type === 'web_search_call') continue;
+      if (item.type === 'message' && item.content) {
+        for (const c of item.content) {
+          if (c.type === 'output_text') {
+            fullText = c.text || '';
+            for (const ann of (c.annotations || [])) {
+              if (ann.type === 'url_citation') {
+                // Extract surrounding text as snippet
+                const snippetStart = Math.max(0, (ann.start_index || 0) - 100);
+                const snippetEnd = Math.min(fullText.length, (ann.end_index || 0) + 100);
+                const snippet = fullText.slice(snippetStart, snippetEnd).replace(/\n/g, ' ').trim();
+                results.push({ title: ann.title || '', link: ann.url || '', snippet });
+              }
+            }
+          }
+        }
+      }
+    }
+    console.log('[OpenAISearch] Got', results.length, 'results for:', query);
+    return results.slice(0, num);
+  } catch (e) {
+    console.warn('[OpenAISearch] Error:', e.message);
+    return [];
+  }
+}
+
+// Unified search — tries providers in priority order with automatic fallback
+async function fetchSearchResults(query, num = 5) {
+  console.log('[Search] Provider status:', {
+    serper: SERPER_KEY ? (_serperExhausted ? 'exhausted' : 'available') : 'no key',
+    openai: OPENAI_KEY ? 'available' : 'no key',
+    claude: ANTHROPIC_KEY ? 'available' : 'no key',
+  });
+
+  // 1. Serper (free credits)
+  if (SERPER_KEY && !_serperExhausted) {
+    console.log('[Search] Trying Serper...');
+    const results = await fetchSerperResults(query, num);
+    if (results.length > 0) { console.log('[Search] Serper returned', results.length, 'results'); return results; }
+    console.log('[Search] Serper returned 0 results');
+  }
+  // 2. OpenAI Web Search (separate rate limits from Claude)
+  if (OPENAI_KEY) {
+    console.log('[Search] Trying OpenAI Web Search...');
+    const results = await fetchOpenAIWebSearch(query, num);
+    if (results.length > 0) { console.log('[Search] OpenAI returned', results.length, 'results'); return results; }
+    console.log('[Search] OpenAI returned 0 results');
+  }
+  // 3. Claude Web Search (last resort)
+  if (ANTHROPIC_KEY) {
+    console.log('[Search] Trying Claude Web Search...');
+    const results = await fetchClaudeWebSearch(query, num);
+    if (results.length > 0) { console.log('[Search] Claude returned', results.length, 'results'); return results; }
+    console.log('[Search] Claude returned 0 results');
+  }
+  console.log('[Search] All providers exhausted for:', query);
+  return [];
+}
+
 async function fetchClaudeSummary(company, apolloData, searchResults, leaderResults, productResults, domain) {
   const searchSnippets = searchResults.map(r => `${r.title} (${r.link}): ${r.snippet}`).join('\n');
   const leaderSnippets = leaderResults.map(r => `${r.title} (${r.link}): ${r.snippet}`).join('\n');
@@ -556,29 +818,24 @@ Respond with a JSON object only, no markdown:
     "funding": "<total funding or stage from any source, e.g. 'Series B, $24M' — null if truly unknown>",
     "industry": "<industry/category from context — null if truly unknown>"
   },
-  "reviews": [{"snippet": "<key insight or sentiment about culture/employee experience from search results — use the snippet text as-is, even if not a verbatim quote>", "source": "<site name, e.g. Glassdoor, Blind, RepVue, Reddit>", "url": "<exact URL>"}],
+  "reviews": [{"snippet": "<key insight about culture, employee experience, or company reputation. If Glassdoor rating or 'would recommend' percentage is visible in the snippet, include it (e.g. '4.4★ rating, 82% would recommend. Employees praise...'). Extract actual review content, not job listing titles.>", "source": "<site name, e.g. Glassdoor, Blind, RepVue, Reddit>", "rating": "<star rating if found, e.g. '4.4' — null if not in snippet>", "url": "<exact URL>"}],
   "leaders": [{"name": "<full name>", "title": "<role at this company>", "newsUrl": "<URL or null>"}]
 }`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
+  const res = await claudeApiCall({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
-    })
   });
 
   const data = await res.json();
-  // Surface API-level errors (rate limits, overload, invalid key, etc.)
-  if (data.error) throw new Error(`Claude API error: ${data.error.message || data.error.type}`);
-  if (!res.ok) throw new Error(`Claude HTTP ${res.status}`);
+  // Surface API-level errors with friendly messages
+  if (data.error) {
+    const msg = data.error.message || data.error.type || '';
+    if (/rate.limit/i.test(msg)) throw new Error('AI is busy — too many requests. Try again in a moment.');
+    throw new Error('AI analysis temporarily unavailable. Try refreshing.');
+  }
+  if (!res.ok) throw new Error('AI analysis temporarily unavailable. Try refreshing.');
   const raw = data.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude');
   const clean = raw.replace(/```json|```/g, '').trim();
@@ -792,12 +1049,34 @@ async function handleChatMessage({ messages, context }) {
   };
 
   const systemParts = [
-    `You are a sharp, concise strategic advisor embedded in CompanyIntel — a personal job search intelligence tool. You have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. Use ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.\n\nResponse style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.`,
+    `You are a sharp, concise strategic advisor embedded in CompanyIntel — a personal job search intelligence tool. You have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. Use ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.\n\nResponse style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable and open in new tabs. Images will render inline. Use these when they add value — don't force formatting where plain text works.`,
     `\n=== TODAY ===\n${todayStr}`
   ];
 
   if (context._applicationMode) {
-    systemParts.push(`\n=== APPLICATION MODE ===\nThe user is currently filling out a job application. Help them answer application questions concisely and compellingly, drawing on their background, the job description, and what you know about the company. Keep answers specific to this role — not generic. Mirror the language and values from the job posting. Be confident but authentic.`);
+    systemParts.push(`\n=== APPLICATION HELPER MODE ===
+SITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.
+
+VOICE & TONE:
+- Write as the user in first person. Conversational, confident, specific.
+- Sound like a smart person talking, not an AI writing.
+- No dramatic framing, no buzzword stacking, no filler.
+- Think "how you'd explain it to a friend who works in the industry."
+- NEVER wrap the answer in quotation marks.
+
+LENGTH: 2-5 sentences unless the user specifies otherwise. Shorter is almost always better. If a question needs a longer answer, cap at one short paragraph.
+
+CONTEXT TO SYNTHESIZE: You have the user's Story Time profile, their work experience and preferences, the full job description, the company's product/market/space from web research, the match analysis with green and red flags, and any email or meeting history. Use ALL of this to understand why this company is a fit for this specific person. Reference specifics — the company's actual product, their market position, the user's real experience. Generic answers are unacceptable.
+
+OUTPUT FORMAT:
+- Give ONE clean answer the user can copy-paste directly into the application field.
+- No preamble like "Here's an answer you can adapt."
+- No alternatives unless asked.
+- No commentary after the answer — just the answer.
+- NEVER wrap the answer in quotation marks.
+- If you want to offer to adjust, put it in one short line after a blank line.
+
+When the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
   }
 
   // ── Company overview ──────────────────────────────────────────────────────
@@ -886,13 +1165,29 @@ async function handleChatMessage({ messages, context }) {
     systemParts.push(`\n=== MEETING NOTES / TRANSCRIPTS ===\n${context.granolaNote.slice(0, 12000)}`);
   }
 
-  // ── User background & prefs ───────────────────────────────────────────────
+  // ── User profile & preferences (everything from preferences page) ────────
   const userParts = [];
-  if (prefs.jobMatchBackground) userParts.push(`Background: ${prefs.jobMatchBackground}`);
-  if (prefs.roles)               userParts.push(`Target roles: ${prefs.roles}`);
-  if (prefs.avoid)               userParts.push(`Avoid: ${prefs.avoid}`);
-  if (prefs.roleLoved)           userParts.push(`Loves: ${prefs.roleLoved}`);
-  if (prefs.roleHated)           userParts.push(`Hates: ${prefs.roleHated}`);
+  // Resume / LinkedIn
+  if (prefs.resumeText)          userParts.push(`Resume / LinkedIn profile:\n${prefs.resumeText.slice(0, 3000)}`);
+  if (prefs.linkedinUrl)         userParts.push(`LinkedIn URL: ${prefs.linkedinUrl}`);
+  // Role context
+  if (prefs.jobMatchBackground)  userParts.push(`Background & strengths: ${prefs.jobMatchBackground}`);
+  if (prefs.roleLoved)           userParts.push(`Responsibilities & attributes they enjoy: ${prefs.roleLoved}`);
+  if (prefs.roleHated)           userParts.push(`Responsibilities & attributes to avoid: ${prefs.roleHated}`);
+  // Career preferences
+  if (prefs.roles)               userParts.push(`Roles looking for: ${prefs.roles}`);
+  if (prefs.avoid)               userParts.push(`Want to avoid: ${prefs.avoid}`);
+  if (prefs.interests)           userParts.push(`Industries/products that excite: ${prefs.interests}`);
+  // Location & logistics
+  if (prefs.userLocation)        userParts.push(`Location: ${prefs.userLocation}`);
+  const wa = (prefs.workArrangement || []).join(', ');
+  if (wa)                        userParts.push(`Work arrangement preference: ${wa}`);
+  if (prefs.maxTravel)           userParts.push(`Max travel: ${prefs.maxTravel}`);
+  // Compensation
+  if (prefs.salaryFloor)         userParts.push(`Base salary floor (walk away below): $${prefs.salaryFloor}`);
+  if (prefs.salaryStrong)        userParts.push(`Base salary strong offer (exciting above): $${prefs.salaryStrong}`);
+  if (prefs.oteFloor)            userParts.push(`OTE floor (walk away below): $${prefs.oteFloor}`);
+  if (prefs.oteStrong)           userParts.push(`OTE strong offer (exciting above): $${prefs.oteStrong}`);
   if (userParts.length)          systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
 
   // ── Story Time (persistent personal context) ───────────────────────────────
@@ -911,20 +1206,11 @@ async function handleChatMessage({ messages, context }) {
   try {
     const systemText = systemParts.join('\n');
     console.log('[Chat] System prompt length:', systemText.length, 'chars');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
+    const res = await claudeApiCall({
         model: 'claude-sonnet-4-6',
         max_tokens: 2048,
         system: systemText,
         messages
-      })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -952,7 +1238,7 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
   const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const systemParts = [
-    `You are the user's strategic career advisor with full visibility across their job search pipeline. You know their background, values, and preferences. You can see every company and opportunity they're tracking.\n\nHelp them prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When they mention a specific company or person, use the pipeline context to inform your response.\n\nIf they ask you to draft a message, email, or follow-up — pull from what you know about that company's stage, contacts, notes, and context to write something specific and actionable.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about them. Don't be sycophantic.\n\nResponse style: Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.`,
+    `You are the user's strategic career advisor with full visibility across their job search pipeline. You know their background, values, and preferences. You can see every company and opportunity they're tracking.\n\nHelp them prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When they mention a specific company or person, use the pipeline context to inform your response.\n\nIf they ask you to draft a message, email, or follow-up — pull from what you know about that company's stage, contacts, notes, and context to write something specific and actionable.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about them. Don't be sycophantic.\n\nResponse style: Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline. Use these when they add value.`,
     `\n=== TODAY ===\n${todayStr}`
   ];
 
@@ -964,17 +1250,24 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
     if (insights.length) systemParts.push(`\n=== AI-LEARNED INSIGHTS ===\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
   }
 
-  // User prefs
+  // User profile & preferences (full)
   const userParts = [];
-  if (prefs.jobMatchBackground) userParts.push(`Background: ${prefs.jobMatchBackground}`);
-  if (prefs.roles)               userParts.push(`Target roles: ${prefs.roles}`);
-  if (prefs.avoid)               userParts.push(`Avoid: ${prefs.avoid}`);
-  if (prefs.roleLoved)           userParts.push(`Loves: ${prefs.roleLoved}`);
-  if (prefs.roleHated)           userParts.push(`Hates: ${prefs.roleHated}`);
-  if (prefs.salaryFloor)         userParts.push(`Salary floor: $${prefs.salaryFloor}`);
+  if (prefs.resumeText)          userParts.push(`Resume / LinkedIn profile:\n${prefs.resumeText.slice(0, 3000)}`);
+  if (prefs.linkedinUrl)         userParts.push(`LinkedIn URL: ${prefs.linkedinUrl}`);
+  if (prefs.jobMatchBackground)  userParts.push(`Background & strengths: ${prefs.jobMatchBackground}`);
+  if (prefs.roleLoved)           userParts.push(`Responsibilities & attributes they enjoy: ${prefs.roleLoved}`);
+  if (prefs.roleHated)           userParts.push(`Responsibilities & attributes to avoid: ${prefs.roleHated}`);
+  if (prefs.roles)               userParts.push(`Roles looking for: ${prefs.roles}`);
+  if (prefs.avoid)               userParts.push(`Want to avoid: ${prefs.avoid}`);
+  if (prefs.interests)           userParts.push(`Industries/products that excite: ${prefs.interests}`);
   if (prefs.userLocation)        userParts.push(`Location: ${prefs.userLocation}`);
   const wa = (prefs.workArrangement || []).join(', ');
-  if (wa) userParts.push(`Work arrangement: ${wa}`);
+  if (wa)                        userParts.push(`Work arrangement preference: ${wa}`);
+  if (prefs.maxTravel)           userParts.push(`Max travel: ${prefs.maxTravel}`);
+  if (prefs.salaryFloor)         userParts.push(`Base salary floor: $${prefs.salaryFloor}`);
+  if (prefs.salaryStrong)        userParts.push(`Base salary strong offer: $${prefs.salaryStrong}`);
+  if (prefs.oteFloor)            userParts.push(`OTE floor: $${prefs.oteFloor}`);
+  if (prefs.oteStrong)           userParts.push(`OTE strong offer: $${prefs.oteStrong}`);
   if (userParts.length) systemParts.push(`\n=== ABOUT THE USER ===\n${userParts.join('\n')}`);
 
   // Pipeline summary
@@ -989,20 +1282,11 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments }) {
   try {
     const systemText = systemParts.join('\n');
     console.log('[GlobalChat] System prompt length:', systemText.length, 'chars');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
+    const res = await claudeApiCall({
         model: 'claude-sonnet-4-6',
         max_tokens: 2048,
         system: systemText,
         messages
-      })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -1028,18 +1312,19 @@ async function extractInsightsFromChat(userMessage, assistantResponse, source) {
     const st = storyTime || {};
     const existing = (st.learnedInsights || []).slice(-20).map(i => i.insight).join('\n');
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
+    const res = await claudeApiCall({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
-        messages: [{ role: 'user', content: `You just had a conversation with the user. Based on the conversation below, extract any NEW personal insights about the user — things like values, preferences, communication style, concerns, patterns, career goals, or relationship dynamics that would help you advise them better in the future.
+        messages: [{ role: 'user', content: `You just had a conversation with the user. Based on the conversation below, extract any NEW insights about the user that would help you advise them better in future conversations. Look for:
+
+1. **Facts & preferences**: values, dealbreakers, career goals, interests, relationship dynamics
+2. **Strategic preferences**: how they want to position themselves, what narrative they want to lead with, how they want to handle specific topics (comp, gaps, why they're leaving, etc.)
+3. **Communication instructions**: things the user explicitly says to remember — "always do X," "never mention Y," "when asked about Z, say this," "lead with A not B"
+4. **Negotiation & interview strategy**: how they want to approach salary discussions, what leverage points they want to emphasize, what questions they want to ask
+5. **Talking points & framing**: specific phrases, framings, or angles the user liked and wants to reuse across applications
+6. **Situational rules**: "if the role is X, emphasize Y" or "for startups, mention Z but not for enterprise"
+
+Capture the STRATEGIC and TACTICAL insights, not just factual observations. If the user corrects you or says "don't do that" or "say it more like this," that's a high-value insight.
 
 Return ONLY a JSON array of insight strings. If there are no new insights, return an empty array [].
 
@@ -1049,10 +1334,9 @@ Assistant: ${assistantResponse}
 
 Existing insights (don't repeat these):
 ${existing}` }]
-      })
     });
     const data = await res.json();
-    if (!res.ok) { console.error('[Insights] API error:', res.status); return; }
+    if (!res.ok) { console.warn('[Insights] Skipped — API busy (', res.status, ')'); return; }
 
     const text = (data.content?.[0]?.text || '').trim();
     let insights;
@@ -1301,285 +1585,103 @@ async function fetchCalendarEvents(domain, companyName, knownContactEmails) {
 
 // ── Granola MCP ─────────────────────────────────────────────────────────────
 
-async function searchGranolaNotes(companyName, contactNames = [], calendarDates = [], attendeeHandles = []) {
-  const { granolaToken } = await new Promise(r => chrome.storage.local.get(['granolaToken'], r));
-  if (!granolaToken) return { notes: null, error: 'not_connected' };
 
-  const granolaPost = async (body) => {
-    const controller = new AbortController();
-    const res = await fetch('https://mcp.granola.ai/mcp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        'Authorization': `Bearer ${granolaToken}`
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
+// ── Granola REST API (Personal API key) ─────────────────────────────────────
+
+async function granolaFetch(path) {
+  if (!GRANOLA_KEY) return null;
+  const res = await fetch('https://public-api.granola.ai' + path, {
+    headers: { 'Authorization': 'Bearer ' + GRANOLA_KEY }
+  });
+  if (res.status === 429) {
+    // Rate limited — wait and retry once
+    await new Promise(r => setTimeout(r, 2000));
+    const retry = await fetch('https://public-api.granola.ai' + path, {
+      headers: { 'Authorization': 'Bearer ' + GRANOLA_KEY }
     });
-    if (res.status === 401) throw Object.assign(new Error('Granola token expired'), { code: 401 });
-    if (!res.ok) return null;
+    if (!retry.ok) return null;
+    return retry.json();
+  }
+  if (!res.ok) {
+    console.warn('[Granola] API error:', res.status, path);
+    return null;
+  }
+  return res.json();
+}
 
-    // Read SSE stream — skip progress notifications, return the final result event
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('text/event-stream')) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          for (const line of lines) {
-            if (!line.startsWith('data:')) continue;
-            const text = line.slice(5).trim();
-            if (!text) continue;
-            try {
-              const parsed = JSON.parse(text);
-              // Skip progress notifications — wait for the final result
-              if (parsed.method === 'notifications/progress') continue;
-              controller.abort();
-              return parsed;
-            } catch(e) { continue; }
-          }
-          // Keep only the last incomplete line in the buffer
-          buffer = lines[lines.length - 1];
-        }
-      } catch(e) { /* AbortError is expected */ }
-      return null;
-    }
-
-    const text = await res.text();
-    if (!text) return null;
-    try { return JSON.parse(text); } catch(e) { return null; }
-  };
+async function searchGranolaNotes(companyName, contactNames = [], calendarDates = [], attendeeHandles = []) {
+  if (!GRANOLA_KEY) return { notes: null, error: 'not_connected' };
 
   try {
-    // MCP handshake: initialize → notifications/initialized → tools/list
-    await granolaPost({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'CompanyIntel', version: '1.0' } } });
-    await granolaPost({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
-    const toolsRes = await granolaPost({ jsonrpc: '2.0', method: 'tools/list', id: 2 });
-    const availableTools = (toolsRes?.result?.tools || []).map(t => t.name);
-    console.log('[Granola MCP] Available tools:', availableTools.join(', '));
-
-    const seen = new Set();
-    const allNotes = [];
-    let reqId = 3;
-
-    const addNote = text => {
-      if (text && !seen.has(text)) { seen.add(text); allNotes.push(text); }
-    };
-
-    const callTool = async (name, args) => {
-      if (!availableTools.includes(name)) return null;
-      const data = await granolaPost({ jsonrpc: '2.0', method: 'tools/call', id: reqId++, params: { name, arguments: args } });
-      return data?.result?.content?.[0]?.text || null;
-    };
-
-    // Resolve the actual tool name for getting full meeting data (varies by Granola version)
-    const transcriptToolName = ['get_meeting_transcript', 'get_meetings', 'get_meeting', 'get_transcript']
-      .find(n => availableTools.includes(n)) || null;
-    console.log('[Granola] Transcript tool resolved to:', transcriptToolName);
-
-    // Resolve query tool name
-    const queryToolName = ['query_granola_meetings', 'search_meetings', 'search']
-      .find(n => availableTools.includes(n)) || 'query_granola_meetings';
-    // Resolve list tool name
-    const listToolName = ['list_meetings', 'list_granola_meetings']
-      .find(n => availableTools.includes(n)) || 'list_meetings';
-
-    // Strategy 1: natural language summary query
-    addNote(await callTool(queryToolName, { query: `meetings with ${companyName}` }));
-
-    // Strategy 2: if nothing found, try contact names
-    if (!allNotes.length) {
-      for (const name of contactNames.slice(0, 3)) {
-        if (name) addNote(await callTool(queryToolName, { query: `meetings with ${name}` }));
-      }
+    console.log('[Granola] Searching notes for:', companyName);
+    // Fetch recent notes (last 90 days)
+    const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const data = await granolaFetch('/v1/notes?page_size=30&created_after=' + since);
+    if (!data?.notes?.length) {
+      console.log('[Granola] No notes found');
+      return { notes: null, transcript: null, meetings: [] };
     }
 
-    // Strategy 3: fetch full transcripts for relevant meetings
-    const transcripts = [];
+    const lowerCompany = companyName.toLowerCase();
+    const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?)$/i, '').trim().toLowerCase();
+    const contactLower = contactNames.map(n => n.toLowerCase());
+
+    // Match notes by title, attendees, or calendar event
+    const matched = [];
+    for (const note of data.notes) {
+      const title = (note.title || '').toLowerCase();
+      const matchesCompany = title.includes(lowerCompany) || (shortName.length > 3 && title.includes(shortName));
+      const matchesContact = contactLower.some(n => {
+        if (!n || n.length < 3) return false;
+        const words = n.split(' ').filter(Boolean);
+        if (words.length >= 2) return words.every(w => w.length > 1 && title.includes(w)) || (words[0].length >= 3 && title.includes(words[0]));
+        return n.length >= 4 && title.includes(n);
+      });
+      if (matchesCompany || matchesContact) matched.push(note);
+    }
+
+    console.log('[Granola] Matched', matched.length, 'notes for', companyName);
+    if (!matched.length) return { notes: null, transcript: null, meetings: [] };
+
+    // Fetch full content with transcripts for matched notes (max 5)
     const meetings = [];
-    const meetingsList = await callTool(listToolName, { time_range: 'last_90_days' });
-    if (meetingsList) {
-      const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-      const lowerCompany = companyName.toLowerCase();
-      const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?)$/i, '').trim().toLowerCase();
-      const contactLower = contactNames.map(n => n.toLowerCase());
+    const transcripts = [];
+    for (const note of matched.slice(0, 5)) {
+      const full = await granolaFetch('/v1/notes/' + note.id + '?include=transcript');
+      if (!full) continue;
 
-      // Parse metadata (title, date, time) for every line or XML element that has a UUID
-      const meetingMeta = {};
-      const lines = meetingsList.split('\n');
+      const transcriptText = (full.transcript || []).map(t =>
+        (t.speaker?.source || 'Speaker') + ': ' + t.text
+      ).join('\n');
 
-      // Helper: parse various date formats → {date: "YYYY-MM-DD", time: "HH:MM" | null}
-      const months3 = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-      const fullMonths = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11};
-      const toIso = (yr, mo, day) => `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      const parseTime = (hr, mn, ap) => {
-        let h = parseInt(hr); const m2 = mn || '00'; const a = (ap||'').toUpperCase();
-        if (a === 'PM' && h < 12) h += 12;
-        if (a === 'AM' && h === 12) h = 0;
-        return `${String(h).padStart(2,'0')}:${m2}`;
-      };
-      const parseFriendlyDate = str => {
-        if (!str) return { date: null, time: null };
-        // 1. ISO: 2026-03-23 or 2026-03-23T10:30
-        const iso = str.match(/(\d{4}-\d{2}-\d{2})/);
-        if (iso) {
-          const t = str.match(/T(\d{2}:\d{2})/);
-          return { date: iso[1], time: t ? t[1] : null };
-        }
-        // 2. Unix timestamp (ms or s)
-        const tsOnly = str.match(/^\s*(\d{10,13})\s*$/);
-        if (tsOnly) {
-          const ts = parseInt(tsOnly[1]);
-          const d = new Date(ts > 1e12 ? ts : ts * 1000);
-          if (!isNaN(d)) return { date: d.toISOString().slice(0,10), time: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` };
-        }
-        // 3. "Mar 23 2026 10 30 AM" or "Mar 23 2026 10:30 AM" (3-letter month)
-        const m3 = str.match(/(\w{3,})\s+(\d{1,2})(?:,)?\s+(\d{4})(?:\s+(\d{1,2})[\s:](\d{2})\s*(AM|PM)?)?/i);
-        if (m3) {
-          const mk = m3[1].toLowerCase();
-          const mo = months3[mk.slice(0,3)] ?? fullMonths[mk] ?? -1;
-          if (mo >= 0) {
-            const date = toIso(m3[3], mo, parseInt(m3[2]));
-            const time = m3[4] ? parseTime(m3[4], m3[5], m3[6]) : null;
-            return { date, time };
-          }
-        }
-        // 4. "23 Mar 2026" (day first)
-        const m4 = str.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/i);
-        if (m4) {
-          const mo = months3[m4[2].toLowerCase()];
-          if (mo !== undefined) return { date: toIso(m4[3], mo, parseInt(m4[1])), time: null };
-        }
-        return { date: null, time: null };
-      };
+      const summary = full.summary_markdown || full.summary_text || '';
+      const attendees = (full.attendees || []).map(a => a.name || a.email).filter(Boolean);
+      const calEvent = full.calendar_event || {};
 
-      for (const line of lines) {
-        // Try XML attribute format: <meeting id="uuid" title="..." date="...">
-        const xmlId = (line.match(/\bid="([^"]+)"/) || [])[1];
-        const xmlTitle = (line.match(/\btitle="([^"]*)"/) || [])[1];
-        const xmlDate = (line.match(/\bdate="([^"]*)"/) || [])[1];
+      meetings.push({
+        id: note.id,
+        title: note.title || 'Meeting',
+        date: note.created_at?.slice(0, 10) || null,
+        time: note.created_at?.slice(11, 16) || null,
+        transcript: transcriptText || summary,
+        summary,
+        attendees,
+        calendarTitle: calEvent.event_title || null,
+      });
 
-        let id, title, date, time;
-
-        if (xmlId && xmlId.length > 4) {
-          // XML format — use attribute values directly
-          id = xmlId;
-          title = xmlTitle || null;
-          const parsed = parseFriendlyDate(xmlDate);
-          date = parsed.date;
-          time = parsed.time;
-        } else {
-          // Fallback: UUID anywhere in line
-          const uuids = line.match(uuidRe);
-          if (!uuids) continue;
-          id = uuids[0];
-          const isoDate = parseFriendlyDate(line);
-          date = isoDate.date;
-          time = isoDate.time;
-          // Extract title by stripping UUID, dates, and XML/punctuation cruft
-          title = line
-            .replace(uuidRe, '')
-            .replace(/<[^>]+>/g, '')
-            .replace(/\d{4}-\d{2}-\d{2}[T\s]?\d{0,2}:?\d{0,2}:?\d{0,2}[^\s]*/g, '')
-            .replace(/[-–|:,\[\]()<>]+/g, ' ')
-            .replace(/\s{2,}/g, ' ')
-            .trim()
-            .slice(0, 150) || null;
-        }
-
-        if (id) meetingMeta[id] = { title, date, time };
-      }
-
-      // Find meeting IDs relevant to this company.
-      console.log('[Granola] Parsed', Object.keys(meetingMeta).length, 'meetings from list. Looking for:', lowerCompany, '| contacts:', contactLower);
-      const relevantIds = [];
-      for (const [id, meta] of Object.entries(meetingMeta)) {
-        const title = (meta.title || '').toLowerCase();
-        if (!title) continue;
-
-        const matchesCompany = title.includes(lowerCompany) || (shortName.length > 3 && title.includes(shortName));
-
-        // Full contact name match only — require at least 2 words or 6+ chars to avoid common first names
-        const matchesContact = contactLower.some(n => {
-          if (!n || n.length < 3) return false;
-          const words = n.split(' ').filter(Boolean);
-          if (words.length >= 2) {
-            // Full name: both first and last appear → strong match
-            const fullMatch = words.every(w => w.length > 1 && title.includes(w));
-            if (fullMatch) return true;
-            // First-name-only match is acceptable for verified company contacts
-            // (these names are scoped to this specific company, so false positives are rare)
-            return words[0].length >= 3 && title.includes(words[0]);
-          }
-          return n.length >= 4 && title.includes(n);
-        });
-
-        if (matchesCompany || matchesContact) relevantIds.push(id);
-      }
-
-      console.log('[Granola] Matched', relevantIds.length, 'meetings by title. Titles checked:', Object.values(meetingMeta).map(m => m.title).slice(0, 10));
-
-      // Fallback: if query_granola_meetings found results but title matching didn't,
-      // extract UUIDs from the query result text and fetch those transcripts
-      if (relevantIds.length === 0 && allNotes.length > 0) {
-        const queryUuids = [];
-        for (const note of allNotes) {
-          const found = note.match(uuidRe);
-          if (found) queryUuids.push(...found);
-        }
-        if (queryUuids.length) {
-          console.log('[Granola] Fallback: extracted', queryUuids.length, 'UUIDs from query results');
-          relevantIds.push(...queryUuids);
-        }
-      }
-
-      // Fetch transcripts in parallel (max 5 meetings) — capture structured per-meeting data
-      const uniqueIds = [...new Set(relevantIds)].slice(0, 5);
-      await Promise.all(uniqueIds.map(async id => {
-        const t = transcriptToolName ? await callTool(transcriptToolName, { meeting_id: id }) : null;
-        if (!t) return;
-        transcripts.push(t);
-        const meta = meetingMeta[id] || {};
-        // Use first non-XML, non-empty transcript line as title fallback
-        const firstLine = t.split('\n')
-          .map(l => l.trim())
-          .find(l => l && l.length > 3 && !l.startsWith('<')) || '';
-        const title = (meta.title && meta.title.length > 4 && !meta.title.startsWith('<'))
-          ? meta.title
-          : firstLine.replace(/^#+\s*/, '').slice(0, 150);
-        // If meta.date is missing, try extracting it from the transcript's XML opening tag
-        let meetingDate = meta.date;
-        let meetingTime = meta.time;
-        if (!meetingDate) {
-          const xmlDateAttr = (t.match(/\bdate="([^"]+)"/) || [])[1];
-          if (xmlDateAttr) {
-            const parsed = parseFriendlyDate(xmlDateAttr);
-            meetingDate = parsed.date;
-            meetingTime = parsed.time || meetingTime;
-          }
-        }
-        meetings.push({ id, title: title || 'Meeting', date: meetingDate, time: meetingTime, transcript: t });
-      }));
-
-      // Sort newest first
-      meetings.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      if (transcriptText) transcripts.push(transcriptText);
+      else if (summary) transcripts.push(summary);
     }
 
-    const notes = allNotes.length ? allNotes.join('\n\n---\n\n') : null;
-    const transcript = transcripts.length ? transcripts.join('\n\n---\n\n') : null;
+    meetings.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    const notes = meetings.map(m => m.summary).filter(Boolean).join('\n\n---\n\n') || null;
+    const transcript = transcripts.join('\n\n---\n\n') || null;
+
+    console.log('[Granola] Returning', meetings.length, 'meetings with', transcripts.length, 'transcripts');
     return { notes, transcript, meetings };
   } catch (err) {
-    if (err.code === 401) {
-      // Token expired — clear stale token so Preferences reflects real state
-      chrome.storage.local.remove('granolaToken');
-      return { notes: null, error: 'token_expired' };
-    }
+    console.error('[Granola] Error:', err.message);
     return { notes: null, error: err.message };
   }
 }
@@ -1600,7 +1702,7 @@ async function backfillMissingWebsites() {
   for (const entry of needsFill) {
     try {
       // Step 1: Serper search for official website
-      const results = await fetchSerperResults(`"${entry.company}" official website`, 3);
+      const results = await fetchSearchResults(`"${entry.company}" official website`, 3);
       const domain = extractDomainFromResults(results, entry.company);
 
       if (domain) {

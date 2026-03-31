@@ -38,6 +38,8 @@ function savePrefs(showConfirm = true) {
     maxTravel:         document.getElementById('pref-max-travel').value.trim(),
     salaryFloor:       document.getElementById('pref-salary-floor').value.trim(),
     salaryStrong:      document.getElementById('pref-salary-strong').value.trim(),
+    oteFloor:          document.getElementById('pref-ote-floor').value.trim(),
+    oteStrong:         document.getElementById('pref-ote-strong').value.trim(),
   };
 
   chrome.storage.sync.set({ prefs }, () => {
@@ -72,6 +74,8 @@ loadPrefsWithMigration(prefs => {
   document.getElementById('pref-max-travel').value      = prefs.maxTravel          || '';
   document.getElementById('pref-salary-floor').value    = prefs.salaryFloor        || '';
   document.getElementById('pref-salary-strong').value   = prefs.salaryStrong       || '';
+  document.getElementById('pref-ote-floor').value       = prefs.oteFloor           || '';
+  document.getElementById('pref-ote-strong').value      = prefs.oteStrong          || '';
 
   const arr = prefs.workArrangement || [];
   document.querySelectorAll('input[name="work-arr"]').forEach(cb => {
@@ -95,6 +99,8 @@ loadPrefsWithMigration(prefs => {
   chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
     const st = storyTime || {};
     inputEl.value = st.rawInput || '';
+    // Auto-size to fit content
+    requestAnimationFrame(() => { inputEl.style.height = ''; inputEl.style.height = Math.max(200, inputEl.scrollHeight) + 'px'; });
     renderProfile(st);
   });
 
@@ -401,188 +407,3 @@ document.getElementById('upload-resume-file').addEventListener('change', e => {
   reader.readAsText(file);
 });
 
-// ── Integrations ───────────────────────────────────────────────────────────
-
-// Gmail
-(function initGmailUI() {
-  const statusEl   = document.getElementById('gmail-status');
-  const connectBtn = document.getElementById('gmail-connect-btn');
-  const disconnBtn = document.getElementById('gmail-disconnect-btn');
-
-  function setConnected(yes) {
-    statusEl.textContent  = yes ? 'Connected' : 'Not connected';
-    statusEl.className    = 'integration-status' + (yes ? ' connected' : '');
-    connectBtn.style.display = yes ? 'none' : '';
-    disconnBtn.style.display = yes ? '' : 'none';
-  }
-
-  chrome.storage.local.get(['gmailConnected'], ({ gmailConnected }) => {
-    setConnected(!!gmailConnected);
-  });
-
-  connectBtn.addEventListener('click', async () => {
-    connectBtn.disabled = true;
-    connectBtn.textContent = 'Connecting…';
-    const result = await new Promise(resolve =>
-      chrome.runtime.sendMessage({ type: 'GMAIL_AUTH' }, resolve)
-    );
-    connectBtn.disabled = false;
-    connectBtn.textContent = 'Connect Gmail';
-    if (result?.success) {
-      setConnected(true);
-    } else {
-      statusEl.textContent = result?.error || 'Connection failed';
-      statusEl.className = 'integration-status';
-    }
-  });
-
-  disconnBtn.addEventListener('click', async () => {
-    await new Promise(resolve => chrome.runtime.sendMessage({ type: 'GMAIL_REVOKE' }, resolve));
-    setConnected(false);
-  });
-})();
-
-// Granola
-(function initGranolaUI() {
-  const statusEl   = document.getElementById('granola-status');
-  const connectBtn = document.getElementById('granola-connect-btn');
-  const disconnBtn = document.getElementById('granola-disconnect-btn');
-
-  function setConnected(yes) {
-    statusEl.textContent  = yes ? 'Connected' : 'Not connected';
-    statusEl.className    = 'integration-status' + (yes ? ' connected' : '');
-    connectBtn.style.display = yes ? 'none' : '';
-    disconnBtn.style.display = yes ? '' : 'none';
-  }
-
-  chrome.storage.local.get(['granolaToken'], async ({ granolaToken }) => {
-    if (!granolaToken) { setConnected(false); return; }
-    // Validate token is still live — a stale token shows "Connected" but fails silently elsewhere
-    try {
-      const res = await fetch('https://mcp.granola.ai/mcp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Authorization': `Bearer ${granolaToken}` },
-        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'CompanyIntel', version: '1.0' } } })
-      });
-      if (res.status === 401) {
-        chrome.storage.local.remove('granolaToken');
-        setConnected(false);
-        statusEl.textContent = 'Session expired — please reconnect';
-      } else {
-        setConnected(true);
-      }
-    } catch(e) {
-      // Network error — assume still connected, let the next actual use surface errors
-      setConnected(true);
-    }
-  });
-
-  connectBtn.addEventListener('click', async () => {
-    connectBtn.disabled = true;
-    connectBtn.textContent = 'Connecting…';
-
-    const extensionId = chrome.runtime.id;
-    const redirectUri = `https://${extensionId}.chromiumapp.org/granola`;
-
-    try {
-      // Step 1: Discover OAuth metadata
-      const discovery = await fetch('https://mcp.granola.ai/.well-known/oauth-authorization-server');
-      const meta = await discovery.json();
-
-      // Step 2: Dynamic Client Registration — register ourselves, get back a client_id
-      let clientId = 'companyintel';
-      if (meta.registration_endpoint) {
-        try {
-          const reg = await fetch(meta.registration_endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              client_name: 'Company Intel',
-              redirect_uris: [redirectUri],
-              grant_types: ['authorization_code'],
-              response_types: ['code'],
-              token_endpoint_auth_method: 'none',
-            })
-          });
-          const regData = await reg.json();
-          if (regData.client_id) clientId = regData.client_id;
-        } catch(e) { /* fall through with default */ }
-      }
-
-      // Step 3: Generate PKCE code_verifier + code_challenge
-      const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(48)))
-        .map(b => b.toString(36)).join('').slice(0, 64);
-      const encoded = new TextEncoder().encode(codeVerifier);
-      const hashBuf = await crypto.subtle.digest('SHA-256', encoded);
-      const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hashBuf)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-
-      // Step 4: Build auth URL with PKCE
-      const state = Math.random().toString(36).slice(2);
-      const authParams = new URLSearchParams({
-        response_type: 'code',
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        scope: meta.scopes_supported?.join(' ') || 'read',
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-      });
-      const authUrl = `${meta.authorization_endpoint}?${authParams}`;
-
-      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, async redirectUrl => {
-        connectBtn.disabled = false;
-        connectBtn.textContent = 'Connect Granola';
-        if (chrome.runtime.lastError || !redirectUrl) {
-          statusEl.textContent = 'Connection cancelled or failed';
-          return;
-        }
-
-        // Extract code from redirect
-        const redirected = new URL(redirectUrl);
-        const code = redirected.searchParams.get('code');
-        if (!code) {
-          // Try implicit token in fragment as fallback
-          const fragment = new URLSearchParams(redirected.hash.slice(1));
-          const token = fragment.get('access_token');
-          if (token) { chrome.storage.local.set({ granolaToken: token }); setConnected(true); }
-          else statusEl.textContent = 'Could not get token from Granola';
-          return;
-        }
-
-        // Step 5: Exchange code for token (with PKCE verifier)
-        try {
-          const tokenRes = await fetch(meta.token_endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'authorization_code',
-              code,
-              redirect_uri: redirectUri,
-              client_id: clientId,
-              code_verifier: codeVerifier,
-            })
-          });
-          const tokenData = await tokenRes.json();
-          if (tokenData.access_token) {
-            chrome.storage.local.set({ granolaToken: tokenData.access_token });
-            setConnected(true);
-          } else {
-            statusEl.textContent = tokenData.error_description || tokenData.error || 'Could not get token from Granola';
-          }
-        } catch(e) {
-          statusEl.textContent = 'Token exchange failed';
-        }
-      });
-    } catch(e) {
-      connectBtn.disabled = false;
-      connectBtn.textContent = 'Connect Granola';
-      statusEl.textContent = 'Could not reach Granola server';
-    }
-  });
-
-  disconnBtn.addEventListener('click', () => {
-    chrome.storage.local.remove('granolaToken');
-    setConnected(false);
-  });
-})();

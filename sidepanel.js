@@ -482,11 +482,104 @@ function showDuplicateDialog(prev, existing, dupIdx) {
   });
 }
 
+function showPipelineStats() {
+  const el = document.getElementById('sp-pipeline-stats');
+  if (!el) return;
+  chrome.storage.local.get(['savedCompanies', 'activityGoals', 'statCardConfigs'], data => {
+    const companies = data.savedCompanies || [];
+    const opps = companies.filter(c => c.isOpportunity);
+    // Mirror the dashboard's selected period — same logic as saved.js getPeriodRange
+    const period = localStorage.getItem('ci_activityPeriod') || 'daily';
+    const goals = (data.activityGoals || {})[period] || {};
+    const cards = data.statCardConfigs || [
+      { key: 'saved', label: 'Opportunities Saved', stages: ['*'], color: '#0ea5e9' },
+      { key: 'applied', label: 'Applications', stages: ['applied'], color: '#FF7A59' },
+      { key: 'interviewed', label: 'New Conversations Started', stages: ['conversations'], color: '#fb923c' },
+    ];
+
+    // Replicate the exact same period range calculation as the dashboard
+    const now = new Date();
+    let start, end;
+    const customRange = localStorage.getItem('ci_activityCustomRange');
+    if (customRange) {
+      try {
+        const cr = JSON.parse(customRange);
+        start = new Date(cr.start + 'T00:00:00').getTime();
+        end = new Date(cr.end + 'T23:59:59').getTime();
+      } catch(e) {}
+    }
+    if (!start) {
+      if (period === 'daily') {
+        const s = new Date(now); s.setHours(0,0,0,0);
+        const e = new Date(now); e.setHours(23,59,59,999);
+        start = s.getTime(); end = e.getTime();
+      } else if (period === 'weekly') {
+        const day = now.getDay();
+        const mon = new Date(now); mon.setDate(now.getDate() + (day === 0 ? -6 : 1 - day)); mon.setHours(0,0,0,0);
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23,59,59,999);
+        start = mon.getTime(); end = sun.getTime();
+      } else {
+        const s = new Date(now.getFullYear(), now.getMonth(), 1);
+        const e = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        start = s.getTime(); end = e.getTime();
+      }
+    }
+    const inPeriod = ts => ts && ts >= start && ts <= end;
+
+    // Same counting logic as dashboard — supports activity + snapshot modes
+    const counts = cards.slice(0, 3).map(card => {
+      let count;
+      if (card.mode === 'snapshot') {
+        count = card.stages.includes('*') ? opps.length : opps.filter(c => card.stages.includes(c.jobStage || 'needs_review')).length;
+      } else {
+        if (card.stages.includes('*')) {
+          count = opps.filter(c => inPeriod(c.savedAt)).length;
+        } else {
+          count = opps.filter(c => card.stages.some(sk => inPeriod(c.stageTimestamps?.[sk]))).length;
+        }
+      }
+      const goal = goals[card.key] || 0;
+      return { ...card, count, goal };
+    });
+
+    // Mini ring SVG (16x16)
+    function miniRing(count, goal, color) {
+      if (!goal) return '';
+      const pct = Math.min(1, count / goal);
+      const r = 6, cx = 8, cy = 8, c = 2 * Math.PI * r;
+      return `<svg class="sp-stat-ring" width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2D3E50" stroke-width="2"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="2"
+          stroke-dasharray="${pct * c} ${c}" stroke-linecap="round"
+          transform="rotate(-90 ${cx} ${cy})"/>
+      </svg>`;
+    }
+
+    el.innerHTML = counts.map(c =>
+      `<div class="sp-stat-chip">
+        ${miniRing(c.count, c.goal, c.color)}
+        <span class="sp-stat-num">${c.count}${c.goal ? `<span class="sp-stat-denom">/${c.goal}</span>` : ''}</span>
+        <span class="sp-stat-label">${c.label}</span>
+      </div>`
+    ).join('<span style="color:#2D3E50">·</span>');
+    el.style.display = 'flex';
+
+    // Click to open dashboard
+    el.onclick = () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('saved.html') });
+      window.close();
+    };
+  });
+}
+
 function markAsSaved() {
   saveConfirmBtn.textContent = '✓ Saved'; saveConfirmBtn.classList.add('saved');
   if (saveMode === 'job') { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
   else                    { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
 }
+
+// Show pipeline stats immediately on load
+showPipelineStats();
 
 // Detect company on load and auto-research
 chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
@@ -523,12 +616,22 @@ function startJobDescriptionFlow(tabId) {
       renderJobSnapshot(descResponse.jobMeta);
     }
 
-    // Always render location match immediately, even without description
-    renderJobOpportunity(null, descResponse.jobMeta || currentJobMeta || null);
+    // Render saved match if available, otherwise show location match while scoring runs
+    if (currentSavedEntry?.jobMatch) {
+      renderJobOpportunity(currentSavedEntry.jobMatch, currentSavedEntry.jobSnapshot || descResponse.jobMeta || currentJobMeta || null);
+    } else {
+      renderJobOpportunity(null, descResponse.jobMeta || currentJobMeta || null);
+    }
 
     // Store description for use in save + chat context
     if (descResponse.jobDescription) {
       currentJobDescription = descResponse.jobDescription;
+      // If already saved with a job match score, use it — don't re-score
+      if (currentSavedEntry?.jobMatch) {
+        console.log('[SP] Using saved job match — skipping re-score');
+        renderJobOpportunity(currentSavedEntry.jobMatch, currentSavedEntry.jobSnapshot || descResponse.jobMeta || currentJobMeta || null);
+        return;
+      }
       const run = (prefs) => { currentPrefs = currentPrefs || prefs; triggerJobAnalysis(companyNameEl.textContent, descResponse.jobDescription); };
       if (currentPrefs) { run(currentPrefs); } else { loadPrefsWithMigration((prefs) => run(prefs || null)); }
     }
@@ -735,30 +838,67 @@ document.getElementById('job-bar').addEventListener('click', (e) => {
 
 // Refresh button — re-detect company then research
 searchBtn.addEventListener('click', () => {
-  const tabId = currentTabId;
-  if (!tabId) {
-    contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
-    return;
-  }
-  chrome.tabs.get(tabId, tab => {
-    if (chrome.runtime.lastError || !tab) return;
+  // Always re-query the CURRENT active tab — don't use stale currentTabId
+  searchBtn.classList.add('refreshing');
+  searchBtn.disabled = true;
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, tabs => {
+    const tab = tabs[0];
+    if (!tab?.id) {
+      contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
+      searchBtn.classList.remove('refreshing');
+      searchBtn.disabled = false;
+      return;
+    }
+    currentTabId = tab.id;
     currentUrl = tab.url || null;
-    chrome.tabs.sendMessage(tabId, { type: 'GET_COMPANY' }, (response) => {
+    const prevCompany = companyNameEl.textContent;
+
+    // Try to inject content script first in case it wasn't loaded
+    chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }).catch(() => {});
+
+    // Give content script a moment to initialize, then query
+    setTimeout(() => {
+    chrome.tabs.sendMessage(tab.id, { type: 'GET_COMPANY' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.company) {
-        contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
+        // Try extracting company from tab title as fallback
+        const titleCompany = tab.title?.split(/\s*[|·—–]\s*/)?.[0]?.trim();
+        if (titleCompany && titleCompany.length > 1 && titleCompany.length < 50) {
+          companyNameEl.textContent = titleCompany;
+          triggerResearch(titleCompany, true);
+          setTimeout(() => { searchBtn.classList.remove('refreshing'); searchBtn.disabled = false; }, 1000);
+          return;
+        }
+        contentEl.innerHTML = '<div class="empty">Could not detect company on this page. Try navigating to a company website or job posting.</div>';
+        searchBtn.classList.remove('refreshing');
+        searchBtn.disabled = false;
         return;
       }
+      // Flash if company changed
+      if (prevCompany && prevCompany !== '—' && prevCompany !== response.company) {
+        companyNameEl.style.animation = 'sp-company-flash 0.5s ease';
+        setTimeout(() => companyNameEl.style.animation = '', 500);
+      }
+      // Reset state for fresh research
       companyNameEl.textContent = response.company;
       currentJobTitle = response.jobTitle || null;
       currentJobMeta = response.jobMeta || null;
       detectedDomain = response.domain || null;
       detectedCompanyLinkedin = response.companyLinkedinUrl || null;
+      currentResearch = null;
+      currentSavedEntry = null;
       const jobOpp = document.getElementById('job-opportunity');
       if (jobOpp) jobOpp.innerHTML = '';
       updateJobTitleBar();
       triggerResearch(response.company, true);
-      if (currentJobTitle) startJobDescriptionFlow(tabId);
+      if (currentJobTitle) startJobDescriptionFlow(tab.id);
+
+      // Stop spinning after research starts (content loading handles the rest)
+      setTimeout(() => {
+        searchBtn.classList.remove('refreshing');
+        searchBtn.disabled = false;
+      }, 1000);
     });
+    }, 300); // small delay for content script injection
   });
 });
 
@@ -775,6 +915,12 @@ function triggerResearch(company, forceRefresh = false) {
   // Show job meta immediately from DOM badges (no API wait needed)
   if (currentJobMeta && currentJobTitle) {
     renderJobSnapshot(currentJobMeta);
+  }
+
+  // If saved data was already loaded by checkAlreadySaved, skip API calls
+  if (currentResearch && !forceRefresh) {
+    console.log('[SP] Using saved research data — skipping API calls');
+    return;
   }
 
   // Phase 1: show skeleton while Apollo loads
@@ -984,13 +1130,19 @@ function renderOppFields(savedEntry) {
     ).join('');
     fields.push(['Company', `<select class="sp-stage-select" id="sp-co-stage">${coOptions}</select>`]);
 
+    // Action On dropdown
+    const actionOpts = '<option value="my_court"' + ((savedEntry.actionStatus || 'my_court') === 'my_court' ? ' selected' : '') + '>🏀 My Court</option><option value="their_court"' + (savedEntry.actionStatus === 'their_court' ? ' selected' : '') + '>⏳ Their Court</option>';
+    fields.push(['Action On', `<select class="sp-stage-select" id="sp-action-status">${actionOpts}</select>`]);
+
     if (savedEntry.nextStep) fields.push(['Next Step', savedEntry.nextStep]);
 
     if (!fields.length) { el.style.display = 'none'; return; }
 
     el.innerHTML = fields.map(([k, v]) =>
       `<div class="sp-opp-row"><span class="sp-opp-key">${k}</span><span class="sp-opp-val">${v}</span></div>`
-    ).join('');
+    ).join('') + `<div class="sp-notes-row">
+      <textarea class="sp-notes-input" id="sp-notes-input" placeholder="Add notes...">${savedEntry.notes || ''}</textarea>
+    </div>`;
     el.style.display = 'block';
 
     // Bind stage change handlers
@@ -1012,6 +1164,7 @@ function renderOppFields(savedEntry) {
         updateEntry({ status: coSelect.value });
         coSelect.style.animation = 'sp-stage-flash 0.4s ease';
         setTimeout(() => coSelect.style.animation = '', 400);
+        setTimeout(() => showPipelineStats(), 300);
       });
     }
 
@@ -1031,6 +1184,23 @@ function renderOppFields(savedEntry) {
         }
         // Fire celebration
         _spFireCelebration(oppSelect.value);
+        // Refresh stats
+        setTimeout(() => showPipelineStats(), 300);
+      });
+    }
+
+    // Notes
+    const actionSelect = el.querySelector('#sp-action-status');
+    if (actionSelect) {
+      actionSelect.addEventListener('change', () => {
+        updateEntry({ actionStatus: actionSelect.value });
+      });
+    }
+
+    const notesInput = el.querySelector('#sp-notes-input');
+    if (notesInput) {
+      notesInput.addEventListener('blur', () => {
+        updateEntry({ notes: notesInput.value.trim() || null });
       });
     }
   });
@@ -1047,6 +1217,7 @@ function showCrmLink(savedEntry) {
   const stageEl = document.getElementById('crm-stage');
   if (stageEl) stageEl.style.display = 'none';
   renderOppFields(savedEntry);
+  showPipelineStats();
 }
 
 function showSaveBar() {
@@ -1069,9 +1240,40 @@ function checkAlreadySaved(company) {
     const match = entries.find(c => companiesMatch(c.company, company));
     if (match) {
       currentSavedEntry = match;
+      // Fix company name if detected as "Unknown Company" but saved entry has real name
+      if ((!company || company === 'Unknown Company') && match.company) {
+        companyNameEl.textContent = match.company;
+      }
       saveBtn.textContent = '✓ Saved';
       saveBtn.classList.add('saved');
       showCrmLink(match);
+
+      // Use saved research data instead of re-fetching from API
+      if (match.intelligence || match.employees || match.industry) {
+        const savedResearch = {
+          intelligence: match.intelligence,
+          employees: match.employees,
+          funding: match.funding,
+          founded: match.founded,
+          industry: match.industry,
+          companyWebsite: match.companyWebsite,
+          companyLinkedin: match.companyLinkedin,
+          reviews: match.reviews || [],
+          leaders: match.leaders || [],
+          jobListings: match.jobListings || [],
+          jobMatch: match.jobMatch,
+          jobSnapshot: match.jobSnapshot,
+          enrichmentSource: 'Saved data',
+        };
+        currentResearch = savedResearch;
+        if (match.companyWebsite) setFavicon(match.companyWebsite);
+        renderResults(savedResearch);
+        // Render existing job match in the job opportunity section
+        if (match.jobMatch) {
+          renderJobOpportunity(match.jobMatch, match.jobSnapshot || currentJobMeta || null);
+        }
+      }
+
       // Auto-tag with 'Job Posted' when viewing from a job page
       if (currentJobTitle && !(match.tags || []).includes('Job Posted')) {
         match.tags = [...(match.tags || []), 'Job Posted'];
@@ -1225,14 +1427,19 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
     return { label: 'Likely Not a Fit', cls: 'low' };
   }
 
-  const jobArr = jobSnapshot?.workArrangement || currentJobMeta?.workArrangement;
-  const jobLoc = jobSnapshot?.location || currentJobMeta?.location;
+  // LinkedIn chips are authoritative for work arrangement — AI snapshot can misinterpret territory mentions as "On-site"
+  const jobArr = currentJobMeta?.workArrangement || jobSnapshot?.workArrangement;
+  const jobLoc = currentJobMeta?.location || jobSnapshot?.location;
   const userWants = currentPrefs?.workArrangement || [];
   let locationMatchHtml = '';
   let locationSummary = '';
   if (jobArr) {
     if (userWants.length > 0) {
-      if (userWants.includes(jobArr)) {
+      // Match if jobArr exactly matches OR if jobArr text contains any preferred arrangement
+      // e.g., "Flexible (Remote and On-site)" matches a "Remote" preference
+      const jobArrLower = jobArr.toLowerCase();
+      const isMatch = userWants.includes(jobArr) || userWants.some(w => jobArrLower.includes(w.toLowerCase())) || /flexible|hybrid.*remote|remote.*on.?site/i.test(jobArr);
+      if (isMatch) {
         let detail = jobArr;
         if (jobArr === 'Remote' && currentPrefs?.remoteGeo) detail += ` · ${currentPrefs.remoteGeo}`;
         else if (jobLoc) detail += ` · ${jobLoc}`;
@@ -1268,8 +1475,9 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
 
   const summaryBadge = v ? `<span class="verdict-badge-sm ${v.cls}">${v.label}</span>` : '';
 
+  const autoOpen = hasMatch || locationMatchHtml;
   jobOpportunityEl.innerHTML = `
-    <details class="jopp-dropdown">
+    <details class="jopp-dropdown"${autoOpen ? ' open' : ''}>
       <summary class="jopp-summary">
         <span class="jopp-summary-left">Job Opportunity</span>
         <span class="jopp-summary-right">${locationSummary}${summaryBadge}</span><span class="jopp-chevron">›</span>
@@ -1283,12 +1491,15 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
           const fb = currentResearch?.matchFeedback;
           const upActive = fb?.type === 'up' ? ' active up' : '';
           const downActive = fb?.type === 'down' ? ' active down' : '';
+          const noteActive = fb?.type === 'note' ? ' active note' : '';
           return `
           <div class="verdict-row" style="margin-top:12px">
+            ${jobMatch.score ? `<span style="font-size:18px;font-weight:800;color:${jobMatch.score >= 7 ? '#00BDA5' : jobMatch.score >= 4 ? '#d97706' : '#f87171'};margin-right:4px">${jobMatch.score}<span style="font-size:12px;opacity:0.6">/10</span></span>` : ''}
             <span class="verdict-badge ${v.cls}">${v.label}</span>
             <span class="verdict-thumbs">
-              <button class="thumb-btn${upActive}" data-dir="up" id="sp-thumb-up" title="Agree with assessment">👍</button>
-              <button class="thumb-btn${downActive}" data-dir="down" id="sp-thumb-down" title="Disagree with assessment">👎</button>
+              <button class="thumb-btn${upActive}" data-dir="up" title="Agree with assessment">👍</button>
+              <button class="thumb-btn${noteActive}" data-dir="note" title="Leave a note on the wording/format">💬</button>
+              <button class="thumb-btn${downActive}" data-dir="down" title="Disagree with assessment">👎</button>
             </span>
             <span class="fit-verdict">${jobMatch.verdict}</span>
           </div>
@@ -1347,7 +1558,7 @@ document.addEventListener('click', e => {
   thumbBtn.classList.add('active', dir);
 
   // Show inline feedback form
-  const placeholder = dir === 'up' ? 'What resonated?' : 'What felt off?';
+  const placeholder = dir === 'up' ? 'What resonated?' : dir === 'note' ? 'Feedback on wording, length, format...' : 'What felt off?';
   formEl.style.display = 'block';
   formEl.innerHTML = `<div class="thumb-feedback-form">
     <input class="thumb-feedback-input" id="sp-thumb-note" type="text" placeholder="${placeholder}">
@@ -1395,7 +1606,7 @@ function renderQuickData(data) {
     { label: 'Total Funding', value: data.funding, url: crunchbaseUrl },
     { label: 'Industry', value: data.industry, url: null },
     { label: 'Founded', value: data.founded, url: null }
-  ].filter(s => s.value && s.value !== 'null');
+  ].filter(s => s.value && s.value !== 'null' && !/not found|unknown|unavailable|n\/a/i.test(s.value));
 
   if (statDefs.length === 0) return;
 
@@ -1427,7 +1638,23 @@ function renderBullets(items, type) {
   if (bullets.length === 0) return '';
   const icon = type === 'fit' ? '✓' : '✗';
   const cls = type === 'fit' ? 'bullet-fit' : 'bullet-flag';
-  return `<ul class="match-bullets">${bullets.map(b => `<li class="${cls}"><span class="bullet-icon">${icon}</span>${b.trim()}</li>`).join('')}</ul>`;
+  return `<ul class="match-bullets">${bullets.map(b => `<li class="${cls}"><span class="bullet-icon">${icon}</span><span>${boldKeyPhrase(b.trim())}</span></li>`).join('')}</ul>`;
+}
+
+// Bold the key signal phrase in a flag bullet — typically the first clause
+function boldKeyPhrase(text) {
+  // Split on common connecting words — bold the part before them
+  const splitRe = /\s+(matches|signals|aligns|mirrors|fits|exceeds|suggests|indicates|required|doesn't|limits|conflicts|may feel|verify|confirm|typical)\b/i;
+  const m = text.match(splitRe);
+  if (m) {
+    const idx = text.indexOf(m[0]);
+    return `<strong>${text.slice(0, idx)}</strong>${text.slice(idx)}`;
+  }
+  // Fallback: split on semicolon or em dash — bold the first part
+  const dashSplit = text.match(/^(.+?)\s*[;—–]\s*(.+)$/);
+  if (dashSplit) return `<strong>${dashSplit[1]}</strong> — ${dashSplit[2]}`;
+  // No split point found — just return as-is
+  return text;
 }
 
 function setFavicon(domain) {
@@ -1456,16 +1683,18 @@ function renderResults(data) {
   // Stats
   const companySlug = companyNameEl.textContent.toLowerCase().replace(/\s+/g, '-');
   const crunchbaseUrl = `https://www.crunchbase.com/organization/${companySlug}`;
+  const ds = data.dataSources || {};
   const statDefs = [
-    { label: 'Employees', value: data.employees, url: data.companyLinkedin ? data.companyLinkedin.replace(/\/?$/, '/') + 'people/' : null },
-    { label: 'Total Funding', value: data.funding, url: crunchbaseUrl },
-    { label: 'Industry', value: data.industry, url: null },
-    { label: 'Founded', value: data.founded, url: null }
-  ].filter(s => s.value && s.value !== 'null');
+    { label: 'Employees', value: data.employees, url: data.companyLinkedin ? data.companyLinkedin.replace(/\/?$/, '/') + 'people/' : null, src: ds.employees },
+    { label: 'Total Funding', value: data.funding, url: crunchbaseUrl, src: ds.funding },
+    { label: 'Industry', value: data.industry, url: null, src: ds.industry },
+    { label: 'Founded', value: data.founded, url: null, src: ds.founded }
+  ].filter(s => s.value && s.value !== 'null' && !/not found|unknown|unavailable|n\/a/i.test(s.value));
 
   const statsHtml = statDefs.length > 0
     ? statDefs.map(s => {
-        const inner = `<div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div>`;
+        const srcTag = s.src ? `<div class="stat-src">${s.src}</div>` : '';
+        const inner = `<div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div>${srcTag}`;
         return s.url
           ? `<a class="stat" href="${s.url}" target="_blank">${inner}</a>`
           : `<div class="stat">${inner}</div>`;
@@ -1496,7 +1725,7 @@ function renderResults(data) {
   // Reviews
   const reviewsHtml = data.reviews && data.reviews.length > 0
     ? data.reviews.map(r => {
-        const inner = `${r.snippet}<div class="review-source">${r.source}</div>`;
+        const inner = `${r.rating ? `<span style="color:#fbbf24;font-weight:700">${r.rating}★</span> ` : ''}${r.snippet}<div class="review-source">${r.source}</div>`;
         return r.url
           ? `<a class="review-item" href="${r.url}" target="_blank">${inner}</a>`
           : `<div class="review-item">${inner}</div>`;
@@ -1505,7 +1734,7 @@ function renderResults(data) {
 
   // Leaders
   const leadersHtml = data.leaders && data.leaders.length > 0
-    ? data.leaders.map((l, i) => {
+    ? data.leaders.filter(l => l.name).map((l, i) => {
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(l.name + ' ' + companyNameEl.textContent)}`;
         const initials = l.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
         return `
@@ -1549,7 +1778,7 @@ function renderResults(data) {
           <div class="leader-avatar-initials" style="background:linear-gradient(135deg,#0d9488,#0077b5);color:#fff">${initials}</div>
           <div class="leader-info">
             <div class="leader-name">${c.name}</div>
-            <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" onclick="copyEmail(this,'${c.email.replace(/'/g,"\\'")}')">⎘</button></div>
+            <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" data-copy-email="${c.email.replace(/"/g,'&quot;')}">⎘</button></div>
           </div>
           <div class="leader-links">
             <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
@@ -1558,40 +1787,44 @@ function renderResults(data) {
       }).join('')
     : null;
 
-  const resSourceTag = data.enrichmentSource ? `<div style="font-size:10px;color:#4a6580;margin-top:4px">Source: ${data.enrichmentSource}</div>` : '';
+  const srcLabel = (s) => s ? `<span class="data-src">${s}</span>` : '';
   contentEl.innerHTML = `
     <div class="section section-overview">
       <div class="section-title">Company Overview</div>
       <div class="stat-grid">${statsHtml}</div>
-      ${resSourceTag}
       ${intelHtml}
+      ${ds.intelligence ? srcLabel(ds.intelligence) : ''}
     </div>
     <div class="section section-signals">
-      <div class="section-title">Hiring Signals</div>
+      <div class="section-title">Hiring Signals ${srcLabel(ds.jobListings)}</div>
       ${jobsHtml}
     </div>
     ${contactsHtml ? `<div class="section section-leadership" id="sp-contacts-section">
-      <div class="section-title">Known Contacts</div>
+      <div class="section-title">Known Contacts ${srcLabel('Gmail')}</div>
       ${contactsHtml}
     </div>` : `<div id="sp-contacts-section"></div>`}
     <div class="section section-leadership">
-      <div class="section-title">Leadership</div>
+      <div class="section-title">Leadership ${srcLabel(ds.leaders)}</div>
       ${leadersHtml}
     </div>
     <div class="section section-reviews">
-      <div class="section-title">Reviews & Signal</div>
+      <div class="section-title">Reviews & Signal ${srcLabel(ds.reviews)}</div>
       ${reviewsHtml}
     </div>
   `;
 }
 
-function copyEmail(btn, email) {
+// Delegated copy email handler (replaces inline onclick)
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-copy-email]');
+  if (!btn) return;
+  const email = btn.dataset.copyEmail;
   navigator.clipboard.writeText(email).then(() => {
     const orig = btn.textContent;
     btn.textContent = '✓';
     setTimeout(() => { btn.textContent = orig; }, 1500);
   });
-}
+});
 
 function renderContactsSection(el, contacts) {
   if (!contacts.length) return;
@@ -1602,7 +1835,7 @@ function renderContactsSection(el, contacts) {
       <div class="leader-avatar-initials" style="background:linear-gradient(135deg,#0d9488,#0077b5);color:#fff">${initials}</div>
       <div class="leader-info">
         <div class="leader-name">${c.name}</div>
-        <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" onclick="copyEmail(this,'${c.email.replace(/'/g,"\\'")}')">⎘</button></div>
+        <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" data-copy-email="${c.email.replace(/"/g,'&quot;')}">⎘</button></div>
       </div>
       <div class="leader-links">
         <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
@@ -1617,10 +1850,142 @@ function renderContactsSection(el, contacts) {
 
 // ── Side Panel Chat (launches floating widget on page) ──────────────────────
 
-(function initSidePanelChatLauncher() {
+(function initSidePanelInlineChat() {
   const chatEl = document.getElementById('sp-chat');
-  const launchBtn = document.getElementById('sp-chat-launch');
-  if (!chatEl || !launchBtn) return;
+  const msgsEl = document.getElementById('sp-chat-messages');
+  const inputEl = document.getElementById('sp-chat-input');
+  const sendBtn = document.getElementById('sp-chat-send');
+  const detachBtn = document.getElementById('sp-chat-detach');
+  const chatResize = document.getElementById('sp-chat-resize');
+  const chatSpacer = document.getElementById('sp-chat-spacer');
+  console.log('[SP Chat] Init:', { chatEl: !!chatEl, msgsEl: !!msgsEl, inputEl: !!inputEl, sendBtn: !!sendBtn });
+  if (!chatEl || !msgsEl || !inputEl || !sendBtn) { console.warn('[SP Chat] Missing elements — aborting init'); return; }
+
+  // Restore saved chat height
+  const savedChatH = localStorage.getItem('ci_sp_chat_height');
+  if (savedChatH) msgsEl.style.maxHeight = savedChatH + 'px';
+
+  // Drag top edge to resize chat height
+  if (chatResize) {
+    chatResize.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = msgsEl.offsetHeight;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'row-resize';
+      const onMove = ev => {
+        const newH = Math.max(60, Math.min(500, startH + (startY - ev.clientY)));
+        msgsEl.style.maxHeight = newH + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        localStorage.setItem('ci_sp_chat_height', parseInt(msgsEl.style.maxHeight));
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  let history = [];
+  let isApplicationMode = false;
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+  }
+
+  function renderMd(text) {
+    let html = String(text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Code blocks (fenced)
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre class="sp-code-block"><code>${code.trim()}</code><button class="sp-code-copy" title="Copy">📋</button></pre>`);
+
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code class="sp-inline-code">$1</code>');
+
+    // Images
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img class="sp-chat-img" src="$2" alt="$1" loading="lazy">');
+
+    // Links
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="sp-chat-link">$1</a>');
+
+    // Bold
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Italic
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h4 class="sp-chat-h">$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3 class="sp-chat-h">$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h3 class="sp-chat-h">$1</h3>');
+
+    // Horizontal rules
+    html = html.replace(/^---$/gm, '<hr class="sp-chat-hr">');
+
+    // Unordered lists
+    html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, m => `<ul class="sp-chat-ul">${m}</ul>`);
+
+    // Numbered lists
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // Line breaks (double newline = paragraph, single = br)
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = html.replace(/\n/g, '<br>');
+    html = `<p>${html}</p>`;
+    html = html.replace(/<p><\/p>/g, '');
+
+    // Auto-link bare URLs
+    html = html.replace(/(^|[^"=])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" class="sp-chat-link">$2</a>');
+
+    return html;
+  }
+
+  function renderMessages(showThinking) {
+    if (history.length === 0) {
+      msgsEl.innerHTML = '<div class="sp-chat-empty">Ask about this role, company, or get help applying.</div>';
+    } else {
+      msgsEl.innerHTML = history.map((m, idx) => {
+        const bubble = m.role === 'assistant' ? renderMd(m.content) : escHtml(m.content);
+        const copyBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
+          ? `<button class="sp-chat-copy" data-idx="${idx}" title="Copy to clipboard">📋</button>`
+          : '';
+        return `<div class="sp-chat-msg sp-chat-msg-${m.role}"><div class="sp-chat-bubble">${bubble}</div>${copyBtn}</div>`;
+      }).join('') + (showThinking ? '<div class="sp-chat-msg sp-chat-msg-assistant"><div class="sp-chat-bubble sp-chat-thinking"><span class="sp-thinking-dots"><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span></span></div></div>' : '');
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    // Bind copy buttons
+    msgsEl.querySelectorAll('.sp-chat-copy').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const text = history[idx]?.content || '';
+        // Strip any quotation mark wrapping and preamble
+        const clean = text.replace(/^["']|["']$/g, '').trim();
+        navigator.clipboard.writeText(clean).then(() => {
+          btn.textContent = '✓';
+          btn.style.color = '#00BDA5';
+          setTimeout(() => { btn.textContent = '📋'; btn.style.color = ''; }, 1500);
+        });
+      });
+    });
+
+    // Code block copy buttons
+    msgsEl.querySelectorAll('.sp-code-copy').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.closest('pre')?.querySelector('code')?.textContent || '';
+        navigator.clipboard.writeText(code).then(() => {
+          btn.textContent = '✓';
+          setTimeout(() => { btn.textContent = '📋'; }, 1500);
+        });
+      });
+    });
+  }
 
   function buildChatContext() {
     const company = companyNameEl?.textContent || '';
@@ -1647,18 +2012,88 @@ function renderContactsSection(el, contacts) {
       emails: (entry.cachedEmails || []).slice(0, 20).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet })),
       meetings: entry.cachedMeetings || [],
       granolaNote: entry.cachedMeetingTranscript || entry.cachedMeetingNotes || null,
+      _applicationMode: isApplicationMode,
     };
   }
 
-  launchBtn.addEventListener('click', () => {
-    if (!currentTabId) return;
+  async function send() {
+    const text = inputEl.value.trim();
+    console.log('[SP Chat] Send called, text:', text?.slice(0, 50));
+    if (!text) return;
+    inputEl.value = '';
+    inputEl.style.height = '';
+    history.push({ role: 'user', content: text });
+    renderMessages(true);
+    sendBtn.disabled = true;
+
     const context = buildChatContext();
-    chrome.tabs.sendMessage(currentTabId, { type: 'OPEN_FLOATING_CHAT', context }, r => {
-      void chrome.runtime.lastError;
-    });
+    const apiMessages = history.map(m => ({ role: m.role, content: m.content }));
+
+    let result;
+    try {
+      result = await Promise.race([
+        new Promise(resolve => {
+          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context }, r => {
+            if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+            else resolve(r);
+          });
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000))
+      ]);
+    } catch (e) {
+      result = { error: e.message === 'timeout' ? 'Request timed out.' : e.message };
+    }
+
+    sendBtn.disabled = false;
+    history.push({ role: 'assistant', content: result?.reply || result?.error || 'Something went wrong.' });
+    renderMessages();
+  }
+
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = '';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
   });
 
-  // Show button when company is detected
+  // Quick action buttons
+  chatEl.querySelector('.sp-chat-actions')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-prompt]');
+    if (btn) {
+      isApplicationMode = btn.dataset.prompt.toLowerCase().includes('application');
+      inputEl.value = btn.dataset.prompt;
+      send();
+      return;
+    }
+    if (e.target.closest('[data-action="clear"]')) {
+      history = [];
+      isApplicationMode = false;
+      renderMessages();
+    }
+  });
+
+  // Detach to floating window
+  // Expand/collapse chat within sidebar
+  let chatExpanded = false;
+  detachBtn?.addEventListener('click', () => {
+    chatExpanded = !chatExpanded;
+    if (chatExpanded) {
+      msgsEl.style.maxHeight = '70vh';
+      msgsEl.style.minHeight = '200px';
+      detachBtn.textContent = '⤡'; // collapse icon
+      detachBtn.title = 'Collapse chat';
+    } else {
+      msgsEl.style.maxHeight = localStorage.getItem('ci_sp_chat_height') ? localStorage.getItem('ci_sp_chat_height') + 'px' : '300px';
+      msgsEl.style.minHeight = '60px';
+      detachBtn.textContent = '⤢'; // expand icon
+      detachBtn.title = 'Expand chat';
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  });
+
+  // Show chat when company is detected
   const observer = new MutationObserver(() => {
     if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
       chatEl.style.display = 'block';
@@ -1668,6 +2103,8 @@ function renderContactsSection(el, contacts) {
   if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
     chatEl.style.display = 'block';
   }
+
+  renderMessages();
 })();
 
 // ── Celebrations (for stage changes in sidepanel) ──────────────────────────

@@ -274,6 +274,7 @@ function renderHeader() {
     <div class="hdr-stars" id="hdr-stars"><span class="hdr-stars-label">Excitement</span>${stars}</div>
     <button class="hdr-refresh-btn" id="hdr-refresh-btn" title="Refresh emails &amp; meetings"><span class="hdr-refresh-icon">↻</span></button>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Setup</a>
+    <a class="hdr-prefs-link" href="${chrome.runtime.getURL('integrations.html')}" target="_blank" style="margin-left:4px">🔗</a>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('docs.html')}" target="_blank" style="margin-left:4px">Docs</a>
   `;
 
@@ -435,6 +436,15 @@ function buildOpportunity() {
       <div class="prop-val-wrap"><input class="prop-input prop-empty" id="opp-base-salary" value="" placeholder="e.g. $150K - $180K"></div>
     </div>
     `}
+    <div class="prop-row">
+      <span class="prop-label">Action On</span>
+      <div class="prop-val-wrap">
+        <select class="prop-input" id="opp-action-status" style="min-height:auto;padding:6px 8px">
+          <option value="my_court" ${(entry.actionStatus || 'my_court') === 'my_court' ? 'selected' : ''}>🏀 My Court</option>
+          <option value="their_court" ${entry.actionStatus === 'their_court' ? 'selected' : ''}>⏳ Their Court</option>
+        </select>
+      </div>
+    </div>
     <div class="prop-row">
       <span class="prop-label">Next Step</span>
       <div class="prop-val-wrap">
@@ -641,12 +651,14 @@ function buildFitSection() {
   if (score) {
     const fb = entry.matchFeedback;
     const upA = fb?.type === 'up' ? ' active up' : '';
+    const noteA = fb?.type === 'note' ? ' active note' : '';
     const downA = fb?.type === 'down' ? ' active down' : '';
     html += `<div class="fit-score-row">
       <span class="fit-score">${score}<span class="fit-score-denom">/10</span></span>
       <span class="fit-verdict" style="color:${v.color}">${v.label}</span>
       <span class="verdict-thumbs">
         <button class="thumb-btn${upA}" data-dir="up" title="Agree">👍</button>
+        <button class="thumb-btn${noteA}" data-dir="note" title="Note on wording/format">💬</button>
         <button class="thumb-btn${downA}" data-dir="down" title="Disagree">👎</button>
       </span>
     </div>
@@ -736,7 +748,7 @@ function bindHubTabs() {
     if (!formEl) return;
     document.querySelectorAll('.fit-score-row .thumb-btn, .verdict-row .thumb-btn').forEach(b => b.classList.remove('active', 'up', 'down'));
     thumbBtn.classList.add('active', dir);
-    const placeholder = dir === 'up' ? 'What resonated?' : 'What felt off?';
+    const placeholder = dir === 'up' ? 'What resonated?' : dir === 'note' ? 'Feedback on wording, length, format...' : 'What felt off?';
     formEl.style.display = 'block';
     formEl.innerHTML = `<div class="thumb-feedback-form"><input class="thumb-feedback-input" id="co-thumb-note" type="text" placeholder="${placeholder}"><button class="thumb-feedback-submit" id="co-thumb-submit">Submit</button></div>`;
     formEl.querySelector('#co-thumb-note')?.focus();
@@ -1963,6 +1975,11 @@ function bindPanelBodyEvents(pid) {
     if (equityInput) {
       equityInput.addEventListener('blur', () => saveEntry({ equity: equityInput.value.trim() || null }));
       equityInput.addEventListener('keydown', e => { if (e.key === 'Enter') equityInput.blur(); });
+    }
+
+    const actionSelect = document.getElementById('opp-action-status');
+    if (actionSelect) {
+      actionSelect.addEventListener('change', () => saveEntry({ actionStatus: actionSelect.value }));
     }
 
     const nextStepInput = document.getElementById('opp-next-step-input');
