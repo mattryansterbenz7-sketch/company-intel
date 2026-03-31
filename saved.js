@@ -37,7 +37,14 @@ let stageCelebrations = {}; // { [stageKey]: { confetti, sound } } — loaded fr
 const DEFAULT_ACTION_STATUSES = [
   { key: 'my_court', label: '🏀 My Court', color: '#FF7A59' },
   { key: 'their_court', label: '⏳ Their Court', color: '#0ea5e9' },
+  { key: 'scheduled', label: '📅 Scheduled', color: '#a78bfa' },
 ];
+
+function detectScheduledStatus(entry) {
+  const events = entry.cachedCalendarEvents || [];
+  const now = new Date();
+  return events.some(e => new Date(e.start) > now);
+}
 let customActionStatuses = null; // loaded from storage, falls back to DEFAULT
 const _collapsedCols = new Set(JSON.parse(sessionStorage.getItem('ci_collapsed_cols') || '[]'));
 let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
@@ -1157,9 +1164,10 @@ function renderKanban(filtered) {
       // Sort: My Court first, then by job match score (highest first), then by most recent activity
       cards.sort((a, b) => {
         // My Court items float to top
-        const aMyC = (a.actionStatus || 'my_court') === 'my_court' ? 1 : 0;
-        const bMyC = (b.actionStatus || 'my_court') === 'my_court' ? 1 : 0;
-        if (bMyC !== aMyC) return bMyC - aMyC;
+        const actionPriority = { scheduled: 2, my_court: 1, their_court: 0 };
+        const aP = actionPriority[a.actionStatus || 'my_court'] || 0;
+        const bP = actionPriority[b.actionStatus || 'my_court'] || 0;
+        if (bP !== aP) return bP - aP;
         const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : -1;
         const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : -1;
         if (sb !== sa) return sb - sa;
@@ -1203,6 +1211,14 @@ function renderKanban(filtered) {
         const idx = allCompanies.findIndex(x => x.id === c.id);
         if (idx === -1) return;
         allCompanies[idx] = { ...allCompanies[idx], cachedCalendarEvents: events };
+        if (detectScheduledStatus(allCompanies[idx])) {
+          const current = allCompanies[idx].actionStatus || 'my_court';
+          if (current === 'my_court' || current === 'their_court') {
+            allCompanies[idx].actionStatus = 'scheduled';
+          }
+        } else if (allCompanies[idx].actionStatus === 'scheduled') {
+          allCompanies[idx].actionStatus = defaultActionStatus(allCompanies[idx].jobStage || allCompanies[idx].status) || 'my_court';
+        }
         chrome.storage.local.set({ savedCompanies: allCompanies });
       }
     );

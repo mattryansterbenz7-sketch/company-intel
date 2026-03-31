@@ -17,6 +17,12 @@ function defaultActionStatus(stageKey) {
   return null;
 }
 
+function detectScheduledStatus(entry) {
+  const events = entry.cachedCalendarEvents || [];
+  const now = new Date();
+  return events.some(e => new Date(e.start) > now);
+}
+
 const DEFAULT_FIELD_DEFS = [
   { id: 'companyWebsite',  label: 'Website',   type: 'url'  },
   { id: 'companyLinkedin', label: 'LinkedIn',  type: 'url'  },
@@ -462,6 +468,7 @@ function buildOpportunity() {
         <select class="prop-input" id="opp-action-status" style="min-height:auto;padding:6px 8px">
           <option value="my_court" ${(entry.actionStatus || 'my_court') === 'my_court' ? 'selected' : ''}>🏀 My Court</option>
           <option value="their_court" ${entry.actionStatus === 'their_court' ? 'selected' : ''}>⏳ Their Court</option>
+          <option value="scheduled" ${entry.actionStatus === 'scheduled' ? 'selected' : ''}>📅 Scheduled</option>
         </select>
       </div>
     </div>
@@ -931,6 +938,14 @@ function loadHubMeetings(forceRefresh) {
 
     if (calEvents.length) {
       saveEntry({ cachedCalendarEvents: calEvents });
+      if (detectScheduledStatus(entry)) {
+        const current = entry.actionStatus || 'my_court';
+        if (current === 'my_court' || current === 'their_court') {
+          saveEntry({ actionStatus: 'scheduled' });
+        }
+      } else if (entry.actionStatus === 'scheduled') {
+        saveEntry({ actionStatus: defaultActionStatus(entry.jobStage || entry.status) || 'my_court' });
+      }
       statusEl.style.display = 'none';
       renderMeetingsTimeline(calEvents, entry.cachedMeetingNotes);
       // Auto-populate next step from future calendar events if not set

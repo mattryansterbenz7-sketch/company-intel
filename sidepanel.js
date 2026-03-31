@@ -1181,7 +1181,7 @@ function renderOppFields(savedEntry) {
     }
 
     // Action On dropdown
-    const actionOpts = '<option value="my_court"' + ((savedEntry.actionStatus || 'my_court') === 'my_court' ? ' selected' : '') + '>🏀 My Court</option><option value="their_court"' + (savedEntry.actionStatus === 'their_court' ? ' selected' : '') + '>⏳ Their Court</option>';
+    const actionOpts = '<option value="my_court"' + ((savedEntry.actionStatus || 'my_court') === 'my_court' ? ' selected' : '') + '>🏀 My Court</option><option value="their_court"' + (savedEntry.actionStatus === 'their_court' ? ' selected' : '') + '>⏳ Their Court</option><option value="scheduled"' + (savedEntry.actionStatus === 'scheduled' ? ' selected' : '') + '>📅 Scheduled</option>';
     fields.push(['Action On', `<select class="sp-stage-select" id="sp-action-status">${actionOpts}</select>`]);
 
     if (savedEntry.nextStep) fields.push(['Next Step', savedEntry.nextStep]);
