@@ -892,25 +892,50 @@ async function researchCompany(company, domain, prefs, companyLinkedin, linkedin
     const effectiveDomain = enrichment.companyWebsite?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || domain || '';
     const qd = effectiveDomain ? `"${company}" ${effectiveDomain}` : `"${company}" company`;
 
-    // Now run Serper searches with the best domain info available
-    // When Serper is exhausted, skip jobs & product searches to reduce expensive fallback calls
-    let reviewResults, leaderResults, jobResults, productResults;
+    // Scout-then-drill review search + parallel leader/job/product searches
+    // Step 1: Scout query runs in parallel with other searches
+    let leaderResults, jobResults, productResults;
+    const scoutPromise = fetchSearchResults(`"${company}" reviews sales culture glassdoor repvue reddit`, 4);
+
     if (_serperExhausted) {
-      console.warn('[Research] Serper exhausted — running only 2 of 4 searches (reviews + leadership); skipping jobs & product to limit expensive fallback usage');
-      [reviewResults, leaderResults] = await Promise.all([
-        fetchSearchResults(`${qd} (site:glassdoor.com/Reviews OR site:glassdoor.com/Overview OR site:repvue.com OR site:blind.app OR reddit.com "${company}" reviews culture)`, 8),
-        fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
-      ]);
+      console.warn('[Research] Serper exhausted — running scout + leadership only; skipping jobs & product');
+      leaderResults = await fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5);
       jobResults = [];
       productResults = [];
     } else {
-      [reviewResults, leaderResults, jobResults, productResults] = await Promise.all([
-        fetchSearchResults(`${qd} (site:glassdoor.com/Reviews OR site:glassdoor.com/Overview OR site:repvue.com OR site:blind.app OR reddit.com "${company}" reviews culture)`, 8),
+      [, leaderResults, jobResults, productResults] = await Promise.all([
+        scoutPromise, // scout runs in parallel
         fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
         fetchSearchResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
         fetchSearchResults(qd + ' what does it do product overview how it works category', 3),
       ]);
     }
+
+    // Step 2: Analyze scout results for known review sources
+    const scoutResults = await scoutPromise;
+    const scoutUrls = scoutResults.map(r => (r.link || '').toLowerCase());
+    const hasRepVue = scoutUrls.some(u => u.includes('repvue.com'));
+    const hasGlassdoor = scoutUrls.some(u => u.includes('glassdoor.com'));
+    console.log('[Research] Review scout:', { hits: scoutResults.length, hasRepVue, hasGlassdoor });
+
+    // Step 3: Targeted drill queries for high-signal sources
+    // Pull user role keywords for targeted queries
+    const { prefs: _drillPrefs } = await new Promise(r => chrome.storage.sync.get(['prefs'], r));
+    const roleKeywords = (_drillPrefs?.roles || '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 2).slice(0, 3).join(' OR ') || 'sales OR GTM OR revenue OR leadership';
+
+    const drillPromises = [];
+    if (hasRepVue) drillPromises.push(fetchSearchResults(`site:repvue.com "${company}" sales quota culture`, 2));
+    if (hasGlassdoor) drillPromises.push(fetchSearchResults(`site:glassdoor.com/Reviews "${company}" ${roleKeywords}`, 2));
+    const drillResults = drillPromises.length ? await Promise.all(drillPromises) : [];
+
+    // Step 4: Combine and deduplicate by URL
+    const seenUrls = new Set();
+    const reviewResults = [];
+    for (const r of [...scoutResults, ...drillResults.flat()]) {
+      const url = (r.link || '').toLowerCase();
+      if (url && !seenUrls.has(url)) { seenUrls.add(url); reviewResults.push(r); }
+    }
+    console.log('[Research] Reviews:', reviewResults.length, 'total (scout:', scoutResults.length, '+ drills:', drillResults.flat().length, ')');
 
     // Use Apollo raw data for Claude synthesis if available, otherwise pass empty
     const apolloRaw = enrichment.raw?.estimated_num_employees ? enrichment.raw : {};
