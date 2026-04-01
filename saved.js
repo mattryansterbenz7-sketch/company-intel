@@ -238,10 +238,17 @@ function renderCompactCard(c) {
         ${c.jobUrl ? `<a class="compact-title" href="${escHtmlGlobal(c.jobUrl)}" target="_blank" title="Open job posting">${escHtmlGlobal(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>`}
         ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
         ${c.quickFitReason && score != null ? (() => {
-          // Strip job title from reason if the AI echoed it
+          // Strip job title echo from reason — match title at start even with trailing words before a separator
           let reason = c.quickFitReason;
-          if (c.jobTitle && reason.toLowerCase().startsWith(c.jobTitle.toLowerCase())) {
-            reason = reason.slice(c.jobTitle.length).replace(/^[\s:—–\-]+/, '').trim();
+          if (c.jobTitle) {
+            const titleLower = c.jobTitle.toLowerCase();
+            const reasonLower = reason.toLowerCase();
+            if (reasonLower.startsWith(titleLower)) {
+              reason = reason.slice(c.jobTitle.length).replace(/^[\s:—–\-,.]+/, '').trim();
+            } else if (reasonLower.includes(titleLower)) {
+              // Title appears somewhere in the reason — remove it
+              reason = reason.replace(new RegExp(c.jobTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').replace(/^[\s:—–\-,.]+/, '').trim();
+            }
           }
           return reason ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(reason)}</div>` : '';
         })() : ''}

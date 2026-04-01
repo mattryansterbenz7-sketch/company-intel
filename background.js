@@ -522,7 +522,9 @@ Hard DQ: Set hardDQ.flagged to true ONLY when there is a genuine dealbreaker tha
 - Location requires relocation with no remote option
 If none of these apply, set hardDQ.flagged to false with empty reasons array.
 
-Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "short signal"}], "hardDQ": {"flagged": boolean, "reasons": ["reason"]}}`;
+IMPORTANT: The "reason" field should explain WHY you gave this score — do NOT repeat the job title or company name. Focus on fit signals (e.g., "Strong alignment on GTM leadership + remote, but comp range is below floor").
+
+Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining the score", "quickTake": [{"type": "green/red", "text": "short signal"}], "hardDQ": {"flagged": boolean, "reasons": ["reason"]}}`;
 
   const { reply, error } = await chatWithFallback({
     model: QUICK_FIT_MODEL,
