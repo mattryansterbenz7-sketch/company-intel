@@ -700,18 +700,166 @@ function renderColumns() {
   bindDragDrop();
 }
 
+function buildActivityTimeline(e) {
+  const events = [];
+
+  // A. Emails
+  (e.cachedEmails || []).forEach(thread => {
+    let ts = 0, senderName = '';
+    if (thread.messages && thread.messages.length) {
+      const lastMsg = thread.messages[thread.messages.length - 1];
+      ts = new Date(lastMsg.date).getTime();
+      if (lastMsg.from) { const m = lastMsg.from.match(/^([^<]+)/); senderName = m ? m[1].trim().split(/\s+/)[0] : ''; }
+    }
+    if (!ts || isNaN(ts)) ts = thread.date ? new Date(thread.date).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = thread.internalDate ? parseInt(thread.internalDate) : 0;
+    if (!ts || isNaN(ts)) return;
+    events.push({
+      ts, icon: '\u{1F4E7}', badgeType: 'email', badge: 'Email',
+      title: thread.subject || 'No subject',
+      subtitle: senderName ? 'From ' + senderName : (thread.from || '').replace(/<.*>/, '').trim() || null,
+      preview: thread.snippet ? thread.snippet.slice(0, 120) : null
+    });
+  });
+
+  // B. Calendar events (past)
+  const now = Date.now();
+  (e.cachedCalendarEvents || []).forEach(evt => {
+    const ts = new Date(evt.start).getTime();
+    if (!ts || isNaN(ts) || ts > now) return;
+    const attendees = (evt.attendees || []).filter(a => !a.self).slice(0, 3).map(a => a.displayName || a.email?.split('@')[0] || '').filter(Boolean);
+    events.push({
+      ts, icon: '\u{1F4C5}', badgeType: 'meeting', badge: 'Meeting',
+      title: evt.summary || evt.title || 'Calendar event',
+      subtitle: attendees.length ? 'with ' + attendees.join(', ') : null,
+      preview: evt.location || null
+    });
+  });
+
+  // C. Granola meetings
+  (e.cachedMeetings || []).forEach(m => {
+    let ts = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = m.date ? new Date(m.date).getTime() : 0;
+    if (!ts || isNaN(ts)) return;
+    events.push({
+      ts, icon: '\u{1F399}\uFE0F', badgeType: 'call', badge: 'Call',
+      title: m.title || 'Meeting',
+      subtitle: 'Granola recording',
+      preview: m.summary ? m.summary.slice(0, 120) : 'Meeting notes available'
+    });
+  });
+
+  // D. Activity log
+  const typeIcons = { linkedin_dm: '\u{1F4AC}', phone_call: '\u{1F4DE}', coffee_chat: '\u2615', text: '\u{1F4AC}', referral: '\u{1F91D}', applied: '\u2705', other: '\u{1F4DD}' };
+  const typeNames = { linkedin_dm: 'LinkedIn DM', phone_call: 'Phone Call', coffee_chat: 'Coffee Chat', text: 'Text', referral: 'Referral', applied: 'Applied', other: 'Other' };
+  (e.activityLog || []).forEach(log => {
+    const ts = new Date(log.date).getTime();
+    if (!ts || isNaN(ts)) return;
+    events.push({
+      ts, icon: typeIcons[log.type] || '\u{1F4DD}', badgeType: 'activity', badge: typeNames[log.type] || 'Activity',
+      title: typeNames[log.type] || 'Activity',
+      subtitle: log.note ? log.note.slice(0, 80) : null,
+      preview: null
+    });
+  });
+
+  // E. Applied date
+  if (e.appliedDate && e.appliedDate > 0) {
+    const hasLogApplied = (e.activityLog || []).some(a => a.type === 'applied' && Math.abs(new Date(a.date).getTime() - e.appliedDate) < 86400000);
+    if (!hasLogApplied) {
+      events.push({
+        ts: e.appliedDate, icon: '\u2705', badgeType: 'milestone', badge: 'Milestone',
+        title: 'Applied',
+        subtitle: e.jobTitle ? 'for ' + e.jobTitle : null,
+        preview: null
+      });
+    }
+  }
+
+  // F. Stage changes
+  const allStages = [...(customOpportunityStages || []), ...(customCompanyStages || [])];
+  for (const [key, ts] of Object.entries(e.stageTimestamps || {})) {
+    if (/^\d{10,}$/.test(key)) continue;
+    if (typeof ts !== 'number' || ts <= 0) continue;
+    const sd = allStages.find(s => s.key === key);
+    events.push({
+      ts, icon: '\u{1F4CB}', badgeType: 'stage', badge: 'Stage',
+      title: sd ? sd.label : key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      subtitle: 'Pipeline stage reached',
+      preview: null, isStage: true
+    });
+  }
+
+  // Dedup: merge calendar + Granola within 24h with shared title words
+  const deduped = [];
+  const used = new Set();
+  events.sort((a, b) => b.ts - a.ts);
+  for (let i = 0; i < events.length; i++) {
+    if (used.has(i)) continue;
+    const ev = events[i];
+    if (ev.badgeType === 'meeting' || ev.badgeType === 'call') {
+      for (let j = i + 1; j < events.length; j++) {
+        if (used.has(j)) continue;
+        const other = events[j];
+        if ((other.badgeType === 'meeting' || other.badgeType === 'call') && Math.abs(ev.ts - other.ts) < 86400000) {
+          const wordsA = (ev.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          const wordsB = (other.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          if (wordsA.some(w => wordsB.includes(w))) {
+            if (other.badgeType === 'call') { ev.icon = '\u{1F4C5}\u{1F399}\uFE0F'; ev.title = other.title; ev.preview = other.preview; ev.badgeType = 'call'; ev.badge = 'Call'; }
+            else { ev.icon = '\u{1F4C5}\u{1F399}\uFE0F'; ev.preview = ev.preview || other.preview; }
+            used.add(j);
+          }
+        }
+      }
+    }
+    deduped.push(ev);
+  }
+
+  if (!deduped.length) return '<div class="p-empty">No activity tracked yet. Emails, meetings, and manual logs will appear here as they\'re detected.</div>';
+
+  return deduped.map(ev => {
+    const dateStr = new Date(ev.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `<div class="timeline-entry timeline-${ev.badgeType}${ev.isStage ? ' timeline-stage' : ''}">
+      <div class="timeline-dot-col">
+        <div class="timeline-dot">${ev.icon}</div>
+        <div class="timeline-line"></div>
+      </div>
+      <div class="timeline-content">
+        <div class="timeline-header">
+          <span class="timeline-badge timeline-badge-${ev.badgeType}">${ev.badge}</span>
+          <span class="timeline-date">${dateStr}</span>
+        </div>
+        <div class="timeline-title">${escapeHtml(ev.title)}</div>
+        ${ev.subtitle ? `<div class="timeline-subtitle">${escapeHtml(ev.subtitle)}</div>` : ''}
+        ${ev.preview ? `<div class="timeline-preview">${escapeHtml(ev.preview)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function initActivityTab() {
+  const container = document.getElementById('activity-timeline');
+  if (!container) return;
+  container.innerHTML = buildActivityTimeline(entry);
+}
+
 function renderMainTabs() {
   const colEl = document.getElementById('col-main');
+  const isOpp = entry.isOpportunity;
   colEl.innerHTML = `
     <div class="hub-tabs-container">
       <div class="hub-tab-bar">
-        <button class="hub-tab active" data-tab="intel">Intel</button>
+        <button class="hub-tab${isOpp ? ' active' : ''}" data-tab="activity">Activity</button>
+        <button class="hub-tab${isOpp ? '' : ' active'}" data-tab="intel">Intel</button>
         <button class="hub-tab" data-tab="notes">Notes</button>
         <button class="hub-tab" data-tab="emails">Emails</button>
         <button class="hub-tab" data-tab="meetings">Meetings</button>
         <button class="hub-tab" data-tab="docs">Docs</button>
       </div>
-      <div class="hub-pane active" id="hub-intel">
+      <div class="hub-pane${isOpp ? ' active' : ''}" id="hub-activity">
+        <div id="activity-timeline"></div>
+      </div>
+      <div class="hub-pane${isOpp ? '' : ' active'}" id="hub-intel">
         ${buildIntelTab()}
       </div>
       <div class="hub-pane" id="hub-notes">
@@ -1063,10 +1211,15 @@ function bindHubTabs() {
   const container = document.querySelector('.hub-tabs-container');
   if (!container) return;
 
-  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false;
+  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false, activityInited = false;
 
-  // Init intel immediately (starts active)
-  setTimeout(() => { if (!intelInited) { intelInited = true; initIntelTab(); } }, 0);
+  if (entry.isOpportunity) {
+    // Activity tab starts active for opportunities
+    setTimeout(() => { if (!activityInited) { activityInited = true; initActivityTab(); } }, 0);
+  } else {
+    // Init intel immediately (starts active)
+    setTimeout(() => { if (!intelInited) { intelInited = true; initIntelTab(); } }, 0);
+  }
 
   container.querySelectorAll('.hub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -1075,6 +1228,11 @@ function bindHubTabs() {
       tab.classList.add('active');
       document.getElementById('hub-' + tab.dataset.tab)?.classList.add('active');
 
+      if (tab.dataset.tab === 'activity' && !activityInited) {
+        activityInited = true;
+        initActivityTab();
+      }
+      if (tab.dataset.tab === 'activity') initActivityTab();
       if (tab.dataset.tab === 'intel' && !intelInited) {
         intelInited = true;
         initIntelTab();
@@ -1401,6 +1559,10 @@ function loadHubEmails(forceRefresh) {
     renderEmailsFromData(result.emails);
     applyContactsFromEmails(result.emails);
     maybeRescore('new_emails');
+    const activityContainer = document.getElementById('activity-timeline');
+    if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
+      activityContainer.innerHTML = buildActivityTimeline(entry);
+    }
   });
 }
 
@@ -1450,6 +1612,10 @@ function loadHubMeetings(forceRefresh) {
       }
       statusEl.style.display = 'none';
       renderMeetingsTimeline(calEvents, entry.cachedMeetingNotes);
+      const activityContainer = document.getElementById('activity-timeline');
+      if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
+        activityContainer.innerHTML = buildActivityTimeline(entry);
+      }
       // Auto-populate next step from upcoming calendar event
       const nextStepChanges = autoPopulateNextStep(entry);
       if (nextStepChanges) {
@@ -1529,6 +1695,10 @@ function loadHubMeetings(forceRefresh) {
       applyGranolaContextOverrides();
       const calEvents = entry.cachedCalendarEvents || [];
       renderMeetingsTimeline(calEvents, granolaNotes);
+      const activityContainer = document.getElementById('activity-timeline');
+      if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
+        activityContainer.innerHTML = buildActivityTimeline(entry);
+      }
 
       // New context arrived — refresh fit analysis and job match score
       maybeRefreshDeepFitAnalysis();
