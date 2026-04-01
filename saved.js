@@ -1376,24 +1376,7 @@ function renderKanban(filtered) {
       </div>`;
   }).join('');
 
-  // Inject swipe overlays into ONLY the first card in the scoring queue
-  const queueCol = board.querySelector(`.kanban-cards[data-status="${stages[0]?.key || QUEUE_STAGE}"]`);
-  if (queueCol && activePipeline === 'opportunity') {
-    const firstCard = queueCol.querySelector('.kanban-card, .compact-card');
-    if (firstCard) {
-      firstCard.classList.add('swipe-card-wrap');
-      firstCard.insertAdjacentHTML('afterbegin', `
-        <div class="swipe-overlay right" style="opacity:0">
-          <svg class="swipe-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-          <span class="swipe-label">Interested</span>
-        </div>
-        <div class="swipe-overlay left" style="opacity:0">
-          <svg class="swipe-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          <span class="swipe-label">Pass</span>
-        </div>
-      `);
-    }
-  }
+  // Swipe overlays are now injected dynamically on swipe start (in bindKanbanEvents)
 
   bindKanbanEvents(board);
 
@@ -2095,7 +2078,7 @@ function bindKanbanEvents(board) {
     });
   });
 
-  // Swipe-to-triage for scoring queue cards
+  // Swipe-to-triage for ALL scoring queue cards
   if (activePipeline === 'opportunity') {
     const stages = currentStages();
     const queueKey = stages[0]?.key || QUEUE_STAGE;
@@ -2103,143 +2086,104 @@ function bindKanbanEvents(board) {
     const queueCardsContainer = board.querySelector(`.kanban-cards[data-status="${queueKey}"]`);
 
     if (queueCardsContainer) {
-      const COMMIT_RATIO = 0.4; // 40% of column width
+      const COMMIT_RATIO = 0.4;
       const interactiveSelector = 'textarea, input, select, a, button, summary, details, .card-tag, .star, .card-stars, .tag-remove, .tag-add-btn, .card-notes, .kanban-action-status, .kanban-next-step-input, .kanban-next-step-date, .status-select, .add-opp-btn, .card-delete, .score-match-btn, .compact-apply-btn, .compact-dismiss-btn';
+      const colRect = () => queueCardsContainer.closest('.kanban-col')?.getBoundingClientRect();
 
-      // Only bind swipe to the FIRST card in the queue (the one with overlays)
-      const swipeCard = queueCardsContainer.querySelector('.swipe-card-wrap');
-      if (swipeCard) { const card = swipeCard;
+      // Bind swipe to ALL cards in the queue column
+      queueCardsContainer.querySelectorAll('.kanban-card, .compact-card').forEach(card => {
         let startX = 0, startY = 0, deltaX = 0, deltaY = 0, isSwiping = false, directionLocked = false;
 
         card.addEventListener('pointerdown', e => {
-          // Don't swipe from interactive elements
           if (e.target.closest(interactiveSelector)) return;
-          startX = e.clientX;
-          startY = e.clientY;
-          deltaX = 0;
-          deltaY = 0;
-          isSwiping = false;
-          directionLocked = false;
-          // Don't capture pointer yet — wait until we confirm horizontal direction
-          // setPointerCapture blocks native HTML5 drag events
+          startX = e.clientX; startY = e.clientY;
+          deltaX = 0; deltaY = 0; isSwiping = false; directionLocked = false;
         });
 
         card.addEventListener('pointermove', e => {
           if (startX === 0 && startY === 0) return;
-          deltaX = e.clientX - startX;
-          deltaY = e.clientY - startY;
-
-          // Wait for initial movement threshold
+          deltaX = e.clientX - startX; deltaY = e.clientY - startY;
           if (!directionLocked && Math.abs(deltaX) < 3 && Math.abs(deltaY) < 3) return;
-
-          // Lock direction on first significant movement
           if (!directionLocked) {
             directionLocked = true;
-            if (Math.abs(deltaY) > Math.abs(deltaX)) {
-              // Vertical drag — let drag-and-drop handle it
-              startX = 0; startY = 0;
-              return;
-            }
+            if (Math.abs(deltaY) > Math.abs(deltaX)) { startX = 0; startY = 0; return; }
             isSwiping = true;
-            card.setPointerCapture(e.pointerId); // capture now that we know it's a swipe
+            card.setPointerCapture(e.pointerId);
             card.classList.add('swiping');
+            // Inject overlays if not present
+            if (!card.querySelector('.swipe-overlay')) {
+              card.style.position = 'relative';
+              card.insertAdjacentHTML('afterbegin', `
+                <div class="swipe-overlay right" style="opacity:0"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span class="swipe-label">Interested</span></div>
+                <div class="swipe-overlay left" style="opacity:0"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg><span class="swipe-label">Pass</span></div>
+              `);
+            }
           }
-
           if (!isSwiping) return;
           e.preventDefault();
-
-          // Apply transform
           const rotation = Math.max(-8, Math.min(8, deltaX * 0.06));
           card.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
           card.style.transformOrigin = 'center bottom';
-
-          // Update overlay opacity
           const threshold = queueCardsContainer.offsetWidth * COMMIT_RATIO;
           const progress = Math.min(1, Math.abs(deltaX) / threshold);
-          const rightOverlay = card.querySelector('.swipe-overlay.right');
-          const leftOverlay = card.querySelector('.swipe-overlay.left');
-          if (deltaX > 10 && rightOverlay) {
-            rightOverlay.style.opacity = progress * 0.85;
-            if (leftOverlay) leftOverlay.style.opacity = 0;
-          } else if (deltaX < -10 && leftOverlay) {
-            leftOverlay.style.opacity = progress * 0.85;
-            if (rightOverlay) rightOverlay.style.opacity = 0;
-          } else {
-            if (rightOverlay) rightOverlay.style.opacity = 0;
-            if (leftOverlay) leftOverlay.style.opacity = 0;
-          }
+          const rightOv = card.querySelector('.swipe-overlay.right');
+          const leftOv = card.querySelector('.swipe-overlay.left');
+          if (deltaX > 10) { if (rightOv) rightOv.style.opacity = progress * 0.85; if (leftOv) leftOv.style.opacity = 0; }
+          else if (deltaX < -10) { if (leftOv) leftOv.style.opacity = progress * 0.85; if (rightOv) rightOv.style.opacity = 0; }
+          else { if (rightOv) rightOv.style.opacity = 0; if (leftOv) leftOv.style.opacity = 0; }
         });
 
-        card.addEventListener('pointerup', e => {
-          if (!isSwiping) {
-            startX = 0; startY = 0;
-            return;
-          }
-
+        card.addEventListener('pointerup', () => {
+          if (!isSwiping) { startX = 0; startY = 0; return; }
           card.classList.remove('swiping');
           const threshold = queueCardsContainer.offsetWidth * COMMIT_RATIO;
           const entryId = card.dataset.id;
 
-          if (Math.abs(deltaX) > threshold && entryId) {
-            // COMMIT — fly out
+          // Check: did the card cross past the column edges?
+          const cr = colRect();
+          const cardCenter = card.getBoundingClientRect().left + card.getBoundingClientRect().width / 2;
+          const pastLeftEdge = cr && cardCenter < cr.left;
+          const pastRightEdge = cr && cardCenter > cr.right;
+
+          if ((Math.abs(deltaX) > threshold || pastLeftEdge || pastRightEdge) && entryId) {
             const direction = deltaX > 0 ? 1 : -1;
             card.classList.add('fly-out');
             card.style.transform = `translateX(${direction * 600}px) rotate(${direction * 15}deg)`;
             card.style.opacity = '0';
-
             setTimeout(() => {
               const entry = allCompanies.find(c => c.id === entryId);
               if (!entry) return;
-
               const now = Date.now();
               if (direction > 0) {
-                // Swipe RIGHT — Interested
-                const ts = { ...(entry.stageTimestamps || {}) };
-                ts[interestedKey] = now;
-                const autoAction = defaultActionStatus(interestedKey);
+                const ts = { ...(entry.stageTimestamps || {}) }; ts[interestedKey] = now;
                 const changes = { jobStage: interestedKey, stageTimestamps: ts };
+                const autoAction = defaultActionStatus(interestedKey);
                 if (autoAction) changes.actionStatus = autoAction;
                 updateCompany(entryId, changes);
               } else {
-                // Swipe LEFT — Pass
-                const ts = { ...(entry.stageTimestamps || {}) };
-                ts[DISMISS_STAGE] = now;
+                const ts = { ...(entry.stageTimestamps || {}) }; ts[DISMISS_STAGE] = now;
                 const tags = [...new Set([...(entry.tags || []), DISMISS_TAG])];
-                // Ensure tag is known
-                if (!allKnownTags.includes(DISMISS_TAG)) {
-                  allKnownTags.push(DISMISS_TAG);
-                  chrome.storage.local.set({ allTags: allKnownTags });
-                }
-                const autoAction = defaultActionStatus(DISMISS_STAGE);
+                if (!allKnownTags.includes(DISMISS_TAG)) { allKnownTags.push(DISMISS_TAG); chrome.storage.local.set({ allTags: allKnownTags }); }
                 const changes = { jobStage: DISMISS_STAGE, stageTimestamps: ts, tags };
+                const autoAction = defaultActionStatus(DISMISS_STAGE);
                 if (autoAction) changes.actionStatus = autoAction;
                 updateCompany(entryId, changes);
               }
             }, 300);
           } else {
-            // SNAP BACK
             card.classList.add('snap-back');
             card.style.transform = '';
-            const rightOverlay = card.querySelector('.swipe-overlay.right');
-            const leftOverlay = card.querySelector('.swipe-overlay.left');
-            if (rightOverlay) rightOverlay.style.opacity = 0;
-            if (leftOverlay) leftOverlay.style.opacity = 0;
+            const rightOv = card.querySelector('.swipe-overlay.right');
+            const leftOv = card.querySelector('.swipe-overlay.left');
+            if (rightOv) rightOv.style.opacity = 0;
+            if (leftOv) leftOv.style.opacity = 0;
             setTimeout(() => card.classList.remove('snap-back'), 250);
           }
-
-          startX = 0; startY = 0;
-          isSwiping = false;
-          directionLocked = false;
+          startX = 0; startY = 0; isSwiping = false; directionLocked = false;
         });
 
-        // Suppress click after swipe
-        card.addEventListener('click', e => {
-          if (Math.abs(deltaX) > 5) {
-            e.stopPropagation();
-            e.preventDefault();
-          }
-        }, true);
-      }
+        card.addEventListener('click', e => { if (Math.abs(deltaX) > 5) { e.stopPropagation(); e.preventDefault(); } }, true);
+      });
     }
   }
 }
