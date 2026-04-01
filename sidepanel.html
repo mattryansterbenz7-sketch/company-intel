@@ -47,6 +47,16 @@
     .pref-hint::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #2D2D2D; color: #E8E5E0; font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 220px; padding: 8px 10px; border-radius: 7px; border: 1px solid #E8E5E0; box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; }
     .pref-hint:hover::after { opacity: 1; }
 
+    /* Health dot */
+    .sp-health-dot {
+      width: 8px; height: 8px; border-radius: 50%; cursor: pointer;
+      transition: background 0.3s; flex-shrink: 0;
+    }
+    .sp-health-dot.green { background: #22c55e; }
+    .sp-health-dot.yellow { background: #eab308; }
+    .sp-health-dot.red { background: #ef4444; }
+    .sp-health-dot.gray { background: #b0c1d4; }
+
     /* Company bar */
     .company-bar { padding: 10px 16px; background: #fff; border-bottom: 1px solid #E8E5E0; display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: 10px; }
     .company-bar-left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
@@ -490,6 +500,7 @@
 <body>
   <div class="header">
     <div class="logo" id="sp-logo" style="cursor:pointer" title="Open dashboard">Company<span>Intel</span></div>
+    <span class="sp-health-dot" id="sp-health-dot" title="API health — click for details"></span>
     <div class="header-actions">
       <button id="saved-btn" class="header-icon-btn">
         <span class="header-icon" style="font-style:normal;font-size:16px">⊞</span>

@@ -405,5 +405,126 @@ function initGmailOAuth() {
 }
 
 
+// ── API Usage Dashboard ──
+
+function loadUsageDashboard() {
+  chrome.runtime.sendMessage({ type: 'GET_API_USAGE' }, usage => {
+    void chrome.runtime.lastError;
+    chrome.storage.local.get(['apiCreditAllocations', 'integrations'], data => {
+      const alloc = data.apiCreditAllocations || {};
+      const integrations = data.integrations || {};
+      renderUsageCards(usage || {}, alloc, integrations);
+    });
+  });
+}
+
+function renderSparkline(history) {
+  if (!history?.length) return '';
+  const max = Math.max(...history.map(d => d.requests), 1);
+  const w = 160, h = 28;
+  const points = history.map((d, i) => {
+    const x = (i / Math.max(history.length - 1, 1)) * w;
+    const y = h - (d.requests / max) * h;
+    return `${x},${y}`;
+  }).join(' ');
+  return `<svg class="usage-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="#7c98b6" stroke-width="1.5"/></svg>`;
+}
+
+function formatTokens(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function renderUsageCards(usage, alloc, integrations) {
+  const container = document.getElementById('usage-cards');
+  if (!container) return;
+
+  const providers = [
+    { id: 'anthropic', name: 'Anthropic', keyCheck: 'anthropic_key', isAI: true },
+    { id: 'openai', name: 'OpenAI', keyCheck: 'openai_key', isAI: true },
+    { id: 'serper', name: 'Serper', keyCheck: 'serper_key', isCredit: true },
+    { id: 'apollo', name: 'Apollo', keyCheck: 'apollo_key', isCredit: true },
+    { id: 'granola', name: 'Granola', keyCheck: 'granola_key' },
+  ];
+
+  let html = '';
+  for (const prov of providers) {
+    const pd = usage[prov.id] || initProviderUsageView();
+    const configured = !!integrations[prov.keyCheck];
+    const dimmed = !configured ? ' dimmed' : '';
+
+    let statLine = '';
+    let subLines = '';
+
+    if (prov.isAI) {
+      statLine = `${pd.requestsToday || 0} <span style="font-size:12px;font-weight:400;color:#7c98b6">today</span>`;
+      const tokIn = (pd.tokensToday?.input || 0);
+      const tokOut = (pd.tokensToday?.output || 0);
+      if (tokIn || tokOut) {
+        subLines += `<div class="usage-card-sub">${formatTokens(tokIn)} in / ${formatTokens(tokOut)} out tokens today</div>`;
+      }
+      subLines += `<div class="usage-card-sub">${pd.totalRequests || 0} total requests</div>`;
+      if (prov.id === 'anthropic' && pd.lastRateLimit?.requestsRemaining != null) {
+        const rl = pd.lastRateLimit;
+        subLines += `<div class="usage-card-sub">Rate limit: ${rl.requestsRemaining}/${rl.requestsLimit} req, ${formatTokens(rl.tokensRemaining || 0)}/${formatTokens(rl.tokensLimit || 0)} tok</div>`;
+      }
+    } else if (prov.isCredit) {
+      statLine = `${pd.totalRequests || 0} <span style="font-size:12px;font-weight:400;color:#7c98b6">credits used</span>`;
+      subLines += `<div class="usage-card-sub">${pd.requestsToday || 0} today</div>`;
+
+      // Progress bar if allocation set
+      const creditAlloc = alloc[prov.id];
+      if (creditAlloc && creditAlloc > 0) {
+        const pct = Math.min((pd.totalRequests || 0) / creditAlloc * 100, 100);
+        const color = pct >= 90 ? 'red' : pct >= 70 ? 'yellow' : 'green';
+        subLines += `<div class="usage-progress"><div class="usage-progress-bar ${color}" style="width:${pct}%"></div></div>`;
+        subLines += `<div class="usage-card-sub">${pd.totalRequests || 0} / ${creditAlloc} allocated</div>`;
+      }
+      subLines += `<div style="margin-top:4px"><label class="usage-card-sub">Credit limit: </label><input class="usage-alloc-input" type="number" min="0" data-provider="${prov.id}" value="${alloc[prov.id] || ''}" placeholder="e.g. 2500"></div>`;
+    } else {
+      statLine = `${pd.totalRequests || 0} <span style="font-size:12px;font-weight:400;color:#7c98b6">requests</span>`;
+      subLines += `<div class="usage-card-sub">${pd.requestsToday || 0} today</div>`;
+    }
+
+    // Error counts
+    let errHtml = '';
+    if (pd.errors?.count429 > 0) errHtml += `<div class="usage-card-warn">${pd.errors.count429} rate limits (429)</div>`;
+    if (pd.errors?.count401 > 0) errHtml += `<div class="usage-card-err">${pd.errors.count401} auth errors (401/403)</div>`;
+    if (pd.errors?.countOther > 0) errHtml += `<div class="usage-card-sub">${pd.errors.countOther} other errors</div>`;
+
+    html += `<div class="usage-card${dimmed}">
+      <div class="usage-card-name">${prov.name}</div>
+      <div class="usage-card-stat">${statLine}</div>
+      ${subLines}
+      ${errHtml}
+      ${renderSparkline(pd.dailyHistory)}
+    </div>`;
+  }
+
+  container.innerHTML = html;
+
+  // Bind allocation input handlers
+  container.querySelectorAll('.usage-alloc-input').forEach(input => {
+    const handler = () => {
+      const val = parseInt(input.value) || 0;
+      chrome.runtime.sendMessage({ type: 'SET_CREDIT_ALLOCATION', provider: input.dataset.provider, credits: val });
+    };
+    input.addEventListener('blur', handler);
+    input.addEventListener('change', handler);
+  });
+}
+
+function initProviderUsageView() {
+  return {
+    totalRequests: 0, totalInputTokens: 0, totalOutputTokens: 0,
+    requestsToday: 0, tokensToday: { input: 0, output: 0 },
+    lastRequestAt: null, lastRateLimit: {},
+    dailyHistory: [], errors: { count429: 0, count401: 0, countOther: 0 }
+  };
+}
+
 // ── Boot ──
 renderIntegrations();
+loadUsageDashboard();
+setInterval(loadUsageDashboard, 30000);

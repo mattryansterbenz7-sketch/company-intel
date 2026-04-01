@@ -1,3 +1,32 @@
+// ── API Health Dot ──────────────────────────────────────────────────────────
+
+function updateHealthDot() {
+  chrome.runtime.sendMessage({ type: 'GET_API_USAGE' }, usage => {
+    void chrome.runtime.lastError;
+    const dot = document.getElementById('sp-health-dot');
+    if (!dot || !usage) { if (dot) dot.className = 'sp-health-dot gray'; return; }
+
+    // Check for recent issues
+    let status = 'green';
+    for (const key of ['anthropic', 'openai', 'serper', 'apollo']) {
+      const p = usage[key];
+      if (!p) continue;
+      if (p.errors?.count401 > 0) { status = 'red'; break; }
+      if (p.errors?.count429 > 0 && p.lastRequestAt > Date.now() - 600000) { status = 'yellow'; }
+    }
+
+    dot.className = `sp-health-dot ${status}`;
+  });
+}
+updateHealthDot();
+setInterval(updateHealthDot, 60000);
+
+document.getElementById('sp-health-dot')?.addEventListener('click', () => {
+  window.open(chrome.runtime.getURL('integrations.html'), '_blank');
+});
+
+// ── Main ────────────────────────────────────────────────────────────────────
+
 const searchBtn = document.getElementById('search-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const savedBtn = document.getElementById('saved-btn');

@@ -46,6 +46,96 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
 setInterval(() => { if (GRANOLA_KEY) buildGranolaIndex(); }, 6 * 60 * 60 * 1000);
 
+// ── API Usage Tracking ──────────────────────────────────────────────────────
+
+function initProviderUsage() {
+  return {
+    totalRequests: 0, totalInputTokens: 0, totalOutputTokens: 0,
+    requestsToday: 0, tokensToday: { input: 0, output: 0 },
+    lastRequestAt: null, lastRateLimit: {},
+    dailyHistory: [], errors: { count429: 0, count401: 0, countOther: 0 }
+  };
+}
+
+async function getApiUsage() {
+  return new Promise(r => chrome.storage.local.get(['apiUsage'], d => r(d.apiUsage || { lastDayReset: '' })));
+}
+
+async function saveApiUsage(usage) {
+  return new Promise(r => chrome.storage.local.set({ apiUsage: usage }, r));
+}
+
+async function trackApiCall(provider, response) {
+  // Non-blocking — fire and forget
+  try {
+    const usage = await getApiUsage();
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Reset daily counters if new day
+    if (usage.lastDayReset !== today) {
+      for (const key of Object.keys(usage)) {
+        if (key === 'lastDayReset') continue;
+        const p = usage[key];
+        if (p?.requestsToday !== undefined) {
+          p.requestsToday = 0;
+          if (p.tokensToday) p.tokensToday = { input: 0, output: 0 };
+        }
+      }
+      usage.lastDayReset = today;
+    }
+
+    if (!usage[provider]) usage[provider] = initProviderUsage();
+    const pd = usage[provider];
+
+    pd.totalRequests++;
+    pd.requestsToday++;
+    pd.lastRequestAt = Date.now();
+
+    // Track errors
+    if (!response.ok) {
+      if (response.status === 429) pd.errors.count429++;
+      else if (response.status === 401 || response.status === 403) pd.errors.count401++;
+      else pd.errors.countOther++;
+    }
+
+    // Daily history
+    let dayEntry = pd.dailyHistory.find(d => d.date === today);
+    if (!dayEntry) {
+      dayEntry = { date: today, requests: 0, inputTokens: 0, outputTokens: 0 };
+      pd.dailyHistory.push(dayEntry);
+    }
+    dayEntry.requests++;
+    pd.dailyHistory = pd.dailyHistory.slice(-30);
+
+    // Token tracking for AI providers — read from cloned response
+    if (provider === 'anthropic' || provider === 'openai') {
+      try {
+        const data = await response.clone().json();
+        const inputTokens = data.usage?.input_tokens || data.usage?.prompt_tokens || 0;
+        const outputTokens = data.usage?.output_tokens || data.usage?.completion_tokens || 0;
+        pd.totalInputTokens += inputTokens;
+        pd.totalOutputTokens += outputTokens;
+        pd.tokensToday.input += inputTokens;
+        pd.tokensToday.output += outputTokens;
+        dayEntry.inputTokens += inputTokens;
+        dayEntry.outputTokens += outputTokens;
+      } catch {}
+    }
+
+    // Anthropic rate limit headers
+    if (provider === 'anthropic') {
+      pd.lastRateLimit = {
+        tokensRemaining: parseInt(response.headers.get('anthropic-ratelimit-tokens-remaining')) || null,
+        tokensLimit: parseInt(response.headers.get('anthropic-ratelimit-tokens-limit')) || null,
+        requestsRemaining: parseInt(response.headers.get('anthropic-ratelimit-requests-remaining')) || null,
+        requestsLimit: parseInt(response.headers.get('anthropic-ratelimit-requests-limit')) || null,
+      };
+    }
+
+    await saveApiUsage(usage);
+  } catch {}
+}
+
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persisted to storage, survives SW restarts
 
 // ── AI Scoring Queue Config ─────────────────────────────────────────────────
@@ -73,6 +163,7 @@ async function claudeApiCall(body, maxRetries = 3) {
       },
       body: JSON.stringify(body)
     });
+    trackApiCall('anthropic', res); // non-blocking, no await needed
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
       console.warn(`[Claude] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -97,6 +188,7 @@ async function openAiChatCall({ model, system, messages, max_tokens }, maxRetrie
       },
       body: JSON.stringify({ model, messages: oaiMessages, max_tokens })
     });
+    trackApiCall('openai', res); // non-blocking, no await needed
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[OpenAI] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -296,6 +388,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'INTERPRET_PROFILE_SECTION') {
     interpretProfileSection(message.section, message.content).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GET_API_USAGE') {
+    getApiUsage().then(sendResponse);
+    return true;
+  }
+  if (message.type === 'RESET_API_USAGE') {
+    chrome.storage.local.remove('apiUsage', () => sendResponse({ success: true }));
+    return true;
+  }
+  if (message.type === 'SET_CREDIT_ALLOCATION') {
+    chrome.storage.local.get(['apiCreditAllocations'], d => {
+      const alloc = d.apiCreditAllocations || {};
+      alloc[message.provider] = message.credits;
+      chrome.storage.local.set({ apiCreditAllocations: alloc }, () => sendResponse({ success: true }));
+    });
     return true;
   }
 });
@@ -1046,6 +1154,7 @@ async function fetchApolloData(domain, companyName) {
       'x-api-key': APOLLO_KEY
     }
   });
+  trackApiCall('apollo', res); // non-blocking, no await needed
   if (res.status === 429 || res.status === 402 || res.status === 403) {
     console.warn('[Apollo] Credits exhausted (HTTP', res.status, ')');
     _apolloExhausted = true;
@@ -1084,6 +1193,7 @@ async function fetchSerperResults(query, num = 5) {
     },
     body: JSON.stringify({ q: query, num })
   });
+  trackApiCall('serper', res); // non-blocking, no await needed
   if (res.status === 429 || res.status === 402 || res.status === 403) {
     console.warn('[Serper] Credits exhausted (HTTP', res.status, ')');
     _serperExhausted = true;
@@ -2242,6 +2352,7 @@ async function granolaFetch(path) {
   const res = await fetch('https://public-api.granola.ai' + path, {
     headers: { 'Authorization': 'Bearer ' + GRANOLA_KEY }
   });
+  trackApiCall('granola', res); // non-blocking, no await needed
   if (res.status === 429) {
     // Rate limited — wait and retry once
     await new Promise(r => setTimeout(r, 2000));
