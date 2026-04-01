@@ -341,8 +341,20 @@ function bindEvents(integrations) {
       const provider = PROVIDERS.find(p => p.id === btn.dataset.provider);
       if (!provider?.storageKey) return;
       const input = document.getElementById('key-' + provider.storageKey);
-      const key = input?.value?.trim();
-      if (!key) return;
+      let key = input?.value?.trim();
+      // If input is empty, test the currently active key (from config.js or storage)
+      if (!key) {
+        const activeKey = await new Promise(r => chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, r));
+        if (!activeKey?.[provider.id]) {
+          const resultEl = document.getElementById('test-' + provider.id);
+          resultEl.textContent = 'No key to test';
+          resultEl.className = 'test-result fail';
+          setTimeout(() => { resultEl.textContent = ''; }, 3000);
+          return;
+        }
+        // Use a sentinel to tell background to test with the active in-memory key
+        key = '__USE_ACTIVE_KEY__';
+      }
       const resultEl = document.getElementById('test-' + provider.id);
       btn.disabled = true;
       btn.textContent = 'Testing...';

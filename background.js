@@ -1133,7 +1133,13 @@ function parseLinkedInCompanySnippet(results) {
 }
 
 async function testApiKey(provider, key) {
-  // Strip invisible Unicode characters that break HTTP headers (smart quotes, zero-width spaces, etc.)
+  // If sentinel, use the active in-memory key
+  if (key === '__USE_ACTIVE_KEY__') {
+    const keys = { anthropic: ANTHROPIC_KEY, openai: OPENAI_KEY, serper: SERPER_KEY, apollo: APOLLO_KEY, granola: GRANOLA_KEY };
+    key = keys[provider] || '';
+    if (!key) return { ok: false, reason: 'No key configured' };
+  }
+  // Strip invisible Unicode characters that break HTTP headers
   key = key.replace(/[^\x20-\x7E]/g, '').trim();
   try {
     if (provider === 'anthropic') {
