@@ -1235,13 +1235,14 @@ function renderKanban(filtered) {
     const renderCard = colMode === 'compact' ? renderCompactCard : renderKanbanCard;
     return `
       <div class="kanban-col${isCollapsed ? ' collapsed' : ''}" data-col-key="${statusKey}">
-        <div class="kanban-col-header" data-status="${statusKey}" style="border-color:${s.border};background:${s.bg};color:${s.color}">
+        <div class="kanban-col-header" data-status="${statusKey}" style="border-top-color:${s.border};border-left-color:${s.border}">
+          <div class="col-color-dot" data-col="${statusKey}" style="background:${s.border}"></div>
           <span class="kanban-col-title">${statusLabel}</span>
           <span class="kanban-col-count">${cards.length}</span>
           <button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>
-          <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}">‹</button>
+          <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4L6 8l4 4"/></svg></button>
         </div>
-        <div class="kanban-cards" data-status="${statusKey}" style="border-color:${s.border};background:rgba(0,0,0,0.15)">
+        <div class="kanban-cards" data-status="${statusKey}">
           ${cards.length ? cards.map(c => renderCard(c)).join('') : '<div class="kanban-empty">Empty</div>'}
         </div>
       </div>`;
@@ -1610,6 +1611,85 @@ function bindKanbanEvents(board) {
       const cur = getColViewMode(col);
       setColViewMode(col, cur === 'compact' ? 'standard' : 'compact');
       render();
+    });
+  });
+
+  // Color dot click → open color picker
+  board.querySelectorAll('.col-color-dot').forEach(dot => {
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const col = dot.dataset.col;
+      // Close any existing picker
+      document.querySelectorAll('.col-color-picker').forEach(p => p.remove());
+
+      const PRESET_COLORS = [
+        '#64748b','#94a3b8','#374151','#1e293b',
+        '#ef4444','#f87171','#dc2626','#b91c1c',
+        '#f97316','#fb923c','#FF7A59','#ea580c',
+        '#eab308','#facc15','#ca8a04','#a16207',
+        '#22c55e','#4ade80','#16a34a','#15803d',
+        '#14b8a6','#2dd4bf','#0d9488','#0f766e',
+        '#06b6d4','#22d3ee','#0891b2','#0e7490',
+        '#3b82f6','#60a5fa','#2563eb','#1d4ed8',
+        '#8b5cf6','#a78bfa','#7c3aed','#6d28d9',
+        '#ec4899','#f472b6','#db2777','#be185d',
+      ];
+
+      const currentColor = dot.style.background;
+      const picker = document.createElement('div');
+      picker.className = 'col-color-picker';
+      picker.innerHTML = `
+        <div class="color-grid">
+          ${PRESET_COLORS.map(c => `<div class="color-swatch${c === currentColor ? ' selected' : ''}" style="background:${c}" data-color="${c}"></div>`).join('')}
+        </div>
+        <div class="color-custom-row">
+          <span class="color-custom-label">Custom:</span>
+          <input type="color" class="color-custom-input" value="${currentColor || '#64748b'}">
+        </div>`;
+
+      dot.closest('.kanban-col-header').appendChild(picker);
+
+      function applyColor(newColor) {
+        // Update storage
+        const stageType = activePipeline === 'opportunity' ? 'opportunityStages' : 'companyStages';
+        chrome.storage.local.get([stageType], data => {
+          const stages = data[stageType] || [];
+          const stage = stages.find(s => s.key === col);
+          if (stage) {
+            stage.color = newColor;
+            chrome.storage.local.set({ [stageType]: stages }, () => {
+              picker.remove();
+              render(); // re-render the board
+            });
+          }
+        });
+      }
+
+      picker.querySelectorAll('.color-swatch').forEach(sw => {
+        sw.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyColor(sw.dataset.color);
+        });
+      });
+
+      picker.querySelector('.color-custom-input').addEventListener('input', (e) => {
+        // Live preview
+        dot.style.background = e.target.value;
+        dot.closest('.kanban-col-header').style.borderTopColor = e.target.value;
+      });
+      picker.querySelector('.color-custom-input').addEventListener('change', (e) => {
+        applyColor(e.target.value);
+      });
+
+      // Close on outside click
+      setTimeout(() => {
+        document.addEventListener('click', function closePicker(ev) {
+          if (!picker.contains(ev.target) && ev.target !== dot) {
+            picker.remove();
+            document.removeEventListener('click', closePicker);
+          }
+        });
+      }, 0);
     });
   });
 
