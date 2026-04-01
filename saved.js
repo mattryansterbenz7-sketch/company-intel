@@ -64,6 +64,15 @@ const DEFAULT_STAT_CARDS = [
 ];
 let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
 
+function parseLocalDate(d) {
+  if (!d) return 0;
+  if (typeof d === 'number') return d;
+  const s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00').getTime();
+  const ms = new Date(s).getTime();
+  return isNaN(ms) ? 0 : ms;
+}
+
 function truncLabel(str, max = 40) {
   if (!str) return '';
   return str.length > max ? str.slice(0, max - 1) + '…' : str;
@@ -100,9 +109,9 @@ function computeLastActivity(entry) {
 
   // B. Meetings (Granola)
   (entry.cachedMeetings || []).forEach(m => {
-    let ts = m.createdAt ? new Date(m.createdAt).getTime() : 0;
-    if (!ts || isNaN(ts)) ts = m.date ? new Date(m.date).getTime() : 0;
-    if (!ts || isNaN(ts)) return;
+    let ts = m.createdAt ? parseLocalDate(m.createdAt) : 0;
+    if (!ts) ts = parseLocalDate(m.date);
+    if (!ts) return;
     candidates.push({ timestamp: ts, label: truncLabel('Call: ' + (m.title || 'Meeting')), type: 'meeting' });
   });
 
@@ -116,8 +125,8 @@ function computeLastActivity(entry) {
 
   // D. Activity log
   (entry.activityLog || []).forEach(log => {
-    const ts = new Date(log.date).getTime();
-    if (!ts || isNaN(ts)) return;
+    const ts = parseLocalDate(log.date);
+    if (!ts) return;
     const typeLabels = {
       linkedin_dm: 'LinkedIn DM',
       phone_call: 'Phone call',
@@ -147,8 +156,9 @@ function computeLastActivity(entry) {
 function getUpcomingCalendarEvent(entry) {
   const events = entry.cachedCalendarEvents || [];
   const now = Date.now();
+  const twoWeeks = now + 14 * 24 * 60 * 60 * 1000;
   const future = events
-    .filter(e => new Date(e.start).getTime() > now)
+    .filter(e => { const t = new Date(e.start).getTime(); return t > now && t <= twoWeeks; })
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   return future.length ? future[0] : null;
 }
