@@ -302,7 +302,7 @@ function renderCompactCard(c) {
     <div class="compact-card score-${tier}${stateClass}" data-id="${c.id}" draggable="true">
       <div class="compact-card-score">${scoreHtml}</div>
       <div class="compact-card-body">
-        <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtmlGlobal(c.company)}</span></div>
+        <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtmlGlobal(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
         ${c.jobUrl ? `<a class="compact-title" href="${escHtmlGlobal(c.jobUrl)}" target="_blank" title="Open job posting">${escHtmlGlobal(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>`}
         ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
         ${c.quickFitReason && score != null ? (() => {
@@ -1470,7 +1470,7 @@ function renderKanbanCard(c) {
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
             ${faviconHtml}
             <span class="card-type ${isJob ? 'job' : 'company'}">${isJob ? 'Opp' : 'Co.'}</span>
-            <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}</a>
+            <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</a>
           </div>
           ${isJob && c.jobTitle ? `<div class="kanban-card-job">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : c.jobTitle}</div>` : ''}
         </div>

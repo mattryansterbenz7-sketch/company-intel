@@ -54,6 +54,42 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
 setInterval(() => { if (GRANOLA_KEY) buildGranolaIndex(); }, 6 * 60 * 60 * 1000);
 
+// ── Company name matching helper ────────────────────────────────────────────
+function companiesMatchLoose(a, b) {
+  if (!a || !b) return false;
+  const norm = s => s.toLowerCase().replace(/\b(inc|llc|ltd|corp|co|ai|the|a|an|\.com)\b/g, '').replace(/[^a-z0-9]/g, '').trim();
+  const na = norm(a), nb = norm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  // Check first significant word
+  const fa = na.match(/[a-z]{3,}/)?.[0], fb = nb.match(/[a-z]{3,}/)?.[0];
+  return fa && fb && (fa === fb || fa.includes(fb) || fb.includes(fa));
+}
+
+// ── One-time scan for data contamination ────────────────────────────────────
+chrome.storage.local.get(['savedCompanies', '_dataConflictScanDone'], data => {
+  if (data._dataConflictScanDone) return;
+  const entries = data.savedCompanies || [];
+  let changed = false;
+  for (const e of entries) {
+    if (e.dataConflict) continue; // already flagged
+    const desc = e.intelligence?.eli5 || e.intelligence?.oneLiner || '';
+    if (!desc || !e.company) continue;
+    const companyWords = e.company.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+    if (!companyWords.length) continue;
+    const descLower = desc.toLowerCase();
+    const mentionsCompany = companyWords.some(w => descLower.includes(w));
+    if (!mentionsCompany) {
+      e.dataConflict = true;
+      changed = true;
+      console.warn('[DataIntegrity] Flagged potential contamination:', e.company, '| desc:', desc.slice(0, 60));
+    }
+  }
+  if (changed) chrome.storage.local.set({ savedCompanies: entries });
+  chrome.storage.local.set({ _dataConflictScanDone: true });
+});
+
 // ── API Usage Tracking ──────────────────────────────────────────────────────
 
 function initProviderUsage() {
@@ -967,6 +1003,11 @@ async function researchCompany(company, domain, prefs, companyLinkedin, linkedin
         jobMatch: 'Claude Haiku',
       },
     };
+    // Propagate data conflict flag from AI validation
+    if (aiSummary._dataConflict) {
+      result.dataConflict = true;
+      delete result._dataConflict;
+    }
     // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
     if (linkedinFirmo) {
       if (!result.employees && linkedinFirmo.employees) { result.employees = linkedinFirmo.employees; result.employeesSource = 'LinkedIn (page)'; }
@@ -1511,7 +1552,20 @@ Respond with a JSON object only, no markdown:
     });
     if (result.error) throw new Error('AI is busy — too many requests. Try again in a moment.');
     const fbClean = result.reply.replace(/```json|```/g, '').trim();
-    try { return JSON.parse(fbClean); } catch { return JSON.parse(fbClean.slice(0, fbClean.lastIndexOf('}') + 1)); }
+    let fbResult;
+    try { fbResult = JSON.parse(fbClean); } catch { fbResult = JSON.parse(fbClean.slice(0, fbClean.lastIndexOf('}') + 1)); }
+    // Validate the AI didn't describe a different company
+    const fbAiRef = fbResult.intelligence?.eli5 || fbResult.intelligence?.oneLiner || '';
+    if (fbAiRef && company) {
+      const fbWords = company.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+      const fbDescLower = fbAiRef.toLowerCase();
+      const fbMentions = fbWords.some(w => fbDescLower.includes(w));
+      if (!fbMentions) {
+        console.warn('[Research] AI description may not match company:', company, '| desc:', fbAiRef.slice(0, 80));
+        fbResult._dataConflict = true;
+      }
+    }
+    return fbResult;
   }
   // Surface API-level errors with friendly messages
   if (data.error) {
@@ -1524,16 +1578,30 @@ Respond with a JSON object only, no markdown:
   if (!raw) throw new Error('Empty response from Claude');
   const clean = raw.replace(/```json|```/g, '').trim();
   // If JSON is truncated (common with low max_tokens), attempt partial recovery
+  let parsedResult;
   try {
-    return JSON.parse(clean);
+    parsedResult = JSON.parse(clean);
   } catch (e) {
     // Try to find the largest valid JSON object in the response
     const lastBrace = clean.lastIndexOf('}');
     if (lastBrace > 0) {
-      return JSON.parse(clean.slice(0, lastBrace + 1));
+      parsedResult = JSON.parse(clean.slice(0, lastBrace + 1));
+    } else {
+      throw e;
     }
-    throw e;
   }
+  // Validate the AI didn't describe a different company
+  const aiCompanyRef = parsedResult.intelligence?.eli5 || parsedResult.intelligence?.oneLiner || '';
+  if (aiCompanyRef && company) {
+    const companyWords = company.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+    const descLower = aiCompanyRef.toLowerCase();
+    const mentionsCompany = companyWords.some(w => descLower.includes(w));
+    if (!mentionsCompany) {
+      console.warn('[Research] AI description may not match company:', company, '| desc:', aiCompanyRef.slice(0, 80));
+      parsedResult._dataConflict = true;
+    }
+  }
+  return parsedResult;
 }
 
 // ── Gmail ───────────────────────────────────────────────────────────────────

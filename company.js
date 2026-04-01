@@ -997,7 +997,14 @@ function buildIntelTab() {
     : `<div class="hub-section-label">Job Fit Analysis</div>
        <div class="p-empty" style="text-align:left">Add this company to the Opportunity Pipeline to enable fit analysis against your preferences, meetings, and emails.</div>`;
 
+  const conflictBanner = entry.dataConflict ? `
+    <div class="data-conflict-banner">
+      <span>\u26a0\ufe0f The intel for this company may be inaccurate \u2014 enrichment data may belong to a different company.</span>
+      <button class="conflict-reenrich-btn" id="reenrich-btn">Re-enrich \u2192</button>
+    </div>` : '';
+
   return `
+    ${conflictBanner}
     <div class="hub-intel-block">${overview}</div>
     ${hasIntel ? `<div class="hub-intel-block">${intel}</div>` : ''}
     ${entry.isOpportunity ? `<div class="hub-intel-block" id="hub-role-brief-block">${buildRoleBriefSection()}</div>` : ''}
@@ -1037,6 +1044,42 @@ function initIntelTab() {
       if (hiringEl  && updates.jobListings) hiringEl.innerHTML  = `<div class="hub-section-label">Hiring Signals</div>${buildHiring()}`;
     });
   }
+
+  // Bind re-enrich button for data conflict banner
+  document.getElementById('reenrich-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('reenrich-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Re-enriching...'; }
+    // Clear stale enrichment data
+    saveEntry({
+      intelligence: null, reviews: null, leaders: null,
+      employees: null, funding: null, industry: null, founded: null,
+      roleBrief: null, dataConflict: false,
+    });
+    // Re-run research
+    chrome.runtime.sendMessage({
+      type: 'RESEARCH_COMPANY',
+      company: entry.company,
+      domain: (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null,
+      prefs: null,
+      companyLinkedin: entry.companyLinkedin || null,
+    }, result => {
+      void chrome.runtime.lastError;
+      if (result) {
+        saveEntry({
+          intelligence: result.intelligence || null,
+          reviews: result.reviews || null,
+          leaders: result.leaders || null,
+          employees: result.employees || entry.employees || null,
+          funding: result.funding || entry.funding || null,
+          industry: result.industry || entry.industry || null,
+          founded: result.founded || entry.founded || null,
+          dataConflict: result.dataConflict || false,
+        });
+      }
+      // Reload the page to show fresh data
+      location.reload();
+    });
+  });
 
   // Trigger / refresh deep fit analysis
   maybeRefreshDeepFitAnalysis();
