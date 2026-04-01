@@ -1366,6 +1366,7 @@ function renderKanban(filtered) {
           <div class="col-color-dot" data-col="${statusKey}" style="background:${s.border}"></div>
           <span class="kanban-col-title">${statusLabel}</span>
           <span class="kanban-col-count">${cards.length}</span>
+          ${statusKey === QUEUE_STAGE && activePipeline === 'opportunity' ? `<button class="col-rescore-btn" data-col="${statusKey}" title="Re-score entries missing quickTake data">↻ Re-score</button>` : ''}
           <button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>
           <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4L6 8l4 4"/></svg></button>
         </div>
@@ -1774,6 +1775,53 @@ function bindKanbanEvents(board) {
     cardEl.addEventListener('click', (e) => {
       if (e.target.closest('a, button, select, textarea, input, .card-tag, .star, .card-stars, details, summary')) return;
       window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+    });
+  });
+
+  // Re-score button for AI Scoring Queue
+  board.querySelectorAll('.col-rescore-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const queueEntries = allCompanies.filter(c =>
+        c.isOpportunity && (c.jobStage || 'needs_review') === QUEUE_STAGE &&
+        !c.quickTake?.length && !c.jobMatch?.quickTake?.length
+      );
+      if (!queueEntries.length) { btn.textContent = '✓ All scored'; setTimeout(() => btn.textContent = '↻ Re-score', 2000); return; }
+
+      btn.disabled = true;
+      let done = 0;
+      const total = queueEntries.length;
+      btn.textContent = `Scoring 0/${total}...`;
+
+      // Process in batches of 2 with 2s delay
+      for (let i = 0; i < queueEntries.length; i += 2) {
+        const batch = queueEntries.slice(i, i + 2);
+        await Promise.all(batch.map(entry =>
+          new Promise(resolve => {
+            chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+              void chrome.runtime.lastError;
+              if (result && !result.error) {
+                // Update in-memory entry
+                const idx = allCompanies.findIndex(c => c.id === entry.id);
+                if (idx >= 0) {
+                  if (result.quickFitScore != null) allCompanies[idx].quickFitScore = result.quickFitScore;
+                  if (result.quickFitReason) allCompanies[idx].quickFitReason = result.quickFitReason;
+                  if (result.quickTake) allCompanies[idx].quickTake = result.quickTake;
+                  if (result.hardDQ) allCompanies[idx].hardDQ = result.hardDQ;
+                }
+              }
+              done++;
+              btn.textContent = `Scoring ${done}/${total}...`;
+              resolve();
+            });
+          })
+        ));
+        if (i + 2 < queueEntries.length) await new Promise(r => setTimeout(r, 2000));
+      }
+
+      btn.disabled = false;
+      btn.textContent = `✓ ${done} scored`;
+      setTimeout(() => { btn.textContent = '↻ Re-score'; render(); }, 1500);
     });
   });
 
