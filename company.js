@@ -28,8 +28,8 @@ function computeLastActivityCo(e) {
   for (const m of (e.cachedMeetings || [])) { const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0; if (ts > 0) acts.push({ timestamp: ts, label: `Call: ${(m.title || 'Meeting').slice(0, 45)}` }); }
   for (const m of (e.manualMeetings || [])) { const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0; if (ts > 0) acts.push({ timestamp: ts, label: `${(m.title || 'Meeting').slice(0, 45)}` }); }
   for (const a of (e.activityLog || [])) { if (a.date) { const tl = typeLabels[a.type] || 'Activity'; acts.push({ timestamp: new Date(a.date + 'T12:00:00').getTime(), label: a.note ? `${tl}: ${a.note.slice(0, 35)}` : tl }); } }
-  const allStageDefs = [...(customOpportunityStages || []), ...(customCompanyStages || [])];
-  for (const [sk, ts] of Object.entries(e.stageTimestamps || {})) { if (/^\d{10,}$/.test(sk)) continue; if (typeof ts !== 'number' || ts <= 0) continue; const sd = allStageDefs.find(s => s.key === sk); acts.push({ timestamp: ts, label: `Stage → ${sd ? sd.label : sk.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}` }); }
+  const appliedTs = (e.stageTimestamps || {})['applied'];
+  if (typeof appliedTs === 'number' && appliedTs > 0) acts.push({ timestamp: appliedTs, label: 'Applied' });
   acts.sort((a, b) => b.timestamp - a.timestamp);
   return acts.length ? acts[0] : { timestamp: 0, label: null };
 }
