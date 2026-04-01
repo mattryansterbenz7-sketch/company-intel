@@ -2094,6 +2094,9 @@ function bindKanbanEvents(board) {
       queueCardsContainer.querySelectorAll('.kanban-card, .compact-card').forEach(card => {
         let startX = 0, startY = 0, deltaX = 0, deltaY = 0, isSwiping = false, directionLocked = false;
 
+        // Prevent native HTML5 drag on queue cards — it steals pointer events before swipe can lock direction
+        card.setAttribute('draggable', 'false');
+
         card.addEventListener('pointerdown', e => {
           if (e.target.closest(interactiveSelector)) return;
           startX = e.clientX; startY = e.clientY;
