@@ -1577,6 +1577,7 @@ function bindKanbanEvents(board) {
       };
       const autoAction = defaultActionStatus(newStatus);
       if (autoAction) changes.actionStatus = autoAction;
+      if (newStatus === 'applied' && !entry.appliedDate) changes.appliedDate = Date.now();
       updateCompany(draggingId, changes);
       if (activePipeline !== 'company') {
         const confettiConfig = getConfettiConfig(newStatus);

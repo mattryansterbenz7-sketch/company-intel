@@ -445,6 +445,10 @@ function renderHeader() {
     // Auto-set Action On based on stage
     const autoAction = defaultActionStatus(sel.value);
     if (autoAction) stageChanges.actionStatus = autoAction;
+    // Auto-seed applied date
+    if (sel.value === 'applied' && !entry.appliedDate) {
+      stageChanges.appliedDate = Date.now();
+    }
     saveEntry(stageChanges);
     // Update Action On dropdown if visible
     const actionSel = document.getElementById('opp-action-status');
@@ -2893,6 +2897,16 @@ function bindPanelBodyEvents(pid) {
       nextStepDate.addEventListener('change', () => {
         nextStepDate.classList.toggle('has-value', !!nextStepDate.value);
         saveEntry({ nextStepDate: nextStepDate.value || null });
+      });
+    }
+
+    const appliedDateInput = document.getElementById('opp-applied-date');
+    if (appliedDateInput) {
+      appliedDateInput.addEventListener('change', () => {
+        const val = appliedDateInput.value;
+        const ts = val ? new Date(val + 'T12:00:00').getTime() : null;
+        appliedDateInput.classList.toggle('has-value', !!val);
+        saveEntry({ appliedDate: ts });
       });
     }
 

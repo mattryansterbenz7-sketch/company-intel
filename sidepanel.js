@@ -1302,6 +1302,8 @@ function renderOppFields(savedEntry) {
         // Auto-set Action On based on stage
         const autoAction = defaultActionStatus(oppSelect.value);
         if (autoAction) stageChanges.actionStatus = autoAction;
+        // Auto-seed applied date
+        if (oppSelect.value === 'applied' && !savedEntry.appliedDate) stageChanges.appliedDate = Date.now();
         updateEntry(stageChanges);
         // Update Action On dropdown if visible
         const actionSel = el.querySelector('#sp-action-status');
