@@ -1341,16 +1341,16 @@ function renderKanban(filtered) {
         return (b.savedAt || 0) - (a.savedAt || 0);
       });
     } else if (activePipeline === 'opportunity') {
-      // Sort: My Court first, then by job match score (highest first), then by most recent activity
+      // Sort: score first (highest first), then action priority, then most recent activity
       cards.sort((a, b) => {
-        // My Court items float to top
+        const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : (a.quickFitScore || -1);
+        const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : (b.quickFitScore || -1);
+        if (sb !== sa) return sb - sa;
+        // Scheduled items surface above same-score items
         const actionPriority = { scheduled: 2, my_court: 1, their_court: 0 };
         const aP = actionPriority[a.actionStatus || 'my_court'] || 0;
         const bP = actionPriority[b.actionStatus || 'my_court'] || 0;
         if (bP !== aP) return bP - aP;
-        const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : -1;
-        const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : -1;
-        if (sb !== sa) return sb - sa;
         return (computeLastActivity(b).timestamp || b.savedAt || 0) - (computeLastActivity(a).timestamp || a.savedAt || 0);
       });
     }
