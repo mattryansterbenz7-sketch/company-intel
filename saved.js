@@ -46,6 +46,7 @@ function detectScheduledStatus(entry) {
   return events.some(e => new Date(e.start) > now);
 }
 let customActionStatuses = null; // loaded from storage, falls back to DEFAULT
+let _userWorkArrangement = []; // loaded from chrome.storage.sync prefs
 const _collapsedCols = new Set(JSON.parse(sessionStorage.getItem('ci_collapsed_cols') || '[]'));
 let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
 let activityCustomRange = JSON.parse(localStorage.getItem('ci_activityCustomRange') || 'null'); // {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} or null
@@ -188,10 +189,14 @@ function renderCompactCard(c) {
   const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
   const stateClass = isScoring ? ' scoring' : '';
 
+  // Hard DQ
+  const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
+  const compactDQHtml = hardDQ?.flagged ? '<div class="compact-dq">\u{1F6AB} Hard DQ</div>' : '';
+
   // Score display
   let scoreHtml;
   if (score != null) {
-    scoreHtml = `<span class="compact-score-num ${tier}">${score}</span><span class="compact-score-den">/10</span>`;
+    scoreHtml = `<span class="compact-score-num ${tier}">${score}</span><span class="compact-score-den">/10</span>${compactDQHtml}`;
   } else if (isScoring) {
     scoreHtml = '<span class="compact-spinner"></span>';
   } else {
@@ -241,6 +246,12 @@ function renderCompactCard(c) {
           return reason ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(reason)}</div>` : '';
         })() : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
+        ${(() => {
+          const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
+          return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 2).map(qt =>
+            `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtmlGlobal(qt.text)}</div>`
+          ).join('')}</div>` : '';
+        })()}
         ${tagsHtml}
         ${actionsHtml}
       </div>
@@ -350,6 +361,10 @@ document.addEventListener('click', () => {
 });
 
 function load() {
+  // Load user prefs for work arrangement mismatch detection
+  chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+    _userWorkArrangement = (prefs?.workArrangement) || [];
+  });
   chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs', 'actionStatuses'], (data) => {
     const { savedCompanies, allTags } = data;
     // Migration: old customStages → opportunityStages
@@ -1214,6 +1229,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg.score != null) updates.quickFitScore = msg.score;
       if (msg.scoredAt) updates.quickFitScoredAt = msg.scoredAt;
       if (msg.jobSnapshot) updates.jobSnapshot = msg.jobSnapshot;
+      if (msg.quickTake) updates.quickTake = msg.quickTake;
+      if (msg.hardDQ) updates.hardDQ = msg.hardDQ;
       allCompanies[idx] = { ...allCompanies[idx], ...updates, _queuedForScoring: false };
       // Re-render just the kanban if active, otherwise full render
       render();
@@ -1386,17 +1403,37 @@ function renderKanbanCard(c) {
           const d = Math.round((Date.now() - c.jobMatchScoredAt) / 86400000);
           return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
         })() : '';
-        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
+        const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
+        const hardDQHtml = hardDQ?.flagged ? '<span class="hard-dq-badge">\u{1F6AB} Hard DQ</span>' : '';
+        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
       ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
         const compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary;
         const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
+        const userWantsRemote = Array.isArray(_userWorkArrangement) && _userWorkArrangement.some(w => /remote/i.test(w));
+        const jobArr = c.workArrangement || '';
+        const arrMismatch = userWantsRemote && /on.?site|hybrid/i.test(jobArr);
         return `<div class="card-job-chips">
-          ${compText ? `<span class="job-chip salary ${compLabel.toLowerCase()}">💰 ${compLabel}: ${compText}</span>` : ''}
-          ${c.equity ? `<span class="job-chip equity">📈 ${c.equity}</span>` : ''}
-          ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}</span>` : ''}
+          ${compText ? `<span class="job-chip salary ${compLabel.toLowerCase()}">\u{1F4B0} ${compLabel}: ${compText}</span>` : ''}
+          ${c.equity ? `<span class="job-chip equity">\u{1F4C8} ${c.equity}</span>` : ''}
+          ${c.workArrangement ? `<span class="job-chip ${arrClass}${arrMismatch ? ' arr-mismatch' : ''}">${c.workArrangement === 'Remote' ? '\u{1F310}' : c.workArrangement === 'Hybrid' ? '\u{1F3E0}' : '\u{1F3E2}'} ${c.workArrangement}</span>` : ''}
         </div>`;
       })() : ''}
+      ${(() => {
+        const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
+        return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 4).map(qt =>
+          `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtmlGlobal(qt.text)}</div>`
+        ).join('')}</div>` : '';
+      })()}
+      ${(() => {
+        const reviews = c.reviews || [];
+        const ratingReview = reviews.find(r => r.rating);
+        return ratingReview ? (() => {
+          const rating = parseFloat(ratingReview.rating);
+          const warn = rating < 3.0;
+          return `<span class="review-chip${warn ? ' review-warn' : ''}">${warn ? '\u26A0\uFE0F' : '\u2B50'} ${rating} ${ratingReview.source || 'Glassdoor'}</span>`;
+        })() : '';
+      })()}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
       ${(() => {
         const act = computeLastActivity(c);

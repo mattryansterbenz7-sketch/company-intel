@@ -556,6 +556,40 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .compact-queue-dot { width: 8px; height: 8px; background: #DDD9D4; border-radius: 50%; }
+
+    /* Quick Take bullets */
+    .quick-take { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
+    .qt-bullet { font-size: 11px; line-height: 1.4; color: #33475b; }
+    .qt-green { }
+    .qt-red { }
+
+    /* Hard DQ badge */
+    .hard-dq-badge {
+      font-size: 10px; font-weight: 700; color: #b91c1c;
+      background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 12px; padding: 2px 8px; white-space: nowrap;
+    }
+
+    /* Review chip */
+    .review-chip {
+      font-size: 10px; color: #516f90; background: #f5f8fa;
+      border: 1px solid #dfe3eb; border-radius: 10px; padding: 1px 7px;
+      white-space: nowrap;
+    }
+    .review-chip.review-warn {
+      color: #a16207; background: rgba(234,179,8,0.08);
+      border-color: rgba(234,179,8,0.3);
+    }
+
+    /* Work arrangement mismatch */
+    .arr-mismatch {
+      color: #b91c1c !important; background: rgba(239,68,68,0.08) !important;
+      border-color: rgba(239,68,68,0.3) !important; font-weight: 600 !important;
+    }
+
+    /* Compact card hard DQ */
+    .compact-dq { font-size: 9px; font-weight: 700; color: #b91c1c; margin-top: 2px; }
+
     /* View toggle in column header */
     .col-view-toggle {
       background: none; border: none; color: #A09A94; font-size: 13px; cursor: pointer; padding: 2px 4px; border-radius: 4px; margin-left: auto;

@@ -513,13 +513,22 @@ Compensation: ${entry.salary || 'Not specified'}
 Arrangement: ${entry.workArrangement || 'Not specified'}
 Description (first 3000 chars): ${jobDesc}
 
-Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining the score"}`;
+Quick Take: Include 2-4 of the most decisive signals as quickTake bullets (green for strong fits, red for dealbreakers). Lead with the single most important signal. Keep each to 8-15 words max.
+
+Hard DQ: Set hardDQ.flagged to true ONLY when there is a genuine dealbreaker that makes this role dead on arrival:
+- Work arrangement is On-site/Hybrid when candidate requires Remote
+- Base salary maximum is below candidate's salary floor
+- Role function is fundamentally different from candidate's target roles (e.g., engineering role for a sales person)
+- Location requires relocation with no remote option
+If none of these apply, set hardDQ.flagged to false with empty reasons array.
+
+Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "short signal"}], "hardDQ": {"flagged": boolean, "reasons": ["reason"]}}`;
 
   const { reply, error } = await chatWithFallback({
     model: QUICK_FIT_MODEL,
     system: 'You are a precise job-fit scoring assistant. Respond with valid JSON only.',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 150,
+    max_tokens: 400,
     tag: 'QuickFit'
   });
 
@@ -528,12 +537,16 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining 
   // Parse response
   let score = null;
   let reason = 'Could not parse response';
+  let quickTake = [];
+  let hardDQ = { flagged: false, reasons: [] };
   try {
     const jsonMatch = reply.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       score = Number(parsed.score);
       reason = parsed.reason || 'No reason provided';
+      quickTake = parsed.quickTake || [];
+      hardDQ = parsed.hardDQ || { flagged: false, reasons: [] };
     }
   } catch (parseErr) {
     console.warn('[QuickFit] Failed to parse response:', reply);
@@ -549,6 +562,8 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining 
   if (idx !== -1) {
     freshEntries[idx].quickFitScore = score;
     freshEntries[idx].quickFitReason = reason;
+    freshEntries[idx].quickTake = quickTake;
+    freshEntries[idx].hardDQ = hardDQ;
     freshEntries[idx].quickFitScoredAt = Date.now();
     await new Promise(resolve =>
       chrome.storage.local.set({ savedCompanies: freshEntries }, resolve)
@@ -560,10 +575,12 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining 
     type: 'QUICK_FIT_COMPLETE',
     entryId,
     quickFitScore: score,
-    quickFitReason: reason
+    quickFitReason: reason,
+    quickTake,
+    hardDQ
   }).catch(() => {}); // ignore if no listeners
 
-  return { quickFitScore: score, quickFitReason: reason };
+  return { quickFitScore: score, quickFitReason: reason, quickTake, hardDQ };
 }
 
 async function processQueue() {
@@ -1002,13 +1019,24 @@ Analysis rules:
 12. Do NOT flag missing travel information as a red flag. Most job postings don't mention travel requirements — this is normal and not a negative signal. Only flag travel as a red flag if travel is explicitly required AND it exceeds the user's max travel preference.
 13. For workArrangement in jobSnapshot: if the LinkedIn posting explicitly says "Remote" in its chips/tags, set workArrangement to "Remote" even if the job description mentions a specific geography or territory (e.g., "Southeast region"). Territory assignments do NOT mean on-site — they define sales coverage area, not work location.
 
+Quick Take: Include 2-4 of the most decisive signals as quickTake bullets (green for strong fits, red for dealbreakers). Lead with the single most important signal. Keep each to 8-15 words max.
+
+Hard DQ: Set hardDQ.flagged to true ONLY when there is a genuine dealbreaker that makes this role dead on arrival:
+- Work arrangement is On-site/Hybrid when candidate requires Remote
+- Base salary maximum is below candidate's salary floor
+- Role function is fundamentally different from candidate's target roles (e.g., engineering role for a sales person)
+- Location requires relocation with no remote option
+If none of these apply, set hardDQ.flagged to false with empty reasons array.
+
 {
   "jobMatch": {
     "jobSummary": "<2-3 sentences on core responsibilities and what success looks like in this role>",
     "score": <1-10 fit score: work arrangement, skills vs background, role type vs targets, loved/hated role signals>,
     "verdict": "<one direct, honest sentence — should they apply and why>",
     "strongFits": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
-    "redFlags": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"]
+    "redFlags": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
+    "quickTake": [{"type": "green or red", "text": "8-15 word bullet summarizing a key signal"}],
+    "hardDQ": {"flagged": true/false, "reasons": ["short reason string"]}
   },
   "jobSnapshot": {
     "salary": "<base salary range as written in the posting, e.g. '$125,000' or '$133,500 - $200,500' — null only if truly not mentioned>",
