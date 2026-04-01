@@ -2305,7 +2305,7 @@ async function buildGranolaIndex() {
     console.log('[Granola] Index built:', totalNotes, 'notes indexed');
     return { success: true, noteCount: totalNotes };
   } catch (err) {
-    console.error('[Granola] Index build failed:', err.message);
+    console.warn('[Granola] Index build failed:', err.message);
     return { success: false, error: err.message };
   }
 }
