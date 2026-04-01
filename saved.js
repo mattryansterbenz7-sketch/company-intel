@@ -107,13 +107,14 @@ function computeLastActivity(entry) {
   }
 
   // Stage timestamps (lowest priority fallback)
-  for (const [stage, ts] of Object.entries(entry.stageTimestamps || {})) {
-    // Skip entries where the key is a raw timestamp (migration artifact)
-    if (/^\d{10,}$/.test(stage)) continue;
-    if (typeof ts === 'number' && ts > 0) {
-      const label = stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      activities.push({ timestamp: ts, label: `Stage → ${label}`, type: 'stage' });
-    }
+  // Look up stage labels from current configuration
+  const allStageDefs = [...(customOpportunityStages || []), ...(customCompanyStages || [])];
+  for (const [stageKey, ts] of Object.entries(entry.stageTimestamps || {})) {
+    if (/^\d{10,}$/.test(stageKey)) continue; // skip timestamp-as-key artifacts
+    if (typeof ts !== 'number' || ts <= 0) continue;
+    const stageDef = allStageDefs.find(s => s.key === stageKey);
+    const stageLabel = stageDef ? stageDef.label : stageKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    activities.push({ timestamp: ts, label: `Stage → ${stageLabel}`, type: 'stage' });
   }
 
   activities.sort((a, b) => b.timestamp - a.timestamp);
