@@ -1138,13 +1138,20 @@ async function testApiKey(provider, key) {
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
         body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] })
       });
-      return { ok: res.ok, status: res.status };
+      if (res.ok) return { ok: true, status: res.status };
+      if (res.status === 401) return { ok: false, status: res.status, reason: 'Invalid API key' };
+      if (res.status === 429) return { ok: false, status: res.status, reason: 'Key valid — rate limited' };
+      if (res.status === 402 || res.status === 403) return { ok: false, status: res.status, reason: 'Key valid — billing/permission issue' };
+      return { ok: false, status: res.status };
     }
     if (provider === 'apollo') {
       const res = await fetch('https://api.apollo.io/api/v1/organizations/enrich?name=google', {
         headers: { 'Content-Type': 'application/json', 'x-api-key': key }
       });
-      return { ok: res.ok, status: res.status };
+      if (res.ok) return { ok: true, status: res.status };
+      if (res.status === 401 || res.status === 403) return { ok: false, status: res.status, reason: 'Invalid API key' };
+      if (res.status === 422 || res.status === 429 || res.status === 402) return { ok: false, status: res.status, reason: 'Key valid — credits exhausted' };
+      return { ok: false, status: res.status };
     }
     if (provider === 'serper') {
       const res = await fetch('https://google.serper.dev/search', {
@@ -1152,13 +1159,20 @@ async function testApiKey(provider, key) {
         headers: { 'Content-Type': 'application/json', 'X-API-KEY': key },
         body: JSON.stringify({ q: 'test', num: 1 })
       });
-      return { ok: res.ok, status: res.status };
+      if (res.ok) return { ok: true, status: res.status };
+      if (res.status === 401 || res.status === 403) return { ok: false, status: res.status, reason: 'Invalid API key' };
+      if (res.status === 429 || res.status === 402) return { ok: false, status: res.status, reason: 'Key valid — credits exhausted' };
+      return { ok: false, status: res.status };
     }
     if (provider === 'openai') {
       const res = await fetch('https://api.openai.com/v1/models', {
         headers: { 'Authorization': `Bearer ${key}` }
       });
-      return { ok: res.ok, status: res.status };
+      if (res.ok) return { ok: true, status: res.status };
+      if (res.status === 401) return { ok: false, status: res.status, reason: 'Invalid API key' };
+      if (res.status === 429) return { ok: false, status: res.status, reason: 'Key valid — rate limited' };
+      if (res.status === 402) return { ok: false, status: res.status, reason: 'Key valid — billing issue' };
+      return { ok: false, status: res.status };
     }
     if (provider === 'granola') {
       const res = await fetch('https://public-api.granola.ai/v1/notes?page_size=1', {

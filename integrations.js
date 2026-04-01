@@ -352,7 +352,12 @@ function bindEvents(integrations) {
       if (result?.ok) {
         resultEl.textContent = '✓ Connected';
         resultEl.className = 'test-result ok';
-        chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' });
+        if (provider.id === 'granola') chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' });
+      } else if (result?.reason) {
+        // Distinguish between auth failures and credit/billing issues
+        const isCredits = /credit|billing|rate/i.test(result.reason);
+        resultEl.textContent = isCredits ? `⚠ ${result.reason}` : `✗ ${result.reason}`;
+        resultEl.className = isCredits ? 'test-result warn' : 'test-result fail';
       } else {
         resultEl.textContent = `✗ Failed (${result?.status || result?.error || 'unknown'})`;
         resultEl.className = 'test-result fail';
