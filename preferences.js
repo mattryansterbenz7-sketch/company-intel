@@ -119,6 +119,17 @@ function renderInterpretation(panelKey, data) {
   const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
   if (!panel || !data) return;
 
+  // If data.summary contains raw JSON (from fallback parse), try to re-parse and render properly
+  if (data.summary && typeof data.summary === 'string' && /^\s*[\[{]/.test(data.summary)) {
+    try {
+      const reparsed = JSON.parse(data.summary);
+      if (reparsed && typeof reparsed === 'object') {
+        renderInterpretation(panelKey, reparsed);
+        return;
+      }
+    } catch {}
+  }
+
   let html = '';
   if (data.bullets) {
     html = data.bullets.map(b => `<div style="margin-bottom:6px"><span style="color:#7c98b6;margin-right:4px">•</span>${escHtml(b)}</div>`).join('');
@@ -135,9 +146,10 @@ function renderInterpretation(panelKey, data) {
   } else if (data.responses) {
     html = data.responses.map(r => `<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:#33475b">"${escHtml(r.question)}"</div><div style="font-size:11px;color:#7c98b6;margin-top:2px">${escHtml(r.approach)}</div></div>`).join('');
   } else if (data.categories) {
-    html = data.categories.map(cat =>
-      `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:#516f90;text-transform:uppercase;letter-spacing:0.03em">${escHtml(cat.name)}</div><div style="font-size:12px;color:#33475b;margin-top:2px">${(cat.skills || []).map(s => escHtml(s)).join(' · ')}</div></div>`
-    ).join('');
+    html = data.categories.map(cat => {
+      const skills = (cat.skills || []).map(s => typeof s === 'string' ? s : (s.skill || s.name || JSON.stringify(s)));
+      return `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:#516f90;text-transform:uppercase;letter-spacing:0.03em">${escHtml(cat.name)}</div><div style="font-size:12px;color:#33475b;margin-top:2px">${skills.map(s => escHtml(s)).join(' · ')}</div></div>`;
+    }).join('');
   } else if (data.signals) {
     html = data.signals.map(s => `<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:#33475b">${escHtml(s.signal)}</div><div style="font-size:11px;color:#7c98b6;margin-top:2px">${escHtml(s.interpretation)}</div></div>`).join('');
   }
@@ -221,9 +233,17 @@ function loadStoredInterpretations() {
     void chrome.runtime.lastError;
     Object.entries(AI_SECTION_MAP).forEach(([panelKey, storageKey]) => {
       const stored = data[storageKey + 'Interpretation'];
-      if (stored?.data) {
+      // Check if stored data is a stale fallback (raw JSON wrapped in summary)
+      const isStale = stored?.data?.summary && typeof stored.data.summary === 'string' && /^\s*[\[{]/.test(stored.data.summary);
+      if (stored?.data && !isStale) {
         _interpretedHashes[panelKey] = stored.sourceHash || 0;
         renderInterpretation(panelKey, stored.data);
+      } else if (isStale) {
+        // Clear stale fallback and regenerate
+        chrome.storage.local.remove(storageKey + 'Interpretation');
+        const fieldId2 = { story: 'profile-story', experience: 'profile-experience', skills: 'profile-skills', principles: 'profile-principles', motivators: 'profile-motivators', voice: 'profile-voice', faq: 'profile-faq', greenLights: 'profile-green-lights', redLights: 'profile-red-lights' }[panelKey];
+        const el2 = fieldId2 ? document.getElementById(fieldId2) : null;
+        if (el2?.value?.trim()) requestInterpretation(panelKey, storageKey, el2.value.trim());
       } else {
         // No stored interpretation — auto-generate if the section has content
         const fieldId = {
