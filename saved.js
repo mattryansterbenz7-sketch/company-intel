@@ -1460,12 +1460,6 @@ function renderKanbanCard(c) {
         })() : '';
       })()}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
-      ${(() => {
-        const act = computeLastActivity(c);
-        if (!act.timestamp) return '';
-        const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        return `<div class="kanban-last-activity"><span class="kanban-activity-label">${act.label || 'Last activity'}</span><span class="kanban-activity-date">${dateStr}</span></div>`;
-      })()}
       <div class="card-tags" id="tags-${c.id}">
         ${(c.tags || []).map(tag => {
           const cl = tagColor(tag);
@@ -1492,6 +1486,12 @@ function renderKanbanCard(c) {
           <label class="kanban-field-label">Next Step Date</label>
           <input class="kanban-next-step-date${c.nextStepDate ? ' has-value' : ''}" data-id="${c.id}" type="date" value="${c.nextStepDate || ''}">
         </div>
+        ${(() => {
+          const act = computeLastActivity(c);
+          if (!act.label) return '';
+          const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value">${act.label} · ${dateStr}</span></div>`;
+        })()}
       </div>
       <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>
       <textarea class="card-notes" data-id="${c.id}" placeholder="Notes...">${c.notes || ''}</textarea>

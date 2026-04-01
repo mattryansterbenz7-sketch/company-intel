@@ -596,14 +596,23 @@ function buildOpportunity() {
         <input class="prop-input${entry.nextStepDate ? ' has-value' : ''}" id="opp-next-step-date" type="date" value="${entry.nextStepDate || ''}">
       </div>
     </div>
+    ${entry.appliedDate || entry.stageTimestamps?.applied ? (() => {
+      const ts = entry.appliedDate || entry.stageTimestamps?.applied;
+      const dateVal = ts ? new Date(ts).toISOString().split('T')[0] : '';
+      return `<div class="prop-row">
+        <span class="prop-label">Applied Date</span>
+        <div class="prop-val-wrap">
+          <input class="prop-input${dateVal ? ' has-value' : ''}" id="opp-applied-date" type="date" value="${dateVal}">
+        </div>
+      </div>`;
+    })() : ''}
     ${(() => {
       const act = computeLastActivity(entry);
-      if (!act.timestamp) return '';
+      if (!act.label) return '';
       const d = new Date(act.timestamp);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       return `<div class="prop-row">
         <span class="prop-label">Last Activity</span>
-        <div class="prop-val-wrap"><span style="font-size:12px;color:#516f90">${act.label || ''}</span><span style="margin-left:6px">${dateStr}</span></div>
+        <div class="prop-val-wrap"><span style="color:#516f90">${act.label}</span> <span style="font-weight:600">${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
       </div>`;
     })()}
     <div id="prop-add-area">
