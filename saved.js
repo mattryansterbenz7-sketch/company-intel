@@ -128,10 +128,9 @@ function setColViewMode(stageKey, mode) {
 function renderCompactCard(c) {
   const score = c.quickFitScore ?? c.jobMatch?.score ?? null;
   const isScoring = c._queuedForScoring && score === null;
-  const isQueued = !c._queuedForScoring && !c.quickFitScoredAt && score === null;
 
   const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
-  const stateClass = isScoring ? ' scoring' : isQueued ? ' queued' : '';
+  const stateClass = isScoring ? ' scoring' : '';
 
   // Score display
   let scoreHtml;
@@ -179,7 +178,6 @@ function renderCompactCard(c) {
         ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
         ${c.quickFitReason && score != null ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(c.quickFitReason)}</div>` : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
-        ${isQueued ? '<div class="compact-meta">In queue</div>' : ''}
         ${tagsHtml}
         ${actionsHtml}
       </div>
