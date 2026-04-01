@@ -866,6 +866,25 @@
       cursor: pointer; font-family: inherit; white-space: nowrap;
     }
     .conflict-reenrich-btn:hover { background: rgba(245,158,11,0.1); }
+
+    /* ── Field Suggestions ── */
+    .field-suggestion {
+      display: flex; align-items: center; gap: 6px; margin-top: 4px;
+      padding: 4px 8px; background: rgba(175,169,236,0.08); border: 1px solid rgba(175,169,236,0.2);
+      border-radius: 6px; font-size: 11px; width: 100%;
+    }
+    .suggestion-icon { font-size: 12px; flex-shrink: 0; }
+    .suggestion-value { color: #5b21b6; font-weight: 600; }
+    .suggestion-source { color: #7c98b6; font-style: italic; margin-left: auto; }
+    .suggestion-accept {
+      background: none; border: none; color: #15803d; font-size: 14px; cursor: pointer; padding: 0 2px;
+    }
+    .suggestion-accept:hover { color: #0F6E56; }
+    .suggestion-dismiss {
+      background: none; border: none; color: #b0c1d4; font-size: 12px; cursor: pointer; padding: 0 2px;
+    }
+    .suggestion-dismiss:hover { color: #e5483b; }
+    .prop-row.has-suggestion { flex-wrap: wrap; }
   </style>
 </head>
 <body>

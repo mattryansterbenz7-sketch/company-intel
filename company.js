@@ -392,6 +392,7 @@ function maybeRescore(reason) {
           saveEntry({ jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() });
           if (result.jobSnapshot) saveEntry({ jobSnapshot: result.jobSnapshot });
           renderPanel('opportunity');
+          bindPanelBodyEvents('opportunity');
         }
       );
     });
@@ -557,8 +558,85 @@ function scoreToVerdict(score) {
   return                 { label: 'Likely Not a Fit', cls: 'low',   color: '#dc2626' };
 }
 
+function generateFieldSuggestions(e) {
+  const suggestions = {};
+  const dismissed = e._dismissedSuggestions || {};
+
+  // Helper: only suggest if field is empty and not dismissed
+  const suggest = (field, value, source, confidence) => {
+    if (!value || dismissed[field]) return;
+    suggestions[field] = { value, source, confidence };
+  };
+
+  // 1. Role — auto-fill from jobTitle (always, no ambiguity)
+  if (!e.jobTitle && e.jobMatch?.jobTitle) {
+    suggest('jobTitle', e.jobMatch.jobTitle, 'Job match analysis', 'high');
+  }
+
+  // 2. Base Salary — from stored fields or job match
+  if (!e.baseSalaryRange) {
+    const sal = e.jobMatch?.salary?.base || e.jobSnapshot?.salary || e.jobMatch?.baseSalaryRange;
+    if (sal) suggest('baseSalaryRange', sal, e.jobMatch?.salary?.base ? 'AI scoring' : 'Job posting', 'high');
+  }
+
+  // 3. OTE — from stored fields or job match
+  if (!e.oteTotalComp) {
+    const ote = e.jobMatch?.salary?.ote || e.jobSnapshot?.oteTotalComp || e.jobMatch?.oteTotalComp;
+    if (ote) suggest('oteTotalComp', ote, 'AI scoring', 'high');
+  }
+
+  // 4. Equity — from job match or snapshot
+  if (!e.equity) {
+    const eq = e.jobMatch?.equity || e.jobSnapshot?.equity;
+    if (eq) suggest('equity', eq, 'Job posting', 'medium');
+  }
+
+  // 5. Work arrangement — from job snapshot or match
+  // (not a text field — but useful context)
+
+  // 6. Next Step — from upcoming calendar event
+  const upcoming = getUpcomingCalendarEvent(e);
+  if (!e.nextStep && upcoming) {
+    const title = upcoming.summary || upcoming.title || '';
+    if (title) suggest('nextStep', title, 'Calendar event', 'high');
+  }
+
+  // 7. Next Step Date — from upcoming calendar event
+  if (!e.nextStepDate && upcoming) {
+    const date = new Date(upcoming.start).toISOString().split('T')[0];
+    suggest('nextStepDate', date, 'Calendar event', 'high');
+  }
+
+  // 8. Action On — infer from context
+  if (!e.actionStatus || e.actionStatus === 'my_court') {
+    // If there's a future calendar event, suggest "Scheduled"
+    if (upcoming) suggest('actionStatus', 'scheduled', 'Upcoming meeting detected', 'high');
+  }
+
+  return suggestions;
+}
+
+function renderSuggestionPill(field, suggestion) {
+  if (!suggestion) return '';
+  return `<div class="field-suggestion" data-field="${field}" data-value="${escapeHtml(suggestion.value)}">
+    <span class="suggestion-icon">\u2728</span>
+    <span class="suggestion-value">${escapeHtml(suggestion.value)}</span>
+    <span class="suggestion-source">${escapeHtml(suggestion.source)}</span>
+    <button class="suggestion-accept" data-field="${field}" title="Accept">\u2713</button>
+    <button class="suggestion-dismiss" data-field="${field}" title="Dismiss">\u2715</button>
+  </div>`;
+}
+
 function buildOpportunity() {
   const propsHtml = buildProperties();
+
+  // Auto-fill Role from job match (no suggestion pill — immediate)
+  if (entry.isOpportunity && !entry.jobTitle && entry.jobMatch?.jobTitle) {
+    entry.jobTitle = entry.jobMatch.jobTitle;
+    saveEntry({ jobTitle: entry.jobTitle });
+  }
+
+  const suggestions = entry.isOpportunity ? generateFieldSuggestions(entry) : {};
 
   if (!entry.isOpportunity) {
     return `${propsHtml}
@@ -608,24 +686,28 @@ function buildOpportunity() {
     </div>
     ${jobUrlHtml}
     ${matchHtml}
-    ${entry.baseSalaryRange || entry.oteTotalComp || entry.equity ? `
-    <div class="prop-row">
+    ${entry.baseSalaryRange || entry.oteTotalComp || entry.equity || suggestions.baseSalaryRange || suggestions.oteTotalComp || suggestions.equity ? `
+    <div class="prop-row${!entry.baseSalaryRange && suggestions.baseSalaryRange ? ' has-suggestion' : ''}">
       <span class="prop-label">Base Salary</span>
       <div class="prop-val-wrap"><input class="prop-input${entry.baseSalaryRange ? '' : ' prop-empty'}" id="opp-base-salary" value="${(entry.baseSalaryRange || '').replace(/"/g,'&quot;')}" placeholder="e.g. $150K - $180K"></div>
+      ${!entry.baseSalaryRange && suggestions.baseSalaryRange ? renderSuggestionPill('baseSalaryRange', suggestions.baseSalaryRange) : ''}
     </div>
-    <div class="prop-row">
+    <div class="prop-row${!entry.oteTotalComp && suggestions.oteTotalComp ? ' has-suggestion' : ''}">
       <span class="prop-label">OTE / Total</span>
       <div class="prop-val-wrap"><input class="prop-input${entry.oteTotalComp ? '' : ' prop-empty'}" id="opp-ote" value="${(entry.oteTotalComp || '').replace(/"/g,'&quot;')}" placeholder="e.g. $250K OTE"></div>
+      ${!entry.oteTotalComp && suggestions.oteTotalComp ? renderSuggestionPill('oteTotalComp', suggestions.oteTotalComp) : ''}
     </div>
-    <div class="prop-row">
+    <div class="prop-row${!entry.equity && suggestions.equity ? ' has-suggestion' : ''}">
       <span class="prop-label">Equity</span>
       <div class="prop-val-wrap"><input class="prop-input${entry.equity ? '' : ' prop-empty'}" id="opp-equity" value="${(entry.equity || '').replace(/"/g,'&quot;')}" placeholder="e.g. 0.1% - 0.2%"></div>
+      ${!entry.equity && suggestions.equity ? renderSuggestionPill('equity', suggestions.equity) : ''}
     </div>
     ${entry.compSource ? `<div class="prop-row"><span class="prop-label" style="font-size:10px;color:#94a3b8">Comp Source</span><div class="prop-val-wrap"><span style="font-size:11px;color:#94a3b8">${entry.compAutoExtracted ? '✨ ' : ''}${entry.compSource}</span></div></div>` : ''}
     ` : `
-    <div class="prop-row">
+    <div class="prop-row${suggestions.baseSalaryRange ? ' has-suggestion' : ''}">
       <span class="prop-label">Base Salary</span>
       <div class="prop-val-wrap"><input class="prop-input prop-empty" id="opp-base-salary" value="" placeholder="e.g. $150K - $180K"></div>
+      ${suggestions.baseSalaryRange ? renderSuggestionPill('baseSalaryRange', suggestions.baseSalaryRange) : ''}
     </div>
     `}
     <div class="prop-row">
@@ -638,17 +720,19 @@ function buildOpportunity() {
         </select>
       </div>
     </div>
-    <div class="prop-row">
+    <div class="prop-row${!entry.nextStep && suggestions.nextStep ? ' has-suggestion' : ''}">
       <span class="prop-label">Next Step</span>
       <div class="prop-val-wrap">
         <input class="prop-input ${!entry.nextStep ? 'prop-empty' : ''}" id="opp-next-step-input" value="${(entry.nextStep || '').replace(/"/g,'&quot;')}" placeholder="e.g. Send proposal…">
       </div>
+      ${!entry.nextStep && suggestions.nextStep ? renderSuggestionPill('nextStep', suggestions.nextStep) : ''}
     </div>
-    <div class="prop-row">
+    <div class="prop-row${!entry.nextStepDate && suggestions.nextStepDate ? ' has-suggestion' : ''}">
       <span class="prop-label">Next Step Date</span>
       <div class="prop-val-wrap">
         <input class="prop-input${entry.nextStepDate ? ' has-value' : ''}" id="opp-next-step-date" type="date" value="${entry.nextStepDate || ''}">
       </div>
+      ${!entry.nextStepDate && suggestions.nextStepDate ? renderSuggestionPill('nextStepDate', suggestions.nextStepDate) : ''}
     </div>
     ${entry.appliedDate || entry.stageTimestamps?.applied ? (() => {
       const ts = entry.appliedDate || entry.stageTimestamps?.applied;
@@ -1622,6 +1706,11 @@ function loadHubEmails(forceRefresh) {
     if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
       activityContainer.innerHTML = buildActivityTimeline(entry);
     }
+    // Check for new field suggestions
+    if (entry.isOpportunity && Object.keys(generateFieldSuggestions(entry)).length) {
+      renderPanel('opportunity');
+      bindPanelBodyEvents('opportunity');
+    }
   });
 }
 
@@ -1679,6 +1768,10 @@ function loadHubMeetings(forceRefresh) {
       const nextStepChanges = autoPopulateNextStep(entry);
       if (nextStepChanges) {
         saveEntry(nextStepChanges);
+        renderPanel('opportunity');
+        bindPanelBodyEvents('opportunity');
+      } else if (entry.isOpportunity && Object.keys(generateFieldSuggestions(entry)).length) {
+        // Check for new field suggestions after calendar data arrived
         renderPanel('opportunity');
         bindPanelBodyEvents('opportunity');
       }
@@ -3162,6 +3255,30 @@ function bindPanelBodyEvents(pid) {
         saveEntry({ appliedDate: ts });
       });
     }
+
+    // Suggestion accept/dismiss
+    document.querySelectorAll('.suggestion-accept').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.field;
+        const pill = btn.closest('.field-suggestion');
+        const value = pill?.dataset.value;
+        if (field && value) {
+          saveEntry({ [field]: value });
+          renderPanel('opportunity');
+          bindPanelBodyEvents('opportunity');
+        }
+      });
+    });
+
+    document.querySelectorAll('.suggestion-dismiss').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.field;
+        const dismissed = entry._dismissedSuggestions || {};
+        dismissed[field] = true;
+        saveEntry({ _dismissedSuggestions: dismissed });
+        btn.closest('.field-suggestion')?.remove();
+      });
+    });
 
   }
 
