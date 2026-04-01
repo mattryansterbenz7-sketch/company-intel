@@ -107,8 +107,11 @@ function computeLastActivity(entry) {
 
   // Stage timestamps (lowest priority fallback)
   for (const [stage, ts] of Object.entries(entry.stageTimestamps || {})) {
+    // Skip entries where the key is a raw timestamp (migration artifact)
+    if (/^\d{10,}$/.test(stage)) continue;
     if (typeof ts === 'number' && ts > 0) {
-      activities.push({ timestamp: ts, label: `Stage → ${stage.replace(/_/g, ' ')}`, type: 'stage' });
+      const label = stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      activities.push({ timestamp: ts, label: `Stage → ${label}`, type: 'stage' });
     }
   }
 
