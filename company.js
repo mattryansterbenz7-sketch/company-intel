@@ -622,6 +622,84 @@ function renderMainTabs() {
   bindHubTabs();
 }
 
+function buildRoleBriefSection() {
+  if (!entry.isOpportunity) return '';
+
+  const brief = entry.roleBrief;
+  const hasData = entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length || entry.manualMeetings?.length;
+
+  // Check if stale
+  let staleHtml = '';
+  if (brief?.generatedAt) {
+    const sv = brief.sourceVersions || {};
+    const newEmails = (entry.cachedEmails?.length || 0) > (sv.emailCount || 0);
+    const newMeetings = ((entry.cachedMeetings?.length || 0) + (entry.manualMeetings?.length || 0)) > (sv.meetingCount || 0);
+    const newNotes = (entry.notes?.length || 0) !== (sv.notesLength || 0);
+    if (newEmails || newMeetings || newNotes) {
+      const parts = [];
+      if (newMeetings) parts.push('new meetings');
+      if (newEmails) parts.push('new emails');
+      if (newNotes) parts.push('updated notes');
+      staleHtml = `<div class="rb-stale-bar"><span>${parts.join(' and ')} since last update</span><button class="rb-refresh-btn rb-stale-refresh" id="rb-stale-refresh">Refresh</button></div>`;
+    }
+  }
+
+  if (brief?.content) {
+    const d = new Date(brief.generatedAt);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const emailCount = brief.sourceVersions?.emailCount || 0;
+    const meetingCount = brief.sourceVersions?.meetingCount || 0;
+    const metaParts = [];
+    if (meetingCount) metaParts.push(`${meetingCount} meeting${meetingCount === 1 ? '' : 's'}`);
+    if (emailCount) metaParts.push(`${emailCount} email${emailCount === 1 ? '' : 's'}`);
+    const metaStr = metaParts.length ? ` \u00b7 ${metaParts.join(', ')}` : '';
+
+    // Render markdown content as HTML
+    let briefHtml = brief.content;
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({ breaks: true, gfm: true });
+      briefHtml = marked.parse(brief.content);
+    } else {
+      briefHtml = brief.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    }
+
+    // Original job posting collapsible
+    const jdHtml = entry.jobDescription ? `
+      <div class="rb-jd-divider"></div>
+      <details class="rb-jd-toggle">
+        <summary class="rb-jd-summary">Original job posting <span class="rb-jd-chevron">\u203a</span></summary>
+        <div class="rb-jd-body">${(entry.jobDescription || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>
+      </details>` : '';
+
+    return `
+      <div class="hub-section-label" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          Role Brief
+          <div class="rb-meta">Updated ${dateStr}${metaStr}</div>
+        </div>
+        <button class="rb-refresh-btn" id="rb-refresh-btn">\u21bb Refresh brief</button>
+      </div>
+      ${staleHtml}
+      <div class="rb-card">
+        <div class="rb-content" id="rb-content">${briefHtml}</div>
+        ${jdHtml}
+      </div>`;
+  }
+
+  if (hasData) {
+    return `
+      <div class="hub-section-label">Role Brief</div>
+      <div class="rb-empty">
+        <button class="rb-generate-btn" id="rb-generate-btn">Generate role brief</button>
+        <div class="rb-empty-sub">Synthesizes job posting + meetings + emails into one structured brief</div>
+      </div>`;
+  }
+
+  return `
+    <div class="hub-section-label">Role Brief</div>
+    <div class="rb-empty-msg">No role data yet. Save a job posting or record meetings to generate a brief.</div>`;
+}
+
 function buildIntelTab() {
   const overview = buildOverview();
   const intel    = buildIntel();
@@ -636,6 +714,7 @@ function buildIntelTab() {
   return `
     <div class="hub-intel-block">${overview}</div>
     ${hasIntel ? `<div class="hub-intel-block">${intel}</div>` : ''}
+    ${entry.isOpportunity ? `<div class="hub-intel-block" id="hub-role-brief-block">${buildRoleBriefSection()}</div>` : ''}
     <div class="hub-intel-block" id="hub-fit-block">${fitHtml}</div>
     <div class="hub-intel-block" id="hub-reviews-block">
       <div class="hub-section-label">Employee Reviews</div>
@@ -675,6 +754,58 @@ function initIntelTab() {
 
   // Trigger / refresh deep fit analysis
   maybeRefreshDeepFitAnalysis();
+
+  // Bind role brief events
+  bindRoleBriefEvents();
+
+  // Auto-generate role brief on first load if data exists
+  if (entry.isOpportunity && !entry.roleBrief && (entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length)) {
+    setTimeout(() => generateRoleBrief(), 1000);
+  }
+}
+
+function generateRoleBrief() {
+  const btn = document.getElementById('rb-refresh-btn') || document.getElementById('rb-generate-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '\u21bb Generating...'; }
+
+  chrome.runtime.sendMessage({
+    type: 'GENERATE_ROLE_BRIEF',
+    company: entry.company,
+    jobTitle: entry.jobTitle,
+    jobDescription: entry.jobDescription,
+    jobSnapshot: entry.jobSnapshot,
+    emails: (entry.cachedEmails || []).slice(0, 15).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet })),
+    meetings: [...(entry.cachedMeetings || []), ...(entry.manualMeetings || [])].slice(0, 10),
+    meetingTranscript: entry.cachedMeetingTranscript || null,
+    notes: entry.notes || '',
+    knownContacts: (entry.knownContacts || []).slice(0, 10),
+  }, result => {
+    void chrome.runtime.lastError;
+    if (result?.content) {
+      const sourceVersions = {
+        jobDescriptionLength: (entry.jobDescription || '').length,
+        emailCount: (entry.cachedEmails || []).length,
+        meetingCount: (entry.cachedMeetings || []).length + (entry.manualMeetings || []).length,
+        notesLength: (entry.notes || '').length,
+      };
+      saveEntry({ roleBrief: { content: result.content, generatedAt: Date.now(), sourceVersions } });
+      // Re-render the Role Brief block
+      const rbBlock = document.getElementById('hub-role-brief-block');
+      if (rbBlock) {
+        rbBlock.innerHTML = buildRoleBriefSection();
+        bindRoleBriefEvents();
+      }
+      maybeRescore('role_brief_updated');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '\u21bb Refresh brief'; }
+    }
+  });
+}
+
+function bindRoleBriefEvents() {
+  document.getElementById('rb-generate-btn')?.addEventListener('click', generateRoleBrief);
+  document.getElementById('rb-refresh-btn')?.addEventListener('click', generateRoleBrief);
+  document.getElementById('rb-stale-refresh')?.addEventListener('click', generateRoleBrief);
 }
 
 function maybeRefreshDeepFitAnalysis() {
@@ -705,6 +836,7 @@ function maybeRefreshDeepFitAnalysis() {
       notes:           entry.notes || '',
       transcripts:     entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '',
       emails:          (entry.cachedEmails || []).slice(0, 8).map(e => ({ subject: e.subject, from: e.from, snippet: e.snippet })),
+      roleBrief:       entry.roleBrief?.content || '',
       prefs
     }, result => {
       void chrome.runtime.lastError;
@@ -885,6 +1017,7 @@ function bindHubTabs() {
         notes:          entry.notes || '',
         transcripts:    entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '',
         emails:         (entry.cachedEmails || []).slice(0, 8).map(e => ({ subject: e.subject, from: e.from, snippet: e.snippet })),
+        roleBrief:      entry.roleBrief?.content || '',
         prefs
       }, result => {
         void chrome.runtime.lastError;

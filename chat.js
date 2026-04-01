@@ -323,6 +323,7 @@ function buildContext(entry, emails, granolaNote, meetings) {
     intelligence: entry.intelligence || null,
     jobMatch: entry.jobMatch || null,
     matchFeedback: entry.matchFeedback || null,
+    roleBrief: entry.roleBrief?.content || null,
     jobDescription: entry.jobDescription || null,
     reviews: entry.reviews || [],
     leaders: entry.leaders || [],

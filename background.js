@@ -204,6 +204,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     fetchCalendarEvents(message.domain, message.companyName, message.knownContactEmails).then(sendResponse);
     return true;
   }
+  if (message.type === 'GENERATE_ROLE_BRIEF') {
+    generateRoleBrief(message).then(sendResponse);
+    return true;
+  }
   if (message.type === 'DEEP_FIT_ANALYSIS') {
     deepFitAnalysis(message).then(sendResponse);
     return true;
@@ -1579,6 +1583,11 @@ When the user first enters this mode, respond: "Paste the application question a
     systemParts.push(`\n=== KNOWN CONTACTS AT ${(context.company || '').toUpperCase()} ===\n${contacts}`);
   }
 
+  // ── Role Brief (AI-synthesized) ─────────────────────────────────────────
+  if (context.roleBrief) {
+    systemParts.push(`\n=== ROLE BRIEF (AI-synthesized understanding) ===\n${context.roleBrief.slice(0, 4000)}`);
+  }
+
   // ── Job opportunity ───────────────────────────────────────────────────────
   if (context.jobDescription || context.jobMatch) {
     const job = [`\n=== JOB DETAILS ===`];
@@ -1951,11 +1960,97 @@ ${insights || '(none yet)'}`;
   }
 }
 
+// ── Role Brief Generation ────────────────────────────────────────────────────
+
+async function generateRoleBrief({ company, jobTitle, jobDescription, jobSnapshot, emails, meetings, meetingTranscript, notes, knownContacts }) {
+  const contextParts = [];
+
+  if (jobDescription) contextParts.push(`=== ORIGINAL JOB POSTING ===\n${jobDescription.slice(0, 5000)}`);
+  if (jobSnapshot) {
+    const snap = typeof jobSnapshot === 'string' ? jobSnapshot : JSON.stringify(jobSnapshot);
+    contextParts.push(`=== JOB SNAPSHOT ===\n${snap}`);
+  }
+  if (meetings?.length) {
+    contextParts.push(`=== MEETING TRANSCRIPTS (${meetings.length} meetings) ===\n${meetings.map(m =>
+      `--- ${m.title || 'Meeting'} | ${m.date || ''} ---\n${(m.summaryMarkdown || m.transcript || m.summary || '').slice(0, 3000)}`
+    ).join('\n\n')}`);
+  }
+  if (meetingTranscript) contextParts.push(`=== MEETING NOTES ===\n${meetingTranscript.slice(0, 4000)}`);
+  if (emails?.length) {
+    contextParts.push(`=== EMAIL THREADS (${emails.length}) ===\n${emails.slice(0, 15).map(e =>
+      `[${e.date || ''}] "${e.subject}" — ${e.from}${e.snippet ? '\n  ' + e.snippet.slice(0, 200) : ''}`
+    ).join('\n')}`);
+  }
+  if (notes) contextParts.push(`=== USER NOTES ===\n${notes.slice(0, 2000)}`);
+  if (knownContacts?.length) {
+    contextParts.push(`=== KNOWN CONTACTS ===\n${knownContacts.map(c =>
+      `${c.name || ''}${c.title ? ' — ' + c.title : ''}${c.email ? ' <' + c.email + '>' : ''}`
+    ).join('\n')}`);
+  }
+
+  if (!contextParts.length) return { error: 'No data available to generate brief' };
+
+  const prompt = `You are synthesizing everything known about a specific job role into a structured brief. You have access to the original job posting (if one exists), meeting transcripts where this role was discussed, email threads with the company, and the user's personal notes.
+
+Company: ${company}
+Role: ${jobTitle || 'Unknown'}
+
+${contextParts.join('\n\n')}
+
+Create a living document that represents the CURRENT understanding of this role — not just what the job posting says, but what has been learned through real conversations.
+
+Structure with these sections (only include sections where you have real information):
+
+## Role Overview
+What the role actually is — title, function, scope. Start with the posting if available, then layer on conversation learnings.
+
+## Compensation & Equity
+Everything known about comp — base, OTE, commission structure, equity, benefits. Note the source and flag discrepancies.
+
+## Team & Reporting
+Who you'd work with, report to, team size, org structure.
+
+## What They're Actually Looking For
+Real requirements and priorities — which may differ from posted requirements. What did the hiring manager emphasize?
+
+## Culture & Working Style
+Remote/hybrid/in-office reality, async vs sync, pace, decision-making style.
+
+## Open Questions
+Things not yet answered or needing clarification.
+
+## Timeline & Process
+Hiring process, timeline, next steps, urgency.
+
+Rules:
+- Be factual and specific. Cite sources when it matters (e.g., "Per the Feb 24 call...")
+- When conversations contradict the posting, note BOTH and flag the discrepancy
+- Keep it dense and scannable — short paragraphs, bullets for 3+ items
+- If a section has no information, omit it entirely
+- Use markdown formatting (## headers, **bold**, bullet lists)
+- Target 500-1500 words depending on available information`;
+
+  try {
+    const result = await chatWithFallback({
+      model: 'claude-sonnet-4-5-20250514',
+      system: 'You are a role intelligence analyst. Write structured, factual briefs in markdown.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2048,
+      tag: 'RoleBrief'
+    });
+    if (result.error) return { error: result.error };
+    return { content: result.reply };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 // ── Deep Fit Analysis ────────────────────────────────────────────────────────
 
-async function deepFitAnalysis({ company, jobTitle, jobSummary, jobSnapshot, jobDescription, jobMatch, notes, transcripts, emails, prefs }) {
+async function deepFitAnalysis({ company, jobTitle, jobSummary, jobSnapshot, jobDescription, jobMatch, notes, transcripts, emails, prefs, roleBrief }) {
   const contextParts = [`Company: ${company}`, `Role: ${jobTitle || 'Unknown'}`];
 
+  if (roleBrief) contextParts.push(`Role Brief (synthesized from conversations + posting):\n${roleBrief.slice(0, 3000)}`);
   if (jobSummary) contextParts.push(`Job summary: ${jobSummary}`);
   // Full description is richer than the snapshot — prefer it, fall back to snapshot
   if (jobDescription) {
