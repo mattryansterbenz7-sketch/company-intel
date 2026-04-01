@@ -17,6 +17,22 @@ function defaultActionStatus(stageKey) {
   return null;
 }
 
+function computeLastActivityCo(e) {
+  const acts = [];
+  const typeLabels = { linkedin_dm: 'LinkedIn DM', phone_call: 'Phone call', coffee_chat: 'Coffee chat', text: 'Text', referral: 'Referral', email_sent: 'Email sent', applied: 'Applied', other: 'Activity' };
+  for (const t of (e.cachedEmails || [])) {
+    if (t.date) { const from = (t.from || '').replace(/<.*>/, '').trim().split(' ')[0]; acts.push({ timestamp: new Date(t.date).getTime(), label: `Email${from ? ' from ' + from : ''}: ${(t.subject || '').slice(0, 35)}` }); }
+  }
+  const now = Date.now();
+  for (const ev of (e.cachedCalendarEvents || [])) { const s = new Date(ev.start).getTime(); if (s <= now) acts.push({ timestamp: s, label: `Meeting: ${(ev.summary || ev.title || '').slice(0, 45)}` }); }
+  for (const m of (e.cachedMeetings || [])) { const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0; if (ts > 0) acts.push({ timestamp: ts, label: `Call: ${(m.title || 'Meeting').slice(0, 45)}` }); }
+  for (const m of (e.manualMeetings || [])) { const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0; if (ts > 0) acts.push({ timestamp: ts, label: `${(m.title || 'Meeting').slice(0, 45)}` }); }
+  for (const a of (e.activityLog || [])) { if (a.date) { const tl = typeLabels[a.type] || 'Activity'; acts.push({ timestamp: new Date(a.date + 'T12:00:00').getTime(), label: a.note ? `${tl}: ${a.note.slice(0, 35)}` : tl }); } }
+  for (const [stage, ts] of Object.entries(e.stageTimestamps || {})) { if (typeof ts === 'number' && ts > 0) acts.push({ timestamp: ts, label: `Stage → ${stage.replace(/_/g, ' ')}` }); }
+  acts.sort((a, b) => b.timestamp - a.timestamp);
+  return acts.length ? acts[0] : { timestamp: 0, label: null };
+}
+
 function detectScheduledStatus(entry) {
   const events = entry.cachedCalendarEvents || [];
   const now = new Date();
@@ -523,12 +539,13 @@ function buildOpportunity() {
       </div>
     </div>
     ${(() => {
-      const ts = Math.max(entry.cachedEmailsAt || 0, entry.cachedMeetingNotesAt || 0, entry.cachedGranolaAt || 0, entry.savedAt || 0);
-      if (!ts) return '';
-      const d = new Date(ts);
+      const act = computeLastActivityCo(entry);
+      if (!act.timestamp) return '';
+      const d = new Date(act.timestamp);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       return `<div class="prop-row">
         <span class="prop-label">Last Activity</span>
-        <div class="prop-val-wrap"><span>${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+        <div class="prop-val-wrap"><span style="font-size:12px;color:#516f90">${act.label || ''}</span><span style="margin-left:6px">${dateStr}</span></div>
       </div>`;
     })()}
     <div id="prop-add-area">

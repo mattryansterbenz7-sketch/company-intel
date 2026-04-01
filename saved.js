@@ -64,44 +64,56 @@ const DEFAULT_STAT_CARDS = [
 let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
 
 function computeLastActivity(entry) {
-  const timestamps = [];
+  const activities = [];
 
   // Cached emails
-  const emails = entry.cachedEmails || [];
-  for (const e of emails) {
-    if (e.date) timestamps.push(new Date(e.date).getTime());
-    if (e.internalDate) timestamps.push(parseInt(e.internalDate));
+  for (const thread of (entry.cachedEmails || [])) {
+    if (thread.date) {
+      const ts = new Date(thread.date).getTime();
+      const from = (thread.from || '').replace(/<.*>/, '').trim().split(' ')[0];
+      activities.push({ timestamp: ts, label: `Email${from ? ' from ' + from : ''}: ${(thread.subject || '').slice(0, 35)}`, type: 'email' });
+    }
   }
 
   // Past calendar events
   const now = Date.now();
   for (const evt of (entry.cachedCalendarEvents || [])) {
     const start = new Date(evt.start).getTime();
-    if (start <= now) timestamps.push(start);
+    if (start <= now) {
+      activities.push({ timestamp: start, label: `Meeting: ${(evt.summary || evt.title || 'Calendar event').slice(0, 45)}`, type: 'calendar' });
+    }
   }
 
   // Granola meetings
   for (const m of (entry.cachedMeetings || [])) {
-    if (m.date) timestamps.push(new Date(m.date + 'T12:00:00').getTime());
+    const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0;
+    if (ts > 0) activities.push({ timestamp: ts, label: `Call: ${(m.title || 'Meeting').slice(0, 45)}`, type: 'meeting' });
   }
 
   // Manual meetings
   for (const m of (entry.manualMeetings || [])) {
-    if (m.date) timestamps.push(new Date(m.date + 'T12:00:00').getTime());
+    const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0;
+    if (ts > 0) activities.push({ timestamp: ts, label: `${(m.title || 'Meeting').slice(0, 45)}`, type: 'meeting' });
   }
 
   // Activity log
+  const typeLabels = { linkedin_dm: 'LinkedIn DM', phone_call: 'Phone call', coffee_chat: 'Coffee chat', text: 'Text', referral: 'Referral', email_sent: 'Email sent', applied: 'Applied', other: 'Activity' };
   for (const a of (entry.activityLog || [])) {
-    if (a.date) timestamps.push(new Date(a.date + 'T12:00:00').getTime());
+    if (a.date) {
+      const tl = typeLabels[a.type] || 'Activity';
+      activities.push({ timestamp: new Date(a.date + 'T12:00:00').getTime(), label: a.note ? `${tl}: ${a.note.slice(0, 35)}` : tl, type: 'manual' });
+    }
   }
 
-  // Stage timestamps (secondary signal)
-  for (const ts of Object.values(entry.stageTimestamps || {})) {
-    if (typeof ts === 'number') timestamps.push(ts);
+  // Stage timestamps (lowest priority fallback)
+  for (const [stage, ts] of Object.entries(entry.stageTimestamps || {})) {
+    if (typeof ts === 'number' && ts > 0) {
+      activities.push({ timestamp: ts, label: `Stage → ${stage.replace(/_/g, ' ')}`, type: 'stage' });
+    }
   }
 
-  const valid = timestamps.filter(t => t > 0 && !isNaN(t));
-  return valid.length ? Math.max(...valid) : 0;
+  activities.sort((a, b) => b.timestamp - a.timestamp);
+  return activities.length ? activities[0] : { timestamp: 0, label: null, type: null };
 }
 
 // Helper: record timestamp when entry first reaches a stage
@@ -1237,7 +1249,7 @@ function renderKanban(filtered) {
         const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : -1;
         const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : -1;
         if (sb !== sa) return sb - sa;
-        return (computeLastActivity(b) || b.savedAt || 0) - (computeLastActivity(a) || a.savedAt || 0);
+        return (computeLastActivity(b).timestamp || b.savedAt || 0) - (computeLastActivity(a).timestamp || a.savedAt || 0);
       });
     }
     const s = stageStyle(statusKey);
@@ -1358,10 +1370,10 @@ function renderKanbanCard(c) {
       })() : ''}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
       ${(() => {
-        const actTs = computeLastActivity(c);
-        if (!actTs) return '';
-        const dateStr = new Date(actTs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        return `<div class="kanban-last-activity">Last activity: <span>${dateStr}</span></div>`;
+        const act = computeLastActivity(c);
+        if (!act.timestamp) return '';
+        const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        return `<div class="kanban-last-activity"><span class="kanban-activity-label">${act.label || 'Last activity'}</span><span class="kanban-activity-date">${dateStr}</span></div>`;
       })()}
       <div class="card-tags" id="tags-${c.id}">
         ${(c.tags || []).map(tag => {
