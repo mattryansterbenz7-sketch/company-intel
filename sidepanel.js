@@ -104,26 +104,29 @@ function loadPrefsWithMigration(callback) {
 
 function applyPrefsToForm(prefs) {
   if (!prefs) return;
-  document.getElementById('pref-roles').value = prefs.roles || '';
-  document.getElementById('pref-avoid').value = prefs.avoid || '';
-  document.getElementById('pref-interests').value = prefs.interests || '';
-  document.getElementById('pref-linkedin-url').value = prefs.linkedinUrl || '';
-  document.getElementById('pref-resume-text').value = prefs.resumeText || '';
-  document.getElementById('pref-job-match-bg').value = prefs.jobMatchBackground || '';
-  document.getElementById('pref-role-loved').value = prefs.roleLoved || '';
-  document.getElementById('pref-role-hated').value = prefs.roleHated || '';
+  // Helper: set value only if element exists (some fields moved to Career OS page)
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  setVal('pref-roles', prefs.roles);
+  setVal('pref-avoid', prefs.avoid);
+  setVal('pref-interests', prefs.interests);
+  setVal('pref-linkedin-url', prefs.linkedinUrl);
+  setVal('pref-resume-text', prefs.resumeText);
+  setVal('pref-job-match-bg', prefs.jobMatchBackground);
+  setVal('pref-role-loved', prefs.roleLoved);
+  setVal('pref-role-hated', prefs.roleHated);
   const toggle = document.getElementById('pref-job-match-toggle');
-  toggle.checked = !!prefs.jobMatchEnabled;
-  document.getElementById('job-match-fields').style.display = prefs.jobMatchEnabled ? 'block' : 'none';
+  if (toggle) toggle.checked = !!prefs.jobMatchEnabled;
+  const matchFields = document.getElementById('job-match-fields');
+  if (matchFields) matchFields.style.display = prefs.jobMatchEnabled ? 'block' : 'none';
   (prefs.workArrangement || []).forEach(val => {
     const cb = document.querySelector(`input[name="work-arr"][value="${val}"]`);
     if (cb) cb.checked = true;
   });
-  document.getElementById('pref-location-city').value = prefs.locationCity || '';
-  document.getElementById('pref-location-state').value = prefs.locationState || '';
-  document.getElementById('pref-max-travel').value = prefs.maxTravel || '';
-  document.getElementById('pref-salary-floor').value = prefs.salaryFloor || prefs.minSalary || '';
-  document.getElementById('pref-salary-strong').value = prefs.salaryStrong || '';
+  setVal('pref-location-city', prefs.locationCity);
+  setVal('pref-location-state', prefs.locationState);
+  setVal('pref-max-travel', prefs.maxTravel);
+  setVal('pref-salary-floor', prefs.salaryFloor || prefs.minSalary);
+  setVal('pref-salary-strong', prefs.salaryStrong);
 }
 
 // Load preferences into settings fields (with local→sync migration)
