@@ -887,14 +887,18 @@ Analysis rules:
         messages: [{ role: 'user', content: prompt }]
     });
     const data = await res.json();
-    // Fallback to OpenAI on rate limit
-    if ((res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) && OPENAI_KEY) {
-      console.warn('[AnalyzeJob] Claude rate limited, falling back to OpenAI');
-      const fbRes = await openAiChatCall({ model: 'gpt-4.1-mini', system: 'You are a JSON-only analyst. Respond with valid JSON only.', messages: [{ role: 'user', content: prompt }], max_tokens: 1100 });
-      const fbData = await fbRes.json();
-      if (fbRes.ok) {
-        const fbRaw = fbData.choices?.[0]?.message?.content || '';
-        return JSON.parse(fbRaw.replace(/```json|```/g, '').trim());
+    // Fallback through all models on rate limit
+    if (res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) {
+      console.warn('[AnalyzeJob] Claude rate limited, trying fallback chain...');
+      const result = await chatWithFallback({
+        model: 'gpt-4.1-mini',
+        system: 'You are a JSON-only analyst. Respond with valid JSON only.',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1100,
+        tag: 'AnalyzeJob'
+      });
+      if (!result.error) {
+        return JSON.parse(result.reply.replace(/```json|```/g, '').trim());
       }
     }
     const clean = data.content[0].text.replace(/```json|```/g, '').trim();
@@ -1234,18 +1238,18 @@ Respond with a JSON object only, no markdown:
   });
 
   let data = await res.json();
-  // On Claude rate limit, fall back to OpenAI
-  if ((res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) && OPENAI_KEY) {
-    console.warn('[Research] Claude rate limited, falling back to OpenAI gpt-4.1-mini');
-    const fbRes = await openAiChatCall({ model: 'gpt-4.1-mini', system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.', messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
-    data = await fbRes.json();
-    if (!fbRes.ok) {
-      console.error('[Research] OpenAI fallback also failed:', fbRes.status, data);
-      throw new Error('AI is busy — too many requests. Try again in a moment.');
-    }
-    const fbRaw = data.choices?.[0]?.message?.content;
-    if (!fbRaw) throw new Error('Empty response from fallback');
-    const fbClean = fbRaw.replace(/```json|```/g, '').trim();
+  // On Claude rate limit, fall back through all available models
+  if (res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) {
+    console.warn('[Research] Claude rate limited, trying fallback chain...');
+    const result = await chatWithFallback({
+      model: 'gpt-4.1-mini',
+      system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
+      tag: 'Research'
+    });
+    if (result.error) throw new Error('AI is busy — too many requests. Try again in a moment.');
+    const fbClean = result.reply.replace(/```json|```/g, '').trim();
     try { return JSON.parse(fbClean); } catch { return JSON.parse(fbClean.slice(0, fbClean.lastIndexOf('}') + 1)); }
   }
   // Surface API-level errors with friendly messages
