@@ -276,6 +276,20 @@
     .kanban-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 13px; display: flex; flex-direction: column; gap: 8px; cursor: grab; transition: box-shadow 0.15s, border-color 0.15s; user-select: none; box-shadow: 0 1px 3px rgba(45,62,80,0.06); }
     .kanban-card:hover { border-color: #FF7A59; box-shadow: 0 3px 10px rgba(45,62,80,0.1); }
     .kanban-card.dragging { opacity: 0.35; cursor: grabbing; }
+    /* Swipe-to-triage */
+    .kanban-card.swiping { transition: none !important; cursor: grabbing; z-index: 100; position: relative; }
+    .kanban-card .swipe-overlay {
+      position: absolute; inset: 0; border-radius: inherit;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      pointer-events: none; opacity: 0; z-index: 20;
+    }
+    .swipe-overlay.right { background: rgba(34,197,94,0.12); }
+    .swipe-overlay.left { background: rgba(239,68,68,0.12); }
+    .swipe-overlay.right .swipe-icon, .swipe-overlay.right .swipe-label { color: #15803d; }
+    .swipe-overlay.left .swipe-icon, .swipe-overlay.left .swipe-label { color: #b91c1c; }
+    .swipe-overlay .swipe-label { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
+    .kanban-card.fly-out { transition: transform 0.3s ease-in, opacity 0.3s ease-in; pointer-events: none; }
+    .kanban-card.snap-back { transition: transform 0.25s ease-out; }
     .kanban-card-company { font-size: 14px; font-weight: 700; color: #2d3e50; line-height: 1.2; text-decoration: none; cursor: pointer; }
     .kanban-card-company:hover { color: #0077b5; }
     .kanban-card-job { font-size: 12px; color: #516f90; margin-top: 2px; }
