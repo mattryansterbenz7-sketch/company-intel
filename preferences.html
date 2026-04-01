@@ -12,7 +12,7 @@
     }
 
     /* ── Page container ── */
-    .page { max-width: 760px; margin: 0 auto; }
+    .page { max-width: 1400px; margin: 0 auto; }
 
     /* ── Page header ── */
     .page-header { text-align: center; margin-bottom: 32px; }
@@ -55,6 +55,11 @@
 
     /* ── Two-column row ── */
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+
+    /* ── Preferences two-column body ── */
+    .prefs-body { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .prefs-col { display: flex; flex-direction: column; gap: 12px; }
+    @media (max-width: 900px) { .prefs-body { grid-template-columns: 1fr; } }
 
     /* ── Input fields ── */
     .field { margin-bottom: 14px; }
@@ -346,6 +351,9 @@
       </div>
     </div>
 
+    <div class="prefs-body">
+      <div class="prefs-col">
+
     <!-- ── 2. My Story ── -->
     <div class="card" id="card-story" data-card="story">
       <div class="card-header">
@@ -406,182 +414,184 @@
       </div>
     </div>
 
-    <!-- ── 4. Operating Principles | What Drives You ── -->
-    <div class="two-col">
-      <div class="card" id="card-principles" data-card="principles">
-        <div class="card-header">
-          <div class="card-header-text">
-            <div class="card-title">Operating principles</div>
-            <div class="card-subtitle">How you work, what you value, what environments bring out your best</div>
-          </div>
-          <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+    <!-- ── 4. Operating Principles ── -->
+    <div class="card" id="card-principles" data-card="principles">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Operating principles</div>
+          <div class="card-subtitle">How you work, what you value, what environments bring out your best</div>
         </div>
-        <div class="card-body">
-          <textarea class="field-input field-input-md" id="profile-principles" style="font-size:13px;" placeholder="How you operate — ownership, speed, collaboration style, decision-making..."></textarea>
-          <div class="ai-toggle" data-ai="principles">
-            <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-            <span class="ai-toggle-text">How the AI reads this</span>
-            <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-          </div>
-          <div class="ai-panel" data-ai-panel="principles">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
-        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
-      <div class="card" id="card-motivators" data-card="motivators">
-        <div class="card-header">
-          <div class="card-header-text">
-            <div class="card-title">What drives you</div>
-            <div class="card-subtitle">Core motivators, personality traits, what energizes and drains you</div>
-          </div>
-          <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-        </div>
-        <div class="card-body">
-          <textarea class="field-input field-input-md" id="profile-motivators" style="font-size:13px;" placeholder="What fuels you — competition, autonomy, learning, building? What personality traits define how you show up?"></textarea>
-          <div class="ai-toggle" data-ai="motivators">
-            <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-            <span class="ai-toggle-text">How the AI reads this</span>
-            <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-          </div>
-          <div class="ai-panel" data-ai-panel="motivators">Nothing here yet — add your motivators to see the AI's interpretation</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── 5. Voice & Style | FAQ / Polished Responses ── -->
-    <div class="two-col">
-      <div class="card" id="card-voice" data-card="voice">
-        <div class="card-header">
-          <div class="card-header-text">
-            <div class="card-title">Voice &amp; style</div>
-            <div class="card-subtitle">How you sound when you write and talk</div>
-          </div>
-          <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-        </div>
-        <div class="card-body">
-          <textarea class="field-input field-input-sm" id="profile-voice" style="font-size:13px;" placeholder="Direct? Conversational? Do you use humor? Formal in writing but casual in speech?"></textarea>
-          <div class="helper-text">Helps the AI match your tone in emails and applications</div>
-          <div class="ai-toggle" data-ai="voice">
-            <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-            <span class="ai-toggle-text">How the AI reads this</span>
-            <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-          </div>
-          <div class="ai-panel" data-ai-panel="voice">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
-        </div>
-      </div>
-      <div class="card" id="card-faq" data-card="faq">
-        <div class="card-header">
-          <div class="card-header-text">
-            <div class="card-title">FAQ / polished responses</div>
-            <div class="card-subtitle">Go-to answers for recurring questions</div>
-          </div>
-          <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-        </div>
-        <div class="card-body">
-          <textarea class="field-input field-input-sm" id="profile-faq" style="font-size:13px;" placeholder="'Why are you looking?' 'Tell me about yourself' 'What are you looking for?'"></textarea>
-          <div class="helper-text">The AI reuses these instead of generating from scratch</div>
-          <div class="ai-toggle" data-ai="faq">
-            <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-            <span class="ai-toggle-text">How the AI reads this</span>
-            <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-          </div>
-          <div class="ai-panel" data-ai-panel="faq">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Divider ── -->
-    <hr class="divider">
-
-    <!-- ── 6. Green Lights | Red Lights ── -->
-    <div class="two-col">
-      <div class="light-card green">
-        <div class="light-header">
-          <div class="light-dot green"></div>
-          <div class="light-title">Green lights</div>
-        </div>
-        <div class="light-subtitle">What makes an opportunity attractive — role, company, culture, comp, product</div>
-        <textarea class="field-input field-input-lg" id="profile-green-lights" style="font-size:13px;" placeholder="Roles, industries, cultures, company traits that attract you..."></textarea>
-        <div class="ai-toggle" data-ai="greenLights">
+      <div class="card-body">
+        <textarea class="field-input field-input-md" id="profile-principles" style="font-size:13px;" placeholder="How you operate — ownership, speed, collaboration style, decision-making..."></textarea>
+        <div class="ai-toggle" data-ai="principles">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="ai-toggle-text">How the AI reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
-        <div class="ai-panel" data-ai-panel="greenLights"></div>
+        <div class="ai-panel" data-ai-panel="principles">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
       </div>
-      <div class="light-card red">
-        <div class="light-header">
-          <div class="light-dot red"></div>
-          <div class="light-title">Red lights</div>
+    </div>
+
+    <!-- ── 4b. What Drives You ── -->
+    <div class="card" id="card-motivators" data-card="motivators">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">What drives you</div>
+          <div class="card-subtitle">Core motivators, personality traits, what energizes and drains you</div>
         </div>
-        <div class="light-subtitle">What makes you walk away or hesitate — dealbreakers across any dimension</div>
-        <textarea class="field-input field-input-lg" id="profile-red-lights" style="font-size:13px;" placeholder="Dealbreakers — company types, cultures, role traits you'd walk away from..."></textarea>
-        <div class="ai-toggle" data-ai="redLights">
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <textarea class="field-input field-input-md" id="profile-motivators" style="font-size:13px;" placeholder="What fuels you — competition, autonomy, learning, building? What personality traits define how you show up?"></textarea>
+        <div class="ai-toggle" data-ai="motivators">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="ai-toggle-text">How the AI reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
-        <div class="ai-panel" data-ai-panel="redLights"></div>
+        <div class="ai-panel" data-ai-panel="motivators">Nothing here yet — add your motivators to see the AI's interpretation</div>
       </div>
     </div>
 
-    <!-- ── 7. Location & Logistics | Compensation Signals ── -->
-    <div class="two-col">
-      <div class="light-card" style="border-top: none;">
-        <div class="section-label">LOCATION &amp; LOGISTICS</div>
-        <div class="grid-2" style="margin-bottom: 12px;">
-          <div class="field">
-            <label class="field-label">City</label>
-            <input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off">
-          </div>
-          <div class="field">
-            <label class="field-label">State</label>
-            <select class="field-input" id="pref-location-state" style="height:38px;">
-              <option value="">State</option>
-              <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
-            </select>
-          </div>
+    <!-- ── 5. Voice & Style ── -->
+    <div class="card" id="card-voice" data-card="voice">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Voice &amp; style</div>
+          <div class="card-subtitle">How you sound when you write and talk</div>
         </div>
-        <div class="field" style="margin-bottom: 12px;">
-          <label class="field-label">Work arrangement</label>
-          <div class="check-group">
-            <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
-            <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
-            <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
-          </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <textarea class="field-input field-input-sm" id="profile-voice" style="font-size:13px;" placeholder="Direct? Conversational? Do you use humor? Formal in writing but casual in speech?"></textarea>
+        <div class="helper-text">Helps the AI match your tone in emails and applications</div>
+        <div class="ai-toggle" data-ai="voice">
+          <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="ai-toggle-text">How the AI reads this</span>
+          <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+        </div>
+        <div class="ai-panel" data-ai-panel="voice">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
+      </div>
+    </div>
+
+    <!-- ── 5b. FAQ / Polished Responses ── -->
+    <div class="card" id="card-faq" data-card="faq">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">FAQ / polished responses</div>
+          <div class="card-subtitle">Go-to answers for recurring questions</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <textarea class="field-input field-input-sm" id="profile-faq" style="font-size:13px;" placeholder="'Why are you looking?' 'Tell me about yourself' 'What are you looking for?'"></textarea>
+        <div class="helper-text">The AI reuses these instead of generating from scratch</div>
+        <div class="ai-toggle" data-ai="faq">
+          <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="ai-toggle-text">How the AI reads this</span>
+          <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+        </div>
+        <div class="ai-panel" data-ai-panel="faq">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
+      </div>
+    </div>
+
+      </div>
+      <div class="prefs-col">
+
+    <!-- ── 6. Green Lights ── -->
+    <div class="light-card green">
+      <div class="light-header">
+        <div class="light-dot green"></div>
+        <div class="light-title">Green lights</div>
+      </div>
+      <div class="light-subtitle">What makes an opportunity attractive — role, company, culture, comp, product</div>
+      <textarea class="field-input field-input-lg" id="profile-green-lights" style="font-size:13px;" placeholder="Roles, industries, cultures, company traits that attract you..."></textarea>
+      <div class="ai-toggle" data-ai="greenLights">
+        <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="ai-toggle-text">How the AI reads this</span>
+        <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+      </div>
+      <div class="ai-panel" data-ai-panel="greenLights"></div>
+    </div>
+
+    <!-- ── 6b. Red Lights ── -->
+    <div class="light-card red">
+      <div class="light-header">
+        <div class="light-dot red"></div>
+        <div class="light-title">Red lights</div>
+      </div>
+      <div class="light-subtitle">What makes you walk away or hesitate — dealbreakers across any dimension</div>
+      <textarea class="field-input field-input-lg" id="profile-red-lights" style="font-size:13px;" placeholder="Dealbreakers — company types, cultures, role traits you'd walk away from..."></textarea>
+      <div class="ai-toggle" data-ai="redLights">
+        <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="ai-toggle-text">How the AI reads this</span>
+        <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+      </div>
+      <div class="ai-panel" data-ai-panel="redLights"></div>
+    </div>
+
+    <!-- ── 7. Location & Logistics ── -->
+    <div class="light-card" style="border-top: none;">
+      <div class="section-label">LOCATION &amp; LOGISTICS</div>
+      <div class="grid-2" style="margin-bottom: 12px;">
+        <div class="field">
+          <label class="field-label">City</label>
+          <input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off">
         </div>
         <div class="field">
-          <label class="field-label">Max travel</label>
-          <input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None">
+          <label class="field-label">State</label>
+          <select class="field-input" id="pref-location-state" style="height:38px;">
+            <option value="">State</option>
+            <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
+          </select>
         </div>
       </div>
+      <div class="field" style="margin-bottom: 12px;">
+        <label class="field-label">Work arrangement</label>
+        <div class="check-group">
+          <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
+          <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
+          <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Max travel</label>
+        <input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None">
+      </div>
+    </div>
 
-      <div class="light-card" style="border-top: none;">
-        <div class="section-label">COMPENSATION SIGNALS</div>
-        <div class="field" style="margin-bottom: 14px;">
-          <label class="field-label" style="margin-bottom: 8px;">Base Salary</label>
-          <div class="salary-row">
-            <div class="salary-item">
-              <span class="salary-label red">Walk away below</span>
-              <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="$120K">
-            </div>
-            <div class="salary-item">
-              <span class="salary-label green">Strong offer above</span>
-              <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="$180K">
-            </div>
+    <!-- ── 7b. Compensation Signals ── -->
+    <div class="light-card" style="border-top: none;">
+      <div class="section-label">COMPENSATION SIGNALS</div>
+      <div class="field" style="margin-bottom: 14px;">
+        <label class="field-label" style="margin-bottom: 8px;">Base Salary</label>
+        <div class="salary-row">
+          <div class="salary-item">
+            <span class="salary-label red">Walk away below</span>
+            <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="$120K">
+          </div>
+          <div class="salary-item">
+            <span class="salary-label green">Strong offer above</span>
+            <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="$180K">
           </div>
         </div>
-        <div class="field">
-          <label class="field-label" style="margin-bottom: 8px;">OTE / Total Comp</label>
-          <div class="salary-row">
-            <div class="salary-item">
-              <span class="salary-label red">OTE walk away below</span>
-              <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="$200K">
-            </div>
-            <div class="salary-item">
-              <span class="salary-label green">OTE strong above</span>
-              <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="$300K">
-            </div>
+      </div>
+      <div class="field">
+        <label class="field-label" style="margin-bottom: 8px;">OTE / Total Comp</label>
+        <div class="salary-row">
+          <div class="salary-item">
+            <span class="salary-label red">OTE walk away below</span>
+            <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="$200K">
+          </div>
+          <div class="salary-item">
+            <span class="salary-label green">OTE strong above</span>
+            <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="$300K">
           </div>
         </div>
+      </div>
+    </div>
+
       </div>
     </div>
 
