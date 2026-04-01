@@ -17,21 +17,78 @@ function defaultActionStatus(stageKey) {
   return null;
 }
 
-function computeLastActivityCo(e) {
-  const acts = [];
-  const typeLabels = { linkedin_dm: 'LinkedIn DM', phone_call: 'Phone call', coffee_chat: 'Coffee chat', text: 'Text', referral: 'Referral', email_sent: 'Email sent', applied: 'Applied', other: 'Activity' };
-  for (const t of (e.cachedEmails || [])) {
-    if (t.date) { const from = (t.from || '').replace(/<.*>/, '').trim().split(' ')[0]; acts.push({ timestamp: new Date(t.date).getTime(), label: `Email${from ? ' from ' + from : ''}: ${(t.subject || '').slice(0, 35)}` }); }
-  }
+function truncLabel(str, max = 40) {
+  if (!str) return '';
+  return str.length > max ? str.slice(0, max - 1) + '…' : str;
+}
+
+function computeLastActivity(entry) {
+  const candidates = [];
+
+  // A. Emails
+  (entry.cachedEmails || []).forEach(thread => {
+    let ts = 0, senderName = '';
+    if (thread.messages && thread.messages.length) {
+      const lastMsg = thread.messages[thread.messages.length - 1];
+      ts = new Date(lastMsg.date).getTime();
+      if (lastMsg.from) {
+        const match = lastMsg.from.match(/^([^<]+)/);
+        senderName = match ? match[1].trim().split(/\s+/)[0] : '';
+      }
+    }
+    if (!ts || isNaN(ts)) ts = thread.date ? new Date(thread.date).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = thread.internalDate ? parseInt(thread.internalDate) : 0;
+    if (!ts || isNaN(ts)) return;
+    const label = senderName
+      ? truncLabel('Email from ' + senderName)
+      : truncLabel('Email: ' + (thread.subject || 'No subject'));
+    candidates.push({ timestamp: ts, label, type: 'email' });
+  });
+
+  // B. Meetings (Granola)
+  (entry.cachedMeetings || []).forEach(m => {
+    let ts = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = m.date ? new Date(m.date).getTime() : 0;
+    if (!ts || isNaN(ts)) return;
+    candidates.push({ timestamp: ts, label: truncLabel('Call: ' + (m.title || 'Meeting')), type: 'meeting' });
+  });
+
+  // C. Calendar events (past only)
   const now = Date.now();
-  for (const ev of (e.cachedCalendarEvents || [])) { const s = new Date(ev.start).getTime(); if (s <= now) acts.push({ timestamp: s, label: `Meeting: ${(ev.summary || ev.title || '').slice(0, 45)}` }); }
-  for (const m of (e.cachedMeetings || [])) { const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0; if (ts > 0) acts.push({ timestamp: ts, label: `Call: ${(m.title || 'Meeting').slice(0, 45)}` }); }
-  for (const m of (e.manualMeetings || [])) { const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0; if (ts > 0) acts.push({ timestamp: ts, label: `${(m.title || 'Meeting').slice(0, 45)}` }); }
-  for (const a of (e.activityLog || [])) { if (a.date) { const tl = typeLabels[a.type] || 'Activity'; acts.push({ timestamp: new Date(a.date + 'T12:00:00').getTime(), label: a.note ? `${tl}: ${a.note.slice(0, 35)}` : tl }); } }
-  const appliedTs = (e.stageTimestamps || {})['applied'];
-  if (typeof appliedTs === 'number' && appliedTs > 0) acts.push({ timestamp: appliedTs, label: 'Applied' });
-  acts.sort((a, b) => b.timestamp - a.timestamp);
-  return acts.length ? acts[0] : { timestamp: 0, label: null };
+  (entry.cachedCalendarEvents || []).forEach(evt => {
+    const ts = new Date(evt.start).getTime();
+    if (!ts || isNaN(ts) || ts > now) return;
+    candidates.push({ timestamp: ts, label: truncLabel('Meeting: ' + (evt.summary || evt.title || 'Event')), type: 'calendar' });
+  });
+
+  // D. Activity log
+  (entry.activityLog || []).forEach(log => {
+    const ts = new Date(log.date).getTime();
+    if (!ts || isNaN(ts)) return;
+    const typeLabels = {
+      linkedin_dm: 'LinkedIn DM',
+      phone_call: 'Phone call',
+      coffee_chat: 'Coffee chat',
+      text: 'Text',
+      referral: 'Referral',
+      applied: 'Applied',
+      other: ''
+    };
+    const prefix = typeLabels[log.type] || '';
+    const label = log.type === 'applied' ? 'Applied'
+      : prefix ? truncLabel(prefix + ': ' + (log.note || ''))
+      : truncLabel(log.note || 'Activity');
+    candidates.push({ timestamp: ts, label, type: 'activity_log' });
+  });
+
+  // E. Applied date (editable field — NOT stageTimestamps)
+  if (entry.appliedDate && entry.appliedDate > 0) {
+    candidates.push({ timestamp: entry.appliedDate, label: 'Applied', type: 'applied' });
+  }
+
+  if (!candidates.length) return { timestamp: 0, label: null };
+  candidates.sort((a, b) => b.timestamp - a.timestamp);
+  return candidates[0];
 }
 
 function detectScheduledStatus(entry) {
@@ -540,7 +597,7 @@ function buildOpportunity() {
       </div>
     </div>
     ${(() => {
-      const act = computeLastActivityCo(entry);
+      const act = computeLastActivity(entry);
       if (!act.timestamp) return '';
       const d = new Date(act.timestamp);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

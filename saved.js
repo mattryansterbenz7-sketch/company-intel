@@ -64,56 +64,78 @@ const DEFAULT_STAT_CARDS = [
 ];
 let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
 
+function truncLabel(str, max = 40) {
+  if (!str) return '';
+  return str.length > max ? str.slice(0, max - 1) + '…' : str;
+}
+
 function computeLastActivity(entry) {
-  const activities = [];
+  const candidates = [];
 
-  // Cached emails
-  for (const thread of (entry.cachedEmails || [])) {
-    if (thread.date) {
-      const ts = new Date(thread.date).getTime();
-      const from = (thread.from || '').replace(/<.*>/, '').trim().split(' ')[0];
-      activities.push({ timestamp: ts, label: `Email${from ? ' from ' + from : ''}: ${(thread.subject || '').slice(0, 35)}`, type: 'email' });
+  // A. Emails
+  (entry.cachedEmails || []).forEach(thread => {
+    let ts = 0, senderName = '';
+    if (thread.messages && thread.messages.length) {
+      const lastMsg = thread.messages[thread.messages.length - 1];
+      ts = new Date(lastMsg.date).getTime();
+      if (lastMsg.from) {
+        const match = lastMsg.from.match(/^([^<]+)/);
+        senderName = match ? match[1].trim().split(/\s+/)[0] : '';
+      }
     }
-  }
+    if (!ts || isNaN(ts)) ts = thread.date ? new Date(thread.date).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = thread.internalDate ? parseInt(thread.internalDate) : 0;
+    if (!ts || isNaN(ts)) return;
+    const label = senderName
+      ? truncLabel('Email from ' + senderName)
+      : truncLabel('Email: ' + (thread.subject || 'No subject'));
+    candidates.push({ timestamp: ts, label, type: 'email' });
+  });
 
-  // Past calendar events
+  // B. Meetings (Granola)
+  (entry.cachedMeetings || []).forEach(m => {
+    let ts = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = m.date ? new Date(m.date).getTime() : 0;
+    if (!ts || isNaN(ts)) return;
+    candidates.push({ timestamp: ts, label: truncLabel('Call: ' + (m.title || 'Meeting')), type: 'meeting' });
+  });
+
+  // C. Calendar events (past only)
   const now = Date.now();
-  for (const evt of (entry.cachedCalendarEvents || [])) {
-    const start = new Date(evt.start).getTime();
-    if (start <= now) {
-      activities.push({ timestamp: start, label: `Meeting: ${(evt.summary || evt.title || 'Calendar event').slice(0, 45)}`, type: 'calendar' });
-    }
+  (entry.cachedCalendarEvents || []).forEach(evt => {
+    const ts = new Date(evt.start).getTime();
+    if (!ts || isNaN(ts) || ts > now) return;
+    candidates.push({ timestamp: ts, label: truncLabel('Meeting: ' + (evt.summary || evt.title || 'Event')), type: 'calendar' });
+  });
+
+  // D. Activity log
+  (entry.activityLog || []).forEach(log => {
+    const ts = new Date(log.date).getTime();
+    if (!ts || isNaN(ts)) return;
+    const typeLabels = {
+      linkedin_dm: 'LinkedIn DM',
+      phone_call: 'Phone call',
+      coffee_chat: 'Coffee chat',
+      text: 'Text',
+      referral: 'Referral',
+      applied: 'Applied',
+      other: ''
+    };
+    const prefix = typeLabels[log.type] || '';
+    const label = log.type === 'applied' ? 'Applied'
+      : prefix ? truncLabel(prefix + ': ' + (log.note || ''))
+      : truncLabel(log.note || 'Activity');
+    candidates.push({ timestamp: ts, label, type: 'activity_log' });
+  });
+
+  // E. Applied date (editable field — NOT stageTimestamps)
+  if (entry.appliedDate && entry.appliedDate > 0) {
+    candidates.push({ timestamp: entry.appliedDate, label: 'Applied', type: 'applied' });
   }
 
-  // Granola meetings
-  for (const m of (entry.cachedMeetings || [])) {
-    const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0;
-    if (ts > 0) activities.push({ timestamp: ts, label: `Call: ${(m.title || 'Meeting').slice(0, 45)}`, type: 'meeting' });
-  }
-
-  // Manual meetings
-  for (const m of (entry.manualMeetings || [])) {
-    const ts = m.date ? new Date(m.date + 'T12:00:00').getTime() : 0;
-    if (ts > 0) activities.push({ timestamp: ts, label: `${(m.title || 'Meeting').slice(0, 45)}`, type: 'meeting' });
-  }
-
-  // Activity log
-  const typeLabels = { linkedin_dm: 'LinkedIn DM', phone_call: 'Phone call', coffee_chat: 'Coffee chat', text: 'Text', referral: 'Referral', email_sent: 'Email sent', applied: 'Applied', other: 'Activity' };
-  for (const a of (entry.activityLog || [])) {
-    if (a.date) {
-      const tl = typeLabels[a.type] || 'Activity';
-      activities.push({ timestamp: new Date(a.date + 'T12:00:00').getTime(), label: a.note ? `${tl}: ${a.note.slice(0, 35)}` : tl, type: 'manual' });
-    }
-  }
-
-  // Only "applied" counts as a real activity — other stage changes are bookkeeping
-  const appliedTs = (entry.stageTimestamps || {})['applied'];
-  if (typeof appliedTs === 'number' && appliedTs > 0) {
-    activities.push({ timestamp: appliedTs, label: 'Applied', type: 'applied' });
-  }
-
-  activities.sort((a, b) => b.timestamp - a.timestamp);
-  return activities.length ? activities[0] : { timestamp: 0, label: null, type: null };
+  if (!candidates.length) return { timestamp: 0, label: null };
+  candidates.sort((a, b) => b.timestamp - a.timestamp);
+  return candidates[0];
 }
 
 // Helper: record timestamp when entry first reaches a stage
