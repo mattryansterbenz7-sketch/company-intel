@@ -2094,13 +2094,15 @@ function bindKanbanEvents(board) {
       queueCardsContainer.querySelectorAll('.kanban-card, .compact-card').forEach(card => {
         let startX = 0, startY = 0, deltaX = 0, deltaY = 0, isSwiping = false, directionLocked = false;
 
-        // Prevent native HTML5 drag on queue cards — it steals pointer events before swipe can lock direction
+        // Prevent native HTML5 drag on queue cards — it steals pointer events
         card.setAttribute('draggable', 'false');
+        card.style.touchAction = 'pan-y'; // allow vertical scroll, block horizontal browser gestures
 
         card.addEventListener('pointerdown', e => {
           if (e.target.closest(interactiveSelector)) return;
           startX = e.clientX; startY = e.clientY;
           deltaX = 0; deltaY = 0; isSwiping = false; directionLocked = false;
+          card.setPointerCapture(e.pointerId);
         });
 
         card.addEventListener('pointermove', e => {
@@ -2111,7 +2113,6 @@ function bindKanbanEvents(board) {
             directionLocked = true;
             if (Math.abs(deltaY) > Math.abs(deltaX)) { startX = 0; startY = 0; return; }
             isSwiping = true;
-            card.setPointerCapture(e.pointerId);
             card.classList.add('swiping');
             // Inject overlays if not present
             if (!card.querySelector('.swipe-overlay')) {
