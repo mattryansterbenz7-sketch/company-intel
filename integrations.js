@@ -55,10 +55,10 @@ const PROVIDERS = [
   },
   {
     id: 'google_cse', name: 'Google Custom Search', category: 'Search Providers',
-    description: 'Direct Google search — free 100 queries/day, alternative to Serper.',
+    description: 'Direct Google search — free 100 queries/day, fallback when Serper credits are exhausted.',
     storageKey: 'google_cse_key', placeholder: 'Your Google API key',
     extraFields: [{ key: 'google_cse_cx', label: 'Search Engine ID (CX)', placeholder: 'Your CX ID' }],
-    status: 'ready',
+    docsUrl: 'https://programmablesearchengine.google.com/',
   },
   {
     id: 'brave', name: 'Brave Search', category: 'Search Providers',

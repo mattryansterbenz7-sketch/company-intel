@@ -15,6 +15,8 @@ let APOLLO_KEY = _cfg.APOLLO_KEY || '';
 let SERPER_KEY = _cfg.SERPER_KEY || '';
 let OPENAI_KEY = _cfg.OPENAI_KEY || '';
 let GRANOLA_KEY = '';
+let GOOGLE_CSE_KEY = '';
+let GOOGLE_CSE_CX = '';
 
 // Override with storage-based keys on boot
 chrome.storage.local.get(['integrations'], ({ integrations }) => {
@@ -27,6 +29,8 @@ chrome.storage.local.get(['integrations'], ({ integrations }) => {
   if (integrations.apollo_key)    APOLLO_KEY = cleanKey(integrations.apollo_key);
   if (integrations.serper_key)    SERPER_KEY = cleanKey(integrations.serper_key);
   if (integrations.granola_key)   GRANOLA_KEY = cleanKey(integrations.granola_key);
+  if (integrations.google_cse_key) GOOGLE_CSE_KEY = cleanKey(integrations.google_cse_key);
+  if (integrations.google_cse_cx)  GOOGLE_CSE_CX = cleanKey(integrations.google_cse_cx);
   if (GRANOLA_KEY) setTimeout(() => buildGranolaIndex(), 5000);
 });
 
@@ -39,7 +43,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (v.apollo_key)    APOLLO_KEY = ck(v.apollo_key);
     if (v.serper_key)    SERPER_KEY = ck(v.serper_key);
     if (v.openai_key)    OPENAI_KEY = ck(v.openai_key);
-    if (v.granola_key)   GRANOLA_KEY = v.granola_key;
+    if (v.granola_key)   GRANOLA_KEY = ck(v.granola_key);
+    if (v.google_cse_key) GOOGLE_CSE_KEY = ck(v.google_cse_key);
+    if (v.google_cse_cx)  GOOGLE_CSE_CX = ck(v.google_cse_cx);
     _apolloExhausted = false;
     _serperExhausted = false;
   }
@@ -359,6 +365,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       serper: !!SERPER_KEY,
       openai: !!OPENAI_KEY,
       granola: !!GRANOLA_KEY,
+      google_cse: !!(GOOGLE_CSE_KEY && GOOGLE_CSE_CX),
       apolloExhausted: _apolloExhausted,
       serperExhausted: _serperExhausted,
     });
@@ -1257,6 +1264,29 @@ async function fetchSerperResults(query, num = 5) {
   return data.organic || [];
 }
 
+// Google Custom Search — free 100 queries/day
+async function fetchGoogleCSEResults(query, num = 5) {
+  if (!GOOGLE_CSE_KEY || !GOOGLE_CSE_CX) return [];
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(GOOGLE_CSE_KEY)}&cx=${encodeURIComponent(GOOGLE_CSE_CX)}&q=${encodeURIComponent(query)}&num=${Math.min(num, 10)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('[GoogleCSE] Error:', res.status);
+      return [];
+    }
+    const data = await res.json();
+    // Normalize to same format as Serper (title, link, snippet)
+    return (data.items || []).map(item => ({
+      title: item.title || '',
+      link: item.link || '',
+      snippet: item.snippet || '',
+    }));
+  } catch (err) {
+    console.warn('[GoogleCSE] Fetch error:', err.message);
+    return [];
+  }
+}
+
 // Claude Web Search — uses Anthropic's built-in web_search tool
 async function fetchClaudeWebSearch(query, num = 5) {
   if (!ANTHROPIC_KEY) { console.log('[ClaudeSearch] No API key'); return []; }
@@ -1356,6 +1386,7 @@ async function fetchOpenAIWebSearch(query, num = 5) {
 async function fetchSearchResults(query, num = 5) {
   console.log('[Search] Provider status:', {
     serper: SERPER_KEY ? (_serperExhausted ? 'exhausted' : 'available') : 'no key',
+    googleCSE: (GOOGLE_CSE_KEY && GOOGLE_CSE_CX) ? 'available' : 'no key',
     openai: OPENAI_KEY ? 'available' : 'no key',
     claude: ANTHROPIC_KEY ? 'available' : 'no key',
   });
@@ -1367,14 +1398,21 @@ async function fetchSearchResults(query, num = 5) {
     if (results.length > 0) { console.log('[Search] Serper returned', results.length, 'results'); return results; }
     console.log('[Search] Serper returned 0 results');
   }
-  // 2. OpenAI Web Search (separate rate limits from Claude)
+  // 2. Google Custom Search (free 100 queries/day)
+  if (GOOGLE_CSE_KEY && GOOGLE_CSE_CX) {
+    console.log('[Search] Trying Google CSE...');
+    const results = await fetchGoogleCSEResults(query, num);
+    if (results.length > 0) { console.log('[Search] Google CSE returned', results.length, 'results'); return results; }
+    console.log('[Search] Google CSE returned 0 results');
+  }
+  // 3. OpenAI Web Search (separate rate limits from Claude)
   if (OPENAI_KEY) {
     console.warn('[Search] Using expensive fallback: OpenAI web search (Serper exhausted)');
     const results = await fetchOpenAIWebSearch(query, num);
     if (results.length > 0) { console.log('[Search] OpenAI returned', results.length, 'results'); results._usedExpensiveFallback = true; return results; }
     console.log('[Search] OpenAI returned 0 results');
   }
-  // 3. Claude Web Search (last resort)
+  // 4. Claude Web Search (last resort)
   if (ANTHROPIC_KEY) {
     console.warn('[Search] Using expensive fallback: Claude web search (Serper exhausted)');
     const results = await fetchClaudeWebSearch(query, num);
