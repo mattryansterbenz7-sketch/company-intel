@@ -277,8 +277,9 @@
     .kanban-card:hover { border-color: #FF7A59; box-shadow: 0 3px 10px rgba(45,62,80,0.1); }
     .kanban-card.dragging { opacity: 0.35; cursor: grabbing; }
     /* Swipe-to-triage */
-    .kanban-card.swiping { transition: none !important; cursor: grabbing; z-index: 100; position: relative; }
-    .kanban-card .swipe-overlay {
+    .kanban-card.swiping, .compact-card.swiping { transition: none !important; cursor: grabbing; z-index: 100; }
+    .swipe-card-wrap { position: relative; }
+    .swipe-overlay {
       position: absolute; inset: 0; border-radius: inherit;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
       pointer-events: none; opacity: 0; z-index: 20;

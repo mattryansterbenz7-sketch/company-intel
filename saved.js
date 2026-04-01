@@ -1276,22 +1276,23 @@ function renderKanban(filtered) {
       </div>`;
   }).join('');
 
-  // Inject swipe overlays into scoring queue cards
+  // Inject swipe overlays into ONLY the first card in the scoring queue
   const queueCol = board.querySelector(`.kanban-cards[data-status="${stages[0]?.key || QUEUE_STAGE}"]`);
   if (queueCol && activePipeline === 'opportunity') {
-    queueCol.querySelectorAll('.kanban-card, .compact-card').forEach(card => {
-      card.style.position = 'relative';
-      card.insertAdjacentHTML('afterbegin', `
-        <div class="swipe-overlay right">
+    const firstCard = queueCol.querySelector('.kanban-card, .compact-card');
+    if (firstCard) {
+      firstCard.classList.add('swipe-card-wrap');
+      firstCard.insertAdjacentHTML('afterbegin', `
+        <div class="swipe-overlay right" style="opacity:0">
           <svg class="swipe-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
           <span class="swipe-label">Interested</span>
         </div>
-        <div class="swipe-overlay left">
+        <div class="swipe-overlay left" style="opacity:0">
           <svg class="swipe-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           <span class="swipe-label">Pass</span>
         </div>
       `);
-    });
+    }
   }
 
   bindKanbanEvents(board);
@@ -1914,7 +1915,9 @@ function bindKanbanEvents(board) {
       const COMMIT_RATIO = 0.4; // 40% of column width
       const interactiveSelector = 'textarea, input, select, a, button, summary, details, .card-tag, .star, .card-stars, .tag-remove, .tag-add-btn, .card-notes, .kanban-action-status, .kanban-next-step-input, .kanban-next-step-date, .status-select, .add-opp-btn, .card-delete, .score-match-btn, .compact-apply-btn, .compact-dismiss-btn';
 
-      queueCardsContainer.querySelectorAll('.kanban-card, .compact-card').forEach(card => {
+      // Only bind swipe to the FIRST card in the queue (the one with overlays)
+      const swipeCard = queueCardsContainer.querySelector('.swipe-card-wrap');
+      if (swipeCard) { const card = swipeCard;
         let startX = 0, startY = 0, deltaX = 0, deltaY = 0, isSwiping = false, directionLocked = false;
 
         card.addEventListener('pointerdown', e => {
@@ -2043,7 +2046,7 @@ function bindKanbanEvents(board) {
             e.preventDefault();
           }
         }, true);
-      });
+      }
     }
   }
 }
