@@ -143,15 +143,21 @@ async function renderIntegrations() {
     categories[p.category].push(p);
   });
 
-  let html = '';
+  // Split into two columns
+  const leftCats = ['AI Engine', 'Search Providers'];
+  const rightCats = ['Company Data & Enrichment', 'Email & Calendar', 'Meeting Transcripts', 'Communication'];
+
+  let leftHtml = '', rightHtml = '';
   for (const [cat, providers] of Object.entries(categories)) {
-    html += `<div class="category-title">${cat}</div>`;
-    providers.forEach(p => {
-      html += renderProviderCard(p, integrations, keyStatus);
-    });
+    const catHtml = `<div class="category-title">${cat}</div>` + providers.map(p => renderProviderCard(p, integrations, keyStatus)).join('');
+    if (leftCats.includes(cat)) leftHtml += catHtml;
+    else rightHtml += catHtml;
   }
 
-  container.innerHTML = html;
+  const leftCol = document.getElementById('providers-left');
+  const rightCol = document.getElementById('providers-right');
+  if (leftCol) leftCol.innerHTML = leftHtml;
+  if (rightCol) rightCol.innerHTML = rightHtml;
   bindEvents(integrations);
 }
 
