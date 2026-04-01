@@ -43,13 +43,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// Periodic Granola index refresh
-chrome.alarms.create('granola-index-refresh', { periodInMinutes: 360 }); // every 6 hours
-chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === 'granola-index-refresh' && GRANOLA_KEY) {
-    buildGranolaIndex();
-  }
-});
+// Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
+setInterval(() => { if (GRANOLA_KEY) buildGranolaIndex(); }, 6 * 60 * 60 * 1000);
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persisted to storage, survives SW restarts
 
