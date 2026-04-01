@@ -45,13 +45,17 @@ const PROVIDERS = [
   },
   {
     id: 'claude_search', name: 'Claude Web Search', category: 'Search Providers',
-    description: 'AI-powered web search via Anthropic — automatic fallback when Serper is exhausted. Uses your Anthropic key.',
-    status: 'active', oauth: false, noKey: true,
+    description: 'AI-powered web search via Anthropic — automatic fallback when Serper is exhausted.',
+    storageKey: 'anthropic_key', placeholder: 'Your Anthropic API key (same as AI Engine above)',
+    sharedWith: 'Anthropic (Claude)',
+    status: 'active', docsUrl: 'https://console.anthropic.com/settings/keys',
   },
   {
     id: 'openai_search', name: 'OpenAI Web Search', category: 'Search Providers',
-    description: 'Web search via OpenAI — fallback after Claude search. Uses your OpenAI key.',
-    status: 'active', oauth: false, noKey: true,
+    description: 'Web search via OpenAI — fallback after Claude search.',
+    storageKey: 'openai_key', placeholder: 'Your OpenAI API key (same as AI Engine above)',
+    sharedWith: 'OpenAI',
+    status: 'active', docsUrl: 'https://platform.openai.com/api-keys',
   },
   {
     id: 'google_cse', name: 'Google Custom Search', category: 'Search Providers',
@@ -194,23 +198,7 @@ function renderProviderCard(p, integrations, keyStatus) {
     return renderOAuthCard(p, keyStatus);
   }
 
-  // Providers that use another provider's key (Claude Search uses Anthropic, OpenAI Search uses OpenAI)
-  if (p.noKey) {
-    const parentKey = p.id === 'claude_search' ? 'anthropic' : p.id === 'openai_search' ? 'openai' : null;
-    const hasParent = parentKey && keyStatus[parentKey];
-    return `<div class="provider-card">
-      <div class="provider-header">
-        <div class="provider-name">${p.name}</div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="status-dot ${hasParent ? 'green' : 'grey'}"></span>
-          <span class="status-label ${hasParent ? 'connected' : ''}">${hasParent ? 'Active (uses ' + (parentKey === 'anthropic' ? 'Anthropic' : 'OpenAI') + ' key)' : 'Configure ' + (parentKey === 'anthropic' ? 'Anthropic' : 'OpenAI') + ' key first'}</span>
-        </div>
-      </div>
-      <div class="provider-desc">${p.description}</div>
-    </div>`;
-  }
-
-  // API key providers (Anthropic, Apollo, Serper)
+  // API key providers
   const inStorage = !!integrations[p.storageKey];
   const inConfig = !!keyStatus[p.id];
   const hasKey = inStorage || inConfig;
@@ -233,9 +221,10 @@ function renderProviderCard(p, integrations, keyStatus) {
       </div>
     </div>
     <div class="provider-desc">${p.description} ${docsLink}</div>
+    ${p.sharedWith ? `<div style="font-size:11px;color:#7c98b6;margin-bottom:8px">🔗 Shares API key with ${p.sharedWith} — enter it here or in AI Engine above</div>` : ''}
     <div class="key-row">
-      <input class="key-input" type="password" id="key-${p.storageKey}" value="${integrations[p.storageKey] || ''}" placeholder="${hasKey && !integrations[p.storageKey] ? 'Set via config.js (override here)' : p.placeholder || ''}">
-      <button class="key-toggle" data-target="key-${p.storageKey}">Show</button>
+      <input class="key-input" type="password" id="key-${p.id}" data-storage-key="${p.storageKey}" value="${integrations[p.storageKey] || ''}" placeholder="${hasKey && !integrations[p.storageKey] ? 'Set via config.js (override here)' : p.placeholder || ''}">
+      <button class="key-toggle" data-target="key-${p.id}">Show</button>
     </div>
     <div class="provider-actions">
       <button class="btn-save" data-provider="${p.id}">Save</button>
@@ -319,7 +308,7 @@ function bindEvents(integrations) {
       if (!provider) return;
       const { integrations: current = {} } = await new Promise(r => chrome.storage.local.get(['integrations'], r));
       if (provider.storageKey) {
-        const input = document.getElementById('key-' + provider.storageKey);
+        const input = document.getElementById('key-' + provider.id) || document.getElementById('key-' + provider.storageKey);
         if (input) current[provider.storageKey] = input.value.trim();
       }
       if (provider.extraFields) {
@@ -340,7 +329,7 @@ function bindEvents(integrations) {
     btn.addEventListener('click', async () => {
       const provider = PROVIDERS.find(p => p.id === btn.dataset.provider);
       if (!provider?.storageKey) return;
-      const input = document.getElementById('key-' + provider.storageKey);
+      const input = document.getElementById('key-' + provider.id) || document.getElementById('key-' + provider.storageKey);
       let key = input?.value?.trim();
       // If input is empty, test the currently active key (from config.js or storage)
       if (!key) {
