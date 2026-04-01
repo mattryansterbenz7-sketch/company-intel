@@ -352,6 +352,7 @@ function bindEvents(integrations) {
       if (result?.ok) {
         resultEl.textContent = '✓ Connected';
         resultEl.className = 'test-result ok';
+        chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' });
       } else {
         resultEl.textContent = `✗ Failed (${result?.status || result?.error || 'unknown'})`;
         resultEl.className = 'test-result fail';

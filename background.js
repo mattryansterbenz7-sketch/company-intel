@@ -26,6 +26,7 @@ chrome.storage.local.get(['integrations'], ({ integrations }) => {
   if (integrations.apollo_key)    APOLLO_KEY = integrations.apollo_key;
   if (integrations.serper_key)    SERPER_KEY = integrations.serper_key;
   if (integrations.granola_key)   GRANOLA_KEY = integrations.granola_key;
+  if (GRANOLA_KEY) setTimeout(() => buildGranolaIndex(), 5000);
 });
 
 // Live-update keys when user saves them from Integrations page
@@ -39,6 +40,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (v.granola_key)   GRANOLA_KEY = v.granola_key;
     _apolloExhausted = false;
     _serperExhausted = false;
+  }
+});
+
+// Periodic Granola index refresh
+chrome.alarms.create('granola-index-refresh', { periodInMinutes: 360 }); // every 6 hours
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'granola-index-refresh' && GRANOLA_KEY) {
+    buildGranolaIndex();
   }
 });
 
@@ -209,7 +218,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'GRANOLA_SEARCH') {
-    searchGranolaNotes(message.companyName, message.contactNames || [], message.calendarDates || [], message.attendeeHandles || []).then(sendResponse);
+    searchGranolaNotes(message.companyName, message.companyDomain || null, message.contactNames || []).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GRANOLA_BUILD_INDEX') {
+    buildGranolaIndex().then(sendResponse);
     return true;
   }
   if (message.type === 'CONSOLIDATE_PROFILE') {
@@ -1590,7 +1603,9 @@ When the user first enters this mode, respond: "Paste the application question a
     const mtgLines = context.meetings.map(m => {
       const rel = relTime(m.date);
       const header = `--- Meeting: ${m.title || 'Untitled'} | ${m.date || 'unknown date'}${rel}${m.time ? ' at ' + m.time : ''} ---`;
-      const body = (m.transcript || '').slice(0, 4000);
+      let body = '';
+      if (m.summaryMarkdown) body += `-- Granola AI Summary --\n${m.summaryMarkdown}\n\n`;
+      body += (m.transcript || '').slice(0, 4000);
       return `${header}\n${body}`;
     }).join('\n\n');
     systemParts.push(`\n=== MEETING TRANSCRIPTS (${context.meetings.length} meetings) ===\n${mtgLines}`);
@@ -2119,86 +2134,165 @@ async function granolaFetch(path) {
   return res.json();
 }
 
-async function searchGranolaNotes(companyName, contactNames = [], calendarDates = [], attendeeHandles = []) {
+// ── Granola Note Index ─────────────────────────────────────────────────────
+
+async function buildGranolaIndex() {
+  if (!GRANOLA_KEY) return { success: false, error: 'not_connected' };
+  console.log('[Granola] Building note index...');
+
+  try {
+    const index = { lastFullSync: Date.now(), lastIncrementalSync: Date.now(), notes: {} };
+    let cursor = null;
+    let totalNotes = 0;
+    const since = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10); // 6 months
+
+    // Paginate through all notes
+    do {
+      const url = '/v1/notes?page_size=30&created_after=' + since + (cursor ? '&cursor=' + cursor : '');
+      const page = await granolaFetch(url);
+      if (!page?.notes?.length) break;
+
+      // Fetch detail for each note (metadata only, no transcript)
+      for (const note of page.notes) {
+        await new Promise(r => setTimeout(r, 200)); // rate limit: 5/sec
+        const detail = await granolaFetch('/v1/notes/' + note.id);
+        if (!detail) continue;
+
+        index.notes[note.id] = {
+          id: note.id,
+          title: detail.title || note.title || '',
+          createdAt: detail.created_at || note.created_at || '',
+          attendeeEmails: (detail.attendees || []).map(a => (a.email || '').toLowerCase()).filter(Boolean),
+          attendeeNames: (detail.attendees || []).map(a => a.name || '').filter(Boolean),
+          inviteeEmails: (detail.calendar_event?.invitees || []).map(i => (i.email || '').toLowerCase()).filter(Boolean),
+          folderNames: (detail.folder_membership || []).map(f => f.name || '').filter(Boolean),
+          calendarTitle: detail.calendar_event?.event_title || '',
+          hasSummary: !!(detail.summary_text || detail.summary_markdown),
+          hasTranscript: true, // assume true, actual fetch happens on match
+        };
+        totalNotes++;
+      }
+
+      cursor = page.hasMore ? page.cursor : null;
+    } while (cursor);
+
+    // Save to storage
+    await new Promise(r => chrome.storage.local.set({ granolaIndex: index }, r));
+    console.log('[Granola] Index built:', totalNotes, 'notes indexed');
+    return { success: true, noteCount: totalNotes };
+  } catch (err) {
+    console.error('[Granola] Index build failed:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+async function getGranolaIndex() {
+  return new Promise(r => chrome.storage.local.get(['granolaIndex'], d => r(d.granolaIndex || null)));
+}
+
+async function searchGranolaNotes(companyName, companyDomain, contactNames = []) {
   if (!GRANOLA_KEY) return { notes: null, error: 'not_connected' };
 
   try {
-    console.log('[Granola] Searching notes for:', companyName, '| contacts:', contactNames, '| handles:', attendeeHandles);
-    // Fetch recent notes (last 90 days)
-    const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-    const data = await granolaFetch('/v1/notes?page_size=50&created_after=' + since);
-    if (!data?.notes?.length) {
-      console.log('[Granola] No notes found');
-      return { notes: null, transcript: null, meetings: [] };
+    console.log('[Granola] Searching for:', companyName, '| domain:', companyDomain, '| contacts:', contactNames);
+
+    // Get the local index
+    let index = await getGranolaIndex();
+
+    // If no index exists, build one (first time)
+    if (!index || !Object.keys(index.notes || {}).length) {
+      console.log('[Granola] No index found, building...');
+      await buildGranolaIndex();
+      index = await getGranolaIndex();
+      if (!index) return { notes: null, transcript: null, meetings: [] };
     }
+
+    const allNotes = Object.values(index.notes);
+    if (!allNotes.length) return { notes: null, transcript: null, meetings: [] };
 
     const lowerCompany = companyName.toLowerCase();
     const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?)$/i, '').trim().toLowerCase();
-    // Filter out the user's own name from contact matching to avoid matching every meeting
-    // (the user appears in the title of all their meetings)
-    const contactLower = contactNames
-      .map(n => n.toLowerCase())
-      .filter(n => {
-        // Exclude names that look like the user's own name (appears in most meeting titles)
-        // Heuristic: if a name appears in more than 60% of all note titles, it's probably the user
-        const words = n.split(' ').filter(Boolean);
-        if (words.length < 2) return true;
-        const appearances = data.notes.filter(note => {
-          const t = (note.title || '').toLowerCase();
-          return words.every(w => t.includes(w));
-        }).length;
-        const isLikelyUser = appearances > data.notes.length * 0.6;
-        if (isLikelyUser) console.log('[Granola] Excluding likely user name from matching:', n);
-        return !isLikelyUser;
-      });
-    const handlesLower = attendeeHandles.map(h => h.toLowerCase()).filter(Boolean);
+    const contactLower = contactNames.map(n => n.toLowerCase());
 
-    // Match notes by: company name in title, contact full name in title,
-    // or attendee email handles matching known calendar attendees
-    const matched = [];
-    for (const note of data.notes) {
+    // Get user's own email to exclude from attendee matching
+    const { gmailUserEmail } = await new Promise(r => chrome.storage.local.get(['gmailUserEmail'], r));
+    const userEmail = (gmailUserEmail || '').toLowerCase();
+
+    const matched = new Map(); // noteId -> { note, reason, priority }
+
+    for (const note of allNotes) {
+      // Priority 1: Attendee email domain match
+      if (companyDomain) {
+        const domainLower = companyDomain.toLowerCase();
+        const allEmails = [...(note.attendeeEmails || []), ...(note.inviteeEmails || [])];
+        const hasDomainMatch = allEmails.some(e => e.endsWith('@' + domainLower) && e !== userEmail);
+        if (hasDomainMatch) {
+          matched.set(note.id, { note, reason: 'email-domain', priority: 1 });
+          continue;
+        }
+      }
+
+      // Priority 2: Folder name match
+      if (note.folderNames?.length) {
+        const folderMatch = note.folderNames.some(f => {
+          const fl = f.toLowerCase();
+          return fl === lowerCompany || fl === shortName || fl.includes(lowerCompany) || (shortName.length > 3 && fl.includes(shortName));
+        });
+        if (folderMatch && !matched.has(note.id)) {
+          matched.set(note.id, { note, reason: 'folder', priority: 2 });
+          continue;
+        }
+      }
+
+      // Priority 3: Attendee full name matches a Known Contact
+      if (note.attendeeNames?.length && contactLower.length) {
+        const nameMatch = contactLower.some(cn => {
+          const words = cn.split(' ').filter(Boolean);
+          if (words.length < 2) return false;
+          return note.attendeeNames.some(an => {
+            const anl = an.toLowerCase();
+            return words.every(w => w.length > 1 && anl.includes(w));
+          });
+        });
+        if (nameMatch && !matched.has(note.id)) {
+          matched.set(note.id, { note, reason: 'attendee-name', priority: 3 });
+          continue;
+        }
+      }
+
+      // Priority 4: Title + company/contact name match (weakest)
       const title = (note.title || '').toLowerCase();
-      const noteAttendees = (note.attendees || []).map(a => ((a.email || '').split('@')[0] || '').toLowerCase()).filter(Boolean);
-      const noteAttendeeEmails = (note.attendees || []).map(a => (a.email || '').toLowerCase()).filter(Boolean);
-      const calTitle = ((note.calendar_event?.event_title) || '').toLowerCase();
+      const calTitle = (note.calendarTitle || '').toLowerCase();
+      const searchText = title + ' ' + calTitle;
 
-      // 1. Company name in title or calendar event title
-      const matchesCompany = title.includes(lowerCompany)
-        || (shortName.length > 3 && title.includes(shortName))
-        || calTitle.includes(lowerCompany)
-        || (shortName.length > 3 && calTitle.includes(shortName));
+      const titleMatchesCompany = searchText.includes(lowerCompany) || (shortName.length > 3 && searchText.includes(shortName));
 
-      // 2. Contact full name in title (require all name parts)
-      const matchesContact = contactLower.some(n => {
-        if (!n || n.length < 3) return false;
-        const words = n.split(' ').filter(Boolean);
-        if (words.length >= 2) return words.every(w => w.length > 1 && title.includes(w));
-        return n.length >= 5 && title.includes(n);
+      const titleMatchesContact = contactLower.some(cn => {
+        const words = cn.split(' ').filter(Boolean);
+        if (words.length >= 2) return words.every(w => w.length > 1 && searchText.includes(w));
+        // Single-word name: only if >= 5 chars and not the user's name
+        return cn.length >= 5 && searchText.includes(cn) && (!userEmail || !userEmail.includes(cn));
       });
 
-      // 3. Attendee email handles from calendar events match note attendees
-      const matchesAttendee = handlesLower.length > 0 && handlesLower.some(h =>
-        noteAttendees.includes(h) || noteAttendeeEmails.some(e => e.startsWith(h + '@'))
-      );
-
-      // 4. Note date matches a known calendar event date for this company
-      const noteDate = (note.created_at || '').slice(0, 10);
-      const matchesCalDate = noteDate && calendarDates.includes(noteDate);
-
-      if (matchesCompany || matchesContact || matchesAttendee || matchesCalDate) {
-        const reason = matchesCompany ? 'company' : matchesContact ? 'contact' : matchesAttendee ? 'attendee' : 'calDate';
-        console.log('[Granola] Matched note:', title.slice(0, 60), '| reason:', reason);
-        matched.push(note);
+      if ((titleMatchesCompany || titleMatchesContact) && !matched.has(note.id)) {
+        matched.set(note.id, { note, reason: titleMatchesCompany ? 'title-company' : 'title-contact', priority: 4 });
       }
     }
 
-    console.log('[Granola] Matched', matched.length, 'of', data.notes.length, 'notes for', companyName);
-    if (!matched.length) return { notes: null, transcript: null, meetings: [] };
+    // Sort by priority, then by date
+    const sortedMatches = [...matched.values()]
+      .sort((a, b) => a.priority - b.priority || (b.note.createdAt || '').localeCompare(a.note.createdAt || ''))
+      .slice(0, 10); // cap at 10
 
-    // Fetch full content with transcripts for matched notes (max 5)
+    console.log('[Granola] Matched', sortedMatches.length, 'notes for', companyName,
+      sortedMatches.map(m => `${m.note.title?.slice(0,40)} (${m.reason})`));
+
+    if (!sortedMatches.length) return { notes: null, transcript: null, meetings: [] };
+
+    // Fetch full content with transcripts for matched notes
     const meetings = [];
     const transcripts = [];
-    for (const note of matched.slice(0, 5)) {
+    for (const { note } of sortedMatches) {
       const full = await granolaFetch('/v1/notes/' + note.id + '?include=transcript');
       if (!full) continue;
 
@@ -2206,17 +2300,20 @@ async function searchGranolaNotes(companyName, contactNames = [], calendarDates 
         (t.speaker?.source || 'Speaker') + ': ' + t.text
       ).join('\n');
 
-      const summary = full.summary_markdown || full.summary_text || '';
+      const summaryMd = full.summary_markdown || '';
+      const summaryText = full.summary_text || '';
+      const summary = summaryMd || summaryText;
       const attendees = (full.attendees || []).map(a => a.name || a.email).filter(Boolean);
       const calEvent = full.calendar_event || {};
 
       meetings.push({
         id: note.id,
         title: note.title || 'Meeting',
-        date: note.created_at?.slice(0, 10) || null,
-        time: note.created_at?.slice(11, 16) || null,
+        date: (note.createdAt || '').slice(0, 10) || null,
+        time: (note.createdAt || '').slice(11, 16) || null,
         transcript: transcriptText || summary,
         summary,
+        summaryMarkdown: summaryMd,
         attendees,
         calendarTitle: calEvent.event_title || null,
       });

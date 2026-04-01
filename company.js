@@ -1262,16 +1262,8 @@ function loadHubMeetings(forceRefresh) {
 
   Promise.race([
     new Promise(r => {
-      // Extract calendar dates (YYYY-MM-DD) and attendee email handles to guide Granola search
-      const calEvents = entry.cachedCalendarEvents || [];
-      const calendarDates = [...new Set(calEvents.map(e => (e.start || '').slice(0, 10)).filter(Boolean))];
-      const attendeeHandles = [...new Set(
-        calEvents.flatMap(e => (e.attendees || [])
-          .filter(a => !a.self && a.email)
-          .map(a => a.email.split('@')[0].toLowerCase())
-        )
-      )];
-      chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames, calendarDates, attendeeHandles }, result => {
+      const companyDomain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '') || null;
+      chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company, companyDomain, contactNames }, result => {
         void chrome.runtime.lastError;
         r(result || { notes: null });
       });
