@@ -91,6 +91,40 @@ function computeLastActivity(entry) {
   return candidates[0];
 }
 
+function getUpcomingCalendarEvent(entry) {
+  const events = entry.cachedCalendarEvents || [];
+  const now = Date.now();
+  const future = events
+    .filter(e => new Date(e.start).getTime() > now)
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  return future.length ? future[0] : null;
+}
+
+function isSemanticallySimlar(a, b) {
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  const wa = norm(a), wb = norm(b);
+  if (!wa.length || !wb.length) return false;
+  const shared = wa.filter(w => wb.includes(w)).length;
+  if (shared >= 2) return true;
+  const names = s => (s.match(/\b[A-Z][a-z]{2,}/g) || []).map(n => n.toLowerCase());
+  const namesA = names(a), namesB = names(b);
+  return namesA.some(n => namesB.includes(n));
+}
+
+function autoPopulateNextStep(entry) {
+  const upcoming = getUpcomingCalendarEvent(entry);
+  if (!upcoming) return null;
+  const eventTitle = (upcoming.summary || upcoming.title || '').trim();
+  if (!eventTitle) return null;
+  const eventDate = new Date(upcoming.start).toISOString().split('T')[0];
+  const currentStep = (entry.nextStep || '').trim();
+  const currentDate = entry.nextStepDate || '';
+  if (currentDate === eventDate && currentStep) return null;
+  if (!currentStep) return { nextStep: eventTitle, nextStepDate: eventDate };
+  if (isSemanticallySimlar(currentStep, eventTitle)) return { nextStep: eventTitle, nextStepDate: eventDate };
+  return { nextStep: eventTitle + ' → ' + currentStep, nextStepDate: eventDate };
+}
+
 function detectScheduledStatus(entry) {
   const events = entry.cachedCalendarEvents || [];
   const now = new Date();
@@ -1416,22 +1450,12 @@ function loadHubMeetings(forceRefresh) {
       }
       statusEl.style.display = 'none';
       renderMeetingsTimeline(calEvents, entry.cachedMeetingNotes);
-      // Auto-populate next step date from nearest future calendar event
-      if (!entry.nextStepDate && calEvents.length) {
-        const now = new Date();
-        const futureEvents = calEvents
-          .filter(e => new Date(e.start) > now)
-          .sort((a, b) => new Date(a.start) - new Date(b.start));
-        if (futureEvents.length) {
-          const nextDate = new Date(futureEvents[0].start).toISOString().slice(0, 10);
-          const updates = { nextStepDate: nextDate };
-          // Also auto-set next step text from calendar event title if not set
-          if (!entry.nextStep) {
-            updates.nextStep = futureEvents[0].summary || futureEvents[0].title || 'Upcoming meeting';
-          }
-          saveEntry(updates);
-          renderPanel('opportunity');
-        }
+      // Auto-populate next step from upcoming calendar event
+      const nextStepChanges = autoPopulateNextStep(entry);
+      if (nextStepChanges) {
+        saveEntry(nextStepChanges);
+        renderPanel('opportunity');
+        bindPanelBodyEvents('opportunity');
       }
       // If no date found and no next step at all, try AI extraction
       if (!entry.nextStep && !entry.nextStepDate) {

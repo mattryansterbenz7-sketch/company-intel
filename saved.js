@@ -138,6 +138,40 @@ function computeLastActivity(entry) {
   return candidates[0];
 }
 
+function getUpcomingCalendarEvent(entry) {
+  const events = entry.cachedCalendarEvents || [];
+  const now = Date.now();
+  const future = events
+    .filter(e => new Date(e.start).getTime() > now)
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  return future.length ? future[0] : null;
+}
+
+function isSemanticallySimlar(a, b) {
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  const wa = norm(a), wb = norm(b);
+  if (!wa.length || !wb.length) return false;
+  const shared = wa.filter(w => wb.includes(w)).length;
+  if (shared >= 2) return true;
+  const names = s => (s.match(/\b[A-Z][a-z]{2,}/g) || []).map(n => n.toLowerCase());
+  const namesA = names(a), namesB = names(b);
+  return namesA.some(n => namesB.includes(n));
+}
+
+function autoPopulateNextStep(entry) {
+  const upcoming = getUpcomingCalendarEvent(entry);
+  if (!upcoming) return null;
+  const eventTitle = (upcoming.summary || upcoming.title || '').trim();
+  if (!eventTitle) return null;
+  const eventDate = new Date(upcoming.start).toISOString().split('T')[0];
+  const currentStep = (entry.nextStep || '').trim();
+  const currentDate = entry.nextStepDate || '';
+  if (currentDate === eventDate && currentStep) return null;
+  if (!currentStep) return { nextStep: eventTitle, nextStepDate: eventDate };
+  if (isSemanticallySimlar(currentStep, eventTitle)) return { nextStep: eventTitle, nextStepDate: eventDate };
+  return { nextStep: eventTitle + ' → ' + currentStep, nextStepDate: eventDate };
+}
+
 // Helper: record timestamp when entry first reaches a stage
 function stageEnterTimestamp(entry, stageKey) {
   const ts = { ...(entry.stageTimestamps || {}) };
@@ -1370,6 +1404,13 @@ function renderKanban(filtered) {
           allCompanies[idx].actionStatus = defaultActionStatus(allCompanies[idx].jobStage || allCompanies[idx].status) || 'my_court';
         }
         chrome.storage.local.set({ savedCompanies: allCompanies });
+        // Auto-populate next step from upcoming calendar event
+        const nextStepChanges = autoPopulateNextStep(allCompanies[idx]);
+        if (nextStepChanges) {
+          allCompanies[idx] = { ...allCompanies[idx], ...nextStepChanges };
+          chrome.storage.local.set({ savedCompanies: allCompanies });
+          render();
+        }
       }
     );
   });
