@@ -1490,7 +1490,7 @@ function renderKanbanCard(c) {
           const act = computeLastActivity(c);
           if (!act.label) return '';
           const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value">${act.label} · ${dateStr}</span></div>`;
+          return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value">${dateStr} · ${act.label}</span></div>`;
         })()}
       </div>
       <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>

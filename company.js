@@ -616,7 +616,7 @@ function buildOpportunity() {
       const d = new Date(act.timestamp);
       return `<div class="prop-row">
         <span class="prop-label">Last Activity</span>
-        <div class="prop-val-wrap"><span style="color:#516f90">${act.label}</span> <span style="font-weight:600">${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+        <div class="prop-val-wrap"><span style="font-weight:600">${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span> <span style="color:#516f90">${act.label}</span></div>
       </div>`;
     })()}
     <div id="prop-add-area">
