@@ -2416,20 +2416,37 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+const CO_TAG_PALETTE = [
+  { border: '#6366f1', color: '#4338ca', bg: 'rgba(99,102,241,0.15)' },
+  { border: '#10b981', color: '#047857', bg: 'rgba(16,185,129,0.15)' },
+  { border: '#f97316', color: '#c2410c', bg: 'rgba(249,115,22,0.15)' },
+  { border: '#ec4899', color: '#be185d', bg: 'rgba(236,72,153,0.15)' },
+  { border: '#0ea5e9', color: '#0369a1', bg: 'rgba(14,165,233,0.15)' },
+  { border: '#a855f7', color: '#7e22ce', bg: 'rgba(168,85,247,0.15)' },
+  { border: '#22c55e', color: '#15803d', bg: 'rgba(34,197,94,0.15)' },
+  { border: '#eab308', color: '#a16207', bg: 'rgba(234,179,8,0.15)' },
+  { border: '#ef4444', color: '#b91c1c', bg: 'rgba(239,68,68,0.15)' },
+  { border: '#14b8a6', color: '#0f766e', bg: 'rgba(20,184,166,0.15)' },
+];
+let _coCustomTagColors = {};
+chrome.storage.local.get(['tagColors'], d => { _coCustomTagColors = d.tagColors || {}; });
+
+const CO_SEMANTIC_TAG_COLORS = {
+  'application rejected': 8, 'rejected': 8, "didn't apply": 8,
+  'job posted': 2, 'linkedin easy apply': 4,
+  'vc-backed': 1, 'bootstrapped': 6, 'founding team': 5,
+  'referral': 9, 'recruiter': 3, '***action required***': 8,
+};
+
 function tagColor(tag) {
+  if (_coCustomTagColors[tag] !== undefined) {
+    return CO_TAG_PALETTE[_coCustomTagColors[tag] % CO_TAG_PALETTE.length];
+  }
+  const semantic = CO_SEMANTIC_TAG_COLORS[tag.toLowerCase()];
+  if (semantic !== undefined) return CO_TAG_PALETTE[semantic];
   let hash = 0;
   for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff;
-  const palette = [
-    { border: '#818cf8', color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
-    { border: '#34d399', color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
-    { border: '#fbbf24', color: '#d97706', bg: 'rgba(217,119,6,0.08)'  },
-    { border: '#f472b6', color: '#db2777', bg: 'rgba(219,39,119,0.08)' },
-    { border: '#60a5fa', color: '#2563eb', bg: 'rgba(37,99,235,0.08)'  },
-    { border: '#a78bfa', color: '#7c3aed', bg: 'rgba(124,58,237,0.08)' },
-    { border: '#fb923c', color: '#ea6d0d', bg: 'rgba(234,109,13,0.08)' },
-    { border: '#2dd4bf', color: '#0d9488', bg: 'rgba(13,148,136,0.08)' },
-  ];
-  return palette[Math.abs(hash) % palette.length];
+  return CO_TAG_PALETTE[Math.abs(hash) % CO_TAG_PALETTE.length];
 }
 
 // ── Panel event binding ─────────────────────────────────────────────────────

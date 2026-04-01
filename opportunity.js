@@ -29,20 +29,37 @@ let collapsedPanels = JSON.parse(localStorage.getItem('ci_panel_collapsed') || '
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
+const OPP_TAG_PALETTE = [
+  { border: '#6366f1', color: '#4338ca', bg: 'rgba(99,102,241,0.15)' },
+  { border: '#10b981', color: '#047857', bg: 'rgba(16,185,129,0.15)' },
+  { border: '#f97316', color: '#c2410c', bg: 'rgba(249,115,22,0.15)' },
+  { border: '#ec4899', color: '#be185d', bg: 'rgba(236,72,153,0.15)' },
+  { border: '#0ea5e9', color: '#0369a1', bg: 'rgba(14,165,233,0.15)' },
+  { border: '#a855f7', color: '#7e22ce', bg: 'rgba(168,85,247,0.15)' },
+  { border: '#22c55e', color: '#15803d', bg: 'rgba(34,197,94,0.15)' },
+  { border: '#eab308', color: '#a16207', bg: 'rgba(234,179,8,0.15)' },
+  { border: '#ef4444', color: '#b91c1c', bg: 'rgba(239,68,68,0.15)' },
+  { border: '#14b8a6', color: '#0f766e', bg: 'rgba(20,184,166,0.15)' },
+];
+let _oppCustomTagColors = {};
+chrome.storage.local.get(['tagColors'], d => { _oppCustomTagColors = d.tagColors || {}; });
+
+const OPP_SEMANTIC_TAG_COLORS = {
+  'application rejected': 8, 'rejected': 8, "didn't apply": 8,
+  'job posted': 2, 'linkedin easy apply': 4,
+  'vc-backed': 1, 'bootstrapped': 6, 'founding team': 5,
+  'referral': 9, 'recruiter': 3, '***action required***': 8,
+};
+
 function tagColor(tag) {
+  if (_oppCustomTagColors[tag] !== undefined) {
+    return OPP_TAG_PALETTE[_oppCustomTagColors[tag] % OPP_TAG_PALETTE.length];
+  }
+  const semantic = OPP_SEMANTIC_TAG_COLORS[tag.toLowerCase()];
+  if (semantic !== undefined) return OPP_TAG_PALETTE[semantic];
   let hash = 0;
   for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff;
-  const palette = [
-    { border: '#818cf8', color: '#a5b4fc', bg: 'rgba(99,102,241,0.12)'  },
-    { border: '#34d399', color: '#6ee7b7', bg: 'rgba(52,211,153,0.12)'  },
-    { border: '#fb923c', color: '#fdba74', bg: 'rgba(251,146,60,0.12)'  },
-    { border: '#f472b6', color: '#f9a8d4', bg: 'rgba(244,114,182,0.12)' },
-    { border: '#38bdf8', color: '#7dd3fc', bg: 'rgba(56,189,248,0.12)'  },
-    { border: '#c084fc', color: '#d8b4fe', bg: 'rgba(192,132,252,0.12)' },
-    { border: '#4ade80', color: '#86efac', bg: 'rgba(74,222,128,0.12)'  },
-    { border: '#f59e0b', color: '#fcd34d', bg: 'rgba(245,158,11,0.12)'  },
-  ];
-  return palette[Math.abs(hash) % palette.length];
+  return OPP_TAG_PALETTE[Math.abs(hash) % OPP_TAG_PALETTE.length];
 }
 
 function scoreToVerdict(score) {
