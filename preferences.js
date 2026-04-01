@@ -134,6 +134,10 @@ function renderInterpretation(panelKey, data) {
     html = `<div style="font-size:12px;color:#33475b;line-height:1.6">${escHtml(data.style)}</div>`;
   } else if (data.responses) {
     html = data.responses.map(r => `<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:#33475b">"${escHtml(r.question)}"</div><div style="font-size:11px;color:#7c98b6;margin-top:2px">${escHtml(r.approach)}</div></div>`).join('');
+  } else if (data.categories) {
+    html = data.categories.map(cat =>
+      `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:#516f90;text-transform:uppercase;letter-spacing:0.03em">${escHtml(cat.name)}</div><div style="font-size:12px;color:#33475b;margin-top:2px">${(cat.skills || []).map(s => escHtml(s)).join(' · ')}</div></div>`
+    ).join('');
   } else if (data.signals) {
     html = data.signals.map(s => `<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:#33475b">${escHtml(s.signal)}</div><div style="font-size:11px;color:#7c98b6;margin-top:2px">${escHtml(s.interpretation)}</div></div>`).join('');
   }

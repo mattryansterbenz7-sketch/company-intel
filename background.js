@@ -307,6 +307,7 @@ const SECTION_PROMPTS = {
   profileFAQ: `Read these polished responses and list the questions they cover with a brief note on the approach/angle for each.\n\nContent: {content}\n\nRespond in JSON only: {"responses": [{"question": "what question this answers", "approach": "brief note on angle"}]}`,
   profileGreenLights: `Read this list of things that make job opportunities attractive to this person. Group them into categories and note any that might be ambiguous or could be interpreted multiple ways. Be specific about what each signal means for job matching.\n\nContent: {content}\n\nRespond in JSON only: {"signals": [{"signal": "the item", "interpretation": "what this means for job matching"}]}`,
   profileRedLights: `Read this list of dealbreakers. Group them into categories and note any that might be ambiguous. Be specific about what would trigger each red flag in a real job posting.\n\nContent: {content}\n\nRespond in JSON only: {"signals": [{"signal": "the item", "interpretation": "what would trigger this in a job posting"}]}`,
+  profileSkills: `Read this person's skills and intangibles. Organize them into categories (technical skills, soft skills, domain expertise, certifications/tools) and note what level of depth or seniority each suggests.\n\nContent: {content}\n\nRespond in JSON only: {"categories": [{"name": "category name", "skills": ["skill 1", "skill 2"]}]}`,
 };
 
 async function interpretProfileSection(section, content) {
@@ -325,7 +326,24 @@ async function interpretProfileSection(section, content) {
     });
     if (result.error) return { error: result.error };
     const clean = result.reply.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (e) {
+      // Try to fix common JSON issues: unescaped newlines, trailing commas
+      try {
+        const fixed = clean
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t')
+          .replace(/,\s*([}\]])/g, '$1'); // trailing commas
+        parsed = JSON.parse(fixed);
+      } catch (e2) {
+        // Last resort: wrap the entire response as a simple summary
+        console.warn('[ProfileInterpret] JSON parse failed, using raw text');
+        parsed = { summary: clean };
+      }
+    }
     // Store interpretation
     const storageKey = section + 'Interpretation';
     chrome.storage.local.set({ [storageKey]: { data: parsed, generatedAt: Date.now(), sourceHash: simpleHash(content) } });
@@ -816,7 +834,11 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
   if (rc.emails?.length) richSection += `\nRecent Email Context (${rc.emails.length} emails):\n${rc.emails.slice(0, 5).map(e => `- [${e.date}] "${e.subject}" from ${e.from}`).join('\n')}\n`;
   if (rc.meetings?.length) richSection += `\nMeeting Context (${rc.meetings.length} meetings):\n${rc.meetings.slice(0, 3).map(m => `- ${m.title || 'Meeting'} (${m.date || ''}) — ${(m.transcript || '').slice(0, 500)}`).join('\n')}\n`;
   if (rc.transcript) richSection += `\nMeeting Transcript (summary):\n${rc.transcript.slice(0, 1500)}\n`;
-  if (rc.storyTime) richSection += `\nUser Story Time Profile:\n${rc.storyTime.slice(0, 1500)}\n`;
+  if (rc.storyTime) richSection += `\nUser Story Time Profile:\n${rc.storyTime.slice(0, 3000)}\n`;
+  // For high-stakes scoring, also include raw Story Time if available and different from summary
+  if (rc.storyTimeRaw && rc.storyTimeRaw !== rc.storyTime) {
+    richSection += `\nDetailed Background (raw):\n${rc.storyTimeRaw.slice(0, 4000)}\n`;
+  }
   if (rc.notes) richSection += `\nUser Notes on This Company:\n${rc.notes}\n`;
   if (rc.knownComp) richSection += `\n${rc.knownComp}\n`;
   if (rc.contextDocuments?.length) {
@@ -1657,7 +1679,7 @@ When the user first enters this mode, respond: "Paste the application question a
 
   // Career OS text buckets
   const story = profileData.profileStory || (profileData.storyTime?.profileSummary || profileData.storyTime?.rawInput || '');
-  if (story) systemParts.push(`\n[Your Story]\n${story.slice(0, 4000)}`);
+  if (story) systemParts.push(`\n[Your Story]\n${story.slice(0, 8000)}`);
 
   if (profileData.profileExperience) systemParts.push(`\n[Experience & Accomplishments]\n${profileData.profileExperience.slice(0, 4000)}`);
   if (profileData.profilePrinciples) systemParts.push(`\n[Operating Principles]\n${profileData.profilePrinciples.slice(0, 2000)}`);
@@ -1748,7 +1770,7 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatMo
   if (gcLinkParts.length) systemParts.push(`\n[Personal Info]\n${gcLinkParts.join('\n')}`);
 
   const gcStory = gcProfile.profileStory || (storyTime?.profileSummary || storyTime?.rawInput || '');
-  if (gcStory) systemParts.push(`\n[Your Story]\n${gcStory.slice(0, 4000)}`);
+  if (gcStory) systemParts.push(`\n[Your Story]\n${gcStory.slice(0, 8000)}`);
   if (gcProfile.profileExperience) systemParts.push(`\n[Experience & Accomplishments]\n${gcProfile.profileExperience.slice(0, 4000)}`);
   if (gcProfile.profilePrinciples) systemParts.push(`\n[Operating Principles]\n${gcProfile.profilePrinciples.slice(0, 2000)}`);
   if (gcProfile.profileMotivators) systemParts.push(`\n[What Drives You]\n${gcProfile.profileMotivators.slice(0, 2000)}`);
@@ -1886,7 +1908,19 @@ ${existing}` }]
 // ── Story Time: Profile Consolidation ────────────────────────────────────────
 
 async function consolidateProfile(rawInput, insights) {
-  const prompt = `Consolidate the following personal narrative and learned observations into a clear, structured personal profile summary. Preserve the user's voice and specifics. Organize into sections like: Background & Experience, Values & Preferences, Working Style, Career Goals, Dealbreakers, Relationship Patterns. Only include sections where you have real information. Keep it under 1500 words.
+  const prompt = `You are compressing a personal career profile for use as AI context. Extract EVERY specific fact, number, metric, skill, preference, criterion, and lesson — express each in the most concise form possible.
+
+Rules:
+- NEVER drop a specific fact, number, company name, metric, or stated preference
+- Strip storytelling and conversational padding. Keep substance, lose wrapper
+- Convert paragraphs into dense, scannable notes. Short phrases, not sentences
+- Preserve the user's exact words for values and preferences
+- Group into sections: Career Identity, Experience (subsection per role), Skills & Capabilities, Green Lights, Red Lights, Values & Working Style, Career Goals, Projects
+- Within Experience, preserve: company, title, metrics (ARR, ACV, team size, %), accomplishments, lessons
+- Target 2500-3500 words ceiling. Do NOT cut real content to hit a shorter number
+- If learned insights are included, weave into relevant sections
+
+Goal: someone reading this knows EVERYTHING the original said, without conversational padding.
 
 === USER'S OWN WORDS ===
 ${rawInput || '(none provided)'}
@@ -1905,7 +1939,7 @@ ${insights || '(none yet)'}`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
+        max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }]
       })
     });
