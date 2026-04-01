@@ -21,11 +21,12 @@ chrome.storage.local.get(['integrations'], ({ integrations }) => {
   if (!integrations) { console.log('[Keys] No integrations in storage, using config.js'); return; }
   console.log('[Keys] Loading from storage:', Object.keys(integrations).filter(k => !!integrations[k]).join(', '));
   console.log('[Keys] OpenAI key present:', !!integrations.openai_key, '| length:', (integrations.openai_key || '').length);
-  if (integrations.anthropic_key) ANTHROPIC_KEY = integrations.anthropic_key;
-  if (integrations.openai_key)    OPENAI_KEY = integrations.openai_key;
-  if (integrations.apollo_key)    APOLLO_KEY = integrations.apollo_key;
-  if (integrations.serper_key)    SERPER_KEY = integrations.serper_key;
-  if (integrations.granola_key)   GRANOLA_KEY = integrations.granola_key;
+  const cleanKey = k => (k || '').replace(/[^\x20-\x7E]/g, '').trim();
+  if (integrations.anthropic_key) ANTHROPIC_KEY = cleanKey(integrations.anthropic_key);
+  if (integrations.openai_key)    OPENAI_KEY = cleanKey(integrations.openai_key);
+  if (integrations.apollo_key)    APOLLO_KEY = cleanKey(integrations.apollo_key);
+  if (integrations.serper_key)    SERPER_KEY = cleanKey(integrations.serper_key);
+  if (integrations.granola_key)   GRANOLA_KEY = cleanKey(integrations.granola_key);
   if (GRANOLA_KEY) setTimeout(() => buildGranolaIndex(), 5000);
 });
 
@@ -33,10 +34,11 @@ chrome.storage.local.get(['integrations'], ({ integrations }) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.integrations) {
     const v = changes.integrations.newValue || {};
-    if (v.anthropic_key) ANTHROPIC_KEY = v.anthropic_key;
-    if (v.apollo_key)    APOLLO_KEY = v.apollo_key;
-    if (v.serper_key)    SERPER_KEY = v.serper_key;
-    if (v.openai_key)    OPENAI_KEY = v.openai_key;
+    const ck = k => (k || '').replace(/[^\x20-\x7E]/g, '').trim();
+    if (v.anthropic_key) ANTHROPIC_KEY = ck(v.anthropic_key);
+    if (v.apollo_key)    APOLLO_KEY = ck(v.apollo_key);
+    if (v.serper_key)    SERPER_KEY = ck(v.serper_key);
+    if (v.openai_key)    OPENAI_KEY = ck(v.openai_key);
     if (v.granola_key)   GRANOLA_KEY = v.granola_key;
     _apolloExhausted = false;
     _serperExhausted = false;
@@ -1131,6 +1133,8 @@ function parseLinkedInCompanySnippet(results) {
 }
 
 async function testApiKey(provider, key) {
+  // Strip invisible Unicode characters that break HTTP headers (smart quotes, zero-width spaces, etc.)
+  key = key.replace(/[^\x20-\x7E]/g, '').trim();
   try {
     if (provider === 'anthropic') {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
