@@ -1793,15 +1793,26 @@ function bindKanbanEvents(board) {
       const total = queueEntries.length;
       btn.textContent = `Scoring 0/${total}...`;
 
+      // Mark all pending cards with a visual indicator
+      queueEntries.forEach(entry => {
+        const cardEl = document.getElementById('kcard-' + entry.id) || document.querySelector(`.compact-card[data-id="${entry.id}"]`);
+        if (cardEl) cardEl.classList.add('rescore-pending');
+      });
+
       // Process in batches of 2 with 2s delay
       for (let i = 0; i < queueEntries.length; i += 2) {
         const batch = queueEntries.slice(i, i + 2);
+        // Mark current batch as actively scoring
+        batch.forEach(entry => {
+          const cardEl = document.getElementById('kcard-' + entry.id) || document.querySelector(`.compact-card[data-id="${entry.id}"]`);
+          if (cardEl) { cardEl.classList.remove('rescore-pending'); cardEl.classList.add('rescore-active'); }
+        });
         await Promise.all(batch.map(entry =>
           new Promise(resolve => {
             chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
               void chrome.runtime.lastError;
+              const cardEl = document.getElementById('kcard-' + entry.id) || document.querySelector(`.compact-card[data-id="${entry.id}"]`);
               if (result && !result.error) {
-                // Update in-memory entry
                 const idx = allCompanies.findIndex(c => c.id === entry.id);
                 if (idx >= 0) {
                   if (result.quickFitScore != null) allCompanies[idx].quickFitScore = result.quickFitScore;
@@ -1809,6 +1820,9 @@ function bindKanbanEvents(board) {
                   if (result.quickTake) allCompanies[idx].quickTake = result.quickTake;
                   if (result.hardDQ) allCompanies[idx].hardDQ = result.hardDQ;
                 }
+                if (cardEl) { cardEl.classList.remove('rescore-active'); cardEl.classList.add('rescore-done'); }
+              } else {
+                if (cardEl) { cardEl.classList.remove('rescore-active'); cardEl.classList.add('rescore-failed'); }
               }
               done++;
               btn.textContent = `Scoring ${done}/${total}...`;
