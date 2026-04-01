@@ -1171,7 +1171,7 @@ async function testApiKey(provider, key) {
       });
       if (res.ok) return { ok: true, status: res.status };
       if (res.status === 401 || res.status === 403) return { ok: false, status: res.status, reason: 'Invalid API key' };
-      if (res.status === 429 || res.status === 402) return { ok: false, status: res.status, reason: 'Key valid — credits exhausted' };
+      if (res.status === 400 || res.status === 429 || res.status === 402) return { ok: false, status: res.status, reason: 'Key valid — credits exhausted' };
       return { ok: false, status: res.status };
     }
     if (provider === 'openai') {
