@@ -1266,7 +1266,7 @@ function renderOppFields(savedEntry) {
       oppSelect.addEventListener('change', () => {
         const ts = { ...(savedEntry.stageTimestamps || {}) };
         if (!ts[oppSelect.value]) ts[oppSelect.value] = Date.now();
-        const stageChanges = { jobStage: oppSelect.value, stageTimestamps: ts, lastActivity: Date.now() };
+        const stageChanges = { jobStage: oppSelect.value, stageTimestamps: ts };
         // Auto-set Action On based on stage
         const autoAction = defaultActionStatus(oppSelect.value);
         if (autoAction) stageChanges.actionStatus = autoAction;

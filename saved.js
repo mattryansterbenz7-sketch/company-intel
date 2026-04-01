@@ -63,6 +63,47 @@ const DEFAULT_STAT_CARDS = [
 ];
 let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
 
+function computeLastActivity(entry) {
+  const timestamps = [];
+
+  // Cached emails
+  const emails = entry.cachedEmails || [];
+  for (const e of emails) {
+    if (e.date) timestamps.push(new Date(e.date).getTime());
+    if (e.internalDate) timestamps.push(parseInt(e.internalDate));
+  }
+
+  // Past calendar events
+  const now = Date.now();
+  for (const evt of (entry.cachedCalendarEvents || [])) {
+    const start = new Date(evt.start).getTime();
+    if (start <= now) timestamps.push(start);
+  }
+
+  // Granola meetings
+  for (const m of (entry.cachedMeetings || [])) {
+    if (m.date) timestamps.push(new Date(m.date + 'T12:00:00').getTime());
+  }
+
+  // Manual meetings
+  for (const m of (entry.manualMeetings || [])) {
+    if (m.date) timestamps.push(new Date(m.date + 'T12:00:00').getTime());
+  }
+
+  // Activity log
+  for (const a of (entry.activityLog || [])) {
+    if (a.date) timestamps.push(new Date(a.date + 'T12:00:00').getTime());
+  }
+
+  // Stage timestamps (secondary signal)
+  for (const ts of Object.values(entry.stageTimestamps || {})) {
+    if (typeof ts === 'number') timestamps.push(ts);
+  }
+
+  const valid = timestamps.filter(t => t > 0 && !isNaN(t));
+  return valid.length ? Math.max(...valid) : 0;
+}
+
 // Helper: record timestamp when entry first reaches a stage
 function stageEnterTimestamp(entry, stageKey) {
   const ts = { ...(entry.stageTimestamps || {}) };
@@ -686,7 +727,6 @@ function render() {
       const now = Date.now();
       const changes = {
         [field]: sel.value,
-        lastActivity: now,
         ...(entry ? stageEnterTimestamp(entry, sel.value) : { stageTimestamps: { [sel.value]: now } }),
         ...(entry ? backfillClearTimestamps(entry, sel.value) : {}),
       };
@@ -1184,7 +1224,7 @@ function renderKanban(filtered) {
         const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : -1;
         const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : -1;
         if (sb !== sa) return sb - sa;
-        return (b.lastActivity || b.savedAt || 0) - (a.lastActivity || a.savedAt || 0);
+        return (computeLastActivity(b) || b.savedAt || 0) - (computeLastActivity(a) || a.savedAt || 0);
       });
     }
     const s = stageStyle(statusKey);
@@ -1304,13 +1344,9 @@ function renderKanbanCard(c) {
       })() : ''}
       ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
       ${(() => {
-        const events = c.cachedCalendarEvents || [];
-        const past = events.filter(e => new Date(e.start) <= new Date()).sort((a, b) => new Date(b.start) - new Date(a.start));
-        const calTs = past.length ? new Date(past[0].start).getTime() : 0;
-        const actTs = c.lastActivity || 0;
-        const ts = Math.max(calTs, actTs);
-        if (!ts) return '';
-        const dateStr = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const actTs = computeLastActivity(c);
+        if (!actTs) return '';
+        const dateStr = new Date(actTs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         return `<div class="kanban-last-activity">Last activity: <span>${dateStr}</span></div>`;
       })()}
       <div class="card-tags" id="tags-${c.id}">
@@ -1419,7 +1455,6 @@ function bindKanbanEvents(board) {
       const now = Date.now();
       const changes = {
         [stageField]: newStatus,
-        lastActivity: now,
         ...stageEnterTimestamp(entry, newStatus),
         ...backfillClearTimestamps(entry, newStatus),
       };
@@ -1591,7 +1626,6 @@ function bindKanbanEvents(board) {
       const now = Date.now();
       const changes = {
         jobStage: nextStage,
-        lastActivity: now,
         ...stageEnterTimestamp(entry, nextStage),
       };
       const autoAction = defaultActionStatus(nextStage);
@@ -1653,12 +1687,10 @@ function bindKanbanEvents(board) {
       const id = btn.dataset.id;
       const entry = allCompanies.find(c => c.id === id);
       if (!entry) return;
-      const now = Date.now();
       const existingTags = entry.tags || [];
       const tags = existingTags.includes(DISMISS_TAG) ? existingTags : [...existingTags, DISMISS_TAG];
       updateCompany(id, {
         jobStage: DISMISS_STAGE,
-        lastActivity: now,
         tags,
         ...stageEnterTimestamp(entry, DISMISS_STAGE),
       });

@@ -1346,6 +1346,31 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
       </div>
     </div>`;
 
+  // ── "+ Log activity" button and form ────────────────────────────────────────
+  html += `<button class="mtg-add-btn" id="activity-log-btn" style="margin-left:8px">+ Log activity</button>`;
+  html += `
+    <div id="activity-log-form" style="display:none" class="mtg-add-form">
+      <div class="mtg-add-title">Log an activity</div>
+      <div class="mtg-add-fields">
+        <select class="mtg-add-input" id="al-type">
+          <option value="linkedin_dm">LinkedIn DM</option>
+          <option value="phone_call">Phone Call</option>
+          <option value="coffee_chat">Coffee Chat</option>
+          <option value="text">Text Message</option>
+          <option value="referral">Referral / Intro</option>
+          <option value="email_sent">Email Sent</option>
+          <option value="other">Other</option>
+        </select>
+        <input type="text" class="mtg-add-input" id="al-note" placeholder="What happened?">
+        <input type="date" class="mtg-add-input" id="al-date" style="width:auto">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="mtg-add-save" id="al-save">Save</button>
+          <button class="mtg-add-cancel" id="al-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  html += `<div id="activity-log-list"></div>`;
+
   // ── "Ask about all meetings" chat (shown if we have any data) ──────────────
   if (meetings.length || allCtx) {
     html += `
@@ -1618,6 +1643,98 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
       }
     });
   });
+
+  // ── Activity Log wiring ───────────────────────────────────────────────────
+  const alBtn = contentEl.querySelector('#activity-log-btn');
+  const alForm = contentEl.querySelector('#activity-log-form');
+  const alType = contentEl.querySelector('#al-type');
+  const alNote = contentEl.querySelector('#al-note');
+  const alDate = contentEl.querySelector('#al-date');
+  const alSave = contentEl.querySelector('#al-save');
+  const alCancel = contentEl.querySelector('#al-cancel');
+
+  function renderActivityLog() {
+    const listEl = contentEl.querySelector('#activity-log-list');
+    if (!listEl) return;
+    const log = (entry.activityLog || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (!log.length) { listEl.innerHTML = ''; return; }
+
+    const typeLabels = {
+      linkedin_dm: '\u{1F4AC} LinkedIn DM',
+      phone_call: '\u{1F4DE} Phone Call',
+      coffee_chat: '\u2615 Coffee Chat',
+      text: '\u{1F4F1} Text Message',
+      referral: '\u{1F91D} Referral / Intro',
+      email_sent: '\u{1F4E7} Email Sent',
+      other: '\u{1F4CC} Other'
+    };
+
+    listEl.innerHTML = '<div style="font-size:11px;font-weight:700;color:#516f90;text-transform:uppercase;letter-spacing:0.05em;margin:16px 0 8px">Activity Log</div>' +
+      log.map(a => {
+        const d = new Date(a.date + 'T12:00:00');
+        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `<div class="activity-log-entry" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f3f8;font-size:12px">
+          <span style="color:#7c98b6;white-space:nowrap">${dateStr}</span>
+          <span style="color:#516f90;font-weight:600;white-space:nowrap">${typeLabels[a.type] || a.type}</span>
+          <span style="color:#33475b;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.note || '')}</span>
+          <button class="mtg-card-del" data-al-id="${a.id}" title="Delete" style="flex-shrink:0">\u2715</button>
+        </div>`;
+      }).join('');
+
+    // Delete handlers
+    listEl.querySelectorAll('[data-al-id]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const aid = btn.dataset.alId;
+        const current = (entry.activityLog || []).filter(x => x.id !== aid);
+        entry.activityLog = current;
+        saveEntry({ activityLog: current });
+        renderActivityLog();
+      });
+    });
+  }
+
+  if (alBtn && alForm) {
+    // Default date to today
+    alDate.value = new Date().toISOString().slice(0, 10);
+
+    alBtn.addEventListener('click', () => {
+      alNote.value = '';
+      alDate.value = new Date().toISOString().slice(0, 10);
+      alType.value = 'linkedin_dm';
+      alForm.style.display = '';
+      alBtn.style.display = 'none';
+      alNote.focus();
+    });
+
+    alCancel.addEventListener('click', () => {
+      alForm.style.display = 'none';
+      alBtn.style.display = '';
+    });
+
+    alSave.addEventListener('click', () => {
+      const type = alType.value;
+      const note = alNote.value.trim();
+      const date = alDate.value || new Date().toISOString().slice(0, 10);
+
+      const current = entry.activityLog || [];
+      current.unshift({
+        id: 'act_' + Date.now(),
+        type,
+        note,
+        date,
+        createdAt: Date.now(),
+      });
+      entry.activityLog = current;
+      saveEntry({ activityLog: current });
+
+      alForm.style.display = 'none';
+      alBtn.style.display = '';
+      renderActivityLog();
+    });
+  }
+
+  renderActivityLog();
 }
 
 function renderManualMeetingDetail(contentEl, meeting, events, granolaNotes) {
