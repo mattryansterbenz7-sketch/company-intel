@@ -73,16 +73,22 @@ function computeLastActivity(entry) {
   const candidates = [];
 
   // A. Emails
+  const parseSender = (fromStr) => {
+    if (!fromStr) return '';
+    const before = fromStr.includes('<') ? fromStr.split('<')[0].trim() : fromStr.trim();
+    const first = before.split(/\s+/)[0];
+    return (first && !first.includes('@') && first.length > 1) ? first : '';
+  };
   (entry.cachedEmails || []).forEach(thread => {
     let ts = 0, senderName = '';
     if (thread.messages && thread.messages.length) {
       const lastMsg = thread.messages[thread.messages.length - 1];
       ts = new Date(lastMsg.date).getTime();
-      if (lastMsg.from) {
-        const match = lastMsg.from.match(/^([^<]+)/);
-        senderName = match ? match[1].trim().split(/\s+/)[0] : '';
-      }
+      senderName = parseSender(lastMsg.from);
+      if (!senderName && thread.from) senderName = parseSender(thread.from);
+      if (!senderName && thread.messages[0]?.from) senderName = parseSender(thread.messages[0].from);
     }
+    if (!senderName && thread.from) senderName = parseSender(thread.from);
     if (!ts || isNaN(ts)) ts = thread.date ? new Date(thread.date).getTime() : 0;
     if (!ts || isNaN(ts)) ts = thread.internalDate ? parseInt(thread.internalDate) : 0;
     if (!ts || isNaN(ts)) return;
@@ -1531,7 +1537,7 @@ function renderKanbanCard(c) {
           const act = computeLastActivity(c);
           if (!act.label) return '';
           const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value">${dateStr} · ${act.label}</span></div>`;
+          return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value" title="${act.label} · ${dateStr}">${dateStr} · ${act.label}</span></div>`;
         })()}
       </div>
       <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>
