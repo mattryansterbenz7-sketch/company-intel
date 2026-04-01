@@ -723,7 +723,7 @@ function render() {
             ${isJob && c.jobMatch?.score ? (() => {
               const v = scoreToVerdict(c.jobMatch.score);
               return `<div class="card-job-overview">
-                ${c.jobMatch.jobSummary ? `<div class="card-job-summary">${c.jobMatch.jobSummary}</div>` : ''}
+                ${c.jobMatch.jobSummary && (!c.jobTitle || !c.jobMatch.jobSummary.toLowerCase().startsWith(c.jobTitle.toLowerCase())) ? `<div class="card-job-summary">${c.jobMatch.jobSummary}</div>` : ''}
                 <div class="card-verdict-row">
                   <span class="card-verdict-badge ${v.cls}">${v.label}</span>
                   <span class="card-verdict-text">${c.jobMatch.verdict || ''}</span>
@@ -1453,7 +1453,7 @@ function renderKanbanCard(c) {
     <details class="kanban-details">
       <summary class="kanban-details-toggle">Company Intel</summary>
       <div class="kanban-details-body">
-        ${c.jobMatch?.jobSummary ? `<div class="kanban-detail-summary">${c.jobMatch.jobSummary}</div>` : ''}
+        ${c.jobMatch?.jobSummary && (!c.jobTitle || !c.jobMatch.jobSummary.toLowerCase().startsWith(c.jobTitle.toLowerCase())) ? `<div class="kanban-detail-summary">${c.jobMatch.jobSummary}</div>` : ''}
         ${c.jobMatch?.verdict ? `<div class="kanban-detail-verdict">${c.jobMatch.verdict}</div>` : ''}
         ${c.jobMatch?.strongFits?.length ? `<details class="card-analysis"><summary>Green Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div></details>` : ''}
         ${c.jobMatch?.redFlags?.length ? `<details class="card-analysis"><summary>Red Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div></details>` : ''}
@@ -1516,7 +1516,7 @@ function renderKanbanCard(c) {
           return `<span class="review-chip${warn ? ' review-warn' : ''}">${warn ? '\u26A0\uFE0F' : '\u2B50'} ${rating} ${ratingReview.source || 'Glassdoor'}</span>`;
         })() : '';
       })()}
-      ${c.oneLiner ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
+      ${c.oneLiner && c.jobTitle && !c.oneLiner.toLowerCase().startsWith(c.jobTitle.toLowerCase()) ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : c.oneLiner && !c.jobTitle ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
       <div class="card-tags" id="tags-${c.id}">
         ${(c.tags || []).map(tag => {
           const cl = tagColor(tag);
@@ -2056,7 +2056,8 @@ function bindKanbanEvents(board) {
           deltaY = 0;
           isSwiping = false;
           directionLocked = false;
-          card.setPointerCapture(e.pointerId);
+          // Don't capture pointer yet — wait until we confirm horizontal direction
+          // setPointerCapture blocks native HTML5 drag events
         });
 
         card.addEventListener('pointermove', e => {
@@ -2076,6 +2077,7 @@ function bindKanbanEvents(board) {
               return;
             }
             isSwiping = true;
+            card.setPointerCapture(e.pointerId); // capture now that we know it's a swipe
             card.classList.add('swiping');
           }
 
