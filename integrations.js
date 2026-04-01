@@ -452,6 +452,14 @@ function renderUsageTable(usage, alloc, integrations) {
   const container = document.getElementById('usage-table');
   if (!container) return;
 
+  const BILLING_URLS = {
+    anthropic: 'https://console.anthropic.com/settings/billing',
+    openai: 'https://platform.openai.com/settings/organization/billing/overview',
+    serper: 'https://serper.dev/dashboard',
+    apollo: 'https://app.apollo.io/#/settings/credits/current',
+    granola: null,
+  };
+
   const providers = [
     { id: 'anthropic', name: 'Anthropic', keyCheck: 'anthropic_key', type: 'ai' },
     { id: 'serper', name: 'Serper', keyCheck: 'serper_key', type: 'credit' },
@@ -469,13 +477,15 @@ function renderUsageTable(usage, alloc, integrations) {
     // Status dot + label
     let dotColor = 'gray', statusText = 'Idle', statusClass = 'gray';
     if (!configured) {
-      statusText = 'Not set';
+      statusText = 'No key'; statusClass = 'gray';
     } else if (pd.errors?.count401 > 0) {
       dotColor = 'red'; statusText = 'Auth error'; statusClass = 'red';
-    } else if (pd.errors?.count429 > 0) {
+    } else if (pd.errors?.count429 > 0 && pd.totalRequests > 0) {
       dotColor = 'yellow'; statusText = `${pd.errors.count429} retries`; statusClass = 'yellow';
     } else if (pd.totalRequests > 0) {
       dotColor = 'green'; statusText = 'Healthy'; statusClass = 'green';
+    } else if (configured) {
+      dotColor = 'green'; statusText = 'Ready'; statusClass = 'green';
     }
 
     // Credit-based status override
@@ -515,10 +525,13 @@ function renderUsageTable(usage, alloc, integrations) {
       if (pd.totalRequests > 0) details += 'Meeting notes & transcripts';
     }
 
-    if (!configured) details = '<span style="font-style:italic">(not configured)</span>';
+    if (!configured) details = '<span style="font-style:italic">No key configured</span>';
+
+    const billingUrl = BILLING_URLS[prov.id];
+    const billingLink = billingUrl ? `<a href="${billingUrl}" target="_blank" rel="noopener noreferrer" class="usage-billing-link" title="View billing dashboard">↗</a>` : '';
 
     html += `<div class="usage-row${dimmed}">
-      <div class="usage-provider">${prov.name}</div>
+      <div class="usage-provider">${prov.name} ${billingLink}</div>
       <div class="usage-counts">
         <span class="usage-count-today">${pd.requestsToday || 0} req</span>
         <span class="usage-count-total">${(pd.totalRequests || 0).toLocaleString()} total ${renderSparkline(pd.dailyHistory)}</span>
