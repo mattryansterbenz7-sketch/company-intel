@@ -1782,11 +1782,13 @@ function bindKanbanEvents(board) {
   board.querySelectorAll('.col-rescore-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const queueEntries = allCompanies.filter(c =>
-        c.isOpportunity && (c.jobStage || 'needs_review') === QUEUE_STAGE &&
-        !c.quickTake?.length && !c.jobMatch?.quickTake?.length
-      );
-      if (!queueEntries.length) { btn.textContent = '✓ All scored'; setTimeout(() => btn.textContent = '↻ Re-score', 2000); return; }
+      const queueEntries = allCompanies.filter(c => {
+        if (!c.isOpportunity || (c.jobStage || 'needs_review') !== QUEUE_STAGE) return false;
+        const hasQuickTake = c.quickTake?.length > 0 || c.jobMatch?.quickTake?.length > 0;
+        const hasHardDQ = c.hardDQ !== undefined || c.jobMatch?.hardDQ !== undefined;
+        return !(hasQuickTake && hasHardDQ); // skip if both exist
+      });
+      if (!queueEntries.length) { btn.textContent = '✓ All up to date'; setTimeout(() => btn.textContent = '↻ Re-score', 2000); return; }
 
       btn.disabled = true;
       let done = 0;
