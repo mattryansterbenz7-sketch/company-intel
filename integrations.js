@@ -413,115 +413,153 @@ function loadUsageDashboard() {
     chrome.storage.local.get(['apiCreditAllocations', 'integrations'], data => {
       const alloc = data.apiCreditAllocations || {};
       const integrations = data.integrations || {};
-      renderUsageCards(usage || {}, alloc, integrations);
+      renderUsageTable(usage || {}, alloc, integrations);
     });
   });
 }
 
 function renderSparkline(history) {
-  if (!history?.length) return '';
-  const max = Math.max(...history.map(d => d.requests), 1);
-  const w = 160, h = 28;
-  const points = history.map((d, i) => {
-    const x = (i / Math.max(history.length - 1, 1)) * w;
-    const y = h - (d.requests / max) * h;
+  if (!history?.length || history.length < 2) return '';
+  const last7 = history.slice(-7);
+  const max = Math.max(...last7.map(d => d.requests), 1);
+  const w = 40, h = 16;
+  const points = last7.map((d, i) => {
+    const x = (i / Math.max(last7.length - 1, 1)) * w;
+    const y = h - (d.requests / max) * (h - 2) - 1;
     return `${x},${y}`;
   }).join(' ');
-  return `<svg class="usage-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="#7c98b6" stroke-width="1.5"/></svg>`;
+  return `<svg class="usage-sparkline" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="#7c98b6" stroke-width="1.2"/></svg>`;
 }
 
 function formatTokens(n) {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
   return String(n);
 }
 
-function renderUsageCards(usage, alloc, integrations) {
-  const container = document.getElementById('usage-cards');
+function estimateAnthropicCost(pd) {
+  // Rough estimate: blend of Haiku (~$0.25/$1.25 per M) and Sonnet (~$3/$15 per M)
+  // Assume ~80% Haiku, 20% Sonnet based on typical usage
+  const inTok = pd.tokensToday?.input || 0;
+  const outTok = pd.tokensToday?.output || 0;
+  const costIn = inTok * (0.8 * 0.25 + 0.2 * 3) / 1000000;
+  const costOut = outTok * (0.8 * 1.25 + 0.2 * 15) / 1000000;
+  const total = costIn + costOut;
+  return total < 0.01 ? '<$0.01' : '$' + total.toFixed(2);
+}
+
+function renderUsageTable(usage, alloc, integrations) {
+  const container = document.getElementById('usage-table');
   if (!container) return;
 
   const providers = [
-    { id: 'anthropic', name: 'Anthropic', keyCheck: 'anthropic_key', isAI: true },
-    { id: 'openai', name: 'OpenAI', keyCheck: 'openai_key', isAI: true },
-    { id: 'serper', name: 'Serper', keyCheck: 'serper_key', isCredit: true },
-    { id: 'apollo', name: 'Apollo', keyCheck: 'apollo_key', isCredit: true },
-    { id: 'granola', name: 'Granola', keyCheck: 'granola_key' },
+    { id: 'anthropic', name: 'Anthropic', keyCheck: 'anthropic_key', type: 'ai' },
+    { id: 'serper', name: 'Serper', keyCheck: 'serper_key', type: 'credit' },
+    { id: 'apollo', name: 'Apollo', keyCheck: 'apollo_key', type: 'credit' },
+    { id: 'openai', name: 'OpenAI', keyCheck: 'openai_key', type: 'ai-fallback' },
+    { id: 'granola', name: 'Granola', keyCheck: 'granola_key', type: 'data' },
   ];
 
   let html = '';
   for (const prov of providers) {
-    const pd = usage[prov.id] || initProviderUsageView();
+    const pd = usage[prov.id] || { totalRequests: 0, requestsToday: 0, tokensToday: { input: 0, output: 0 }, lastRateLimit: {}, dailyHistory: [], errors: { count429: 0, count401: 0, countOther: 0 } };
     const configured = !!integrations[prov.keyCheck];
     const dimmed = !configured ? ' dimmed' : '';
 
-    let statLine = '';
-    let subLines = '';
-
-    if (prov.isAI) {
-      statLine = `${pd.requestsToday || 0} <span style="font-size:12px;font-weight:400;color:#7c98b6">today</span>`;
-      const tokIn = (pd.tokensToday?.input || 0);
-      const tokOut = (pd.tokensToday?.output || 0);
-      if (tokIn || tokOut) {
-        subLines += `<div class="usage-card-sub">${formatTokens(tokIn)} in / ${formatTokens(tokOut)} out tokens today</div>`;
-      }
-      subLines += `<div class="usage-card-sub">${pd.totalRequests || 0} total requests</div>`;
-      if (prov.id === 'anthropic' && pd.lastRateLimit?.requestsRemaining != null) {
-        const rl = pd.lastRateLimit;
-        subLines += `<div class="usage-card-sub">Rate limit: ${rl.requestsRemaining}/${rl.requestsLimit} req, ${formatTokens(rl.tokensRemaining || 0)}/${formatTokens(rl.tokensLimit || 0)} tok</div>`;
-      }
-    } else if (prov.isCredit) {
-      statLine = `${pd.totalRequests || 0} <span style="font-size:12px;font-weight:400;color:#7c98b6">credits used</span>`;
-      subLines += `<div class="usage-card-sub">${pd.requestsToday || 0} today</div>`;
-
-      // Progress bar if allocation set
-      const creditAlloc = alloc[prov.id];
-      if (creditAlloc && creditAlloc > 0) {
-        const pct = Math.min((pd.totalRequests || 0) / creditAlloc * 100, 100);
-        const color = pct >= 90 ? 'red' : pct >= 70 ? 'yellow' : 'green';
-        subLines += `<div class="usage-progress"><div class="usage-progress-bar ${color}" style="width:${pct}%"></div></div>`;
-        subLines += `<div class="usage-card-sub">${pd.totalRequests || 0} / ${creditAlloc} allocated</div>`;
-      }
-      subLines += `<div style="margin-top:4px"><label class="usage-card-sub">Credit limit: </label><input class="usage-alloc-input" type="number" min="0" data-provider="${prov.id}" value="${alloc[prov.id] || ''}" placeholder="e.g. 2500"></div>`;
-    } else {
-      statLine = `${pd.totalRequests || 0} <span style="font-size:12px;font-weight:400;color:#7c98b6">requests</span>`;
-      subLines += `<div class="usage-card-sub">${pd.requestsToday || 0} today</div>`;
+    // Status dot + label
+    let dotColor = 'gray', statusText = 'Idle', statusClass = 'gray';
+    if (!configured) {
+      statusText = 'Not set';
+    } else if (pd.errors?.count401 > 0) {
+      dotColor = 'red'; statusText = 'Auth error'; statusClass = 'red';
+    } else if (pd.errors?.count429 > 0) {
+      dotColor = 'yellow'; statusText = `${pd.errors.count429} retries`; statusClass = 'yellow';
+    } else if (pd.totalRequests > 0) {
+      dotColor = 'green'; statusText = 'Healthy'; statusClass = 'green';
     }
 
-    // Error counts
-    let errHtml = '';
-    if (pd.errors?.count429 > 0) errHtml += `<div class="usage-card-warn">${pd.errors.count429} rate limits (429)</div>`;
-    if (pd.errors?.count401 > 0) errHtml += `<div class="usage-card-err">${pd.errors.count401} auth errors (401/403)</div>`;
-    if (pd.errors?.countOther > 0) errHtml += `<div class="usage-card-sub">${pd.errors.countOther} other errors</div>`;
+    // Credit-based status override
+    const creditAlloc = alloc[prov.id];
+    if (prov.type === 'credit' && creditAlloc > 0 && configured) {
+      const pct = Math.round((pd.totalRequests || 0) / creditAlloc * 100);
+      if (pct >= 90) { dotColor = 'red'; statusText = `${pct}% used`; statusClass = 'red'; }
+      else if (pct >= 70) { dotColor = 'yellow'; statusText = `${pct}% used`; statusClass = 'yellow'; }
+      else if (pd.totalRequests > 0) { dotColor = 'green'; statusText = `${pct}% used`; statusClass = 'green'; }
+    }
 
-    html += `<div class="usage-card${dimmed}">
-      <div class="usage-card-name">${prov.name}</div>
-      <div class="usage-card-stat">${statLine}</div>
-      ${subLines}
-      ${errHtml}
-      ${renderSparkline(pd.dailyHistory)}
+    // Details
+    let details = '';
+    if (prov.type === 'ai') {
+      const tokIn = pd.tokensToday?.input || 0;
+      const tokOut = pd.tokensToday?.output || 0;
+      if (tokIn || tokOut) {
+        details += `${formatTokens(tokIn)} in · ${formatTokens(tokOut)} out today`;
+        details += ` · <span class="usage-cost">Est. ${estimateAnthropicCost(pd)}</span>`;
+      }
+      if (pd.lastRateLimit?.tokensRemaining != null) {
+        details += `<br>Rate: ${formatTokens(pd.lastRateLimit.tokensRemaining)}/${formatTokens(pd.lastRateLimit.tokensLimit || 0)} tokens/min`;
+      }
+    } else if (prov.type === 'credit') {
+      if (creditAlloc > 0) {
+        const pct = Math.min((pd.totalRequests || 0) / creditAlloc * 100, 100);
+        const barColor = pct >= 90 ? 'red' : pct >= 70 ? 'yellow' : 'green';
+        details += `<div class="usage-progress"><div class="usage-progress-bar ${barColor}" style="width:${pct}%"></div></div>`;
+        details += `${pd.totalRequests || 0} / <span class="usage-alloc-link" data-provider="${prov.id}">${creditAlloc.toLocaleString()}</span> credits`;
+      } else if (configured) {
+        details += `<span class="usage-alloc-link" data-provider="${prov.id}">Set credit limit</span>`;
+      }
+    } else if (prov.type === 'ai-fallback') {
+      details += 'Fallback provider';
+      if (pd.errors?.count429 > 0) details += ` · ${pd.errors.count429} rate limits retried via chain`;
+    } else if (prov.type === 'data') {
+      if (pd.totalRequests > 0) details += 'Meeting notes & transcripts';
+    }
+
+    if (!configured) details = '<span style="font-style:italic">(not configured)</span>';
+
+    html += `<div class="usage-row${dimmed}">
+      <div class="usage-provider">${prov.name}</div>
+      <div class="usage-counts">
+        <span class="usage-count-today">${pd.requestsToday || 0} req</span>
+        <span class="usage-count-total">${(pd.totalRequests || 0).toLocaleString()} total ${renderSparkline(pd.dailyHistory)}</span>
+      </div>
+      <div class="usage-status"><span class="usage-dot ${dotColor}"></span><span class="usage-status-text ${statusClass}">${statusText}</span></div>
+      <div class="usage-details">${details}</div>
     </div>`;
   }
 
   container.innerHTML = html;
 
-  // Bind allocation input handlers
-  container.querySelectorAll('.usage-alloc-input').forEach(input => {
-    const handler = () => {
-      const val = parseInt(input.value) || 0;
-      chrome.runtime.sendMessage({ type: 'SET_CREDIT_ALLOCATION', provider: input.dataset.provider, credits: val });
-    };
-    input.addEventListener('blur', handler);
-    input.addEventListener('change', handler);
+  // Inline credit allocation edit
+  container.querySelectorAll('.usage-alloc-link').forEach(link => {
+    link.addEventListener('click', () => {
+      const prov = link.dataset.provider;
+      const current = alloc[prov] || '';
+      const input = document.createElement('input');
+      input.className = 'usage-alloc-input';
+      input.type = 'number';
+      input.min = '0';
+      input.value = current;
+      input.placeholder = 'e.g. 2500';
+      link.replaceWith(input);
+      input.focus();
+      input.select();
+      const save = () => {
+        const val = parseInt(input.value) || 0;
+        alloc[prov] = val;
+        chrome.runtime.sendMessage({ type: 'SET_CREDIT_ALLOCATION', provider: prov, credits: val }, () => {
+          loadUsageDashboard(); // re-render with new allocation
+        });
+      };
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { save(); input.blur(); } });
+    });
   });
-}
 
-function initProviderUsageView() {
-  return {
-    totalRequests: 0, totalInputTokens: 0, totalOutputTokens: 0,
-    requestsToday: 0, tokensToday: { input: 0, output: 0 },
-    lastRequestAt: null, lastRateLimit: {},
-    dailyHistory: [], errors: { count429: 0, count401: 0, countOther: 0 }
-  };
+  // Reset button
+  document.getElementById('usage-reset-btn')?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'RESET_API_USAGE' }, () => loadUsageDashboard());
+  });
 }
 
 // ── Boot ──

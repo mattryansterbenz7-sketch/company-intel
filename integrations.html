@@ -67,30 +67,42 @@
     .oauth-disconnect:hover { background: rgba(229,72,59,0.06); }
     .oauth-note { font-size: 12px; color: #7c98b6; line-height: 1.5; margin-top: 6px; }
 
-    /* Usage dashboard */
-    .usage-section { margin-bottom: 32px; }
-    .usage-title { font-size: 16px; font-weight: 700; color: #2d3e50; margin-bottom: 14px; }
-    .usage-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-    .usage-card {
-      background: #fff; border: 1px solid #e8e5e0; border-radius: 10px; padding: 14px;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .usage-card.dimmed { opacity: 0.4; }
-    .usage-card-name { font-size: 12px; font-weight: 700; color: #516f90; text-transform: uppercase; letter-spacing: 0.05em; }
-    .usage-card-stat { font-size: 20px; font-weight: 800; color: #2d3e50; }
-    .usage-card-sub { font-size: 11px; color: #7c98b6; line-height: 1.5; }
-    .usage-card-warn { font-size: 11px; color: #d97706; font-weight: 600; }
-    .usage-card-err { font-size: 11px; color: #e5483b; font-weight: 600; }
-    .usage-progress { height: 4px; background: #eaf0f6; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+    /* Usage dashboard — compact table layout */
+    .usage-section { margin-bottom: 28px; background: #f8fafc; border: 1px solid #eaf0f6; border-radius: 10px; padding: 16px 20px; }
+    .usage-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .usage-title { font-size: 13px; font-weight: 700; color: #516f90; text-transform: uppercase; letter-spacing: 0.06em; }
+    .usage-reset-btn { font-size: 11px; color: #7c98b6; background: none; border: 1px solid #dfe3eb; border-radius: 5px; padding: 3px 10px; cursor: pointer; font-family: inherit; }
+    .usage-reset-btn:hover { border-color: #e5483b; color: #e5483b; }
+    .usage-table { width: 100%; }
+    .usage-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-top: 1px solid #eaf0f6; }
+    .usage-row:first-child { border-top: none; }
+    .usage-row.dimmed { opacity: 0.35; }
+    .usage-provider { width: 80px; font-size: 12px; font-weight: 700; color: #2d3e50; flex-shrink: 0; padding-top: 1px; }
+    .usage-counts { width: 120px; flex-shrink: 0; display: flex; gap: 12px; font-size: 12px; }
+    .usage-count-today { font-weight: 700; color: #2d3e50; white-space: nowrap; }
+    .usage-count-total { color: #7c98b6; white-space: nowrap; }
+    .usage-status { width: 100px; flex-shrink: 0; display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; }
+    .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .usage-dot.green { background: #22c55e; }
+    .usage-dot.yellow { background: #eab308; }
+    .usage-dot.red { background: #ef4444; }
+    .usage-dot.gray { background: #b0c1d4; }
+    .usage-status-text { white-space: nowrap; }
+    .usage-status .green { color: #15803d; }
+    .usage-status .yellow { color: #a16207; }
+    .usage-status .red { color: #b91c1c; }
+    .usage-status .gray { color: #7c98b6; }
+    .usage-details { flex: 1; min-width: 0; font-size: 11px; color: #7c98b6; line-height: 1.6; }
+    .usage-progress { height: 3px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin: 4px 0 2px; max-width: 200px; }
     .usage-progress-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
     .usage-progress-bar.green { background: #22c55e; }
     .usage-progress-bar.yellow { background: #eab308; }
     .usage-progress-bar.red { background: #ef4444; }
-    .usage-alloc-input {
-      width: 80px; border: 1px solid #dfe3eb; border-radius: 4px; padding: 3px 6px;
-      font-size: 11px; font-family: inherit; color: #33475b;
-    }
-    .usage-sparkline { height: 30px; margin-top: 6px; }
+    .usage-alloc-link { color: #7c98b6; cursor: pointer; border-bottom: 1px dashed #b0c1d4; font-size: 11px; }
+    .usage-alloc-link:hover { color: #FF7A59; border-color: #FF7A59; }
+    .usage-alloc-input { width: 60px; border: 1px solid #dfe3eb; border-radius: 3px; padding: 1px 4px; font-size: 11px; font-family: inherit; color: #33475b; }
+    .usage-sparkline { display: inline-block; vertical-align: middle; margin-left: 4px; }
+    .usage-cost { color: #516f90; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -108,8 +120,11 @@
   <div class="page-subtitle">Connect your data sources and API keys. CompanyIntel uses these to research companies, score job postings, and surface your email and meeting context.</div>
 
   <div class="usage-section" id="usage-section">
-    <h2 class="usage-title">API Usage</h2>
-    <div class="usage-cards" id="usage-cards"></div>
+    <div class="usage-header">
+      <span class="usage-title">API Usage</span>
+      <button class="usage-reset-btn" id="usage-reset-btn">Reset counters</button>
+    </div>
+    <div class="usage-table" id="usage-table"></div>
   </div>
 
   <div id="providers-container"></div>
