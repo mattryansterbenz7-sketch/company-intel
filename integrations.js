@@ -431,7 +431,7 @@ function loadUsageDashboard() {
 }
 
 function renderSparkline(history) {
-  if (!history?.length || history.length < 2) return '';
+  if (!history?.length || history.length < 3) return '';
   const last7 = history.slice(-7);
   const max = Math.max(...last7.map(d => d.requests), 1);
   const w = 40, h = 16;
