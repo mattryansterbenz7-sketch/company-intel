@@ -400,6 +400,7 @@ async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
 }
 
 const photoCache = {}; // in-memory, per service worker lifetime
+const photoPending = {}; // dedup in-flight photo fetches
 let _apolloExhausted = false;
 let _serperExhausted = false;
 
@@ -418,7 +419,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'GET_LEADER_PHOTOS') {
     const { leaders, company } = message;
-    Promise.all(leaders.map(l => fetchLeaderPhoto(l.name, `"${company}"`))).then(photos => {
+    // Cap at 3 leaders to save Serper image credits
+    const capped = leaders.slice(0, 3);
+    Promise.all(capped.map(l => {
+      // Prefer existing thumbnail from LinkedIn search results (free, no API call)
+      if (l.photoUrl || l.thumbnailUrl) return Promise.resolve(l.photoUrl || l.thumbnailUrl);
+      return fetchLeaderPhoto(l.name, `"${company}"`);
+    })).then(photos => {
+      // Fill remaining leaders with null (they'll get initials circles)
+      while (photos.length < leaders.length) photos.push(null);
       sendResponse(photos);
     });
     return true;
@@ -1400,20 +1409,30 @@ async function fetchApolloData(domain, companyName) {
 async function fetchLeaderPhoto(name, company) {
   const cacheKey = `${name}|${company}`;
   if (photoCache[cacheKey] !== undefined) return photoCache[cacheKey];
-  try {
-    const res = await fetch('https://google.serper.dev/images', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-KEY': SERPER_KEY },
-      body: JSON.stringify({ q: name + ' ' + company, num: 1 })
-    });
-    const data = await res.json();
-    const photoUrl = data.images?.[0]?.thumbnailUrl || null;
-    photoCache[cacheKey] = photoUrl;
-    return photoUrl;
-  } catch {
-    photoCache[cacheKey] = null;
-    return null;
-  }
+  // Dedup: if a fetch for the same key is already in-flight, reuse its promise
+  if (photoPending[cacheKey]) return photoPending[cacheKey];
+  if (!SERPER_KEY || _serperExhausted) { photoCache[cacheKey] = null; return null; }
+
+  photoPending[cacheKey] = (async () => {
+    try {
+      const res = await fetch('https://google.serper.dev/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': SERPER_KEY },
+        body: JSON.stringify({ q: name + ' ' + company, num: 1 })
+      });
+      const data = await res.json();
+      const photoUrl = data.images?.[0]?.thumbnailUrl || null;
+      photoCache[cacheKey] = photoUrl;
+      return photoUrl;
+    } catch {
+      photoCache[cacheKey] = null;
+      return null;
+    } finally {
+      delete photoPending[cacheKey];
+    }
+  })();
+
+  return photoPending[cacheKey];
 }
 
 async function fetchSerperResults(query, num = 5) {
