@@ -146,6 +146,9 @@
     }
     .hub-tab:hover { color: #33475b; }
     .hub-tab.active { color: #33475b; border-bottom-color: #ff7a59; }
+    .hub-tab.drag-over { border-bottom-color: #2d3e50; background: rgba(45,62,80,0.06); }
+    .hub-tab[draggable="true"] { cursor: grab; }
+    .hub-tab[draggable="true"]:active { cursor: grabbing; }
     .hub-pane { display: none; padding: 20px 24px; overflow-y: auto; flex: 1; }
     .hub-pane.active { display: block; }
     .hub-intel-block { margin-bottom: 0; }

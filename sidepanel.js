@@ -724,11 +724,12 @@ function startJobDescriptionFlow(tabId) {
       renderJobSnapshot(descResponse.jobMeta);
     }
 
-    // Render saved match if available, otherwise show location match while scoring runs
+    // Render saved match if available, otherwise show location/meta only (no loading spinner)
     if (currentSavedEntry?.jobMatch) {
       renderJobOpportunity(currentSavedEntry.jobMatch, currentSavedEntry.jobSnapshot || descResponse.jobMeta || currentJobMeta || null);
-    } else {
-      renderJobOpportunity(null, descResponse.jobMeta || currentJobMeta || null);
+    } else if (descResponse.jobMeta || currentJobMeta) {
+      // Show job meta (location, salary) without the analysis spinner
+      renderJobOpportunity('pending', descResponse.jobMeta || currentJobMeta || null);
     }
 
     // Store description for use in save + chat context
@@ -740,13 +741,9 @@ function startJobDescriptionFlow(tabId) {
         renderJobOpportunity(currentSavedEntry.jobMatch, currentSavedEntry.jobSnapshot || descResponse.jobMeta || currentJobMeta || null);
         return;
       }
-      // Skip auto-scoring for unsaved job postings — only score after explicit save
-      if (!currentSavedEntry) {
-        console.log('[SP] Unsaved job posting — skipping auto ANALYZE_JOB');
-        return;
-      }
-      const run = (prefs) => { currentPrefs = currentPrefs || prefs; triggerJobAnalysis(companyNameEl.textContent, descResponse.jobDescription); };
-      if (currentPrefs) { run(currentPrefs); } else { loadPrefsWithMigration((prefs) => run(prefs || null)); }
+      // Never auto-trigger job analysis — only runs via explicit research or save+research
+      console.log('[SP] Skipping auto ANALYZE_JOB — user must click Research');
+      return;
     }
   });
 }
@@ -1207,10 +1204,46 @@ async function triggerResearch(company, forceRefresh = false) {
     return;
   }
 
-  // For unsaved job postings, skip research on page load — user must click "Save + research now"
-  // checkAlreadySaved runs async and will set currentSavedEntry + render saved data if it exists
-  if (currentJobTitle && !forceRefresh) {
-    console.log('[SP] Job posting detected — skipping auto-research for unsaved entry');
+  // Check if auto-research is enabled in pipeline config
+  const { pipelineConfig: pc } = await new Promise(r => chrome.storage.local.get(['pipelineConfig'], r));
+  const autoResearch = pc?.scoring?.autoResearch || false;
+
+  if (!forceRefresh && !autoResearch) {
+    console.log('[SP] Skipping auto-research — user must click Research button');
+    // Show what we have (cached data, LinkedIn firmographics, or empty state with research button)
+    chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
+      const cacheKey = company.toLowerCase().replace(/[,;:!?.]+$/, '').trim();
+      const cached = researchCache?.[cacheKey];
+      const CACHE_TTL = 24 * 60 * 60 * 1000;
+      if (cached && Date.now() - cached.ts < CACHE_TTL) {
+        currentResearch = cached.data;
+        renderResults(cached.data);
+      } else if (detectedLinkedinFirmo) {
+        // Show LinkedIn firmographics as a lightweight overview
+        renderQuickData({
+          employees: detectedLinkedinFirmo.employees,
+          industry: detectedLinkedinFirmo.industry,
+        });
+      }
+      // Always show the research button
+      const loader = document.getElementById('research-loader');
+      if (loader) loader.remove();
+      const existingBtn = document.getElementById('sp-research-btn');
+      if (!existingBtn) {
+        const btn = document.createElement('button');
+        btn.id = 'sp-research-btn';
+        btn.className = 'sp-chat-launch-btn';
+        btn.style.cssText = 'margin:12px 0;width:100%';
+        btn.innerHTML = cached ? '↻ Refresh research' : '&#128270; Research this company';
+        btn.addEventListener('click', () => {
+          btn.disabled = true;
+          btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">&#128270; Researching...<span class="sp-research-spin">&#8635;</span></span>';
+          btn.style.opacity = '0.7';
+          triggerResearch(company, true);
+        });
+        contentEl.appendChild(btn);
+      }
+    });
     return;
   }
 
@@ -1795,11 +1828,12 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
     }
   }
 
-  const hasMatch = !!(jobMatch);
+  const isPending = jobMatch === 'pending';
+  const hasMatch = !!(jobMatch && jobMatch !== 'pending');
   const v = hasMatch ? scoreToVerdict(jobMatch.score) : null;
 
-  // If no data yet, show loading state
-  if (!locationMatchHtml && !hasMatch) {
+  // If no data and not pending, show loading state
+  if (!locationMatchHtml && !hasMatch && !isPending) {
     jobOpportunityEl.innerHTML = `
       <details class="jopp-dropdown">
         <summary class="jopp-summary">
@@ -1826,6 +1860,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
         ${locationMatchHtml}
         ${(jobSnapshot?.salary || currentJobMeta?.salary) ? `<div class="salary-display"><span class="salary-label">${jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base Salary'}</span><span class="salary-value">${jobSnapshot?.salary || currentJobMeta?.salary}</span></div>` : ''}
         ${(jobSnapshot?.perks?.length || currentJobMeta?.perks?.length) ? `<div class="perks-display">${(jobSnapshot?.perks || currentJobMeta?.perks || []).map(p => `<span class="perk-chip">🎁 ${p}</span>`).join('')}</div>` : ''}
+        ${isPending && !hasMatch ? '<div style="font-size:11px;color:#7c98b6;margin:8px 0;line-height:1.5">Click <b>Research this company</b> below for full fit analysis with score, green flags, and red flags.</div>' : ''}
         ${hasMatch && jobMatch.jobSummary ? `<div class="job-summary">${jobMatch.jobSummary}</div>` : ''}
         ${hasMatch ? (() => {
           const fb = currentResearch?.matchFeedback;

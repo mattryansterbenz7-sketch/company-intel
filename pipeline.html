@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>CompanyIntel — Data Pipeline</title>
+  <title>CompanyIntel — Pipeline & Usage</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f8fa; color: #33475b; min-height: 100vh; font-size: 14px; }
@@ -64,12 +64,86 @@
     .pipeline-count-label { font-size: 12px; color: #33475b; }
     .pipeline-cascade-arrow { text-align: center; font-size: 10px; color: #b0c1d4; padding: 2px 0; }
     .pipeline-warn { font-size: 11px; color: #d97706; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 6px; padding: 6px 10px; margin-top: 8px; }
+
+    /* ── Status dots ── */
+    .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; flex-shrink: 0; }
+    .status-dot.healthy { background: #22c55e; }
+    .status-dot.exhausted { background: #ef4444; }
+    .status-dot.nokey { background: #9ca3af; }
+    .status-label { font-size: 10px; color: #7c98b6; margin-right: 6px; }
+
+    /* ── Cost badge: free ── */
+    .pipeline-cost.free { background: #e0f2fe; color: #0369a1; }
+
+    /* ── Photo scope radios ── */
+    .photo-scope-radios { display: flex; gap: 14px; flex-wrap: wrap; }
+    .photo-scope-label { font-size: 12px; color: #33475b; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .photo-scope-label input { accent-color: #FF7A59; }
+
+    /* ── Pipeline Overview ── */
+    .flow-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .flow-label { font-size: 12px; font-weight: 600; color: #516f90; min-width: 90px; flex-shrink: 0; }
+    .flow-chain { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .flow-pill { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #2d3e50; background: #f0f4f8; border: 1px solid #dfe3eb; border-radius: 12px; padding: 3px 10px; white-space: nowrap; }
+    .flow-arrow { color: #b0c1d4; font-size: 12px; }
+    .pipeline-overview-select { font-size: 11px; border: 1px solid #dfe3eb; border-radius: 12px; padding: 3px 8px; font-family: inherit; color: #33475b; background: #fff; }
+    .cost-estimate { background: #f8fafc; border: 1px solid #eaf0f6; border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
+    .cost-row { font-size: 11px; color: #516f90; line-height: 1.8; }
+    .cost-note { font-size: 11px; color: #d97706; margin-top: 4px; }
+
+    /* ── API Usage Dashboard ── */
+    .usage-section { margin-top: 8px; background: #f8fafc; border: 1px solid #eaf0f6; border-radius: 10px; padding: 16px 20px; }
+    .usage-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+    .usage-title { font-size: 14px; font-weight: 700; color: #2d3e50; }
+    .usage-controls { display: flex; align-items: center; gap: 6px; }
+    .usage-period-btn { font-size: 11px; color: #7c98b6; background: none; border: 1px solid #dfe3eb; border-radius: 5px; padding: 3px 10px; cursor: pointer; font-family: inherit; transition: all 0.12s; }
+    .usage-period-btn:hover { border-color: #7c98b6; color: #2d3e50; }
+    .usage-period-btn.active { background: #2d3e50; color: #fff; border-color: #2d3e50; }
+    .usage-date-input { font-size: 11px; border: 1px solid #dfe3eb; border-radius: 5px; padding: 3px 6px; font-family: inherit; color: #33475b; }
+    .usage-reset-btn { font-size: 11px; color: #7c98b6; background: none; border: 1px solid #dfe3eb; border-radius: 5px; padding: 3px 10px; cursor: pointer; font-family: inherit; }
+    .usage-reset-btn:hover { border-color: #e5483b; color: #e5483b; }
+    .usage-table { width: 100%; }
+    .usage-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid #eaf0f6; }
+    .usage-row:first-child { border-top: none; }
+    .usage-row.dimmed { opacity: 0.35; }
+    .usage-provider { width: 90px; font-size: 12px; font-weight: 700; color: #2d3e50; flex-shrink: 0; padding-top: 1px; }
+    .usage-billing-link { color: #b0c1d4; text-decoration: none; font-size: 11px; font-weight: 400; margin-left: 2px; }
+    .usage-billing-link:hover { color: #FF7A59; }
+    .usage-counts { width: 130px; flex-shrink: 0; font-size: 12px; }
+    .usage-count-primary { font-weight: 700; color: #2d3e50; }
+    .usage-count-secondary { color: #7c98b6; font-size: 11px; }
+    .usage-status { width: 100px; flex-shrink: 0; display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; }
+    .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .usage-dot.green { background: #22c55e; }
+    .usage-dot.yellow { background: #eab308; }
+    .usage-dot.red { background: #ef4444; }
+    .usage-dot.gray { background: #b0c1d4; }
+    .usage-status-text { white-space: nowrap; }
+    .usage-status .green { color: #15803d; }
+    .usage-status .yellow { color: #a16207; }
+    .usage-status .red { color: #b91c1c; }
+    .usage-status .gray { color: #7c98b6; }
+    .usage-details { flex: 1; min-width: 0; font-size: 11px; color: #7c98b6; line-height: 1.6; }
+    .usage-progress { height: 3px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin: 4px 0 2px; max-width: 200px; }
+    .usage-progress-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
+    .usage-progress-bar.green { background: #22c55e; }
+    .usage-progress-bar.yellow { background: #eab308; }
+    .usage-progress-bar.red { background: #ef4444; }
+    .usage-alloc-link { color: #7c98b6; cursor: pointer; border-bottom: 1px dashed #b0c1d4; font-size: 11px; }
+    .usage-alloc-link:hover { color: #FF7A59; border-color: #FF7A59; }
+    .usage-alloc-input { width: 60px; border: 1px solid #dfe3eb; border-radius: 3px; padding: 1px 4px; font-size: 11px; font-family: inherit; color: #33475b; }
+    .usage-sparkline { display: inline-block; vertical-align: middle; margin-left: 4px; }
+    .usage-cost { color: #516f90; font-weight: 600; }
+    .usage-total-bar { margin-top: 14px; padding-top: 12px; border-top: 1px solid #eaf0f6; display: flex; gap: 20px; font-size: 12px; }
+    .usage-total-item { display: flex; flex-direction: column; }
+    .usage-total-label { color: #7c98b6; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .usage-total-value { font-weight: 700; color: #2d3e50; font-size: 14px; }
   </style>
 </head>
 <body>
 
 <div class="header">
-  <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Data Pipeline</span></a>
+  <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Pipeline & Usage</span></a>
   <a class="header-back" href="saved.html">&larr; Back to Saved</a>
 </div>
 
@@ -78,7 +152,7 @@
     <div class="settings-nav">
       <a class="settings-nav-item" href="preferences.html">Career OS</a>
       <a class="settings-nav-item" href="integrations.html">Integrations</a>
-      <a class="settings-nav-item active" href="pipeline.html">Data Pipeline</a>
+      <a class="settings-nav-item active" href="pipeline.html">Pipeline & Usage</a>
       <div class="settings-nav-divider"></div>
       <a class="settings-nav-item" href="docs.html" target="_blank">Documentation</a>
     </div>
@@ -89,6 +163,7 @@
       <div class="page-title">Data Pipeline</div>
       <div class="page-subtitle">Control how CompanyIntel researches companies, scores jobs, and routes AI tasks.</div>
       <div id="pipeline-body"></div>
+      <div id="usage-container"></div>
     </div>
 
   </div><!-- /.settings-content -->

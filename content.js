@@ -1328,6 +1328,216 @@ function extractDomain() {
 if (typeof _ciSidebarToggle === 'undefined') var _ciSidebarToggle = null;
 function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
 
+// ── "Send to Coop" Button — injected on LinkedIn job pages ───────────────────
+
+let _scoopInjected = false;
+let _scoopObserver = null;
+
+function injectCoopButton() {
+  if (_scoopInjected) return;
+  if (!/linkedin\.com\/jobs\//.test(window.location.href)) return;
+
+  // Find the button container (where Apply, Save, LoopCV buttons live)
+  const containers = [
+    '.jobs-apply-button--top-card',              // New layout
+    '.jobs-s-apply',                              // Older layout
+    '.job-details-jobs-unified-top-card__container .mt2', // Unified card
+    '.jobs-unified-top-card__content--two-pane .mt2',
+  ];
+  let actionBar = null;
+  for (const sel of containers) {
+    actionBar = document.querySelector(sel);
+    if (actionBar) break;
+  }
+  // Fallback: find the parent of the Apply button
+  if (!actionBar) {
+    const applyBtn = document.querySelector(
+      'button[aria-label*="Apply"], button.jobs-apply-button, .jobs-apply-button--top-card button'
+    );
+    if (applyBtn) actionBar = applyBtn.parentElement;
+  }
+  if (!actionBar) return;
+
+  // Don't inject twice
+  if (document.getElementById('coop-scoop-btn')) { _scoopInjected = true; return; }
+
+  const btn = document.createElement('button');
+  btn.id = 'coop-scoop-btn';
+  btn.type = 'button';
+
+  // Coop mini avatar (18px) — simplified inline SVG
+  const coopFace = typeof COOP !== 'undefined' ? COOP.avatar(18) : '';
+
+  btn.innerHTML = `${coopFace}<span style="margin-left:4px">Send to Coop</span>`;
+  btn.title = 'Save to CompanyIntel + score with Coop';
+
+  // Style to match LinkedIn's pill buttons
+  Object.assign(btn.style, {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    gap: '0', padding: '0 16px', height: '36px',
+    border: '1px solid #FF7A59', borderRadius: '24px',
+    background: '#fff', color: '#FF7A59',
+    fontSize: '14px', fontWeight: '600', fontFamily: 'inherit',
+    cursor: 'pointer', transition: 'all 0.15s',
+    marginLeft: '8px', verticalAlign: 'middle', lineHeight: '1',
+    whiteSpace: 'nowrap', flexShrink: '0',
+  });
+
+  btn.addEventListener('mouseenter', () => {
+    btn.style.background = '#FF7A59'; btn.style.color = '#fff';
+  });
+  btn.addEventListener('mouseleave', () => {
+    if (!btn.classList.contains('scooped')) {
+      btn.style.background = '#fff'; btn.style.color = '#FF7A59';
+    }
+  });
+
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sending...</span>`;
+
+    try {
+      // Detect company + job from page
+      const detected = await detectCompanyAndJob();
+      const company = detected?.company || 'Unknown';
+      const jobTitle = detected?.jobTitle || null;
+
+      // Extract job description
+      const descData = await extractJobDescriptionForPanel();
+      const jobDescription = descData?.description || null;
+
+      // Extract LinkedIn firmographics if available
+      const firmo = detected?.linkedinFirmo || null;
+      const jobMeta = detected?.jobMeta || null;
+
+      // Check if already saved
+      const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+      const existing = savedCompanies || [];
+      const dup = existing.find(c => {
+        const nameMatch = c.company && company && c.company.toLowerCase().replace(/[^a-z0-9]/g,'') === company.toLowerCase().replace(/[^a-z0-9]/g,'');
+        const titleMatch = !jobTitle || !c.jobTitle || c.jobTitle.toLowerCase().includes(jobTitle.toLowerCase().slice(0, 20));
+        return nameMatch && titleMatch && c.isOpportunity;
+      });
+
+      if (dup) {
+        btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
+        btn.classList.add('scooped');
+        btn.style.background = '#f0f0f0'; btn.style.color = '#999'; btn.style.borderColor = '#ddd';
+        return;
+      }
+
+      // Build entry
+      const companyLinkedin = /linkedin\.com\/company\//i.test(window.location.href) ? window.location.href : (detected?.companyLinkedinUrl || null);
+      const snap = jobMeta || null;
+      const entry = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        type: 'company',
+        company,
+        savedAt: Date.now(),
+        notes: '',
+        rating: null,
+        tags: ['Job Posted', 'Sent to Coop'],
+        url: null,
+        employees: firmo?.employees || null,
+        industry: firmo?.industry || null,
+        companyWebsite: null,
+        companyLinkedin,
+        linkedinFirmo: firmo || null,
+        status: 'co_watchlist',
+        isOpportunity: true,
+        jobStage: 'needs_review',
+        jobTitle,
+        jobUrl: window.location.href,
+        jobDescription,
+        jobSnapshot: snap,
+        baseSalaryRange: snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,
+        oteTotalComp: snap?.oteTotalComp || (snap?.salaryType === 'ote' ? snap?.salary : null) || null,
+        equity: snap?.equity || null,
+        easyApply: detected?.easyApply || false,
+      };
+
+      // Save
+      await new Promise(r => chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, r));
+
+      // Queue for scoring
+      chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
+
+      // Success state
+      btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
+      btn.classList.add('scooped');
+      btn.style.background = '#FF7A59'; btn.style.color = '#fff'; btn.style.borderColor = '#FF7A59';
+
+      // Subtle bounce
+      btn.style.transform = 'scale(1.05)';
+      setTimeout(() => { btn.style.transform = 'scale(1)'; }, 200);
+
+    } catch (err) {
+      console.error('[Coop] Save error:', err);
+      btn.innerHTML = `${coopFace}<span style="margin-left:4px">Error</span>`;
+      btn.disabled = false;
+    }
+  });
+
+  actionBar.appendChild(btn);
+  _scoopInjected = true;
+
+  // Check if already saved on inject
+  checkCoopStatus(btn, coopFace);
+}
+
+async function checkCoopStatus(btn, coopFace) {
+  try {
+    const detected = await detectCompanyAndJob();
+    const company = detected?.company;
+    const jobTitle = detected?.jobTitle;
+    if (!company) return;
+    const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+    const dup = (savedCompanies || []).find(c => {
+      if (!c.company) return false;
+      const nameMatch = c.company.toLowerCase().replace(/[^a-z0-9]/g,'') === company.toLowerCase().replace(/[^a-z0-9]/g,'');
+      return nameMatch && c.isOpportunity;
+    });
+    if (dup) {
+      btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
+      btn.classList.add('scooped');
+      btn.style.background = '#f0f0f0'; btn.style.color = '#999'; btn.style.borderColor = '#ddd';
+      btn.disabled = true;
+    }
+  } catch {}
+}
+
+// Watch for LinkedIn SPA navigation and job panel changes
+function watchForCoopInjection() {
+  // Initial attempt
+  setTimeout(injectCoopButton, 1500);
+
+  // Re-inject on SPA navigation (LinkedIn is a SPA)
+  let lastUrl = window.location.href;
+  _scoopObserver = new MutationObserver(() => {
+    if (window.location.href !== lastUrl) {
+      lastUrl = window.location.href;
+      _scoopInjected = false;
+      const old = document.getElementById('coop-scoop-btn');
+      if (old) old.remove();
+      if (/linkedin\.com\/jobs\//.test(lastUrl)) {
+        setTimeout(injectCoopButton, 1500);
+      }
+    }
+    // Also re-try if button container appeared but our button isn't there yet
+    if (!_scoopInjected && /linkedin\.com\/jobs\//.test(window.location.href)) {
+      injectCoopButton();
+    }
+  });
+  _scoopObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+// Boot scoop injection on LinkedIn
+if (/linkedin\.com/.test(window.location.hostname)) {
+  watchForCoopInjection();
+}
+
 (function initFloatingSidebar() {
   // Don't inject on extension pages
   if (window.location.protocol === 'chrome-extension:') return;

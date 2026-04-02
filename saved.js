@@ -256,7 +256,7 @@ function setColViewMode(stageKey, mode) {
 }
 
 function renderCompactCard(c) {
-  const score = c.quickFitScore ?? c.jobMatch?.score ?? null;
+  const score = c.jobMatch?.score ?? c.quickFitScore ?? null;
   const isScoring = c._queuedForScoring && score === null;
 
   const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
@@ -277,7 +277,21 @@ function renderCompactCard(c) {
   }
 
   // Meta line: salary + arrangement
-  const salary = c.baseSalaryRange || c.oteTotalComp || c.jobMatch?.salary?.base || c.jobSnapshot?.salary || '';
+  let salary = c.baseSalaryRange || c.oteTotalComp || c.jobMatch?.salary?.base || c.jobSnapshot?.salary || '';
+  // Strip job title from salary if the AI accidentally included it
+  if (salary && c.jobTitle) {
+    const salLower = salary.toLowerCase();
+    const titleLower = c.jobTitle.toLowerCase();
+    // Strip if salary starts with the title
+    if (salLower.startsWith(titleLower)) {
+      salary = salary.slice(c.jobTitle.length).replace(/^[\s:—–\-,.;with]+/i, '').trim();
+    }
+    // If salary still looks like a title (no $ or digits in first 20 chars), extract just the money part
+    if (salary && !/[\$\d]/.test(salary.slice(0, 20))) {
+      const moneyMatch = salary.match(/\$[\d,]+[KkMm]?(?:\s*[-–]\s*\$[\d,]+[KkMm]?)?/);
+      salary = moneyMatch ? moneyMatch[0] : '';
+    }
+  }
   const arr = c.jobSnapshot?.workArrangement || c.jobMatch?.workArrangement || '';
   const meta = [salary, arr].filter(Boolean).join(' \u00b7 ');
 
@@ -310,9 +324,9 @@ function renderCompactCard(c) {
         <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtmlGlobal(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
         ${c.jobUrl ? `<a class="compact-title" href="${escHtmlGlobal(c.jobUrl)}" target="_blank" title="Open job posting">${escHtmlGlobal(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>`}
         ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
-        ${c.quickFitReason && score != null ? (() => {
-          // Strip job title echo from reason — match title at start even with trailing words before a separator
-          let reason = c.quickFitReason;
+        ${(c.jobMatch?.verdict || c.quickFitReason) && score != null ? (() => {
+          // Strip job title echo from reason
+          let reason = c.jobMatch?.verdict || c.quickFitReason;
           if (c.jobTitle) {
             const titleLower = c.jobTitle.toLowerCase();
             const reasonLower = reason.toLowerCase();
@@ -1479,7 +1493,15 @@ function renderKanbanCard(c) {
         return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
       ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
-        const compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary;
+        let compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || '';
+        // Strip job title from comp if AI baked it in
+        if (compText && c.jobTitle && compText.toLowerCase().startsWith(c.jobTitle.toLowerCase())) {
+          compText = compText.slice(c.jobTitle.length).replace(/^[\s:—–\-,.;with]+/i, '').trim();
+          if (!/[\$\d]/.test(compText.slice(0, 20))) {
+            const m = compText.match(/\$[\d,]+[KkMm]?(?:\s*[-–]\s*\$[\d,]+[KkMm]?)?/);
+            compText = m ? m[0] : '';
+          }
+        }
         const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
         const userWantsRemote = Array.isArray(_userWorkArrangement) && _userWorkArrangement.some(w => /remote/i.test(w));
         const jobArr = c.workArrangement || '';

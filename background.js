@@ -100,8 +100,25 @@ chrome.storage.local.get(['savedCompanies', 'researchCache', 'photoCache', '_mig
     chrome.storage.local.set({ photoCache: cleanedPhotos });
   }
 
+  // Clean duplicate/concatenated job titles
+  for (const c of companies) {
+    if (c.jobTitle) {
+      const words = c.jobTitle.split(/\s+/);
+      const half = Math.floor(words.length / 2);
+      if (half >= 2) {
+        const firstHalf = words.slice(0, half).join(' ').toLowerCase();
+        const rest = c.jobTitle.toLowerCase();
+        if (rest.indexOf(firstHalf) === 0 && rest.indexOf(firstHalf, 1) > 0) {
+          c.jobTitle = c.jobTitle.slice(rest.indexOf(firstHalf, 1)).trim();
+          dirty = true;
+        }
+      }
+    }
+  }
+  if (dirty) chrome.storage.local.set({ savedCompanies: companies });
+
   chrome.storage.local.set({ _migratedPunctuation2: true });
-  if (dirty || cacheDirty) console.log('[Migration] Stripped trailing punctuation from company names');
+  if (dirty || cacheDirty) console.log('[Migration] Cleaned company names and job titles');
 });
 
 // Live-update keys when user saves them from Integrations page
@@ -134,18 +151,53 @@ const DEFAULT_PIPELINE_CONFIG = {
   aiModels: {
     companyIntelligence: 'claude-haiku-4-5-20251001',
     firmographicExtraction: 'claude-haiku-4-5-20251001',
-    jobMatchScoring: 'claude-haiku-4-5-20251001',
-    deepFitAnalysis: 'claude-sonnet-4-5-20250514',
+    jobMatchScoring: 'claude-sonnet-4-6',
+    deepFitAnalysis: 'claude-sonnet-4-6',
     nextStepExtraction: 'claude-haiku-4-5-20251001',
-    chat: 'gpt-4.1-mini',
+    chat: 'claude-sonnet-4-6',
   },
-  searchCounts: { reviewScout: 3, reviewDrill: 2, leaders: 5, jobs: 5, product: 3 }
+  searchCounts: { reviewScout: 3, reviewDrill: 2, leaders: 5, jobs: 5, product: 3 },
+  photos: {
+    sourceOrder: ['linkedin_thumbnail', 'serper_images'],
+    maxPerCompany: 3,
+    fetchScope: 'leaders_only',
+    cacheTTLDays: 30
+  },
+  scoring: {
+    scoutEnabled: true,
+    scoutResultCount: 3,
+    scoutCacheDays: 7,
+    autoResearch: false,
+  }
 };
 let pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG };
 
 // Load pipeline config
 chrome.storage.local.get(['pipelineConfig'], d => {
-  if (d.pipelineConfig) pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...d.pipelineConfig };
+  if (d.pipelineConfig) {
+    pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...d.pipelineConfig };
+    if (d.pipelineConfig.aiModels) pipelineConfig.aiModels = { ...DEFAULT_PIPELINE_CONFIG.aiModels, ...d.pipelineConfig.aiModels };
+    if (d.pipelineConfig.photos) pipelineConfig.photos = { ...DEFAULT_PIPELINE_CONFIG.photos, ...d.pipelineConfig.photos };
+    if (d.pipelineConfig.scoring) pipelineConfig.scoring = { ...DEFAULT_PIPELINE_CONFIG.scoring, ...d.pipelineConfig.scoring };
+  }
+  // One-time migration: reset AI models that still have old defaults
+  const oldDefaults = {
+    deepFitAnalysis: 'claude-haiku-4-5-20251001',
+    jobMatchScoring: 'claude-haiku-4-5-20251001',
+    chat: 'gpt-4.1-mini',
+  };
+  let modelsMigrated = false;
+  for (const [key, oldVal] of Object.entries(oldDefaults)) {
+    if (pipelineConfig.aiModels?.[key] === oldVal) {
+      pipelineConfig.aiModels[key] = DEFAULT_PIPELINE_CONFIG.aiModels[key];
+      modelsMigrated = true;
+    }
+  }
+  if (modelsMigrated) {
+    chrome.storage.local.set({ pipelineConfig });
+    console.log('[Pipeline] Migrated AI model defaults to new values');
+  }
+  console.log('[Pipeline] Config loaded:', JSON.stringify(pipelineConfig));
 });
 
 // Live-update pipeline config
@@ -289,14 +341,14 @@ function getModelForTask(taskId) {
   const defaults = {
     companyIntelligence: 'claude-haiku-4-5-20251001',
     firmographicExtraction: 'claude-haiku-4-5-20251001',
-    jobMatchScoring: 'claude-haiku-4-5-20251001',
-    deepFitAnalysis: 'claude-sonnet-4-5-20250514',
+    jobMatchScoring: 'claude-sonnet-4-6',
+    deepFitAnalysis: 'claude-sonnet-4-6',
     nextStepExtraction: 'claude-haiku-4-5-20251001',
-    chat: 'gpt-4.1-mini',
+    chat: 'claude-sonnet-4-6',
     quickFitScoring: 'claude-haiku-4-5-20251001',
     profileInterpret: 'claude-haiku-4-5-20251001',
-    roleBrief: 'claude-sonnet-4-5-20250514',
-    profileConsolidate: 'claude-sonnet-4-5-20250514',
+    roleBrief: 'claude-sonnet-4-6',
+    profileConsolidate: 'claude-sonnet-4-6',
   };
   return pipelineConfig?.aiModels?.[taskId] || defaults[taskId] || 'claude-haiku-4-5-20251001';
 }
@@ -307,7 +359,7 @@ async function aiCall(taskId, { system, messages, max_tokens }) {
   if (model.startsWith('gpt-')) {
     if (!OPENAI_KEY) {
       console.warn(`[AI] OpenAI key missing for task ${taskId}, falling back to Claude`);
-      const fallback = model.includes('mini') ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-5-20250514';
+      const fallback = model.includes('mini') ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
       const res = await claudeApiCall({ model: fallback, system, messages, max_tokens });
       const data = await res.json();
       return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model: fallback };
@@ -334,7 +386,7 @@ async function aiCall(taskId, { system, messages, max_tokens }) {
 }
 
 // ── AI Scoring Queue Config ─────────────────────────────────────────────────
-const QUICK_FIT_MODEL = 'claude-haiku-4-5-20251001';
+// Quick fit model reads from pipeline config — no hardcoded override
 const QUEUE_AUTO_PROCESS = true;
 const SCORE_THRESHOLDS = { green: 7, amber: 4 }; // 7+ green, 4-6 amber, below 4 red
 const DISMISS_STAGE = 'rejected';
@@ -402,7 +454,7 @@ async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
   const fallbackChain = [
     { id: 'gpt-4.1-mini', type: 'openai' },
     { id: 'claude-haiku-4-5-20251001', type: 'claude' },
-    { id: 'claude-sonnet-4-5-20250514', type: 'claude' },
+    { id: 'claude-sonnet-4-6', type: 'claude' },
     { id: 'gpt-4.1', type: 'openai' },
   ];
   // Put the requested model first, then the rest in order
@@ -479,14 +531,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'GET_LEADER_PHOTOS') {
     const { leaders, company } = message;
-    // Cap at 3 leaders to save Serper image credits
-    const capped = leaders.slice(0, 3);
+    const photoConfig = pipelineConfig.photos || DEFAULT_PIPELINE_CONFIG.photos;
+    const maxPhotos = photoConfig.maxPerCompany ?? 3;
+    const sourceOrder = photoConfig.sourceOrder || ['linkedin_thumbnail', 'serper_images'];
+    const capped = leaders.slice(0, maxPhotos);
     Promise.all(capped.map(l => {
-      // Prefer existing thumbnail from LinkedIn search results (free, no API call)
-      if (l.photoUrl || l.thumbnailUrl) return Promise.resolve(l.photoUrl || l.thumbnailUrl);
-      return fetchLeaderPhoto(l.name, `"${company}"`);
+      // Try sources in configured order
+      if (sourceOrder.includes('linkedin_thumbnail') && (l.photoUrl || l.thumbnailUrl)) {
+        return Promise.resolve(l.photoUrl || l.thumbnailUrl);
+      }
+      if (sourceOrder.includes('serper_images')) {
+        return fetchLeaderPhoto(l.name, `"${company}"`);
+      }
+      return Promise.resolve(null);
     })).then(photos => {
-      // Fill remaining leaders with null (they'll get initials circles)
       while (photos.length < leaders.length) photos.push(null);
       sendResponse(photos);
     });
@@ -656,7 +714,7 @@ async function interpretProfileSection(section, content) {
   const prompt = promptTemplate.replace('{content}', content.slice(0, 3000));
   try {
     const result = await chatWithFallback({
-      model: 'claude-haiku-4-5-20251001',
+      model: getModelForTask('profileInterpret'),
       system: 'You are a concise profile analyst. Respond in valid JSON only, no markdown fences.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 500,
@@ -698,6 +756,42 @@ function simpleHash(str) {
   return h;
 }
 
+// ── Lightweight Company Scout (1 Serper credit, cached) ─────────────────────
+
+async function scoutCompany(companyName) {
+  const scoringConfig = pipelineConfig.scoring || DEFAULT_PIPELINE_CONFIG.scoring;
+  if (!scoringConfig.scoutEnabled) {
+    console.log('[Scout] Disabled in pipeline config');
+    return null;
+  }
+  const cacheKey = companyName.toLowerCase().replace(/[,;:!?.]+$/, '').trim();
+  // Check research cache first — if full research exists, use that
+  const fullCached = await getCached(cacheKey);
+  if (fullCached?.intelligence) {
+    console.log('[Scout] Full research cache hit for:', companyName);
+    return fullCached.intelligence;
+  }
+  // Check scout cache
+  const cacheTTL = (scoringConfig.scoutCacheDays || 7) * 24 * 60 * 60 * 1000;
+  const { scoutCache } = await new Promise(r => chrome.storage.local.get(['scoutCache'], r));
+  const cached = (scoutCache || {})[cacheKey];
+  if (cached && Date.now() - cached.ts < cacheTTL) {
+    console.log('[Scout] Cache hit for:', companyName);
+    return cached.summary;
+  }
+  // Run 1 Serper search
+  const numResults = scoringConfig.scoutResultCount || 3;
+  console.log('[Scout] Fetching for:', companyName, `(${numResults} results)`);
+  const results = await fetchSearchResults(`"${companyName}" what does it do product overview culture`, numResults);
+  if (!results.length) return null;
+  const snippets = results.slice(0, numResults).map(r => `${r.title}: ${r.snippet || ''}`).join('\n');
+  // Save to scout cache
+  const updated = { ...(scoutCache || {}), [cacheKey]: { summary: snippets, ts: Date.now() } };
+  chrome.storage.local.set({ scoutCache: updated });
+  console.log('[Scout] Cached for:', companyName);
+  return snippets;
+}
+
 // ── Quick Fit Scoring ────────────────────────────────────────────────────────
 
 async function processQuickFitScore(entryId) {
@@ -708,6 +802,9 @@ async function processQuickFitScore(entryId) {
   const entries = savedCompanies || [];
   const entry = entries.find(e => e.id === entryId);
   if (!entry) throw new Error(`Entry ${entryId} not found`);
+
+  // Lightweight company scout — 1 Serper search, cached for 7 days
+  const companyContext = await scoutCompany(entry.company || 'Unknown');
 
   // Load user profile data
   const localData = await new Promise(resolve =>
@@ -723,7 +820,7 @@ async function processQuickFitScore(entryId) {
 
   const jobDesc = (entry.jobDescription || '').slice(0, 3000);
 
-  const prompt = `You are a job fit screener. Based on the candidate's preferences and the job posting, give a quick fit score from 1-10 and a one-sentence reason.
+  const prompt = `You are a job fit screener. Based on the candidate's preferences, the job posting, and what's known about the company, give a quick fit score from 1-10 and a one-sentence reason.
 
 [Candidate Preferences]
 Green lights: ${greenLights}
@@ -735,28 +832,36 @@ Location: ${prefs.userLocation || 'Not specified'}, prefers ${prefs.workArrangem
 [Job Posting]
 Company: ${entry.company || 'Unknown'}
 Title: ${entry.jobTitle || 'Unknown'}
-Compensation: ${entry.salary || 'Not specified'}
-Arrangement: ${entry.workArrangement || 'Not specified'}
+Compensation: ${entry.baseSalaryRange || entry.oteTotalComp || entry.jobSnapshot?.salary || entry.salary || 'Not specified'}
+Work Arrangement: ${entry.jobSnapshot?.workArrangement || entry.workArrangement || 'Not specified'}
+Location: ${entry.jobSnapshot?.location || 'Not specified'}
 Description (first 3000 chars): ${jobDesc}
+${companyContext ? `\n[Company Context from Web]\n${companyContext}` : ''}
 
 Quick Take: Include 2-4 of the most decisive signals as quickTake bullets (green for strong fits, red for dealbreakers). Lead with the single most important signal. Keep each to 8-15 words max.
 
-Hard DQ: Set hardDQ.flagged to true ONLY when there is a genuine dealbreaker that makes this role dead on arrival:
-- Work arrangement is On-site/Hybrid when candidate requires Remote
-- Base salary maximum is below candidate's salary floor
-- Role function is fundamentally different from candidate's target roles (e.g., engineering role for a sales person)
-- Location requires relocation with no remote option
-If none of these apply, set hardDQ.flagged to false with empty reasons array.
+Green Flags (strongFits): Only include flags that represent genuinely strong alignment — real evidence of fit. Examples: "Remote-first culture confirmed on careers page", "Base salary range exceeds candidate floor". Do NOT pad with generic positives. Empty array is fine if nothing stands out.
+
+Red Flags (redFlags): Only include flags backed by real evidence of concern — poor Glassdoor reviews, comp below floor, role fundamentally misaligned with candidate goals, on-site when candidate needs remote. Do NOT fabricate weak flags. Empty array is perfectly acceptable.
+
+CRITICAL: The "Work Arrangement" field above is the authoritative source for remote/on-site/hybrid. It comes from the job posting's structured badges. If it says "Remote", the job IS remote — do not contradict this based on office mentions in the description. Only flag a work arrangement mismatch when the Arrangement field explicitly says On-site or Hybrid and the candidate requires Remote.
+
+Hard DQ: Set hardDQ.flagged to true ONLY when there is an absolute, verified dealbreaker:
+- Work Arrangement field says On-site or Hybrid AND candidate requires Remote
+- Base salary MAXIMUM is below candidate's salary floor (not just the minimum of a range)
+- Role function is fundamentally different from candidate's target roles
+If none clearly apply, set hardDQ.flagged to false. When in doubt, do NOT flag — false positive DQs are worse than missing a real one.
 
 IMPORTANT: The "reason" field should explain WHY you gave this score — do NOT repeat the job title or company name. Focus on fit signals (e.g., "Strong alignment on GTM leadership + remote, but comp range is below floor").
 
-Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining the score", "quickTake": [{"type": "green/red", "text": "short signal"}], "hardDQ": {"flagged": boolean, "reasons": ["reason"]}}`;
+Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "short signal"}], "strongFits": ["evidence-based green flag"] or [], "redFlags": ["evidence-based red flag"] or [], "hardDQ": {"flagged": boolean, "reasons": ["reason"]}}`;
 
+  const quickFitModel = getModelForTask('quickFitScoring');
   const { reply, error } = await chatWithFallback({
-    model: QUICK_FIT_MODEL,
+    model: quickFitModel,
     system: 'You are a precise job-fit scoring assistant. Respond with valid JSON only.',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 400,
+    max_tokens: 600,
     tag: 'QuickFit'
   });
 
@@ -766,6 +871,8 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining 
   let score = null;
   let reason = 'Could not parse response';
   let quickTake = [];
+  let strongFits = [];
+  let redFlags = [];
   let hardDQ = { flagged: false, reasons: [] };
   try {
     const jsonMatch = reply.match(/\{[\s\S]*\}/);
@@ -774,11 +881,20 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining 
       score = Number(parsed.score);
       reason = parsed.reason || 'No reason provided';
       quickTake = parsed.quickTake || [];
+      strongFits = parsed.strongFits || [];
+      redFlags = parsed.redFlags || [];
       hardDQ = parsed.hardDQ || { flagged: false, reasons: [] };
     }
   } catch (parseErr) {
     console.warn('[QuickFit] Failed to parse response:', reply);
     throw new Error('Failed to parse scoring response');
+  }
+
+  // Consistency check: Hard DQ + high score is contradictory — cap score
+  if (hardDQ.flagged && score > 3) {
+    console.log(`[QuickFit] Score ${score} contradicts Hard DQ — capping at 3`);
+    score = 3;
+    reason = (hardDQ.reasons?.[0] || reason);
   }
 
   // Save result to the entry
@@ -793,6 +909,17 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence explaining 
     freshEntries[idx].quickTake = quickTake;
     freshEntries[idx].hardDQ = hardDQ;
     freshEntries[idx].quickFitScoredAt = Date.now();
+    // Write flags to jobMatch so the detail page shows them
+    const existing = freshEntries[idx].jobMatch || {};
+    freshEntries[idx].jobMatch = {
+      ...existing,
+      score: score ?? existing.score,
+      verdict: reason ?? existing.verdict,
+      strongFits: strongFits.length ? strongFits : existing.strongFits || [],
+      redFlags: redFlags.length ? redFlags : existing.redFlags || [],
+      lastUpdatedBy: 'quick_fit',
+      lastUpdatedAt: Date.now()
+    };
     await new Promise(resolve =>
       chrome.storage.local.set({ savedCompanies: freshEntries }, resolve)
     );
@@ -1007,7 +1134,7 @@ async function enrichFromWebResearch(company, domain) {
 }
 
 // Pipeline: try providers in order, return first with actual data
-const ENRICHMENT_PROVIDERS = [enrichFromApollo, enrichFromWebResearch];
+const ENRICHMENT_REGISTRY = { apollo: enrichFromApollo, webResearch: enrichFromWebResearch };
 
 function hasEnrichmentData(result) {
   return result && (result.employees || result.industry || result.funding || result.foundedYear || result.companyWebsite);
@@ -1037,8 +1164,11 @@ async function runEnrichmentPipeline(company, domain, companyLinkedin) {
     return { ...emptyEnrichment(), source: null, _creditsExhausted: true };
   }
   console.log('[Enrich] Pipeline starting for:', company, '| domain:', derivedDomain || '(none)', '| linkedin:', linkedinSlug || '(none)');
-  for (const provider of ENRICHMENT_PROVIDERS) {
-    const result = await provider(company, derivedDomain);
+  const enrichOrder = (pipelineConfig.enrichmentOrder || DEFAULT_PIPELINE_CONFIG.enrichmentOrder).filter(p => p.enabled);
+  for (const provider of enrichOrder) {
+    const fn = ENRICHMENT_REGISTRY[provider.id];
+    if (!fn) continue;
+    const result = await fn(company, derivedDomain);
     if (hasEnrichmentData(result)) {
       console.log('[Enrich] Pipeline success from:', result.source);
       return result;
@@ -1282,12 +1412,11 @@ Analysis rules:
 
 Quick Take: Include 2-4 of the most decisive signals as quickTake bullets (green for strong fits, red for dealbreakers). Lead with the single most important signal. Keep each to 8-15 words max.
 
-Hard DQ: Set hardDQ.flagged to true ONLY when there is a genuine dealbreaker that makes this role dead on arrival:
-- Work arrangement is On-site/Hybrid when candidate requires Remote
-- Base salary maximum is below candidate's salary floor
-- Role function is fundamentally different from candidate's target roles (e.g., engineering role for a sales person)
-- Location requires relocation with no remote option
-If none of these apply, set hardDQ.flagged to false with empty reasons array.
+Hard DQ: Set hardDQ.flagged to true ONLY when there is an absolute, verified dealbreaker:
+- Work Arrangement field says On-site or Hybrid AND candidate requires Remote
+- Base salary MAXIMUM is below candidate's salary floor
+- Role function is fundamentally different from candidate's target roles
+If none clearly apply, set hardDQ.flagged to false. When in doubt, do NOT flag.
 
 {
   "jobMatch": {
@@ -1320,7 +1449,7 @@ If none of these apply, set hardDQ.flagged to false with empty reasons array.
     if (!aiResult.ok) {
       // Fallback through all models
       const fallback = await chatWithFallback({
-        model: 'gpt-4.1-mini', system: 'You are a JSON-only analyst. Respond with valid JSON only.',
+        model: getModelForTask('jobMatchScoring'), system: 'You are a JSON-only analyst. Respond with valid JSON only.',
         messages: [{ role: 'user', content: prompt }], max_tokens: 1100, tag: 'AnalyzeJob'
       });
       if (!fallback.error) return JSON.parse(fallback.reply.replace(/```json|```/g, '').trim());
@@ -2270,7 +2399,7 @@ When the user first enters this mode, respond: "Paste the application question a
   try {
     const systemText = systemParts.join('\n');
     console.log('[Chat] System prompt length:', systemText.length, 'chars');
-    const model = chatModel || pipelineConfig.aiModels?.chat || 'gpt-4.1-mini';
+    const model = chatModel || pipelineConfig.aiModels?.chat || 'claude-sonnet-4-6';
     console.log('[Chat] Using model:', model);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'Chat' });
     if (result.error) return result;
@@ -2389,7 +2518,7 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatMo
 
   try {
     const systemText = systemParts.join('\n');
-    const model = chatModel || pipelineConfig.aiModels?.chat || 'gpt-4.1-mini';
+    const model = chatModel || pipelineConfig.aiModels?.chat || 'claude-sonnet-4-6';
     console.log('[GlobalChat] Using model:', model, '| prompt length:', systemText.length);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'GlobalChat' });
     if (result.error) return result;
@@ -2679,7 +2808,7 @@ Then write the full role brief below.`;
 
   try {
     const result = await chatWithFallback({
-      model: 'claude-sonnet-4-5-20250514',
+      model: 'claude-sonnet-4-6',
       system: 'You are a role intelligence analyst. Write structured, factual briefs in markdown.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 3000,

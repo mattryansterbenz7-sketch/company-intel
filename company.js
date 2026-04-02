@@ -695,6 +695,25 @@ function buildOpportunity() {
     saveEntry({ jobTitle: entry.jobTitle });
   }
 
+  // Fix duplicate/concatenated titles (data cleanup)
+  if (entry.jobTitle) {
+    const title = entry.jobTitle;
+    // Detect repeated title: "Senior Account Manager Senior Account Manager with..."
+    const words = title.split(/\s+/);
+    const half = Math.floor(words.length / 2);
+    if (half >= 2) {
+      const firstHalf = words.slice(0, half).join(' ').toLowerCase();
+      const rest = title.toLowerCase();
+      if (rest.indexOf(firstHalf) === 0 && rest.indexOf(firstHalf, 1) > 0) {
+        // Found duplicate — take the longer variant
+        const secondStart = rest.indexOf(firstHalf, 1);
+        const cleaned = title.slice(secondStart).trim();
+        entry.jobTitle = cleaned;
+        saveEntry({ jobTitle: cleaned });
+      }
+    }
+  }
+
   // Auto-clear past-due next step date
   if (entry.nextStepDate) {
     const today = new Date().toISOString().split('T')[0];
@@ -1012,51 +1031,47 @@ function initActivityTab() {
   container.innerHTML = buildActivityTimeline(entry);
 }
 
+const DEFAULT_TAB_ORDER = ['intel', 'activity', 'notes', 'emails', 'meetings', 'docs'];
+const TAB_LABELS = { intel: 'Intel', activity: 'Activity', notes: 'Notes', emails: 'Emails', meetings: 'Meetings', docs: 'Docs' };
+const TAB_PANE_HTML = {
+  activity: '<div id="activity-timeline"></div>',
+  intel: '', // filled by buildIntelTab()
+  notes: '<div id="hub-notes-container" data-editing="0"></div>',
+  emails: '<div class="p-empty" id="act-emails-status">Loading emails\u2026</div><div id="act-emails-list"></div>',
+  meetings: '<div class="p-empty" id="act-meetings-status">Loading meetings\u2026</div><div id="act-meetings-content"></div>',
+  docs: `<div class="docs-section">
+    <div class="docs-upload-zone" id="docs-drop-zone">
+      <div class="docs-upload-text">Drop files here or click to upload</div>
+      <div class="docs-upload-sub">PDF, images (.png, .jpg), or paste text</div>
+      <input type="file" id="docs-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple style="display:none">
+      <button class="docs-upload-btn" id="docs-upload-btn">Choose files</button>
+    </div>
+    <div class="docs-paste-zone">
+      <textarea class="docs-paste-input" id="docs-paste-input" placeholder="Or paste a job description, offer details, or any text here..." rows="3"></textarea>
+      <button class="docs-paste-btn" id="docs-paste-save">Save text</button>
+    </div>
+    <div class="docs-list" id="docs-list"></div>
+  </div>`,
+};
+
 function renderMainTabs() {
   const colEl = document.getElementById('col-main');
-  const isOpp = entry.isOpportunity;
+  const tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
+  const defaultTab = tabOrder[0]; // first tab is the default
+
+  const tabButtons = tabOrder.map(t =>
+    `<button class="hub-tab${t === defaultTab ? ' active' : ''}" data-tab="${t}" draggable="true">${TAB_LABELS[t] || t}</button>`
+  ).join('');
+
+  const panes = tabOrder.map(t => {
+    const content = t === 'intel' ? buildIntelTab() : (TAB_PANE_HTML[t] || '');
+    return `<div class="hub-pane${t === defaultTab ? ' active' : ''}" id="hub-${t}">${content}</div>`;
+  }).join('');
+
   colEl.innerHTML = `
     <div class="hub-tabs-container">
-      <div class="hub-tab-bar">
-        <button class="hub-tab${isOpp ? ' active' : ''}" data-tab="activity">Activity</button>
-        <button class="hub-tab${isOpp ? '' : ' active'}" data-tab="intel">Intel</button>
-        <button class="hub-tab" data-tab="notes">Notes</button>
-        <button class="hub-tab" data-tab="emails">Emails</button>
-        <button class="hub-tab" data-tab="meetings">Meetings</button>
-        <button class="hub-tab" data-tab="docs">Docs</button>
-      </div>
-      <div class="hub-pane${isOpp ? ' active' : ''}" id="hub-activity">
-        <div id="activity-timeline"></div>
-      </div>
-      <div class="hub-pane${isOpp ? '' : ' active'}" id="hub-intel">
-        ${buildIntelTab()}
-      </div>
-      <div class="hub-pane" id="hub-notes">
-        <div id="hub-notes-container" data-editing="0"></div>
-      </div>
-      <div class="hub-pane" id="hub-emails">
-        <div class="p-empty" id="act-emails-status">Loading emails…</div>
-        <div id="act-emails-list"></div>
-      </div>
-      <div class="hub-pane" id="hub-meetings">
-        <div class="p-empty" id="act-meetings-status">Loading meetings…</div>
-        <div id="act-meetings-content"></div>
-      </div>
-      <div class="hub-pane" id="hub-docs">
-        <div class="docs-section">
-          <div class="docs-upload-zone" id="docs-drop-zone">
-            <div class="docs-upload-text">Drop files here or click to upload</div>
-            <div class="docs-upload-sub">PDF, images (.png, .jpg), or paste text</div>
-            <input type="file" id="docs-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple style="display:none">
-            <button class="docs-upload-btn" id="docs-upload-btn">Choose files</button>
-          </div>
-          <div class="docs-paste-zone">
-            <textarea class="docs-paste-input" id="docs-paste-input" placeholder="Or paste a job description, offer details, or any text here..." rows="3"></textarea>
-            <button class="docs-paste-btn" id="docs-paste-save">Save text</button>
-          </div>
-          <div class="docs-list" id="docs-list"></div>
-        </div>
-      </div>
+      <div class="hub-tab-bar">${tabButtons}</div>
+      ${panes}
     </div>`;
   bindHubTabs();
 }
@@ -1315,90 +1330,52 @@ function bindRoleBriefEvents() {
 }
 
 function maybeRefreshDeepFitAnalysis() {
-  if (!entry.isOpportunity && !entry.jobMatch) return;
+  // Scoring is now unified — auto-refresh only re-runs the single scorer
+  // when new interaction data (meetings, emails) arrives after the last score
+  if (!entry.isOpportunity || !entry.jobMatch?.score) return;
 
-  // Determine if we have richer context than just the job posting
-  const hasContext = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
-    entry.cachedEmails?.length || entry.notes);
+  const hasNewInteractions = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
+    entry.cachedEmails?.length);
+  if (!hasNewInteractions) return;
 
-  // Check if any data source is fresher than the last analysis
   const newestContext = Math.max(
     entry.cachedEmailsAt || 0,
     entry.cachedMeetingNotesAt || 0,
     entry.cachedCalendarEventsAt || 0
   );
-  const analysisAge = entry.deepFitAnalysisAt ? (Date.now() - entry.deepFitAnalysisAt) / 60000 : Infinity;
-  const hasNewData = newestContext > (entry.deepFitAnalysisAt || 0);
-  // Re-run if: no analysis exists, OR analysis is old, OR new data arrived since last analysis
-  const shouldRefresh = !entry.deepFitAnalysis || analysisAge > 60 || hasNewData;
-  console.log('[DeepFit] maybeRefresh:', { shouldRefresh, hasAnalysis: !!entry.deepFitAnalysis, analysisAge: Math.round(analysisAge), hasNewData, hasContext });
-  if (!shouldRefresh) return;
+  const lastScored = entry.jobMatch?.lastUpdatedAt || entry.quickFitScoredAt || 0;
+  if (newestContext <= lastScored) return;
 
-  // No context beyond posting and no existing analysis — skip (not enough to say anything new)
-  if (!hasContext && entry.deepFitAnalysis) return;
-
-  chrome.storage.sync.get(['prefs'], ({ prefs = {} }) => {
-    chrome.runtime.sendMessage({
-      type: 'DEEP_FIT_ANALYSIS',
-      company:     entry.company,
-      jobTitle:    entry.jobTitle || '',
-      jobSummary:      entry.jobMatch?.jobSummary || entry.jobSummary || '',
-      jobSnapshot:     entry.jobSnapshot || '',
-      jobDescription:  entry.jobDescription || '',
-      jobMatch:        entry.jobMatch || {},
-      notes:           entry.notes || '',
-      transcripts:     entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '',
-      emails:          (entry.cachedEmails || []).slice(0, 8).map(e => ({ subject: e.subject, from: e.from, snippet: e.snippet })),
-      roleBrief:       entry.roleBrief?.content || '',
-      prefs
-    }, result => {
-      void chrome.runtime.lastError;
-      console.log('[DeepFit] Result received:', { hasAnalysis: !!result?.analysis, hasFitUpdate: !!result?.fitUpdate });
-      if (result?.analysis) {
-        saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
-        if (result.fitUpdate) {
-          console.log('[DeepFit] Writing fitUpdate to jobMatch:', JSON.stringify(result.fitUpdate).slice(0, 200));
-          const current = entry.jobMatch || {};
-          saveEntry({
-            jobMatch: {
-              ...current,
-              score: result.fitUpdate.score ?? current.score,
-              verdict: result.fitUpdate.verdict ?? current.verdict,
-              strongFits: result.fitUpdate.strongFits?.length ? result.fitUpdate.strongFits : current.strongFits,
-              redFlags: result.fitUpdate.redFlags?.length ? result.fitUpdate.redFlags : current.redFlags,
-              jobSummary: current.jobSummary,
-              lastUpdatedBy: 'deep_fit_analysis',
-              lastUpdatedAt: Date.now()
-            }
-          });
-        } else {
-          console.warn('[DeepFit] No fitUpdate in result — flags will not update');
+  console.log('[FitScore] New interaction data detected — re-scoring');
+  chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+    void chrome.runtime.lastError;
+    if (result && !result.error) {
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const fresh = (savedCompanies || []).find(c => c.id === entry.id);
+        if (fresh) {
+          Object.assign(entry, fresh);
+          const idx = allCompanies.findIndex(c => c.id === entry.id);
+          if (idx !== -1) allCompanies[idx] = entry;
         }
-        // Update only the fit block so other sections aren't disrupted
         const fitBlock = document.getElementById('hub-fit-block');
         if (fitBlock) fitBlock.innerHTML = buildFitSection();
-      }
-    });
+      });
+    }
   });
 }
 
 function buildFitSection() {
+  // Unified scoring — one source of truth: jobMatch
   const jm         = entry.jobMatch || {};
   const score      = jm.score;
   const strongFits = jm.strongFits || [];
   const redFlags   = jm.redFlags   || jm.watchOuts || [];
   const jobSummary = jm.jobSummary  || entry.jobSummary || '';
-  const deep       = entry.deepFitAnalysis || '';
+  const reason     = jm.verdict || entry.quickFitReason || '';
   const v          = score ? scoreToVerdict(score) : null;
-
-  // Quick fit score (from AI scoring queue) — shown when no deep analysis exists
-  const qfs = entry.quickFitScore;
-  const qfr = entry.quickFitReason;
-  const hasQuickFit = qfs != null && !score;
 
   let html = `<div class="hub-section-label">Job Fit Analysis</div>`;
 
-  // Full deep score + verdict row
   if (score) {
     const fb = entry.matchFeedback;
     const upA = fb?.type === 'up' ? ' active up' : '';
@@ -1414,25 +1391,13 @@ function buildFitSection() {
       </span>
     </div>
     <div id="co-thumb-form" style="display:none"></div>`;
-    // Show quick screen as secondary reference if it also exists
-    if (qfs != null) {
-      html += `<div style="font-size:11px;color:#A09A94;margin-top:4px">Quick screen: ${qfs}/10${qfr ? ' — ' + escapeHtml(qfr) : ''}</div>`;
+    if (reason) {
+      html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5">${escapeHtml(reason)}</div>`;
     }
-  } else if (hasQuickFit) {
-    // Quick fit only — no deep analysis yet
-    const qfColor = qfs >= 7 ? '#0F6E56' : qfs >= 4 ? '#854F0B' : '#A32D2D';
-    html += `<div class="fit-score-row">
-      <span class="fit-score" style="color:${qfColor}">${qfs}<span class="fit-score-denom">/10</span></span>
-      <span class="fit-verdict" style="color:${qfColor}">Quick Fit Screen</span>
-    </div>`;
-    if (qfr) {
-      html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5">${escapeHtml(qfr)}</div>`;
-    }
-    html += `<div style="font-size:12px;color:#A09A94;margin:6px 0;line-height:1.5">Quick screening — move to a later stage or click "Run fit analysis" for the full deep analysis with green flags, red flags, and detailed breakdown.</div>`;
   }
 
   // Refresh button — always available for opportunities
-  html += `<button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-analyze using job posting, meetings, emails &amp; notes">
+  html += `<button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-score using latest context">
     ↻ ${score ? 'Refresh analysis' : 'Run fit analysis'}
   </button>`;
 
@@ -1441,28 +1406,23 @@ function buildFitSection() {
     html += `<div class="fit-job-summary">${escapeHtml(jobSummary)}</div>`;
   }
 
-  // Deep analysis narrative (generated from full context)
-  if (deep) {
-    html += `<div class="fit-deep-analysis">${renderMarkdown(deep)}</div>`;
-  } else if (!score && !hasQuickFit) {
+  if (!score) {
     html += `<div class="p-empty" style="text-align:left;margin:8px 0">No fit analysis yet. Click "Run fit analysis" above — or save a job posting to automatically generate one.</div>`;
   }
 
-  // Green flags / Red flags — always shown as side-by-side grid
-  const greenLabel = hasQuickFit && !strongFits.length ? 'Run full analysis to generate' : 'None identified yet';
-  const redLabel = hasQuickFit && !redFlags.length ? 'Run full analysis to generate' : 'None identified yet';
+  // Green flags / Red flags
   html += `<div class="fit-flags-grid">
     <div class="fit-flags-col fit-flags-green">
       <div class="fit-flags-header">✓ Green Flags</div>
       ${strongFits.length
         ? strongFits.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
-        : `<div class="fit-flag-none">${greenLabel}</div>`}
+        : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
     </div>
     <div class="fit-flags-col fit-flags-red">
       <div class="fit-flags-header">⚠ Red Flags</div>
       ${redFlags.length
         ? redFlags.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
-        : `<div class="fit-flag-none">${redLabel}</div>`}
+        : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
     </div>
   </div>`;
 
@@ -1472,17 +1432,22 @@ function buildFitSection() {
 function bindHubTabs() {
   const container = document.querySelector('.hub-tabs-container');
   if (!container) return;
+  const tabBar = container.querySelector('.hub-tab-bar');
 
   let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false, activityInited = false;
 
-  if (entry.isOpportunity) {
-    // Activity tab starts active for opportunities
-    setTimeout(() => { if (!activityInited) { activityInited = true; initActivityTab(); } }, 0);
-  } else {
-    // Init intel immediately (starts active)
-    setTimeout(() => { if (!intelInited) { intelInited = true; initIntelTab(); } }, 0);
-  }
+  // Init the default (first) tab
+  const tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
+  const defaultTab = tabOrder[0];
+  setTimeout(() => {
+    if (defaultTab === 'intel' && !intelInited) { intelInited = true; initIntelTab(); }
+    else if (defaultTab === 'activity' && !activityInited) { activityInited = true; initActivityTab(); }
+    else if (defaultTab === 'emails' && !emailsLoaded) { emailsLoaded = true; loadHubEmails(); }
+    else if (defaultTab === 'meetings' && !meetingsLoaded) { meetingsLoaded = true; loadHubMeetings(); }
+    else if (defaultTab === 'docs' && !docsInited) { docsInited = true; initDocsTab(); }
+  }, 0);
 
+  // Tab click handlers
   container.querySelectorAll('.hub-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       container.querySelectorAll('.hub-tab').forEach(t => t.classList.remove('active'));
@@ -1490,27 +1455,47 @@ function bindHubTabs() {
       tab.classList.add('active');
       document.getElementById('hub-' + tab.dataset.tab)?.classList.add('active');
 
-      if (tab.dataset.tab === 'activity' && !activityInited) {
-        activityInited = true;
-        initActivityTab();
-      }
+      if (tab.dataset.tab === 'activity' && !activityInited) { activityInited = true; initActivityTab(); }
       if (tab.dataset.tab === 'activity') initActivityTab();
-      if (tab.dataset.tab === 'intel' && !intelInited) {
-        intelInited = true;
-        initIntelTab();
-      }
-      if (tab.dataset.tab === 'emails' && !emailsLoaded) {
-        emailsLoaded = true;
-        loadHubEmails();
-      }
-      if (tab.dataset.tab === 'meetings' && !meetingsLoaded) {
-        meetingsLoaded = true;
-        loadHubMeetings();
-      }
-      if (tab.dataset.tab === 'docs' && !docsInited) {
-        docsInited = true;
-        initDocsTab();
-      }
+      if (tab.dataset.tab === 'intel' && !intelInited) { intelInited = true; initIntelTab(); }
+      if (tab.dataset.tab === 'emails' && !emailsLoaded) { emailsLoaded = true; loadHubEmails(); }
+      if (tab.dataset.tab === 'meetings' && !meetingsLoaded) { meetingsLoaded = true; loadHubMeetings(); }
+      if (tab.dataset.tab === 'docs' && !docsInited) { docsInited = true; initDocsTab(); }
+    });
+  });
+
+  // Drag-to-reorder tabs
+  let dragTab = null;
+  tabBar.querySelectorAll('.hub-tab').forEach(tab => {
+    tab.addEventListener('dragstart', e => {
+      dragTab = tab;
+      e.dataTransfer.effectAllowed = 'move';
+      tab.style.opacity = '0.4';
+    });
+    tab.addEventListener('dragend', () => {
+      tab.style.opacity = '';
+      dragTab = null;
+      tabBar.querySelectorAll('.hub-tab').forEach(t => t.classList.remove('drag-over'));
+    });
+    tab.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      tab.classList.add('drag-over');
+    });
+    tab.addEventListener('dragleave', () => tab.classList.remove('drag-over'));
+    tab.addEventListener('drop', e => {
+      e.preventDefault();
+      tab.classList.remove('drag-over');
+      if (!dragTab || dragTab === tab) return;
+      // Reorder in DOM
+      const tabs = [...tabBar.querySelectorAll('.hub-tab')];
+      const fromIdx = tabs.indexOf(dragTab);
+      const toIdx = tabs.indexOf(tab);
+      if (fromIdx < toIdx) tab.after(dragTab);
+      else tab.before(dragTab);
+      // Save new order
+      const newOrder = [...tabBar.querySelectorAll('.hub-tab')].map(t => t.dataset.tab);
+      localStorage.setItem('ci_tabOrder', JSON.stringify(newOrder));
     });
   });
 
@@ -1539,54 +1524,29 @@ function bindHubTabs() {
     document.getElementById('co-thumb-note')?.addEventListener('keydown', e2 => { if (e2.key === 'Enter') submit(); });
   });
 
-  // Fit analysis refresh button (may be rendered later if intel tab is active)
+  // Fit analysis refresh button — re-runs the unified scorer
   document.addEventListener('click', e => {
     if (e.target.id !== 'fit-refresh-btn') return;
     const btn = e.target;
     btn.disabled = true;
-    btn.textContent = '↻ Analyzing…';
-    const prefs = {};
-    chrome.storage.sync.get(['prefs'], d => {
-      Object.assign(prefs, d.prefs || {});
-      chrome.runtime.sendMessage({
-        type: 'DEEP_FIT_ANALYSIS',
-        company:    entry.company,
-        jobTitle:   entry.jobTitle || '',
-        jobSummary:     entry.jobMatch?.jobSummary || entry.jobSummary || '',
-        jobSnapshot:    entry.jobSnapshot || '',
-        jobDescription: entry.jobDescription || '',
-        jobMatch:       entry.jobMatch || {},
-        notes:          entry.notes || '',
-        transcripts:    entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '',
-        emails:         (entry.cachedEmails || []).slice(0, 8).map(e => ({ subject: e.subject, from: e.from, snippet: e.snippet })),
-        roleBrief:      entry.roleBrief?.content || '',
-        prefs
-      }, result => {
-        void chrome.runtime.lastError;
-        btn.disabled = false;
-        btn.textContent = '↻ Refresh analysis';
-        if (result?.analysis) {
-          saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
-          if (result.fitUpdate) {
-            const current = entry.jobMatch || {};
-            saveEntry({
-              jobMatch: {
-                ...current,
-                score: result.fitUpdate.score ?? current.score,
-                verdict: result.fitUpdate.verdict ?? current.verdict,
-                strongFits: result.fitUpdate.strongFits?.length ? result.fitUpdate.strongFits : current.strongFits,
-                redFlags: result.fitUpdate.redFlags?.length ? result.fitUpdate.redFlags : current.redFlags,
-                jobSummary: current.jobSummary,
-                lastUpdatedBy: 'deep_fit_analysis',
-                lastUpdatedAt: Date.now()
-              }
-            });
+    btn.textContent = '↻ Scoring…';
+    chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+      void chrome.runtime.lastError;
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh analysis';
+      if (result && !result.error) {
+        // Reload entry from storage to pick up the updated jobMatch
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+          const fresh = (savedCompanies || []).find(c => c.id === entry.id);
+          if (fresh) {
+            Object.assign(entry, fresh);
+            const idx = allCompanies.findIndex(c => c.id === entry.id);
+            if (idx !== -1) allCompanies[idx] = entry;
           }
-          // Re-render only the fit block so we don't disrupt other sections
           const fitBlock = document.getElementById('hub-fit-block');
           if (fitBlock) fitBlock.innerHTML = buildFitSection();
-        }
-      });
+        });
+      }
     });
   }, { capture: true });
 
@@ -3072,7 +3032,10 @@ function loadPhotosForPanel(pid) {
   if (pid === 'leadership') {
     const leaders = (entry.leaders || []).filter(l => l.name);
     if (!leaders.length) return;
-    chrome.runtime.sendMessage({ type: 'GET_LEADER_PHOTOS', leaders, company: entry.company || '' }, photos => {
+    // Respect fetchScope: 'nobody' means no photo fetches at all
+    chrome.storage.local.get(['pipelineConfig'], ({ pipelineConfig: pc }) => {
+      if ((pc?.photos?.fetchScope) === 'nobody') return;
+      chrome.runtime.sendMessage({ type: 'GET_LEADER_PHOTOS', leaders, company: entry.company || '' }, photos => {
       void chrome.runtime.lastError;
       if (!photos) return;
       leaders.forEach((l, i) => {
@@ -3083,11 +3046,31 @@ function loadPhotosForPanel(pid) {
         const initials = (l.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
         el.innerHTML = `<img src="${photoUrl}" alt="${initials}" onerror="this.parentElement.textContent='${initials}'">`;
       });
+      });
     });
   }
 
   if (pid === 'contacts') {
-    // Contacts use initials circles — do NOT burn Serper image credits on them
+    // Only fetch contact photos if pipeline config allows it
+    chrome.storage.local.get(['pipelineConfig'], ({ pipelineConfig: pc }) => {
+      const scope = pc?.photos?.fetchScope || 'leaders_only';
+      if (scope !== 'leaders_contacts') return;
+      const contacts = (entry.knownContacts || []).filter(c => c.name);
+      if (!contacts.length) return;
+      chrome.runtime.sendMessage(
+        { type: 'GET_LEADER_PHOTOS', leaders: contacts.map(c => ({ name: c.name })), company: entry.company || '' },
+        photos => {
+          void chrome.runtime.lastError;
+          if (!photos) return;
+          contacts.forEach((c, i) => {
+            if (!photos[i]) return;
+            const el = document.getElementById('cavatar-' + encodeURIComponent(c.email));
+            if (!el) return;
+            el.innerHTML = `<img src="${photos[i]}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent='${(c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}'">`;
+          });
+        }
+      );
+    });
     return;
     const contacts = (entry.knownContacts || []).filter(c => c.name);
     if (!contacts.length) return;
