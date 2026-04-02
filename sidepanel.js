@@ -1054,14 +1054,21 @@ function renderHomeState() {
   chrome.storage.local.get(['savedCompanies', 'profileLinks', 'storyTime'], data => {
     const companies = data.savedCompanies || [];
 
-    // Try to get first name
+    // Try to get first name from profile data
     let firstName = '';
-    if (data.profileLinks?.email) firstName = data.profileLinks.email.split('@')[0].split('.')[0];
     if (data.storyTime?.rawInput) {
-      const nameMatch = data.storyTime.rawInput.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]+)/i);
-      if (nameMatch) firstName = nameMatch[1];
+      const m = data.storyTime.rawInput.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]{2,})/i);
+      if (m) firstName = m[1];
     }
-    firstName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : '';
+    if (!firstName && data.storyTime?.profileSummary) {
+      const m = data.storyTime.profileSummary.match(/(?:Name|name):\s*([A-Z][a-z]{2,})/);
+      if (m) firstName = m[1];
+    }
+    if (!firstName && data.profileLinks?.email) {
+      const local = data.profileLinks.email.split('@')[0].split('.')[0];
+      if (local && local.length > 2 && !/\d/.test(local) && !/^(info|admin|hello|contact|one|test)$/i.test(local)) firstName = local;
+    }
+    firstName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase() : '';
 
     document.getElementById('sp-home-greeting').innerHTML = `
       <div class="sp-home-greeting">Good ${timeOfDay}${firstName ? ', ' + firstName : ''}</div>
