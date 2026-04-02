@@ -244,8 +244,16 @@ function waitForJobTitle() {
 }
 
 async function detectLinkedIn() {
-  const isJobPage = /\/jobs\//.test(window.location.pathname);
-  const isCompanyPage = /\/company\/[^/]+/.test(window.location.pathname) && !isJobPage;
+  const path = window.location.pathname;
+  const isJobPage = /\/jobs\//.test(path);
+  const isCompanyPage = /\/company\/[^/]+/.test(path) && !isJobPage;
+  const isProfilePage = /\/in\/[^/]+/.test(path);
+
+  // Only detect on company pages, job pages, and profile pages
+  // Skip feed, messaging, notifications, search, mynetwork
+  if (!isJobPage && !isCompanyPage && !isProfilePage) {
+    return { company: null, source: 'linkedin', domain: null };
+  }
 
   if (isJobPage) {
     const titleResult = await waitForJobTitle();

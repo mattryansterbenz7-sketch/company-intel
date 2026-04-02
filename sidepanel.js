@@ -29,7 +29,7 @@ document.getElementById('sp-health-dot')?.addEventListener('click', () => {
 
 const searchBtn = document.getElementById('search-btn');
 const settingsBtn = document.getElementById('settings-btn');
-const savedBtn = document.getElementById('saved-btn');
+const savedBtn = document.getElementById('saved-btn'); // may be null if removed
 const companyNameEl = document.getElementById('company-name');
 const companyLinksEl = document.getElementById('company-links');
 const contentEl = document.getElementById('content');
@@ -139,8 +139,12 @@ loadPrefsWithMigration((prefs) => {
 function openDashboard() {
   window.open(chrome.runtime.getURL('saved.html'), '_blank');
 }
-savedBtn.addEventListener('click', openDashboard);
+savedBtn?.addEventListener('click', openDashboard);
 document.getElementById('sp-logo')?.addEventListener('click', openDashboard);
+document.getElementById('sp-dashboard-link')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  openDashboard();
+});
 
 
 function openSavePanel(mode) {
@@ -686,9 +690,15 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
   currentTabId = tabs[0]?.id || null;
   chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_COMPANY' }, (response) => {
     if (chrome.runtime.lastError || !response || !response.company) {
-      contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
+      renderHomeState();
       return;
     }
+    // Company detected — hide home state, show company UI
+    const homeEl = document.getElementById('sp-home');
+    if (homeEl) homeEl.style.display = 'none';
+    const companyContent = document.getElementById('company-content');
+    if (companyContent) companyContent.style.display = '';
+    if (searchBtn) searchBtn.style.display = '';
     companyNameEl.textContent = response.company;
     currentJobTitle = response.jobTitle || null;
     currentJobMeta = response.jobMeta || null;
@@ -977,11 +987,19 @@ searchBtn.addEventListener('click', () => {
           setTimeout(() => { searchBtn.classList.remove('refreshing'); searchBtn.disabled = false; }, 1000);
           return;
         }
-        contentEl.innerHTML = '<div class="empty">Could not detect company on this page. Try navigating to a company website or job posting.</div>';
+        renderHomeState();
         searchBtn.classList.remove('refreshing');
         searchBtn.disabled = false;
         return;
       }
+      // Company detected — hide home state, show company UI
+      const homeEl = document.getElementById('sp-home');
+      if (homeEl) homeEl.style.display = 'none';
+      const companyContentEl = document.getElementById('company-content');
+      if (companyContentEl) companyContentEl.style.display = '';
+      const companyBarEl = document.getElementById('company-bar-toggle');
+      if (companyBarEl) companyBarEl.style.display = '';
+      if (searchBtn) searchBtn.style.display = '';
       // Flash if company changed
       if (prevCompany && prevCompany !== '—' && prevCompany !== response.company) {
         companyNameEl.style.animation = 'sp-company-flash 0.5s ease';
@@ -1011,6 +1029,154 @@ searchBtn.addEventListener('click', () => {
     }, 300); // small delay for content script injection
   });
 });
+
+// ── Home State ─────────────────────────────────────────────────────────────
+function renderHomeState() {
+  const homeEl = document.getElementById('sp-home');
+  if (!homeEl) return;
+
+  // Hide company content, show home
+  const companyContent = document.getElementById('company-content');
+  if (companyContent) companyContent.style.display = 'none';
+  const companyBar = document.getElementById('company-bar-toggle');
+  if (companyBar) companyBar.style.display = 'none';
+  const jobBar = document.getElementById('job-bar');
+  if (jobBar) jobBar.style.display = 'none';
+  const oppFields = document.getElementById('sp-opp-fields');
+  if (oppFields) oppFields.style.display = 'none';
+  if (searchBtn) searchBtn.style.display = 'none';
+  homeEl.style.display = '';
+
+  // Greeting
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+
+  chrome.storage.local.get(['savedCompanies', 'profileLinks', 'storyTime'], data => {
+    const companies = data.savedCompanies || [];
+
+    // Try to get first name
+    let firstName = '';
+    if (data.profileLinks?.email) firstName = data.profileLinks.email.split('@')[0].split('.')[0];
+    if (data.storyTime?.rawInput) {
+      const nameMatch = data.storyTime.rawInput.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]+)/i);
+      if (nameMatch) firstName = nameMatch[1];
+    }
+    firstName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : '';
+
+    document.getElementById('sp-home-greeting').innerHTML = `
+      <div class="sp-home-greeting">Good ${timeOfDay}${firstName ? ', ' + firstName : ''}</div>
+      <div class="sp-home-greeting-sub">Navigate to any company page to start research</div>
+    `;
+
+    // Scoring queue count
+    const queueCount = companies.filter(c => c.isOpportunity && (c.jobStage || 'needs_review') === 'needs_review').length;
+    document.getElementById('sp-home-queue').innerHTML = queueCount > 0 ? `
+      <div class="sp-home-card sp-home-queue-card" id="sp-home-queue-link">
+        <span class="sp-home-queue-count">${queueCount}</span>
+        <div>
+          <div class="sp-home-queue-text">in AI Scoring Queue</div>
+          <div class="sp-home-queue-sub">Tap to review</div>
+        </div>
+      </div>
+    ` : '';
+
+    document.getElementById('sp-home-queue-link')?.addEventListener('click', () => {
+      window.open(chrome.runtime.getURL('saved.html'), '_blank');
+    });
+
+    // Action items (next steps due)
+    const actionItems = companies
+      .filter(c => c.isOpportunity && c.nextStepDate)
+      .map(c => {
+        const daysUntil = Math.round((new Date(c.nextStepDate + 'T12:00:00') - new Date()) / 86400000);
+        return { ...c, daysUntil };
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 5);
+
+    if (actionItems.length) {
+      document.getElementById('sp-home-actions').innerHTML = `
+        <div class="sp-home-section">
+          <div class="sp-home-section-title">Action Items</div>
+          <div class="sp-home-card">
+            ${actionItems.map(c => {
+              const dateClass = c.daysUntil < 0 ? 'overdue' : c.daysUntil === 0 ? 'today' : 'upcoming';
+              const dateLabel = c.daysUntil < 0 ? `${Math.abs(c.daysUntil)}d overdue` : c.daysUntil === 0 ? 'Today' : c.daysUntil === 1 ? 'Tomorrow' : `in ${c.daysUntil}d`;
+              return `<div class="sp-home-action-item" data-id="${c.id}">
+                <div>
+                  <div class="sp-home-action-company">${c.company}</div>
+                  <div class="sp-home-action-step">${(c.nextStep || '').slice(0, 50)}</div>
+                </div>
+                <span class="sp-home-action-date ${dateClass}">${dateLabel}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      document.querySelectorAll('.sp-home-action-item').forEach(el => {
+        el.addEventListener('click', () => window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'));
+      });
+    } else {
+      document.getElementById('sp-home-actions').innerHTML = '';
+    }
+
+    // Pipeline snapshot
+    const opps = companies.filter(c => c.isOpportunity);
+    if (opps.length) {
+      chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
+        const stages = stageData.opportunityStages || stageData.customStages || [
+          { key: 'needs_review', label: 'AI Scoring Queue' },
+          { key: 'want_to_apply', label: 'Want to Apply' },
+          { key: 'applied', label: 'Applied' },
+          { key: 'conversations', label: 'Conversations' },
+        ];
+        const counts = {};
+        stages.forEach(s => counts[s.key] = 0);
+        opps.forEach(c => { const k = c.jobStage || 'needs_review'; counts[k] = (counts[k] || 0) + 1; });
+
+        document.getElementById('sp-home-pipeline').innerHTML = `
+          <div class="sp-home-section">
+            <div class="sp-home-section-title">Pipeline</div>
+            <div class="sp-home-card">
+              ${stages.filter(s => counts[s.key] > 0).map(s => `
+                <div class="sp-home-stage-row">
+                  <span class="sp-home-stage-name">${s.label}</span>
+                  <span class="sp-home-stage-count">${counts[s.key]}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      });
+    } else {
+      document.getElementById('sp-home-pipeline').innerHTML = '';
+    }
+
+    // Search
+    const searchInput = document.getElementById('sp-home-search');
+    const resultsEl = document.getElementById('sp-home-results');
+    searchInput?.addEventListener('input', () => {
+      const q = searchInput.value.toLowerCase().trim();
+      if (!q || q.length < 2) { resultsEl.style.display = 'none'; return; }
+      const matches = companies.filter(c =>
+        c.company?.toLowerCase().includes(q) ||
+        (c.jobTitle || '').toLowerCase().includes(q) ||
+        (c.tags || []).some(t => t.toLowerCase().includes(q))
+      ).slice(0, 8);
+      if (!matches.length) { resultsEl.style.display = 'none'; return; }
+      resultsEl.style.display = '';
+      resultsEl.innerHTML = matches.map(c => `
+        <div class="sp-home-search-result" data-id="${c.id}">
+          <div class="sp-home-search-result-name">${c.company}</div>
+          <div class="sp-home-search-result-role">${c.jobTitle || c.status || ''}</div>
+        </div>
+      `).join('');
+      resultsEl.querySelectorAll('.sp-home-search-result').forEach(el => {
+        el.addEventListener('click', () => window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'));
+      });
+    });
+  });
+}
 
 function triggerResearch(company, forceRefresh = false) {
   if (!company || company === '—') {
