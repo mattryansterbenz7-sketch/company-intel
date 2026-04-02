@@ -2148,9 +2148,22 @@ function bindKanbanEvents(board) {
               boardEl.style.transform = '';
             }
           }
-          if (deltaX > 10) { if (rightOv) rightOv.style.opacity = progress * 0.85; if (leftOv) leftOv.style.opacity = 0; }
-          else if (deltaX < -10) { if (leftOv) leftOv.style.opacity = progress * 0.85; if (rightOv) rightOv.style.opacity = 0; }
-          else { if (rightOv) rightOv.style.opacity = 0; if (leftOv) leftOv.style.opacity = 0; }
+          if (deltaX > 10) {
+            if (rightOv) rightOv.style.opacity = progress * 0.85;
+            if (leftOv) leftOv.style.opacity = 0;
+            card.style.background = ''; card.style.borderLeftColor = ''; card.style.boxShadow = '';
+          } else if (deltaX < -10) {
+            if (leftOv) { leftOv.style.opacity = progress * 0.85; const icon = leftOv.querySelector('svg'); if (icon) icon.style.transform = `scale(${0.5 + progress * 0.7})`; }
+            if (rightOv) rightOv.style.opacity = 0;
+            // Progressive red tint, border, shadow
+            const r = Math.min(0.18, progress * 0.18);
+            card.style.background = `rgba(229,72,59,${r})`;
+            card.style.borderLeftColor = progress > 0.3 ? `rgba(229,72,59,${0.3 + progress * 0.7})` : '';
+            card.style.boxShadow = progress > 0.5 ? `0 0 ${progress * 20}px rgba(229,72,59,${progress * 0.15})` : '';
+          } else {
+            if (rightOv) rightOv.style.opacity = 0; if (leftOv) leftOv.style.opacity = 0;
+            card.style.background = ''; card.style.borderLeftColor = ''; card.style.boxShadow = '';
+          }
         });
 
         card.addEventListener('pointerup', () => {
@@ -2170,9 +2183,16 @@ function bindKanbanEvents(board) {
 
           if ((Math.abs(deltaX) > threshold || pastLeftEdge || pastRightEdge) && entryId) {
             const direction = deltaX > 0 ? 1 : -1;
-            card.classList.add('fly-out');
-            card.style.transform = `translateX(${direction * 600}px) rotate(${direction * 15}deg)`;
-            card.style.opacity = '0';
+            if (direction < 0) {
+              // Dismiss: arc down + tilt + shrink + fade
+              card.classList.add('fly-out-dismiss');
+              card.style.transform = `translateX(-600px) translateY(30px) rotate(-8deg) scale(0.95)`;
+              card.style.opacity = '0';
+            } else {
+              card.classList.add('fly-out');
+              card.style.transform = `translateX(600px) rotate(15deg)`;
+              card.style.opacity = '0';
+            }
             setTimeout(() => {
               const entry = allCompanies.find(c => c.id === entryId);
               if (!entry) return;
@@ -2196,6 +2216,7 @@ function bindKanbanEvents(board) {
           } else {
             card.classList.add('snap-back');
             card.style.transform = '';
+            card.style.background = ''; card.style.borderLeftColor = ''; card.style.boxShadow = '';
             const rightOv = card.querySelector('.swipe-overlay.right');
             const leftOv = card.querySelector('.swipe-overlay.left');
             if (rightOv) rightOv.style.opacity = 0;

@@ -290,7 +290,14 @@
     .swipe-overlay.left .swipe-icon, .swipe-overlay.left .swipe-label { color: #b91c1c; }
     .swipe-overlay .swipe-label { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
     .kanban-card.fly-out { transition: transform 0.3s ease-in, opacity 0.3s ease-in; pointer-events: none; }
-    .kanban-card.snap-back { transition: transform 0.25s ease-out; }
+    .kanban-card.fly-out-dismiss, .compact-card.fly-out-dismiss {
+      transition: transform 0.35s ease-out, opacity 0.35s ease-out, background 0.2s, box-shadow 0.2s;
+      pointer-events: none;
+    }
+    .kanban-card.snap-back, .compact-card.snap-back {
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.25s, border-left-color 0.25s, box-shadow 0.25s;
+    }
+    .kanban-card.swiping, .compact-card.swiping { transition: background 0.1s, border-left-color 0.1s, box-shadow 0.1s; }
     .kanban-card-company { font-size: 14px; font-weight: 700; color: #2d3e50; line-height: 1.2; text-decoration: none; cursor: pointer; }
     .kanban-card-company:hover { color: #0077b5; }
     .kanban-card-job { font-size: 12px; color: #516f90; margin-top: 2px; }
