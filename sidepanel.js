@@ -207,21 +207,15 @@ function showSaveTagSuggestions() {
   });
 }
 
-saveTagInput.addEventListener('focus', showSaveTagSuggestions);
-saveTagInput.addEventListener('input', showSaveTagSuggestions);
-
-saveTagInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    const val = saveTagInput.value.trim();
-    if (val) addSaveTag(val);
-  }
-  if (e.key === 'Escape') saveTagSuggestions.style.display = 'none';
-});
-
-saveTagInput.addEventListener('blur', () => {
-  setTimeout(() => { saveTagSuggestions.style.display = 'none'; }, 150);
-});
+if (saveTagInput) {
+  saveTagInput.addEventListener('focus', showSaveTagSuggestions);
+  saveTagInput.addEventListener('input', showSaveTagSuggestions);
+  saveTagInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); const val = saveTagInput.value.trim(); if (val) addSaveTag(val); }
+    if (e.key === 'Escape') saveTagSuggestions.style.display = 'none';
+  });
+  saveTagInput.addEventListener('blur', () => { setTimeout(() => { if (saveTagSuggestions) saveTagSuggestions.style.display = 'none'; }, 150); });
+}
 
 function addSaveTag(tag) {
   const clean = tag.trim();
