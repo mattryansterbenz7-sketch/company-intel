@@ -91,6 +91,8 @@ async function detectCompanyAndJob() {
     result = detectAshby();
   } else if (url.includes('ats.rippling.com')) {
     result = detectRippling();
+  } else if (url.includes('workable.com')) {
+    result = detectWorkable();
   } else {
     result = detectGeneric();
   }
@@ -862,6 +864,61 @@ function detectRippling() {
 
   if (!company) company = 'Unknown Company';
   return { company, jobTitle: jobTitle || null, source: 'rippling', domain: null };
+}
+
+function detectWorkable() {
+  // URL: jobs.workable.com/{company-slug}/{job-id} or apply.workable.com/...
+  const hostname = window.location.hostname;
+  let company = null;
+
+  // Workable subdomain: {company}.workable.com
+  const subMatch = hostname.match(/^([a-z][a-z0-9-]+)\.workable\.com$/i);
+  if (subMatch && subMatch[1] !== 'jobs' && subMatch[1] !== 'apply' && subMatch[1] !== 'www') {
+    company = subMatch[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // URL path: jobs.workable.com/{company-slug}/{job-id}
+  if (!company) {
+    const pathMatch = window.location.pathname.match(/^\/([a-z][a-z0-9-]+)\//i);
+    if (pathMatch && pathMatch[1].length > 2 && !/^(j|jobs|apply|careers)$/i.test(pathMatch[1])) {
+      company = pathMatch[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+  }
+
+  // og:site_name or og:title
+  if (!company) {
+    const siteName = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.trim();
+    if (siteName && siteName.length > 1 && !/workable/i.test(siteName)) {
+      company = siteName.replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+    }
+  }
+  if (!company) {
+    const parts = document.title.split(/\s*[-–—|]\s*/);
+    if (parts.length > 1) company = parts[parts.length - 1].replace(/\s*(careers|jobs|hiring)\s*$/i, '').trim();
+  }
+
+  // Job title from h1 or data attributes
+  let jobTitle = document.querySelector('h1')?.textContent?.trim();
+  if (!jobTitle) {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim();
+    if (ogTitle) {
+      const parts = ogTitle.split(/\s*[-–—|]\s*/);
+      jobTitle = parts[0]?.trim();
+    }
+  }
+
+  // First sentence extraction for company name
+  if (!company) {
+    const descEl = document.querySelector('[data-ui="job-description"], .job-description, article');
+    if (descEl) {
+      const text = descEl.textContent?.slice(0, 500) || '';
+      const nameMatch = text.match(/^([A-Z][A-Za-z\s&.]+?)\s+(?:is\s+(?:seeking|looking|hiring|a\s)|seeks\s)/);
+      if (nameMatch && nameMatch[1].length > 2 && nameMatch[1].length < 50) company = nameMatch[1].trim();
+    }
+  }
+
+  if (!company) company = extractDomain();
+  return { company, jobTitle: jobTitle || null, source: 'workable', domain: null };
 }
 
 function detectGeneric() {
