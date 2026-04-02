@@ -54,6 +54,37 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
 setInterval(() => { if (GRANOLA_KEY) buildGranolaIndex(); }, 6 * 60 * 60 * 1000);
 
+// ── Pipeline Configuration ──────────────────────────────────────────────────
+const DEFAULT_PIPELINE_CONFIG = {
+  enrichmentOrder: [{ id: 'apollo', enabled: true }, { id: 'webResearch', enabled: true }],
+  searchFallbackOrder: [
+    { id: 'serper', enabled: true }, { id: 'google_cse', enabled: true },
+    { id: 'openai', enabled: true }, { id: 'claude', enabled: true }
+  ],
+  aiModels: {
+    companyIntelligence: 'claude-haiku-4-5-20251001',
+    firmographicExtraction: 'claude-haiku-4-5-20251001',
+    jobMatchScoring: 'claude-haiku-4-5-20251001',
+    deepFitAnalysis: 'claude-sonnet-4-5-20250514',
+    nextStepExtraction: 'claude-haiku-4-5-20251001',
+    chat: 'gpt-4.1-mini',
+  },
+  searchCounts: { reviewScout: 3, reviewDrill: 2, leaders: 5, jobs: 5, product: 3 }
+};
+let pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG };
+
+// Load pipeline config
+chrome.storage.local.get(['pipelineConfig'], d => {
+  if (d.pipelineConfig) pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...d.pipelineConfig };
+});
+
+// Live-update pipeline config
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.pipelineConfig) {
+    pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...changes.pipelineConfig.newValue };
+  }
+});
+
 // ── Company name matching helper ────────────────────────────────────────────
 function companiesMatchLoose(a, b) {
   if (!a || !b) return false;
@@ -451,6 +482,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+  if (message.type === 'GET_PIPELINE_CONFIG') {
+    sendResponse(pipelineConfig);
+    return true;
+  }
+  if (message.type === 'SET_PIPELINE_CONFIG') {
+    pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...message.config };
+    chrome.storage.local.set({ pipelineConfig }, () => sendResponse({ success: true }));
+    return true;
+  }
 });
 
 // ── Profile Section Interpretation ───────────────────────────────────────────
@@ -786,7 +826,7 @@ async function enrichFromWebResearch(company, domain) {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }] })
+          body: JSON.stringify({ model: pipelineConfig.aiModels?.firmographicExtraction || 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }] })
         });
         const d = await res.json();
         if (!res.ok) { console.log('[Enrich] Haiku API error:', res.status, d); }
@@ -931,19 +971,19 @@ async function researchCompany(company, domain, prefs, companyLinkedin, linkedin
     // Scout-then-drill review search + parallel leader/job/product searches
     // Step 1: Scout query runs in parallel with other searches
     let leaderResults, jobResults, productResults;
-    const scoutPromise = fetchSearchResults(`"${company}" reviews sales culture glassdoor repvue reddit`, 4);
+    const scoutPromise = fetchSearchResults(`"${company}" reviews sales culture glassdoor repvue reddit`, pipelineConfig.searchCounts?.reviewScout || 3);
 
     if (_serperExhausted) {
       console.warn('[Research] Serper exhausted — running scout + leadership only; skipping jobs & product');
-      leaderResults = await fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5);
+      leaderResults = await fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', pipelineConfig.searchCounts?.leaders || 5);
       jobResults = [];
       productResults = [];
     } else {
       [, leaderResults, jobResults, productResults] = await Promise.all([
         scoutPromise, // scout runs in parallel
-        fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', 5),
-        fetchSearchResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', 5),
-        fetchSearchResults(qd + ' what does it do product overview how it works category', 3),
+        fetchSearchResults('site:linkedin.com/in ' + qd + ' (founder OR "co-founder" OR CEO OR CTO OR CMO OR president)', pipelineConfig.searchCounts?.leaders || 5),
+        fetchSearchResults(qd + ' jobs hiring (site:linkedin.com OR site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com OR site:wellfound.com)', pipelineConfig.searchCounts?.jobs || 5),
+        fetchSearchResults(qd + ' what does it do product overview how it works category', pipelineConfig.searchCounts?.product || 3),
       ]);
     }
 
@@ -960,8 +1000,8 @@ async function researchCompany(company, domain, prefs, companyLinkedin, linkedin
     const roleKeywords = (_drillPrefs?.roles || '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 2).slice(0, 3).join(' OR ') || 'sales OR GTM OR revenue OR leadership';
 
     const drillPromises = [];
-    if (hasRepVue) drillPromises.push(fetchSearchResults(`site:repvue.com "${company}" sales quota culture`, 2));
-    if (hasGlassdoor) drillPromises.push(fetchSearchResults(`site:glassdoor.com/Reviews "${company}" ${roleKeywords}`, 2));
+    if (hasRepVue) drillPromises.push(fetchSearchResults(`site:repvue.com "${company}" sales quota culture`, pipelineConfig.searchCounts?.reviewDrill || 2));
+    if (hasGlassdoor) drillPromises.push(fetchSearchResults(`site:glassdoor.com/Reviews "${company}" ${roleKeywords}`, pipelineConfig.searchCounts?.reviewDrill || 2));
     const drillResults = drillPromises.length ? await Promise.all(drillPromises) : [];
 
     // Step 4: Combine and deduplicate by URL
@@ -1129,7 +1169,7 @@ If none of these apply, set hardDQ.flagged to false with empty reasons array.
 
   try {
     const res = await claudeApiCall({
-        model: 'claude-haiku-4-5-20251001',
+        model: pipelineConfig.aiModels?.jobMatchScoring || 'claude-haiku-4-5-20251001',
         max_tokens: 1100,
         messages: [{ role: 'user', content: prompt }]
     });
@@ -1457,33 +1497,27 @@ async function fetchSearchResults(query, num = 5) {
     claude: ANTHROPIC_KEY ? 'available' : 'no key',
   });
 
-  // 1. Serper (free credits)
-  if (SERPER_KEY && !_serperExhausted) {
-    console.log('[Search] Trying Serper...');
-    const results = await fetchSerperResults(query, num);
-    if (results.length > 0) { console.log('[Search] Serper returned', results.length, 'results'); return results; }
-    console.log('[Search] Serper returned 0 results');
-  }
-  // 2. Google Custom Search (free 100 queries/day)
-  if (GOOGLE_CSE_KEY && GOOGLE_CSE_CX) {
-    console.log('[Search] Trying Google CSE...');
-    const results = await fetchGoogleCSEResults(query, num);
-    if (results.length > 0) { console.log('[Search] Google CSE returned', results.length, 'results'); return results; }
-    console.log('[Search] Google CSE returned 0 results');
-  }
-  // 3. OpenAI Web Search (separate rate limits from Claude)
-  if (OPENAI_KEY) {
-    console.warn('[Search] Using expensive fallback: OpenAI web search (Serper exhausted)');
-    const results = await fetchOpenAIWebSearch(query, num);
-    if (results.length > 0) { console.log('[Search] OpenAI returned', results.length, 'results'); results._usedExpensiveFallback = true; return results; }
-    console.log('[Search] OpenAI returned 0 results');
-  }
-  // 4. Claude Web Search (last resort)
-  if (ANTHROPIC_KEY) {
-    console.warn('[Search] Using expensive fallback: Claude web search (Serper exhausted)');
-    const results = await fetchClaudeWebSearch(query, num);
-    if (results.length > 0) { console.log('[Search] Claude returned', results.length, 'results'); results._usedExpensiveFallback = true; return results; }
-    console.log('[Search] Claude returned 0 results');
+  const searchChain = (pipelineConfig.searchFallbackOrder || DEFAULT_PIPELINE_CONFIG.searchFallbackOrder)
+    .filter(p => p.enabled);
+
+  const SEARCH_REGISTRY = {
+    serper: () => SERPER_KEY && !_serperExhausted ? fetchSerperResults(query, num) : Promise.resolve([]),
+    google_cse: () => GOOGLE_CSE_KEY && GOOGLE_CSE_CX ? fetchGoogleCSEResults(query, num) : Promise.resolve([]),
+    openai: () => OPENAI_KEY ? fetchOpenAIWebSearch(query, num) : Promise.resolve([]),
+    claude: () => ANTHROPIC_KEY ? fetchClaudeWebSearch(query, num) : Promise.resolve([]),
+  };
+
+  for (const provider of searchChain) {
+    const fn = SEARCH_REGISTRY[provider.id];
+    if (!fn) continue;
+    console.log(`[Search] Trying ${provider.id}...`);
+    const results = await fn();
+    if (results.length > 0) {
+      console.log(`[Search] ${provider.id} returned`, results.length, 'results');
+      if (provider.id !== 'serper' && provider.id !== 'google_cse') results._usedExpensiveFallback = true;
+      return results;
+    }
+    console.log(`[Search] ${provider.id} returned 0 results`);
   }
   console.log('[Search] All providers exhausted for:', query);
   return [];
@@ -1534,7 +1568,7 @@ Respond with a JSON object only, no markdown:
 }`;
 
   let res = await claudeApiCall({
-      model: 'claude-haiku-4-5-20251001',
+      model: pipelineConfig.aiModels?.companyIntelligence || 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
   });
@@ -2032,7 +2066,7 @@ When the user first enters this mode, respond: "Paste the application question a
   try {
     const systemText = systemParts.join('\n');
     console.log('[Chat] System prompt length:', systemText.length, 'chars');
-    const model = chatModel || 'gpt-4.1-mini';
+    const model = chatModel || pipelineConfig.aiModels?.chat || 'gpt-4.1-mini';
     console.log('[Chat] Using model:', model);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'Chat' });
     if (result.error) return result;
@@ -2121,7 +2155,7 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatMo
 
   try {
     const systemText = systemParts.join('\n');
-    const model = chatModel || 'gpt-4.1-mini';
+    const model = chatModel || pipelineConfig.aiModels?.chat || 'gpt-4.1-mini';
     console.log('[GlobalChat] Using model:', model, '| prompt length:', systemText.length);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'GlobalChat' });
     if (result.error) return result;
@@ -2391,7 +2425,7 @@ Be specific. Reference real details. Don't hedge or restate the obvious. If tran
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: pipelineConfig.aiModels?.deepFitAnalysis || 'claude-sonnet-4-5-20250514',
         max_tokens: 600,
         system,
         messages: [{ role: 'user', content: contextParts.join('\n\n') }]
@@ -2429,7 +2463,7 @@ async function extractNextSteps(notes, calendarEvents, transcripts) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: pipelineConfig.aiModels?.nextStepExtraction || 'claude-haiku-4-5-20251001',
         max_tokens: 120,
         system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON: {"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null"}. Dates like "Thursday" should be resolved to absolute dates relative to today.`,
         messages: [{ role: 'user', content: contextParts.join('\n\n') }]

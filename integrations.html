@@ -111,6 +111,44 @@
     .integrations-body { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
     .integrations-col { display: flex; flex-direction: column; gap: 0; }
     @media (max-width: 900px) { .integrations-body { grid-template-columns: 1fr; } }
+
+    /* Pipeline Settings */
+    .pipeline-section { margin-top: 28px; background: #f8fafc; border: 1px solid #eaf0f6; border-radius: 10px; padding: 16px 20px; }
+    .pipeline-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+    .pipeline-header-title { font-size: 13px; font-weight: 700; color: #516f90; text-transform: uppercase; letter-spacing: 0.06em; }
+    .pipeline-header-chevron { color: #7c98b6; font-size: 14px; transition: transform 0.2s; }
+    .pipeline-header.collapsed .pipeline-header-chevron { transform: rotate(-90deg); }
+    .pipeline-body { margin-top: 16px; }
+    .pipeline-body.hidden { display: none; }
+    .pipeline-subsection { margin-bottom: 20px; }
+    .pipeline-sub-title { font-size: 14px; font-weight: 700; color: #2d3e50; margin-bottom: 4px; }
+    .pipeline-sub-desc { font-size: 12px; color: #7c98b6; margin-bottom: 10px; }
+    .pipeline-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #fff; border: 1px solid #eaf0f6; border-radius: 6px; margin-bottom: 4px; }
+    .pipeline-row.disabled { opacity: 0.4; }
+    .pipeline-drag { cursor: grab; color: #b0c1d4; font-size: 14px; flex-shrink: 0; }
+    .pipeline-name { font-size: 13px; font-weight: 600; color: #2d3e50; }
+    .pipeline-desc { font-size: 11px; color: #7c98b6; }
+    .pipeline-status { display: flex; align-items: center; gap: 4px; margin-left: auto; font-size: 11px; }
+    .pipeline-cost { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+    .pipeline-cost.cheap { background: #d1fae5; color: #065f46; }
+    .pipeline-cost.expensive { background: #fee2e2; color: #991b1b; }
+    .pipeline-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .pipeline-toggle input { opacity: 0; width: 0; height: 0; }
+    .pipeline-toggle-track { position: absolute; inset: 0; background: #dfe3eb; border-radius: 10px; cursor: pointer; transition: background 0.2s; }
+    .pipeline-toggle-track::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+    .pipeline-toggle input:checked + .pipeline-toggle-track { background: #22c55e; }
+    .pipeline-toggle input:checked + .pipeline-toggle-track::before { transform: translateX(16px); }
+    .pipeline-model-select { font-size: 12px; border: 1px solid #dfe3eb; border-radius: 4px; padding: 3px 6px; font-family: inherit; color: #33475b; background: #fff; }
+    .pipeline-stepper { display: flex; align-items: center; gap: 0; }
+    .pipeline-stepper button { width: 24px; height: 24px; border: 1px solid #dfe3eb; background: #fff; color: #33475b; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .pipeline-stepper button:first-child { border-radius: 4px 0 0 4px; }
+    .pipeline-stepper button:last-child { border-radius: 0 4px 4px 0; }
+    .pipeline-stepper span { width: 28px; height: 24px; border-top: 1px solid #dfe3eb; border-bottom: 1px solid #dfe3eb; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #2d3e50; }
+    .pipeline-counts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pipeline-count-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: #fff; border: 1px solid #eaf0f6; border-radius: 6px; }
+    .pipeline-count-label { font-size: 12px; color: #33475b; }
+    .pipeline-cascade-arrow { text-align: center; font-size: 10px; color: #b0c1d4; padding: 2px 0; }
+    .pipeline-warn { font-size: 11px; color: #d97706; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 6px; padding: 6px 10px; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -138,6 +176,14 @@
   <div class="integrations-body" id="providers-container">
     <div class="integrations-col" id="providers-left"></div>
     <div class="integrations-col" id="providers-right"></div>
+  </div>
+
+  <div class="pipeline-section" id="pipeline-section">
+    <div class="pipeline-header" id="pipeline-header">
+      <span class="pipeline-header-title">Pipeline Settings</span>
+      <span class="pipeline-header-chevron">&#9662;</span>
+    </div>
+    <div class="pipeline-body" id="pipeline-body"></div>
   </div>
 </div>
 
