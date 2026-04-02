@@ -234,6 +234,56 @@ async function trackApiCall(provider, response) {
 
 const CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days — company data doesn't change daily
 
+// ── Multi-Provider AI Router ────────────────────────────────────────────────
+
+function getModelForTask(taskId) {
+  const defaults = {
+    companyIntelligence: 'claude-haiku-4-5-20251001',
+    firmographicExtraction: 'claude-haiku-4-5-20251001',
+    jobMatchScoring: 'claude-haiku-4-5-20251001',
+    deepFitAnalysis: 'claude-sonnet-4-5-20250514',
+    nextStepExtraction: 'claude-haiku-4-5-20251001',
+    chat: 'gpt-4.1-mini',
+    quickFitScoring: 'claude-haiku-4-5-20251001',
+    profileInterpret: 'claude-haiku-4-5-20251001',
+    roleBrief: 'claude-sonnet-4-5-20250514',
+    profileConsolidate: 'claude-sonnet-4-5-20250514',
+  };
+  return pipelineConfig?.aiModels?.[taskId] || defaults[taskId] || 'claude-haiku-4-5-20251001';
+}
+
+async function aiCall(taskId, { system, messages, max_tokens }) {
+  const model = getModelForTask(taskId);
+
+  if (model.startsWith('gpt-')) {
+    if (!OPENAI_KEY) {
+      console.warn(`[AI] OpenAI key missing for task ${taskId}, falling back to Claude`);
+      const fallback = model.includes('mini') ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-5-20250514';
+      const res = await claudeApiCall({ model: fallback, system, messages, max_tokens });
+      const data = await res.json();
+      return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model: fallback };
+    }
+    const res = await openAiChatCall({ model, system, messages, max_tokens });
+    const data = await res.json();
+    return { ok: res.ok, status: res.status, text: data.choices?.[0]?.message?.content || '', raw: data, provider: 'openai', model };
+  }
+
+  if (!ANTHROPIC_KEY) {
+    console.warn(`[AI] Anthropic key missing for task ${taskId}, falling back to OpenAI`);
+    if (OPENAI_KEY) {
+      const fallback = model.includes('sonnet') ? 'gpt-4.1' : 'gpt-4.1-mini';
+      const res = await openAiChatCall({ model: fallback, system, messages, max_tokens });
+      const data = await res.json();
+      return { ok: res.ok, status: res.status, text: data.choices?.[0]?.message?.content || '', raw: data, provider: 'openai', model: fallback };
+    }
+    return { ok: false, status: 0, text: '', raw: {}, provider: 'none', model, error: 'No AI keys configured' };
+  }
+
+  const res = await claudeApiCall({ model, system, messages, max_tokens });
+  const data = await res.json();
+  return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model };
+}
+
 // ── AI Scoring Queue Config ─────────────────────────────────────────────────
 const QUICK_FIT_MODEL = 'claude-haiku-4-5-20251001';
 const QUEUE_AUTO_PROCESS = true;
@@ -844,23 +894,20 @@ async function enrichFromWebResearch(company, domain) {
     let aiEstimate = {};
     if (snippets.length > 50) {
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: pipelineConfig.aiModels?.firmographicExtraction || 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }] })
+        const aiResult = await aiCall('firmographicExtraction', {
+          system: 'You are a JSON-only data extractor. Respond with valid JSON only.',
+          messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }],
+          max_tokens: 300
         });
-        const d = await res.json();
-        if (!res.ok) { console.log('[Enrich] Haiku API error:', res.status, d); }
-        else {
-          let t = (d.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-          // Strip trailing text after JSON (Haiku sometimes appends notes)
+        if (aiResult.ok && aiResult.text) {
+          let t = aiResult.text.replace(/```json|```/g, '').trim();
           const lastBrace = t.lastIndexOf('}');
           if (lastBrace > 0) t = t.slice(0, lastBrace + 1);
-          console.log('[Enrich] Haiku raw response:', t);
+          console.log('[Enrich] AI raw response:', t);
           aiEstimate = JSON.parse(t);
-          console.log('[Enrich] Haiku parsed:', aiEstimate);
-        }
-      } catch(e) { console.log('[Enrich] Haiku parse error:', e.message); }
+          console.log('[Enrich] AI parsed:', aiEstimate);
+        } else { console.log('[Enrich] AI error:', aiResult.status); }
+      } catch(e) { console.log('[Enrich] AI parse error:', e.message); }
     } else {
       console.log('[Enrich] Skipping Haiku — snippets too short:', snippets.length);
     }
@@ -1193,28 +1240,21 @@ If none of these apply, set hardDQ.flagged to false with empty reasons array.
 }`;
 
   try {
-    const res = await claudeApiCall({
-        model: pipelineConfig.aiModels?.jobMatchScoring || 'claude-haiku-4-5-20251001',
-        max_tokens: 1100,
-        messages: [{ role: 'user', content: prompt }]
+    const aiResult = await aiCall('jobMatchScoring', {
+      system: 'You are a JSON-only analyst. Respond with valid JSON only.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1100
     });
-    const data = await res.json();
-    // Fallback through all models on rate limit
-    if (res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) {
-      console.warn('[AnalyzeJob] Claude rate limited, trying fallback chain...');
-      const result = await chatWithFallback({
-        model: 'gpt-4.1-mini',
-        system: 'You are a JSON-only analyst. Respond with valid JSON only.',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1100,
-        tag: 'AnalyzeJob'
+    if (!aiResult.ok) {
+      // Fallback through all models
+      const fallback = await chatWithFallback({
+        model: 'gpt-4.1-mini', system: 'You are a JSON-only analyst. Respond with valid JSON only.',
+        messages: [{ role: 'user', content: prompt }], max_tokens: 1100, tag: 'AnalyzeJob'
       });
-      if (!result.error) {
-        return JSON.parse(result.reply.replace(/```json|```/g, '').trim());
-      }
+      if (!fallback.error) return JSON.parse(fallback.reply.replace(/```json|```/g, '').trim());
+      return null;
     }
-    const clean = data.content[0].text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
+    return JSON.parse(aiResult.text.replace(/```json|```/g, '').trim());
   } catch (err) {
     return null;
   }
@@ -1592,49 +1632,34 @@ Respond with a JSON object only, no markdown:
   "leaders": [{"name": "<full name>", "title": "<role at this company>", "newsUrl": "<URL or null>"}]
 }`;
 
-  let res = await claudeApiCall({
-      model: pipelineConfig.aiModels?.companyIntelligence || 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }]
+  const aiResult = await aiCall('companyIntelligence', {
+    system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 2000
   });
 
-  let data = await res.json();
-  // On Claude rate limit, fall back through all available models
-  if (res.status === 429 || (data.error && /rate.limit/i.test(data.error.message || ''))) {
-    console.warn('[Research] Claude rate limited, trying fallback chain...');
-    const result = await chatWithFallback({
+  if (!aiResult.ok) {
+    // Try fallback chain if primary model failed
+    const fallback = await chatWithFallback({
       model: 'gpt-4.1-mini',
       system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2000,
       tag: 'Research'
     });
-    if (result.error) throw new Error('AI is busy — too many requests. Try again in a moment.');
-    const fbClean = result.reply.replace(/```json|```/g, '').trim();
+    if (fallback.error) throw new Error('AI is busy — too many requests. Try again in a moment.');
+    const fbClean = fallback.reply.replace(/```json|```/g, '').trim();
     let fbResult;
     try { fbResult = JSON.parse(fbClean); } catch { fbResult = JSON.parse(fbClean.slice(0, fbClean.lastIndexOf('}') + 1)); }
-    // Validate the AI didn't describe a different company
     const fbAiRef = fbResult.intelligence?.eli5 || fbResult.intelligence?.oneLiner || '';
     if (fbAiRef && company) {
       const fbWords = company.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
-      const fbDescLower = fbAiRef.toLowerCase();
-      const fbMentions = fbWords.some(w => fbDescLower.includes(w));
-      if (!fbMentions) {
-        console.warn('[Research] AI description may not match company:', company, '| desc:', fbAiRef.slice(0, 80));
-        fbResult._dataConflict = true;
-      }
+      if (!fbWords.some(w => fbAiRef.toLowerCase().includes(w))) fbResult._dataConflict = true;
     }
     return fbResult;
   }
-  // Surface API-level errors with friendly messages
-  if (data.error) {
-    const msg = data.error.message || data.error.type || '';
-    if (/rate.limit/i.test(msg)) throw new Error('AI is busy — too many requests. Try again in a moment.');
-    throw new Error('AI analysis temporarily unavailable. Try refreshing.');
-  }
-  if (!res.ok) throw new Error('AI analysis temporarily unavailable. Try refreshing.');
-  const raw = data.content?.[0]?.text;
-  if (!raw) throw new Error('Empty response from Claude');
+  const raw = aiResult.text;
+  if (!raw) throw new Error('Empty response from AI');
   const clean = raw.replace(/```json|```/g, '').trim();
   // If JSON is truncated (common with low max_tokens), attempt partial recovery
   let parsedResult;
@@ -2476,23 +2501,12 @@ Be specific. Reference real details. Don't hedge or restate the obvious. If tran
 
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: pipelineConfig.aiModels?.deepFitAnalysis || 'claude-sonnet-4-5-20250514',
-        max_tokens: 600,
-        system,
-        messages: [{ role: 'user', content: contextParts.join('\n\n') }]
-      })
+    const result = await aiCall('deepFitAnalysis', {
+      system,
+      messages: [{ role: 'user', content: contextParts.join('\n\n') }],
+      max_tokens: 600
     });
-    const data = await res.json();
-    return { analysis: data.content?.[0]?.text || null };
+    return { analysis: result.text || null };
   } catch (e) {
     return { error: e.message };
   }
@@ -2514,23 +2528,12 @@ async function extractNextSteps(notes, calendarEvents, transcripts) {
   if (!contextParts.length) return { nextStep: null, nextStepDate: null };
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: pipelineConfig.aiModels?.nextStepExtraction || 'claude-haiku-4-5-20251001',
-        max_tokens: 120,
-        system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON: {"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null"}. Dates like "Thursday" should be resolved to absolute dates relative to today.`,
-        messages: [{ role: 'user', content: contextParts.join('\n\n') }]
-      })
+    const result = await aiCall('nextStepExtraction', {
+      system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON: {"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null"}. Dates like "Thursday" should be resolved to absolute dates relative to today.`,
+      messages: [{ role: 'user', content: contextParts.join('\n\n') }],
+      max_tokens: 120
     });
-    const data = await res.json();
-    const text = data.content?.[0]?.text || '{}';
+    const text = result.text || '{}';
     const match = text.match(/\{[\s\S]*?\}/);
     const json = match ? JSON.parse(match[0]) : {};
     return {
