@@ -21,15 +21,18 @@ const COOP = {
         <!-- Ears -->
         <ellipse cx="28" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
         <ellipse cx="72" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
-        <!-- Hair: short sides (fade), textured top — not swept dramatically -->
-        <!-- Side fade: darker, close-cropped -->
-        <path d="M28 44 Q28 30 36 24 L34 26 Q30 32 30 42Z" fill="#7A6040"/>
-        <path d="M72 44 Q72 30 64 24 L66 26 Q70 32 70 42Z" fill="#7A6040"/>
-        <!-- Top: natural medium brown, slight texture, not too tall -->
-        <path d="M30 38 Q30 22 50 19 Q70 22 70 38 L68 32 Q66 22 50 20 Q34 22 32 32Z" fill="#8B6B4A"/>
-        <!-- Subtle texture lines on top -->
-        <path d="M40 24 Q42 20 46 19" fill="none" stroke="#9D7D5A" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-        <path d="M48 22 Q52 19 56 20" fill="none" stroke="#9D7D5A" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+        <!-- Hair: full coverage, short sides, styled top -->
+        <!-- Main hair mass covering top and sides of head -->
+        <path d="M27 42 Q27 20 50 14 Q73 20 73 42 L71 36 Q69 20 50 17 Q31 20 29 36Z" fill="#7A5C3A"/>
+        <!-- Side coverage: visible short hair on sides -->
+        <path d="M27 42 Q27 28 35 22 L33 24 Q29 30 28 40Z" fill="#6B4E30"/>
+        <path d="M73 42 Q73 28 65 22 L67 24 Q71 30 72 40Z" fill="#6B4E30"/>
+        <!-- Top volume: styled, natural -->
+        <path d="M31 34 Q31 18 50 14 Q69 18 69 34 Q68 22 50 17 Q32 22 31 34Z" fill="#8B6B4A"/>
+        <!-- Hair texture on top -->
+        <path d="M36 26 Q38 18 44 15 Q46 20 44 26Z" fill="#96784E" opacity="0.7"/>
+        <path d="M44 22 Q48 14 54 14 Q56 18 52 22Z" fill="#96784E" opacity="0.6"/>
+        <path d="M52 24 Q56 16 62 18 Q60 22 56 24Z" fill="#8B6B4A" opacity="0.5"/>
         <!-- Eyes: blue, proportional, natural -->
         <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/>
         <circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
