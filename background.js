@@ -2144,9 +2144,35 @@ When the user first enters this mode, respond: "Paste the application question a
   // AI-learned insights (from passive learning)
   const storyTime = profileData.storyTime;
   if (storyTime?.learnedInsights?.length) {
-    const insights = storyTime.learnedInsights.slice(-20);
-    systemParts.push(`\n[AI-Learned Insights]\n${insights.map(i => `- ${i.insight}`).join('\n')}`);
+    const allInsights = storyTime.learnedInsights;
+    // Backward compat: handle old string-format insights
+    const normalized = allInsights.map(i => typeof i === 'string' ? { insight: i, category: 'general', priority: 'normal' } : i);
+    const highPriority = normalized.filter(i => i.priority === 'high');
+    const styleInstructions = normalized.filter(i => i.category === 'style_instruction');
+    const normalInsights = normalized.filter(i => i.priority !== 'high' && i.category !== 'style_instruction');
+    const recentNormal = normalInsights.slice(-15);
+
+    // Style instructions get their own section
+    if (styleInstructions.length) {
+      systemParts.push(`\n=== STYLE INSTRUCTIONS (from past corrections) ===\n${styleInstructions.map(i => `- ${i.insight}`).join('\n')}`);
+    }
+
+    // High-priority insights always included + recent normal
+    const injectedInsights = [...highPriority, ...recentNormal];
+    if (injectedInsights.length) {
+      systemParts.push(`\n[AI-Learned Insights]\n${injectedInsights.map(i => `- ${i.insight}`).join('\n')}`);
+    }
+
+    // Answer patterns for application helper mode
+    if (context._applicationMode && storyTime?.answerPatterns?.length) {
+      const patterns = storyTime.answerPatterns.slice(-10);
+      systemParts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${patterns.map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
+    }
   }
+
+  // Check for trigger phrases that should make extraction blocking
+  const lastUserMsg = messages[messages.length - 1]?.content || '';
+  const hasTrigger = /remember this|remember that|don't forget|from now on|always\s+(?:lead|start|use|mention|include)|never\s+(?:say|mention|use|include)|update my profile|add this to/i.test(lastUserMsg);
 
   try {
     const systemText = systemParts.join('\n');
@@ -2155,9 +2181,12 @@ When the user first enters this mode, respond: "Paste the application question a
     console.log('[Chat] Using model:', model);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'Chat' });
     if (result.error) return result;
-    // Passive learning: extract insights in background (non-blocking)
-    const lastUserMsg = messages[messages.length - 1]?.content || '';
-    extractInsightsFromChat(lastUserMsg, result.reply, `chat:${context.company || 'unknown'}`);
+    // Passive learning: extract insights — blocking for trigger phrases, debounced otherwise
+    if (hasTrigger) {
+      await _doExtractInsightsFromChat(lastUserMsg, result.reply, `chat:${context.company || 'unknown'}`);
+    } else {
+      extractInsightsFromChat(lastUserMsg, result.reply, `chat:${context.company || 'unknown'}`);
+    }
     return { reply: result.reply, model: result.usedModel };
   } catch (err) {
     console.error('[Chat] Error:', err);
@@ -2226,7 +2255,30 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatMo
   if (gcCompParts.length) systemParts.push(`\n[Compensation]\n${gcCompParts.join('\n')}`);
 
   if (storyTime?.learnedInsights?.length) {
-    systemParts.push(`\n[AI-Learned Insights]\n${storyTime.learnedInsights.slice(-20).map(i => `- ${i.insight}`).join('\n')}`);
+    const allInsights = storyTime.learnedInsights;
+    // Backward compat: handle old string-format insights
+    const normalized = allInsights.map(i => typeof i === 'string' ? { insight: i, category: 'general', priority: 'normal' } : i);
+    const highPriority = normalized.filter(i => i.priority === 'high');
+    const styleInstructions = normalized.filter(i => i.category === 'style_instruction');
+    const normalInsights = normalized.filter(i => i.priority !== 'high' && i.category !== 'style_instruction');
+    const recentNormal = normalInsights.slice(-15);
+
+    // Style instructions get their own section
+    if (styleInstructions.length) {
+      systemParts.push(`\n=== STYLE INSTRUCTIONS (from past corrections) ===\n${styleInstructions.map(i => `- ${i.insight}`).join('\n')}`);
+    }
+
+    // High-priority insights always included + recent normal
+    const injectedInsights = [...highPriority, ...recentNormal];
+    if (injectedInsights.length) {
+      systemParts.push(`\n[AI-Learned Insights]\n${injectedInsights.map(i => `- ${i.insight}`).join('\n')}`);
+    }
+
+    // Answer patterns for global chat (pipeline advisor may help with applications too)
+    if (storyTime?.answerPatterns?.length) {
+      const patterns = storyTime.answerPatterns.slice(-10);
+      systemParts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${patterns.map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
+    }
   }
 
   // Pipeline summary
@@ -2238,15 +2290,22 @@ async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatMo
   // Company-specific enrichment (only for mentioned companies)
   if (enrichments) systemParts.push(enrichments);
 
+  // Check for trigger phrases that should make extraction blocking
+  const lastUserMsg = messages[messages.length - 1]?.content || '';
+  const hasTrigger = /remember this|remember that|don't forget|from now on|always\s+(?:lead|start|use|mention|include)|never\s+(?:say|mention|use|include)|update my profile|add this to/i.test(lastUserMsg);
+
   try {
     const systemText = systemParts.join('\n');
     const model = chatModel || pipelineConfig.aiModels?.chat || 'gpt-4.1-mini';
     console.log('[GlobalChat] Using model:', model, '| prompt length:', systemText.length);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'GlobalChat' });
     if (result.error) return result;
-    // Passive learning: extract insights in background (non-blocking)
-    const lastUserMsg = messages[messages.length - 1]?.content || '';
-    extractInsightsFromChat(lastUserMsg, result.reply, 'global-chat');
+    // Passive learning: extract insights — blocking for trigger phrases, debounced otherwise
+    if (hasTrigger) {
+      await _doExtractInsightsFromChat(lastUserMsg, result.reply, 'global-chat');
+    } else {
+      extractInsightsFromChat(lastUserMsg, result.reply, 'global-chat');
+    }
     return { reply: result.reply, model: result.usedModel };
   } catch (err) {
     console.error('[GlobalChat] Error:', err);
@@ -2275,29 +2334,39 @@ async function _doExtractInsightsFromChat(userMessage, assistantResponse, source
   try {
     const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
     const st = storyTime || {};
-    const existing = (st.learnedInsights || []).slice(-20).map(i => i.insight).join('\n');
+    const existing = (st.learnedInsights || []).slice(-20).map(i => typeof i === 'string' ? i : i.insight).join('\n');
 
     const res = await claudeApiCall({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
-        messages: [{ role: 'user', content: `You just had a conversation with the user. Based on the conversation below, extract any NEW insights about the user that would help you advise them better in future conversations. Look for:
+        messages: [{ role: 'user', content: `You observed a conversation between the user and their AI career advisor. Extract structured learnings.
 
-1. **Facts & preferences**: values, dealbreakers, career goals, interests, relationship dynamics
-2. **Strategic preferences**: how they want to position themselves, what narrative they want to lead with, how they want to handle specific topics (comp, gaps, why they're leaving, etc.)
-3. **Communication instructions**: things the user explicitly says to remember — "always do X," "never mention Y," "when asked about Z, say this," "lead with A not B"
-4. **Negotiation & interview strategy**: how they want to approach salary discussions, what leverage points they want to emphasize, what questions they want to ask
-5. **Talking points & framing**: specific phrases, framings, or angles the user liked and wants to reuse across applications
-6. **Situational rules**: "if the role is X, emphasize Y" or "for startups, mention Z but not for enterprise"
+Return ONLY a JSON object:
+{
+  "insights": [
+    {
+      "text": "the insight in plain language",
+      "category": "experience_update | green_light | red_light | answer_pattern | strategic_preference | style_instruction | general",
+      "priority": "high | normal",
+      "target_field": "profileGreenLights | profileRedLights | rawInput | null",
+      "context": "what triggered this"
+    }
+  ]
+}
 
-Capture the STRATEGIC and TACTICAL insights, not just factual observations. If the user corrects you or says "don't do that" or "say it more like this," that's a high-value insight.
-
-Return ONLY a JSON array of insight strings. If there are no new insights, return an empty array [].
+Rules:
+- Only extract NEW insights not in the existing list
+- "high" priority: user explicitly said to remember, gave a direct instruction, or corrected the AI
+- target_field: set when the insight maps to a preference field
+- answer_pattern: include the refined answer text
+- style_instruction: capture exact instruction ("shorter answers", "no bullets")
+- If no insights, return {"insights": []}
 
 Conversation:
 User: ${userMessage}
 Assistant: ${assistantResponse}
 
-Existing insights (don't repeat these):
+Existing insights (don't repeat):
 ${existing}` }]
     });
     const data = await res.json();
@@ -2306,25 +2375,88 @@ ${existing}` }]
     const text = (data.content?.[0]?.text || '').trim();
     let insights;
     try {
-      // Extract JSON array from response (handle markdown code fences)
+      // Extract JSON from response (handle markdown code fences)
       const jsonStr = text.replace(/^```json?\s*/i, '').replace(/\s*```$/, '');
-      insights = JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      insights = parsed.insights || (Array.isArray(parsed) ? parsed.map(s => typeof s === 'string' ? { text: s, category: 'general', priority: 'normal' } : s) : []);
     } catch (e) { return; }
 
-    if (!Array.isArray(insights) || insights.length === 0) return;
+    if (!insights.length) return;
 
-    const now = new Date().toISOString().slice(0, 10);
-    const newInsights = insights
-      .filter(i => typeof i === 'string' && i.trim().length > 5)
-      .map(i => ({ source, date: now, insight: i.trim() }));
-
-    if (newInsights.length === 0) return;
-
-    st.learnedInsights = [...(st.learnedInsights || []), ...newInsights].slice(-100); // keep last 100
-    chrome.storage.local.set({ storyTime: st });
-    console.log(`[Insights] Extracted ${newInsights.length} new insight(s) from ${source}`);
+    await routeInsights(insights, source);
+    console.log(`[Insights] Extracted ${insights.length} new insight(s) from ${source}`);
   } catch (err) {
     console.error('[Insights] Error:', err.message);
+  }
+}
+
+async function routeInsights(insights, source) {
+  if (!insights?.length) return;
+
+  const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
+  const st = storyTime || {};
+  st.learnedInsights = st.learnedInsights || [];
+
+  let profileChanged = false;
+  const profileUpdates = {};
+
+  for (const insight of insights) {
+    // Add to learned insights array (always)
+    st.learnedInsights.push({
+      source,
+      date: new Date().toISOString().slice(0, 10),
+      insight: insight.text,
+      category: insight.category || 'general',
+      priority: insight.priority || 'normal',
+      context: insight.context || null,
+    });
+
+    // Route to specific profile fields
+    if (insight.target_field === 'profileGreenLights' && insight.category === 'green_light') {
+      profileUpdates.profileGreenLights = true;
+      profileChanged = true;
+    }
+    if (insight.target_field === 'profileRedLights' && insight.category === 'red_light') {
+      profileUpdates.profileRedLights = true;
+      profileChanged = true;
+    }
+    if (insight.target_field === 'rawInput' && insight.category === 'experience_update') {
+      st.rawInput = (st.rawInput || '') + '\n\n[Learned ' + new Date().toISOString().slice(0, 10) + '] ' + insight.text;
+    }
+    if (insight.category === 'answer_pattern') {
+      st.answerPatterns = st.answerPatterns || [];
+      if (st.answerPatterns.length < 50) {
+        st.answerPatterns.push({ text: insight.text, context: insight.context, date: new Date().toISOString().slice(0, 10), source });
+      }
+    }
+  }
+
+  // Keep last 100 insights
+  st.learnedInsights = st.learnedInsights.slice(-100);
+
+  // Save storyTime
+  chrome.storage.local.set({ storyTime: st });
+
+  // Append to profile fields
+  if (profileChanged) {
+    chrome.storage.local.get(Object.keys(profileUpdates), data => {
+      const updates = {};
+      for (const insight of insights) {
+        if (insight.target_field === 'profileGreenLights') {
+          updates.profileGreenLights = (data.profileGreenLights || '') + '\n' + insight.text;
+        }
+        if (insight.target_field === 'profileRedLights') {
+          updates.profileRedLights = (data.profileRedLights || '') + '\n' + insight.text;
+        }
+      }
+      if (Object.keys(updates).length) chrome.storage.local.set(updates);
+    });
+  }
+
+  // Broadcast captured insights for UI confirmation
+  const capturedTexts = insights.filter(i => i.priority === 'high' || i.category !== 'general').map(i => i.text);
+  if (capturedTexts.length) {
+    chrome.runtime.sendMessage({ type: 'INSIGHTS_CAPTURED', insights: capturedTexts }).catch(() => {});
   }
 }
 
