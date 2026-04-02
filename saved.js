@@ -2912,6 +2912,13 @@ function openStatCardEditor() {
   const sizeBtn  = document.getElementById('gc-size');
   if (!floatEl || !trigger) return;
 
+  if (typeof COOP !== 'undefined') {
+    const gcSpark = document.querySelector('.gc-spark');
+    const gcTitle = document.getElementById('gc-title');
+    if (gcSpark) gcSpark.innerHTML = COOP.avatar(20);
+    if (gcTitle) gcTitle.innerHTML = `<span style="color:#FF7A59;font-weight:800;">Coop</span>`;
+  }
+
   let history = [];
   let isMinimized = false;
 
@@ -2945,15 +2952,21 @@ function openStatCardEditor() {
 
   function renderMessages(showThinking) {
     if (history.length === 0) {
-      msgsEl.innerHTML = '<div class="gc-empty">Ask anything about your pipeline — compare opportunities, draft follow-ups, get strategic advice.</div>';
+      msgsEl.innerHTML = typeof COOP !== 'undefined'
+        ? `<div class="gc-empty">${COOP.emptyStateHTML('global')}</div>`
+        : '<div class="gc-empty">Ask anything about your pipeline — compare opportunities, draft follow-ups, get strategic advice.</div>';
     } else {
+      const thinkingHTML = showThinking
+        ? (typeof COOP !== 'undefined' ? `<div class="gc-msg gc-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="gc-msg gc-msg-assistant"><div class="gc-bubble gc-thinking"><span class="gc-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>')
+        : '';
       msgsEl.innerHTML = history.map(m => {
         const text = m.content;
         const bubble = m.role === 'assistant'
           ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escHtml(text))
           : escHtml(text);
-        return `<div class="gc-msg gc-msg-${m.role}"><div class="gc-bubble">${bubble}</div></div>`;
-      }).join('') + (showThinking ? '<div class="gc-msg gc-msg-assistant"><div class="gc-bubble gc-thinking"><span class="gc-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>' : '');
+        const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
+        return `<div class="gc-msg gc-msg-${m.role}">${prefix}<div class="gc-bubble">${bubble}</div></div>`;
+      }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }

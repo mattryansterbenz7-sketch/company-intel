@@ -727,9 +727,9 @@
   <button id="gc-trigger">&#10038;</button>
   <div id="gc-float" class="gc-hidden">
     <div class="gc-header" id="gc-header">
-      <div class="gc-header-left">
+      <div class="gc-header-left" id="gc-header-left">
         <span class="gc-spark">&#10038;</span>
-        <span class="gc-title">Pipeline Advisor</span>
+        <span class="gc-title" id="gc-title">Pipeline Advisor</span>
         <span class="gc-subtitle">— all companies</span>
         <button class="gc-model-toggle" id="gc-model-toggle" title="Click to switch model"><span class="gc-model-label" id="gc-model-label">◆ GPT-4.1 mini</span></button>
       </div>
@@ -742,7 +742,7 @@
     <div class="gc-body">
       <div class="gc-messages" id="gc-messages"></div>
       <div class="gc-input-row">
-        <textarea class="gc-input" id="gc-input" placeholder="Ask anything about your pipeline..." rows="2"></textarea>
+        <textarea class="gc-input" id="gc-input" placeholder="Ask Coop anything..." rows="2"></textarea>
         <button class="gc-send" id="gc-send">Send</button>
       </div>
       <div class="gc-actions">
@@ -754,6 +754,7 @@
     </div>
   </div>
 
+  <script src="coop.js"></script>
   <script src="saved.js"></script>
 </body>
 </html>

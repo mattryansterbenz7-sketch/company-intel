@@ -30,7 +30,7 @@ function buildChatPanel(container, entry) {
   let chatModelIdx = 0;
 
   const panelId = chatKey.replace(/[^a-z0-9]/gi, '_');
-  const placeholder = container.dataset.chatPlaceholder || 'Ask anything about this company or role…';
+  const placeholder = container.dataset.chatPlaceholder || 'Ask Coop anything...';
   const minimal = container.dataset.chatMinimal === '1';
   container.innerHTML = `
     <div class="chat-messages" id="chat-msgs-${panelId}"></div>
@@ -77,8 +77,14 @@ function buildChatPanel(container, entry) {
   let meetingsContext = (entry.cachedMeetings?.length) ? entry.cachedMeetings : null;
 
   function renderHistory(showThinking) {
+    const emptyHTML = typeof COOP !== 'undefined'
+      ? `<div class="chat-empty">${COOP.emptyStateHTML('company')}</div>`
+      : `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.</div>`;
+    const thinkingHTML = showThinking
+      ? (typeof COOP !== 'undefined' ? `<div class="chat-msg chat-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="chat-msg chat-msg-assistant"><div class="chat-msg-bubble chat-thinking"><span class="chat-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>')
+      : '';
     msgsEl.innerHTML = history.length === 0
-      ? `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.</div>`
+      ? emptyHTML
       : history.map((m, idx) => {
           const text = m.content[0]?.text || m.content;
           const bubble = m.role === 'assistant'
@@ -88,8 +94,9 @@ function buildChatPanel(container, entry) {
           const followup = isLastAssistant
             ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
             : '';
-          return `<div class="chat-msg chat-msg-${m.role}"><div class="chat-msg-bubble">${bubble}</div>${followup}</div>`;
-        }).join('') + (showThinking ? '<div class="chat-msg chat-msg-assistant"><div class="chat-msg-bubble chat-thinking"><span class="chat-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>' : '');
+          const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
+          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${followup}</div>`;
+        }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
     // Bind follow-up chip clicks

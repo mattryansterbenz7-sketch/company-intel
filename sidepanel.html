@@ -779,26 +779,28 @@
     <div class="sp-inline-chat" id="sp-inline-chat">
       <div class="sp-chat-resize-handle" id="sp-chat-resize"></div>
       <div class="sp-chat-header">
-        <span class="sp-chat-header-title">&#10038; Ask AI <button class="sp-model-toggle" id="sp-model-toggle" title="Click to switch model"><span class="data-src" style="margin-left:6px" id="sp-model-label">◆ GPT-4.1 mini</span></button></span>
+        <span class="sp-chat-header-title" id="sp-chat-header-title" style="display:flex;align-items:center;gap:8px;">&#10038; Ask AI</span>
+        <button class="sp-model-toggle" id="sp-model-toggle" title="Click to switch model"><span class="data-src" style="margin-left:6px" id="sp-model-label">◆ GPT-4.1 mini</span></button>
         <div class="sp-chat-header-btns">
           <button class="sp-chat-detach" id="sp-chat-detach" title="Pop out to floating window">&#x2922;</button>
         </div>
       </div>
       <div class="sp-chat-messages" id="sp-chat-messages">
-        <div class="sp-chat-empty">Ask about this role, company, or get help applying.</div>
+        <div class="sp-chat-empty" id="sp-chat-empty">Ask about this role, company, or get help applying.</div>
       </div>
       <div class="sp-chat-input-row">
-        <textarea class="sp-chat-input" id="sp-chat-input" placeholder="Ask anything..." rows="1"></textarea>
+        <textarea class="sp-chat-input" id="sp-chat-input" placeholder="Ask Coop anything..." rows="1"></textarea>
         <button class="sp-chat-send" id="sp-chat-send">Send</button>
       </div>
       <div class="sp-chat-actions">
-        <button class="sp-chat-action" data-prompt="Help me answer application questions for this role">Help me apply</button>
-        <button class="sp-chat-action" data-prompt="What should I know before interviewing here?">Prep me</button>
+        <button class="sp-chat-action" data-prompt="Help me answer application questions for this role">Coop, help me apply</button>
+        <button class="sp-chat-action" data-prompt="What should I know before interviewing here?">Coop, prep me</button>
         <button class="sp-chat-action sp-chat-clear" data-action="clear">Clear</button>
       </div>
     </div>
   </div>
 
+  <script src="coop.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

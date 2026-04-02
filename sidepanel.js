@@ -2204,6 +2204,13 @@ function renderContactsSection(el, contacts) {
   console.log('[SP Chat] Init:', { chatEl: !!chatEl, msgsEl: !!msgsEl, inputEl: !!inputEl, sendBtn: !!sendBtn });
   if (!chatEl || !msgsEl || !inputEl || !sendBtn) { console.warn('[SP Chat] Missing elements — aborting init'); return; }
 
+  if (typeof COOP !== 'undefined') {
+    const headerTitle = document.getElementById('sp-chat-header-title');
+    if (headerTitle) headerTitle.innerHTML = COOP.headerHTML();
+    const emptyState = document.getElementById('sp-chat-empty');
+    if (emptyState) emptyState.innerHTML = COOP.emptyStateHTML('company');
+  }
+
   // Restore saved chat height
   const savedChatH = localStorage.getItem('ci_sp_chat_height');
   if (savedChatH) msgsEl.style.maxHeight = savedChatH + 'px';
@@ -2312,15 +2319,19 @@ function renderContactsSection(el, contacts) {
 
   function renderMessages(showThinking) {
     if (history.length === 0) {
-      msgsEl.innerHTML = '<div class="sp-chat-empty">Ask about this role, company, or get help applying.</div>';
+      msgsEl.innerHTML = typeof COOP !== 'undefined' ? `<div class="sp-chat-empty">${COOP.emptyStateHTML('company')}</div>` : '<div class="sp-chat-empty">Ask about this role, company, or get help applying.</div>';
     } else {
+      const thinkingHTML = showThinking
+        ? (typeof COOP !== 'undefined' ? `<div class="sp-chat-msg sp-chat-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="sp-chat-msg sp-chat-msg-assistant"><div class="sp-chat-bubble sp-chat-thinking"><span class="sp-thinking-dots"><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span></span></div></div>')
+        : '';
       msgsEl.innerHTML = history.map((m, idx) => {
         const bubble = m.role === 'assistant' ? renderMd(m.content) : escHtml(m.content);
         const copyBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
           ? `<button class="sp-chat-copy" data-idx="${idx}" title="Copy to clipboard">📋</button>`
           : '';
-        return `<div class="sp-chat-msg sp-chat-msg-${m.role}"><div class="sp-chat-bubble">${bubble}</div>${copyBtn}</div>`;
-      }).join('') + (showThinking ? '<div class="sp-chat-msg sp-chat-msg-assistant"><div class="sp-chat-bubble sp-chat-thinking"><span class="sp-thinking-dots"><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span></span></div></div>' : '');
+        const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
+        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${copyBtn}</div>`;
+      }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
