@@ -2329,8 +2329,11 @@ function renderContactsSection(el, contacts) {
         const copyBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
           ? `<button class="sp-chat-copy" data-idx="${idx}" title="Copy to clipboard">📋</button>`
           : '';
+        const saveAnswerBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
+          ? `<button class="sp-chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern">💾 Save</button>`
+          : '';
         const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${copyBtn}</div>`;
+        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${copyBtn}${saveAnswerBtn}</div>`;
       }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
@@ -2357,6 +2360,36 @@ function renderContactsSection(el, contacts) {
         navigator.clipboard.writeText(code).then(() => {
           btn.textContent = '✓';
           setTimeout(() => { btn.textContent = '📋'; }, 1500);
+        });
+      });
+    });
+
+    // Save answer buttons
+    msgsEl.querySelectorAll('.sp-chat-save-answer').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const answer = history[idx]?.content || '';
+        let question = '';
+        for (let i = idx - 1; i >= 0; i--) {
+          if (history[i]?.role === 'user') { question = typeof history[i].content === 'string' ? history[i].content : history[i].content; break; }
+        }
+        chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+          const st = storyTime || {};
+          st.answerPatterns = st.answerPatterns || [];
+          if (st.answerPatterns.length >= 50) st.answerPatterns.shift();
+          st.answerPatterns.push({
+            question: question.slice(0, 200),
+            text: answer.slice(0, 500),
+            company: companyNameEl?.textContent || '',
+            date: new Date().toISOString().slice(0, 10),
+            source: 'manual-save'
+          });
+          chrome.storage.local.set({ storyTime: st }, () => {
+            btn.textContent = '✓ Saved';
+            btn.style.color = '#15803d';
+            btn.disabled = true;
+            setTimeout(() => { btn.textContent = '💾 Save'; btn.style.color = ''; btn.disabled = false; }, 2000);
+          });
         });
       });
     });
@@ -2485,6 +2518,22 @@ function renderContactsSection(el, contacts) {
   }
 
   renderMessages();
+
+  // Listen for INSIGHTS_CAPTURED broadcasts and annotate the last assistant message
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'INSIGHTS_CAPTURED' && msg.insights?.length) {
+      const allMsgs = msgsEl.querySelectorAll('.sp-chat-msg-assistant');
+      const lastMsg = allMsgs[allMsgs.length - 1];
+      if (lastMsg) {
+        if (lastMsg.querySelector('.insight-annotation')) return;
+        const annotationHtml = `<div class="insight-annotation">
+          <span class="insight-check">✓</span>
+          <span class="insight-text">Learned: ${msg.insights.map(t => t.length > 60 ? t.slice(0, 57) + '...' : t).join('; ')}</span>
+        </div>`;
+        lastMsg.insertAdjacentHTML('beforeend', annotationHtml);
+      }
+    }
+  });
 })();
 
 // ── Celebrations (for stage changes in sidepanel) ──────────────────────────

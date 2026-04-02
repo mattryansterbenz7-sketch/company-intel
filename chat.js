@@ -94,8 +94,9 @@ function buildChatPanel(container, entry) {
           const followup = isLastAssistant
             ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
             : '';
+          const saveBtn = m.role === 'assistant' ? `<button class="chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern" style="background:none;border:none;font-size:13px;cursor:pointer;opacity:0.4;padding:2px;">💾</button>` : '';
           const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${followup}</div>`;
+          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${saveBtn}${followup}</div>`;
         }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
@@ -105,6 +106,42 @@ function buildChatPanel(container, entry) {
         inputEl.value = btn.dataset.followup;
         inputEl.focus();
         send();
+      });
+    });
+
+    // Save answer buttons
+    msgsEl.querySelectorAll('.chat-save-answer').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const m = history[idx];
+        const answer = (typeof m?.content === 'string' ? m.content : m?.content?.[0]?.text) || '';
+        let question = '';
+        for (let i = idx - 1; i >= 0; i--) {
+          if (history[i]?.role === 'user') {
+            const c = history[i].content;
+            question = typeof c === 'string' ? c : c?.[0]?.text || '';
+            break;
+          }
+        }
+        chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
+          const st = storyTime || {};
+          st.answerPatterns = st.answerPatterns || [];
+          if (st.answerPatterns.length >= 50) st.answerPatterns.shift();
+          st.answerPatterns.push({
+            question: question.slice(0, 200),
+            text: answer.slice(0, 500),
+            company: entry.company || '',
+            date: new Date().toISOString().slice(0, 10),
+            source: 'manual-save'
+          });
+          chrome.storage.local.set({ storyTime: st }, () => {
+            btn.textContent = '✓';
+            btn.style.opacity = '1';
+            btn.style.color = '#15803d';
+            btn.disabled = true;
+            setTimeout(() => { btn.textContent = '💾'; btn.style.opacity = '0.4'; btn.style.color = ''; btn.disabled = false; }, 2000);
+          });
+        });
       });
     });
   }
@@ -270,6 +307,20 @@ function buildChatPanel(container, entry) {
   }
 
   renderHistory();
+
+  // Listen for INSIGHTS_CAPTURED broadcasts and annotate the last assistant message
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'INSIGHTS_CAPTURED' && msg.insights?.length) {
+      const allMsgs = msgsEl.querySelectorAll('.chat-msg-assistant');
+      const lastMsg = allMsgs[allMsgs.length - 1];
+      if (lastMsg && !lastMsg.querySelector('.insight-annotation')) {
+        lastMsg.insertAdjacentHTML('beforeend', `<div class="insight-annotation">
+          <span class="insight-check">✓</span>
+          <span class="insight-text">Learned: ${msg.insights.map(t => t.length > 60 ? t.slice(0, 57) + '...' : t).join('; ')}</span>
+        </div>`);
+      }
+    }
+  });
 
   // Auto-fetch emails in background if not cached
   if (!emailContext) {
