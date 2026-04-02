@@ -1222,6 +1222,29 @@ function generateRoleBrief() {
         notesLength: (entry.notes || '').length,
       };
       saveEntry({ roleBrief: { content: result.content, generatedAt: Date.now(), sourceVersions } });
+
+      // Backfill empty fields from role brief extraction
+      if (result.briefFields) {
+        const updates = {};
+        let count = 0;
+        if (result.briefFields.jobTitle && (!entry.jobTitle || entry.jobTitle === 'New Opportunity')) {
+          updates.jobTitle = result.briefFields.jobTitle; count++;
+        }
+        if (result.briefFields.baseSalaryRange && !entry.baseSalaryRange) {
+          updates.baseSalaryRange = result.briefFields.baseSalaryRange; count++;
+        }
+        if (result.briefFields.oteTotalComp && !entry.oteTotalComp) {
+          updates.oteTotalComp = result.briefFields.oteTotalComp; count++;
+        }
+        if (result.briefFields.equity && !entry.equity) {
+          updates.equity = result.briefFields.equity; count++;
+        }
+        if (count > 0) {
+          saveEntry(updates);
+          console.log(`[RoleBrief] Backfilled ${count} fields`);
+        }
+      }
+
       // Re-render the Role Brief block
       const rbBlock = document.getElementById('hub-role-brief-block');
       if (rbBlock) {

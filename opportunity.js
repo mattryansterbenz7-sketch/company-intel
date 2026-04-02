@@ -29,6 +29,157 @@ let collapsedPanels = JSON.parse(localStorage.getItem('ci_panel_collapsed') || '
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
+function parseLocalDate(d) {
+  if (!d) return 0;
+  if (typeof d === 'number') return d;
+  const s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00').getTime();
+  const ms = new Date(s).getTime();
+  return isNaN(ms) ? 0 : ms;
+}
+
+function truncLabel(str, max = 40) {
+  if (!str) return '';
+  return str.length > max ? str.slice(0, max - 1) + '\u2026' : str;
+}
+
+function computeLastActivity(entry) {
+  const candidates = [];
+
+  // A. Emails
+  const BULK_RE = /noreply|no-reply|notifications?@|mailer-daemon|newsletter|digest@|linkedin\.com|updates?@|marketing@/i;
+  const parseSender = (fromStr) => {
+    if (!fromStr) return '';
+    const before = fromStr.includes('<') ? fromStr.split('<')[0].trim() : fromStr.trim();
+    const first = before.split(/\s+/)[0];
+    return (first && !first.includes('@') && first.length > 1) ? first : '';
+  };
+  (entry.cachedEmails || []).forEach(thread => {
+    const fromRaw = thread.from || (thread.messages?.[0]?.from) || '';
+    if (BULK_RE.test(fromRaw)) return;
+
+    let ts = 0, senderName = '';
+    if (thread.messages && thread.messages.length) {
+      const lastMsg = thread.messages[thread.messages.length - 1];
+      ts = new Date(lastMsg.date).getTime();
+      senderName = parseSender(lastMsg.from);
+      if (!senderName && thread.from) senderName = parseSender(thread.from);
+      if (!senderName && thread.messages[0]?.from) senderName = parseSender(thread.messages[0].from);
+    }
+    if (!senderName && thread.from) senderName = parseSender(thread.from);
+    if (!ts || isNaN(ts)) ts = thread.date ? new Date(thread.date).getTime() : 0;
+    if (!ts || isNaN(ts)) ts = thread.internalDate ? parseInt(thread.internalDate) : 0;
+    if (!ts || isNaN(ts)) return;
+    const label = senderName
+      ? truncLabel('Email from ' + senderName)
+      : truncLabel('Email: ' + (thread.subject || 'No subject'));
+    candidates.push({ timestamp: ts, label, type: 'email' });
+  });
+
+  // B. Meetings (Granola)
+  (entry.cachedMeetings || []).forEach(m => {
+    let ts = m.createdAt ? parseLocalDate(m.createdAt) : 0;
+    if (!ts) ts = parseLocalDate(m.date);
+    if (!ts) return;
+    candidates.push({ timestamp: ts, label: truncLabel('Call: ' + (m.title || 'Meeting')), type: 'meeting' });
+  });
+
+  // C. Calendar events (past only)
+  const now = Date.now();
+  (entry.cachedCalendarEvents || []).forEach(evt => {
+    const ts = new Date(evt.start).getTime();
+    if (!ts || isNaN(ts) || ts > now) return;
+    candidates.push({ timestamp: ts, label: truncLabel('Meeting: ' + (evt.summary || evt.title || 'Event')), type: 'calendar' });
+  });
+
+  // D. Activity log
+  (entry.activityLog || []).forEach(log => {
+    const ts = parseLocalDate(log.date);
+    if (!ts) return;
+    const typeLabels = {
+      linkedin_dm: 'LinkedIn DM',
+      phone_call: 'Phone call',
+      coffee_chat: 'Coffee chat',
+      text: 'Text',
+      referral: 'Referral',
+      applied: 'Applied',
+      other: ''
+    };
+    const prefix = typeLabels[log.type] || '';
+    const label = log.type === 'applied' ? 'Applied'
+      : prefix ? truncLabel(prefix + ': ' + (log.note || ''))
+      : truncLabel(log.note || 'Activity');
+    candidates.push({ timestamp: ts, label, type: 'activity_log' });
+  });
+
+  // E. Applied date (editable field — NOT stageTimestamps)
+  if (entry.appliedDate && entry.appliedDate > 0) {
+    candidates.push({ timestamp: entry.appliedDate, label: 'Applied', type: 'applied' });
+  }
+
+  if (!candidates.length) return { timestamp: 0, label: null };
+  candidates.sort((a, b) => b.timestamp - a.timestamp);
+  return candidates[0];
+}
+
+function parseEmailContactLocal(fromStr) {
+  if (!fromStr) return null;
+  const match = fromStr.match(/^(.+?)\s*<([^>]+)>/);
+  if (match) {
+    const name = match[1].replace(/"/g, '').trim();
+    const email = match[2].trim().toLowerCase();
+    if (name && email && !/noreply|no-reply/i.test(email)) return { name, email };
+  }
+  const plain = fromStr.trim().toLowerCase();
+  if (plain.includes('@') && !/noreply/i.test(plain)) {
+    return { name: plain.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), email: plain };
+  }
+  return null;
+}
+
+function mergeExtractedContacts(extracted) {
+  const existing = entry.knownContacts || [];
+  const existingEmails = new Set(existing.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+
+  // Get the user's own email to exclude
+  const userEmail = (entry.gmailUserEmail || '').toLowerCase();
+
+  // Get the company domain to determine auto-add vs suggest
+  const companyDomain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+
+  let added = 0;
+  for (const contact of extracted) {
+    const email = (contact.email || '').toLowerCase();
+    if (!email || existingEmails.has(email)) continue;
+    if (email === userEmail) continue;
+
+    // Skip generic/no-reply addresses
+    if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
+
+    // Auto-add: email matches company domain, or matches a leader name
+    const emailDomain = email.split('@')[1] || '';
+    const isCompanyDomain = companyDomain && emailDomain.includes(companyDomain.split('.')[0]);
+    const matchesLeader = (entry.leaders || []).some(l =>
+      l.name && contact.name && l.name.toLowerCase().includes(contact.name.split(' ')[0].toLowerCase())
+    );
+
+    if (isCompanyDomain || matchesLeader) {
+      existing.push({
+        name: contact.name,
+        email: contact.email,
+        source: contact.source || 'auto-extracted',
+        addedAt: Date.now(),
+      });
+      existingEmails.add(email);
+      added++;
+    }
+  }
+
+  if (added > 0) {
+    saveEntry({ knownContacts: existing });
+  }
+}
+
 const OPP_TAG_PALETTE = [
   { border: '#6366f1', color: '#4338ca', bg: 'rgba(99,102,241,0.15)' },
   { border: '#10b981', color: '#047857', bg: 'rgba(16,185,129,0.15)' },
@@ -117,6 +268,22 @@ function init() {
          <span style="color:#7da8c4;font-size:14px;margin-left:14px">Entry not found — it may have been deleted.</span>`;
       document.getElementById('opp-body').style.display = 'none';
       return;
+    }
+
+    // Compute last activity
+    const computed = computeLastActivity(entry);
+    if (computed.timestamp > 0) {
+      // Display it — the rendering code will pick it up
+    }
+
+    // Extract contacts from cached emails on load
+    if (entry.cachedEmails?.length) {
+      const contacts = [];
+      for (const thread of entry.cachedEmails) {
+        const parsed = parseEmailContactLocal(thread.from);
+        if (parsed) contacts.push({ ...parsed, source: 'email' });
+      }
+      if (contacts.length) mergeExtractedContacts(contacts);
     }
 
     // Ensure any newly added default panels are in the saved order
@@ -245,6 +412,21 @@ function renderSidebar() {
           <span class="sb-stat-value">${v}</span>
         </div>`).join('')}
     </div>` : ''}
+
+    ${(() => {
+      const act = computeLastActivity(e);
+      if (!act.label) return '';
+      const d = new Date(act.timestamp);
+      return `<div class="sb-section">
+        <div class="sb-title">Last Activity</div>
+        <div class="sb-stat">
+          <span class="sb-stat-value" style="font-weight:600">${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        </div>
+        <div class="sb-stat">
+          <span class="sb-stat-label">${act.label}</span>
+        </div>
+      </div>`;
+    })()}
 
     <div class="sb-section">
       <div class="sb-title">Links</div>
@@ -647,6 +829,10 @@ function bindActivityPanel() {
     statusEl.style.display = 'none';
     listEl.innerHTML = renderEmailThreads(result.emails);
     bindThreadToggles(listEl);
+
+    // Cache emails and extract contacts
+    saveEntry({ cachedEmails: result.emails, cachedEmailsAt: Date.now() });
+    if (result.extractedContacts?.length) mergeExtractedContacts(result.extractedContacts);
   });
 
   // Auto-load Granola meeting notes

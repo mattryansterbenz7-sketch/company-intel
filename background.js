@@ -2575,7 +2575,13 @@ Rules:
 - Keep it dense and scannable — short paragraphs, bullets for 3+ items
 - If a section has no information, omit it entirely
 - Use markdown formatting (## headers, **bold**, bullet lists)
-- Target 500-1500 words depending on available information`;
+- Target 500-1500 words depending on available information
+
+At the very end of your response, include a structured data block:
+<role_brief_fields>
+{"jobTitle": "extracted title or null", "baseSalaryRange": "base salary range or null", "oteTotalComp": "OTE/total comp or null", "equity": "equity info or null"}
+</role_brief_fields>
+Only include fields where you have clear data — use null for anything not mentioned.`;
 
   try {
     const result = await chatWithFallback({
@@ -2586,7 +2592,14 @@ Rules:
       tag: 'RoleBrief'
     });
     if (result.error) return { error: result.error };
-    return { content: result.reply };
+    let briefFields = null;
+    const fieldsMatch = result.reply.match(/<role_brief_fields>([\s\S]*?)<\/role_brief_fields>/);
+    if (fieldsMatch) {
+      try { briefFields = JSON.parse(fieldsMatch[1].trim()); } catch {}
+      // Strip the tags from the displayed brief
+      result.reply = result.reply.replace(/<role_brief_fields>[\s\S]*?<\/role_brief_fields>/, '').trim();
+    }
+    return { content: result.reply, briefFields };
   } catch (err) {
     return { error: err.message };
   }
