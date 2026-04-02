@@ -390,6 +390,16 @@ function backfillFromLinkedinFirmo() {
 // Event-driven re-scoring: triggers when new context arrives (meetings, emails, notes)
 function maybeRescore(reason) {
   if (!entry.isOpportunity || !entry.jobDescription) return;
+
+  // If we have rich context (meetings, emails, notes), the deep fit analysis
+  // will produce a better score. Skip the posting-only re-score.
+  const hasRichContext = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
+    entry.cachedEmails?.length || entry.notes);
+  if (hasRichContext) {
+    console.log('[Rescore] Skipping posting-only rescore — deep fit analysis will handle it (reason:', reason, ')');
+    return;
+  }
+
   chrome.storage.sync.get(['prefs'], ({ prefs }) => {
     if (!prefs) return;
     chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
@@ -416,6 +426,35 @@ function maybeRescore(reason) {
         }
       );
     });
+  });
+}
+
+function maybeExtractNextSteps() {
+  const contextAge = Math.max(entry.cachedEmailsAt || 0, entry.cachedMeetingNotesAt || 0);
+  const lastExtraction = entry.nextStepExtractedAt || 0;
+  if (!contextAge || lastExtraction >= contextAge) return;
+  if (entry.nextStepManuallySetAt && entry.nextStepManuallySetAt > lastExtraction) return;
+
+  const emailContext = (entry.cachedEmails || []).slice(0, 5).map(e =>
+    `- "${e.subject}" from ${e.from} (${e.date})`
+  ).join('\n');
+
+  chrome.runtime.sendMessage({
+    type: 'EXTRACT_NEXT_STEPS',
+    notes: entry.cachedMeetingNotes || null,
+    transcripts: entry.cachedMeetingTranscript || null,
+    calendarEvents: entry.cachedCalendarEvents || [],
+    emailContext
+  }, result => {
+    void chrome.runtime.lastError;
+    if (result?.nextStep || result?.nextStepDate) {
+      saveEntry({
+        nextStep: result.nextStep || null,
+        nextStepDate: result.nextStepDate || null,
+        nextStepExtractedAt: Date.now()
+      });
+      renderPanel('opportunity');
+    }
   });
 }
 
@@ -1308,6 +1347,21 @@ function maybeRefreshDeepFitAnalysis() {
       void chrome.runtime.lastError;
       if (result?.analysis) {
         saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
+        if (result.fitUpdate) {
+          const current = entry.jobMatch || {};
+          saveEntry({
+            jobMatch: {
+              ...current,
+              score: result.fitUpdate.score ?? current.score,
+              verdict: result.fitUpdate.verdict ?? current.verdict,
+              strongFits: result.fitUpdate.strongFits?.length ? result.fitUpdate.strongFits : current.strongFits,
+              redFlags: result.fitUpdate.redFlags?.length ? result.fitUpdate.redFlags : current.redFlags,
+              jobSummary: current.jobSummary,
+              lastUpdatedBy: 'deep_fit_analysis',
+              lastUpdatedAt: Date.now()
+            }
+          });
+        }
         // Update only the fit block so other sections aren't disrupted
         const fitBlock = document.getElementById('hub-fit-block');
         if (fitBlock) fitBlock.innerHTML = buildFitSection();
@@ -1501,6 +1555,21 @@ function bindHubTabs() {
         btn.textContent = '↻ Refresh analysis';
         if (result?.analysis) {
           saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
+          if (result.fitUpdate) {
+            const current = entry.jobMatch || {};
+            saveEntry({
+              jobMatch: {
+                ...current,
+                score: result.fitUpdate.score ?? current.score,
+                verdict: result.fitUpdate.verdict ?? current.verdict,
+                strongFits: result.fitUpdate.strongFits?.length ? result.fitUpdate.strongFits : current.strongFits,
+                redFlags: result.fitUpdate.redFlags?.length ? result.fitUpdate.redFlags : current.redFlags,
+                jobSummary: current.jobSummary,
+                lastUpdatedBy: 'deep_fit_analysis',
+                lastUpdatedAt: Date.now()
+              }
+            });
+          }
           // Re-render only the fit block so we don't disrupt other sections
           const fitBlock = document.getElementById('hub-fit-block');
           if (fitBlock) fitBlock.innerHTML = buildFitSection();
@@ -1832,20 +1901,7 @@ function loadHubMeetings(forceRefresh) {
         bindPanelBodyEvents('opportunity');
       }
       // If no date found and no next step at all, try AI extraction
-      if (!entry.nextStep && !entry.nextStepDate) {
-        chrome.runtime.sendMessage({
-          type: 'EXTRACT_NEXT_STEPS',
-          notes: entry.cachedMeetingNotes || null,
-          transcripts: entry.cachedMeetingTranscript || null,
-          calendarEvents: calEvents
-        }, result => {
-          void chrome.runtime.lastError;
-          if (result?.nextStep || result?.nextStepDate) {
-            saveEntry({ nextStep: result.nextStep || null, nextStepDate: result.nextStepDate || null });
-            renderPanel('opportunity');
-          }
-        });
-      }
+      maybeExtractNextSteps();
     } else if (!entry.cachedCalendarEvents?.length) {
       // Still render the meetings timeline so the "+ Add meeting" button is available
       statusEl.style.display = 'none';
@@ -1916,23 +1972,7 @@ function loadHubMeetings(forceRefresh) {
       maybeRescore('new_meetings');
 
       // Auto-populate next step + date if not already set
-      if (!entry.nextStep && !entry.nextStepDate) {
-        chrome.runtime.sendMessage({
-          type: 'EXTRACT_NEXT_STEPS',
-          notes: granolaNotes,
-          transcripts: granolaTranscript,
-          calendarEvents: calEvents
-        }, result => {
-          void chrome.runtime.lastError;
-          if (result?.nextStep || result?.nextStepDate) {
-            saveEntry({
-              nextStep: result.nextStep || null,
-              nextStepDate: result.nextStepDate || null
-            });
-            renderPanel('opportunity');
-          }
-        });
-      }
+      maybeExtractNextSteps();
     }
   });
 }
@@ -3346,7 +3386,7 @@ function bindPanelBodyEvents(pid) {
 
     const nextStepInput = document.getElementById('opp-next-step-input');
     if (nextStepInput) {
-      nextStepInput.addEventListener('blur', () => saveEntry({ nextStep: nextStepInput.value.trim() || null }));
+      nextStepInput.addEventListener('blur', () => saveEntry({ nextStep: nextStepInput.value.trim() || null, nextStepManuallySetAt: Date.now() }));
       nextStepInput.addEventListener('keydown', e => { if (e.key === 'Enter') nextStepInput.blur(); });
     }
 
@@ -3354,7 +3394,7 @@ function bindPanelBodyEvents(pid) {
     if (nextStepDate) {
       nextStepDate.addEventListener('change', () => {
         nextStepDate.classList.toggle('has-value', !!nextStepDate.value);
-        saveEntry({ nextStepDate: nextStepDate.value || null });
+        saveEntry({ nextStepDate: nextStepDate.value || null, nextStepManuallySetAt: Date.now() });
       });
     }
 

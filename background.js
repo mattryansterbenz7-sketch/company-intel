@@ -452,7 +452,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'EXTRACT_NEXT_STEPS') {
-    extractNextSteps(message.notes, message.calendarEvents, message.transcripts).then(sendResponse);
+    extractNextSteps(message.notes, message.calendarEvents, message.transcripts, message.emailContext).then(sendResponse);
     return true;
   }
   if (message.type === 'GRANOLA_SEARCH') {
@@ -2643,16 +2643,36 @@ Write a focused 2-4 sentence narrative that covers:
 2. What the actual conversations or emails reveal about fit, culture, and momentum — things the posting alone can't tell you
 3. A clear, honest recommendation (pursue / proceed with caution / pass) with the single most important reason
 
-Be specific. Reference real details. Don't hedge or restate the obvious. If transcripts/emails are available, weight them heavily — live interaction signals beat job description text every time.`;
+Be specific. Reference real details. Don't hedge or restate the obvious. If transcripts/emails are available, weight them heavily — live interaction signals beat job description text every time.
+
+After your narrative analysis, include a structured assessment block:
+<fit_update>
+{"score": <1-10 updated fit score reflecting ALL context — meetings, emails, notes, not just the posting>, "verdict": "<updated one-sentence verdict>", "strongFits": ["<concrete green flag grounded in specific evidence, 8-14 words>"], "redFlags": ["<concrete red flag grounded in specific evidence, 8-14 words>"]}
+</fit_update>
+
+Rules for the structured block:
+- Score reflects EVERYTHING known — posting, meetings, emails, notes.
+- Flags must cite real evidence. "Recruiter followed up personally" not "Company seems interested."
+- If meetings/emails exist, at least one flag should reference interaction signals.
+- 2-5 flags per category. Quality over quantity.
+- If insufficient evidence for red flags, include fewer rather than fabricating weak ones.`;
 
 
   try {
     const result = await aiCall('deepFitAnalysis', {
       system,
       messages: [{ role: 'user', content: contextParts.join('\n\n') }],
-      max_tokens: 600
+      max_tokens: 900
     });
-    return { analysis: result.text || null };
+    const text = result.text || '';
+    const fitMatch = text.match(/<fit_update>([\s\S]*?)<\/fit_update>/);
+    let fitUpdate = null;
+    let cleanAnalysis = text;
+    if (fitMatch) {
+      try { fitUpdate = JSON.parse(fitMatch[1].trim()); } catch {}
+      cleanAnalysis = text.replace(/<fit_update>[\s\S]*?<\/fit_update>/, '').trim();
+    }
+    return { analysis: cleanAnalysis, fitUpdate };
   } catch (e) {
     return { error: e.message };
   }
@@ -2660,7 +2680,7 @@ Be specific. Reference real details. Don't hedge or restate the obvious. If tran
 
 // ── Next Step Extraction ─────────────────────────────────────────────────────
 
-async function extractNextSteps(notes, calendarEvents, transcripts) {
+async function extractNextSteps(notes, calendarEvents, transcripts, emailContext) {
   const today = new Date().toISOString().slice(0, 10);
   const futureEvents = (calendarEvents || []).filter(e => (e.start || '') > today);
 
@@ -2670,6 +2690,7 @@ async function extractNextSteps(notes, calendarEvents, transcripts) {
   }
   if (transcripts) contextParts.push(`Meeting transcripts:\n${transcripts.slice(0, 3000)}`);
   if (notes) contextParts.push(`Meeting notes:\n${notes.slice(0, 1500)}`);
+  if (emailContext) contextParts.push(`Recent emails:\n${emailContext}`);
 
   if (!contextParts.length) return { nextStep: null, nextStepDate: null };
 
