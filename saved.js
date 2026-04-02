@@ -82,6 +82,7 @@ function computeLastActivity(entry) {
   const candidates = [];
 
   // A. Emails
+  const BULK_RE = /noreply|no-reply|notifications?@|mailer-daemon|newsletter|digest@|linkedin\.com|updates?@|marketing@/i;
   const parseSender = (fromStr) => {
     if (!fromStr) return '';
     const before = fromStr.includes('<') ? fromStr.split('<')[0].trim() : fromStr.trim();
@@ -89,6 +90,10 @@ function computeLastActivity(entry) {
     return (first && !first.includes('@') && first.length > 1) ? first : '';
   };
   (entry.cachedEmails || []).forEach(thread => {
+    // Skip bulk/notification senders
+    const fromRaw = thread.from || (thread.messages?.[0]?.from) || '';
+    if (BULK_RE.test(fromRaw)) return;
+
     let ts = 0, senderName = '';
     if (thread.messages && thread.messages.length) {
       const lastMsg = thread.messages[thread.messages.length - 1];

@@ -1751,12 +1751,9 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           const d = (e.split('@')[1] || '').toLowerCase();
           return d === domain || d.split('.')[0] === baseDomain;
         }).length < 3;
-        if (isBootstrap && companyName) {
-          parts.push(`"${companyName}"`);
-          // Also search shorter name (strip common suffixes like "AI", "Inc", etc.)
-          // so casual emails without full brand name are still found
-          const shortName = companyName.replace(/\s+(AI|Inc\.?|LLC|Corp\.?|Ltd\.?|Co\.?|Technologies|Tech|Labs?|Group|Solutions?|Services?|Systems?|Software|Platform|Studios?|Ventures?)$/i, '').trim();
-          if (shortName && shortName !== companyName) parts.push(`"${shortName}"`);
+        if (isBootstrap && companyName && companyName.length > 3) {
+          // Search for company name but exclude bulk senders
+          parts.push(`"${companyName}" -from:linkedin.com -from:noreply -from:notifications`);
         }
         const query = parts.join(' OR ');
         const fetchMessages = async (q) => {
@@ -1810,6 +1807,21 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
             allEmails = allEmails.concat(secondEmails);
           }
         }
+
+        // Filter out bulk/notification senders that aren't real company correspondence
+        const BULK_SENDERS = /noreply|no-reply|notifications?@|mailer-daemon|postmaster|digest@|newsletter|updates?@|marketing@|news@|hello@linkedin|member@linkedin|invitations@linkedin|jobs-listings@linkedin|messages-noreply@linkedin/i;
+        allEmails = allEmails.filter(e => {
+          const fromAddr = (e.from || '').toLowerCase();
+          // Skip known bulk senders
+          if (BULK_SENDERS.test(fromAddr)) return false;
+          // Skip LinkedIn notification emails (from: "LinkedIn <xxx@linkedin.com>") unless subject contains exact company name
+          if (fromAddr.includes('linkedin.com') && companyName) {
+            const subjectLower = (e.subject || '').toLowerCase();
+            const companyLower = companyName.toLowerCase();
+            if (!subjectLower.includes(companyLower)) return false;
+          }
+          return true;
+        });
 
         // Get user's own email for contact deduplication
         let userEmail = null;
