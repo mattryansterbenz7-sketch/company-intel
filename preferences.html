@@ -8,7 +8,7 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #FAF9F7; color: #2d3e50; min-height: 100vh; font-size: 14px;
-      padding: 40px 20px 80px;
+      padding: 0;
     }
 
     /* ── Page container ── */
@@ -239,22 +239,52 @@
     .color-swatch:hover { transform: scale(1.2); border-color: rgba(0,0,0,0.2); }
     .color-palette-label { font-size: 11px; color: #7c98b6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 
-    /* ── Back link ── */
-    .back-link {
-      position: fixed; top: 16px; left: 16px; font-size: 13px; font-weight: 600;
-      color: #7c98b6; text-decoration: none; display: flex; align-items: center; gap: 4px;
-      z-index: 50;
-    }
-    .back-link:hover { color: #2d3e50; }
-
     /* ── Micro-interactions ── */
     button, [role="button"] { transition: all 0.15s ease; }
     button:active:not(:disabled) { transform: scale(0.96); }
+
+    /* ── Shared Settings Sidebar ── */
+    .settings-layout { display: flex; min-height: 100vh; }
+    .settings-sidebar {
+      width: 180px; flex-shrink: 0; background: #f5f8fa; border-right: 0.5px solid #e2e8f0;
+      padding: 20px 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
+    }
+    .settings-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+    .settings-nav-item {
+      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: #516f90;
+      text-decoration: none; border-radius: 6px; border-left: 2px solid transparent; transition: all 0.12s;
+    }
+    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: #2d3e50; }
+    .settings-nav-item.active { background: #fff; color: #2d3e50; font-weight: 600; border-left-color: #FF7A59; }
+    .settings-nav-divider { height: 1px; background: #e2e8f0; margin: 10px 14px; }
+    .settings-content { flex: 1; min-width: 0; }
+
+    .header { background: #2d3e50; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
+    .header .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; text-decoration: none; }
+    .header .logo span { color: #FF7A59; }
+    .header .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
+    .header-back { color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #4a6580; border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; transition: all 0.15s; font-family: inherit; text-decoration: none; }
+    .header-back:hover { color: #fff; border-color: #7c98b6; }
   </style>
 </head>
 <body>
 
-  <a class="back-link" href="saved.html" id="btn-back">&larr; Back</a>
+<div class="header">
+  <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Career OS</span></a>
+  <a class="header-back" href="saved.html">&larr; Back to Saved</a>
+</div>
+
+<div class="settings-layout">
+  <nav class="settings-sidebar">
+    <div class="settings-nav">
+      <a class="settings-nav-item active" href="preferences.html">Career OS</a>
+      <a class="settings-nav-item" href="integrations.html">Integrations</a>
+      <a class="settings-nav-item" href="pipeline.html">Data Pipeline</a>
+      <div class="settings-nav-divider"></div>
+      <a class="settings-nav-item" href="docs.html" target="_blank">Documentation</a>
+    </div>
+  </nav>
+  <div class="settings-content" style="padding: 40px 20px 80px;">
 
   <div class="page">
 
@@ -608,6 +638,9 @@
 
   <!-- Save status toast -->
   <div class="save-status" id="save-status"><span class="save-spinner"></span><span class="save-check">&#10003;</span> <span id="save-status-text">Saved</span></div>
+
+  </div><!-- /.settings-content -->
+</div><!-- /.settings-layout -->
 
   <script src="preferences.js"></script>
 </body>

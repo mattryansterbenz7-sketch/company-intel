@@ -106,17 +106,42 @@
 
     h3.sub { font-size: 15px; font-weight: 700; color: #2d3e50; margin: 24px 0 10px; }
     p.body { font-size: 13px; color: #516f90; line-height: 1.7; margin-bottom: 12px; }
+
+    /* ── Shared Settings Sidebar ── */
+    .settings-layout { display: flex; min-height: 100vh; }
+    .settings-sidebar {
+      width: 180px; flex-shrink: 0; background: #f5f8fa; border-right: 0.5px solid #e2e8f0;
+      padding: 20px 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
+    }
+    .settings-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+    .settings-nav-item {
+      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: #516f90;
+      text-decoration: none; border-radius: 6px; border-left: 2px solid transparent; transition: all 0.12s;
+    }
+    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: #2d3e50; }
+    .settings-nav-item.active { background: #fff; color: #2d3e50; font-weight: 600; border-left-color: #FF7A59; }
+    .settings-nav-divider { height: 1px; background: #e2e8f0; margin: 10px 14px; }
+    .settings-content { flex: 1; min-width: 0; }
   </style>
 </head>
 <body>
 
 <div class="header">
   <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Documentation</span></a>
-  <div style="display:flex;gap:12px">
-    <a class="header-link" href="preferences.html">Setup</a>
-    <a class="header-link" href="saved.html">← Back to App</a>
-  </div>
+  <a class="header-link" href="saved.html">&larr; Back to Saved</a>
 </div>
+
+<div class="settings-layout">
+  <nav class="settings-sidebar">
+    <div class="settings-nav">
+      <a class="settings-nav-item" href="preferences.html">Career OS</a>
+      <a class="settings-nav-item" href="integrations.html">Integrations</a>
+      <a class="settings-nav-item" href="pipeline.html">Data Pipeline</a>
+      <div class="settings-nav-divider"></div>
+      <a class="settings-nav-item active" href="docs.html">Documentation</a>
+    </div>
+  </nav>
+  <div class="settings-content">
 
 <div class="layout">
 
@@ -636,6 +661,9 @@
 
   </div>
 </div>
+
+  </div><!-- /.settings-content -->
+</div><!-- /.settings-layout -->
 
 <script src="docs.js"></script>
 
