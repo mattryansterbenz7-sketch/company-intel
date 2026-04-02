@@ -1831,6 +1831,20 @@ function setFavicon(domain) {
 }
 
 function renderResults(data) {
+  // Cache age indicator
+  const cacheAgeEl = document.getElementById('sp-cache-age');
+  if (cacheAgeEl) {
+    if (data._cachedAt) {
+      const days = Math.round((Date.now() - data._cachedAt) / 86400000);
+      cacheAgeEl.textContent = days === 0 ? 'Researched today' : days === 1 ? 'Researched yesterday' : `Researched ${days} days ago`;
+      cacheAgeEl.style.display = '';
+    } else {
+      cacheAgeEl.textContent = 'Just researched';
+      cacheAgeEl.style.display = '';
+      setTimeout(() => { if (cacheAgeEl.textContent === 'Just researched') cacheAgeEl.style.display = 'none'; }, 5000);
+    }
+  }
+
   // Job snapshot badges — use DOM meta (jobSnapshot comes via ANALYZE_JOB separately)
   renderJobSnapshot(currentJobMeta || null);
 

@@ -211,7 +211,7 @@ async function trackApiCall(provider, response) {
   } catch {}
 }
 
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — persisted to storage, survives SW restarts
+const CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days — company data doesn't change daily
 
 // ── AI Scoring Queue Config ─────────────────────────────────────────────────
 const QUICK_FIT_MODEL = 'claude-haiku-4-5-20251001';
@@ -934,7 +934,11 @@ async function getCached(key) {
   return new Promise(resolve =>
     chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
       const entry = (researchCache || {})[key];
-      resolve(entry && Date.now() - entry.ts < CACHE_TTL ? entry.data : null);
+      if (entry && Date.now() - entry.ts < CACHE_TTL) {
+        resolve({ ...entry.data, _cachedAt: entry.ts });
+      } else {
+        resolve(null);
+      }
     })
   );
 }
