@@ -1320,11 +1320,16 @@ function maybeRefreshDeepFitAnalysis() {
   const hasContext = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
     entry.cachedEmails?.length || entry.notes);
 
-  // Don't re-generate if analysis is fresh (< 60 min) AND context hasn't changed
-  const age = entry.deepFitAnalysisAt
-    ? (Date.now() - entry.deepFitAnalysisAt) / 60000
-    : Infinity;
-  if (entry.deepFitAnalysis && age < 60) return;
+  // Check if any data source is fresher than the last analysis
+  const newestContext = Math.max(
+    entry.cachedEmailsAt || 0,
+    entry.cachedMeetingNotesAt || 0,
+    entry.cachedCalendarEventsAt || 0
+  );
+  const analysisAge = entry.deepFitAnalysisAt ? (Date.now() - entry.deepFitAnalysisAt) / 60000 : Infinity;
+  const hasNewData = newestContext > (entry.deepFitAnalysisAt || 0);
+  // Re-run if: no analysis exists, OR analysis is old, OR new data arrived since last analysis
+  if (entry.deepFitAnalysis && analysisAge < 60 && !hasNewData) return;
 
   // No context beyond posting and no existing analysis — skip (not enough to say anything new)
   if (!hasContext && entry.deepFitAnalysis) return;
