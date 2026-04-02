@@ -589,7 +589,7 @@ function showPipelineStats() {
     const period = localStorage.getItem('ci_activityPeriod') || 'daily';
     const goals = (data.activityGoals || {})[period] || {};
     const cards = data.statCardConfigs || [
-      { key: 'saved', label: 'Opportunities Saved', stages: ['*'], color: '#0ea5e9' },
+      { key: 'saved', label: 'Opportunities Saved', stages: ['*'], color: '#0ea5e9', mode: 'snapshot' },
       { key: 'applied', label: 'Applications', stages: ['applied'], color: '#FF7A59' },
       { key: 'interviewed', label: 'New Conversations Started', stages: ['conversations'], color: '#fb923c' },
     ];
@@ -1186,7 +1186,7 @@ function renderHomeState() {
   });
 }
 
-function triggerResearch(company, forceRefresh = false) {
+async function triggerResearch(company, forceRefresh = false) {
   if (!company || company === '—') {
     contentEl.innerHTML = '<div class="empty">Navigate to a company page or job posting to get started.</div>';
     return;
@@ -1194,7 +1194,7 @@ function triggerResearch(company, forceRefresh = false) {
 
   // Show save button — mark as already saved if this company exists
   showSaveBar();
-  checkAlreadySaved(company);
+  await checkAlreadySaved(company);
 
   // Show job meta immediately from DOM badges (no API wait needed)
   if (currentJobMeta && currentJobTitle) {
@@ -1561,6 +1561,7 @@ function showSaveBar() {
 }
 
 function checkAlreadySaved(company) {
+  return new Promise(resolve => {
   chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
     void chrome.runtime.lastError;
     const entries = savedCompanies || [];
@@ -1626,6 +1627,8 @@ function checkAlreadySaved(company) {
         syncContactsForEntry(match);
       }
     }
+    resolve();
+  });
   });
 }
 

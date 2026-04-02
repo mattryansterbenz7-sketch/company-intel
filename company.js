@@ -3087,6 +3087,8 @@ function loadPhotosForPanel(pid) {
   }
 
   if (pid === 'contacts') {
+    // Contacts use initials circles — do NOT burn Serper image credits on them
+    return;
     const contacts = (entry.knownContacts || []).filter(c => c.name);
     if (!contacts.length) return;
     chrome.runtime.sendMessage(

@@ -128,6 +128,11 @@ async function detectCompanyAndJob() {
     }
   }
 
+  // Strip trailing punctuation from company name (prevents cache key mismatches like "Warmly," vs "Warmly")
+  if (result?.company) {
+    result.company = result.company.replace(/[,;:!?.]+$/, '').trim();
+  }
+
   // Return immediately — description extracted separately via GET_JOB_DESCRIPTION
   return result;
 }

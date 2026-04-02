@@ -56,6 +56,54 @@ chrome.storage.local.get(['integrations'], ({ integrations }) => {
   if (GRANOLA_KEY) setTimeout(() => buildGranolaIndex(), 5000);
 });
 
+// ── One-time migration: strip trailing punctuation from company names ────────
+chrome.storage.local.get(['savedCompanies', 'researchCache', 'photoCache', '_migratedPunctuation2'], data => {
+  if (data._migratedPunctuation2) return; // already ran
+  const strip = s => s.replace(/[,;:!?.]+$/, '').trim();
+  let dirty = false;
+
+  // Clean savedCompanies
+  const companies = data.savedCompanies || [];
+  for (const c of companies) {
+    if (c.company && c.company !== strip(c.company)) {
+      c.company = strip(c.company);
+      dirty = true;
+    }
+  }
+  if (dirty) chrome.storage.local.set({ savedCompanies: companies });
+
+  // Clean researchCache keys
+  const cache = data.researchCache || {};
+  const cleaned = {};
+  let cacheDirty = false;
+  for (const [k, v] of Object.entries(cache)) {
+    const cleanK = strip(k);
+    if (cleanK !== k) cacheDirty = true;
+    if (!cleaned[cleanK] || (v.ts > cleaned[cleanK].ts)) {
+      cleaned[cleanK] = v;
+    }
+  }
+  if (cacheDirty) chrome.storage.local.set({ researchCache: cleaned });
+
+  // Clean photoCache keys — company name is embedded in the key after |
+  const pc = data.photoCache || {};
+  const cleanedPhotos = {};
+  let photoDirty = false;
+  for (const [k, v] of Object.entries(pc)) {
+    // Key format: "Name|\"Company,\"" → strip punctuation before closing quote
+    const cleanK = k.replace(/[,;:!?.]+(?="?\s*$)/, '');
+    if (cleanK !== k) photoDirty = true;
+    if (!cleanedPhotos[cleanK]) cleanedPhotos[cleanK] = v;
+  }
+  if (photoDirty) {
+    Object.assign(photoCache, cleanedPhotos);
+    chrome.storage.local.set({ photoCache: cleanedPhotos });
+  }
+
+  chrome.storage.local.set({ _migratedPunctuation2: true });
+  if (dirty || cacheDirty) console.log('[Migration] Stripped trailing punctuation from company names');
+});
+
 // Live-update keys when user saves them from Integrations page
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.integrations) {
@@ -399,8 +447,20 @@ async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
   return { error: `All models failed. Last error: ${lastError}` };
 }
 
-const photoCache = {}; // in-memory, per service worker lifetime
+let photoCache = {}; // loaded from storage, persisted on write
 const photoPending = {}; // dedup in-flight photo fetches
+// Load photo cache from storage on boot — promise so callers can await it
+const _photoCacheReady = new Promise(resolve => {
+  chrome.storage.local.get(['photoCache'], d => {
+    if (d.photoCache) {
+      photoCache = d.photoCache;
+      console.log(`[PhotoCache] Loaded ${Object.keys(photoCache).length} entries from storage`);
+    } else {
+      console.log('[PhotoCache] No cache found in storage — starting fresh');
+    }
+    resolve();
+  });
+});
 let _apolloExhausted = false;
 let _serperExhausted = false;
 
@@ -1009,6 +1069,7 @@ async function quickLookup(company, domain, companyLinkedin, linkedinFirmo) {
 }
 
 async function getCached(key) {
+  key = key.replace(/[,;:!?.]+$/, '').trim(); // normalize
   return new Promise(resolve =>
     chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
       const entry = (researchCache || {})[key];
@@ -1022,6 +1083,7 @@ async function getCached(key) {
 }
 
 async function setCached(key, data) {
+  key = key.replace(/[,;:!?.]+$/, '').trim(); // normalize
   return new Promise(resolve =>
     chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
       const updated = { ...(researchCache || {}), [key]: { data, ts: Date.now() } };
@@ -1407,11 +1469,19 @@ async function fetchApolloData(domain, companyName) {
 }
 
 async function fetchLeaderPhoto(name, company) {
+  await _photoCacheReady; // ensure cache is loaded before checking
   const cacheKey = `${name}|${company}`;
-  if (photoCache[cacheKey] !== undefined) return photoCache[cacheKey];
+  if (photoCache[cacheKey] !== undefined) {
+    console.log(`[PhotoCache] HIT: ${cacheKey}`);
+    return photoCache[cacheKey];
+  }
   // Dedup: if a fetch for the same key is already in-flight, reuse its promise
-  if (photoPending[cacheKey]) return photoPending[cacheKey];
+  if (photoPending[cacheKey]) {
+    console.log(`[PhotoCache] IN-FLIGHT dedup: ${cacheKey}`);
+    return photoPending[cacheKey];
+  }
   if (!SERPER_KEY || _serperExhausted) { photoCache[cacheKey] = null; return null; }
+  console.log(`[PhotoCache] MISS: ${cacheKey} — fetching from Serper`);
 
   photoPending[cacheKey] = (async () => {
     try {
@@ -1423,9 +1493,12 @@ async function fetchLeaderPhoto(name, company) {
       const data = await res.json();
       const photoUrl = data.images?.[0]?.thumbnailUrl || null;
       photoCache[cacheKey] = photoUrl;
+      chrome.storage.local.set({ photoCache }); // persist
+      console.log(`[PhotoCache] Saved ${Object.keys(photoCache).length} entries to storage`);
       return photoUrl;
     } catch {
       photoCache[cacheKey] = null;
+      chrome.storage.local.set({ photoCache }); // persist
       return null;
     } finally {
       delete photoPending[cacheKey];
@@ -2596,23 +2669,25 @@ Rules:
 - Use markdown formatting (## headers, **bold**, bullet lists)
 - Target 500-1500 words depending on available information
 
-At the very end of your response, include a structured data block:
+IMPORTANT: You MUST start your response with a structured data block FIRST, before the brief:
 <role_brief_fields>
 {"jobTitle": "extracted title or null", "baseSalaryRange": "base salary range or null", "oteTotalComp": "OTE/total comp or null", "equity": "equity info or null"}
 </role_brief_fields>
-Only include fields where you have clear data — use null for anything not mentioned.`;
+Only include fields where you have clear data — use null for anything not mentioned.
+
+Then write the full role brief below.`;
 
   try {
     const result = await chatWithFallback({
       model: 'claude-sonnet-4-5-20250514',
       system: 'You are a role intelligence analyst. Write structured, factual briefs in markdown.',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2048,
+      max_tokens: 3000,
       tag: 'RoleBrief'
     });
     if (result.error) return { error: result.error };
     let briefFields = null;
-    console.log('[RoleBrief] Raw response end:', (result.reply || '').slice(-300));
+    console.log('[RoleBrief] Raw response start:', (result.reply || '').slice(0, 400));
     const fieldsMatch = result.reply.match(/<role_brief_fields>([\s\S]*?)<\/role_brief_fields>/);
     if (fieldsMatch) {
       try {
@@ -2671,10 +2746,13 @@ Write a focused 2-4 sentence narrative that covers:
 
 Be specific. Reference real details. Don't hedge or restate the obvious. If transcripts/emails are available, weight them heavily — live interaction signals beat job description text every time.
 
-After your narrative analysis, include a structured assessment block:
+IMPORTANT: You MUST start your response with the structured assessment block FIRST, before your narrative:
+
 <fit_update>
 {"score": <1-10 updated fit score reflecting ALL context — meetings, emails, notes, not just the posting>, "verdict": "<updated one-sentence verdict>", "strongFits": ["<concrete green flag grounded in specific evidence, 8-14 words>"], "redFlags": ["<concrete red flag grounded in specific evidence, 8-14 words>"]}
 </fit_update>
+
+Then write your 2-4 sentence narrative analysis.
 
 Rules for the structured block:
 - Score reflects EVERYTHING known — posting, meetings, emails, notes.
@@ -2688,7 +2766,7 @@ Rules for the structured block:
     const result = await aiCall('deepFitAnalysis', {
       system,
       messages: [{ role: 'user', content: contextParts.join('\n\n') }],
-      max_tokens: 900
+      max_tokens: 1200
     });
     if (!result.ok) {
       console.error('[DeepFit] AI call failed:', result.status, result.error);

@@ -773,7 +773,8 @@ chrome.storage.local.get(['companyStages', 'opportunityStages', 'customStages'],
 
 // ── Back button ──────────────────────────────────────────────────────────────
 
-document.getElementById('btn-back').addEventListener('click', (e) => {
+const btnBack = document.getElementById('btn-back');
+if (btnBack) btnBack.addEventListener('click', (e) => {
   e.preventDefault();
   window.location.href = chrome.runtime.getURL('saved.html');
 });
