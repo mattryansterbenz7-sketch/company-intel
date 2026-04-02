@@ -1051,22 +1051,29 @@ function renderHomeState() {
   const hour = new Date().getHours();
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
 
-  chrome.storage.local.get(['savedCompanies', 'profileLinks', 'storyTime'], data => {
+  chrome.storage.local.get(['savedCompanies', 'profileLinks', 'storyTime', 'gmailUserEmail'], data => {
     const companies = data.savedCompanies || [];
 
     // Try to get first name from profile data
     let firstName = '';
+    // Common words that look like names but aren't
+    const notNames = /^(one|the|this|that|who|what|how|not|all|any|can|will|been|just|have|with|from|into|also|over|only|some|more|very|each|both|most|than|then|when|here|your|such)$/i;
     if (data.storyTime?.rawInput) {
-      const m = data.storyTime.rawInput.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]{2,})/i);
-      if (m) firstName = m[1];
+      const m = data.storyTime.rawInput.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]{2,})/);
+      if (m && !notNames.test(m[1])) firstName = m[1];
     }
     if (!firstName && data.storyTime?.profileSummary) {
       const m = data.storyTime.profileSummary.match(/(?:Name|name):\s*([A-Z][a-z]{2,})/);
-      if (m) firstName = m[1];
+      if (m && !notNames.test(m[1])) firstName = m[1];
+    }
+    // Check gmail user email (stored separately by email fetch)
+    if (!firstName && data.gmailUserEmail) {
+      const local = data.gmailUserEmail.split('@')[0].split('.')[0];
+      if (local && local.length > 2 && !/\d/.test(local) && !notNames.test(local)) firstName = local;
     }
     if (!firstName && data.profileLinks?.email) {
       const local = data.profileLinks.email.split('@')[0].split('.')[0];
-      if (local && local.length > 2 && !/\d/.test(local) && !/^(info|admin|hello|contact|one|test)$/i.test(local)) firstName = local;
+      if (local && local.length > 2 && !/\d/.test(local) && !notNames.test(local)) firstName = local;
     }
     firstName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase() : '';
 
@@ -2511,6 +2518,8 @@ function renderContactsSection(el, contacts) {
       detachBtn.title = 'Expand chat';
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
+    // Scroll the chat panel into view so it doesn't expand below the visible area
+    chatEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   // Show chat when company is detected
