@@ -2612,11 +2612,18 @@ Only include fields where you have clear data — use null for anything not ment
     });
     if (result.error) return { error: result.error };
     let briefFields = null;
+    console.log('[RoleBrief] Raw response end:', (result.reply || '').slice(-300));
     const fieldsMatch = result.reply.match(/<role_brief_fields>([\s\S]*?)<\/role_brief_fields>/);
     if (fieldsMatch) {
-      try { briefFields = JSON.parse(fieldsMatch[1].trim()); } catch {}
-      // Strip the tags from the displayed brief
+      try {
+        briefFields = JSON.parse(fieldsMatch[1].trim());
+        console.log('[RoleBrief] Parsed briefFields:', JSON.stringify(briefFields));
+      } catch (e) {
+        console.warn('[RoleBrief] briefFields JSON parse failed:', e.message);
+      }
       result.reply = result.reply.replace(/<role_brief_fields>[\s\S]*?<\/role_brief_fields>/, '').trim();
+    } else {
+      console.warn('[RoleBrief] No <role_brief_fields> block found in response');
     }
     return { content: result.reply, briefFields };
   } catch (err) {
@@ -2683,13 +2690,25 @@ Rules for the structured block:
       messages: [{ role: 'user', content: contextParts.join('\n\n') }],
       max_tokens: 900
     });
+    if (!result.ok) {
+      console.error('[DeepFit] AI call failed:', result.status, result.error);
+      return { error: result.error || 'AI call failed' };
+    }
     const text = result.text || '';
+    console.log('[DeepFit] Raw response:', text.slice(0, 500));
     const fitMatch = text.match(/<fit_update>([\s\S]*?)<\/fit_update>/);
     let fitUpdate = null;
     let cleanAnalysis = text;
     if (fitMatch) {
-      try { fitUpdate = JSON.parse(fitMatch[1].trim()); } catch {}
+      try {
+        fitUpdate = JSON.parse(fitMatch[1].trim());
+        console.log('[DeepFit] Parsed fitUpdate:', JSON.stringify(fitUpdate));
+      } catch (e) {
+        console.warn('[DeepFit] fitUpdate JSON parse failed:', e.message, '| raw:', fitMatch[1].slice(0, 200));
+      }
       cleanAnalysis = text.replace(/<fit_update>[\s\S]*?<\/fit_update>/, '').trim();
+    } else {
+      console.warn('[DeepFit] No <fit_update> block found in response');
     }
     return { analysis: cleanAnalysis, fitUpdate };
   } catch (e) {

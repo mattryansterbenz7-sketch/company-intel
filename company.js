@@ -1273,6 +1273,7 @@ function generateRoleBrief() {
       saveEntry({ roleBrief: { content: result.content, generatedAt: Date.now(), sourceVersions } });
 
       // Backfill empty fields from role brief extraction
+      console.log('[RoleBrief] briefFields:', result.briefFields ? JSON.stringify(result.briefFields) : 'null/undefined');
       if (result.briefFields) {
         const updates = {};
         let count = 0;
@@ -1329,7 +1330,9 @@ function maybeRefreshDeepFitAnalysis() {
   const analysisAge = entry.deepFitAnalysisAt ? (Date.now() - entry.deepFitAnalysisAt) / 60000 : Infinity;
   const hasNewData = newestContext > (entry.deepFitAnalysisAt || 0);
   // Re-run if: no analysis exists, OR analysis is old, OR new data arrived since last analysis
-  if (entry.deepFitAnalysis && analysisAge < 60 && !hasNewData) return;
+  const shouldRefresh = !entry.deepFitAnalysis || analysisAge > 60 || hasNewData;
+  console.log('[DeepFit] maybeRefresh:', { shouldRefresh, hasAnalysis: !!entry.deepFitAnalysis, analysisAge: Math.round(analysisAge), hasNewData, hasContext });
+  if (!shouldRefresh) return;
 
   // No context beyond posting and no existing analysis — skip (not enough to say anything new)
   if (!hasContext && entry.deepFitAnalysis) return;
@@ -1350,9 +1353,11 @@ function maybeRefreshDeepFitAnalysis() {
       prefs
     }, result => {
       void chrome.runtime.lastError;
+      console.log('[DeepFit] Result received:', { hasAnalysis: !!result?.analysis, hasFitUpdate: !!result?.fitUpdate });
       if (result?.analysis) {
         saveEntry({ deepFitAnalysis: result.analysis, deepFitAnalysisAt: Date.now() });
         if (result.fitUpdate) {
+          console.log('[DeepFit] Writing fitUpdate to jobMatch:', JSON.stringify(result.fitUpdate).slice(0, 200));
           const current = entry.jobMatch || {};
           saveEntry({
             jobMatch: {
@@ -1366,6 +1371,8 @@ function maybeRefreshDeepFitAnalysis() {
               lastUpdatedAt: Date.now()
             }
           });
+        } else {
+          console.warn('[DeepFit] No fitUpdate in result — flags will not update');
         }
         // Update only the fit block so other sections aren't disrupted
         const fitBlock = document.getElementById('hub-fit-block');
