@@ -201,7 +201,7 @@ function buildChatPanel(container, entry) {
       btn.textContent = 'Load emails';
 
       if (result?.error === 'not_connected') {
-        showStatus('Gmail not connected. Connect it in Preferences.', 'err');
+        showStatus('Gmail not connected. Connect it in Integrations.', 'err');
         return;
       }
       if (!result?.emails?.length) {
@@ -233,11 +233,11 @@ function buildChatPanel(container, entry) {
       }));
 
       if (result?.error === 'token_expired') {
-        showStatus('Granola session expired — please reconnect in Preferences.', 'err');
+        showStatus('Granola session expired — please reconnect in Integrations.', 'err');
         return;
       }
       if (result?.error === 'not_connected') {
-        showStatus('Granola not connected. Connect it in Preferences.', 'err');
+        showStatus('Granola not connected. Connect it in Integrations.', 'err');
         return;
       }
       if (!result?.notes && !result?.transcript && !result?.meetings?.length) {
@@ -290,7 +290,7 @@ function buildChatPanel(container, entry) {
       result => {
         void chrome.runtime.lastError;
         if (result?.error === 'token_expired') {
-          showStatus('Granola session expired — reconnect in Preferences.', 'err');
+          showStatus('Granola session expired — reconnect in Integrations.', 'err');
           return;
         }
         if (result?.error === 'not_connected') return; // silently skip if never connected

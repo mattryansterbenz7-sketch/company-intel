@@ -169,7 +169,7 @@ function renderHeader() {
     </select>
     <div class="hdr-stars" id="hdr-stars">${stars}</div>
     ${entry.url ? `<a class="hdr-ext-link" href="${entry.url}" target="_blank">↗ Job Posting</a>` : ''}
-    <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Preferences</a>
+    <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Career OS</a>
   `;
 
   document.title = `${entry.company}${entry.jobTitle ? ' · ' + entry.jobTitle : ''} — CompanyIntel`;
