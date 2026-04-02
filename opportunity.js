@@ -156,23 +156,15 @@ function mergeExtractedContacts(extracted) {
     // Skip generic/no-reply addresses
     if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
 
-    // Auto-add: email matches company domain, or matches a leader name
-    const emailDomain = email.split('@')[1] || '';
-    const isCompanyDomain = companyDomain && emailDomain.includes(companyDomain.split('.')[0]);
-    const matchesLeader = (entry.leaders || []).some(l =>
-      l.name && contact.name && l.name.toLowerCase().includes(contact.name.split(' ')[0].toLowerCase())
-    );
-
-    if (isCompanyDomain || matchesLeader) {
-      existing.push({
-        name: contact.name,
-        email: contact.email,
-        source: contact.source || 'auto-extracted',
-        addedAt: Date.now(),
-      });
-      existingEmails.add(email);
-      added++;
-    }
+    // Auto-add all non-generic contacts — emails were fetched specifically for this company
+    existing.push({
+      name: contact.name,
+      email: contact.email,
+      source: contact.source || 'auto-extracted',
+      addedAt: Date.now(),
+    });
+    existingEmails.add(email);
+    added++;
   }
 
   if (added > 0) {
