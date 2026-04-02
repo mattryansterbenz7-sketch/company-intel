@@ -624,6 +624,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleGlobalChatMessage(message).then(sendResponse);
     return true;
   }
+  if (message.type === 'COOP_MESSAGE') {
+    handleCoopMessage(message).then(sendResponse);
+    return true;
+  }
   if (message.type === 'GET_KEY_STATUS') {
     sendResponse({
       anthropic: !!ANTHROPIC_KEY,
@@ -2117,7 +2121,267 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
 
 // ── Chat ────────────────────────────────────────────────────────────────────
 
+// ── Unified Coop Chat Handler ─────────────────────────────────────────────
+
+async function buildCoopProfileContext() {
+  const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
+  const profileKeys = ['profileLinks', 'profileStory', 'profileExperience', 'profilePrinciples',
+    'profileMotivators', 'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
+    'profileResume', 'profileSkills', 'storyTime'];
+  const profileData = await new Promise(r => chrome.storage.local.get(profileKeys, r));
+  const parts = [];
+
+  // Personal Info
+  const links = profileData.profileLinks || {};
+  const linkParts = [];
+  if (links.linkedin || prefs.linkedinUrl) linkParts.push(`LinkedIn: ${links.linkedin || prefs.linkedinUrl}`);
+  if (links.github)  linkParts.push(`GitHub: ${links.github}`);
+  if (links.website) linkParts.push(`Website: ${links.website}`);
+  if (links.email)   linkParts.push(`Email: ${links.email}`);
+  if (links.phone)   linkParts.push(`Phone: ${links.phone}`);
+  if (linkParts.length) parts.push(`\n[Personal Info]\n${linkParts.join('\n')}`);
+
+  // Story
+  const story = profileData.profileStory || (profileData.storyTime?.profileSummary || profileData.storyTime?.rawInput || '');
+  if (story) parts.push(`\n[Your Story]\n${story.slice(0, 8000)}`);
+
+  // Career OS text buckets
+  if (profileData.profileExperience) parts.push(`\n[Experience & Accomplishments]\n${profileData.profileExperience.slice(0, 4000)}`);
+  if (profileData.profilePrinciples) parts.push(`\n[Operating Principles]\n${profileData.profilePrinciples.slice(0, 2000)}`);
+  if (profileData.profileMotivators) parts.push(`\n[What Drives You]\n${profileData.profileMotivators.slice(0, 2000)}`);
+  if (profileData.profileVoice)      parts.push(`\n[Voice & Style]\n${profileData.profileVoice.slice(0, 2000)}`);
+  if (profileData.profileFAQ)        parts.push(`\n[FAQ / Polished Responses]\n${profileData.profileFAQ.slice(0, 3000)}`);
+
+  // Resume
+  const resume = profileData.profileResume?.content || prefs.resumeText;
+  if (resume) parts.push(`\n[Resume]\n${resume.slice(0, 3000)}`);
+
+  // Green & Red Lights
+  const greenLights = profileData.profileGreenLights || [prefs.roles, prefs.roleLoved, prefs.interests].filter(Boolean).join('\n');
+  if (greenLights) parts.push(`\n[Green Lights]\n${greenLights.slice(0, 2000)}`);
+  const redLights = profileData.profileRedLights || [prefs.avoid, prefs.roleHated].filter(Boolean).join('\n');
+  if (redLights) parts.push(`\n[Red Lights]\n${redLights.slice(0, 2000)}`);
+
+  // Skills
+  const skills = profileData.profileSkills || prefs.jobMatchBackground;
+  if (skills) parts.push(`\n[Skills & Intangibles]\n${skills}`);
+
+  // Location & logistics
+  const locParts = [];
+  if (prefs.userLocation) locParts.push(`Location: ${prefs.userLocation}`);
+  const wa = (prefs.workArrangement || []).join(', ');
+  if (wa) locParts.push(`Work arrangement: ${wa}`);
+  if (prefs.maxTravel) locParts.push(`Max travel: ${prefs.maxTravel}`);
+  if (locParts.length) parts.push(`\n[Location]\n${locParts.join('\n')}`);
+
+  // Compensation
+  const compParts = [];
+  if (prefs.salaryFloor)  compParts.push(`Base salary floor (walk away below): $${prefs.salaryFloor}`);
+  if (prefs.salaryStrong) compParts.push(`Base salary strong offer (exciting above): $${prefs.salaryStrong}`);
+  if (prefs.oteFloor)     compParts.push(`OTE floor (walk away below): $${prefs.oteFloor}`);
+  if (prefs.oteStrong)    compParts.push(`OTE strong offer (exciting above): $${prefs.oteStrong}`);
+  if (compParts.length) parts.push(`\n[Compensation]\n${compParts.join('\n')}`);
+
+  // AI-learned insights
+  const storyTime = profileData.storyTime;
+  if (storyTime?.learnedInsights?.length) {
+    const normalized = storyTime.learnedInsights.map(i => typeof i === 'string' ? { insight: i, category: 'general', priority: 'normal' } : i);
+    const highPriority = normalized.filter(i => i.priority === 'high');
+    const styleInstructions = normalized.filter(i => i.category === 'style_instruction');
+    const normalInsights = normalized.filter(i => i.priority !== 'high' && i.category !== 'style_instruction');
+    if (styleInstructions.length) parts.push(`\n=== STYLE INSTRUCTIONS (from past corrections) ===\n${styleInstructions.map(i => `- ${i.insight}`).join('\n')}`);
+    const injected = [...highPriority, ...normalInsights.slice(-15)];
+    if (injected.length) parts.push(`\n[AI-Learned Insights]\n${injected.map(i => `- ${i.insight}`).join('\n')}`);
+    if (storyTime?.answerPatterns?.length) {
+      parts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${storyTime.answerPatterns.slice(-10).map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
+async function buildCoopPipelineSummary() {
+  const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+  const entries = savedCompanies || [];
+  if (!entries.length) return '';
+  const lines = entries.map(e => {
+    const parts = [e.company];
+    if (e.jobStage) parts.push(`Stage: ${e.jobStage}`);
+    else if (e.status) parts.push(`Status: ${e.status}`);
+    if (e.jobTitle) parts.push(`Role: ${e.jobTitle}`);
+    if (e.jobMatch?.score) parts.push(`Score: ${e.jobMatch.score}/10`);
+    if (e.rating) parts.push(`Excitement: ${e.rating}/5`);
+    if (e.knownContacts?.length) parts.push(`Contacts: ${e.knownContacts.slice(0,3).map(c=>c.name).join(', ')}`);
+    if (e.notes) parts.push(`Notes: ${e.notes.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,80)}`);
+    if (e.tags?.length) parts.push(`Tags: ${e.tags.join(', ')}`);
+    return `- ${parts.join(' | ')}`;
+  }).join('\n');
+  return `\n=== YOUR FULL PIPELINE (${entries.length} entries) ===\n${lines}`;
+}
+
+async function handleCoopMessage({ messages, context, globalChat, pipeline, enrichments, chatModel }) {
+  context = context || {};
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const daysAgo = dateStr => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T12:00:00');
+    if (isNaN(d)) return null;
+    return Math.round((today - d) / 86400000);
+  };
+  const relTime = dateStr => {
+    const n = daysAgo(dateStr);
+    if (n === null) return '';
+    if (n === 0) return ' (today)';
+    if (n === 1) return ' (yesterday)';
+    if (n < 7)  return ` (${n} days ago)`;
+    if (n < 30) return ` (${Math.round(n/7)} weeks ago)`;
+    return ` (${Math.round(n/30)} months ago)`;
+  };
+
+  // Layer 1: Coop identity
+  const identityPrompt = globalChat
+    ? `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have full visibility across Matt's job search pipeline. You know his background, values, and preferences. You can see every company and opportunity he's tracking.\n\nHelp him prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When he mentions a specific company or person, use the pipeline context to inform your response.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about him. Don't be sycophantic.\n\nResponse style: Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.`
+    : `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. You ALSO have visibility across the full pipeline — you can compare this opportunity to others and give strategic advice.\n\nUse ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.\n\nResponse style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.`;
+
+  const systemParts = [identityPrompt, `\n=== TODAY ===\n${todayStr}`];
+
+  // Layer 2: Application helper mode (if active)
+  if (context._applicationMode) {
+    systemParts.push(`\n=== APPLICATION HELPER MODE ===\nSITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.\n\nVOICE & TONE:\n- Write as the user in first person. Conversational, confident, specific.\n- Sound like a smart person talking, not an AI writing.\n- No dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.\n\nLENGTH: 2-5 sentences unless the user specifies otherwise.\n\nOUTPUT FORMAT:\n- Give ONE clean answer the user can copy-paste directly.\n- No preamble, no alternatives unless asked, no commentary after.\n- NEVER wrap in quotation marks.\n\nWhen the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
+  }
+
+  // Layer 3: Profile context (always — same for company + global)
+  const profileContext = await buildCoopProfileContext();
+  if (profileContext) systemParts.push(profileContext);
+
+  // Layer 4: Pipeline summary (ALWAYS — this is the key unification)
+  const pipelineSummary = pipeline || await buildCoopPipelineSummary();
+  if (pipelineSummary) systemParts.push(pipelineSummary);
+
+  // Layer 5: Deep company context (when on a company page)
+  if (!globalChat && context.company) {
+    const overview = [`\n=== CURRENT COMPANY / OPPORTUNITY ===`];
+    if (context.company)   overview.push(`Company: ${context.company}`);
+    if (context.jobTitle)  overview.push(`Role: ${context.jobTitle}`);
+    if (context.status)    overview.push(`Pipeline stage: ${context.status}`);
+    if (context.employees) overview.push(`Size: ${context.employees}`);
+    if (context.funding)   overview.push(`Funding: ${context.funding}`);
+    if (context.tags?.length) overview.push(`Tags: ${context.tags.join(', ')}`);
+    if (context.notesFeed?.length) {
+      const noteLines = context.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(n => {
+        const d = new Date(n.createdAt);
+        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const text = (n.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        return `[${dateStr}] ${text}`;
+      }).join('\n');
+      overview.push(`User notes:\n${noteLines}`);
+    } else if (context.notes) {
+      overview.push(`User notes: ${(context.notes || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}`);
+    }
+    systemParts.push(overview.join('\n'));
+
+    if (context.intelligence?.eli5 || context.intelligence?.whosBuyingIt || context.intelligence?.howItWorks) {
+      const intel = [`\n=== COMPANY INTELLIGENCE ===`];
+      if (context.intelligence.eli5)         intel.push(`What they do: ${context.intelligence.eli5}`);
+      if (context.intelligence.whosBuyingIt) intel.push(`Who buys it: ${context.intelligence.whosBuyingIt}`);
+      if (context.intelligence.howItWorks)   intel.push(`How it works: ${context.intelligence.howItWorks}`);
+      systemParts.push(intel.join('\n'));
+    }
+    if (context.leaders?.length) systemParts.push(`\n=== LEADERSHIP ===\n${context.leaders.map(l => `- ${l.name} — ${l.title || 'unknown'}`).join('\n')}`);
+    if (context.knownContacts?.length) {
+      systemParts.push(`\n=== KNOWN CONTACTS AT ${(context.company || '').toUpperCase()} ===\n${context.knownContacts.map(c => `- ${[c.name, c.title, c.email ? `<${c.email}>` : ''].filter(Boolean).join(' | ')}`).join('\n')}`);
+    }
+    if (context.roleBrief) systemParts.push(`\n=== ROLE BRIEF (AI-synthesized understanding) ===\n${context.roleBrief.slice(0, 4000)}`);
+    if (context.jobDescription || context.jobMatch) {
+      const job = [`\n=== JOB DETAILS ===`];
+      if (context.jobDescription) job.push(`Full job description:\n${context.jobDescription.slice(0, 5000)}`);
+      if (context.jobMatch?.verdict)           job.push(`Match verdict: ${context.jobMatch.verdict}`);
+      if (context.jobMatch?.score)             job.push(`Match score: ${context.jobMatch.score}/10`);
+      if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
+      if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
+      if (context.matchFeedback) {
+        const fb = context.matchFeedback;
+        job.push(`User feedback on match: ${fb.type === 'up' ? '👍 Agreed' : '👎 Disagreed'}${fb.note ? ` — "${fb.note}"` : ''}`);
+      }
+      systemParts.push(job.join('\n'));
+    }
+    if (context.reviews?.length) systemParts.push(`\n=== EMPLOYEE REVIEWS ===\n${context.reviews.slice(0, 4).map(r => `- "${r.snippet}" (${r.source || ''})`).join('\n')}`);
+    if (context.emails?.length) {
+      const emailLines = context.emails.slice(0, 20).map(e => {
+        const lines = [`[${e.date || ''}] "${e.subject}" — ${e.from}`];
+        if (e.snippet) lines.push(`  ${e.snippet.slice(0, 200)}`);
+        return lines.join('\n');
+      }).join('\n');
+      systemParts.push(`\n=== EMAIL HISTORY (${context.emails.length} emails) ===\n${emailLines}`);
+    }
+    if (context.meetings?.length) {
+      const mtgLines = context.meetings.map(m => {
+        const rel = relTime(m.date);
+        const header = `--- Meeting: ${m.title || 'Untitled'} | ${m.date || 'unknown date'}${rel}${m.time ? ' at ' + m.time : ''} ---`;
+        let body = '';
+        if (m.summaryMarkdown) body += `-- Granola AI Summary --\n${m.summaryMarkdown}\n\n`;
+        body += (m.transcript || '').slice(0, 4000);
+        return `${header}\n${body}`;
+      }).join('\n\n');
+      systemParts.push(`\n=== MEETING TRANSCRIPTS (${context.meetings.length} meetings) ===\n${mtgLines}`);
+    } else if (context.granolaNote) {
+      systemParts.push(`\n=== MEETING NOTES / TRANSCRIPTS ===\n${context.granolaNote.slice(0, 12000)}`);
+    }
+    if (context.manualMeetings?.length) {
+      const manualLines = context.manualMeetings.map(m => {
+        const rel = relTime(m.date);
+        return `--- Meeting (manual): ${m.title || 'Untitled'} | ${m.date || 'unknown'}${rel} ---\n${(m.transcript || m.notes || '(no notes)').slice(0, 4000)}`;
+      }).join('\n\n');
+      systemParts.push(`\n=== MANUALLY LOGGED MEETINGS (${context.manualMeetings.length}) ===\n${manualLines}`);
+    }
+    if (context.contextDocuments?.length) {
+      let used = 0;
+      const docParts = [];
+      for (const doc of context.contextDocuments) {
+        const tokens = doc.tokenEstimate || Math.ceil(doc.extractedText.length / 4);
+        if (used + tokens > 4000) { docParts.push(`\n## Uploaded: ${doc.filename} (truncated)\n${doc.extractedText.slice(0, (4000 - used) * 4)}`); break; }
+        docParts.push(`\n## Uploaded: ${doc.filename}\n${doc.extractedText}`);
+        used += tokens;
+      }
+      systemParts.push(`\n=== UPLOADED DOCUMENTS ===\n${docParts.join('\n')}`);
+    }
+  }
+
+  // Layer 6: On-demand enrichments for mentioned companies (global chat)
+  if (enrichments) systemParts.push(enrichments);
+
+  // Send to AI
+  const lastUserMsg = messages[messages.length - 1]?.content || '';
+  const hasTrigger = /remember this|remember that|don't forget|from now on|always\s+(?:lead|start|use|mention|include)|never\s+(?:say|mention|use|include)|update my profile|add this to/i.test(lastUserMsg);
+
+  try {
+    const systemText = systemParts.join('\n');
+    const model = chatModel || pipelineConfig.aiModels?.chat || 'claude-sonnet-4-6';
+    console.log('[Coop] Model:', model, '| prompt:', systemText.length, 'chars | global:', !!globalChat, '| company:', context.company || '(none)');
+    const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat' });
+    if (result.error) return result;
+    const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
+    if (hasTrigger) {
+      await _doExtractInsightsFromChat(lastUserMsg, result.reply, source);
+    } else {
+      extractInsightsFromChat(lastUserMsg, result.reply, source);
+    }
+    return { reply: result.reply, model: result.usedModel };
+  } catch (err) {
+    console.error('[Coop] Error:', err);
+    return { error: err.message };
+  }
+}
+
+// ── Legacy handler — redirects to unified Coop handler ────────────────────
 async function handleChatMessage({ messages, context, chatModel }) {
+  return handleCoopMessage({ messages, context, globalChat: false, chatModel });
+}
+
+// Original handleChatMessage preserved below for reference — DELETE after confirming redirect works
+async function _oldHandleChatMessage({ messages, context, chatModel }) {
   chrome.storage.sync.get(['prefs'], async ({ prefs }) => {});
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
 
@@ -2419,6 +2683,11 @@ When the user first enters this mode, respond: "Paste the application question a
 // ── Global Chat (Pipeline Advisor) ───────────────────────────────────────────
 
 async function handleGlobalChatMessage({ messages, pipeline, enrichments, chatModel }) {
+  return handleCoopMessage({ messages, context: {}, globalChat: true, pipeline, enrichments, chatModel });
+}
+
+// Original handleGlobalChatMessage preserved below for reference — DELETE after confirming redirect works
+async function _oldHandleGlobalChatMessage({ messages, pipeline, enrichments, chatModel }) {
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
   const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r)); // for learnedInsights
 
