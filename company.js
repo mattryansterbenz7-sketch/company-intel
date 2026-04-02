@@ -237,6 +237,22 @@ function init() {
     // Extract contacts from cached emails immediately (purges self, finds any missed contacts)
     if (entry.cachedEmails?.length) applyContactsFromEmails(entry.cachedEmails);
 
+    // Also run mergeExtractedContacts on cached emails (idempotent — skips existing contacts)
+    if (entry.cachedEmails?.length) {
+      const cachedExtracted = [];
+      for (const thread of entry.cachedEmails) {
+        const parsed = parseEmailContactLocal(thread.from);
+        if (parsed) cachedExtracted.push({ ...parsed, source: 'email' });
+        if (thread.messages) {
+          for (const msg of thread.messages) {
+            const p = parseEmailContactLocal(msg.from);
+            if (p) cachedExtracted.push({ ...p, source: 'email' });
+          }
+        }
+      }
+      if (cachedExtracted.length) mergeExtractedContacts(cachedExtracted);
+    }
+
     // Backfill from LinkedIn firmographics (persisted)
     backfillFromLinkedinFirmo();
 
@@ -1701,6 +1717,9 @@ function loadHubEmails(forceRefresh) {
     saveEntry(emailUpdates);
     renderEmailsFromData(result.emails);
     applyContactsFromEmails(result.emails);
+    if (result.extractedContacts?.length) {
+      mergeExtractedContacts(result.extractedContacts);
+    }
     maybeRescore('new_emails');
     const activityContainer = document.getElementById('activity-timeline');
     if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
@@ -1845,6 +1864,9 @@ function loadHubMeetings(forceRefresh) {
         cachedMeetingNotesAt: Date.now(),
       });
       applyGranolaContextOverrides();
+      if (granolaResult.extractedContacts?.length) {
+        mergeExtractedContacts(granolaResult.extractedContacts);
+      }
       const calEvents = entry.cachedCalendarEvents || [];
       renderMeetingsTimeline(calEvents, granolaNotes);
       const activityContainer = document.getElementById('activity-timeline');
@@ -2555,6 +2577,67 @@ function buildReviews() {
       "${r.snippet}"
       <div class="p-review-src">${r.source ? `<a href="${r.url||'#'}" target="_blank">${r.source}</a>` : ''}</div>
     </div>`).join('');
+}
+
+// ── Auto-extraction: merge contacts from background.js extractedContacts ─────
+function parseEmailContactLocal(fromStr) {
+  if (!fromStr) return null;
+  const match = fromStr.match(/^(.+?)\s*<([^>]+)>/);
+  if (match) {
+    const name = match[1].replace(/"/g, '').trim();
+    const email = match[2].trim().toLowerCase();
+    if (name && email && !/noreply|no-reply/i.test(email)) return { name, email };
+  }
+  const plain = fromStr.trim().toLowerCase();
+  if (plain.includes('@') && !/noreply/i.test(plain)) {
+    return { name: plain.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), email: plain };
+  }
+  return null;
+}
+
+function mergeExtractedContacts(extracted) {
+  const existing = entry.knownContacts || [];
+  const existingEmails = new Set(existing.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+
+  // Get the user's own email to exclude
+  const userEmail = (entry.gmailUserEmail || gmailUserEmail || '').toLowerCase();
+
+  // Get the company domain to determine auto-add vs suggest
+  const companyDomain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+
+  let added = 0;
+  for (const contact of extracted) {
+    const email = (contact.email || '').toLowerCase();
+    if (!email || existingEmails.has(email)) continue;
+    if (email === userEmail) continue;
+
+    // Skip generic/no-reply addresses
+    if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
+
+    // Auto-add: email matches company domain, or matches a leader name
+    const emailDomain = email.split('@')[1] || '';
+    const isCompanyDomain = companyDomain && emailDomain.includes(companyDomain.split('.')[0]);
+    const matchesLeader = (entry.leaders || []).some(l =>
+      l.name && contact.name && l.name.toLowerCase().includes(contact.name.split(' ')[0].toLowerCase())
+    );
+
+    if (isCompanyDomain || matchesLeader) {
+      existing.push({
+        name: contact.name,
+        email: contact.email,
+        source: contact.source || 'auto-extracted',
+        addedAt: Date.now(),
+      });
+      existingEmails.add(email);
+      added++;
+    }
+  }
+
+  if (added > 0) {
+    saveEntry({ knownContacts: existing });
+    // Re-render contacts panel if visible
+    renderPanel('contacts');
+  }
 }
 
 // Extract contacts from emails and apply to entry, purging self

@@ -1,6 +1,27 @@
 // Floating sidebar is the primary UI — icon click toggles it
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 
+// ── Contact extraction helper ───────────────────────────────────────────────
+function parseEmailContact(fromStr) {
+  if (!fromStr) return null;
+  // "Carina Clingman <carina@company.com>" or just "email@company.com"
+  const match = fromStr.match(/^(.+?)\s*<([^>]+)>/);
+  if (match) {
+    const name = match[1].replace(/"/g, '').trim();
+    const email = match[2].trim().toLowerCase();
+    if (name && email && !email.includes('noreply') && !email.includes('no-reply')) {
+      return { name, email };
+    }
+  }
+  // Plain email
+  const plain = fromStr.trim().toLowerCase();
+  if (plain.includes('@') && !plain.includes('noreply')) {
+    const name = plain.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return { name, email: plain };
+  }
+  return null;
+}
+
 chrome.action.onClicked.addListener((tab) => {
   if (!tab?.id || !tab.url || /^(chrome|edge|about|chrome-extension):/.test(tab.url)) return;
   chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' }, () => void chrome.runtime.lastError);
@@ -1798,7 +1819,30 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           userEmail = profile.emailAddress?.toLowerCase() || null;
           if (userEmail) chrome.storage.local.set({ gmailUserEmail: userEmail });
         } catch(e) {}
-        resolve({ emails: allEmails, userEmail });
+
+        // Extract contacts from email headers
+        const extractedContacts = [];
+        const seenEmails = new Set();
+        for (const thread of allEmails) {
+          // Parse From field
+          const fromParts = parseEmailContact(thread.from);
+          if (fromParts && !seenEmails.has(fromParts.email.toLowerCase())) {
+            seenEmails.add(fromParts.email.toLowerCase());
+            extractedContacts.push({ ...fromParts, source: 'email' });
+          }
+          // Parse individual messages if available
+          if (thread.messages) {
+            for (const msg of thread.messages) {
+              const msgFrom = parseEmailContact(msg.from);
+              if (msgFrom && !seenEmails.has(msgFrom.email.toLowerCase())) {
+                seenEmails.add(msgFrom.email.toLowerCase());
+                extractedContacts.push({ ...msgFrom, source: 'email' });
+              }
+            }
+          }
+        }
+
+        resolve({ emails: allEmails, userEmail, extractedContacts });
       } catch (err) {
         if (err.code === 401) {
           chrome.identity.removeCachedAuthToken({ token }, () => {});
@@ -2750,6 +2794,7 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
     // Fetch full content with transcripts for matched notes
     const meetings = [];
     const transcripts = [];
+    const granolaContacts = [];
     for (const { note } of sortedMatches) {
       const full = await granolaFetch('/v1/notes/' + note.id + '?include=transcript');
       if (!full) continue;
@@ -2776,6 +2821,15 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
         calendarTitle: calEvent.event_title || null,
       });
 
+      // Extract attendee contacts
+      if (full.attendees?.length) {
+        for (const att of full.attendees) {
+          if (att.email && att.name) {
+            granolaContacts.push({ name: att.name, email: att.email.toLowerCase(), source: 'meeting' });
+          }
+        }
+      }
+
       if (transcriptText) transcripts.push(transcriptText);
       else if (summary) transcripts.push(summary);
     }
@@ -2786,7 +2840,7 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
     const transcript = transcripts.join('\n\n---\n\n') || null;
 
     console.log('[Granola] Returning', meetings.length, 'meetings with', transcripts.length, 'transcripts');
-    return { notes, transcript, meetings };
+    return { notes, transcript, meetings, extractedContacts: granolaContacts };
   } catch (err) {
     console.error('[Granola] Error:', err.message);
     return { notes: null, error: err.message };
