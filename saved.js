@@ -2132,12 +2132,26 @@ function bindKanbanEvents(board) {
           const progress = Math.min(1, Math.abs(deltaX) / threshold);
           const rightOv = card.querySelector('.swipe-overlay.right');
           const leftOv = card.querySelector('.swipe-overlay.left');
+          // Board parallax shift — push board right when swiping left to create exit space
+          const boardEl = document.getElementById('kanban-board');
+          if (boardEl) {
+            if (deltaX < -10) {
+              const shift = Math.min(40, Math.abs(deltaX) * 0.15);
+              boardEl.style.transform = `translateX(${shift}px)`;
+              boardEl.style.transition = 'transform 0.1s ease-out';
+            } else {
+              boardEl.style.transform = '';
+            }
+          }
           if (deltaX > 10) { if (rightOv) rightOv.style.opacity = progress * 0.85; if (leftOv) leftOv.style.opacity = 0; }
           else if (deltaX < -10) { if (leftOv) leftOv.style.opacity = progress * 0.85; if (rightOv) rightOv.style.opacity = 0; }
           else { if (rightOv) rightOv.style.opacity = 0; if (leftOv) leftOv.style.opacity = 0; }
         });
 
         card.addEventListener('pointerup', () => {
+          // Reset board parallax
+          const boardEl = document.getElementById('kanban-board');
+          if (boardEl) { boardEl.style.transition = 'transform 0.3s ease-out'; boardEl.style.transform = ''; setTimeout(() => boardEl.style.transition = '', 300); }
           if (!isSwiping) { startX = 0; startY = 0; return; }
           card.classList.remove('swiping');
           const threshold = queueCardsContainer.offsetWidth * COMMIT_RATIO;
