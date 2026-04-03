@@ -1092,7 +1092,8 @@ async function processQuickFitScore(entryId) {
   for (const a of attractedTo) {
     for (const kw of (a.keywords || [])) {
       if (kw && jobDescLower.includes(kw.toLowerCase())) {
-        keywordHits.attracted.push({ keyword: kw, entry: a.text });
+        const numSev = typeof a.severity === 'number' ? a.severity : 2;
+        keywordHits.attracted.push({ keyword: kw, entry: a.text, severity: numSev });
       }
     }
   }
@@ -1113,9 +1114,10 @@ async function processQuickFitScore(entryId) {
   // ── Build structured candidate preferences for prompt ──
   let candidateSection = '[Candidate Preferences]\n';
   if (attractedTo.length) {
-    candidateSection += 'Attracted To (structured):\n' + attractedTo.map(e =>
-      `- [${e.category}] ${e.text}${e.keywords?.length ? ` (keywords: ${e.keywords.join(', ')})` : ''}`
-    ).join('\n') + '\n';
+    candidateSection += 'Attracted To (structured, importance 1-5 where 5=must-have):\n' + attractedTo.map(e => {
+      const sev = typeof e.severity === 'number' ? e.severity : 2;
+      return `- [${e.category}/importance:${sev}] ${e.text}${e.keywords?.length ? ` (keywords: ${e.keywords.join(', ')})` : ''}`;
+    }).join('\n') + '\n';
   } else {
     candidateSection += `Green lights: ${greenLights}\n`;
   }
@@ -1147,7 +1149,11 @@ async function processQuickFitScore(entryId) {
   // Add deterministic keyword hits to prompt
   let keywordContext = '';
   if (keywordHits.attracted.length) {
-    keywordContext += `\n\n[KEYWORD MATCHES — Attracted To]\n${keywordHits.attracted.map(h => `- "${h.keyword}" found → ${h.entry}`).join('\n')}`;
+    keywordContext += `\n\n[KEYWORD MATCHES — Attracted To (green flags)]\n${keywordHits.attracted.map(h => `- "${h.keyword}" found (importance:${h.severity}) → ${h.entry}`).join('\n')}`;
+    const highImportance = keywordHits.attracted.filter(h => h.severity >= 4);
+    if (highImportance.length) {
+      keywordContext += `\n\nNOTE: High-importance green flag keywords matched (importance 4-5) — these should significantly BOOST the score.`;
+    }
   }
   if (keywordHits.dealbreaker.length) {
     keywordContext += `\n\n[KEYWORD MATCHES — Dealbreakers]\n${keywordHits.dealbreaker.map(h => `- "${h.keyword}" found (${h.severity}) → ${h.entry}`).join('\n')}`;
@@ -1176,6 +1182,7 @@ SCORING RULES:
 - The "Work Arrangement" field above is authoritative. If it says "Remote", the job IS remote.
 - hardDQ: true ONLY for absolute verified dealbreakers (on-site vs remote requirement, base max below salary floor, fundamentally wrong role type). When in doubt, do NOT flag.
 - reason: explain WHY you gave this score. Do NOT repeat job title or company name.
+- Green flag importance matters: high-importance (4-5) green flags that match should significantly boost the score. A role matching multiple importance-5 green flags should score higher even if minor red flags exist. Green flags counterbalance red flags — weigh both sides.
 
 QUALIFICATION MATCH:
 - Compare the posting's stated skills, qualifications, mindset, and experience requirements against the candidate's actual background.
@@ -1232,6 +1239,14 @@ Respond in JSON only:
     console.log(`[QuickFit] Score ${score} with Hard DQ — capping at 4`);
     score = 4;
     reason = (hardDQ.reasons?.[0] || reason);
+  }
+
+  // Post-AI boost: high-importance green flag keyword matches should floor score
+  const highGreenHits = keywordHits.attracted.filter(h => h.severity >= 4);
+  if (highGreenHits.length >= 2 && score < 6 && !hardDQ.flagged) {
+    console.log(`[QuickFit] Green flag boost: ${highGreenHits.length} high-importance matches — flooring score from ${score} to 6`);
+    score = Math.max(score, 6);
+    strongFits = [...strongFits, ...highGreenHits.map(h => `Matches "${h.keyword}" (importance ${h.severity})`)];
   }
 
   // Post-AI override: hard dealbreaker keyword matches force flagging

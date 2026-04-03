@@ -902,10 +902,15 @@ function renderStructuredList(containerId, storageKey, entries, opts = {}) {
     return sevB - sevA;
   });
 
+  const isGreen = storageKey === 'profileAttractedTo';
   listEl.innerHTML = sorted.map(entry => {
     const sev = typeof entry.severity === 'number' ? entry.severity : (entry.severity === 'hard' ? 4 : 2);
-    const colors = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-    const labels = ['Minor','Preference','Notable','Dealbreaker','Hard Stop'];
+    const greenColors = ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'];
+    const redColors = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
+    const greenLabels = ['Nice to Have','Preferred','Important','Essential','Must Have'];
+    const redLabels = ['Minor','Preference','Notable','Dealbreaker','Hard Stop'];
+    const colors = isGreen ? greenColors : redColors;
+    const labels = isGreen ? greenLabels : redLabels;
     return `
     <div class="structured-entry" data-id="${entry.id}">
       <div class="entry-content">
@@ -976,17 +981,21 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
       <textarea class="field-input entry-form-text" placeholder="Describe this signal..." rows="2">${escHtml(editEntry?.text || '')}</textarea>
       <div class="entry-form-row">
         <select class="field-input entry-form-category">${catOptions}</select>
-        ${opts.showSeverity ? `
-          <div class="severity-scale" style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:11px;color:#6b7280;white-space:nowrap;">Severity:</span>
-            ${[1,2,3,4,5].map(n => {
-              const current = editEntry?.severity ?? 2;
-              const numSev = typeof current === 'number' ? current : (current === 'hard' ? 4 : 2);
-              const colors = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-              return `<button class="sev-num-btn ${numSev === n ? 'active' : ''}" data-sev="${n}" style="width:28px;height:28px;border-radius:50%;border:2px solid ${colors[n-1]};background:${numSev === n ? colors[n-1] : 'transparent'};color:${numSev === n ? '#fff' : colors[n-1]};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">${n}</button>`;
-            }).join('')}
-            <span style="font-size:10px;color:#94a3b8;margin-left:2px;">${editEntry?.severity >= 4 || editEntry?.severity === 'hard' ? 'dealbreaker' : 'preference'}</span>
-          </div>` : ''}
+        ${opts.showSeverity ? (() => {
+          const isGreenForm = storageKey === 'profileAttractedTo';
+          const sevColors = isGreenForm ? ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'] : ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
+          const sevLabels = isGreenForm ? ['nice to have','preferred','important','essential','must have'] : ['minor','preference','notable','dealbreaker','hard stop'];
+          const current = editEntry?.severity ?? 2;
+          const numSev = typeof current === 'number' ? current : (current === 'hard' ? 4 : 2);
+          return `
+          <div class="severity-scale" data-flag-type="${isGreenForm ? 'green' : 'red'}" style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#6b7280;white-space:nowrap;">${isGreenForm ? 'Importance:' : 'Severity:'}</span>
+            ${[1,2,3,4,5].map(n =>
+              `<button class="sev-num-btn ${numSev === n ? 'active' : ''}" data-sev="${n}" style="width:28px;height:28px;border-radius:50%;border:2px solid ${sevColors[n-1]};background:${numSev === n ? sevColors[n-1] : 'transparent'};color:${numSev === n ? '#fff' : sevColors[n-1]};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">${n}</button>`
+            ).join('')}
+            <span style="font-size:10px;color:#94a3b8;margin-left:2px;">${sevLabels[numSev - 1]}</span>
+          </div>`;
+        })() : ''}
       </div>
       <div class="entry-form-row">
         <input type="text" class="field-input entry-form-keywords" placeholder="Keywords (comma-separated, e.g. grit, hustle)" value="${escHtml((editEntry?.keywords || []).join(', '))}">
@@ -1000,12 +1009,16 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
   // Severity scale toggle
   formWrap.querySelectorAll('.sev-num-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const colors = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
+      const scaleEl = formWrap.querySelector('.severity-scale');
+      const isGreenForm = scaleEl?.dataset.flagType === 'green';
+      const colors = isGreenForm ? ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'] : ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
+      const sevLabels = isGreenForm ? ['nice to have','preferred','important','essential','must have'] : ['minor','preference','notable','dealbreaker','hard stop'];
       formWrap.querySelectorAll('.sev-num-btn').forEach(b => {
         b.classList.remove('active');
         const n = parseInt(b.dataset.sev);
         b.style.background = 'transparent';
         b.style.color = colors[n-1];
+        b.style.borderColor = colors[n-1];
       });
       btn.classList.add('active');
       const n = parseInt(btn.dataset.sev);
@@ -1013,7 +1026,7 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
       btn.style.color = '#fff';
       // Update label
       const label = formWrap.querySelector('.severity-scale span:last-child');
-      if (label) label.textContent = n >= 4 ? 'dealbreaker' : 'preference';
+      if (label) label.textContent = sevLabels[n - 1];
     });
   });
 
