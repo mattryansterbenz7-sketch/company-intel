@@ -2606,10 +2606,23 @@ function renderContactsSection(el, contacts) {
     } catch { return ''; }
   }
 
+  function getTabFaviconHTML() {
+    const url = currentUrl || '';
+    try {
+      const u = new URL(url);
+      const host = u.hostname;
+      if (host.includes('linkedin.com')) return `<span class="sp-tab-indicator-icon-fallback" style="color:#0A66C2;">in</span>`;
+      if (url.includes('chrome-extension://')) return `<span class="sp-tab-indicator-icon-fallback" style="color:#FF7A59;">&#9670;</span>`;
+      return `<img class="sp-tab-indicator-icon" src="https://www.google.com/s2/favicons?domain=${host}&sz=32" onerror="this.outerHTML='<span class=sp-tab-indicator-icon-fallback>&#9679;</span>'" />`;
+    } catch { return `<span class="sp-tab-indicator-icon-fallback">&#9679;</span>`; }
+  }
+
   function updateTabIndicator() {
     if (!tabContextActive || !tabIndicator) return;
     tabContextLabel = getTabContextLabel();
     if (tabContextLabel) {
+      const iconWrap = document.getElementById('sp-tab-indicator-icon-wrap');
+      if (iconWrap) iconWrap.innerHTML = getTabFaviconHTML();
       tabIndicatorText.textContent = `Sharing "${tabContextLabel}"`;
       tabIndicator.style.display = '';
     } else {
@@ -2659,14 +2672,14 @@ function renderContactsSection(el, contacts) {
   function buildEmptyStateHTML() {
     const ctx = detectSuggestionContext();
     const suggestions = SUGGESTIONS_BY_CONTEXT[ctx] || SUGGESTIONS_BY_CONTEXT.company;
-    const avatarHTML = typeof COOP !== 'undefined' ? COOP.avatar(56) : '';
+    const avatarHTML = typeof COOP !== 'undefined' ? COOP.avatar(48) : '';
     const suggestionsHTML = suggestions.map(s =>
       `<button class="sp-suggestion-btn" data-suggestion-prompt="${s.prompt.replace(/"/g, '&quot;')}">${s.label}</button>`
     ).join('');
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;text-align:center;">
-      ${avatarHTML}
-      <div style="font-size:15px;font-weight:700;color:#2D2D2D;">Hey, I'm Coop</div>
-      <div style="font-size:13px;color:#8B8680;line-height:1.5;max-width:260px;">Your co-operator</div>
+    return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:32px 24px 20px;">
+      <div style="margin-bottom:8px;">${avatarHTML}</div>
+      <div style="font-size:22px;font-weight:700;color:#FF7A59;line-height:1.2;">Hello, Matt</div>
+      <div style="font-size:20px;font-weight:600;color:#2D2D2D;line-height:1.3;">How can I help you today?</div>
     </div>
     <div class="sp-suggestions">${suggestionsHTML}</div>`;
   }
@@ -3120,6 +3133,8 @@ function renderContactsSection(el, contacts) {
   inputEl.addEventListener('input', () => {
     inputEl.style.height = '';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
+    // Toggle send button active state
+    sendBtn.classList.toggle('has-text', inputEl.value.trim().length > 0);
   });
 
   // Quick action buttons (clear in bottom bar)
@@ -3151,6 +3166,10 @@ function renderContactsSection(el, contacts) {
   let chatSizeState = 'normal'; // normal | expanded | minimized
   const inputRow = chatEl.querySelector('.sp-chat-input-row');
 
+  const SVG_EXPAND = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l-2 2m0 0h4m-4 0V8M12 6l2-2m0 0h-4m4 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const SVG_COLLAPSE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 2v4h4M2 10h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const SVG_MINIMIZE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+
   function applyChatSize() {
     const tabInd = document.getElementById('sp-tab-indicator');
     if (chatSizeState === 'expanded') {
@@ -3159,22 +3178,19 @@ function renderContactsSection(el, contacts) {
       msgsEl.style.display = '';
       if (inputRow) inputRow.style.display = '';
       if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
-      detachBtn.textContent = '⤡';
-      detachBtn.title = 'Minimize chat';
+      if (detachBtn) { detachBtn.innerHTML = SVG_COLLAPSE; detachBtn.title = 'Minimize chat'; }
     } else if (chatSizeState === 'minimized') {
       msgsEl.style.display = 'none';
       if (inputRow) inputRow.style.display = 'none';
       if (tabInd) tabInd.style.display = 'none';
-      detachBtn.textContent = '⤢';
-      detachBtn.title = 'Expand chat';
+      if (detachBtn) { detachBtn.innerHTML = SVG_EXPAND; detachBtn.title = 'Expand chat'; }
     } else {
       msgsEl.style.maxHeight = localStorage.getItem('ci_sp_chat_height') ? localStorage.getItem('ci_sp_chat_height') + 'px' : '300px';
       msgsEl.style.minHeight = '60px';
       msgsEl.style.display = '';
       if (inputRow) inputRow.style.display = '';
       if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
-      detachBtn.textContent = '⤢';
-      detachBtn.title = 'Expand chat';
+      if (detachBtn) { detachBtn.innerHTML = SVG_EXPAND; detachBtn.title = 'Expand chat'; }
     }
     if (chatSizeState !== 'minimized') {
       msgsEl.scrollTop = msgsEl.scrollHeight;
