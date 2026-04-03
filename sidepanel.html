@@ -15,8 +15,8 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #FAF9F7; color: #2D2D2D; width: 100%; min-width: 300px; min-height: 100vh;
-      display: flex; flex-direction: column;
+      background: #FAF9F7; color: #2D2D2D; width: 100%; min-width: 300px; height: 100vh;
+      display: flex; flex-direction: column; overflow: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -385,8 +385,8 @@
     .sp-chat-resize-handle { height: 7px; cursor: row-resize; display: flex; align-items: center; justify-content: center; background: #F5F3F0; border-bottom: 1px solid #E8E5E0; }
     .sp-chat-resize-handle::after { content: ''; width: 36px; height: 3px; border-radius: 2px; background: #DDD9D4; transition: background 0.15s; }
     .sp-chat-resize-handle:hover::after { background: #FF7A59; }
-    .sp-chat-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #E8E5E0; }
-    .sp-chat-header-title { font-size: 13px; font-weight: 800; color: #FF7A59; }
+    .sp-chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fff; border-bottom: 1px solid #E8E5E0; }
+    .sp-chat-header-title { font-size: 13px; font-weight: 800; color: #FF7A59; flex: 1; min-width: 0; }
     /* Pipeline stats */
     .sp-pipeline-stats { display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: #F5F3F0; border-bottom: 1px solid #E8E5E0; cursor: pointer; overflow-x: auto; }
     .sp-pipeline-stats:hover { background: #F0EEEB; }
@@ -396,13 +396,28 @@
     .sp-stat-denom { font-size: 10px; color: #A09A94; font-weight: 600; }
     .sp-stat-label { font-size: 9px; color: #A09A94; text-transform: uppercase; letter-spacing: 0.05em; }
 
-    .sp-model-toggle { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
-    .sp-model-toggle .data-src { cursor: pointer; transition: all 0.15s; padding: 1px 8px 1px 6px; }
-    .sp-model-toggle .data-src::after { content: ' ▾'; font-size: 8px; opacity: 0.6; }
-    .sp-model-toggle:hover .data-src { background: #FF7A59; color: #fff; }
-    .sp-chat-header-btns { display: flex; gap: 4px; }
+    .sp-model-toggle { background: none; border: 1px solid #E8E5E0; border-radius: 6px; padding: 4px 8px; cursor: pointer; font: inherit; display: flex; align-items: center; gap: 4px; transition: all 0.15s; flex-shrink: 0; }
+    .sp-model-toggle:hover { border-color: #FF7A59; background: rgba(255,122,89,0.04); }
+    .sp-model-toggle .sp-model-label-text { font-size: 11px; font-weight: 600; color: #6B6560; white-space: nowrap; }
+    .sp-model-toggle .sp-model-caret { font-size: 8px; color: #A09A94; }
+    .sp-chat-header-btns { display: flex; gap: 6px; align-items: center; }
+    .sp-chat-popout { background: none; border: 1px solid #DDD9D4; color: #8B8680; font-size: 13px; cursor: pointer; padding: 3px 7px; border-radius: 4px; transition: all 0.12s; line-height: 1; }
+    .sp-chat-popout:hover { color: #FF7A59; border-color: #FF7A59; }
     .sp-chat-detach { background: none; border: 1px solid #DDD9D4; color: #8B8680; font-size: 14px; cursor: pointer; padding: 3px 6px; border-radius: 4px; transition: all 0.12s; line-height: 1; }
     .sp-chat-detach:hover { color: #FF7A59; border-color: #FF7A59; }
+
+    /* Tab awareness indicator */
+    .sp-tab-indicator { display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: #F5F3F0; border-top: 1px solid #E8E5E0; font-size: 11px; color: #8B8680; }
+    .sp-tab-indicator-icon { font-size: 12px; color: #FF7A59; flex-shrink: 0; }
+    .sp-tab-indicator-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .sp-tab-indicator-dismiss { background: none; border: none; color: #A09A94; cursor: pointer; font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+    .sp-tab-indicator-dismiss:hover { color: #FF7A59; }
+
+    /* Contextual suggestions */
+    .sp-suggestions { display: flex; flex-direction: column; gap: 6px; padding: 0 16px 12px; }
+    .sp-suggestion-btn { background: #fff; border: 1px solid #E8E5E0; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #4A4A4A; cursor: pointer; font-family: inherit; text-align: left; transition: all 0.15s; line-height: 1.4; }
+    .sp-suggestion-btn:hover { border-color: #FF7A59; color: #FF7A59; background: rgba(255,122,89,0.03); }
+    .sp-suggestion-btn:active { transform: scale(0.98); }
     .sp-chat-messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 60px; max-height: 300px; background: #FAF9F7; }
     .sp-chat-empty { color: #A09A94; font-size: 13px; text-align: center; padding: 24px 8px; line-height: 1.6; }
     .sp-chat-msg { display: flex; flex-direction: column; }
@@ -411,7 +426,9 @@
     .sp-chat-msg-user .sp-chat-bubble { background: #F0EEEB; color: #2D2D2D; padding: 8px 14px; border-radius: 12px 12px 3px 12px; font-size: 13px; line-height: 1.5; max-width: 88%; }
     .sp-chat-msg-assistant .sp-chat-bubble { color: #3D3D3D; font-size: 14px; line-height: 1.7; padding: 4px 0; max-width: 100%; }
     .sp-chat-msg-assistant .sp-chat-bubble strong { color: #1A1A1A; font-weight: 600; }
-    .sp-chat-input-row { display: flex; gap: 8px; padding: 10px 14px; align-items: flex-end; border-top: 1px solid #E8E5E0; background: #fff; }
+    .sp-chat-input-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-top: 1px solid #E8E5E0; background: #fff; }
+    .sp-chat-input-main { display: flex; gap: 8px; align-items: flex-end; }
+    .sp-chat-input-bottom { display: flex; align-items: center; gap: 8px; }
     .sp-chat-input { flex: 1; background: #FAF9F7; border: 1.5px solid #E8E5E0; border-radius: 12px; color: #2D2D2D; font-size: 14px; padding: 10px 14px; font-family: inherit; resize: none; outline: none; min-height: 38px; max-height: 100px; line-height: 1.4; transition: border-color 0.2s, box-shadow 0.2s; }
     .sp-chat-input:focus { border-color: #FF7A59; box-shadow: 0 0 0 3px rgba(255,122,89,0.08); }
     .sp-chat-input::placeholder { color: #C5C0BA; }
@@ -457,6 +474,16 @@
     .sp-code-block code { white-space: pre; }
     .sp-code-copy { position: absolute; top: 6px; right: 6px; background: #E8E5E0; border: none; color: #6B6560; padding: 2px 5px; border-radius: 3px; font-size: 11px; cursor: pointer; }
     .sp-code-copy:hover { color: #FF7A59; }
+
+    /* Coop entry-update proposal cards */
+    .sp-chat-proposal { background: #F8F7F5; border: 1px solid #E8E5E0; border-radius: 8px; padding: 10px 12px; margin: 8px 0 4px; }
+    .sp-chat-proposal-text { font-size: 13px; font-weight: 600; color: #2D3E50; margin-bottom: 8px; }
+    .sp-chat-proposal-actions { display: flex; gap: 8px; }
+    .sp-chat-proposal-actions button { border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .sp-chat-proposal-accept { background: #FF7A59; color: white; }
+    .sp-chat-proposal-accept:hover { background: #E86A4A; }
+    .sp-chat-proposal-dismiss { background: #E8E5E0; color: #6B6560; }
+    .sp-chat-proposal-dismiss:hover { background: #DAD7D2; }
     .sp-chat-img { max-width: 100%; border-radius: 6px; margin: 6px 0; }
 
     /* Queue save buttons */
@@ -576,6 +603,7 @@
     </div>
   </div>
 
+  <div id="sp-main-scroll" style="flex:1;overflow-y:auto;min-height:0;">
   <!-- Pipeline stats row -->
   <div id="sp-pipeline-stats" class="sp-pipeline-stats"></div>
 
@@ -659,6 +687,7 @@
       <input type="text" class="sp-home-search-input" id="sp-home-search" placeholder="Search companies, roles, tags..." autocomplete="off">
     </div>
     <div id="sp-home-queue"></div>
+    <div id="sp-home-tasks"></div>
     <div id="sp-home-actions"></div>
     <div id="sp-home-pipeline"></div>
     <div id="sp-home-results" style="display:none"></div>
@@ -787,29 +816,39 @@
     </div>
   </div>
   <div class="sp-toast" id="sp-toast"></div>
+  </div><!-- /#sp-main-scroll -->
 
   <!-- Sticky AI Chat — docked at bottom -->
   <div id="sp-chat" style="display:none">
     <div class="sp-inline-chat" id="sp-inline-chat">
       <div class="sp-chat-resize-handle" id="sp-chat-resize"></div>
       <div class="sp-chat-header">
-        <span class="sp-chat-header-title" id="sp-chat-header-title" style="display:flex;align-items:center;gap:8px;">&#10038; Ask AI</span>
-        <button class="sp-model-toggle" id="sp-model-toggle" title="Click to switch model"><span class="data-src" style="margin-left:6px" id="sp-model-label">◆ GPT-4.1 mini</span></button>
+        <span class="sp-chat-header-title" id="sp-chat-header-title" style="display:flex;align-items:center;gap:8px;">Coop</span>
         <div class="sp-chat-header-btns">
-          <button class="sp-chat-detach" id="sp-chat-detach" title="Pop out to floating window">&#x2922;</button>
+          <button class="sp-chat-popout" id="sp-chat-popout" title="Pop out to window">⧉</button>
+          <button class="sp-chat-detach" id="sp-chat-detach" title="Expand chat">&#x2922;</button>
         </div>
       </div>
       <div class="sp-chat-messages" id="sp-chat-messages">
         <div class="sp-chat-empty" id="sp-chat-empty">Ask about this role, company, or get help applying.</div>
       </div>
-      <div class="sp-chat-input-row">
-        <textarea class="sp-chat-input" id="sp-chat-input" placeholder="Ask Coop anything..." rows="1"></textarea>
-        <button class="sp-chat-send" id="sp-chat-send">Send</button>
+      <div id="sp-tab-indicator" class="sp-tab-indicator" style="display:none">
+        <span class="sp-tab-indicator-icon">⊙</span>
+        <span class="sp-tab-indicator-text" id="sp-tab-indicator-text"></span>
+        <button class="sp-tab-indicator-dismiss" id="sp-tab-dismiss" title="Disconnect from tab">✕</button>
       </div>
-      <div class="sp-chat-actions">
-        <button class="sp-chat-action" data-prompt="Help me answer application questions for this role">Coop, help me apply</button>
-        <button class="sp-chat-action" data-prompt="What should I know before interviewing here?">Coop, prep me</button>
-        <button class="sp-chat-action sp-chat-clear" data-action="clear">Clear</button>
+      <div class="sp-chat-input-row">
+        <div class="sp-chat-input-main">
+          <textarea class="sp-chat-input" id="sp-chat-input" placeholder="Ask Coop anything..." rows="1"></textarea>
+          <button class="sp-chat-send" id="sp-chat-send">Send</button>
+        </div>
+        <div class="sp-chat-input-bottom">
+          <button class="sp-model-toggle" id="sp-model-toggle" title="Switch model">
+            <span class="sp-model-label-text" id="sp-model-label">Fast</span>
+            <span class="sp-model-caret">▾</span>
+          </button>
+          <button class="sp-chat-action sp-chat-clear" data-action="clear" style="margin-left:auto;">Clear</button>
+        </div>
       </div>
     </div>
   </div>

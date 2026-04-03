@@ -2568,16 +2568,107 @@ function renderContactsSection(el, contacts) {
   const inputEl = document.getElementById('sp-chat-input');
   const sendBtn = document.getElementById('sp-chat-send');
   const detachBtn = document.getElementById('sp-chat-detach');
+  const popoutBtn = document.getElementById('sp-chat-popout');
   const chatResize = document.getElementById('sp-chat-resize');
   const chatSpacer = document.getElementById('sp-chat-spacer');
+  const tabIndicator = document.getElementById('sp-tab-indicator');
+  const tabIndicatorText = document.getElementById('sp-tab-indicator-text');
+  const tabDismissBtn = document.getElementById('sp-tab-dismiss');
   console.log('[SP Chat] Init:', { chatEl: !!chatEl, msgsEl: !!msgsEl, inputEl: !!inputEl, sendBtn: !!sendBtn });
   if (!chatEl || !msgsEl || !inputEl || !sendBtn) { console.warn('[SP Chat] Missing elements — aborting init'); return; }
 
   if (typeof COOP !== 'undefined') {
     const headerTitle = document.getElementById('sp-chat-header-title');
     if (headerTitle) headerTitle.innerHTML = COOP.headerHTML();
-    const emptyState = document.getElementById('sp-chat-empty');
-    if (emptyState) emptyState.innerHTML = COOP.emptyStateHTML('company');
+  }
+
+  // ── Tab/page awareness ──
+  let tabContextActive = true;
+  let tabContextLabel = '';
+
+  function getTabContextLabel() {
+    const url = currentUrl || '';
+    const company = companyNameEl?.textContent || '';
+    if (!url) return '';
+    try {
+      const u = new URL(url);
+      const host = u.hostname.replace(/^www\./, '');
+      if (host.includes('linkedin.com')) {
+        if (url.includes('/jobs/')) return company ? `LinkedIn Jobs — ${company}` : 'LinkedIn Jobs';
+        if (url.includes('/feed')) return 'LinkedIn Feed';
+        return `LinkedIn — ${u.pathname.split('/').filter(Boolean)[0] || 'page'}`;
+      }
+      if (url.includes('chrome-extension://')) {
+        if (url.includes('saved')) return 'CompanyIntel — Saved';
+        return 'CompanyIntel';
+      }
+      return company ? `${company} — ${host}` : host;
+    } catch { return ''; }
+  }
+
+  function updateTabIndicator() {
+    if (!tabContextActive || !tabIndicator) return;
+    tabContextLabel = getTabContextLabel();
+    if (tabContextLabel) {
+      tabIndicatorText.textContent = `Sharing "${tabContextLabel}"`;
+      tabIndicator.style.display = '';
+    } else {
+      tabIndicator.style.display = 'none';
+    }
+  }
+
+  if (tabDismissBtn) {
+    tabDismissBtn.addEventListener('click', () => {
+      tabContextActive = false;
+      tabIndicator.style.display = 'none';
+    });
+  }
+
+  // ── Contextual suggested questions ──
+  const SUGGESTIONS_BY_CONTEXT = {
+    job: [
+      { label: 'Score this role for me', prompt: 'Score this role against my profile and ICP' },
+      { label: 'Help me apply', prompt: 'Help me answer application questions for this role' },
+      { label: 'Compare to my ICP', prompt: 'Compare this role to my ideal company profile' },
+    ],
+    linkedin: [
+      { label: 'Explore trending topics', prompt: 'What are the trending topics in my feed?' },
+      { label: 'Find networking opportunities', prompt: 'Identify networking opportunities from this page' },
+      { label: 'Draft a post', prompt: 'Help me draft a LinkedIn post about my job search' },
+    ],
+    saved: [
+      { label: 'What should I prioritize?', prompt: 'What should I prioritize today from my saved opportunities?' },
+      { label: 'Compare top opportunities', prompt: 'Compare my top-rated saved opportunities' },
+      { label: 'Draft follow-ups', prompt: 'Draft follow-up messages for my active opportunities' },
+    ],
+    company: [
+      { label: 'Prep me for an interview', prompt: 'What should I know before interviewing here?' },
+      { label: 'Draft a follow-up email', prompt: 'Draft a follow-up email for this company' },
+      { label: 'What are the risks?', prompt: "What are the red flags or risks I should know about?" },
+    ],
+  };
+
+  function detectSuggestionContext() {
+    const url = currentUrl || '';
+    if (currentJobTitle) return 'job';
+    if (url.includes('linkedin.com')) return 'linkedin';
+    if (url.includes('chrome-extension://') && url.includes('saved')) return 'saved';
+    return 'company';
+  }
+
+  function buildEmptyStateHTML() {
+    const ctx = detectSuggestionContext();
+    const suggestions = SUGGESTIONS_BY_CONTEXT[ctx] || SUGGESTIONS_BY_CONTEXT.company;
+    const avatarHTML = typeof COOP !== 'undefined' ? COOP.avatar(56) : '';
+    const suggestionsHTML = suggestions.map(s =>
+      `<button class="sp-suggestion-btn" data-suggestion-prompt="${s.prompt.replace(/"/g, '&quot;')}">${s.label}</button>`
+    ).join('');
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;text-align:center;">
+      ${avatarHTML}
+      <div style="font-size:15px;font-weight:700;color:#2D2D2D;">Hey, I'm Coop</div>
+      <div style="font-size:13px;color:#8B8680;line-height:1.5;max-width:260px;">Your co-operator</div>
+    </div>
+    <div class="sp-suggestions">${suggestionsHTML}</div>`;
   }
 
   // Restore saved chat height
@@ -2649,7 +2740,10 @@ function renderContactsSection(el, contacts) {
 
   function updateModelLabel() {
     const m = spAvailableModels[chatModelIdx] || spAvailableModels[0];
-    if (modelLabel && m) modelLabel.textContent = m.icon + ' ' + m.label;
+    if (!modelLabel || !m) return;
+    // Compact tier label: "Fast", "Balanced", "Pro"
+    const tierMap = { 'Fast & cheap': 'Fast', 'Fastest': 'Fast', 'Balanced': 'Balanced', 'Most capable': 'Pro' };
+    modelLabel.textContent = (tierMap[m.tier] || m.tier);
   }
 
   if (modelToggle) {
@@ -2826,7 +2920,14 @@ function renderContactsSection(el, contacts) {
 
   function renderMessages(showThinking) {
     if (history.length === 0) {
-      msgsEl.innerHTML = typeof COOP !== 'undefined' ? `<div class="sp-chat-empty">${COOP.emptyStateHTML('company')}</div>` : '<div class="sp-chat-empty">Ask about this role, company, or get help applying.</div>';
+      msgsEl.innerHTML = `<div class="sp-chat-empty">${buildEmptyStateHTML()}</div>`;
+      // Bind suggestion buttons
+      msgsEl.querySelectorAll('.sp-suggestion-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const prompt = btn.dataset.suggestionPrompt;
+          if (prompt) { inputEl.value = prompt; send(); }
+        });
+      });
     } else {
       const thinkingHTML = showThinking
         ? (typeof COOP !== 'undefined' ? `<div class="sp-chat-msg sp-chat-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="sp-chat-msg sp-chat-msg-assistant"><div class="sp-chat-bubble sp-chat-thinking"><span class="sp-thinking-dots"><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span></span></div></div>')
@@ -2969,6 +3070,8 @@ function renderContactsSection(el, contacts) {
       meetings: entry.cachedMeetings || [],
       granolaNote: entry.cachedMeetingTranscript || entry.cachedMeetingNotes || null,
       _applicationMode: isApplicationMode,
+      currentTabUrl: tabContextActive ? currentUrl : null,
+      tabContext: tabContextActive ? tabContextLabel : null,
     };
   }
 
@@ -3019,15 +3122,8 @@ function renderContactsSection(el, contacts) {
     inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
   });
 
-  // Quick action buttons
-  chatEl.querySelector('.sp-chat-actions')?.addEventListener('click', e => {
-    const btn = e.target.closest('[data-prompt]');
-    if (btn) {
-      isApplicationMode = btn.dataset.prompt.toLowerCase().includes('application');
-      inputEl.value = btn.dataset.prompt;
-      send();
-      return;
-    }
+  // Quick action buttons (clear in bottom bar)
+  chatEl.addEventListener('click', e => {
     if (e.target.closest('[data-action="clear"]')) {
       history = [];
       isApplicationMode = false;
@@ -3035,24 +3131,40 @@ function renderContactsSection(el, contacts) {
     }
   });
 
+  // ── Pop-out chat window ──
+  if (popoutBtn) {
+    popoutBtn.addEventListener('click', () => {
+      const chatState = JSON.stringify(history);
+      chrome.storage.local.set({ _coopPopoutHistory: chatState, _coopPopoutModel: chatModelIdx }, () => {
+        chrome.windows.create({
+          url: chrome.runtime.getURL('sidepanel.html?popout=1'),
+          type: 'popup',
+          width: 420,
+          height: 620,
+          focused: true
+        });
+      });
+    });
+  }
+
   // Chat size states: 'normal' → 'expanded' → 'minimized' → 'normal'
   let chatSizeState = 'normal'; // normal | expanded | minimized
   const inputRow = chatEl.querySelector('.sp-chat-input-row');
-  const actionsRow = chatEl.querySelector('.sp-chat-actions');
 
   function applyChatSize() {
+    const tabInd = document.getElementById('sp-tab-indicator');
     if (chatSizeState === 'expanded') {
       msgsEl.style.maxHeight = '70vh';
       msgsEl.style.minHeight = '200px';
       msgsEl.style.display = '';
       if (inputRow) inputRow.style.display = '';
-      if (actionsRow) actionsRow.style.display = '';
+      if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
       detachBtn.textContent = '⤡';
       detachBtn.title = 'Minimize chat';
     } else if (chatSizeState === 'minimized') {
       msgsEl.style.display = 'none';
       if (inputRow) inputRow.style.display = 'none';
-      if (actionsRow) actionsRow.style.display = 'none';
+      if (tabInd) tabInd.style.display = 'none';
       detachBtn.textContent = '⤢';
       detachBtn.title = 'Expand chat';
     } else {
@@ -3060,7 +3172,7 @@ function renderContactsSection(el, contacts) {
       msgsEl.style.minHeight = '60px';
       msgsEl.style.display = '';
       if (inputRow) inputRow.style.display = '';
-      if (actionsRow) actionsRow.style.display = '';
+      if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
       detachBtn.textContent = '⤢';
       detachBtn.title = 'Expand chat';
     }
@@ -3091,11 +3203,40 @@ function renderContactsSection(el, contacts) {
   const observer = new MutationObserver(() => {
     if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
       chatEl.style.display = 'block';
+      updateTabIndicator();
+      // Re-render empty state with fresh context-aware suggestions
+      if (history.length === 0) renderMessages();
     }
   });
   observer.observe(companyNameEl, { childList: true, characterData: true, subtree: true });
   if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
     chatEl.style.display = 'block';
+    updateTabIndicator();
+  }
+
+  // Handle popout mode — if opened as ?popout=1, restore history and show full chat
+  if (new URLSearchParams(window.location.search).get('popout') === '1') {
+    chatEl.style.display = 'block';
+    // Hide everything except chat in popout mode
+    document.querySelectorAll('.header, .company-bar, #job-bar, #save-panel, #sp-opp-fields, #company-links, #sp-main-scroll').forEach(el => {
+      if (el) el.style.display = 'none';
+    });
+    // Make chat fill the window
+    msgsEl.style.maxHeight = 'calc(100vh - 140px)';
+    msgsEl.style.minHeight = '200px';
+    // Hide pop-out button (already in a pop-out), hide resize handle
+    if (popoutBtn) popoutBtn.style.display = 'none';
+    if (chatResize) chatResize.style.display = 'none';
+    if (detachBtn) detachBtn.style.display = 'none';
+    // Restore history from storage
+    chrome.storage.local.get(['_coopPopoutHistory', '_coopPopoutModel'], data => {
+      if (data._coopPopoutHistory) {
+        try { history = JSON.parse(data._coopPopoutHistory); } catch {}
+      }
+      if (typeof data._coopPopoutModel === 'number') chatModelIdx = data._coopPopoutModel;
+      updateModelLabel();
+      renderMessages();
+    });
   }
 
   renderMessages();
