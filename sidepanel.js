@@ -29,6 +29,39 @@ document.getElementById('sp-health-dot')?.addEventListener('click', () => {
 
 const searchBtn = document.getElementById('search-btn');
 const settingsBtn = document.getElementById('settings-btn');
+
+// ── Chat/Intel Mode Toggle ──────────────────────────────────────────────────
+const coopToggleBtn = document.getElementById('coop-toggle-btn');
+const chatBackBtn = document.getElementById('sp-chat-back');
+
+// Set Coop avatar on the toggle button
+if (coopToggleBtn && typeof COOP !== 'undefined') {
+  coopToggleBtn.innerHTML = COOP.avatar(24);
+}
+
+function enterChatMode() {
+  document.body.classList.add('chat-mode');
+  const chatEl = document.getElementById('sp-chat');
+  if (chatEl) chatEl.style.display = 'flex';
+  localStorage.setItem('ci_sp_mode', 'chat');
+}
+
+function exitChatMode() {
+  document.body.classList.remove('chat-mode');
+  localStorage.setItem('ci_sp_mode', 'intel');
+}
+
+if (coopToggleBtn) {
+  coopToggleBtn.addEventListener('click', enterChatMode);
+}
+if (chatBackBtn) {
+  chatBackBtn.addEventListener('click', exitChatMode);
+}
+
+// Restore last mode
+if (localStorage.getItem('ci_sp_mode') === 'chat') {
+  enterChatMode();
+}
 const savedBtn = document.getElementById('saved-btn'); // may be null if removed
 const companyNameEl = document.getElementById('company-name');
 const companyLinksEl = document.getElementById('company-links');
@@ -3198,6 +3231,7 @@ function renderContactsSection(el, contacts) {
   }
 
   detachBtn?.addEventListener('click', () => {
+    if (document.body.classList.contains('chat-mode')) return; // no resize in full chat mode
     if (chatSizeState === 'normal') chatSizeState = 'expanded';
     else if (chatSizeState === 'expanded') chatSizeState = 'minimized';
     else chatSizeState = 'normal';
@@ -3210,7 +3244,8 @@ function renderContactsSection(el, contacts) {
   // Click header title to toggle minimize/normal
   const chatHeader = chatEl.querySelector('.sp-chat-header');
   chatHeader?.addEventListener('click', (e) => {
-    if (e.target.closest('button') || e.target.closest('.sp-model-toggle')) return; // don't intercept button clicks
+    if (document.body.classList.contains('chat-mode')) return; // no minimize in full chat mode
+    if (e.target.closest('button') || e.target.closest('.sp-model-toggle')) return;
     chatSizeState = chatSizeState === 'minimized' ? 'normal' : 'minimized';
     applyChatSize();
   });
@@ -3232,18 +3267,12 @@ function renderContactsSection(el, contacts) {
 
   // Handle popout mode — if opened as ?popout=1, restore history and show full chat
   if (new URLSearchParams(window.location.search).get('popout') === '1') {
-    chatEl.style.display = 'block';
-    // Hide everything except chat in popout mode
-    document.querySelectorAll('.header, .company-bar, #job-bar, #save-panel, #sp-opp-fields, #company-links, #sp-main-scroll').forEach(el => {
-      if (el) el.style.display = 'none';
-    });
-    // Make chat fill the window
-    msgsEl.style.maxHeight = 'calc(100vh - 140px)';
-    msgsEl.style.minHeight = '200px';
-    // Hide pop-out button (already in a pop-out), hide resize handle
+    document.body.classList.add('chat-mode');
+    chatEl.style.display = 'flex';
+    // Hide back + pop-out buttons in pop-out window
     if (popoutBtn) popoutBtn.style.display = 'none';
-    if (chatResize) chatResize.style.display = 'none';
-    if (detachBtn) detachBtn.style.display = 'none';
+    const backBtn = document.getElementById('sp-chat-back');
+    if (backBtn) backBtn.style.display = 'none';
     // Restore history from storage
     chrome.storage.local.get(['_coopPopoutHistory', '_coopPopoutModel'], data => {
       if (data._coopPopoutHistory) {
