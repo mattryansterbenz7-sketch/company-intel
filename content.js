@@ -277,6 +277,12 @@ async function detectLinkedIn() {
     return detectLinkedInCompanyPage();
   }
 
+  // Profile pages: extract current employer from the profile top card
+  if (isProfilePage) {
+    const profileCompany = await detectLinkedInProfileCompany();
+    return { ...profileCompany, source: 'linkedin', domain: null };
+  }
+
   // Non-job pages or title timed out: DOM selectors
   const jsonLd = extractJsonLd();
   if (jsonLd) return { ...jsonLd, source: 'linkedin', domain: null };
@@ -351,6 +357,73 @@ function extractLinkedInCompanyFirmo() {
   }
 
   return (result.employees || result.industry || result.location) ? result : null;
+}
+
+async function detectLinkedInProfileCompany() {
+  // On LinkedIn profile pages, extract the current employer from the top card.
+  // The top card shows "Title @ Company" or has a company link next to the headline.
+  // We must NOT scan the whole page for /company/ links — that picks up past employers,
+  // sidebar suggestions, ads, etc.
+
+  // Wait briefly for React to render the profile top card
+  await new Promise(r => setTimeout(r, 800));
+
+  // Strategy 1: Look for the company link/button in the profile top card area
+  // LinkedIn profiles have an experience overlay link near the headline
+  const topCardSelectors = [
+    // Current employer link in the top card (most reliable)
+    '.pv-text-details__right-panel a[href*="/company/"]',
+    '.pv-top-card--experience-list-item a[href*="/company/"]',
+    // The inline company text next to headline
+    'button[aria-label*="Current company"]',
+    '.text-body-medium a[href*="/company/"]',
+  ];
+  for (const sel of topCardSelectors) {
+    const el = document.querySelector(sel);
+    if (el) {
+      const text = el.textContent.trim();
+      if (text && text.length > 1 && text.length < 80 && text.toLowerCase() !== 'linkedin') {
+        return { company: text, jobTitle: null };
+      }
+    }
+  }
+
+  // Strategy 2: Parse the headline "Title @ Company" or "Title at Company"
+  const headlineEl = document.querySelector('.text-body-medium');
+  if (headlineEl) {
+    const headline = headlineEl.textContent.trim();
+    const atMatch = headline.match(/(?:@|at)\s+(.+?)$/i);
+    if (atMatch) {
+      const company = atMatch[1].trim();
+      if (company.length > 1 && company.length < 80) {
+        return { company, jobTitle: null };
+      }
+    }
+  }
+
+  // Strategy 3: First experience item company name (most recent role)
+  const expCompanyEl = document.querySelector(
+    '#experience ~ .pvs-list__outer-container .hoverable-link-text span[aria-hidden="true"],' +
+    '.experience-section .pv-entity__secondary-title,' +
+    'section[id*="experience"] .hoverable-link-text'
+  );
+  if (expCompanyEl) {
+    const text = expCompanyEl.textContent.trim();
+    if (text && text.length > 1 && text.length < 80) {
+      return { company: text, jobTitle: null };
+    }
+  }
+
+  // Strategy 4: The company badge/logo link shown next to the person's name
+  const badgeLink = document.querySelector('.pv-top-card--photo-resize a[href*="/company/"]');
+  if (badgeLink) {
+    const img = badgeLink.querySelector('img[alt]');
+    if (img?.alt && img.alt.length > 1 && img.alt.length < 80) {
+      return { company: img.alt.trim(), jobTitle: null };
+    }
+  }
+
+  return { company: null, jobTitle: null };
 }
 
 async function detectLinkedInCompanyPage() {
@@ -1563,18 +1636,21 @@ if (/linkedin\.com/.test(window.location.hostname)) {
         position: absolute; right: 0;
         pointer-events: auto; cursor: pointer;
         transition: width 0.15s ease-out, opacity 0.2s ease-out, background 0.2s ease, box-shadow 0.2s ease;
-        opacity: 0; width: 0; height: 68px; overflow: hidden;
-        display: flex; align-items: center; justify-content: center;
-        background: #2D3E50; border-radius: 10px 0 0 10px;
+        opacity: 0; width: 0; height: 48px; overflow: hidden;
+        display: flex; align-items: center; gap: 8px; padding: 0 12px 0 6px;
+        background: #fff; border-radius: 24px 0 0 24px;
+        box-shadow: -2px 2px 12px rgba(0,0,0,0.1);
       }
       .ci-sb-trigger:hover {
-        background: #FF7A59;
-        box-shadow: -3px 0 14px rgba(255,122,89,0.25);
+        background: #fff;
+        box-shadow: -4px 2px 20px rgba(0,0,0,0.15);
       }
       .ci-sb-trigger-icon {
         opacity: 0; transition: opacity 0.15s ease;
-        font-size: 16px; line-height: 1;
+        display: flex; align-items: center; gap: 6px;
+        font-size: 12px; font-weight: 600; color: #2d3e50; white-space: nowrap; line-height: 1;
       }
+      .ci-sb-trigger-icon svg { flex-shrink: 0; border-radius: 50%; }
       .ci-sb-trigger.ci-sb-dragging { transition: none !important; cursor: grabbing; }
 
       /* State 4: full panel */
@@ -1592,16 +1668,14 @@ if (/linkedin\.com/.test(window.location.hostname)) {
       }
 
       .ci-sb-close {
-        position: absolute; top: 8px; left: 8px; z-index: 30;
-        background: rgba(45,62,80,0.85); color: #e2e8f0; border: none;
-        width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
-        font-size: 14px; display: flex; align-items: center; justify-content: center;
-        transition: all 0.15s; opacity: 0; pointer-events: none;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        backdrop-filter: blur(4px);
+        position: absolute; top: 8px; left: -24px; z-index: 30;
+        background: none; color: #99acc2; border: none;
+        width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+        font-size: 16px; line-height: 1; display: none; align-items: center; justify-content: center;
+        transition: color 0.15s; padding: 0;
       }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-close { opacity: 1; pointer-events: auto; }
-      .ci-sb-close:hover { background: #FF7A59; color: #fff; }
+      #ci-sidebar-host.ci-sb-s4 .ci-sb-close { display: flex; pointer-events: auto; }
+      .ci-sb-close:hover { color: #2d3e50; }
 
       /* Resize handle on left edge of panel */
       .ci-sb-resize {
@@ -1627,11 +1701,11 @@ if (/linkedin\.com/.test(window.location.hostname)) {
 
     <div class="ci-sb-backdrop" id="ci-sb-backdrop"></div>
     <div class="ci-sb-trigger" id="ci-sb-strip">
-      <span class="ci-sb-trigger-icon">🔍</span>
+      <span class="ci-sb-trigger-icon">${typeof COOP !== 'undefined' ? COOP.avatar(32) : '<svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#ct)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/><path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/></g></svg>'}<span style="margin-left:2px">Chat with Coop</span></span>
     </div>
     <div class="ci-sb-panel" id="ci-sb-panel">
       <div class="ci-sb-resize" id="ci-sb-resize"></div>
-      <button class="ci-sb-close" id="ci-sb-close">✕</button>
+      <button class="ci-sb-close" id="ci-sb-close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   `;
   document.body.appendChild(container);
@@ -1720,6 +1794,11 @@ if (/linkedin\.com/.test(window.location.hostname)) {
     strip.style.opacity = '0';
     const icon = strip.querySelector('.ci-sb-trigger-icon');
     if (icon) icon.style.opacity = '0';
+    // Clear inline width/transition from resize drag so CSS class removal takes effect
+    panel.style.width = '';
+    panel.style.transition = '';
+    document.documentElement.style.transition = '';
+    document.documentElement.style.marginRight = '';
     unpushPage();
     setState(1);
   }
@@ -1732,7 +1811,7 @@ if (/linkedin\.com/.test(window.location.hostname)) {
 
   // Mouse proximity detection
   const MAX_DIST = 480;  // start revealing at this distance from edge
-  const MAX_WIDTH = 36;  // fully revealed trigger width
+  const MAX_WIDTH = 170;  // fully revealed trigger width (Coop avatar + label)
   const MIN_WIDTH = 0;
 
   document.addEventListener('mousemove', e => {

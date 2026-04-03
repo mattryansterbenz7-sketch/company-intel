@@ -7,76 +7,114 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #FAF9F7; color: #2d3e50; min-height: 100vh; font-size: 14px;
+      background: #f0eeeb; color: #2d3e50; min-height: 100vh; font-size: 14px;
       padding: 0;
     }
 
     /* ── Page container ── */
     .page { max-width: 1400px; margin: 0 auto; }
 
-    /* ── Page header ── */
-    .page-header { text-align: center; margin-bottom: 32px; }
-    .page-header-icon {
-      width: 56px; height: 56px; border-radius: 14px;
-      display: inline-flex; align-items: center; justify-content: center;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, rgba(175,169,236,0.15), rgba(93,202,165,0.15));
+    /* ── Compact Coop identity bar ── */
+    .coop-bar {
+      display: flex; align-items: center; gap: 16px;
+      background: #fff; border: 1px solid #C8C5C0; border-radius: 10px;
+      padding: 14px 20px; margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(45,62,80,0.06);
     }
-    .page-header-icon svg { width: 30px; height: 30px; }
-    .page-header-title { font-size: 22px; font-weight: 500; color: #2d3e50; margin-bottom: 4px; }
-    .page-header-subtitle { font-size: 14px; color: #7c98b6; line-height: 1.5; }
+    .coop-bar svg { width: 40px; height: 40px; flex-shrink: 0; }
+    .coop-bar-info { flex: 1; min-width: 0; }
+    .coop-bar-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+    .coop-bar-name { font-size: 16px; font-weight: 700; color: #1A1A1A; }
+    .coop-bar-role { font-size: 12px; color: #516f90; }
+    .coop-bar-desc { font-size: 12px; color: #3D3D3D; line-height: 1.5; }
+    .coop-bio-traits { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; flex-shrink: 0; }
+    .coop-bio-trait {
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+      background: rgba(255,122,89,0.1); color: #e0593a; letter-spacing: 0.02em;
+    }
+
+    /* ── DEPRECATED: page-header (kept for JS compat) ── */
+    .page-header { display: none; }
 
     /* ── Collapsible cards ── */
     .card {
-      background: #fff; border: 0.5px solid #dfe3eb; border-radius: 12px;
-      padding: 0; margin-bottom: 12px; transition: box-shadow 0.2s ease;
+      background: #fff; border: 1px solid #C8C5C0; border-radius: 10px;
+      padding: 0; margin-bottom: 10px; transition: box-shadow 0.2s ease;
+      box-shadow: 0 1px 3px rgba(45,62,80,0.06);
     }
-    .card:hover { box-shadow: 0 2px 8px rgba(45,62,80,0.06); }
+    .card:hover { box-shadow: 0 3px 12px rgba(45,62,80,0.1); }
     .card-header {
       display: flex; align-items: flex-start; justify-content: space-between;
-      padding: 1.25rem; cursor: pointer; user-select: none;
+      padding: 14px 16px; cursor: pointer; user-select: none;
     }
     .card-header-text { flex: 1; }
-    .card-title { font-size: 15px; font-weight: 600; color: #2d3e50; }
-    .card-subtitle { font-size: 12px; color: #7c98b6; margin-top: 2px; line-height: 1.4; }
+    .card-title { font-size: 14px; font-weight: 700; color: #1A1A1A; }
+    .card-subtitle { font-size: 12px; color: #516f90; margin-top: 2px; line-height: 1.4; }
     .card-chevron {
-      flex-shrink: 0; width: 20px; height: 20px; margin-left: 12px; margin-top: 2px;
-      transition: transform 0.2s ease; color: #99acc2;
+      flex-shrink: 0; width: 18px; height: 18px; margin-left: 10px; margin-top: 2px;
+      transition: transform 0.2s ease; color: #7c98b6;
     }
     .card.collapsed .card-chevron { transform: rotate(-90deg); }
-    .card-body { padding: 0 1.25rem 1.25rem; }
+    .card-body { padding: 0 16px 14px; }
     .card.collapsed .card-body { display: none; }
 
     /* ── Non-collapsible section label ── */
     .section-label {
-      font-size: 11px; font-weight: 500; color: #7c98b6; text-transform: uppercase;
-      letter-spacing: 0.5px; margin-bottom: 12px;
+      font-size: 11px; font-weight: 600; color: #516f90; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 10px;
     }
 
     /* ── Two-column row ── */
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 
     /* ── Preferences two-column body ── */
-    .prefs-body { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .prefs-body { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .prefs-col { display: flex; flex-direction: column; gap: 12px; }
-    @media (max-width: 900px) { .prefs-body { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) {
+      .prefs-body { grid-template-columns: 1fr; }
+      .coop-bar { flex-direction: column; align-items: flex-start; }
+      .coop-bio-traits { margin-left: 0; }
+    }
+
+    /* ── Tab navigation ── */
+    .cos-tabs {
+      display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #d0ccc6;
+      position: sticky; top: 0; background: #f0eeeb; z-index: 10; padding: 0 2px;
+    }
+    .cos-tab {
+      padding: 9px 18px; font-size: 13px; font-weight: 600; color: #516f90;
+      cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s; user-select: none;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .cos-tab:hover { color: #1A1A1A; }
+    .cos-tab.active { color: #e0593a; border-bottom-color: #e0593a; }
+    .cos-tab-panel { display: none; }
+    .cos-tab-panel.active { display: block; }
+
+    /* ── Section headers within tabs ── */
+    .cos-section-label {
+      font-size: 11px; font-weight: 700; color: #e0593a; letter-spacing: 0.08em;
+      text-transform: uppercase; margin: 16px 0 8px; padding-left: 2px;
+    }
+    .cos-section-label:first-child { margin-top: 0; }
 
     /* ── Input fields ── */
     .field { margin-bottom: 14px; }
     .field:last-child { margin-bottom: 0; }
-    .field-label { font-size: 12px; color: #7c98b6; margin-bottom: 5px; display: block; }
+    .field-label { font-size: 12px; color: #3D5468; margin-bottom: 5px; display: block; font-weight: 500; }
     .field-input {
       width: 100%; background: #FAF9F7; border: 1px solid #e8e6e3; border-radius: 8px;
       color: #2d3e50; font-size: 13px; font-family: inherit; padding: 9px 12px;
       line-height: 1.6; transition: border-color 0.15s, background 0.15s;
     }
     .field-input:focus { outline: none; border-color: #AFA9EC; background: #fff; box-shadow: 0 0 0 3px rgba(175,169,236,0.1); }
-    .field-input::placeholder { color: #b8b5b0; }
+    .field-input::placeholder { color: #8a8780; }
     input.field-input { height: 38px; resize: none; }
-    textarea.field-input { resize: vertical; min-height: 90px; }
-    textarea.field-input-sm { min-height: 80px; }
-    textarea.field-input-md { min-height: 100px; }
-    textarea.field-input-lg { min-height: 120px; }
+    textarea.field-input { resize: none; }
+    .ta-see-more { display: none; background: none; border: none; color: #FF7A59; font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 0 2px; letter-spacing: 0.01em; }
+    .ta-see-more:hover { text-decoration: underline; }
+    .ta-see-more.visible { display: inline-block; }
 
     /* ── 3-column grid ── */
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
@@ -88,7 +126,7 @@
       text-align: center; margin-top: 14px; transition: border-color 0.15s;
     }
     .resume-upload:hover { border-color: #AFA9EC; }
-    .resume-upload-text { font-size: 13px; color: #7c98b6; margin-bottom: 8px; }
+    .resume-upload-text { font-size: 13px; color: #516f90; margin-bottom: 8px; }
     .resume-upload-btn {
       font-size: 12px; font-weight: 600; color: #516f90; background: #fff;
       border: 1px solid #dfe3eb; border-radius: 6px; padding: 6px 16px;
@@ -105,14 +143,14 @@
     }
     .resume-file-info .replace-btn:hover { color: #7c6fe0; }
 
-    /* ── "How the AI reads this" toggle ── */
+    /* ── "How Coop reads this" toggle ── */
     .ai-toggle {
       display: flex; align-items: center; gap: 6px; cursor: pointer;
       user-select: none; margin-top: 10px; padding: 2px 0;
     }
     .ai-toggle-icon { flex-shrink: 0; }
     .ai-toggle-icon svg { display: block; }
-    .ai-toggle-text { font-size: 13px; color: #7c98b6; }
+    .ai-toggle-text { font-size: 13px; color: #516f90; }
     .two-col .ai-toggle-text { font-size: 12px; }
     .ai-toggle-chevron {
       width: 12px; height: 12px; color: #99acc2; transition: transform 0.2s;
@@ -127,13 +165,13 @@
     @keyframes aiSpin { to { transform: rotate(360deg); } }
 
     /* ── Helper text ── */
-    .helper-text { font-size: 11px; color: #a8a5a0; margin-top: 6px; line-height: 1.4; }
+    .helper-text { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
 
     /* ── Divider ── */
     .divider { border: none; border-top: 1px solid #e8e6e3; margin: 20px 0; }
 
     /* ── Green/Red light cards ── */
-    .light-card { background: #fff; border: 0.5px solid #dfe3eb; border-radius: 12px; padding: 1.25rem; }
+    .light-card { background: #fff; border: 1px solid #C8C5C0; border-radius: 10px; padding: 16px; }
     .light-card.green { border-top: 2.5px solid #5DCAA5; }
     .light-card.red { border-top: 2.5px solid #E24B4A; }
     .light-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -141,7 +179,7 @@
     .light-dot.green { background: #5DCAA5; }
     .light-dot.red { background: #E24B4A; }
     .light-title { font-size: 15px; font-weight: 600; color: #2d3e50; }
-    .light-subtitle { font-size: 12px; color: #7c98b6; margin-bottom: 12px; line-height: 1.4; }
+    .light-subtitle { font-size: 12px; color: #516f90; margin-bottom: 12px; line-height: 1.4; }
 
     /* ── Location & comp section ── */
     .check-group { display: flex; gap: 20px; flex-wrap: wrap; padding: 4px 0; }
@@ -158,8 +196,8 @@
     /* ── Toggle ── */
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0; }
     .toggle-info { display: flex; flex-direction: column; gap: 3px; }
-    .toggle-label-text { font-size: 14px; font-weight: 600; color: #2d3e50; }
-    .toggle-desc { font-size: 12px; color: #7c98b6; }
+    .toggle-label-text { font-size: 14px; font-weight: 600; color: #1A1A1A; }
+    .toggle-desc { font-size: 12px; color: #516f90; }
     .toggle-switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
     .toggle-track {
@@ -239,6 +277,257 @@
     .color-swatch:hover { transform: scale(1.2); border-color: rgba(0,0,0,0.2); }
     .color-palette-label { font-size: 11px; color: #7c98b6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 
+    /* ── Structured entries ── */
+    .structured-list { margin-bottom: 8px; }
+    .structured-empty { font-size: 12px; color: #6b7280; padding: 12px 0; }
+    .structured-entry {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+      padding: 10px 12px; border: 0.5px solid #eaf0f6; border-radius: 8px; margin-bottom: 6px;
+      background: #FDFCFB; transition: background 0.15s;
+    }
+    .structured-entry:hover { background: #F5F3F0; }
+    .structured-entry:hover .entry-actions { opacity: 1; }
+    .entry-content { flex: 1; min-width: 0; }
+    .entry-badges { display: flex; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+    .entry-category-badge {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      background: #eef2f7; color: #516f90; padding: 2px 8px; border-radius: 4px;
+    }
+    .entry-severity-badge {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 2px 8px; border-radius: 4px;
+    }
+    .entry-severity-badge.soft { background: #FFF3E0; color: #e65100; }
+    .entry-severity-badge.hard { background: #FFEBEE; color: #c62828; }
+    .entry-text { font-size: 13px; color: #2d3e50; line-height: 1.5; }
+    .entry-keywords { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+    .keyword-pill {
+      font-size: 11px; font-weight: 500; background: linear-gradient(135deg, rgba(175,169,236,0.12), rgba(93,202,165,0.12));
+      color: #516f90; padding: 2px 8px; border-radius: 10px; border: 0.5px solid rgba(175,169,236,0.3);
+    }
+    .entry-actions { opacity: 0; display: flex; gap: 4px; flex-shrink: 0; transition: opacity 0.15s; }
+    .entry-edit-btn, .entry-delete-btn {
+      background: none; border: none; cursor: pointer; font-size: 14px; color: #99acc2;
+      width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+      font-family: inherit; transition: all 0.12s;
+    }
+    .entry-edit-btn:hover { background: #eef2f7; color: #516f90; }
+    .entry-delete-btn:hover { background: #FFEBEE; color: #c62828; }
+
+    /* ── Entry form ── */
+    .entry-form {
+      background: #F5F3F0; border-radius: 8px; padding: 12px; margin-top: 8px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .entry-form-text { min-height: 50px !important; font-size: 13px; }
+    .entry-form-row { display: flex; gap: 8px; align-items: center; }
+    .entry-form-category { max-width: 160px; height: 34px; font-size: 12px; }
+    .severity-toggle { display: flex; border: 1px solid #dfe3eb; border-radius: 6px; overflow: hidden; }
+    .sev-btn {
+      font-size: 11px; font-weight: 600; padding: 5px 12px; border: none; cursor: pointer;
+      background: #fff; color: #7c98b6; font-family: inherit; transition: all 0.12s;
+    }
+    .sev-btn.active { background: #2d3e50; color: #fff; }
+    .sev-btn[data-sev="hard"].active { background: #c62828; color: #fff; }
+    .entry-form-keywords { font-size: 12px; height: 34px; }
+    .entry-form-actions { display: flex; gap: 8px; }
+    .entry-form-save {
+      font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px; border: none;
+      background: #2d3e50; color: #fff; cursor: pointer; font-family: inherit; transition: all 0.15s;
+    }
+    .entry-form-save:hover { background: #1a2c3a; }
+    .entry-form-cancel {
+      font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px;
+      border: 1px solid #dfe3eb; background: #fff; color: #516f90; cursor: pointer; font-family: inherit;
+    }
+    .entry-add-btn {
+      font-size: 12px; font-weight: 600; color: #7c6fe0; background: none; border: 1px dashed #d0cdf0;
+      border-radius: 8px; padding: 8px 16px; cursor: pointer; width: 100%; margin-top: 6px;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .entry-add-btn:hover { background: rgba(175,169,236,0.08); border-color: #AFA9EC; }
+
+    /* ── Skill tags ── */
+    .skill-tags-container { margin-top: 10px; }
+    .skill-tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 10px; }
+    .skill-tag {
+      font-size: 12px; font-weight: 500; background: #eef2f7; color: #2d3e50;
+      padding: 4px 10px; border-radius: 12px; display: flex; align-items: center; gap: 4px;
+    }
+    .skill-tag-x {
+      background: none; border: none; cursor: pointer; font-size: 14px; color: #99acc2;
+      padding: 0; line-height: 1; font-family: inherit;
+    }
+    .skill-tag-x:hover { color: #c62828; }
+    #skill-tag-input { height: 32px; font-size: 12px; }
+
+    /* ── ICP cards ── */
+    .icp-card { background: #fff; border: 1px solid #C8C5C0; border-radius: 10px; padding: 16px; margin-bottom: 10px; }
+    .icp-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .icp-card-icon { width: 20px; height: 20px; color: #AFA9EC; }
+    .icp-card-title { font-size: 15px; font-weight: 600; color: #2d3e50; }
+    .icp-card-subtitle { font-size: 12px; color: #516f90; margin-bottom: 12px; line-height: 1.4; }
+    .icp-autofill-btn {
+      font-size: 12px; font-weight: 600; color: #FF7A59; background: rgba(255,122,89,0.06);
+      border: 1px solid rgba(255,122,89,0.25); border-radius: 8px; padding: 7px 16px;
+      cursor: pointer; font-family: inherit; margin-bottom: 10px; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .icp-autofill-btn:hover { background: rgba(255,122,89,0.12); border-color: #FF7A59; }
+    .icp-autofill-btn:disabled { opacity: 0.5; cursor: default; }
+    .icp-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .icp-attrs .field { margin-bottom: 0; }
+
+    /* ── Interview learnings ── */
+    .learning-entry {
+      position: relative; padding: 10px 30px 10px 12px; border: 0.5px solid #eaf0f6;
+      border-radius: 8px; margin-bottom: 6px; background: #FDFCFB;
+    }
+    .learning-entry:hover { background: #F5F3F0; }
+    .learning-entry:hover .learning-delete { opacity: 1; }
+    .learning-text { font-size: 13px; color: #2d3e50; line-height: 1.5; }
+    .learning-meta { font-size: 11px; color: #516f90; margin-top: 4px; }
+    .learning-delete { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity 0.15s; }
+    .learning-add-row { display: flex; gap: 8px; margin-top: 8px; }
+    .learning-add-row input { flex: 1; }
+    .learning-add-row textarea { flex: 2; min-height: 38px; }
+    .learning-add-btn-el {
+      font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; border: none;
+      background: #2d3e50; color: #fff; cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+
+    /* ── Coop chat drawer ── */
+    .coop-chat-toggle {
+      position: fixed; bottom: 24px; right: 24px; height: 48px;
+      border-radius: 24px; border: none; cursor: pointer; z-index: 200;
+      background: #fff; color: #2d3e50;
+      display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px;
+      box-shadow: 0 4px 20px rgba(45,62,80,0.15), 0 0 0 1px rgba(0,0,0,0.06);
+      transition: all 0.2s; font-family: inherit;
+    }
+    .coop-chat-toggle:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(45,62,80,0.2), 0 0 0 1px rgba(0,0,0,0.08); }
+    .coop-chat-toggle.open { display: none; }
+    .coop-chat-toggle svg { flex-shrink: 0; }
+    .coop-chat-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+    .coop-chat-drawer {
+      position: fixed; top: 0; right: -420px; width: 400px; height: 100dvh;
+      background: #2d3e50; border-left: 1px solid #3a5068; z-index: 199;
+      display: flex; flex-direction: column; transition: right 0.3s ease;
+      box-shadow: -8px 0 40px rgba(0,0,0,0.15);
+    }
+    .coop-chat-drawer.open { right: 0; }
+    .coop-chat-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid #3a5068; flex-shrink: 0;
+      background: #344d63;
+    }
+    .coop-chat-title { font-size: 15px; font-weight: 700; color: #FF7A59; }
+    .coop-chat-subtitle { font-size: 11px; color: #99acc2; }
+    .coop-chat-close-btn {
+      background: none; border: none; cursor: pointer; font-size: 20px; color: #7c98b6;
+      width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    }
+    .coop-chat-close-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .coop-chat-messages {
+      flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .coop-chat-messages::-webkit-scrollbar { width: 4px; }
+    .coop-chat-messages::-webkit-scrollbar-track { background: transparent; }
+    .coop-chat-messages::-webkit-scrollbar-thumb { background: #3a5068; border-radius: 4px; }
+    .coop-msg { max-width: 90%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; }
+    .coop-msg-user { align-self: flex-end; background: #FF7A59; color: #fff; border-bottom-right-radius: 4px; }
+    .coop-msg-assistant { align-self: flex-start; background: rgba(255,255,255,0.08); color: #e8ecf1; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+    .coop-typing { color: #99acc2; display: flex; align-items: center; gap: 8px; }
+    .coop-proposal {
+      margin-top: 8px; padding: 10px; background: rgba(175,169,236,0.1); border: 1px solid rgba(175,169,236,0.25);
+      border-radius: 8px; font-size: 12px;
+    }
+    .coop-proposal-text { margin-bottom: 8px; color: #e2e8f0; }
+    .coop-proposal-actions { display: flex; gap: 8px; }
+    .coop-accept-btn {
+      font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 5px; border: none;
+      background: #5DCAA5; color: #fff; cursor: pointer; font-family: inherit;
+    }
+    .coop-reject-btn {
+      font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 5px;
+      border: 1px solid #dfe3eb; background: #fff; color: #7c98b6; cursor: pointer; font-family: inherit;
+    }
+    .coop-model-toggle {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); padding: 3px 10px; border-radius: 8px;
+      cursor: pointer; font: inherit; font-size: 10px; font-weight: 600; color: #7c98b6;
+      text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+    }
+    .coop-model-toggle:hover { border-color: #FF7A59; color: #e2e8f0; }
+    .coop-model-dropdown {
+      position: absolute; top: 52px; right: 48px; min-width: 200px; background: #344d63;
+      border: 1px solid #4a6580; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+      z-index: 210; padding: 6px 0;
+    }
+    .coop-model-opt {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 8px 14px; cursor: pointer; transition: background 0.1s;
+    }
+    .coop-model-opt:hover { background: rgba(255,255,255,0.08); }
+    .coop-model-opt.active { background: rgba(255,122,89,0.15); }
+    .coop-model-name { font-size: 12px; font-weight: 600; color: #e8ecf1; }
+    .coop-model-tier { font-size: 10px; color: #7c98b6; }
+    .coop-model-cost { font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+    .coop-token-info {
+      font-size: 10px; color: #516f90; text-align: right; padding: 2px 14px 0;
+    }
+    .coop-chat-input-row {
+      display: flex; gap: 8px; padding: 12px 20px 24px; border-top: 1px solid #3a5068; flex-shrink: 0;
+      background: #344d63;
+    }
+    .coop-chat-input-row textarea {
+      flex: 1; min-height: 42px; max-height: 140px; resize: none;
+      font-size: 14px; padding: 10px 14px; border: 1px solid #4a6580; border-radius: 10px;
+      font-family: inherit; line-height: 1.5; background: rgba(255,255,255,0.08); color: #e8ecf1;
+      overflow-y: auto;
+    }
+    .coop-chat-input-row textarea::placeholder { color: #7c98b6; }
+    .coop-chat-input-row textarea:focus { outline: none; border-color: #FF7A59; }
+    .coop-chat-send-btn {
+      width: 38px; height: 38px; border-radius: 8px; border: none; cursor: pointer;
+      background: #FF7A59; color: #fff; font-size: 16px; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; transition: all 0.15s;
+    }
+    .coop-chat-send-btn:hover { background: #e5613f; }
+
+    /* ── Coop memory ── */
+    .memory-entry {
+      position: relative; padding: 10px 32px 10px 12px; border: 0.5px solid #eaf0f6;
+      border-radius: 8px; margin-bottom: 4px; background: #FDFCFB; transition: background 0.12s;
+    }
+    .memory-entry:hover { background: #F5F3F0; }
+    .memory-entry:hover .memory-delete { opacity: 1; }
+    .memory-insight { font-size: 13px; color: #2d3e50; line-height: 1.5; }
+    .memory-meta { font-size: 10px; color: #6b7280; margin-top: 3px; display: flex; gap: 8px; }
+    .memory-cat {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 1px 6px; border-radius: 3px; background: #eef2f7; color: #516f90;
+    }
+    .memory-cat.style_instruction { background: #EDE9FE; color: #6d28d9; }
+    .memory-cat.green_light { background: #D1FAE5; color: #065f46; }
+    .memory-cat.red_light { background: #FEE2E2; color: #991b1b; }
+    .memory-cat.answer_pattern { background: #FEF3C7; color: #92400e; }
+    .memory-cat.high { background: #FEE2E2; color: #991b1b; }
+    .memory-delete {
+      position: absolute; top: 8px; right: 8px; opacity: 0; background: none; border: none;
+      cursor: pointer; font-size: 14px; color: #ccc; transition: opacity 0.15s;
+    }
+    .memory-delete:hover { color: #ef4444; }
+    .memory-filter-btn {
+      font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px;
+      border: 1px solid #dfe3eb; background: #fff; color: #516f90; cursor: pointer; font-family: inherit;
+    }
+    .memory-filter-btn.active { background: #2d3e50; color: #fff; border-color: #2d3e50; }
+    .memory-section-title {
+      font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 8px; padding-top: 4px;
+    }
+
     /* ── Micro-interactions ── */
     button, [role="button"] { transition: all 0.15s ease; }
     button:active:not(:disabled) { transform: scale(0.96); }
@@ -259,59 +548,76 @@
     .settings-nav-divider { height: 1px; background: #e2e8f0; margin: 10px 14px; }
     .settings-content { flex: 1; min-width: 0; }
 
-    .header { background: #2d3e50; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
+    .header { background: #2d3e50; padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
     .header .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; text-decoration: none; }
     .header .logo span { color: #FF7A59; }
     .header .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
-    .header-back { color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #4a6580; border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; transition: all 0.15s; font-family: inherit; text-decoration: none; }
-    .header-back:hover { color: #fff; border-color: #7c98b6; }
+    .header-nav { display: flex; align-items: center; gap: 6px; }
+    .header-nav-item {
+      color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 16px;
+      border: 1px solid transparent; border-radius: 8px; background: transparent;
+      cursor: pointer; transition: all 0.15s; font-family: inherit; text-decoration: none;
+    }
+    .header-nav-item:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .header-nav-item.active { color: #fff; background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.15); }
   </style>
 </head>
 <body>
 
 <div class="header">
   <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Career OS</span></a>
-  <a class="header-back" href="saved.html">&larr; Back to Saved</a>
+  <div class="header-nav">
+    <a class="header-nav-item active" href="preferences.html">Career OS</a>
+    <a class="header-nav-item" href="integrations.html">Integrations</a>
+    <a class="header-nav-item" href="pipeline.html">Pipeline &amp; Usage</a>
+    <a class="header-nav-item" href="docs.html" target="_blank">Docs</a>
+  </div>
 </div>
 
-<div class="settings-layout">
-  <nav class="settings-sidebar">
-    <div class="settings-nav">
-      <a class="settings-nav-item active" href="preferences.html">Career OS</a>
-      <a class="settings-nav-item" href="integrations.html">Integrations</a>
-      <a class="settings-nav-item" href="pipeline.html">Pipeline & Usage</a>
-      <div class="settings-nav-divider"></div>
-      <a class="settings-nav-item" href="docs.html" target="_blank">Documentation</a>
-    </div>
-  </nav>
-  <div class="settings-content" style="padding: 40px 20px 80px;">
+<div class="settings-content" style="padding: 24px 20px 80px; max-width: 1400px; margin: 0 auto;">
 
   <div class="page">
 
-    <!-- ── Page Header ── -->
-    <div class="page-header">
-      <div class="page-header-icon">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="brain-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#AFA9EC"/>
-              <stop offset="100%" style="stop-color:#5DCAA5"/>
-            </linearGradient>
-          </defs>
-          <path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#brain-grad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+    <!-- ── Compact Coop identity bar ── -->
+    <div class="coop-bar">
+      <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;box-shadow:0 2px 8px rgba(45,62,80,0.15), 0 0 0 2px rgba(255,122,89,0.15);">
+        <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+        <clipPath id="hdr-coop"><circle cx="50" cy="50" r="48"/></clipPath>
+        <g clip-path="url(#hdr-coop)">
+          <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+          <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+          <path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/>
+          <ellipse cx="28" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+          <ellipse cx="72" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+          <path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/>
+          <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+          <ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+          <path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/>
+        </g>
+      </svg>
+      <div class="coop-bar-info">
+        <div class="coop-bar-top">
+          <span class="coop-bar-name" id="page-title">Coop</span>
+          <span class="coop-bar-role">Your co-operator</span>
+        </div>
+        <div class="coop-bar-desc">Everything on this page is how Coop thinks about you.</div>
       </div>
-      <div class="page-header-title" id="page-title">Your Career OS</div>
-      <div class="page-header-subtitle">Everything the AI knows about you — visible, editable, and always in context</div>
+      <div class="coop-bio-traits">
+        <span class="coop-bio-trait">Direct</span>
+        <span class="coop-bio-trait">Opinionated</span>
+        <span class="coop-bio-trait">Never sugarcoats</span>
+        <span class="coop-bio-trait">Connects dots</span>
+        <span class="coop-bio-trait">Strategic</span>
+      </div>
     </div>
 
-    <!-- ── Job Match Toggle ── -->
-    <div class="card" style="margin-bottom: 16px;">
-      <div style="padding: 14px 1.25rem;">
+    <!-- ── Job Match toggle ── -->
+    <div class="card" style="margin-bottom:10px;">
+      <div style="padding: 12px 16px;">
         <div class="toggle-row">
           <div class="toggle-info">
-            <div class="toggle-label-text">Job Match Insights</div>
-            <div class="toggle-desc">Score job postings against your background &amp; preferences</div>
+            <div class="toggle-label-text" style="font-size:13px;">Job Match Insights</div>
+            <div class="toggle-desc" style="font-size:11px;">Score postings against your profile</div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="pref-job-match-toggle">
@@ -321,12 +627,27 @@
       </div>
     </div>
 
-    <!-- ── 1. Personal Info & Links ── -->
+    <!-- ── Page Header (hidden, kept for JS compat) ── -->
+    <div class="page-header"></div>
+
+    <!-- ── Tab Navigation ── -->
+    <div class="cos-tabs">
+      <button class="cos-tab active" data-tab="profile">Your Profile</button>
+      <button class="cos-tab" data-tab="fit">Skills &amp; Fit</button>
+      <button class="cos-tab" data-tab="flags">Green &amp; Red Flags</button>
+      <button class="cos-tab" data-tab="memory">Coop's Memory</button>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 1: YOUR PROFILE                                                 -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="cos-tab-panel active" data-panel="profile">
+
     <div class="card" id="card-personal" data-card="personal">
       <div class="card-header">
         <div class="card-header-text">
           <div class="card-title">Personal info &amp; links</div>
-          <div class="card-subtitle">Contact details, profiles, and resume</div>
+          <div class="card-subtitle">Contact details and profiles</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
@@ -359,30 +680,43 @@
             <input type="text" class="field-input" id="link-booking" placeholder="calendly.com/you">
           </div>
         </div>
-
-        <!-- LinkedIn import -->
-        <div style="margin-top: 10px;">
-          <div class="import-row">
-            <button class="import-btn" id="import-linkedin-btn">&#11015; Import from LinkedIn tab</button>
-          </div>
-          <div class="import-status" id="import-status"></div>
-        </div>
-
-        <!-- Resume upload -->
-        <div class="resume-upload" id="resume-drop-zone">
-          <div class="resume-upload-text">Drop PDF, .txt, or .md</div>
-          <button class="resume-upload-btn" id="resume-upload-btn">Upload</button>
-          <input type="file" id="resume-file-input" accept=".pdf,.txt,.md" style="display:none">
-        </div>
-        <div class="resume-file-info" id="resume-file-info" style="display:none">
-          <span id="resume-filename"></span>
-          <button class="replace-btn" id="resume-replace-btn">Replace</button>
-        </div>
       </div>
+
+    <!-- ── 1b. LinkedIn Import ── -->
+    <div class="card-body" style="border-top: 1px solid #eaf0f6; padding-top: 16px;">
+      <div class="section-label">LINKEDIN IMPORT</div>
+      <div class="helper-text" style="margin-top:-8px; margin-bottom:10px;">
+        Open your LinkedIn profile in another tab, then click below. Scrapes your <strong>name, headline, about, experience, education, and skills</strong> into the "Experience &amp; Accomplishments" section below.
+      </div>
+      <div class="import-row">
+        <button class="import-btn" id="import-linkedin-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          Import from LinkedIn tab
+        </button>
+      </div>
+      <div class="import-status" id="import-status"></div>
     </div>
 
-    <div class="prefs-body">
-      <div class="prefs-col">
+    <!-- ── 1c. Resume ── -->
+    <div class="card-body" style="border-top: 1px solid #eaf0f6; padding-top: 16px;">
+      <div class="section-label">RESUME</div>
+      <div class="helper-text" style="margin-top:-8px; margin-bottom:10px;">
+        Upload a text version of your resume. The AI uses this as additional context for applications and scoring — separate from your LinkedIn data.
+      </div>
+      <div class="resume-upload" id="resume-drop-zone">
+        <div class="resume-upload-text">Drop .txt, .md, or paste-friendly PDF</div>
+        <button class="resume-upload-btn" id="resume-upload-btn">Upload resume</button>
+        <input type="file" id="resume-file-input" accept=".pdf,.txt,.md" style="display:none">
+      </div>
+      <div class="resume-file-info" id="resume-file-info" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span id="resume-filename"></span>
+        <button class="replace-btn" id="resume-replace-btn">Replace</button>
+      </div>
+    </div>
+    </div>
+
+    <div class="cos-section-label">Your narrative</div>
 
     <!-- ── 2. My Story ── -->
     <div class="card" id="card-story" data-card="story">
@@ -394,10 +728,10 @@
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input" id="profile-story" style="min-height:90px; font-size:14px; line-height:1.6;" placeholder="Tell your career story — what drives you, where you've been, where you're headed..."></textarea>
+        <textarea class="field-input" id="profile-story" style="font-size:14px; line-height:1.6;" placeholder="Tell your career story — what drives you, where you've been, where you're headed..."></textarea>
         <div class="ai-toggle" data-ai="story">
           <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="ai-g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#AFA9EC"/><stop offset="100%" style="stop-color:#5DCAA5"/></linearGradient></defs><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
+          <span class="ai-toggle-text">How Coop reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
         <div class="ai-panel" data-ai-panel="story">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
@@ -414,76 +748,48 @@
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input" id="profile-experience" style="min-height:90px; font-size:14px; line-height:1.6;" placeholder="What you've done — roles, results, things you built, specific accomplishments..."></textarea>
+        <textarea class="field-input" id="profile-experience" style="font-size:14px; line-height:1.6;" placeholder="What you've done — roles, results, things you built, specific accomplishments..."></textarea>
         <div class="ai-toggle" data-ai="experience">
           <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><use href="#ai-brain-path"/><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
+          <span class="ai-toggle-text">How Coop reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
         <div class="ai-panel" data-ai-panel="experience">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
       </div>
     </div>
 
-    <!-- ── 3b. Skills & Intangibles ── -->
-    <div class="card" id="card-skills" data-card="skills">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Skills &amp; intangibles</div>
-          <div class="card-subtitle">Hard skills, soft skills, domain expertise, and the things that don't fit on a resume</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <textarea class="field-input" id="profile-skills" style="min-height:80px; font-size:13px;" placeholder="Technical skills, tools, domain knowledge, deal sizes, team sizes, languages, certifications — anything that strengthens your candidacy..."></textarea>
-        <div class="ai-toggle" data-ai="skills">
-          <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
-          <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-        </div>
-        <div class="ai-panel" data-ai-panel="skills">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
-      </div>
-    </div>
-
-    <!-- ── 4. Operating Principles ── -->
+    <!-- ── 4. Motivators & Values (merged Principles + Motivators) ── -->
     <div class="card" id="card-principles" data-card="principles">
       <div class="card-header">
         <div class="card-header-text">
-          <div class="card-title">Operating principles</div>
-          <div class="card-subtitle">How you work, what you value, what environments bring out your best</div>
+          <div class="card-title">Motivators &amp; values</div>
+          <div class="card-subtitle">How you operate, what drives you, what environments bring out your best</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input field-input-md" id="profile-principles" style="font-size:13px;" placeholder="How you operate — ownership, speed, collaboration style, decision-making..."></textarea>
+        <div class="field">
+          <label class="field-label">Operating principles</label>
+          <textarea class="field-input" id="profile-principles" style="font-size:13px;" placeholder="How you operate — ownership, speed, collaboration style, decision-making..."></textarea>
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label class="field-label">What drives you</label>
+          <textarea class="field-input" id="profile-motivators" style="font-size:13px;" placeholder="What fuels you — competition, autonomy, learning, building? What personality traits define how you show up?"></textarea>
+        </div>
         <div class="ai-toggle" data-ai="principles">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
+          <span class="ai-toggle-text">How Coop reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
-        <div class="ai-panel" data-ai-panel="principles">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
+        <div class="ai-panel" data-ai-panel="principles">AI interpretation will appear here. Add content above to generate.</div>
+        <div class="ai-toggle" data-ai="motivators" style="display:none"></div>
+        <div class="ai-panel" data-ai-panel="motivators" style="display:none"></div>
       </div>
     </div>
 
-    <!-- ── 4b. What Drives You ── -->
-    <div class="card" id="card-motivators" data-card="motivators">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">What drives you</div>
-          <div class="card-subtitle">Core motivators, personality traits, what energizes and drains you</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <textarea class="field-input field-input-md" id="profile-motivators" style="font-size:13px;" placeholder="What fuels you — competition, autonomy, learning, building? What personality traits define how you show up?"></textarea>
-        <div class="ai-toggle" data-ai="motivators">
-          <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
-          <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-        </div>
-        <div class="ai-panel" data-ai-panel="motivators">Nothing here yet — add your motivators to see the AI's interpretation</div>
-      </div>
-    </div>
-
+    <div class="cos-section-label">How you communicate</div>
+    <div class="prefs-body">
+      <div class="prefs-col">
     <!-- ── 5. Voice & Style ── -->
     <div class="card" id="card-voice" data-card="voice">
       <div class="card-header">
@@ -495,16 +801,17 @@
       </div>
       <div class="card-body">
         <textarea class="field-input field-input-sm" id="profile-voice" style="font-size:13px;" placeholder="Direct? Conversational? Do you use humor? Formal in writing but casual in speech?"></textarea>
-        <div class="helper-text">Helps the AI match your tone in emails and applications</div>
+        <div class="helper-text">Helps Coop match your tone in emails and applications</div>
         <div class="ai-toggle" data-ai="voice">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
+          <span class="ai-toggle-text">How Coop reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
-        <div class="ai-panel" data-ai-panel="voice">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
+        <div class="ai-panel" data-ai-panel="voice"></div>
       </div>
     </div>
-
+      </div>
+      <div class="prefs-col">
     <!-- ── 5b. FAQ / Polished Responses ── -->
     <div class="card" id="card-faq" data-card="faq">
       <div class="card-header">
@@ -516,131 +823,306 @@
       </div>
       <div class="card-body">
         <textarea class="field-input field-input-sm" id="profile-faq" style="font-size:13px;" placeholder="'Why are you looking?' 'Tell me about yourself' 'What are you looking for?'"></textarea>
-        <div class="helper-text">The AI reuses these instead of generating from scratch</div>
+        <div class="helper-text">Coop reuses these instead of generating from scratch</div>
         <div class="ai-toggle" data-ai="faq">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How the AI reads this</span>
+          <span class="ai-toggle-text">How Coop reads this</span>
           <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
         </div>
-        <div class="ai-panel" data-ai-panel="faq">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
+        <div class="ai-panel" data-ai-panel="faq"></div>
+      </div>
+    </div>
       </div>
     </div>
 
-      </div>
-      <div class="prefs-col">
+    </div><!-- end profile tab panel -->
 
-    <!-- ── 6. Green Lights ── -->
-    <div class="light-card green">
-      <div class="light-header">
-        <div class="light-dot green"></div>
-        <div class="light-title">Green lights</div>
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 2: SKILLS & FIT                                                 -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="cos-tab-panel" data-panel="fit">
+
+    <!-- ── Skills & Intangibles ── -->
+    <div class="card" id="card-skills" data-card="skills">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Skills &amp; intangibles</div>
+          <div class="card-subtitle">Hard skills, soft skills, domain expertise, and quick-match tags</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
-      <div class="light-subtitle">What makes an opportunity attractive — role, company, culture, comp, product</div>
-      <textarea class="field-input field-input-lg" id="profile-green-lights" style="font-size:13px;" placeholder="Roles, industries, cultures, company traits that attract you..."></textarea>
-      <div class="ai-toggle" data-ai="greenLights">
-        <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="ai-toggle-text">How the AI reads this</span>
-        <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+      <div class="card-body">
+        <textarea class="field-input" id="profile-skills" style="font-size:13px;" placeholder="Technical skills, tools, domain knowledge, deal sizes, team sizes, languages, certifications..."></textarea>
+        <div class="skill-tags-container" id="skill-tags-container">
+          <label class="field-label" style="margin-top:10px">Skill tags <span style="color:#6b7280">(press Enter to add)</span></label>
+          <div class="skill-tags-wrap" id="skill-tags-wrap"></div>
+          <input type="text" class="field-input" id="skill-tag-input" placeholder="Add a skill tag...">
+        </div>
+        <div class="ai-toggle" data-ai="skills">
+          <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="ai-toggle-text">How Coop reads this</span>
+          <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+        </div>
+        <div class="ai-panel" data-ai-panel="skills"></div>
       </div>
-      <div class="ai-panel" data-ai-panel="greenLights"></div>
     </div>
 
-    <!-- ── 6b. Red Lights ── -->
-    <div class="light-card red">
-      <div class="light-header">
-        <div class="light-dot red"></div>
-        <div class="light-title">Red lights</div>
+    <!-- ── Interview Learnings ── -->
+    <div class="icp-card">
+      <div class="icp-card-header">
+        <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+        <div class="icp-card-title">Interview learnings</div>
       </div>
-      <div class="light-subtitle">What makes you walk away or hesitate — dealbreakers across any dimension</div>
-      <textarea class="field-input field-input-lg" id="profile-red-lights" style="font-size:13px;" placeholder="Dealbreakers — company types, cultures, role traits you'd walk away from..."></textarea>
-      <div class="ai-toggle" data-ai="redLights">
-        <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="ai-toggle-text">How the AI reads this</span>
-        <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+      <div class="icp-card-subtitle">Takeaways from interviews — what you learned about companies, roles, or yourself</div>
+      <div id="learnings-container">
+        <div id="learnings-list"></div>
+        <div class="learning-add-row">
+          <textarea class="field-input" id="learning-text" placeholder="What did you learn?" rows="2"></textarea>
+          <input type="text" class="field-input" id="learning-source" placeholder="Company" style="max-width:120px">
+          <button class="learning-add-btn-el" id="learning-add-btn">Add</button>
+        </div>
       </div>
-      <div class="ai-panel" data-ai-panel="redLights"></div>
     </div>
 
-    <!-- ── 7. Location & Logistics ── -->
-    <div class="light-card" style="border-top: none;">
-      <div class="section-label">LOCATION &amp; LOGISTICS</div>
-      <div class="grid-2" style="margin-bottom: 12px;">
+    <div class="cos-section-label">Ideal fit</div>
+
+    <!-- ── Role ICP + Company ICP side by side ── -->
+    <div class="grid-2" style="margin-bottom:10px;">
+      <div class="icp-card" style="margin-bottom:0;">
+        <div class="icp-card-header">
+          <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          <div class="icp-card-title">Role ICP</div>
+        </div>
+        <div class="icp-card-subtitle">Your ideal role profile — what Coop uses to evaluate fit</div>
+        <button class="icp-autofill-btn" id="role-icp-autofill">Let Coop fill this in</button>
+        <textarea class="field-input" id="role-icp-text" style="font-size:13px;" placeholder="Describe your ideal next role in your own words..."></textarea>
+        <div class="icp-attrs">
+          <div class="field"><label class="field-label">Target function</label><input type="text" class="field-input" id="role-icp-function" placeholder="e.g. GTM, Sales, RevOps"></div>
+          <div class="field"><label class="field-label">Seniority</label><input type="text" class="field-input" id="role-icp-seniority" placeholder="e.g. VP, Director, IC"></div>
+          <div class="field"><label class="field-label">Scope</label><input type="text" class="field-input" id="role-icp-scope" placeholder="e.g. Full P&L, Regional, Team of 10"></div>
+          <div class="field"><label class="field-label">Selling motion</label><input type="text" class="field-input" id="role-icp-selling-motion" placeholder="e.g. Enterprise, PLG, Mid-market"></div>
+          <div class="field"><label class="field-label">Team size preference</label><input type="text" class="field-input" id="role-icp-team-size" placeholder="e.g. 5-15 direct reports"></div>
+        </div>
+      </div>
+      <div class="icp-card" style="margin-bottom:0;">
+        <div class="icp-card-header">
+          <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+          <div class="icp-card-title">Company ICP</div>
+        </div>
+        <div class="icp-card-subtitle">Your ideal company profile — stage, size, industry, culture</div>
+        <button class="icp-autofill-btn" id="company-icp-autofill">Let Coop fill this in</button>
+        <textarea class="field-input" id="company-icp-text" style="font-size:13px;" placeholder="Describe your ideal company in your own words..."></textarea>
+        <div class="icp-attrs">
+          <div class="field"><label class="field-label">Stage</label><input type="text" class="field-input" id="company-icp-stage" placeholder="e.g. Series B-D, Growth"></div>
+          <div class="field"><label class="field-label">Size range</label><input type="text" class="field-input" id="company-icp-size" placeholder="e.g. 50-500 employees"></div>
+          <div class="field"><label class="field-label">Industries</label><input type="text" class="field-input" id="company-icp-industries" placeholder="e.g. SaaS, FinTech, DevTools"></div>
+          <div class="field"><label class="field-label">Culture markers</label><input type="text" class="field-input" id="company-icp-culture" placeholder="e.g. transparent, async-first, ownership"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Location & Comp side by side ── -->
+    <div class="grid-2" style="margin-bottom:10px;">
+      <div class="light-card" style="border-top: none;">
+        <div class="section-label">LOCATION &amp; LOGISTICS</div>
+        <div class="grid-2" style="margin-bottom: 10px;">
+          <div class="field">
+            <label class="field-label">City</label>
+            <input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="field-label">State</label>
+            <select class="field-input" id="pref-location-state" style="height:38px;">
+              <option value="">State</option>
+              <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom: 10px;">
+          <label class="field-label">Work arrangement</label>
+          <div class="check-group">
+            <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
+            <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
+            <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
+          </div>
+        </div>
         <div class="field">
-          <label class="field-label">City</label>
-          <input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off">
+          <label class="field-label">Max travel</label>
+          <input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None">
+        </div>
+      </div>
+      <div class="light-card" style="border-top: none;">
+        <div class="section-label">COMPENSATION SIGNALS</div>
+        <div class="field" style="margin-bottom: 12px;">
+          <label class="field-label" style="margin-bottom: 8px;">Base Salary</label>
+          <div class="salary-row">
+            <div class="salary-item">
+              <span class="salary-label red">Walk away below</span>
+              <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="$120K">
+            </div>
+            <div class="salary-item">
+              <span class="salary-label green">Strong offer above</span>
+              <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="$180K">
+            </div>
+          </div>
         </div>
         <div class="field">
-          <label class="field-label">State</label>
-          <select class="field-input" id="pref-location-state" style="height:38px;">
-            <option value="">State</option>
-            <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
-          </select>
-        </div>
-      </div>
-      <div class="field" style="margin-bottom: 12px;">
-        <label class="field-label">Work arrangement</label>
-        <div class="check-group">
-          <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
-          <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
-          <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
-        </div>
-      </div>
-      <div class="field">
-        <label class="field-label">Max travel</label>
-        <input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None">
-      </div>
-    </div>
-
-    <!-- ── 7b. Compensation Signals ── -->
-    <div class="light-card" style="border-top: none;">
-      <div class="section-label">COMPENSATION SIGNALS</div>
-      <div class="field" style="margin-bottom: 14px;">
-        <label class="field-label" style="margin-bottom: 8px;">Base Salary</label>
-        <div class="salary-row">
-          <div class="salary-item">
-            <span class="salary-label red">Walk away below</span>
-            <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="$120K">
-          </div>
-          <div class="salary-item">
-            <span class="salary-label green">Strong offer above</span>
-            <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="$180K">
-          </div>
-        </div>
-      </div>
-      <div class="field">
-        <label class="field-label" style="margin-bottom: 8px;">OTE / Total Comp</label>
-        <div class="salary-row">
-          <div class="salary-item">
-            <span class="salary-label red">OTE walk away below</span>
-            <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="$200K">
-          </div>
-          <div class="salary-item">
-            <span class="salary-label green">OTE strong above</span>
-            <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="$300K">
+          <label class="field-label" style="margin-bottom: 8px;">OTE / Total Comp</label>
+          <div class="salary-row">
+            <div class="salary-item">
+              <span class="salary-label red">OTE walk away below</span>
+              <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="$200K">
+            </div>
+            <div class="salary-item">
+              <span class="salary-label green">OTE strong above</span>
+              <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="$300K">
+            </div>
           </div>
         </div>
       </div>
     </div>
 
+    </div><!-- end fit tab panel -->
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 3: GREEN & RED FLAGS                                            -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="cos-tab-panel" data-panel="flags">
+
+    <div class="grid-2" style="margin-bottom:10px;">
+      <div class="light-card green">
+        <div class="light-header">
+          <div class="light-dot green"></div>
+          <div class="light-title">Green flags</div>
+        </div>
+        <div class="light-subtitle">What attracts you — keywords enable automatic matching</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button class="icp-autofill-btn" id="green-flags-autofill">Let Coop fill this in</button>
+          <button class="icp-autofill-btn" id="green-flags-rate" style="background:rgba(93,202,165,0.06);border-color:rgba(93,202,165,0.25);color:#1D9E75;">Have Coop rate severity</button>
+        </div>
+        <div id="attracted-to-entries"></div>
+        <textarea class="field-input" id="profile-green-lights" style="display:none;"></textarea>
+        <div class="ai-toggle" data-ai="greenLights" style="display:none"></div>
+        <div class="ai-panel" data-ai-panel="greenLights" style="display:none"></div>
+      </div>
+      <div class="light-card red">
+        <div class="light-header">
+          <div class="light-dot red"></div>
+          <div class="light-title">Red flags</div>
+        </div>
+        <div class="light-subtitle">Dealbreakers — keywords trigger automatic flags during scoring</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button class="icp-autofill-btn" id="red-flags-autofill">Let Coop fill this in</button>
+          <button class="icp-autofill-btn" id="red-flags-rate" style="background:rgba(226,75,74,0.06);border-color:rgba(226,75,74,0.25);color:#E24B4A;">Have Coop rate severity</button>
+        </div>
+        <div id="dealbreaker-entries"></div>
+        <textarea class="field-input" id="profile-red-lights" style="display:none;"></textarea>
+        <div class="ai-toggle" data-ai="redLights" style="display:none"></div>
+        <div class="ai-panel" data-ai-panel="redLights" style="display:none"></div>
       </div>
     </div>
 
-    <!-- ── 9. Manage Integrations ── -->
-    <div class="integrations-link">
-      <a href="integrations.html">Manage integrations &rarr;</a>
-      <div class="sub">Gmail, Granola, API keys, and all connections</div>
+    </div><!-- end flags tab panel -->
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 4: COOP'S MEMORY                                               -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="cos-tab-panel" data-panel="memory">
+
+    <div class="card" id="card-coop-memory" data-card="coop-memory">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Coop's memory</div>
+          <div class="card-subtitle">Everything Coop has learned from your conversations — browse, verify, or delete</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div id="coop-memory-filters" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
+        <div id="coop-memory-list"></div>
+        <div id="coop-memory-patterns" style="margin-top:16px;"></div>
+      </div>
     </div>
 
-    <!-- ── Stages & Colors ── -->
-    <div id="stages-section"></div>
+    </div><!-- end memory tab panel -->
 
+  </div><!-- /.page -->
+
+  <div class="integrations-link">
+    <a href="integrations.html">Manage integrations &rarr;</a>
+    <div class="sub">Gmail, Granola, API keys, and all connections</div>
   </div>
+
+  <!-- ── Stages & Colors (hidden for now) ── -->
+  <div id="stages-section" style="display:none"></div>
 
   <!-- Save status toast -->
   <div class="save-status" id="save-status"><span class="save-spinner"></span><span class="save-check">&#10003;</span> <span id="save-status-text">Saved</span></div>
 
   </div><!-- /.settings-content -->
-</div><!-- /.settings-layout -->
+
+  <!-- ── Coop Chat Drawer ── -->
+  <button class="coop-chat-toggle" id="coop-chat-toggle">
+    <svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;">
+      <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+      <clipPath id="coop-tog"><circle cx="50" cy="50" r="48"/></clipPath>
+      <g clip-path="url(#coop-tog)">
+        <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+        <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+        <path d="M28 45 Q28 30 38 24 Q50 20 62 24 Q72 30 72 45 Q72 56 65 64 Q59 70 50 72 Q41 70 35 64 Q28 56 28 45Z" fill="#F0CDA0"/>
+        <ellipse cx="28" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+        <ellipse cx="72" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+        <path d="M27 42 Q27 20 50 14 Q73 20 73 42 L71 36 Q69 20 50 17 Q31 20 29 36Z" fill="#7A5C3A"/>
+        <path d="M27 42 Q27 28 35 22 L33 24 Q29 30 28 40Z" fill="#6B4E30"/>
+        <path d="M73 42 Q73 28 65 22 L67 24 Q71 30 72 40Z" fill="#6B4E30"/>
+        <path d="M31 34 Q31 18 50 14 Q69 18 69 34 Q68 22 50 17 Q32 22 31 34Z" fill="#8B6B4A"/>
+        <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/>
+        <circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+        <circle cx="42.5" cy="43" r="0.8" fill="white" opacity="0.8"/>
+        <ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/>
+        <circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+        <circle cx="60.5" cy="43" r="0.8" fill="white" opacity="0.8"/>
+        <path d="M35 38 Q41 36 47 37.5" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M53 37.5 Q59 36 65 38" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M49.5 48 Q50 53 52.5 52" fill="none" stroke="#D9A07A" stroke-width="0.7" stroke-linecap="round"/>
+        <path d="M40 58 Q45 65 50 66 Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/>
+        <path d="M40 58 Q50 61 60 58" fill="none" stroke="#8B6B4A" stroke-width="0.6"/>
+      </g>
+    </svg>
+    <span class="coop-chat-label">Chat with Coop</span>
+  </button>
+  <div class="coop-chat-drawer" id="coop-chat-drawer">
+    <div class="coop-chat-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;">
+          <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+          <clipPath id="coop-hdr"><circle cx="50" cy="50" r="48"/></clipPath>
+          <g clip-path="url(#coop-hdr)">
+            <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+            <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+            <path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/>
+            <path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/>
+            <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+            <ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+            <path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/>
+          </g>
+        </svg>
+        <div>
+          <div class="coop-chat-title">Coop</div>
+          <div class="coop-chat-subtitle">Career OS editor mode</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="coop-model-toggle" id="coop-model-toggle"></button>
+        <button class="coop-chat-close-btn" id="coop-chat-close">&times;</button>
+      </div>
+    </div>
+    <div class="coop-chat-messages" id="coop-chat-messages"></div>
+    <div class="coop-chat-input-row">
+      <textarea id="coop-chat-input" placeholder="Tell Coop about your preferences..." rows="1"></textarea>
+      <button class="coop-chat-send-btn" id="coop-chat-send">&#9654;</button>
+    </div>
+  </div>
 
   <script src="preferences.js"></script>
 </body>

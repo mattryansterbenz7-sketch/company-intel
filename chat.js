@@ -24,7 +24,7 @@ function buildChatPanel(container, entry) {
   const CHAT_MODELS = [
     { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
     { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
-    { id: 'claude-sonnet-4-5-20250514', label: 'Sonnet', icon: '✦' },
+    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', icon: '✦' },
     { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
   ];
   let chatModelIdx = 0;
@@ -37,7 +37,7 @@ function buildChatPanel(container, entry) {
     <div class="chat-email-status" id="chat-email-status-${panelId}" style="display:none"></div>
     <div class="chat-input-row">
       <textarea class="chat-input" id="chat-input-${panelId}" placeholder="${placeholder}" rows="1"></textarea>
-      <button class="chat-model-btn" id="chat-model-${panelId}" title="Click to switch model" style="background:none;border:1px solid #DDD9D4;color:#8B8680;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">Haiku</button>
+      <button class="chat-model-btn" id="chat-model-${panelId}" title="Click to switch model" style="background:none;border:1px solid #DDD9D4;color:#8B8680;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">...</button>
       <button class="chat-send-btn" id="chat-send-${panelId}">Send</button>
     </div>
     ${minimal ? `<div class="chat-actions"><button class="chat-action-btn chat-clear-btn" data-action="clear">Clear chat</button></div>` : `
@@ -56,7 +56,15 @@ function buildChatPanel(container, entry) {
   function updateChatModelBtn() {
     if (modelBtn) modelBtn.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
   }
-  updateChatModelBtn();
+  // Load default model from Pipeline settings, then update button
+  chrome.storage.local.get(['pipelineConfig'], data => {
+    const configModel = data.pipelineConfig?.aiModels?.chat;
+    if (configModel) {
+      const idx = CHAT_MODELS.findIndex(m => m.id === configModel);
+      if (idx >= 0) chatModelIdx = idx;
+    }
+    updateChatModelBtn();
+  });
   if (modelBtn) {
     modelBtn.addEventListener('click', () => {
       chatModelIdx = (chatModelIdx + 1) % CHAT_MODELS.length;

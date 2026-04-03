@@ -18,21 +18,15 @@
     .page-title { font-size: 26px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; margin-bottom: 6px; }
     .page-subtitle { font-size: 14px; color: #7c98b6; margin-bottom: 32px; line-height: 1.6; }
 
-    /* ── Shared Settings Sidebar ── */
-    .settings-layout { display: flex; min-height: 100vh; }
-    .settings-sidebar {
-      width: 180px; flex-shrink: 0; background: #f5f8fa; border-right: 0.5px solid #e2e8f0;
-      padding: 20px 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
+    /* ── Header nav ── */
+    .header-nav { display: flex; align-items: center; gap: 6px; }
+    .header-nav-item {
+      color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 16px;
+      border: 1px solid transparent; border-radius: 8px; background: transparent;
+      cursor: pointer; transition: all 0.15s; font-family: inherit; text-decoration: none;
     }
-    .settings-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
-    .settings-nav-item {
-      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: #516f90;
-      text-decoration: none; border-radius: 6px; border-left: 2px solid transparent; transition: all 0.12s;
-    }
-    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: #2d3e50; }
-    .settings-nav-item.active { background: #fff; color: #2d3e50; font-weight: 600; border-left-color: #FF7A59; }
-    .settings-nav-divider { height: 1px; background: #e2e8f0; margin: 10px 14px; }
-    .settings-content { flex: 1; min-width: 0; }
+    .header-nav-item:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .header-nav-item.active { color: #fff; background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.15); }
 
     /* ── Pipeline Settings ── */
     .pipeline-subsection { margin-bottom: 20px; }
@@ -143,31 +137,30 @@
 <body>
 
 <div class="header">
-  <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Pipeline & Usage</span></a>
-  <a class="header-back" href="saved.html">&larr; Back to Saved</a>
+  <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Pipeline &amp; Usage</span></a>
+  <div class="header-nav">
+    <a class="header-nav-item" href="preferences.html">Career OS</a>
+    <a class="header-nav-item" href="integrations.html">Integrations</a>
+    <a class="header-nav-item active" href="pipeline.html">Pipeline &amp; Usage</a>
+    <a class="header-nav-item" href="docs.html" target="_blank">Docs</a>
+  </div>
 </div>
 
-<div class="settings-layout">
-  <nav class="settings-sidebar">
-    <div class="settings-nav">
-      <a class="settings-nav-item" href="preferences.html">Career OS</a>
-      <a class="settings-nav-item" href="integrations.html">Integrations</a>
-      <a class="settings-nav-item active" href="pipeline.html">Pipeline & Usage</a>
-      <div class="settings-nav-divider"></div>
-      <a class="settings-nav-item" href="docs.html" target="_blank">Documentation</a>
-    </div>
-  </nav>
-  <div class="settings-content">
+<div class="page">
+  <div class="page-title">Data Pipeline</div>
+  <div class="page-subtitle">Control how CompanyIntel researches companies, scores jobs, and routes AI tasks.</div>
+  <div id="pipeline-body"></div>
+  <div id="usage-container"></div>
+</div>
 
-    <div class="page">
-      <div class="page-title">Data Pipeline</div>
-      <div class="page-subtitle">Control how CompanyIntel researches companies, scores jobs, and routes AI tasks.</div>
-      <div id="pipeline-body"></div>
-      <div id="usage-container"></div>
-    </div>
-
-  </div><!-- /.settings-content -->
-</div><!-- /.settings-layout -->
+<!-- Save confirmation toast -->
+<div id="pipeline-save-toast" style="
+  position: fixed; bottom: 20px; right: 20px;
+  background: #2d3e50; color: #5DCAA5; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 18px; border-radius: 8px; opacity: 0; transition: opacity 0.3s;
+  pointer-events: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+">&#10003; Settings saved</div>
 
 <script src="pipeline.js"></script>
 

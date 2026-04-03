@@ -136,6 +136,32 @@ chrome.storage.onChanged.addListener((changes, area) => {
     _apolloExhausted = false;
     _serperExhausted = false;
   }
+
+  // Auto-rescore active opportunities when Career OS profile changes
+  const profileKeys = ['profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'];
+  const changedProfileKeys = profileKeys.filter(k => changes[k]);
+  if (area === 'local' && changedProfileKeys.length) {
+    console.log('[AutoRescore] Profile changed:', changedProfileKeys, '— rescoring active opportunities');
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const active = (savedCompanies || []).filter(c =>
+        c.isOpportunity && c.jobStage && c.jobStage !== 'needs_review' && c.jobStage !== 'rejected'
+      );
+      if (!active.length) return;
+      console.log(`[AutoRescore] Rescoring ${active.length} active opportunities`);
+      // Process in batches of 2 with 2s delay to avoid rate limits
+      let i = 0;
+      const processBatch = () => {
+        const batch = active.slice(i, i + 2);
+        if (!batch.length) return;
+        batch.forEach(entry => {
+          chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
+        });
+        i += 2;
+        if (i < active.length) setTimeout(processBatch, 2000);
+      };
+      processBatch();
+    });
+  }
 });
 
 // Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
@@ -151,10 +177,10 @@ const DEFAULT_PIPELINE_CONFIG = {
   aiModels: {
     companyIntelligence: 'claude-haiku-4-5-20251001',
     firmographicExtraction: 'claude-haiku-4-5-20251001',
-    jobMatchScoring: 'claude-sonnet-4-6',
-    deepFitAnalysis: 'claude-sonnet-4-6',
+    jobMatchScoring: 'claude-haiku-4-5-20251001',
+    deepFitAnalysis: 'claude-haiku-4-5-20251001',
     nextStepExtraction: 'claude-haiku-4-5-20251001',
-    chat: 'claude-sonnet-4-6',
+    chat: 'claude-haiku-4-5-20251001',
   },
   searchCounts: { reviewScout: 3, reviewDrill: 2, leaders: 5, jobs: 5, product: 3 },
   photos: {
@@ -204,6 +230,33 @@ chrome.storage.local.get(['pipelineConfig'], d => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.pipelineConfig) {
     pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...changes.pipelineConfig.newValue };
+  }
+  // Auto-rescore active opportunities when salary/work prefs change
+  if (area === 'sync' && changes.prefs) {
+    const oldPrefs = changes.prefs.oldValue || {};
+    const newPrefs = changes.prefs.newValue || {};
+    const salaryChanged = oldPrefs.salaryFloor !== newPrefs.salaryFloor || oldPrefs.salaryStrong !== newPrefs.salaryStrong ||
+      oldPrefs.oteFloor !== newPrefs.oteFloor || oldPrefs.oteStrong !== newPrefs.oteStrong;
+    const workChanged = JSON.stringify(oldPrefs.workArrangement) !== JSON.stringify(newPrefs.workArrangement);
+    if (salaryChanged || workChanged) {
+      console.log('[AutoRescore] Salary/work prefs changed — rescoring active opportunities');
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const active = (savedCompanies || []).filter(c =>
+          c.isOpportunity && c.jobStage && c.jobStage !== 'needs_review' && c.jobStage !== 'rejected'
+        );
+        let i = 0;
+        const processBatch = () => {
+          const batch = active.slice(i, i + 2);
+          if (!batch.length) return;
+          batch.forEach(entry => {
+            chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
+          });
+          i += 2;
+          if (i < active.length) setTimeout(processBatch, 2000);
+        };
+        processBatch();
+      });
+    }
   }
 });
 
@@ -338,19 +391,26 @@ const CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days — company data doesn't 
 // ── Multi-Provider AI Router ────────────────────────────────────────────────
 
 function getModelForTask(taskId) {
+  const models = pipelineConfig?.aiModels || {};
   const defaults = {
     companyIntelligence: 'claude-haiku-4-5-20251001',
     firmographicExtraction: 'claude-haiku-4-5-20251001',
-    jobMatchScoring: 'claude-sonnet-4-6',
-    deepFitAnalysis: 'claude-sonnet-4-6',
     nextStepExtraction: 'claude-haiku-4-5-20251001',
-    chat: 'claude-sonnet-4-6',
     quickFitScoring: 'claude-haiku-4-5-20251001',
     profileInterpret: 'claude-haiku-4-5-20251001',
-    roleBrief: 'claude-sonnet-4-6',
-    profileConsolidate: 'claude-sonnet-4-6',
+    chat: 'claude-haiku-4-5-20251001',
+    // These tasks inherit from the user-facing "Fit Scoring" setting (quickFitScoring)
+    jobMatchScoring: 'claude-haiku-4-5-20251001',
+    deepFitAnalysis: 'claude-haiku-4-5-20251001',
+    roleBrief: 'claude-haiku-4-5-20251001',
+    profileConsolidate: 'claude-haiku-4-5-20251001',
   };
-  return pipelineConfig?.aiModels?.[taskId] || defaults[taskId] || 'claude-haiku-4-5-20251001';
+  // For scoring tasks not directly in the UI, inherit from the "Fit Scoring" (quickFitScoring) setting
+  const fitModel = models.quickFitScoring;
+  if (fitModel && ['jobMatchScoring', 'deepFitAnalysis', 'roleBrief', 'profileConsolidate'].includes(taskId) && !models[taskId]) {
+    return fitModel;
+  }
+  return models[taskId] || defaults[taskId] || 'claude-haiku-4-5-20251001';
 }
 
 async function aiCall(taskId, { system, messages, max_tokens }) {
@@ -399,6 +459,13 @@ let _scoringInProgress = false;
 
 // Retry wrapper for Claude API calls with exponential backoff on 429
 async function claudeApiCall(body, maxRetries = 3) {
+  // Enable prompt caching: convert system string to cacheable format
+  if (typeof body.system === 'string' && body.system.length > 500) {
+    body = {
+      ...body,
+      system: [{ type: 'text', text: body.system, cache_control: { type: 'ephemeral' } }]
+    };
+  }
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -406,7 +473,8 @@ async function claudeApiCall(body, maxRetries = 3) {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'anthropic-beta': 'prompt-caching-2024-07-31'
       },
       body: JSON.stringify(body)
     });
@@ -476,7 +544,8 @@ async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
         if (res.ok) {
           const reply = data.choices?.[0]?.message?.content || 'No response.';
           if (candidate.id !== model) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
-          return { reply, usedModel: candidate.id };
+          const usage = { input: data.usage?.prompt_tokens || 0, output: data.usage?.completion_tokens || 0 };
+          return { reply, usedModel: candidate.id, usage };
         }
         lastError = data?.error?.message || `OpenAI error ${res.status}`;
         console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
@@ -486,7 +555,8 @@ async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
         if (res.ok) {
           const reply = data.content?.[0]?.text || 'No response.';
           if (candidate.id !== model) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
-          return { reply, usedModel: candidate.id };
+          const usage = { input: data.usage?.input_tokens || 0, output: data.usage?.output_tokens || 0 };
+          return { reply, usedModel: candidate.id, usage };
         }
         lastError = data?.error?.message || `Claude error ${res.status}`;
         console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
@@ -558,6 +628,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     fetchGmailEmails(message.domain, message.companyName, message.linkedinSlug, message.knownContactEmails).then(sendResponse);
     return true;
   }
+  if (message.type === 'CLOSE_SIDEPANEL') {
+    // Close the sidepanel via Chrome API
+    chrome.sidePanel?.setOptions?.({ enabled: false }).then(() => {
+      // Re-enable for future use
+      setTimeout(() => chrome.sidePanel?.setOptions?.({ enabled: true }), 100);
+    }).catch(() => {});
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'SCAN_REJECTIONS') {
+    // Scan all active entries for rejection emails
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const entries = savedCompanies || [];
+      const activeStages = ['applied', 'co_applied', 'interviewing', 'phone_screen', 'interview', 'final_round', 'want_to_apply'];
+      let updated = 0;
+      entries.forEach(entry => {
+        if (!activeStages.includes(entry.jobStage || entry.status || '')) return;
+        if ((entry.tags || []).includes('Application Rejected')) return;
+        if (!entry.cachedEmails?.length) return;
+        const rejection = detectRejectionEmailBg(entry.cachedEmails, entry);
+        if (rejection) {
+          console.log(`[Rejection] Auto-detected for ${entry.company}: "${rejection.subject}"`);
+          entry.jobStage = 'rejected';
+          entry.status = 'closed';
+          const tags = entry.tags || [];
+          if (!tags.includes('Application Rejected')) tags.push('Application Rejected');
+          entry.tags = tags;
+          entry.rejectedAt = Date.now();
+          entry.rejectionEmail = { subject: rejection.subject, from: rejection.from, date: rejection.date, snippet: rejection.snippet };
+          if (!entry.stageTimestamps) entry.stageTimestamps = {};
+          entry.stageTimestamps.rejected = Date.now();
+          updated++;
+        }
+      });
+      if (updated > 0) {
+        chrome.storage.local.set({ savedCompanies: entries });
+      }
+      sendResponse({ updated });
+    });
+    return true;
+  }
   if (message.type === 'GMAIL_REVOKE') {
     gmailRevoke().then(sendResponse);
     return true;
@@ -566,8 +677,148 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleChatMessage(message).then(sendResponse);
     return true;
   }
+  if (message.type === 'QUICK_ENRICH_FIRMO') {
+    (async () => {
+      try {
+        const { company, domain, missing } = message;
+        const query = `"${company}" ${domain || ''} employees funding founded`;
+        const results = await fetchSearchResults(query, 3);
+        if (!results.length) { sendResponse({}); return; }
+
+        const allText = results.map(r => `${r.title} ${r.snippet}`).join(' ');
+
+        // Pass 1: Free regex extraction — no AI needed for clean patterns
+        const extracted = {};
+        if (missing.includes('employees') && !extracted.employees) {
+          // "51-200 employees" or "45 employees" or "~150 employees"
+          const empMatch = allText.match(/(\d[\d,]*\s*[-–]\s*\d[\d,]*)\s*employees/i)
+            || allText.match(/(~?\d[\d,]+)\s*employees/i)
+            || allText.match(/employees[:\s]+(\d[\d,]*\s*[-–]\s*\d[\d,]*)/i);
+          if (empMatch) extracted.employees = empMatch[1].trim();
+        }
+        if (missing.includes('funding') && !extracted.funding) {
+          // "Series B" or "$30M funding" or "raised $12M"
+          const fundMatch = allText.match(/(Series\s+[A-F][\w]*(?:\s*[-–,]\s*\$[\d.]+[BMK])?)/i)
+            || allText.match(/raised\s+(\$[\d.]+[BMK]\w*)/i)
+            || allText.match(/(\$[\d.]+[BMK]\w*)\s*(?:funding|raised|round)/i);
+          if (fundMatch) extracted.funding = fundMatch[1].trim();
+        }
+        if (missing.includes('industry') && !extracted.industry) {
+          // "Industry: SaaS" or "Software Development · 51-200"
+          const indMatch = allText.match(/(?:industry|sector)[:\s]+([^·|•\n]{3,40})/i)
+            || allText.match(/([A-Z][\w\s&\/]+?)\s*·\s*\d/);
+          if (indMatch) extracted.industry = indMatch[1].trim();
+        }
+        if (missing.includes('linkedin') && !extracted.linkedin) {
+          // Extract LinkedIn company URL from search results
+          const allUrls = results.map(r => r.link || '').join(' ');
+          const liMatch = allUrls.match(/https?:\/\/(?:www\.)?linkedin\.com\/company\/[a-z0-9_-]+/i);
+          if (liMatch) extracted.linkedin = liMatch[0];
+        }
+
+        // Check if regex got everything we needed
+        const stillMissing = missing.filter(f => !extracted[f]);
+        console.log('[QuickEnrich] Regex extracted:', extracted, '| still missing:', stillMissing);
+
+        if (stillMissing.length === 0) {
+          // Regex got it all — no AI cost
+          sendResponse(extracted);
+          return;
+        }
+
+        // Pass 2: AI fallback only for fields regex couldn't get
+        const snippets = results.map(r => `${r.title}: ${r.snippet}`).join('\n');
+        const { reply } = await chatWithFallback({
+          model: 'gpt-4.1-mini',
+          system: 'Extract company firmographics from search snippets. Return JSON only.',
+          messages: [{ role: 'user', content: `From these search results about "${company}", extract ONLY these fields: ${stillMissing.join(', ')}. Return JSON: {"employees":"e.g. 51-200 or ~150","funding":"e.g. Series B, $30M","industry":"e.g. B2B SaaS","linkedin":"e.g. https://linkedin.com/company/warmly-ai"}. Only include fields you can confidently extract.\n\n${snippets.slice(0, 2000)}` }],
+          max_tokens: 200,
+          tag: 'QuickEnrich'
+        });
+
+        if (reply) {
+          const match = reply.match(/\{[\s\S]*\}/);
+          if (match) {
+            const aiData = JSON.parse(match[0]);
+            // Merge: regex results take priority, AI fills gaps
+            sendResponse({
+              employees: extracted.employees || aiData.employees || null,
+              funding: extracted.funding || aiData.funding || null,
+              industry: extracted.industry || aiData.industry || null,
+              linkedin: extracted.linkedin || aiData.linkedin || null,
+            });
+            return;
+          }
+        }
+        // Return whatever regex found even if AI failed
+        sendResponse(extracted);
+      } catch (e) {
+        console.warn('[QuickEnrich] Error:', e.message);
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+  if (message.type === 'FETCH_URL') {
+    (async () => {
+      try {
+        const res = await fetch(message.url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+        if (!res.ok) { sendResponse({ error: `HTTP ${res.status}` }); return; }
+        const html = await res.text();
+        const text = html
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+          .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+          .replace(/\s+/g, ' ').trim();
+        sendResponse({ text: text.slice(0, 6000) });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+  if (message.type === 'COOP_CHAT') {
+    handleCoopMessage({
+      messages: message.messages,
+      globalChat: message.globalChat !== false,
+      chatModel: message.chatModel,
+      careerOSChat: message.careerOSChat
+    }).then(sendResponse);
+    return true;
+  }
   if (message.type === 'CALENDAR_FETCH_EVENTS') {
     fetchCalendarEvents(message.domain, message.companyName, message.knownContactEmails).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'UPDATE_PIPELINE_SETTING') {
+    const { key, value } = message;
+    // Re-read from storage first to avoid overwriting other settings
+    chrome.storage.local.get(['pipelineConfig'], d => {
+      const saved = d.pipelineConfig || {};
+      if (key === 'chatModel') {
+        if (!saved.aiModels) saved.aiModels = {};
+        saved.aiModels.chat = value;
+        pipelineConfig.aiModels.chat = value;
+      } else if (key === 'scoringModel') {
+        if (!saved.aiModels) saved.aiModels = {};
+        saved.aiModels.jobMatchScoring = value;
+        pipelineConfig.aiModels.jobMatchScoring = value;
+      } else if (key === 'researchModel') {
+        if (!saved.aiModels) saved.aiModels = {};
+        saved.aiModels.companyIntelligence = value;
+        pipelineConfig.aiModels.companyIntelligence = value;
+      }
+      chrome.storage.local.set({ pipelineConfig: saved });
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+  // GET_PIPELINE_CONFIG handled in the pipeline-specific listener below
+  if (message.type === 'SYNC_ENTRY_FIELDS') {
+    syncEntryFields(message.entryId).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ error: e.message }));
     return true;
   }
   if (message.type === 'GENERATE_ROLE_BRIEF') {
@@ -776,10 +1027,10 @@ async function scoutCompany(companyName) {
     return fullCached.intelligence;
   }
   // Check scout cache
-  const cacheTTL = (scoringConfig.scoutCacheDays || 7) * 24 * 60 * 60 * 1000;
+  const cacheDays = scoringConfig.scoutCacheDays ?? 7;
   const { scoutCache } = await new Promise(r => chrome.storage.local.get(['scoutCache'], r));
   const cached = (scoutCache || {})[cacheKey];
-  if (cached && Date.now() - cached.ts < cacheTTL) {
+  if (cached && (cacheDays === 0 || Date.now() - cached.ts < cacheDays * 86400000)) {
     console.log('[Scout] Cache hit for:', companyName);
     return cached.summary;
   }
@@ -810,28 +1061,104 @@ async function processQuickFitScore(entryId) {
   // Lightweight company scout — 1 Serper search, cached for 7 days
   const companyContext = await scoutCompany(entry.company || 'Unknown');
 
-  // Load user profile data
+  // Load user profile data (structured + legacy fallback)
   const localData = await new Promise(resolve =>
-    chrome.storage.local.get(['profileGreenLights', 'profileRedLights', 'profileSkills'], resolve)
+    chrome.storage.local.get([
+      'profileGreenLights', 'profileRedLights', 'profileSkills',
+      'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
+      'profileRoleICP', 'profileCompanyICP'
+    ], resolve)
   );
   const syncData = await new Promise(resolve =>
     chrome.storage.sync.get(['prefs'], resolve)
   );
   const prefs = syncData.prefs || {};
-  const greenLights = localData.profileGreenLights || 'Not specified';
-  const redLights = localData.profileRedLights || 'Not specified';
+
+  // Structured data with legacy fallback
+  const attractedTo = localData.profileAttractedTo || [];
+  const dealbreakers = localData.profileDealbreakers || [];
+  const skillTags = localData.profileSkillTags || [];
+  const roleICP = localData.profileRoleICP || {};
+  const companyICP = localData.profileCompanyICP || {};
+  const greenLights = attractedTo.length ? attractedTo.map(e => e.text).join('\n') : (localData.profileGreenLights || 'Not specified');
+  const redLights = dealbreakers.length ? dealbreakers.map(e => e.text).join('\n') : (localData.profileRedLights || 'Not specified');
   const skills = localData.profileSkills || 'Not specified';
 
   const jobDesc = (entry.jobDescription || '').slice(0, 3000);
+  const jobDescLower = jobDesc.toLowerCase();
 
-  const prompt = `You are a job fit screener. Based on the candidate's preferences, the job posting, and what's known about the company, give a quick fit score from 1-10 and a one-sentence reason.
+  // ── Deterministic keyword pre-scan ──
+  const keywordHits = { attracted: [], dealbreaker: [], hardDQ: [] };
+  for (const a of attractedTo) {
+    for (const kw of (a.keywords || [])) {
+      if (kw && jobDescLower.includes(kw.toLowerCase())) {
+        keywordHits.attracted.push({ keyword: kw, entry: a.text });
+      }
+    }
+  }
+  for (const d of dealbreakers) {
+    for (const kw of (d.keywords || [])) {
+      if (kw && jobDescLower.includes(kw.toLowerCase())) {
+        const numSev = typeof d.severity === 'number' ? d.severity : (d.severity === 'hard' ? 4 : 2);
+        const hit = { keyword: kw, entry: d.text, severity: numSev };
+        keywordHits.dealbreaker.push(hit);
+        if (numSev >= 4) keywordHits.hardDQ.push(hit);
+      }
+    }
+  }
+  if (keywordHits.attracted.length || keywordHits.dealbreaker.length) {
+    console.log('[QuickFit] Keyword pre-scan hits:', keywordHits);
+  }
 
-[Candidate Preferences]
-Green lights: ${greenLights}
-Red lights: ${redLights}
-Background: ${skills}
-Compensation: Base floor $${prefs.salaryFloor || 'Not specified'}, OTE floor $${prefs.oteFloor || 'Not specified'}
-Location: ${prefs.userLocation || 'Not specified'}, prefers ${prefs.workArrangement || 'Not specified'}
+  // ── Build structured candidate preferences for prompt ──
+  let candidateSection = '[Candidate Preferences]\n';
+  if (attractedTo.length) {
+    candidateSection += 'Attracted To (structured):\n' + attractedTo.map(e =>
+      `- [${e.category}] ${e.text}${e.keywords?.length ? ` (keywords: ${e.keywords.join(', ')})` : ''}`
+    ).join('\n') + '\n';
+  } else {
+    candidateSection += `Green lights: ${greenLights}\n`;
+  }
+  if (dealbreakers.length) {
+    const sevLabel = n => typeof n === 'number' ? ['minor','preference','notable','dealbreaker','hard-stop'][n-1] || 'preference' : (n || 'preference');
+    candidateSection += 'Dealbreakers (structured, severity 1-5 where 5=absolute dealbreaker):\n' + dealbreakers.map(e =>
+      `- [${e.category}/severity:${typeof e.severity === 'number' ? e.severity : (e.severity === 'hard' ? 4 : 2)}] ${e.text}${e.keywords?.length ? ` (keywords: ${e.keywords.join(', ')})` : ''}`
+    ).join('\n') + '\n';
+  } else {
+    candidateSection += `Red lights: ${redLights}\n`;
+  }
+  candidateSection += `Background: ${skills}`;
+  if (skillTags.length) candidateSection += `\nSkill tags: ${skillTags.join(', ')}`;
+  if (roleICP.targetFunction || roleICP.seniority) {
+    candidateSection += `\nRole ICP: ${[roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
+    if (roleICP.text) candidateSection += ` — ${roleICP.text.slice(0, 300)}`;
+  }
+  if (companyICP.stage || companyICP.sizeRange) {
+    candidateSection += `\nCompany ICP: ${[companyICP.stage, companyICP.sizeRange, (companyICP.industryPreferences || []).join('/')].filter(Boolean).join(' | ')}`;
+    if (companyICP.text) candidateSection += ` — ${companyICP.text.slice(0, 300)}`;
+  }
+  candidateSection += `\nCompensation thresholds (IMPORTANT — use these exact numbers, do not confuse floor with strong):`;
+  candidateSection += `\n  Base salary WALK AWAY (reject below): $${prefs.salaryFloor || 'Not specified'}`;
+  candidateSection += `\n  Base salary STRONG OFFER (excited above): $${prefs.salaryStrong || 'Not specified'}`;
+  candidateSection += `\n  OTE WALK AWAY (reject below): $${prefs.oteFloor || 'Not specified'}`;
+  candidateSection += `\n  OTE STRONG OFFER (excited above): $${prefs.oteStrong || 'Not specified'}`;
+  candidateSection += `\nLocation: ${prefs.userLocation || 'Not specified'}, prefers ${prefs.workArrangement || 'Not specified'}`;
+
+  // Add deterministic keyword hits to prompt
+  let keywordContext = '';
+  if (keywordHits.attracted.length) {
+    keywordContext += `\n\n[KEYWORD MATCHES — Attracted To]\n${keywordHits.attracted.map(h => `- "${h.keyword}" found → ${h.entry}`).join('\n')}`;
+  }
+  if (keywordHits.dealbreaker.length) {
+    keywordContext += `\n\n[KEYWORD MATCHES — Dealbreakers]\n${keywordHits.dealbreaker.map(h => `- "${h.keyword}" found (${h.severity}) → ${h.entry}`).join('\n')}`;
+  }
+  if (keywordHits.hardDQ.length) {
+    keywordContext += `\n\nIMPORTANT: Hard dealbreaker keywords detected — these MUST be reflected in scoring.`;
+  }
+
+  const prompt = `You are a job fit screener and role analyst. Based on the candidate's preferences, the job posting, and what's known about the company, produce a unified fit score AND role brief.
+
+${candidateSection}${keywordContext}
 
 [Job Posting]
 Company: ${entry.company || 'Unknown'}
@@ -842,30 +1169,34 @@ Location: ${entry.jobSnapshot?.location || 'Not specified'}
 Description (first 3000 chars): ${jobDesc}
 ${companyContext ? `\n[Company Context from Web]\n${companyContext}` : ''}
 
-Quick Take: Include 2-4 of the most decisive signals as quickTake bullets (green for strong fits, red for dealbreakers). Lead with the single most important signal. Keep each to 8-15 words max.
+SCORING RULES:
+- quickTake: 2-4 most decisive signals (green for fits, red for dealbreakers). 8-15 words each. Lead with the most important.
+- strongFits: Only genuinely strong alignment backed by real evidence. Empty array is fine.
+- redFlags: Only real evidence of concern — comp below floor, on-site when remote needed, poor reviews, role misalignment. Do NOT flag missing information (missing salary, missing travel info, missing equity). Empty array is fine.
+- The "Work Arrangement" field above is authoritative. If it says "Remote", the job IS remote.
+- hardDQ: true ONLY for absolute verified dealbreakers (on-site vs remote requirement, base max below salary floor, fundamentally wrong role type). When in doubt, do NOT flag.
+- reason: explain WHY you gave this score. Do NOT repeat job title or company name.
 
-Green Flags (strongFits): Only include flags that represent genuinely strong alignment — real evidence of fit. Examples: "Remote-first culture confirmed on careers page", "Base salary range exceeds candidate floor". Do NOT pad with generic positives. Empty array is fine if nothing stands out.
+QUALIFICATION MATCH:
+- Compare the posting's stated skills, qualifications, mindset, and experience requirements against the candidate's actual background.
+- qualificationMatch: 1-2 sentences assessing fit. Be specific — reference actual skills/experience the candidate has (or lacks) vs what the posting asks for.
+- qualificationScore: 1-5 (1=severely underqualified, 3=meets most requirements, 5=exceeds all requirements). Factor this into the overall score.
 
-Red Flags (redFlags): Only include flags backed by real evidence of concern — poor Glassdoor reviews, comp below floor, role fundamentally misaligned with candidate goals, on-site when candidate needs remote. Do NOT fabricate weak flags. Empty array is perfectly acceptable.
+ROLE BRIEF:
+- roleSummary: 2-3 sentences on what this role actually is, what you'd own, and what success looks like. Write it for the candidate, not a recruiter.
+- whyInteresting: 1-2 sentences on why this specific role at this specific company could be compelling for THIS candidate given their background. Be honest — if it's not interesting, say so.
+- concerns: 1-2 sentences on legitimate open questions or risks worth investigating before applying. Not missing data — real strategic concerns.
+- compSummary: one line summarizing known comp (base, OTE, equity) or "Not disclosed" if truly nothing.
 
-CRITICAL: The "Work Arrangement" field above is the authoritative source for remote/on-site/hybrid. It comes from the job posting's structured badges. If it says "Remote", the job IS remote — do not contradict this based on office mentions in the description. Only flag a work arrangement mismatch when the Arrangement field explicitly says On-site or Hybrid and the candidate requires Remote.
-
-Hard DQ: Set hardDQ.flagged to true ONLY when there is an absolute, verified dealbreaker:
-- Work Arrangement field says On-site or Hybrid AND candidate requires Remote
-- Base salary MAXIMUM is below candidate's salary floor (not just the minimum of a range)
-- Role function is fundamentally different from candidate's target roles
-If none clearly apply, set hardDQ.flagged to false. When in doubt, do NOT flag — false positive DQs are worse than missing a real one.
-
-IMPORTANT: The "reason" field should explain WHY you gave this score — do NOT repeat the job title or company name. Focus on fit signals (e.g., "Strong alignment on GTM leadership + remote, but comp range is below floor").
-
-Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "short signal"}], "strongFits": ["evidence-based green flag"] or [], "redFlags": ["evidence-based red flag"] or [], "hardDQ": {"flagged": boolean, "reasons": ["reason"]}}`;
+Respond in JSON only:
+{"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "signal"}], "strongFits": [], "redFlags": [], "hardDQ": {"flagged": boolean, "reasons": []}, "roleBrief": {"roleSummary": "", "whyInteresting": "", "concerns": "", "compSummary": "", "qualificationMatch": "", "qualificationScore": number 1-5}}`;
 
   const quickFitModel = getModelForTask('quickFitScoring');
   const { reply, error } = await chatWithFallback({
     model: quickFitModel,
-    system: 'You are a precise job-fit scoring assistant. Respond with valid JSON only.',
+    system: 'You are a precise job-fit scoring and role analysis assistant. Respond with valid JSON only.',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 600,
+    max_tokens: 1000,
     tag: 'QuickFit'
   });
 
@@ -878,6 +1209,7 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTak
   let strongFits = [];
   let redFlags = [];
   let hardDQ = { flagged: false, reasons: [] };
+  let roleBrief = null;
   try {
     const jsonMatch = reply.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -888,6 +1220,7 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTak
       strongFits = parsed.strongFits || [];
       redFlags = parsed.redFlags || [];
       hardDQ = parsed.hardDQ || { flagged: false, reasons: [] };
+      roleBrief = parsed.roleBrief || null;
     }
   } catch (parseErr) {
     console.warn('[QuickFit] Failed to parse response:', reply);
@@ -895,10 +1228,19 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTak
   }
 
   // Consistency check: Hard DQ + high score is contradictory — cap score
-  if (hardDQ.flagged && score > 3) {
-    console.log(`[QuickFit] Score ${score} contradicts Hard DQ — capping at 3`);
-    score = 3;
+  if (hardDQ.flagged && score > 4) {
+    console.log(`[QuickFit] Score ${score} with Hard DQ — capping at 4`);
+    score = 4;
     reason = (hardDQ.reasons?.[0] || reason);
+  }
+
+  // Post-AI override: hard dealbreaker keyword matches force flagging
+  if (keywordHits.hardDQ.length && !hardDQ.flagged) {
+    console.log(`[QuickFit] Hard DQ keyword override: ${keywordHits.hardDQ.map(h => h.keyword).join(', ')}`);
+    hardDQ.flagged = true;
+    hardDQ.reasons = [...(hardDQ.reasons || []), ...keywordHits.hardDQ.map(h => `Keyword "${h.keyword}" matched: ${h.entry}`)];
+    if (score > 2) score = 2;
+    redFlags = [...redFlags, ...keywordHits.hardDQ.map(h => `Hard dealbreaker keyword "${h.keyword}" detected`)];
   }
 
   // Save result to the entry
@@ -921,6 +1263,7 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTak
       verdict: reason ?? existing.verdict,
       strongFits: strongFits.length ? strongFits : existing.strongFits || [],
       redFlags: redFlags.length ? redFlags : existing.redFlags || [],
+      roleBrief: roleBrief || existing.roleBrief || null,
       lastUpdatedBy: 'quick_fit',
       lastUpdatedAt: Date.now()
     };
@@ -928,6 +1271,9 @@ Respond in JSON only: {"score": number 1-10, "reason": "one sentence", "quickTak
       chrome.storage.local.set({ savedCompanies: freshEntries }, resolve)
     );
   }
+
+  // Auto-sync fields after scoring
+  syncEntryFields(entryId).catch(e => console.warn('[SyncFields] Post-score sync failed:', e));
 
   // Broadcast completion to all extension views
   chrome.runtime.sendMessage({
@@ -1370,6 +1716,7 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
       `--- ${d.filename} ---\n${d.extractedText.slice(0, 1500)}`
     ).join('\n\n')}\n`;
   }
+  if (rc.candidateProfile) richSection += `\nCandidate Career OS Profile:${rc.candidateProfile}\n`;
   if (rc.matchFeedback) richSection += `\nPrevious assessment feedback: ${rc.matchFeedback}\n`;
 
   const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
@@ -1459,7 +1806,12 @@ If none clearly apply, set hardDQ.flagged to false. When in doubt, do NOT flag.
       if (!fallback.error) return JSON.parse(fallback.reply.replace(/```json|```/g, '').trim());
       return null;
     }
-    return JSON.parse(aiResult.text.replace(/```json|```/g, '').trim());
+    const result = JSON.parse(aiResult.text.replace(/```json|```/g, '').trim());
+    // Log when Hard DQ contradicts score — but don't force-cap, the DQ might be wrong
+    if (result?.jobMatch?.hardDQ?.flagged && result.jobMatch.score > 4) {
+      console.warn(`[AnalyzeJob] Hard DQ flagged but score is ${result.jobMatch.score} — AI may have misidentified the DQ`);
+    }
+    return result;
   } catch (err) {
     return null;
   }
@@ -1839,14 +2191,16 @@ ${searchSnippets || 'None'}
 Leadership Search Results:
 ${leaderSnippets || 'None'}
 
+CRITICAL: Search results may contain information about MULTIPLE companies with similar names. Before writing your response, identify which company matches the domain "${domain || company}" and ONLY use information about THAT specific company. If the search results describe two different products/businesses, pick the one that matches the domain. ALL fields in "intelligence" must describe the SAME company — if oneLiner says "staffing", then whosBuyingIt and howItWorks must also be about staffing, NOT about a different product.
+
 Respond with a JSON object only, no markdown:
 {
   "intelligence": {
     "oneLiner": "<one sentence, plain English — what does this company do and for whom>",
     "eli5": "<2-3 sentences explaining what they do like you're explaining to a smart friend>",
-    "whosBuyingIt": "<who are the typical buyers — role, company size, pain point>",
+    "whosBuyingIt": "<who are the typical buyers — role, company size, pain point — MUST be consistent with oneLiner>",
     "category": "<type of company, e.g. 'B2B SaaS, payments infrastructure'>",
-    "howItWorks": "<2-3 sentences on core product mechanics and what makes it defensible>"
+    "howItWorks": "<2-3 sentences on core product mechanics and what makes it defensible — MUST describe the same product as oneLiner>"
   },
   "firmographics": {
     "employees": "<headcount or range extracted from search results, e.g. '50-200' or '~500' — null if truly unknown>",
@@ -1973,6 +2327,38 @@ function extractEmailBody(payload) {
     if (nested) return nested;
   }
   return '';
+}
+
+// ── Rejection email detection (regex-only, zero cost) ────────────────────────
+function detectRejectionEmailBg(emails, entry) {
+  if (!emails?.length) return null;
+  const REJECTION_PHRASES = [
+    /we(?:'ve| have) decided to (?:move|go) forward with (?:other|another|different) candidate/i,
+    /(?:unfortunately|regretfully),?\s*we (?:will not|won't|are unable to|cannot) (?:be )?(?:move|moving|proceed|proceeding) forward/i,
+    /(?:unfortunately|regretfully),?\s*(?:we|the team|I) (?:have|has) decided (?:not )?to (?:not )?(?:move|proceed|continue)/i,
+    /(?:the )?position has been filled/i,
+    /after careful (?:consideration|review|deliberation).*?(?:not|won't|unable).*?(?:move|moving|proceed|offer)/i,
+    /we(?:'re| are) not (?:able to )?(?:move|moving|proceed) forward with your (?:application|candidacy)/i,
+    /(?:we|I) (?:regret|am sorry|are sorry) to inform you/i,
+    /your (?:application|candidacy) (?:was|has been) (?:not selected|unsuccessful|rejected)/i,
+    /we(?:'ve| have) (?:chosen|selected|decided on) (?:a |an )?(?:other|another|different) candidate/i,
+    /(?:not|won't) be (?:extending|making) (?:you )?an offer/i,
+    /decided to (?:pursue|explore) other (?:candidates|directions|options)/i,
+    /will not be (?:advancing|continuing) (?:your|with your)/i,
+  ];
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  if ((entry.tags || []).includes('Application Rejected')) return null;
+  for (const email of emails) {
+    const emailDate = email.date ? new Date(email.date).getTime() : 0;
+    if (emailDate && emailDate < cutoff) continue;
+    const text = [email.subject || '', email.snippet || '', (email.body || '').slice(0, 800)].join(' ');
+    for (const pattern of REJECTION_PHRASES) {
+      if (pattern.test(text)) {
+        return { subject: email.subject, from: email.from, date: email.date, snippet: email.snippet };
+      }
+    }
+  }
+  return null;
 }
 
 async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactEmails) {
@@ -2127,7 +2513,9 @@ async function buildCoopProfileContext() {
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
   const profileKeys = ['profileLinks', 'profileStory', 'profileExperience', 'profilePrinciples',
     'profileMotivators', 'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
-    'profileResume', 'profileSkills', 'storyTime'];
+    'profileResume', 'profileSkills', 'storyTime',
+    'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
+    'profileRoleICP', 'profileCompanyICP', 'profileInterviewLearnings'];
   const profileData = await new Promise(r => chrome.storage.local.get(profileKeys, r));
   const parts = [];
 
@@ -2156,15 +2544,56 @@ async function buildCoopProfileContext() {
   const resume = profileData.profileResume?.content || prefs.resumeText;
   if (resume) parts.push(`\n[Resume]\n${resume.slice(0, 3000)}`);
 
-  // Green & Red Lights
-  const greenLights = profileData.profileGreenLights || [prefs.roles, prefs.roleLoved, prefs.interests].filter(Boolean).join('\n');
-  if (greenLights) parts.push(`\n[Green Lights]\n${greenLights.slice(0, 2000)}`);
-  const redLights = profileData.profileRedLights || [prefs.avoid, prefs.roleHated].filter(Boolean).join('\n');
-  if (redLights) parts.push(`\n[Red Lights]\n${redLights.slice(0, 2000)}`);
+  // Structured: Attracted To / Dealbreakers (with legacy fallback)
+  const attractedTo = profileData.profileAttractedTo || [];
+  const dealbreakers = profileData.profileDealbreakers || [];
+  if (attractedTo.length) {
+    parts.push(`\n[Attracted To (structured)]\n${attractedTo.map(e =>
+      `- [${e.category}] ${e.text}${e.keywords?.length ? ` {keywords: ${e.keywords.join(', ')}}` : ''}`
+    ).join('\n')}`);
+  } else {
+    const greenLights = profileData.profileGreenLights || [prefs.roles, prefs.roleLoved, prefs.interests].filter(Boolean).join('\n');
+    if (greenLights) parts.push(`\n[Green Lights]\n${greenLights.slice(0, 2000)}`);
+  }
+  if (dealbreakers.length) {
+    parts.push(`\n[Dealbreakers (structured)]\n${dealbreakers.map(e =>
+      `- [${e.category}/${e.severity}] ${e.text}${e.keywords?.length ? ` {keywords: ${e.keywords.join(', ')}}` : ''}`
+    ).join('\n')}`);
+  } else {
+    const redLights = profileData.profileRedLights || [prefs.avoid, prefs.roleHated].filter(Boolean).join('\n');
+    if (redLights) parts.push(`\n[Red Lights]\n${redLights.slice(0, 2000)}`);
+  }
 
-  // Skills
+  // Role ICP
+  const roleICP = profileData.profileRoleICP || {};
+  if (roleICP.text || roleICP.targetFunction) {
+    const attrs = [roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion, roleICP.teamSizePreference].filter(Boolean);
+    parts.push(`\n[Role ICP]\n${roleICP.text || ''}${attrs.length ? '\nAttributes: ' + attrs.join(' | ') : ''}`);
+  }
+
+  // Company ICP
+  const companyICP = profileData.profileCompanyICP || {};
+  if (companyICP.text || companyICP.stage) {
+    const attrs = [companyICP.stage, companyICP.sizeRange, (companyICP.industryPreferences || []).join(', '), (companyICP.cultureMarkers || []).join(', ')].filter(Boolean);
+    parts.push(`\n[Company ICP]\n${companyICP.text || ''}${attrs.length ? '\nAttributes: ' + attrs.join(' | ') : ''}`);
+  }
+
+  // Skills + tags
   const skills = profileData.profileSkills || prefs.jobMatchBackground;
-  if (skills) parts.push(`\n[Skills & Intangibles]\n${skills}`);
+  const skillTags = profileData.profileSkillTags || [];
+  if (skills || skillTags.length) {
+    let skillSection = skills || '';
+    if (skillTags.length) skillSection += `\nSkill tags: ${skillTags.join(', ')}`;
+    parts.push(`\n[Skills & Intangibles]\n${skillSection}`);
+  }
+
+  // Interview learnings
+  const learnings = profileData.profileInterviewLearnings || [];
+  if (learnings.length) {
+    parts.push(`\n[Interview Learnings]\n${learnings.slice(-10).map(l =>
+      `- ${l.text}${l.source ? ` (${l.source})` : ''}${l.date ? ` [${l.date}]` : ''}`
+    ).join('\n')}`);
+  }
 
   // Location & logistics
   const locParts = [];
@@ -2219,7 +2648,7 @@ async function buildCoopPipelineSummary() {
   return `\n=== YOUR FULL PIPELINE (${entries.length} entries) ===\n${lines}`;
 }
 
-async function handleCoopMessage({ messages, context, globalChat, pipeline, enrichments, chatModel }) {
+async function handleCoopMessage({ messages, context, globalChat, pipeline, enrichments, chatModel, careerOSChat }) {
   context = context || {};
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -2245,16 +2674,63 @@ async function handleCoopMessage({ messages, context, globalChat, pipeline, enri
     ? `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have full visibility across Matt's job search pipeline. You know his background, values, and preferences. You can see every company and opportunity he's tracking.\n\nHelp him prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When he mentions a specific company or person, use the pipeline context to inform your response.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about him. Don't be sycophantic.\n\nResponse style: Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.`
     : `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. You ALSO have visibility across the full pipeline — you can compare this opportunity to others and give strategic advice.\n\nUse ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.\n\nResponse style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.`;
 
-  const systemParts = [identityPrompt, `\n=== TODAY ===\n${todayStr}`];
+  const systemParts = [identityPrompt, `\n=== TODAY ===\n${todayStr}`,
+    `\nCRITICAL RULE: You have the user's FULL Career OS profile loaded in your context — their story, experience, accomplishments, skills, resume, preferences, and everything they've told you. ALWAYS use this data first. When helping with applications, DRAFT an answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information that's already in your context. If they ask you to write something about their background, write it immediately using what you have.`];
 
   // Layer 2: Application helper mode (if active)
   if (context._applicationMode) {
     systemParts.push(`\n=== APPLICATION HELPER MODE ===\nSITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.\n\nVOICE & TONE:\n- Write as the user in first person. Conversational, confident, specific.\n- Sound like a smart person talking, not an AI writing.\n- No dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.\n\nLENGTH: 2-5 sentences unless the user specifies otherwise.\n\nOUTPUT FORMAT:\n- Give ONE clean answer the user can copy-paste directly.\n- No preamble, no alternatives unless asked, no commentary after.\n- NEVER wrap in quotation marks.\n\nWhen the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
   }
 
+  // Layer 2b: Career OS editor mode
+  if (careerOSChat) {
+    systemParts.push(`\n=== CAREER OS EDITOR MODE ===
+You are on the Career OS preferences page. The user can ask you to view, add, or update their structured profile.
+
+You have full visibility into their structured profile fields:
+- Attracted To: structured entries with text, category, severity, and keyword triggers
+- Dealbreakers: structured entries with text, category, severity (hard/soft), and keyword triggers
+- Skill Tags: array of searchable skill labels
+- Role ICP: target function, seniority, scope, selling motion, team size preference
+- Company ICP: stage, size range, industry preferences, culture markers
+- Interview Learnings: text + source company + date
+
+When the user asks to ADD or UPDATE profile data, respond with your explanation AND a code fence containing the structured update:
+
+\`\`\`career-os-update
+{"action":"add","target":"dealbreakers","data":{"text":"Companies that glorify grit culture","category":"culture","severity":"hard","keywords":["grit","hustle","grind"]}}
+\`\`\`
+
+Valid targets: attractedTo, dealbreakers, skillTags, roleICP, companyICP, learnings
+Valid actions: add
+
+For skillTags, data is a string array: {"action":"add","target":"skillTags","data":["Salesforce","HubSpot"]}
+For ICP updates, data is a partial object to merge: {"action":"add","target":"roleICP","data":{"seniority":"VP","targetFunction":"GTM"}}
+
+When asked "what are my dealbreakers?" or similar, read back the structured data clearly.
+Always suggest relevant keywords when adding entries — keywords enable deterministic matching during job scoring.
+
+You can also change system settings when asked. Use a \`\`\`settings-update code fence:
+
+\`\`\`settings-update
+{"action":"update","setting":"chatModel","value":"claude-haiku-4-5-20251001","label":"Claude Haiku"}
+\`\`\`
+
+Valid settings:
+- chatModel: the default model for Coop chat (e.g. "gpt-4.1-mini", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250514")
+- scoringModel: model used for job scoring
+- researchModel: model used for company research
+
+When the user asks to switch models, change defaults, or adjust settings, respond with the settings-update block AND a brief confirmation of what will change and the cost impact.`);
+  }
+
   // Layer 3: Profile context (always — same for company + global)
   const profileContext = await buildCoopProfileContext();
-  if (profileContext) systemParts.push(profileContext);
+  if (profileContext) {
+    systemParts.push(profileContext);
+  } else {
+    console.warn('[Coop Chat] WARNING: Profile context is empty — user data may not be loaded');
+  }
 
   // Layer 4: Pipeline summary (ALWAYS — this is the key unification)
   const pipelineSummary = pipeline || await buildCoopPipelineSummary();
@@ -2322,7 +2798,17 @@ async function handleCoopMessage({ messages, context, globalChat, pipeline, enri
         const header = `--- Meeting: ${m.title || 'Untitled'} | ${m.date || 'unknown date'}${rel}${m.time ? ' at ' + m.time : ''} ---`;
         let body = '';
         if (m.summaryMarkdown) body += `-- Granola AI Summary --\n${m.summaryMarkdown}\n\n`;
-        body += (m.transcript || '').slice(0, 4000);
+        // Replace microphone/speaker labels with names
+        let transcript = (m.transcript || '');
+        const attendeeNames = (m.attendeeNames || m.attendees || '').toString();
+        if (attendeeNames) {
+          const others = attendeeNames.split(/[,;]/).map(n => n.trim()).filter(n => n && !n.toLowerCase().includes('matt'));
+          const otherName = others.length === 1 ? others[0].split(' ')[0] : others.length > 1 ? others.map(n => n.split(' ')[0]).join('/') : 'Other';
+          transcript = transcript.replace(/\bmicrophone:/g, 'Matt:').replace(/\bspeaker:/g, otherName + ':');
+        } else {
+          transcript = transcript.replace(/\bmicrophone:/g, 'Matt:').replace(/\bspeaker:/g, 'Other:');
+        }
+        body += transcript.slice(0, 4000);
         return `${header}\n${body}`;
       }).join('\n\n');
       systemParts.push(`\n=== MEETING TRANSCRIPTS (${context.meetings.length} meetings) ===\n${mtgLines}`);
@@ -2349,17 +2835,204 @@ async function handleCoopMessage({ messages, context, globalChat, pipeline, enri
     }
   }
 
-  // Layer 6: On-demand enrichments for mentioned companies (global chat)
+  // Layer 6: Entry update proposals (company context only)
+  if (!globalChat && !careerOSChat && context.company) {
+    systemParts.push(`\n=== ENTRY UPDATE PROPOSALS ===
+When the user asks you to update, change, or fix data about this company/opportunity, respond with your explanation AND a code fence containing the update:
+
+\`\`\`entry-update
+{"field":"status","value":"interviewing","label":"Move to Interviewing"}
+\`\`\`
+
+You can propose multiple updates in one response — use a separate code fence for each.
+
+Valid fields and example values:
+- status: "watching", "applied", "interviewing", "offer", "rejected", "passed", "closed"
+- jobTitle: any string (the role title)
+- jobStage: "interested", "applied", "phone-screen", "interview", "final-round", "offer", "rejected"
+- rating: 1-5 (integer)
+- tags: ["tag1", "tag2"] (replaces all tags)
+- addTags: ["new-tag"] (appends without removing existing)
+- removeTags: ["old-tag"] (removes specific tags)
+- notes: "text to append" (appends to existing notes, does NOT replace)
+- companyWebsite: URL string
+- companyLinkedin: URL string
+
+Always include a "label" field with a short human-readable description of the change.
+Only propose changes when the user explicitly asks. Don't proactively suggest updates unless something is clearly wrong or missing.`);
+  }
+
+  // Layer 7: Task creation (always available)
+  systemParts.push(`\n=== TASK CREATION ===
+When the user asks you to create a task, reminder, or to-do, respond with your confirmation AND a code fence:
+
+\`\`\`create-task
+{"text":"Follow up with Sarah about the interview","company":"Amagi","dueDate":"2026-04-05","priority":"normal","label":"Task: Follow up with Sarah"}
+\`\`\`
+
+Fields:
+- text (required): what needs to be done
+- company (optional): company name if task is related to one
+- dueDate (optional): YYYY-MM-DD format. If the user says "tomorrow", calculate the date. If not specified, use today.
+- priority (optional): "low", "normal" (default), or "high"
+- label (required): short human-readable description for the proposal card
+
+You can create multiple tasks in one response with separate code fences.
+When the user says things like "remind me to", "don't forget to", "I need to", "add a task", "todo" — create a task.`);
+
+  // Layer 8: On-demand enrichments for mentioned companies (global chat)
   if (enrichments) systemParts.push(enrichments);
 
   // Send to AI
   const lastUserMsg = messages[messages.length - 1]?.content || '';
   const hasTrigger = /remember this|remember that|don't forget|from now on|always\s+(?:lead|start|use|mention|include)|never\s+(?:say|mention|use|include)|update my profile|add this to/i.test(lastUserMsg);
 
+  // ── Smart context routing: use only the tokens needed ──────────────────────
+  const lowerMsg = lastUserMsg.toLowerCase().trim();
+  const userMsgCount = messages.filter(m => m.role === 'user').length;
+  const isFirstMessage = userMsgCount === 1;
+  const fullSystemText = systemParts.join('\n');
+  const fullSize = fullSystemText.length;
+
+  // Tier 1: Simple data entry — Nano + minimal context (~500 chars)
+  const SIMPLE_CAREER_OS = [
+    /^(?:add|create|new)\s+(?:a\s+)?(?:dealbreaker|attracted|skill|tag|learning)/i,
+    /^(?:add|remove)\s+tag/i,
+    /^(?:switch|change|use|set)\s+(?:to\s+)?(?:model|haiku|sonnet|opus|gpt|nano|mini)/i,
+    /^(?:add|append)\s+(?:a\s+)?note/i,
+  ];
+  const SIMPLE_ENTRY_UPDATE = [
+    /^(?:set|change|update|move)\s+(?:status|stage|rating)\s/i,
+    /^(?:add|remove)\s+tag/i,
+    /^(?:mark|move)\s+(?:as|to)\s+(?:watching|applied|interviewing|offer|rejected|passed|closed)/i,
+    /^(?:rate|rating)\s+\d/i,
+  ];
+  const isSimpleCareerOS = careerOSChat && SIMPLE_CAREER_OS.some(p => p.test(lowerMsg));
+  const isSimpleEntry = !globalChat && !careerOSChat && context.company && SIMPLE_ENTRY_UPDATE.some(p => p.test(lowerMsg));
+
+  if (isSimpleCareerOS || isSimpleEntry) {
+    const slimParts = [systemParts[0]];
+    // Always include profile — prompt caching makes this nearly free
+    const profileLayer = systemParts.find(p => p.includes('[Your Story]') || p.includes('[Personal Info]') || p.includes('[Experience'));
+    if (profileLayer) slimParts.push(profileLayer);
+    if (isSimpleCareerOS) {
+      const layer = systemParts.find(p => p.includes('CAREER OS EDITOR MODE'));
+      if (layer) slimParts.push(layer);
+    }
+    if (isSimpleEntry) {
+      const layer = systemParts.find(p => p.includes('ENTRY UPDATE PROPOSALS'));
+      if (layer) slimParts.push(layer);
+      slimParts.push(`Company: ${context.company}${context.jobTitle ? ' | Role: ' + context.jobTitle : ''}${context.status ? ' | Status: ' + context.status : ''}`);
+    }
+    const slimSystem = slimParts.join('\n');
+    const slimModel = OPENAI_KEY ? 'gpt-4.1-nano' : 'claude-haiku-4-5-20251001';
+    console.log(`[Coop] ROUTED → Tier 1 (slim) | ${slimModel} | ${slimSystem.length} chars (${Math.round((1 - slimSystem.length/fullSize) * 100)}% saved)`);
+    try {
+      const result = await chatWithFallback({ model: slimModel, system: slimSystem, messages, max_tokens: 1024, tag: 'Chat-Slim' });
+      if (!result.error) return { reply: result.reply, model: result.usedModel, usage: result.usage, routed: 'slim' };
+    } catch (e) { console.warn('[Coop] Tier 1 failed, escalating:', e.message); }
+  }
+
+  // Tier 2: Medium context — follow-up messages OR simple company questions
+  // On follow-ups, the full profile/pipeline is already in conversation history from msg 1.
+  // Only resend identity + company context + proposal instructions. Skip profile & pipeline layers.
+  const NEEDS_FULL_CONTEXT = [
+    /compare|rank|prioritize|pipeline|all (?:my |the )?(?:companies|opportunities|roles)/i,
+    /interview prep|help me prepare|mock interview/i,
+    /draft|write|compose|email|message|cover letter|follow.?up/i,
+    /what (?:do you|should|would you) (?:think|recommend|suggest)/i,
+    /strategy|strategic|game plan|next steps for my search/i,
+    /my (?:story|background|experience|resume|profile|preferences|dealbreakers)/i,
+    /remember|from now on|always|never/i,
+    /apply|application|help me answer|brag|accomplish|achievement|award|recognition|qualification/i,
+    /do you know|tell me about|what do you know/i,
+    /salesbricks|rep\.ai|navless|tourial|captivate/i,
+  ];
+  const needsFullContext = NEEDS_FULL_CONTEXT.some(p => p.test(lowerMsg));
+  const isFollowUp = !isFirstMessage && !needsFullContext;
+
+  if (isFollowUp) {
+    // Build medium context: identity + today + profile + company context + proposals
+    const mediumParts = [systemParts[0]]; // Layer 1: identity
+    mediumParts.push(`\n=== TODAY ===\n${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`);
+    // ALWAYS include profile context — Coop must know who the user is on every message
+    const profileLayer = systemParts.find(p => p.includes('[Your Story]') || p.includes('[Personal Info]') || p.includes('[Experience'));
+    if (profileLayer) mediumParts.push(profileLayer);
+    // Include Career OS editor or entry update instructions if applicable
+    if (careerOSChat) {
+      const layer = systemParts.find(p => p.includes('CAREER OS EDITOR MODE'));
+      if (layer) mediumParts.push(layer);
+    }
+    if (!globalChat && context.company) {
+      // Include company overview + intel + job details (skip emails, meetings, transcripts)
+      const companyOverview = systemParts.find(p => p.includes('CURRENT COMPANY / OPPORTUNITY'));
+      if (companyOverview) mediumParts.push(companyOverview);
+      const intelSection = systemParts.find(p => p.includes('COMPANY INTELLIGENCE'));
+      if (intelSection) mediumParts.push(intelSection);
+      const jobSection = systemParts.find(p => p.includes('JOB DETAILS'));
+      if (jobSection) mediumParts.push(jobSection);
+      const entryLayer = systemParts.find(p => p.includes('ENTRY UPDATE PROPOSALS'));
+      if (entryLayer) mediumParts.push(entryLayer);
+    }
+    const mediumSystem = mediumParts.join('\n');
+    const mediumModel = chatModel || pipelineConfig.aiModels?.chat || 'gpt-4.1-mini';
+    console.log(`[Coop] ROUTED → Tier 2 (medium, follow-up #${userMsgCount}) | ${mediumModel} | ${mediumSystem.length} chars (${Math.round((1 - mediumSystem.length/fullSize) * 100)}% saved)`);
+    try {
+      const result = await chatWithFallback({ model: mediumModel, system: mediumSystem, messages, max_tokens: 2048, tag: 'Chat-Medium' });
+      if (!result.error) {
+        const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
+        if (hasTrigger) await _doExtractInsightsFromChat(lastUserMsg, result.reply, source);
+        else extractInsightsFromChat(lastUserMsg, result.reply, source);
+        return { reply: result.reply, model: result.usedModel, usage: result.usage, routed: 'medium' };
+      }
+    } catch (e) { console.warn('[Coop] Tier 2 failed, escalating to full:', e.message); }
+  }
+
+  // Tier 3: Full pipeline — first messages, strategy, comparisons, drafting
+
+  // Auto-fetch URLs in the user's message
+  const urlPattern = /https?:\/\/[^\s<>"')\]]+/gi;
+  const urls = (lastUserMsg.match(urlPattern) || []).slice(0, 3); // max 3 URLs
+  if (urls.length) {
+    const fetched = [];
+    for (const url of urls) {
+      try {
+        console.log('[Coop] Fetching URL:', url);
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+        if (res.ok) {
+          const html = await res.text();
+          // Extract text content from HTML
+          const text = html
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+            .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 6000);
+          if (text.length > 50) {
+            fetched.push(`\n=== WEB PAGE: ${url} ===\n${text}`);
+          }
+        }
+      } catch (e) {
+        console.warn('[Coop] Failed to fetch URL:', url, e.message);
+      }
+    }
+    if (fetched.length) {
+      systemParts.push(fetched.join('\n'));
+      systemParts.push('\nThe user shared URL(s) above. Use the fetched page content to inform your response. Summarize what you find relevant.');
+    }
+  }
+
   try {
     const systemText = systemParts.join('\n');
-    const model = chatModel || pipelineConfig.aiModels?.chat || 'claude-sonnet-4-6';
-    console.log('[Coop] Model:', model, '| prompt:', systemText.length, 'chars | global:', !!globalChat, '| company:', context.company || '(none)');
+    const model = chatModel || getModelForTask('chat');
+    console.log(`[Coop] ROUTED → Tier 3 (full) | ${model} | ${systemText.length} chars | global: ${!!globalChat} | company: ${context.company || '(none)'}`);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat' });
     if (result.error) return result;
     const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
@@ -2368,7 +3041,7 @@ async function handleCoopMessage({ messages, context, globalChat, pipeline, enri
     } else {
       extractInsightsFromChat(lastUserMsg, result.reply, source);
     }
-    return { reply: result.reply, model: result.usedModel };
+    return { reply: result.reply, model: result.usedModel, usage: result.usage, routed: 'full' };
   } catch (err) {
     console.error('[Coop] Error:', err);
     return { error: err.message };
@@ -2663,7 +3336,7 @@ When the user first enters this mode, respond: "Paste the application question a
   try {
     const systemText = systemParts.join('\n');
     console.log('[Chat] System prompt length:', systemText.length, 'chars');
-    const model = chatModel || pipelineConfig.aiModels?.chat || 'claude-sonnet-4-6';
+    const model = chatModel || getModelForTask('chat');
     console.log('[Chat] Using model:', model);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'Chat' });
     if (result.error) return result;
@@ -2787,7 +3460,7 @@ async function _oldHandleGlobalChatMessage({ messages, pipeline, enrichments, ch
 
   try {
     const systemText = systemParts.join('\n');
-    const model = chatModel || pipelineConfig.aiModels?.chat || 'claude-sonnet-4-6';
+    const model = chatModel || getModelForTask('chat');
     console.log('[GlobalChat] Using model:', model, '| prompt length:', systemText.length);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: 'GlobalChat' });
     if (result.error) return result;
@@ -2902,13 +3575,13 @@ async function routeInsights(insights, source) {
       context: insight.context || null,
     });
 
-    // Route to specific profile fields
+    // Route to specific profile fields (structured entries preferred, legacy fallback)
     if (insight.target_field === 'profileGreenLights' && insight.category === 'green_light') {
-      profileUpdates.profileGreenLights = true;
+      profileUpdates.profileAttractedTo = true;
       profileChanged = true;
     }
     if (insight.target_field === 'profileRedLights' && insight.category === 'red_light') {
-      profileUpdates.profileRedLights = true;
+      profileUpdates.profileDealbreakers = true;
       profileChanged = true;
     }
     if (insight.target_field === 'rawInput' && insight.category === 'experience_update') {
@@ -2928,15 +3601,40 @@ async function routeInsights(insights, source) {
   // Save storyTime
   chrome.storage.local.set({ storyTime: st });
 
-  // Append to profile fields
+  // Write to structured entries (preferred) with legacy text fallback
   if (profileChanged) {
-    chrome.storage.local.get(Object.keys(profileUpdates), data => {
+    chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'profileGreenLights', 'profileRedLights'], data => {
       const updates = {};
       for (const insight of insights) {
-        if (insight.target_field === 'profileGreenLights') {
+        if (insight.target_field === 'profileGreenLights' && insight.category === 'green_light') {
+          // Write structured entry
+          const arr = data.profileAttractedTo || [];
+          arr.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            text: insight.text,
+            category: 'other',
+            keywords: [],
+            source: source,
+            createdAt: Date.now()
+          });
+          updates.profileAttractedTo = arr;
+          // Also append to legacy text for backward compat
           updates.profileGreenLights = (data.profileGreenLights || '') + '\n' + insight.text;
         }
-        if (insight.target_field === 'profileRedLights') {
+        if (insight.target_field === 'profileRedLights' && insight.category === 'red_light') {
+          // Write structured entry
+          const arr = data.profileDealbreakers || [];
+          arr.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            text: insight.text,
+            category: 'other',
+            severity: 'soft',
+            keywords: [],
+            source: source,
+            createdAt: Date.now()
+          });
+          updates.profileDealbreakers = arr;
+          // Also append to legacy text for backward compat
           updates.profileRedLights = (data.profileRedLights || '') + '\n' + insight.text;
         }
       }
@@ -2984,7 +3682,7 @@ ${insights || '(none yet)'}`;
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: getModelForTask('profileConsolidate'),
         max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -2998,6 +3696,106 @@ ${insights || '(none yet)'}`;
 }
 
 // ── Role Brief Generation ────────────────────────────────────────────────────
+
+// ── Unified field sync — called after any data ingestion ─────────────────────
+async function syncEntryFields(entryId) {
+  const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+  const entries = savedCompanies || [];
+  const idx = entries.findIndex(e => e.id === entryId);
+  if (idx === -1) return;
+  const e = entries[idx];
+  const updates = {};
+
+  console.log('[SyncFields] Running for', e.company, '| roleBrief type:', typeof e.roleBrief, '| roleBrief keys:', e.roleBrief ? Object.keys(e.roleBrief) : 'null', '| jobTitle:', e.jobTitle || '(empty)');
+
+  // Sources to scan
+  const brief = String(typeof e.roleBrief === 'object' ? (e.roleBrief?.content || e.roleBrief?.brief || '') : (e.roleBrief || ''));
+  console.log('[SyncFields] Brief text length:', brief.length, '| first 200 chars:', brief.slice(0, 200));
+  const intel = e.intelligence || {};
+  const jd = e.jobDescription || '';
+  const snapshot = e.jobSnapshot || {};
+  const allText = [brief, intel.eli5, intel.howItWorks, intel.whosBuyingIt, jd].filter(Boolean).join(' ');
+
+  // Job title — from brief, job description, or snapshot
+  if (!e.jobTitle || e.jobTitle === 'New Opportunity') {
+    const m = brief.match(/\*{0,2}Title:\*{0,2}\s*(.+?)(?:\n|\(|;|$)/i)
+      || brief.match(/Title[:\s]+([A-Z][^(\n;]{2,60})/i)
+      || brief.match(/^#+ .*?—\s*(.+?)(?:\s+Role Brief|\n|$)/im);
+    if (m) {
+      const title = m[1].trim().replace(/\*+/g, '').replace(/Role Brief$/i, '').trim();
+      if (title.length > 2 && title.length < 80) updates.jobTitle = title;
+    }
+  }
+
+  // Employees
+  if (!e.employees) {
+    const m = allText.match(/(\d[\d,]*\s*[-–]\s*\d[\d,]*)\s*employees/i)
+      || allText.match(/(~?\d[\d,]+)\s*employees/i);
+    if (m) updates.employees = m[1].trim();
+  }
+
+  // Funding
+  if (!e.funding) {
+    const m = allText.match(/(Series\s+[A-F][\w]*(?:\s*[-–,]\s*\$[\d.]+[BMK])?)/i)
+      || allText.match(/raised\s+(\$[\d.]+[BMK]\w*)/i);
+    if (m) updates.funding = m[1].trim();
+  }
+
+  // Salary from brief or snapshot
+  if (!e.baseSalaryRange) {
+    const m = brief.match(/base[:\s]*\$?([\d,]+[Kk]?\s*[-–]\s*\$?[\d,]+[Kk]?)/i)
+      || brief.match(/salary[:\s]*\$?([\d,]+[Kk]?\s*[-–]\s*\$?[\d,]+[Kk]?)/i);
+    if (m) updates.baseSalaryRange = m[1].trim();
+    else if (snapshot.salary && snapshot.salaryType === 'base') updates.baseSalaryRange = snapshot.salary;
+  }
+  if (!e.oteTotalComp) {
+    const m = brief.match(/OTE[:\s]*\$?([\d,]+[Kk]?\s*[-–]\s*\$?[\d,]+[Kk]?)/i);
+    if (m) updates.oteTotalComp = m[1].trim();
+    else if (snapshot.salary && snapshot.salaryType === 'ote') updates.oteTotalComp = snapshot.salary;
+  }
+
+  // Work arrangement from snapshot
+  if (!e.workArrangement && snapshot.workArrangement) updates.workArrangement = snapshot.workArrangement;
+
+  // Company LinkedIn from any URL in known data
+  if (!e.companyLinkedin) {
+    const m = allText.match(/linkedin\.com\/company\/[a-z0-9_-]+/i);
+    if (m) updates.companyLinkedin = 'https://www.' + m[0];
+  }
+
+  // Founded
+  if (!e.founded) {
+    const m = allText.match(/founded\s*(?:in\s*)?(\d{4})/i) || allText.match(/(\d{4})\s*[-–]\s*present/i);
+    if (m) updates.founded = m[1];
+  }
+
+  // Equity from brief
+  if (!e.equity) {
+    const m = brief.match(/equity[:\s]*([\d.]+%?\s*[-–]\s*[\d.]+%?)/i) || brief.match(/([\d.]+%\s*[-–]\s*[\d.]+%)\s*equity/i);
+    if (m) updates.equity = m[1].trim();
+  }
+
+  // Company website from any URL in data
+  if (!e.companyWebsite) {
+    const m = allText.match(/https?:\/\/(?:www\.)?([a-z0-9-]+\.[a-z]{2,})/i);
+    if (m && !m[1].includes('linkedin.com') && !m[1].includes('glassdoor') && !m[1].includes('google')) {
+      updates.companyWebsite = 'https://' + m[1];
+    }
+  }
+
+  // Industry from intelligence
+  if (!e.industry && intel.category) updates.industry = intel.category;
+
+  // Intelligence fields to top level
+  if (intel.oneLiner && !e.oneLiner) updates.oneLiner = intel.oneLiner;
+  if (intel.category && !e.category) updates.category = intel.category;
+
+  if (Object.keys(updates).length) {
+    console.log('[SyncFields] Auto-filling for', e.company, ':', Object.keys(updates).join(', '));
+    Object.assign(entries[idx], updates);
+    await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));
+  }
+}
 
 async function generateRoleBrief({ company, jobTitle, jobDescription, jobSnapshot, emails, meetings, meetingTranscript, notes, knownContacts }) {
   const contextParts = [];
@@ -3077,7 +3875,7 @@ Then write the full role brief below.`;
 
   try {
     const result = await chatWithFallback({
-      model: 'claude-sonnet-4-6',
+      model: getModelForTask('roleBrief'),
       system: 'You are a role intelligence analyst. Write structured, factual briefs in markdown.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 3000,
@@ -3420,13 +4218,26 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
 
     for (const note of allNotes) {
       // Priority 1: Attendee email domain match
+      // Require EITHER: company name in title, OR majority of non-user attendees are from this domain
+      // A single CC'd person from the domain is not sufficient
       if (companyDomain) {
         const domainLower = companyDomain.toLowerCase();
         const allEmails = [...(note.attendeeEmails || []), ...(note.inviteeEmails || [])];
-        const hasDomainMatch = allEmails.some(e => e.endsWith('@' + domainLower) && e !== userEmail);
-        if (hasDomainMatch) {
-          matched.set(note.id, { note, reason: 'email-domain', priority: 1 });
-          continue;
+        const nonUserEmails = allEmails.filter(e => e !== userEmail && e.length > 3);
+        const domainMatches = nonUserEmails.filter(e => e.endsWith('@' + domainLower));
+
+        if (domainMatches.length > 0) {
+          const title = ((note.title || '') + ' ' + (note.calendarTitle || '')).toLowerCase();
+          const titleHasCompany = title.includes(lowerCompany) || (shortName.length > 3 && title.includes(shortName));
+
+          // Strong match: company name in title + at least one domain email
+          // OR: majority of external attendees are from this domain (it's a meeting WITH this company)
+          const majorityFromDomain = nonUserEmails.length > 0 && (domainMatches.length / nonUserEmails.length) >= 0.5;
+
+          if (titleHasCompany || majorityFromDomain) {
+            matched.set(note.id, { note, reason: 'email-domain', priority: 1 });
+            continue;
+          }
         }
       }
 
@@ -3443,13 +4254,15 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
       }
 
       // Priority 3: Attendee full name matches a Known Contact
+      // Require FULL name match (first + last, both words >= 2 chars) to avoid false positives
       if (note.attendeeNames?.length && contactLower.length) {
         const nameMatch = contactLower.some(cn => {
           const words = cn.split(' ').filter(Boolean);
-          if (words.length < 2) return false;
+          if (words.length < 2) return false; // require first + last name minimum
           return note.attendeeNames.some(an => {
             const anl = an.toLowerCase();
-            return words.every(w => w.length > 1 && anl.includes(w));
+            // Both first and last name must appear, and last name must be >= 3 chars
+            return words.every(w => w.length >= 2 && anl.includes(w)) && words.some(w => w.length >= 3);
           });
         });
         if (nameMatch && !matched.has(note.id)) {
@@ -3458,22 +4271,17 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
         }
       }
 
-      // Priority 4: Title + company/contact name match (weakest)
+      // Priority 4: Title matches company name (strong) or company name + contact name (weaker)
       const title = (note.title || '').toLowerCase();
       const calTitle = (note.calendarTitle || '').toLowerCase();
       const searchText = title + ' ' + calTitle;
 
       const titleMatchesCompany = searchText.includes(lowerCompany) || (shortName.length > 3 && searchText.includes(shortName));
 
-      const titleMatchesContact = contactLower.some(cn => {
-        const words = cn.split(' ').filter(Boolean);
-        if (words.length >= 2) return words.every(w => w.length > 1 && searchText.includes(w));
-        // Single-word name: only if >= 5 chars and not the user's name
-        return cn.length >= 5 && searchText.includes(cn) && (!userEmail || !userEmail.includes(cn));
-      });
-
-      if ((titleMatchesCompany || titleMatchesContact) && !matched.has(note.id)) {
-        matched.set(note.id, { note, reason: titleMatchesCompany ? 'title-company' : 'title-contact', priority: 4 });
+      // Contact name in title is ONLY valid if the company name is also somewhere in the meeting
+      // (title, calendar title, or attendee emails). Contact name alone is too weak.
+      if (titleMatchesCompany && !matched.has(note.id)) {
+        matched.set(note.id, { note, reason: 'title-company', priority: 4 });
       }
     }
 

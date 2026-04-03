@@ -180,7 +180,7 @@ const PANEL_TITLES = {
   opportunity:   'Overview',
   hiring:        'Hiring Signals',
   activity:      'Activity',
-  chat:          'Ask AI',
+  chat:          'Coop',
 };
 
 const DEFAULT_COMPANY_STAGES = [
@@ -262,6 +262,23 @@ function init() {
 
     // Backfill from research cache (persisted)
     backfillFromResearchCache();
+
+    // If key fields still missing after backfill, try targeted re-enrichment
+    setTimeout(() => {
+      reEnrichMissingFields();
+      // Run unified field sync on page load — fills gaps from existing data
+      chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, () => {
+        void chrome.runtime.lastError;
+        // Reload entry from storage to pick up any changes
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+          const fresh = (savedCompanies || []).find(c => c.id === entry.id);
+          if (fresh && fresh.jobTitle && !entry.jobTitle) {
+            entry.jobTitle = fresh.jobTitle;
+            renderHeader();
+          }
+        });
+      });
+    }, 1500);
 
     // Fill missing firmographic fields from research cache (display-only, not persisted)
     const cached = (data.researchCache || {})[entry.company?.toLowerCase()]?.data;
@@ -356,6 +373,30 @@ function saveEntry(changes) {
   chrome.storage.local.set({ savedCompanies: allCompanies });
 }
 
+// Replace "microphone:" / "speaker:" with actual names in transcripts
+function resolveTranscriptSpeakers(transcript, meeting) {
+  if (!transcript) return transcript;
+  // "microphone" = the user (Matt), "speaker" = the other attendee(s)
+  const userName = 'Matt'; // TODO: pull from profile
+
+  // Get the other person's name from meeting attendees
+  let otherName = 'Other';
+  const attendees = (meeting?.attendeeNames || meeting?.attendees || '').toString();
+  if (attendees) {
+    const names = attendees.split(/[,;]/).map(n => n.trim()).filter(n =>
+      n && n.length > 1 && !n.toLowerCase().includes('matt')
+    );
+    if (names.length === 1) otherName = names[0].split(' ')[0]; // first name
+    else if (names.length > 1) otherName = names.map(n => n.split(' ')[0]).join('/');
+  }
+
+  return transcript
+    .replace(/^microphone:/gm, `${userName}:`)
+    .replace(/^speaker:/gm, `${otherName}:`)
+    .replace(/\bmicrophone:/g, `${userName}:`)
+    .replace(/\bspeaker:/g, `${otherName}:`);
+}
+
 function backfillFromResearchCache() {
   return new Promise(resolve => {
     chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
@@ -387,45 +428,80 @@ function backfillFromLinkedinFirmo() {
   return true;
 }
 
+// Re-enrich missing firmographic fields on page load
+// If key fields are still null after cache backfill, do a targeted search
+async function reEnrichMissingFields() {
+  const missing = [];
+  if (!entry.employees) missing.push('employees');
+  if (!entry.funding) missing.push('funding');
+  if (!entry.industry) missing.push('industry');
+  if (!entry.companyLinkedin) missing.push('linkedin');
+  if (missing.length === 0) return;
+
+  console.log(`[ReEnrich] Missing fields for ${entry.company}:`, missing.join(', '));
+
+  // Try a quick Serper search specifically for firmographics
+  try {
+    const result = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        type: 'QUICK_ENRICH_FIRMO',
+        company: entry.company,
+        domain: entry.companyWebsite || '',
+        missing
+      }, r => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(r);
+      });
+    });
+
+    if (result && !result.error) {
+      const updates = {};
+      if (!entry.employees && result.employees) { updates.employees = result.employees; console.log(`[ReEnrich] Found employees: ${result.employees}`); }
+      if (!entry.funding && result.funding) { updates.funding = result.funding; }
+      if (!entry.industry && result.industry) { updates.industry = result.industry; }
+      if (!entry.companyLinkedin && result.linkedin) { updates.companyLinkedin = result.linkedin; console.log(`[ReEnrich] Found LinkedIn: ${result.linkedin}`); }
+      if (Object.keys(updates).length) {
+        saveEntry(updates);
+        // Update the overview display
+        const empEl = document.querySelector('[data-field="employees"]');
+        if (empEl && updates.employees) empEl.textContent = updates.employees;
+        // Also update the research cache so this doesn't repeat
+        chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
+          const cache = researchCache || {};
+          const key = entry.company.toLowerCase();
+          if (cache[key]?.data) {
+            Object.assign(cache[key].data, updates);
+            chrome.storage.local.set({ researchCache: cache });
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[ReEnrich] Failed:', e.message);
+  }
+}
+
 // Event-driven re-scoring: triggers when new context arrives (meetings, emails, notes)
 function maybeRescore(reason) {
-  if (!entry.isOpportunity || !entry.jobDescription) return;
+  if (!entry.isOpportunity) return;
+  // Only auto-rescore opportunities past the queue stage
+  const stage = entry.jobStage || 'needs_review';
+  if (stage === 'needs_review') return;
 
-  // If we have rich context (meetings, emails, notes), the deep fit analysis
-  // will produce a better score. Skip the posting-only re-score.
-  const hasRichContext = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
-    entry.cachedEmails?.length || entry.notes);
-  if (hasRichContext) {
-    console.log('[Rescore] Skipping posting-only rescore — deep fit analysis will handle it (reason:', reason, ')');
-    return;
-  }
-
-  chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-    if (!prefs) return;
-    chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
-      console.log('[Rescore] Triggering re-score for', entry.company, '— reason:', reason);
-      const richContext = {
-        intelligence: entry.intelligence?.eli5 || entry.oneLiner || null,
-        reviews: entry.reviews || [],
-        emails: (entry.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
-        meetings: (entry.cachedMeetings || []).slice(0, 3),
-        transcript: entry.cachedMeetingTranscript || null,
-        storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
-        notes: entry.notes || null,
-        contextDocuments: entry.contextDocuments || [],
-      };
-      chrome.runtime.sendMessage(
-        { type: 'ANALYZE_JOB', company: entry.company, jobTitle: entry.jobTitle, jobDescription: entry.jobDescription, prefs, richContext },
-        result => {
-          void chrome.runtime.lastError;
-          if (!result?.jobMatch) return;
-          saveEntry({ jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() });
-          if (result.jobSnapshot) saveEntry({ jobSnapshot: result.jobSnapshot });
+  console.log('[Rescore] Triggering unified re-score for', entry.company, '— reason:', reason);
+  chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+    void chrome.runtime.lastError;
+    if (result && !result.error) {
+      // Refresh entry from storage and re-render
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const fresh = (savedCompanies || []).find(c => c.id === entry.id);
+        if (fresh) {
+          Object.assign(entry, fresh);
           renderPanel('opportunity');
           bindPanelBodyEvents('opportunity');
         }
-      );
-    });
+      });
+    }
   });
 }
 
@@ -503,17 +579,16 @@ function renderHeader() {
     ${favicon}
     <input class="hdr-name-input" id="hdr-name" value="${nameVal}" placeholder="Company name">
     ${entry.isOpportunity
-      ? `<div class="hdr-stage-group" style="margin-left:8px"><span class="hdr-stage-label">Opportunity</span><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor};color:${oppStageColor}">${oppStageOptions}</select></div>`
+      ? `<div class="hdr-stage-group" style="margin-left:8px"><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor}66;color:${oppStageColor}">${oppStageOptions}</select></div>`
       : `<button class="hdr-opp-btn" id="hdr-add-opp" style="margin-left:8px">+ Add to Pipeline</button>`}
     <div class="hdr-spacer"></div>
     <div class="hdr-stage-group">
-      <span class="hdr-stage-label">Company</span>
-      <select class="hdr-status" id="hdr-status" style="border-color:${statusColor};color:${statusColor}">
+      <select class="hdr-status" id="hdr-status" style="border-color:${statusColor}66;color:${statusColor}">
         ${statusOptions}
       </select>
     </div>
     <div class="hdr-stars" id="hdr-stars"><span class="hdr-stars-label">Excitement</span>${stars}</div>
-    <button class="hdr-refresh-btn" id="hdr-refresh-btn" title="Refresh emails &amp; meetings"><span class="hdr-refresh-icon">↻</span></button>
+    <button class="hdr-refresh-btn" id="hdr-refresh-btn" title="Refresh all data"><span class="hdr-refresh-icon">↻</span></button>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Setup</a>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('integrations.html')}" target="_blank" style="margin-left:4px">🔗</a>
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('docs.html')}" target="_blank" style="margin-left:4px">Docs</a>
@@ -535,14 +610,14 @@ function renderHeader() {
   document.getElementById('hdr-status')?.addEventListener('change', e => {
     const sel = e.target;
     const c = stageColor(sel.value, customCompanyStages);
-    sel.style.borderColor = c; sel.style.color = c;
+    sel.style.borderColor = c + '66'; sel.style.color = c;
     saveEntry({ status: sel.value });
   });
 
   document.getElementById('hdr-opp-stage')?.addEventListener('change', e => {
     const sel = e.target;
     const c = stageColor(sel.value, customOpportunityStages);
-    sel.style.borderColor = c; sel.style.color = c;
+    sel.style.borderColor = c + '66'; sel.style.color = c;
     // Record stage entry timestamp + clear timestamps for stages ahead when moving backward
     const toIdx = customOpportunityStages.findIndex(s => s.key === sel.value);
     const ts = { ...(entry.stageTimestamps || {}) };
@@ -583,15 +658,125 @@ function renderHeader() {
   if (viewPipelineBtn) viewPipelineBtn.addEventListener('click', () => renderPanel('opportunity'));
 
   const refreshBtn = document.getElementById('hdr-refresh-btn');
-  if (refreshBtn) refreshBtn.addEventListener('click', () => {
+  if (refreshBtn) refreshBtn.addEventListener('click', async () => {
     refreshBtn.classList.add('spinning');
     refreshBtn.disabled = true;
+    refreshBtn.title = 'Refreshing...';
+
+    // Show progress toast
+    const toast = document.createElement('div');
+    toast.id = 'refresh-toast';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2d3e50;color:#e2e8f0;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;';
+    toast.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.3);border-top-color:#FF7A59;border-radius:50%;animation:spin 0.6s linear infinite"></span> <span id="refresh-status">Starting refresh...</span>';
+    document.body.appendChild(toast);
+    const setStatus = t => { const s = document.getElementById('refresh-status'); if (s) s.textContent = t; };
+
+    const tasks = [];
+
+    // 1. Re-research company (clear cache, re-run)
+    setStatus('Re-researching company...');
+    try {
+      // Clear cached research
+      await new Promise(r => {
+        chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
+          const cache = researchCache || {};
+          delete cache[entry.company.toLowerCase()];
+          chrome.storage.local.set({ researchCache: cache }, r);
+        });
+      });
+      const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const researchResult = await new Promise(r => {
+        chrome.runtime.sendMessage({
+          type: 'RESEARCH_COMPANY', company: entry.company, domain
+        }, r);
+      });
+      if (researchResult && !researchResult.error) {
+        const updates = {};
+        if (researchResult.employees) updates.employees = researchResult.employees;
+        if (researchResult.funding) updates.funding = researchResult.funding;
+        if (researchResult.industry) updates.industry = researchResult.industry;
+        if (researchResult.founded) updates.founded = researchResult.founded;
+        if (researchResult.companyWebsite) updates.companyWebsite = researchResult.companyWebsite;
+        if (researchResult.companyLinkedin) updates.companyLinkedin = researchResult.companyLinkedin;
+        if (researchResult.intelligence) {
+          updates.intelligence = researchResult.intelligence;
+          // Clear stale top-level fields so intelligence takes priority
+          if (researchResult.intelligence.oneLiner) updates.oneLiner = researchResult.intelligence.oneLiner;
+          if (researchResult.intelligence.category) updates.category = researchResult.intelligence.category;
+        }
+        if (researchResult.reviews?.length) updates.reviews = researchResult.reviews;
+        if (researchResult.leaders?.length) updates.leaders = researchResult.leaders;
+        if (Object.keys(updates).length) saveEntry(updates);
+        tasks.push('research');
+      }
+    } catch (e) { console.warn('[MasterRefresh] Research failed:', e); }
+
+    // 2. Refresh emails
+    setStatus('Fetching emails...');
     loadHubEmails(true);
+    tasks.push('emails');
+
+    // 3. Refresh meetings (rebuild Granola index first)
+    setStatus('Fetching meetings...');
+    await new Promise(r => chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' }, () => { void chrome.runtime.lastError; r(); }));
     loadHubMeetings(true);
+    tasks.push('meetings');
+
+    // 4. Re-enrich missing firmographics
+    setStatus('Checking firmographics...');
+    await reEnrichMissingFields();
+    tasks.push('firmographics');
+
+    // 5. Refresh role brief (if opportunity)
+    if (entry.isOpportunity && entry.jobDescription) {
+      setStatus('Regenerating role brief...');
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            type: 'GENERATE_ROLE_BRIEF',
+            company: entry.company, jobTitle: entry.jobTitle,
+            jobDescription: entry.jobDescription,
+            meetings: entry.cachedMeetings || [], emails: entry.cachedEmails || [],
+            granolaNote: entry.cachedMeetingNotes || ''
+          }, result => {
+            if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
+            if (result?.content) {
+              const updates = { roleBrief: { content: result.content, generatedAt: Date.now() } };
+              // Apply extracted fields from role brief
+              if (result.briefFields) {
+                if (result.briefFields.jobTitle && !entry.jobTitle) updates.jobTitle = result.briefFields.jobTitle;
+                if (result.briefFields.baseSalaryRange && !entry.baseSalaryRange) updates.baseSalaryRange = result.briefFields.baseSalaryRange;
+                if (result.briefFields.oteTotalComp && !entry.oteTotalComp) updates.oteTotalComp = result.briefFields.oteTotalComp;
+                if (result.briefFields.equity && !entry.equity) updates.equity = result.briefFields.equity;
+              }
+              saveEntry(updates);
+              tasks.push('role-brief');
+            }
+            resolve();
+          });
+        });
+      } catch (e) { console.warn('[MasterRefresh] Role brief failed:', e); }
+    }
+
+    // 6. Unified field sync — background.js scans all data and fills gaps
+    setStatus('Syncing fields...');
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, r => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve(r);
+        });
+      });
+      tasks.push('field-sync');
+    } catch (e) { console.warn('[MasterRefresh] Field sync failed:', e); }
+
+    // Done — refresh the page UI
+    setStatus(`Done! Updated: ${tasks.join(', ')}`);
     setTimeout(() => {
-      refreshBtn.classList.remove('spinning');
-      refreshBtn.disabled = false;
-    }, 2000);
+      toast.remove();
+      // Reload the page to show all fresh data
+      window.location.reload();
+    }, 1500);
   });
 }
 
@@ -1029,12 +1214,178 @@ function initActivityTab() {
   const container = document.getElementById('activity-timeline');
   if (!container) return;
   container.innerHTML = buildActivityTimeline(entry);
+
+  // Inject "Log activity" button + form into Activity tab
+  const logSection = document.getElementById('activity-log-section');
+  if (logSection) {
+    logSection.innerHTML = `
+      <button class="mtg-add-btn" id="activity-log-btn-act" style="margin-top:12px">+ Log activity</button>
+      <div id="activity-log-form-act" style="display:none" class="mtg-add-form">
+        <div class="mtg-add-title">Log an activity</div>
+        <div class="mtg-add-fields">
+          <select class="mtg-add-input" id="al-type-act">
+            <option value="linkedin_dm">LinkedIn DM</option>
+            <option value="phone_call">Phone Call</option>
+            <option value="coffee_chat">Coffee Chat</option>
+            <option value="text">Text Message</option>
+            <option value="referral">Referral / Intro</option>
+            <option value="email_sent">Email Sent</option>
+            <option value="other">Other</option>
+          </select>
+          <input type="text" class="mtg-add-input" id="al-note-act" placeholder="What happened?">
+          <input type="date" class="mtg-add-input" id="al-date-act" style="width:auto" value="${new Date().toISOString().slice(0,10)}">
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="mtg-add-save" id="al-save-act">Save</button>
+            <button class="mtg-add-cancel" id="al-cancel-act">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('activity-log-btn-act')?.addEventListener('click', () => {
+      document.getElementById('activity-log-form-act').style.display = 'block';
+    });
+    document.getElementById('al-cancel-act')?.addEventListener('click', () => {
+      document.getElementById('activity-log-form-act').style.display = 'none';
+    });
+    document.getElementById('al-save-act')?.addEventListener('click', () => {
+      const type = document.getElementById('al-type-act').value;
+      const note = document.getElementById('al-note-act').value.trim();
+      const date = document.getElementById('al-date-act').value;
+      if (!date) return;
+      entry.activityLog = entry.activityLog || [];
+      entry.activityLog.push({ type, note, date, createdAt: Date.now() });
+      saveEntry({ activityLog: entry.activityLog });
+      document.getElementById('activity-log-form-act').style.display = 'none';
+      document.getElementById('al-note-act').value = '';
+      container.innerHTML = buildActivityTimeline(entry);
+    });
+  }
 }
 
-const DEFAULT_TAB_ORDER = ['intel', 'activity', 'notes', 'emails', 'meetings', 'docs'];
-const TAB_LABELS = { intel: 'Intel', activity: 'Activity', notes: 'Notes', emails: 'Emails', meetings: 'Meetings', docs: 'Docs' };
+function initTasksTab() {
+  const container = document.getElementById('company-tasks-container');
+  if (!container) return;
+  renderCompanyTasks();
+}
+
+function renderCompanyTasks() {
+  const container = document.getElementById('company-tasks-container');
+  if (!container) return;
+  const companyName = entry.company;
+
+  chrome.storage.local.get(['userTasks'], data => {
+    const allTasks = data.userTasks || [];
+    const companyTasks = allTasks.filter(t => t.company === companyName);
+    const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
+    companyTasks.sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      const da = a.dueDate || '9999-12-31', db = b.dueDate || '9999-12-31';
+      if (da !== db) return da.localeCompare(db);
+      return priVal(a.priority) - priVal(b.priority);
+    });
+
+    function dateLabel(dateStr) {
+      if (!dateStr) return { text: '', cls: '' };
+      const d = new Date(dateStr + 'T12:00:00');
+      const now = new Date(); now.setHours(12,0,0,0);
+      const diff = Math.round((d - now) / 86400000);
+      if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, cls: 'overdue' };
+      if (diff === 0) return { text: 'Today', cls: 'today' };
+      if (diff === 1) return { text: 'Tomorrow', cls: 'upcoming' };
+      return { text: `in ${diff}d`, cls: 'upcoming' };
+    }
+
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-top:8px;">
+        <div style="font-size:13px;font-weight:700;color:#516f90;text-transform:uppercase;letter-spacing:0.06em">Tasks for ${escapeHtml(companyName)}</div>
+        <button class="mtg-add-btn" id="company-task-add-btn">+ Add Task</button>
+      </div>
+      <div id="company-task-form-wrap"></div>
+      <div id="company-task-list">
+        ${companyTasks.length ? companyTasks.map(t => {
+          const dl = dateLabel(t.dueDate);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #eaf0f6;border-radius:8px;margin-bottom:4px;background:#fff;${t.completed ? 'opacity:0.5' : ''}" data-task-id="${t.id}">
+            <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.completed ? '#5DCAA5' : '#dfe3eb'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:${t.completed ? '#fff' : 'transparent'};background:${t.completed ? '#5DCAA5' : 'transparent'};flex-shrink:0" class="ct-check">${t.completed ? '✓' : ''}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:#2d3e50;${t.completed ? 'text-decoration:line-through' : ''}">${escapeHtml(t.text)}</div>
+              <div style="font-size:11px;color:#7c98b6;display:flex;gap:6px;margin-top:2px">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:${t.priority === 'high' ? '#FEE2E2' : t.priority === 'low' ? '#F0FDF4' : '#eef2f7'};color:${t.priority === 'high' ? '#991b1b' : t.priority === 'low' ? '#166534' : '#516f90'}">${t.priority}</span>
+                ${t.dueDate ? `<span>${t.dueDate}</span>` : ''}
+              </div>
+            </div>
+            ${dl.text ? `<span style="font-size:11px;font-weight:600;white-space:nowrap;color:${dl.cls === 'overdue' ? '#ef4444' : dl.cls === 'today' ? '#FF7A59' : '#7c98b6'}">${dl.text}</span>` : ''}
+            <button class="ct-del" style="background:none;border:none;cursor:pointer;font-size:14px;color:#ccc;padding:4px" data-task-id="${t.id}">&times;</button>
+          </div>`;
+        }).join('') : '<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No tasks for this company yet</div>'}
+      </div>`;
+
+    // Wire events
+    container.querySelector('#company-task-add-btn')?.addEventListener('click', () => {
+      const wrap = container.querySelector('#company-task-form-wrap');
+      wrap.innerHTML = `
+        <div class="mtg-add-form" style="margin-bottom:12px">
+          <div class="mtg-add-fields">
+            <input type="text" class="mtg-add-input" id="ct-text" placeholder="What needs to be done?">
+            <div style="display:flex;gap:8px">
+              <input type="date" class="mtg-add-input" id="ct-date" style="width:auto">
+              <select class="mtg-add-input" id="ct-priority" style="width:auto">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="mtg-add-save" id="ct-save">Add Task</button>
+              <button class="mtg-add-cancel" id="ct-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>`;
+      wrap.querySelector('#ct-text')?.focus();
+      wrap.querySelector('#ct-save').addEventListener('click', () => {
+        const text = wrap.querySelector('#ct-text').value.trim();
+        if (!text) return;
+        const dueDate = wrap.querySelector('#ct-date').value || null;
+        const priority = wrap.querySelector('#ct-priority').value;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          tasks.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            text, company: companyName, companyId: entry.id,
+            dueDate, priority, completed: false, createdAt: Date.now()
+          });
+          chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+        });
+      });
+      wrap.querySelector('#ct-cancel').addEventListener('click', () => { wrap.innerHTML = ''; });
+    });
+
+    container.querySelectorAll('.ct-check').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.closest('[data-task-id]').dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => t.id === id);
+          if (t) { t.completed = !t.completed; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
+        });
+      });
+    });
+    container.querySelectorAll('.ct-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = (d.userTasks || []).filter(t => t.id !== id);
+          chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+        });
+      });
+    });
+  });
+}
+
+const DEFAULT_TAB_ORDER = ['intel', 'activity', 'tasks', 'notes', 'emails', 'meetings', 'docs'];
+const TAB_LABELS = { intel: 'Intel', activity: 'Activity', tasks: 'Tasks', notes: 'Notes', emails: 'Emails', meetings: 'Meetings', docs: 'Docs' };
 const TAB_PANE_HTML = {
-  activity: '<div id="activity-timeline"></div>',
+  activity: '<div id="activity-timeline"></div><div id="activity-log-section"></div>',
+  tasks: '<div id="company-tasks-container"></div>',
   intel: '', // filled by buildIntelTab()
   notes: '<div id="hub-notes-container" data-editing="0"></div>',
   emails: '<div class="p-empty" id="act-emails-status">Loading emails\u2026</div><div id="act-emails-list"></div>',
@@ -1056,7 +1407,9 @@ const TAB_PANE_HTML = {
 
 function renderMainTabs() {
   const colEl = document.getElementById('col-main');
-  const tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
+  let tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
+  // Ensure new tabs are included even if user has a cached order
+  for (const t of DEFAULT_TAB_ORDER) { if (!tabOrder.includes(t)) tabOrder.push(t); }
   const defaultTab = tabOrder[0]; // first tab is the default
 
   const tabButtons = tabOrder.map(t =>
@@ -1080,6 +1433,7 @@ function buildRoleBriefSection() {
   if (!entry.isOpportunity) return '';
 
   const brief = entry.roleBrief;
+  const quickBrief = entry.jobMatch?.roleBrief; // unified brief from quick fit
   const hasData = entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length || entry.manualMeetings?.length;
 
   // Check if stale
@@ -1138,6 +1492,24 @@ function buildRoleBriefSection() {
         <div class="rb-content" id="rb-content">${briefHtml}</div>
         ${jdHtml}
       </div>`;
+  }
+
+  // Show unified quick brief from scoring if no full brief exists
+  if (quickBrief && (quickBrief.roleSummary || quickBrief.whyInteresting)) {
+    const sections = [];
+    if (quickBrief.roleSummary) sections.push(`<div style="margin-bottom:10px"><strong>What this role is:</strong> ${quickBrief.roleSummary}</div>`);
+    if (quickBrief.whyInteresting) sections.push(`<div style="margin-bottom:10px"><strong>Why it could be interesting:</strong> ${quickBrief.whyInteresting}</div>`);
+    if (quickBrief.concerns) sections.push(`<div style="margin-bottom:10px"><strong>Open questions:</strong> ${quickBrief.concerns}</div>`);
+    if (quickBrief.qualificationMatch) sections.push(`<div style="margin-bottom:10px"><strong>Qualification match${quickBrief.qualificationScore ? ` (${quickBrief.qualificationScore}/5)` : ''}:</strong> ${quickBrief.qualificationMatch}</div>`);
+    if (quickBrief.compSummary) sections.push(`<div><strong>Compensation:</strong> ${quickBrief.compSummary}</div>`);
+    return `
+      <div class="hub-section-label">Role Brief</div>
+      ${staleHtml}
+      <div class="rb-card">
+        <div class="rb-content">${sections.join('')}</div>
+        <div style="margin-top:10px;font-size:11px;color:#7c98b6;">Auto-generated from scoring${entry.quickFitScoredAt ? ' · ' + new Date(entry.quickFitScoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
+      </div>
+      ${hasData ? '<button class="rb-generate-btn" id="rb-generate-btn" style="margin-top:8px">Generate detailed brief</button>' : ''}`;
   }
 
   if (hasData) {
@@ -1263,7 +1635,7 @@ function initIntelTab() {
 
 function generateRoleBrief() {
   const btn = document.getElementById('rb-refresh-btn') || document.getElementById('rb-generate-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '\u21bb Generating...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:6px"></span>Generating...'; }
 
   chrome.runtime.sendMessage({
     type: 'GENERATE_ROLE_BRIEF',
@@ -1316,6 +1688,8 @@ function generateRoleBrief() {
         rbBlock.innerHTML = buildRoleBriefSection();
         bindRoleBriefEvents();
       }
+      // Run unified field sync after brief is saved
+      chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, () => void chrome.runtime.lastError);
       maybeRescore('role_brief_updated');
     } else {
       if (btn) { btn.disabled = false; btn.textContent = '\u21bb Refresh brief'; }
@@ -1434,14 +1808,17 @@ function bindHubTabs() {
   if (!container) return;
   const tabBar = container.querySelector('.hub-tab-bar');
 
-  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false, activityInited = false;
+  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false, activityInited = false, tasksInited = false;
 
   // Init the default (first) tab
-  const tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
+  let tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
+  // Ensure new tabs are included even if user has a cached order
+  for (const t of DEFAULT_TAB_ORDER) { if (!tabOrder.includes(t)) tabOrder.push(t); }
   const defaultTab = tabOrder[0];
   setTimeout(() => {
     if (defaultTab === 'intel' && !intelInited) { intelInited = true; initIntelTab(); }
     else if (defaultTab === 'activity' && !activityInited) { activityInited = true; initActivityTab(); }
+    else if (defaultTab === 'tasks') { tasksInited = true; initTasksTab(); }
     else if (defaultTab === 'emails' && !emailsLoaded) { emailsLoaded = true; loadHubEmails(); }
     else if (defaultTab === 'meetings' && !meetingsLoaded) { meetingsLoaded = true; loadHubMeetings(); }
     else if (defaultTab === 'docs' && !docsInited) { docsInited = true; initDocsTab(); }
@@ -1457,6 +1834,7 @@ function bindHubTabs() {
 
       if (tab.dataset.tab === 'activity' && !activityInited) { activityInited = true; initActivityTab(); }
       if (tab.dataset.tab === 'activity') initActivityTab();
+      if (tab.dataset.tab === 'tasks') { tasksInited = true; initTasksTab(); }
       if (tab.dataset.tab === 'intel' && !intelInited) { intelInited = true; initIntelTab(); }
       if (tab.dataset.tab === 'emails' && !emailsLoaded) { emailsLoaded = true; loadHubEmails(); }
       if (tab.dataset.tab === 'meetings' && !meetingsLoaded) { meetingsLoaded = true; loadHubMeetings(); }
@@ -1890,7 +2268,7 @@ function loadHubMeetings(forceRefresh) {
       setChatContext(entry.id, allCtx);               // floating chat (uses base entry.id as key)
     }
     (entry.cachedMeetings || []).forEach(m => {
-      if (m.transcript) setChatContext(`${entry.id}-meeting-${m.id}`, m.transcript);
+      if (m.transcript) setChatContext(`${entry.id}-meeting-${m.id}`, resolveTranscriptSpeakers(m.transcript, m));
     });
     // Manual meetings context
     (entry.manualMeetings || []).forEach(m => {
@@ -1953,7 +2331,8 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   const contentEl = document.getElementById('act-meetings-content');
   if (!contentEl) return;
 
-  const granolaM = (entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false }));
+  const dismissed = new Set(entry.dismissedMeetings || []);
+  const granolaM = (entry.cachedMeetings || []).filter(m => !dismissed.has(m.id)).map(m => ({ ...m, _isManual: false }));
   const manualM = (entry.manualMeetings || []).map(m => ({ ...m, _isManual: true }));
   const meetings = [...granolaM, ...manualM].sort((a, b) => {
     const da = a.date || ''; const db = b.date || '';
@@ -2051,7 +2430,8 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
       html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
       for (const m of dayMeetings) {
         const manualBadge = m._isManual ? `<span class="mtg-manual-badge">Manual</span>` : '';
-        const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : '';
+        const dismissBtn = !m._isManual ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company" style="font-size:10px;color:#99acc2;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0.5;transition:opacity 0.15s;">✕ wrong</button>` : '';
+        const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : dismissBtn;
         html += `
           <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}" data-is-manual="${m._isManual ? '1' : '0'}">
             <span class="mtg-card-icon">${m._isManual ? '✏️' : '▤'}</span>
@@ -2225,6 +2605,26 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
     });
   });
 
+  // Dismiss wrong Granola meetings
+  contentEl.querySelectorAll('.mtg-card-dismiss').forEach(btn => {
+    btn.addEventListener('mouseenter', () => { btn.style.opacity = '1'; btn.style.color = '#e5483b'; });
+    btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.5'; btn.style.color = '#99acc2'; });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const mid = btn.dataset.dismissId;
+      // Add to dismissed meetings list on the entry
+      const dismissed = entry.dismissedMeetings || [];
+      if (!dismissed.includes(mid)) dismissed.push(mid);
+      saveEntry({ dismissedMeetings: dismissed });
+      // Remove from cached meetings
+      const cached = (entry.cachedMeetings || []).filter(m => m.id !== mid);
+      saveEntry({ cachedMeetings: cached });
+      // Remove the card from DOM
+      const card = btn.closest('.mtg-card');
+      if (card) { card.style.opacity = '0.3'; setTimeout(() => card.remove(), 300); }
+    });
+  });
+
   // Quick-action chips → fill input and send
   contentEl.querySelectorAll('.mtg-quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2246,6 +2646,8 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
     refreshBtn.addEventListener('click', () => {
       refreshBtn.disabled = true;
       refreshBtn.textContent = '↻ Refreshing…';
+      // Rebuild Granola index to pick up latest matching logic
+      chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' }, () => { void chrome.runtime.lastError; });
       // Clear cached meetings from saved entry
       entry.cachedMeetings = [];
       entry.cachedMeetingNotes = null;
@@ -2381,9 +2783,10 @@ function renderManualMeetingDetail(contentEl, meeting, events, granolaNotes) {
     ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : (meeting.date || '');
 
-  // Set context for this meeting's chat before rendering
+  // Set context for this meeting's chat before rendering (with resolved speaker names)
   if (typeof setChatContext === 'function') {
-    setChatContext(`${entry.id}-meeting-${meeting.id}`, meeting.transcript || meeting.notes || '');
+    const ctx = meeting.transcript ? resolveTranscriptSpeakers(meeting.transcript, meeting) : (meeting.notes || '');
+    setChatContext(`${entry.id}-meeting-${meeting.id}`, ctx);
   }
 
   const bodyText = meeting.notes || '';
@@ -2404,7 +2807,7 @@ function renderManualMeetingDetail(contentEl, meeting, events, granolaNotes) {
     ${meeting.transcript ? `
       <details class="mtg-transcript-wrap">
         <summary class="mtg-transcript-label">Full transcript</summary>
-        <div class="mtg-transcript">${typeof renderMarkdown === 'function' ? renderMarkdown(meeting.transcript) : escapeHtml(meeting.transcript)}</div>
+        <div class="mtg-transcript">${typeof renderMarkdown === 'function' ? renderMarkdown(resolveTranscriptSpeakers(meeting.transcript, meeting)) : escapeHtml(resolveTranscriptSpeakers(meeting.transcript, meeting))}</div>
       </details>` : ''}
   `;
 
@@ -2421,9 +2824,10 @@ function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
     ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : (meeting.date || '');
 
-  // Set context for this meeting's chat before rendering
-  if (typeof setChatContext === 'function' && meeting.transcript) {
-    setChatContext(`${entry.id}-meeting-${meeting.id}`, meeting.transcript);
+  // Set context for this meeting's chat before rendering (with resolved speaker names)
+  const resolvedTranscript = meeting.transcript ? resolveTranscriptSpeakers(meeting.transcript, meeting) : '';
+  if (typeof setChatContext === 'function' && resolvedTranscript) {
+    setChatContext(`${entry.id}-meeting-${meeting.id}`, resolvedTranscript);
   }
 
   contentEl.innerHTML = `
@@ -2438,10 +2842,10 @@ function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
            data-chat-placeholder="Ask about this meeting…"
            data-chat-minimal="1"></div>
     </div>
-    ${meeting.transcript ? `
+    ${resolvedTranscript ? `
       <details class="mtg-transcript-wrap">
         <summary class="mtg-transcript-label">Full transcript</summary>
-        <div class="mtg-transcript">${renderMarkdown(meeting.transcript)}</div>
+        <div class="mtg-transcript">${renderMarkdown(resolvedTranscript)}</div>
       </details>` : ''}
   `;
 
@@ -2520,7 +2924,8 @@ function buildProperties() {
       </div>`;
     }
 
-    const val = (entry[f.id] || '').replace(/"/g, '&quot;');
+    const rawVal = entry[f.id];
+    const val = (typeof rawVal === 'string' ? rawVal : rawVal != null ? String(rawVal) : '').replace(/"/g, '&quot;');
     // Always show employees and industry; hide other empty metadata fields
     const alwaysShow = ['employees', 'industry'].includes(f.id);
     const isMetadataField = ['employees', 'funding', 'founded', 'industry'].includes(f.id);
@@ -2592,9 +2997,10 @@ function buildNotes() {
 
 function buildOverview() {
   const intel = entry.intelligence || {};
-  const oneLiner = entry.oneLiner || intel.oneLiner || '';
+  // intelligence fields take priority — they're fresher than top-level entry fields
+  const oneLiner = intel.oneLiner || entry.oneLiner || '';
   const eli5 = intel.eli5 || '';
-  const cat = entry.category || intel.category || '';
+  const cat = intel.category || entry.category || '';
   // Use oneLiner if available; fall back to eli5 if not — never show both
   const description = oneLiner || eli5;
   if (!description && !cat) return '<div class="p-empty">No overview available.</div>';
@@ -2611,11 +3017,24 @@ function buildIntel() {
     intel.howItWorks    ? ['How It Works', intel.howItWorks]    : null,
   ].filter(Boolean);
   if (!parts.length) return '<div class="p-empty">No intel available.</div>';
-  return parts.map(([label, text]) => `
-    <div class="p-section">
-      <div class="p-section-label">${label}</div>
-      <div class="p-text">${text}</div>
-    </div>`).join('');
+  const innerHtml = parts.length === 2
+    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px;">
+        ${parts.map(([label, text]) => `<div>
+          <div class="p-section-label">${label}</div>
+          <div class="p-text" style="margin-top:6px;">${text}</div>
+        </div>`).join('')}
+      </div>`
+    : parts.map(([label, text]) => `<div style="margin-top:10px;">
+        <div class="p-section-label">${label}</div>
+        <div class="p-text" style="margin-top:6px;">${text}</div>
+      </div>`).join('');
+  return `<details class="p-section" open>
+    <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:8px;padding:6px 0;">
+      <span style="font-size:12px;color:#FF7A59;transition:transform 0.15s;display:inline-block;" class="intel-chevron">▾</span>
+      <span class="p-section-label" style="margin:0;color:#2d3e50;">Company Intel</span>
+    </summary>
+    ${innerHtml}
+  </details>`;
 }
 
 function buildReviews() {

@@ -67,6 +67,7 @@ const SCOUT_CACHE_OPTIONS = [
   { value: 7, label: '7 days' },
   { value: 14, label: '14 days' },
   { value: 30, label: '30 days' },
+  { value: 0, label: 'Never expire' },
 ];
 
 let currentConfig = null;
@@ -74,7 +75,15 @@ let currentKeyStatus = null;
 
 function savePipelineConfig(config) {
   currentConfig = config;
-  chrome.runtime.sendMessage({ type: 'SET_PIPELINE_CONFIG', config });
+  chrome.runtime.sendMessage({ type: 'SET_PIPELINE_CONFIG', config }, (resp) => {
+    void chrome.runtime.lastError;
+    const toast = document.getElementById('pipeline-save-toast');
+    if (toast) {
+      toast.style.opacity = '1';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+    }
+  });
 }
 
 function statusDot(providerId, keyStatus) {
@@ -298,7 +307,7 @@ function renderScoringSection(config) {
   html += `<div class="pipeline-count-row">
     <div><div class="pipeline-count-label" style="font-weight:600">Scout cache duration</div></div>
     <select class="pipeline-model-select" id="scout-cache-days">
-      ${SCOUT_CACHE_OPTIONS.map(o => `<option value="${o.value}" ${(scoring.scoutCacheDays || 7) === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+      ${SCOUT_CACHE_OPTIONS.map(o => `<option value="${o.value}" ${(scoring.scoutCacheDays ?? 7) === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
     </select>
   </div>`;
 

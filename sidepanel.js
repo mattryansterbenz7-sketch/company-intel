@@ -146,6 +146,25 @@ document.getElementById('sp-dashboard-link')?.addEventListener('click', (e) => {
   openDashboard();
 });
 
+// Close sidepanel
+document.getElementById('sp-close-btn')?.addEventListener('click', () => {
+  // Try Chrome sidePanel API first, fall back to window.close
+  if (chrome.runtime?.sendMessage) {
+    chrome.runtime.sendMessage({ type: 'CLOSE_SIDEPANEL' }, () => {
+      void chrome.runtime.lastError;
+      window.close();
+    });
+  } else {
+    window.close();
+  }
+});
+
+// Re-render tasks/stats when storage changes from another page (e.g. saved.html)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.userTasks) {
+    showPipelineStats();
+  }
+});
 
 function openSavePanel(mode) {
   saveMode = mode;
@@ -652,7 +671,12 @@ function showPipelineStats() {
       </svg>`;
     }
 
-    el.innerHTML = counts.map(c =>
+    // Format date range label
+    const fmtDate = ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const periodLabel = period === 'daily' ? 'Today' : `${fmtDate(start)} – ${fmtDate(end)}`;
+
+    el.innerHTML = `<span style="font-size:10px;font-weight:600;color:#7c98b6;text-transform:uppercase;letter-spacing:0.04em;margin-right:4px;">${periodLabel}</span>` +
+    counts.map(c =>
       `<div class="sp-stat-chip">
         ${miniRing(c.count, c.goal, c.color)}
         <span class="sp-stat-num">${c.count}${c.goal ? `<span class="sp-stat-denom">/${c.goal}</span>` : ''}</span>
@@ -1079,7 +1103,7 @@ function renderHomeState() {
       <div class="sp-home-card sp-home-queue-card" id="sp-home-queue-link">
         <span class="sp-home-queue-count">${queueCount}</span>
         <div>
-          <div class="sp-home-queue-text">in AI Scoring Queue</div>
+          <div class="sp-home-queue-text">in Coop's AI Scoring Queue</div>
           <div class="sp-home-queue-sub">Tap to review</div>
         </div>
       </div>
@@ -1089,28 +1113,28 @@ function renderHomeState() {
       window.open(chrome.runtime.getURL('saved.html'), '_blank');
     });
 
-    // Action items (next steps due)
-    const actionItems = companies
+    // Next Steps — company-specific next steps with dates (not completable)
+    const nextSteps = companies
       .filter(c => c.isOpportunity && c.nextStepDate)
       .map(c => {
         const daysUntil = Math.round((new Date(c.nextStepDate + 'T12:00:00') - new Date()) / 86400000);
-        return { ...c, daysUntil };
+        return { id: c.id, company: c.company, text: (c.nextStep || '').slice(0, 50), daysUntil };
       })
       .sort((a, b) => a.daysUntil - b.daysUntil)
       .slice(0, 5);
 
-    if (actionItems.length) {
+    if (nextSteps.length) {
       document.getElementById('sp-home-actions').innerHTML = `
         <div class="sp-home-section">
-          <div class="sp-home-section-title">Action Items</div>
+          <div class="sp-home-section-title">Next Steps</div>
           <div class="sp-home-card">
-            ${actionItems.map(c => {
+            ${nextSteps.map(c => {
               const dateClass = c.daysUntil < 0 ? 'overdue' : c.daysUntil === 0 ? 'today' : 'upcoming';
               const dateLabel = c.daysUntil < 0 ? `${Math.abs(c.daysUntil)}d overdue` : c.daysUntil === 0 ? 'Today' : c.daysUntil === 1 ? 'Tomorrow' : `in ${c.daysUntil}d`;
-              return `<div class="sp-home-action-item" data-id="${c.id}">
+              return `<div class="sp-home-action-item" data-id="${c.id}" data-type="company">
                 <div>
                   <div class="sp-home-action-company">${c.company}</div>
-                  <div class="sp-home-action-step">${(c.nextStep || '').slice(0, 50)}</div>
+                  <div class="sp-home-action-step">${c.text}</div>
                 </div>
                 <span class="sp-home-action-date ${dateClass}">${dateLabel}</span>
               </div>`;
@@ -1118,44 +1142,272 @@ function renderHomeState() {
           </div>
         </div>
       `;
-      document.querySelectorAll('.sp-home-action-item').forEach(el => {
+      document.querySelectorAll('#sp-home-actions .sp-home-action-item').forEach(el => {
         el.addEventListener('click', () => window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'));
       });
     } else {
       document.getElementById('sp-home-actions').innerHTML = '';
     }
 
-    // Pipeline snapshot
-    const opps = companies.filter(c => c.isOpportunity);
-    if (opps.length) {
-      chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
-        const stages = stageData.opportunityStages || stageData.customStages || [
-          { key: 'needs_review', label: 'AI Scoring Queue' },
-          { key: 'want_to_apply', label: 'Want to Apply' },
-          { key: 'applied', label: 'Applied' },
-          { key: 'conversations', label: 'Conversations' },
-        ];
-        const counts = {};
-        stages.forEach(s => counts[s.key] = 0);
-        opps.forEach(c => { const k = c.jobStage || 'needs_review'; counts[k] = (counts[k] || 0) + 1; });
+    // Tasks — user-created tasks with due dates, completable with checkbox
+    chrome.storage.local.get(['userTasks'], taskData => {
+      const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
+      const tasks = (taskData.userTasks || [])
+        .filter(t => !t.completed && t.dueDate)
+        .map(t => {
+          const daysUntil = Math.round((new Date(t.dueDate + 'T12:00:00') - new Date()) / 86400000);
+          return { ...t, daysUntil };
+        })
+        .sort((a, b) => {
+          if (a.daysUntil !== b.daysUntil) return a.daysUntil - b.daysUntil;
+          return priVal(a.priority) - priVal(b.priority);
+        })
+        .slice(0, 20);
 
-        document.getElementById('sp-home-pipeline').innerHTML = `
+      const tasksEl = document.getElementById('sp-home-tasks');
+      // Read filter state
+      const taskPriFilter = tasksEl._priFilter || 'all';
+      const taskDateFilter = tasksEl._dateFilter || 'all';
+
+      // Apply filters
+      const filtered = tasks.filter(t => {
+        if (taskPriFilter !== 'all' && (t.priority || 'normal') !== taskPriFilter) return false;
+        if (taskDateFilter === 'overdue' && t.daysUntil >= 0) return false;
+        if (taskDateFilter === 'today' && t.daysUntil !== 0) return false;
+        if (taskDateFilter === 'upcoming' && t.daysUntil <= 0) return false;
+        return true;
+      });
+
+      const priColors = { low: { bg: '#DBEAFE', color: '#1D4ED8' }, normal: { bg: '#FEF3C7', color: '#92400E' }, high: { bg: '#FEE2E2', color: '#991B1B' } };
+
+      const filterBtn = (label, filterKey, filterVal) => {
+        const isActive = (filterKey === 'pri' ? taskPriFilter : taskDateFilter) === filterVal;
+        return `<button data-filter-key="${filterKey}" data-filter-val="${filterVal}" style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid ${isActive ? '#FF7A59' : '#E8E5E0'};background:${isActive ? 'rgba(255,122,89,0.08)' : '#fff'};color:${isActive ? '#FF7A59' : '#6B6560'};cursor:pointer;font-family:inherit;transition:all 0.15s;">${label}</button>`;
+      };
+
+      {
+        tasksEl.innerHTML = `
           <div class="sp-home-section">
-            <div class="sp-home-section-title">Pipeline</div>
+            <div class="sp-home-section-title" style="display:flex;align-items:center;justify-content:space-between;">
+              Tasks
+              <button id="sp-task-new-btn" style="font-size:10px;font-weight:700;color:#FF7A59;background:none;border:1px solid #FF7A59;border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit;">+ New</button>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+              ${filterBtn('All', 'pri', 'all')}${filterBtn('High', 'pri', 'high')}${filterBtn('Normal', 'pri', 'normal')}${filterBtn('Low', 'pri', 'low')}
+              <span style="width:1px;background:#E8E5E0;margin:0 2px;"></span>
+              ${filterBtn('All dates', 'date', 'all')}${filterBtn('Overdue', 'date', 'overdue')}${filterBtn('Today', 'date', 'today')}${filterBtn('Upcoming', 'date', 'upcoming')}
+            </div>
             <div class="sp-home-card">
-              ${stages.filter(s => counts[s.key] > 0).map(s => `
-                <div class="sp-home-stage-row">
-                  <span class="sp-home-stage-name">${s.label}</span>
-                  <span class="sp-home-stage-count">${counts[s.key]}</span>
+              ${filtered.length ? filtered.map(t => {
+                const dateClass = t.daysUntil < 0 ? 'overdue' : t.daysUntil === 0 ? 'today' : 'upcoming';
+                const dateLabel = t.daysUntil < 0 ? `${Math.abs(t.daysUntil)}d overdue` : t.daysUntil === 0 ? 'Today' : t.daysUntil === 1 ? 'Tomorrow' : `in ${t.daysUntil}d`;
+                const pri = t.priority || 'normal';
+                const pc = priColors[pri] || priColors.normal;
+                return `<div class="sp-home-action-item" style="display:flex;align-items:center;gap:8px;" data-task-id="${t.id}">
+                  <div class="sp-task-check" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:50%;border:2px solid #dfe3eb;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" title="Complete task"></div>
+                  <div style="flex:1;min-width:0;" class="sp-task-click" data-task-id="${t.id}" data-company-id="${t.companyId || ''}">
+                    <div class="sp-home-action-company">${t.company || 'Task'}</div>
+                    <div class="sp-home-action-step">${(t.text || '').slice(0, 50)}</div>
+                  </div>
+                  <button class="sp-task-pri-toggle" data-task-id="${t.id}" data-pri="${pri}" title="Click to change priority" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;cursor:pointer;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;font-family:inherit;">${pri}</button>
+                  <span class="sp-task-date-edit ${dateClass}" data-task-id="${t.id}" data-date="${t.dueDate || ''}" title="Click to change date" style="cursor:pointer;flex-shrink:0;">${dateLabel}</span>
+                </div>`;
+              }).join('') : `<div style="color:#A09A94;font-size:12px;padding:8px 0;">${tasks.length ? 'No tasks match filter' : 'No tasks yet'}</div>`}
+            </div>
+            <div id="sp-task-add-form" style="display:none;margin-top:8px;">
+              <div class="sp-home-card" style="display:flex;flex-direction:column;gap:8px;padding:12px;">
+                <input type="text" id="sp-quick-task-input" placeholder="What needs to be done?" style="font-size:13px;padding:8px 10px;border:1px solid #E8E5E0;border-radius:6px;font-family:inherit;outline:none;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <div id="sp-quick-task-pri" style="display:flex;gap:0;border:1px solid #E8E5E0;border-radius:6px;overflow:hidden;">
+                    <button type="button" data-pri="low" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;font-family:inherit;background:#fff;color:#6B6560;">Low</button>
+                    <button type="button" data-pri="normal" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;border-left:1px solid #E8E5E0;border-right:1px solid #E8E5E0;cursor:pointer;font-family:inherit;background:#FEF3C7;color:#92400E;">Normal</button>
+                    <button type="button" data-pri="high" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;font-family:inherit;background:#fff;color:#6B6560;">High</button>
+                  </div>
+                  <input type="date" id="sp-quick-task-date" style="font-size:11px;padding:5px 8px;border:1px solid #E8E5E0;border-radius:6px;font-family:inherit;color:#6B6560;outline:none;flex:1;">
                 </div>
-              `).join('')}
+                <div style="display:flex;gap:8px;">
+                  <button id="sp-quick-task-add" style="flex:1;font-size:12px;font-weight:700;color:#fff;background:#FF7A59;border:none;border-radius:6px;padding:8px;cursor:pointer;font-family:inherit;">Add Task</button>
+                  <button id="sp-quick-task-cancel" style="font-size:12px;font-weight:600;color:#6B6560;background:#F0EEEB;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-family:inherit;">Cancel</button>
+                </div>
+              </div>
             </div>
           </div>
         `;
-      });
-    } else {
-      document.getElementById('sp-home-pipeline').innerHTML = '';
-    }
+
+        // Filter handlers
+        tasksEl.querySelectorAll('[data-filter-key]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const key = btn.dataset.filterKey;
+            const val = btn.dataset.filterVal;
+            if (key === 'pri') tasksEl._priFilter = val;
+            else tasksEl._dateFilter = val;
+            showPipelineStats();
+          });
+        });
+
+        // "+ New" button shows the add form
+        tasksEl.querySelector('#sp-task-new-btn')?.addEventListener('click', () => {
+          const form = tasksEl.querySelector('#sp-task-add-form');
+          if (form) {
+            form.style.display = 'block';
+            form.querySelector('#sp-quick-task-input')?.focus();
+          }
+        });
+        // Cancel hides it
+        tasksEl.querySelector('#sp-quick-task-cancel')?.addEventListener('click', () => {
+          const form = tasksEl.querySelector('#sp-task-add-form');
+          if (form) form.style.display = 'none';
+        });
+
+        // Quick-add task handler
+        const quickInput = tasksEl.querySelector('#sp-quick-task-input');
+        const quickDate = tasksEl.querySelector('#sp-quick-task-date');
+        const quickBtn = tasksEl.querySelector('#sp-quick-task-add');
+        const quickPriGroup = tasksEl.querySelector('#sp-quick-task-pri');
+        let quickPriority = 'normal';
+        if (quickDate) quickDate.value = new Date().toISOString().slice(0, 10);
+        if (quickPriGroup) {
+          quickPriGroup.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+              quickPriority = btn.dataset.pri;
+              quickPriGroup.querySelectorAll('button').forEach(b => {
+                const isActive = b.dataset.pri === quickPriority;
+                const c = priColors[b.dataset.pri];
+                b.style.background = isActive ? c.bg : '#fff';
+                b.style.color = isActive ? c.color : '#6B6560';
+              });
+            });
+          });
+        }
+        const addQuickTask = () => {
+          const text = quickInput?.value?.trim();
+          if (!text) {
+            if (quickInput) {
+              quickInput.style.borderColor = '#FF7A59';
+              quickInput.placeholder = 'Type a task first...';
+              setTimeout(() => { quickInput.style.borderColor = ''; quickInput.placeholder = 'What needs to be done?'; }, 1500);
+            }
+            return;
+          }
+          const dueDate = quickDate?.value || new Date().toISOString().slice(0, 10);
+          const newTask = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            text,
+            dueDate,
+            priority: quickPriority,
+            completed: false,
+            createdAt: Date.now(),
+          };
+          chrome.storage.local.get(['userTasks'], d => {
+            const all = d.userTasks || [];
+            all.push(newTask);
+            chrome.storage.local.set({ userTasks: all }, () => {
+              quickInput.value = '';
+              showPipelineStats();
+            });
+          });
+        };
+        quickBtn?.addEventListener('click', addQuickTask);
+        quickInput?.addEventListener('keydown', e => { if (e.key === 'Enter') addQuickTask(); });
+
+        // Checkbox to complete
+        tasksEl.querySelectorAll('.sp-task-check').forEach(el => {
+          el.addEventListener('mouseenter', () => { el.style.borderColor = '#5DCAA5'; });
+          el.addEventListener('mouseleave', () => { el.style.borderColor = '#dfe3eb'; });
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = el.dataset.taskId;
+            chrome.storage.local.get(['userTasks'], d => {
+              const allTasks = d.userTasks || [];
+              const task = allTasks.find(t => t.id === id);
+              if (task) {
+                task.completed = true;
+                chrome.storage.local.set({ userTasks: allTasks }, () => {
+                  // Animate out
+                  const row = el.closest('.sp-home-action-item');
+                  if (row) {
+                    el.style.background = '#5DCAA5';
+                    el.style.borderColor = '#5DCAA5';
+                    el.innerHTML = '<span style="color:#fff;font-size:10px">✓</span>';
+                    row.style.opacity = '0.4';
+                    row.style.textDecoration = 'line-through';
+                    setTimeout(() => { row.style.display = 'none'; }, 600);
+                  }
+                });
+              }
+            });
+          });
+        });
+
+        // Click date to edit
+        // Click priority badge to cycle: low → normal → high → low
+        tasksEl.querySelectorAll('.sp-task-pri-toggle').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const taskId = el.dataset.taskId;
+            const cycle = { low: 'normal', normal: 'high', high: 'low' };
+            const newPri = cycle[el.dataset.pri] || 'normal';
+            chrome.storage.local.get(['userTasks'], d => {
+              const allTasks = d.userTasks || [];
+              const task = allTasks.find(t => t.id === taskId);
+              if (task) {
+                task.priority = newPri;
+                chrome.storage.local.set({ userTasks: allTasks }, () => showPipelineStats());
+              }
+            });
+          });
+        });
+
+        // Click date to edit
+        tasksEl.querySelectorAll('.sp-task-date-edit').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const taskId = el.dataset.taskId;
+            const currentDate = el.dataset.date || '';
+            // Replace label with date input
+            const input = document.createElement('input');
+            input.type = 'date';
+            input.value = currentDate;
+            input.style.cssText = 'font-size:11px;padding:2px 4px;border:1px solid #FF7A59;border-radius:4px;font-family:inherit;outline:none;width:110px;';
+            el.replaceWith(input);
+            input.focus();
+            const save = () => {
+              const newDate = input.value;
+              if (newDate && newDate !== currentDate) {
+                chrome.storage.local.get(['userTasks'], d => {
+                  const allTasks = d.userTasks || [];
+                  const task = allTasks.find(t => t.id === taskId);
+                  if (task) {
+                    task.dueDate = newDate;
+                    chrome.storage.local.set({ userTasks: allTasks }, () => showPipelineStats());
+                  }
+                });
+              } else {
+                showPipelineStats(); // re-render to restore label
+              }
+            };
+            input.addEventListener('change', save);
+            input.addEventListener('blur', save);
+          });
+        });
+
+        // Click task text to open company
+        tasksEl.querySelectorAll('.sp-task-click').forEach(el => {
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', () => {
+            const companyId = el.dataset.companyId;
+            if (companyId) {
+              window.open(chrome.runtime.getURL('company.html?id=' + companyId), '_blank');
+            } else {
+              window.open(chrome.runtime.getURL('saved.html'), '_blank');
+            }
+          });
+        });
+      }
+    });
+
+    // Pipeline snapshot — removed, available in full-screen CRM view
+    document.getElementById('sp-home-pipeline').innerHTML = '';
 
     // Search
     const searchInput = document.getElementById('sp-home-search');
@@ -1413,7 +1665,7 @@ function updateJobTitleBar() {
 }
 
 const JOB_STATUSES = {
-  needs_review: 'AI Scoring Queue',
+  needs_review: "Coop's AI Scoring Queue",
   want_to_apply: 'I Want to Apply',
   applied: 'Applied',
   intro_requested: 'Intro Requested',
@@ -1665,6 +1917,56 @@ function checkAlreadySaved(company) {
   });
 }
 
+// ── Rejection email detection (regex-only, zero AI cost) ─────────────────────
+function detectRejectionEmail(emails, entry) {
+  if (!emails?.length) return null;
+
+  const REJECTION_PHRASES = [
+    /we(?:'ve| have) decided to (?:move|go) forward with (?:other|another|different) candidate/i,
+    /(?:unfortunately|regretfully),?\s*we (?:will not|won't|are unable to|cannot) (?:be )?(?:move|moving|proceed|proceeding) forward/i,
+    /(?:unfortunately|regretfully),?\s*(?:we|the team|I) (?:have|has) decided (?:not )?to (?:not )?(?:move|proceed|continue)/i,
+    /(?:the )?position has been filled/i,
+    /after careful (?:consideration|review|deliberation).*?(?:not|won't|unable).*?(?:move|moving|proceed|offer)/i,
+    /we(?:'re| are) not (?:able to )?(?:move|moving|proceed) forward with your (?:application|candidacy)/i,
+    /(?:we|I) (?:regret|am sorry|are sorry) to inform you/i,
+    /your (?:application|candidacy) (?:was|has been) (?:not selected|unsuccessful|rejected)/i,
+    /we(?:'ve| have) (?:chosen|selected|decided on) (?:a |an )?(?:other|another|different) candidate/i,
+    /(?:not|won't) be (?:extending|making) (?:you )?an offer/i,
+    /decided to (?:pursue|explore) other (?:candidates|directions|options)/i,
+    /will not be (?:advancing|continuing) (?:your|with your)/i,
+    /your (?:profile|background|experience) (?:does not|doesn't|did not|didn't) (?:align|match|fit)/i,
+    /we (?:appreciate|thank) (?:you|your).*?(?:but|however).*?(?:not|won't|unable).*?(?:forward|proceed|offer)/i,
+  ];
+
+  // Only check emails from the last 30 days
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+  // Skip if already tagged as rejected
+  if ((entry.tags || []).includes('Application Rejected')) return null;
+
+  for (const email of emails) {
+    // Parse date
+    const emailDate = email.date ? new Date(email.date).getTime() : 0;
+    if (emailDate && emailDate < cutoff) continue;
+
+    // Check subject + snippet + body (first 800 chars)
+    const textToCheck = [email.subject || '', email.snippet || '', (email.body || '').slice(0, 800)].join(' ');
+
+    for (const pattern of REJECTION_PHRASES) {
+      if (pattern.test(textToCheck)) {
+        return {
+          subject: email.subject,
+          from: email.from,
+          date: email.date,
+          snippet: email.snippet,
+          matchedPhrase: textToCheck.match(pattern)?.[0] || ''
+        };
+      }
+    }
+  }
+  return null;
+}
+
 // Silently fetch emails and update knownContacts for a saved entry
 function syncContactsForEntry(savedEntry) {
   const domain = (savedEntry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
@@ -1745,6 +2047,27 @@ function syncContactsForEntry(savedEntry) {
         if (idx === -1) return;
         all[idx] = { ...all[idx], ...cacheUpdates };
         currentSavedEntry = all[idx];
+
+        // ── Rejection detection ──────────────────────────────────────────
+        const activeStages = ['applied', 'co_applied', 'interviewing', 'phone_screen', 'interview', 'final_round', 'want_to_apply'];
+        const entryStage = all[idx].jobStage || all[idx].status || '';
+        if (activeStages.includes(entryStage)) {
+          const rejection = detectRejectionEmail(result.emails, all[idx]);
+          if (rejection) {
+            console.log(`[Rejection] Detected for ${all[idx].company}: "${rejection.subject}" — ${rejection.matchedPhrase}`);
+            all[idx].jobStage = 'rejected';
+            all[idx].status = 'closed';
+            const tags = all[idx].tags || [];
+            if (!tags.includes('Application Rejected')) tags.push('Application Rejected');
+            all[idx].tags = tags;
+            all[idx].rejectedAt = Date.now();
+            all[idx].rejectionEmail = { subject: rejection.subject, from: rejection.from, date: rejection.date, snippet: rejection.snippet };
+            if (!all[idx].stageTimestamps) all[idx].stageTimestamps = {};
+            all[idx].stageTimestamps.rejected = Date.now();
+            currentSavedEntry = all[idx];
+          }
+        }
+
         chrome.storage.local.set({ savedCompanies: all }, () => {
           void chrome.runtime.lastError;
           // Re-render contacts section if visible
@@ -2288,24 +2611,85 @@ function renderContactsSection(el, contacts) {
   let history = [];
   let isApplicationMode = false;
 
-  // Model switcher — default GPT-4.1 mini, click to cycle
-  const CHAT_MODELS = [
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
-    { id: 'claude-sonnet-4-5-20250514', label: 'Sonnet', icon: '✦' },
-    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
+  // Model switcher — dropdown picklist, ordered by cost
+  const CHAT_ALL_MODELS = [
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆', provider: 'openai', cost: '$', tier: 'Fast & cheap' },
+    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆', provider: 'openai', cost: '$', tier: 'Fastest' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', icon: '⚡', provider: 'anthropic', cost: '$', tier: 'Fast & cheap' },
+    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', icon: '✦', provider: 'anthropic', cost: '$$', tier: 'Balanced' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆', provider: 'openai', cost: '$$', tier: 'Balanced' },
+    { id: 'gpt-5', label: 'GPT-5', icon: '◆', provider: 'openai', cost: '$$$', tier: 'Most capable' },
+    { id: 'claude-opus-4-0-20250514', label: 'Claude Opus', icon: '★', provider: 'anthropic', cost: '$$$', tier: 'Most capable' },
   ];
+  let spAvailableModels = CHAT_ALL_MODELS;
   let chatModelIdx = 0;
   const modelToggle = document.getElementById('sp-model-toggle');
   const modelLabel = document.getElementById('sp-model-label');
+
+  // Load pipeline config and key status independently, then set the default model
+  Promise.all([
+    new Promise(r => chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, s => { void chrome.runtime.lastError; r(s); })),
+    new Promise(r => chrome.storage.local.get(['pipelineConfig'], d => r(d.pipelineConfig)))
+  ]).then(([status, pipelineCfg]) => {
+    if (status) {
+      spAvailableModels = CHAT_ALL_MODELS.filter(m => {
+        if (m.provider === 'openai') return !!status.openai;
+        if (m.provider === 'anthropic') return !!status.anthropic;
+        return true;
+      });
+      if (!spAvailableModels.length) spAvailableModels = CHAT_ALL_MODELS;
+    }
+    const configModel = pipelineCfg?.aiModels?.chat;
+    if (configModel) {
+      const idx = spAvailableModels.findIndex(m => m.id === configModel);
+      if (idx >= 0) chatModelIdx = idx;
+    }
+    updateModelLabel();
+  });
+
   function updateModelLabel() {
-    if (modelLabel) modelLabel.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
+    const m = spAvailableModels[chatModelIdx] || spAvailableModels[0];
+    if (modelLabel && m) modelLabel.textContent = m.icon + ' ' + m.label;
   }
-  updateModelLabel();
+
   if (modelToggle) {
-    modelToggle.addEventListener('click', () => {
-      chatModelIdx = (chatModelIdx + 1) % CHAT_MODELS.length;
-      updateModelLabel();
+    modelToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const existing = document.getElementById('sp-model-dropdown');
+      if (existing) { existing.remove(); return; }
+
+      const rect = modelToggle.getBoundingClientRect();
+      const dd = document.createElement('div');
+      dd.id = 'sp-model-dropdown';
+      // Position above the toggle to avoid getting cut off at bottom of sidepanel
+      const dropdownHeight = spAvailableModels.length * 52 + 12;
+      const topPos = Math.max(8, rect.top - dropdownHeight - 4);
+      dd.style.cssText = `position:fixed;top:${topPos}px;left:${Math.max(4, rect.left - 40)}px;right:8px;max-width:240px;background:#fff;border:1px solid #dfe3eb;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.15);z-index:10001;padding:6px 0;font-family:inherit;max-height:${window.innerHeight - 20}px;overflow-y:auto;`;
+
+      dd.innerHTML = spAvailableModels.map((m, i) => `
+        <div data-idx="${i}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;cursor:pointer;transition:background 0.1s;${i === chatModelIdx ? 'background:rgba(255,122,89,0.08);' : ''}">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:${i === chatModelIdx ? '#FF7A59' : '#2d3e50'}">${m.icon} ${m.label}</div>
+            <div style="font-size:10px;color:#7c98b6">${m.tier}</div>
+          </div>
+          <span style="font-size:10px;font-weight:700;color:${m.cost === '$' ? '#5DCAA5' : m.cost === '$$' ? '#ca8a04' : '#FF7A59'};letter-spacing:1px">${m.cost}</span>
+        </div>
+      `).join('');
+
+      document.body.appendChild(dd);
+
+      dd.querySelectorAll('[data-idx]').forEach(opt => {
+        opt.addEventListener('mouseenter', () => { opt.style.background = '#f5f3f0'; });
+        opt.addEventListener('mouseleave', () => { opt.style.background = parseInt(opt.dataset.idx) === chatModelIdx ? 'rgba(255,122,89,0.08)' : ''; });
+        opt.addEventListener('click', () => {
+          chatModelIdx = parseInt(opt.dataset.idx);
+          updateModelLabel();
+          dd.remove();
+        });
+      });
+
+      const closeDd = (ev) => { if (!dd.contains(ev.target) && ev.target !== modelToggle) { dd.remove(); document.removeEventListener('click', closeDd); } };
+      setTimeout(() => document.addEventListener('click', closeDd), 0);
     });
   }
 
@@ -2363,6 +2747,83 @@ function renderContactsSection(el, contacts) {
     return html;
   }
 
+  // ── Proposal parsing & application ────────────────────────────────────────
+  function parseEntryProposals(content) {
+    const proposals = [];
+    let cleaned = content;
+    const fenceRegex = /```entry-update\n([\s\S]*?)```/g;
+    let match;
+    while ((match = fenceRegex.exec(content)) !== null) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        if (Array.isArray(parsed)) proposals.push(...parsed);
+        else proposals.push(parsed);
+      } catch {}
+      cleaned = cleaned.replace(match[0], '');
+    }
+    // Also parse create-task fences
+    const taskRegex = /```create-task\n([\s\S]*?)```/g;
+    while ((match = taskRegex.exec(content)) !== null) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        proposals.push({ ...parsed, _type: 'task' });
+      } catch {}
+      cleaned = cleaned.replace(match[0], '');
+    }
+    return { cleaned: cleaned.trim(), proposals };
+  }
+
+  function applyEntryProposal(proposal) {
+    // Handle task creation
+    if (proposal._type === 'task') {
+      const newTask = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        text: proposal.text,
+        company: proposal.company || currentSavedEntry?.company || '',
+        companyId: currentSavedEntry?.id || '',
+        dueDate: proposal.dueDate || new Date().toISOString().slice(0, 10),
+        priority: proposal.priority || 'normal',
+        completed: false,
+        createdAt: Date.now(),
+        source: 'coop',
+      };
+      chrome.storage.local.get(['userTasks'], d => {
+        const all = d.userTasks || [];
+        all.push(newTask);
+        chrome.storage.local.set({ userTasks: all });
+      });
+      return;
+    }
+    if (!currentSavedEntry?.id) return;
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const entries = savedCompanies || [];
+      const idx = entries.findIndex(c => c.id === currentSavedEntry.id);
+      if (idx === -1) return;
+      const entry = entries[idx];
+      const field = proposal.field;
+      const value = proposal.value;
+
+      if (field === 'notes') {
+        // Append to notes
+        const existing = entry.notes || '';
+        const sep = existing ? '\n' : '';
+        entry.notes = existing + sep + value;
+      } else if (field === 'addTags') {
+        const tags = entry.tags || [];
+        (Array.isArray(value) ? value : [value]).forEach(t => { if (!tags.includes(t)) tags.push(t); });
+        entry.tags = tags;
+      } else if (field === 'removeTags') {
+        const remove = Array.isArray(value) ? value : [value];
+        entry.tags = (entry.tags || []).filter(t => !remove.includes(t));
+      } else {
+        entry[field] = value;
+      }
+
+      Object.assign(currentSavedEntry, entry);
+      chrome.storage.local.set({ savedCompanies: entries });
+    });
+  }
+
   function renderMessages(showThinking) {
     if (history.length === 0) {
       msgsEl.innerHTML = typeof COOP !== 'undefined' ? `<div class="sp-chat-empty">${COOP.emptyStateHTML('company')}</div>` : '<div class="sp-chat-empty">Ask about this role, company, or get help applying.</div>';
@@ -2371,7 +2832,28 @@ function renderContactsSection(el, contacts) {
         ? (typeof COOP !== 'undefined' ? `<div class="sp-chat-msg sp-chat-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="sp-chat-msg sp-chat-msg-assistant"><div class="sp-chat-bubble sp-chat-thinking"><span class="sp-thinking-dots"><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span><span class="sp-thinking-dot"></span></span></div></div>')
         : '';
       msgsEl.innerHTML = history.map((m, idx) => {
-        const bubble = m.role === 'assistant' ? renderMd(m.content) : escHtml(m.content);
+        let bubble;
+        let proposalHTML = '';
+        if (m.role === 'assistant') {
+          const { cleaned, proposals } = parseEntryProposals(m.content);
+          bubble = renderMd(cleaned);
+          if (proposals.length) {
+            proposalHTML = proposals.map((p, pi) => {
+              const label = p._type === 'task'
+                ? (p.label || `Task: ${p.text}`)
+                : (p.label || `Set ${p.field} to ${typeof p.value === 'string' ? p.value : JSON.stringify(p.value)}`);
+              return `<div class="sp-chat-proposal" data-msg="${idx}" data-pi="${pi}">
+                <div class="sp-chat-proposal-text">${escHtml(label)}</div>
+                <div class="sp-chat-proposal-actions">
+                  <button class="sp-chat-proposal-accept">Accept</button>
+                  <button class="sp-chat-proposal-dismiss">Dismiss</button>
+                </div>
+              </div>`;
+            }).join('');
+          }
+        } else {
+          bubble = escHtml(m.content);
+        }
         const copyBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
           ? `<button class="sp-chat-copy" data-idx="${idx}" title="Copy to clipboard">📋</button>`
           : '';
@@ -2379,10 +2861,30 @@ function renderContactsSection(el, contacts) {
           ? `<button class="sp-chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern">💾 Save</button>`
           : '';
         const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${copyBtn}${saveAnswerBtn}</div>`;
+        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${proposalHTML}${copyBtn}${saveAnswerBtn}</div>`;
       }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    // Bind proposal accept/dismiss buttons
+    msgsEl.querySelectorAll('.sp-chat-proposal-accept').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.sp-chat-proposal');
+        const msgIdx = parseInt(card.dataset.msg);
+        const pi = parseInt(card.dataset.pi);
+        const { proposals } = parseEntryProposals(history[msgIdx]?.content || '');
+        if (proposals[pi]) {
+          applyEntryProposal(proposals[pi]);
+          card.querySelector('.sp-chat-proposal-actions').innerHTML = '<span style="color:#5DCAA5;font-weight:600;font-size:12px">Applied</span>';
+        }
+      });
+    });
+    msgsEl.querySelectorAll('.sp-chat-proposal-dismiss').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.sp-chat-proposal');
+        card.querySelector('.sp-chat-proposal-actions').innerHTML = '<span style="color:#7c98b6;font-size:12px">Dismissed</span>';
+      });
+    });
 
     // Bind copy buttons
     msgsEl.querySelectorAll('.sp-chat-copy').forEach(btn => {
@@ -2487,7 +2989,7 @@ function renderContactsSection(el, contacts) {
     try {
       result = await Promise.race([
         new Promise(resolve => {
-          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context, chatModel: CHAT_MODELS[chatModelIdx].id }, r => {
+          chrome.runtime.sendMessage({ type: 'CHAT_MESSAGE', messages: apiMessages, context, chatModel: spAvailableModels[chatModelIdx].id }, r => {
             if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
             else resolve(r);
           });
@@ -2501,7 +3003,7 @@ function renderContactsSection(el, contacts) {
     sendBtn.disabled = false;
     // If the backend fell back to a different model, show which one was used
     const replyText = result?.reply || result?.error || 'Something went wrong.';
-    const fallbackNote = (result?.model && result.model !== CHAT_MODELS[chatModelIdx].id)
+    const fallbackNote = (result?.model && result.model !== spAvailableModels[chatModelIdx].id)
       ? `\n\n*— answered by ${result.model.includes('gpt') ? 'GPT-4.1 mini' : result.model} (fallback)*`
       : '';
     history.push({ role: 'assistant', content: replyText + fallbackNote });
@@ -2533,25 +3035,56 @@ function renderContactsSection(el, contacts) {
     }
   });
 
-  // Detach to floating window
-  // Expand/collapse chat within sidebar
-  let chatExpanded = false;
-  detachBtn?.addEventListener('click', () => {
-    chatExpanded = !chatExpanded;
-    if (chatExpanded) {
+  // Chat size states: 'normal' → 'expanded' → 'minimized' → 'normal'
+  let chatSizeState = 'normal'; // normal | expanded | minimized
+  const inputRow = chatEl.querySelector('.sp-chat-input-row');
+  const actionsRow = chatEl.querySelector('.sp-chat-actions');
+
+  function applyChatSize() {
+    if (chatSizeState === 'expanded') {
       msgsEl.style.maxHeight = '70vh';
       msgsEl.style.minHeight = '200px';
-      detachBtn.textContent = '⤡'; // collapse icon
-      detachBtn.title = 'Collapse chat';
+      msgsEl.style.display = '';
+      if (inputRow) inputRow.style.display = '';
+      if (actionsRow) actionsRow.style.display = '';
+      detachBtn.textContent = '⤡';
+      detachBtn.title = 'Minimize chat';
+    } else if (chatSizeState === 'minimized') {
+      msgsEl.style.display = 'none';
+      if (inputRow) inputRow.style.display = 'none';
+      if (actionsRow) actionsRow.style.display = 'none';
+      detachBtn.textContent = '⤢';
+      detachBtn.title = 'Expand chat';
     } else {
       msgsEl.style.maxHeight = localStorage.getItem('ci_sp_chat_height') ? localStorage.getItem('ci_sp_chat_height') + 'px' : '300px';
       msgsEl.style.minHeight = '60px';
-      detachBtn.textContent = '⤢'; // expand icon
+      msgsEl.style.display = '';
+      if (inputRow) inputRow.style.display = '';
+      if (actionsRow) actionsRow.style.display = '';
+      detachBtn.textContent = '⤢';
       detachBtn.title = 'Expand chat';
     }
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-    // Scroll the chat panel into view so it doesn't expand below the visible area
-    chatEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (chatSizeState !== 'minimized') {
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+  }
+
+  detachBtn?.addEventListener('click', () => {
+    if (chatSizeState === 'normal') chatSizeState = 'expanded';
+    else if (chatSizeState === 'expanded') chatSizeState = 'minimized';
+    else chatSizeState = 'normal';
+    applyChatSize();
+    if (chatSizeState !== 'minimized') {
+      chatEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+
+  // Click header title to toggle minimize/normal
+  const chatHeader = chatEl.querySelector('.sp-chat-header');
+  chatHeader?.addEventListener('click', (e) => {
+    if (e.target.closest('button') || e.target.closest('.sp-model-toggle')) return; // don't intercept button clicks
+    chatSizeState = chatSizeState === 'minimized' ? 'normal' : 'minimized';
+    applyChatSize();
   });
 
   // Show chat when company is detected

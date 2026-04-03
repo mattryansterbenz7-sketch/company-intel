@@ -10,10 +10,10 @@ let activeRatings = new Set(); // empty = any
 let activeStatus = 'all';
 let activeTag = null;
 let activeActionFilter = 'all'; // 'all' | 'my_court' | 'their_court'
-let viewMode = localStorage.getItem('ci_viewMode') || 'grid';
+let viewMode = localStorage.getItem('ci_viewMode') || 'kanban';
 
 const DEFAULT_OPPORTUNITY_STAGES = [
-  { key: 'needs_review',    label: 'AI Scoring Queue',           color: '#64748b' },
+  { key: 'needs_review',    label: "Coop's AI Scoring Queue",           color: '#64748b' },
   { key: 'want_to_apply',   label: 'I Want to Apply',           color: '#22d3ee' },
   { key: 'applied',         label: 'Applied',                   color: '#60a5fa' },
   { key: 'intro_requested', label: 'Intro Requested',           color: '#a78bfa' },
@@ -32,7 +32,7 @@ const DEFAULT_COMPANY_STAGES = [
 ];
 let customOpportunityStages = [...DEFAULT_OPPORTUNITY_STAGES];
 let customCompanyStages = [...DEFAULT_COMPANY_STAGES];
-let activePipeline = localStorage.getItem('ci_activePipeline') || 'all'; // 'all' | 'opportunity' | 'company'
+let activePipeline = localStorage.getItem('ci_activePipeline') || 'opportunity'; // 'all' | 'opportunity' | 'company'
 let stageCelebrations = {}; // { [stageKey]: { confetti, sound } } — loaded from storage
 const DEFAULT_ACTION_STATUSES = [
   { key: 'my_court', label: '🏀 My Court', color: '#FF7A59' },
@@ -262,9 +262,9 @@ function renderCompactCard(c) {
   const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
   const stateClass = isScoring ? ' scoring' : '';
 
-  // Hard DQ
+  // Hard DQ — only show if score is genuinely low (3 or below) to avoid false positives
   const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
-  const compactDQHtml = hardDQ?.flagged ? '<div class="compact-dq">\u{1F6AB} Hard DQ</div>' : '';
+  const compactDQHtml = hardDQ?.flagged && score != null && score <= 3 ? '<div class="compact-dq">\u{1F6AB} Hard DQ</div>' : '';
 
   // Score display
   let scoreHtml;
@@ -276,21 +276,30 @@ function renderCompactCard(c) {
     scoreHtml = '<span class="compact-queue-dot"></span>';
   }
 
+  // Helper: strip job title prefix from any text field
+  function stripTitleEcho(text) {
+    if (!text || !c.jobTitle) return text;
+    const tl = c.jobTitle.toLowerCase().trim();
+    const xl = text.toLowerCase().trim();
+    // Exact or prefix match
+    if (xl.startsWith(tl)) {
+      text = text.slice(c.jobTitle.length).replace(/^[\s:—–\-,.;with]+/i, '').trim();
+    }
+    // If remaining text is empty or essentially the same as the title, kill it
+    if (text) {
+      const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (norm(text) === norm(c.jobTitle) || norm(c.jobTitle).includes(norm(text)) && text.length < c.jobTitle.length + 10) text = '';
+    }
+    return text;
+  }
+
   // Meta line: salary + arrangement
   let salary = c.baseSalaryRange || c.oteTotalComp || c.jobMatch?.salary?.base || c.jobSnapshot?.salary || '';
-  // Strip job title from salary if the AI accidentally included it
-  if (salary && c.jobTitle) {
-    const salLower = salary.toLowerCase();
-    const titleLower = c.jobTitle.toLowerCase();
-    // Strip if salary starts with the title
-    if (salLower.startsWith(titleLower)) {
-      salary = salary.slice(c.jobTitle.length).replace(/^[\s:—–\-,.;with]+/i, '').trim();
-    }
-    // If salary still looks like a title (no $ or digits in first 20 chars), extract just the money part
-    if (salary && !/[\$\d]/.test(salary.slice(0, 20))) {
-      const moneyMatch = salary.match(/\$[\d,]+[KkMm]?(?:\s*[-–]\s*\$[\d,]+[KkMm]?)?/);
-      salary = moneyMatch ? moneyMatch[0] : '';
-    }
+  salary = stripTitleEcho(salary);
+  // If salary still looks like a title (no $ or digits in first 20 chars), extract just the money part
+  if (salary && !/[\$\d]/.test(salary.slice(0, 20))) {
+    const moneyMatch = salary.match(/\$[\d,]+[KkMm]?(?:\s*[-–]\s*\$[\d,]+[KkMm]?)?/);
+    salary = moneyMatch ? moneyMatch[0] : '';
   }
   const arr = c.jobSnapshot?.workArrangement || c.jobMatch?.workArrangement || '';
   const meta = [salary, arr].filter(Boolean).join(' \u00b7 ');
@@ -323,19 +332,22 @@ function renderCompactCard(c) {
       <div class="compact-card-body">
         <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtmlGlobal(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
         ${c.jobUrl ? `<a class="compact-title" href="${escHtmlGlobal(c.jobUrl)}" target="_blank" title="Open job posting">${escHtmlGlobal(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>`}
-        ${meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : ''}
+        ${(() => {
+          // Filter meta: remove job title echo from salary/arrangement line
+          if (meta && c.jobTitle && meta.toLowerCase().startsWith(c.jobTitle.toLowerCase())) return '';
+          return meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : '';
+        })()}
         ${(c.jobMatch?.verdict || c.quickFitReason) && score != null ? (() => {
-          // Strip job title echo from reason
           let reason = c.jobMatch?.verdict || c.quickFitReason;
           if (c.jobTitle) {
-            const titleLower = c.jobTitle.toLowerCase();
-            const reasonLower = reason.toLowerCase();
-            if (reasonLower.startsWith(titleLower)) {
-              reason = reason.slice(c.jobTitle.length).replace(/^[\s:—–\-,.]+/, '').trim();
-            } else if (reasonLower.includes(titleLower)) {
-              // Title appears somewhere in the reason — remove it
-              reason = reason.replace(new RegExp(c.jobTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').replace(/^[\s:—–\-,.]+/, '').trim();
+            reason = stripTitleEcho(reason);
+            // Also strip if the remaining text still closely matches the title
+            if (reason) {
+              const sim = reason.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const titleSim = c.jobTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (sim === titleSim || titleSim.startsWith(sim) || sim.startsWith(titleSim)) reason = '';
             }
+            if (reason && reason.length < 10 && !/[a-z]{3,}/i.test(reason)) reason = '';
           }
           return reason ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(reason)}</div>` : '';
         })() : ''}
@@ -351,6 +363,326 @@ function renderCompactCard(c) {
       </div>
     </div>`;
 }
+
+// ── Score Preview Modal ──────────────────────────────────────────────────────
+
+function openScoreModal(entry) {
+  const overlay = document.getElementById('score-modal-overlay');
+  const content = document.getElementById('score-modal-content');
+  if (!overlay || !content) return;
+
+  const score = entry.jobMatch?.score ?? entry.quickFitScore ?? null;
+  const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
+  const jm = entry.jobMatch || {};
+
+  // Salary
+  const salary = entry.baseSalaryRange || entry.oteTotalComp || jm.salary?.base || entry.jobSnapshot?.salary || '';
+  const arrangement = entry.jobSnapshot?.workArrangement || jm.workArrangement || '';
+  const meta = [salary, arrangement].filter(Boolean).join(' \u00b7 ');
+
+  // Hard DQ — only show if score is genuinely low (3 or below) to avoid false positives
+  const hardDQ = jm.hardDQ || entry.hardDQ;
+  const dqHtml = hardDQ?.flagged && score != null && score <= 3
+    ? `<div class="score-modal-dq">\u{1F6AB} Hard Disqualifier${hardDQ.reasons?.length ? ': ' + hardDQ.reasons.join('; ') : ''}</div>`
+    : '';
+
+  // Flags — side by side
+  const strongFits = jm.strongFits || [];
+  const redFlags = jm.redFlags || jm.watchOuts || [];
+  const greenCol = strongFits.length ? `<div class="score-modal-flag-col green">
+    <div class="score-modal-flag-heading green">Green Flags</div>
+    ${strongFits.map(f => `<div class="score-modal-flag"><span class="score-modal-flag-icon">\u{2705}</span><span>${escHtmlGlobal(f)}</span></div>`).join('')}
+  </div>` : '';
+  const redCol = redFlags.length ? `<div class="score-modal-flag-col red">
+    <div class="score-modal-flag-heading red">Red Flags</div>
+    ${redFlags.map(f => `<div class="score-modal-flag"><span class="score-modal-flag-icon">\u{1F534}</span><span>${escHtmlGlobal(f)}</span></div>`).join('')}
+  </div>` : '';
+  const flagsHtml = (greenCol || redCol) ? `${greenCol}${redCol}` : '';
+
+  // Tags
+  const tagsHtml = (entry.tags || []).map(t => {
+    const cl = tagColor(t);
+    return `<span class="score-modal-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtmlGlobal(t)}</span>`;
+  }).join('');
+
+  // Favicon
+  const favDomain = entry.companyWebsite ? entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+  const favHtml = favDomain ? `<img src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" style="width:20px;height:20px;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : '';
+
+  // Job summary + role brief
+  const summary = jm.jobSummary || jm.roleBrief?.roleSummary || jm.verdict || '';
+  const rb = jm.roleBrief || {};
+
+  content.innerHTML = `
+    <div class="score-modal-header">
+      <div class="score-modal-score ${tier}">
+        <div class="score-modal-score-num" style="color:${tier === 'green' ? '#0F6E56' : tier === 'amber' ? '#854F0B' : '#A32D2D'}">${score}</div>
+        <div class="score-modal-score-den">/10</div>
+      </div>
+      <div>
+        <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit">${favHtml} ${escHtmlGlobal(entry.company)}</a>
+        <div class="score-modal-title">${entry.jobUrl ? `<a href="${escHtmlGlobal(entry.jobUrl)}" target="_blank">${escHtmlGlobal(entry.jobTitle || '')}</a>` : escHtmlGlobal(entry.jobTitle || '')}</div>
+        ${meta ? `<div class="score-modal-meta">${escHtmlGlobal(meta)}</div>` : ''}
+      </div>
+    </div>
+    <div class="score-modal-body">
+      ${dqHtml}
+      ${summary ? `<div class="score-modal-verdict">${escHtmlGlobal(summary)}</div>` : ''}
+      ${flagsHtml ? `<div class="score-modal-flags">${flagsHtml}</div>` : ''}
+      ${rb.whyInteresting ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#1D9E75;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Why interesting</strong><br>${escHtmlGlobal(rb.whyInteresting)}</div>` : ''}
+      ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtmlGlobal(rb.concerns)}</div>` : ''}
+      ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/5)` : ''}</strong><br>${escHtmlGlobal(rb.qualificationMatch)}</div>` : ''}
+      ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtmlGlobal(rb.compSummary)}</div>` : ''}
+      ${tagsHtml ? `<div class="score-modal-tags">${tagsHtml}</div>` : ''}
+      <div style="display:flex;gap:8px;">
+        <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" target="_blank" style="flex:1">See full breakdown</a>
+        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtmlGlobal(entry.jobUrl)}" target="_blank" style="flex:1">View posting</a>` : ''}
+      </div>
+      <button class="score-modal-rescore" id="score-modal-rescore-btn">Re-score with latest criteria</button>
+      ${entry.jobMatchScoredAt ? `<div style="text-align:center;font-size:11px;color:#A09A94;margin-top:4px;">Scored ${new Date(entry.jobMatchScoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>` : ''}
+    </div>
+    <div class="score-modal-actions">
+      <button class="score-modal-dismiss" id="score-modal-dismiss-btn">Pass</button>
+      <button class="score-modal-apply" id="score-modal-apply-btn">Apply</button>
+    </div>
+  `;
+
+  overlay.classList.add('open');
+
+  // Action handlers
+  document.getElementById('score-modal-apply-btn').addEventListener('click', () => {
+    overlay.classList.remove('open');
+    // Trigger the same logic as the compact card Apply button
+    const btn = document.querySelector(`.compact-apply-btn[data-id="${entry.id}"]`);
+    if (btn) btn.click();
+  });
+  document.getElementById('score-modal-dismiss-btn').addEventListener('click', () => {
+    overlay.classList.remove('open');
+    const btn = document.querySelector(`.compact-dismiss-btn[data-id="${entry.id}"]`);
+    if (btn) btn.click();
+  });
+
+  // Re-score button
+  document.getElementById('score-modal-rescore-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('score-modal-rescore-btn');
+    // Re-read entry from allCompanies in case it was updated
+    const freshEntry = allCompanies.find(c => c.id === entry.id) || entry;
+
+    if (!freshEntry.jobDescription) {
+      if (freshEntry.jobUrl) {
+        btn.textContent = 'Opening posting to grab description...';
+        btn.style.color = '#A09A94';
+        btn.disabled = true;
+        // Open the posting so the content script captures the job description
+        window.open(freshEntry.jobUrl, '_blank');
+        // Poll for the job description to appear in storage (content script will save it)
+        let attempts = 0;
+        const poll = setInterval(() => {
+          attempts++;
+          chrome.storage.local.get(['savedCompanies'], data => {
+            const updated = (data.savedCompanies || []).find(c => c.id === freshEntry.id);
+            if (updated?.jobDescription) {
+              clearInterval(poll);
+              // Update in-memory data
+              const idx = allCompanies.findIndex(c => c.id === freshEntry.id);
+              if (idx !== -1) allCompanies[idx] = updated;
+              btn.textContent = 'Re-score with latest criteria';
+              btn.style.color = '';
+              btn.disabled = false;
+              // Auto-trigger re-score
+              btn.click();
+            } else if (attempts > 20) {
+              clearInterval(poll);
+              btn.textContent = 'Visit the posting, then try again';
+              btn.style.color = '#A09A94';
+              btn.disabled = false;
+              setTimeout(() => { btn.textContent = 'Re-score with latest criteria'; btn.style.color = ''; }, 4000);
+            }
+          });
+        }, 2000);
+      } else {
+        btn.textContent = 'No job posting URL — can\'t re-score';
+        btn.style.color = '#A09A94';
+        setTimeout(() => { btn.textContent = 'Re-score with latest criteria'; btn.style.color = ''; }, 3000);
+      }
+      return;
+    }
+
+    btn.textContent = 'Re-scoring...';
+    btn.disabled = true;
+    console.log('[Scorecard] Re-scoring', freshEntry.company, freshEntry.jobTitle);
+
+    chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+      if (!prefs || (!prefs.jobMatchEnabled && !prefs.roles && !prefs.workArrangement?.length)) {
+        btn.textContent = 'Set up job preferences in Career OS first';
+        btn.style.color = '#A09A94';
+        btn.disabled = false;
+        return;
+      }
+      chrome.storage.local.get(['storyTime', 'profileStory', 'profileExperience', 'profileSkills', 'profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'], (localData) => {
+        const roleICP = localData.profileRoleICP || {};
+        const companyICP = localData.profileCompanyICP || {};
+        const attractedTo = localData.profileAttractedTo || [];
+        const dealbreakers = localData.profileDealbreakers || [];
+        let candidateProfile = '';
+        if (roleICP.text || roleICP.targetFunction) candidateProfile += `\nRole ICP: ${roleICP.text || ''} ${[roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
+        if (companyICP.text || companyICP.stage) candidateProfile += `\nCompany ICP: ${companyICP.text || ''} ${[companyICP.stage, companyICP.sizeRange, (companyICP.industryPreferences||[]).join('/')].filter(Boolean).join(' | ')}`;
+        if (attractedTo.length) candidateProfile += `\nGreen flags: ${attractedTo.map(e => e.text).join('; ')}`;
+        if (dealbreakers.length) candidateProfile += `\nRed flags/dealbreakers: ${dealbreakers.map(e => `${e.text} (${e.severity})`).join('; ')}`;
+        if (localData.profileSkillTags?.length) candidateProfile += `\nSkill tags: ${localData.profileSkillTags.join(', ')}`;
+        const richContext = {
+          intelligence: freshEntry.intelligence?.eli5 || freshEntry.oneLiner || null,
+          reviews: freshEntry.reviews || [],
+          storyTime: localData.storyTime?.profileSummary || localData.storyTime?.rawInput || null,
+          storyTimeRaw: [localData.profileStory, localData.profileExperience, localData.profileSkills].filter(Boolean).join('\n\n') || null,
+          notes: freshEntry.notes || null,
+          knownComp: freshEntry.baseSalaryRange || freshEntry.oteTotalComp ? `Known comp: ${freshEntry.baseSalaryRange ? 'Base ' + freshEntry.baseSalaryRange : ''} ${freshEntry.oteTotalComp ? 'OTE ' + freshEntry.oteTotalComp : ''}`.trim() : null,
+          candidateProfile,
+        };
+        chrome.runtime.sendMessage(
+          { type: 'ANALYZE_JOB', company: freshEntry.company, jobTitle: freshEntry.jobTitle, jobDescription: freshEntry.jobDescription, prefs, richContext },
+          result => {
+            void chrome.runtime.lastError;
+            console.log('[Scorecard] Re-score result:', result);
+            if (result?.jobMatch) {
+              const idx = allCompanies.findIndex(x => x.id === freshEntry.id);
+              if (idx !== -1) {
+                allCompanies[idx].jobMatch = result.jobMatch;
+                allCompanies[idx].jobMatchScoredAt = Date.now();
+                if (result.jobSnapshot) allCompanies[idx].jobSnapshot = result.jobSnapshot;
+                chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+                  render();
+                  overlay.classList.remove('open');
+                  setTimeout(() => openScoreModal(allCompanies[idx]), 150);
+                });
+              }
+            } else {
+              console.warn('[Scorecard] Re-score failed:', result);
+              btn.textContent = 'Re-score failed — check console';
+              btn.disabled = false;
+            }
+          }
+        );
+      });
+    });
+  });
+
+  // ── Swipe gesture ──
+  initSwipeGesture(entry);
+}
+
+function initSwipeGesture(entry) {
+  const overlay = document.getElementById('score-modal-overlay');
+  const modal = document.getElementById('score-modal');
+  const passLabel = document.getElementById('swipe-pass');
+  const applyLabel = document.getElementById('swipe-apply');
+  if (!modal) return;
+
+  const THRESHOLD = 120; // px to trigger action
+  let startX = 0, currentX = 0, dragging = false;
+
+  function onStart(x) {
+    dragging = true;
+    startX = x;
+    currentX = 0;
+    modal.classList.add('swiping');
+    modal.classList.remove('snapping');
+  }
+
+  function onMove(x) {
+    if (!dragging) return;
+    currentX = x - startX;
+    const rotation = currentX * 0.04; // subtle tilt
+    const clampedRotation = Math.max(-8, Math.min(8, rotation));
+    modal.style.transform = `translateX(${currentX}px) rotate(${clampedRotation}deg)`;
+
+    // Show indicators based on direction
+    const progress = Math.min(Math.abs(currentX) / THRESHOLD, 1);
+    if (currentX < -30) {
+      passLabel.style.opacity = progress;
+      applyLabel.style.opacity = 0;
+    } else if (currentX > 30) {
+      applyLabel.style.opacity = progress;
+      passLabel.style.opacity = 0;
+    } else {
+      passLabel.style.opacity = 0;
+      applyLabel.style.opacity = 0;
+    }
+  }
+
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+    modal.classList.remove('swiping');
+
+    if (currentX < -THRESHOLD) {
+      // Swipe left → Pass
+      modal.classList.add('snapping');
+      modal.style.transform = 'translateX(-150%) rotate(-15deg)';
+      modal.style.opacity = '0';
+      setTimeout(() => {
+        resetModal();
+        overlay.classList.remove('open');
+        const btn = document.querySelector(`.compact-dismiss-btn[data-id="${entry.id}"]`);
+        if (btn) btn.click();
+      }, 300);
+    } else if (currentX > THRESHOLD) {
+      // Swipe right → Apply
+      modal.classList.add('snapping');
+      modal.style.transform = 'translateX(150%) rotate(15deg)';
+      modal.style.opacity = '0';
+      setTimeout(() => {
+        resetModal();
+        overlay.classList.remove('open');
+        const btn = document.querySelector(`.compact-apply-btn[data-id="${entry.id}"]`);
+        if (btn) btn.click();
+      }, 300);
+    } else {
+      // Snap back
+      modal.classList.add('snapping');
+      modal.style.transform = '';
+      passLabel.style.opacity = 0;
+      applyLabel.style.opacity = 0;
+    }
+  }
+
+  function resetModal() {
+    modal.classList.remove('snapping', 'swiping');
+    modal.style.transform = '';
+    modal.style.opacity = '';
+    passLabel.style.opacity = 0;
+    applyLabel.style.opacity = 0;
+  }
+
+  // Mouse events
+  modal.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button, a, input')) return;
+    e.preventDefault();
+    onStart(e.clientX);
+  });
+  document.addEventListener('mousemove', (e) => { if (dragging) { e.preventDefault(); onMove(e.clientX); } });
+  document.addEventListener('mouseup', () => onEnd());
+
+  // Touch events
+  modal.addEventListener('touchstart', (e) => {
+    if (e.target.closest('button, a, input')) return;
+    onStart(e.touches[0].clientX);
+  }, { passive: true });
+  modal.addEventListener('touchmove', (e) => { if (dragging) onMove(e.touches[0].clientX); }, { passive: true });
+  modal.addEventListener('touchend', () => onEnd());
+
+  // Reset on open
+  resetModal();
+}
+
+// Close modal handlers
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('score-modal-overlay');
+  if (!overlay) return;
+  document.getElementById('score-modal-close')?.addEventListener('click', () => overlay.classList.remove('open'));
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('open'); });
+});
 
 function scoreToVerdict(score) {
   if (score >= 8) return { label: 'Strong Match', cls: 'high' };
@@ -464,10 +796,10 @@ function load() {
     // Migration: old customStages → opportunityStages
     const storedOpp = data.opportunityStages || data.customStages;
     if (storedOpp && storedOpp.length > 0) {
-      // Migration: rename old "Needs Review" / "Saved — Needs Review" → "AI Scoring Queue"
+      // Migration: rename old "Needs Review" / "Saved — Needs Review" → "Coop's AI Scoring Queue"
       const first = storedOpp[0];
       if (first && first.key === 'needs_review' && /needs.review/i.test(first.label)) {
-        first.label = 'AI Scoring Queue';
+        first.label = "Coop\u2019s AI Scoring Queue";
         chrome.storage.local.set({ opportunityStages: storedOpp });
       }
       customOpportunityStages = storedOpp;
@@ -553,62 +885,106 @@ function updateTagsToolbar() {
   const allTagsInUse = [...new Set(allCompanies.flatMap(c => c.tags || []))].sort();
   if (allTagsInUse.length === 0) { toolbar.style.display = 'none'; return; }
   toolbar.style.display = 'flex';
+  toolbar.style.alignItems = 'center';
+  toolbar.style.flexWrap = 'wrap';
+  toolbar.style.gap = '6px';
 
-  toolbar.innerHTML = '<span class="filter-label">Tags:</span>';
-  const allBtn = document.createElement('button');
-  allBtn.className = 'tag-filter-btn' + (activeTag === null ? ' active' : '');
-  allBtn.textContent = 'All';
-  allBtn.style.cssText = 'border-color:#334155;color:#64748b;';
-  if (activeTag === null) allBtn.style.cssText = 'border-color:#6366f1;color:#818cf8;background:rgba(99,102,241,0.12);';
-  allBtn.addEventListener('click', () => { activeTag = null; updateTagsToolbar(); render(); });
-  toolbar.appendChild(allBtn);
+  toolbar.innerHTML = '';
 
-  allTagsInUse.forEach(tag => {
-    const c = tagColor(tag);
-    const btn = document.createElement('button');
-    btn.className = 'tag-filter-btn' + (activeTag === tag ? ' active' : '');
-    btn.style.cssText = `border-color:${c.border};color:${activeTag === tag ? '#fff' : c.color};background:${activeTag === tag ? c.bg : 'transparent'};display:inline-flex;align-items:center;gap:5px;`;
+  // Label
+  const label = document.createElement('span');
+  label.className = 'filter-label';
+  label.textContent = 'Tags:';
+  toolbar.appendChild(label);
+
+  // Dropdown trigger
+  const dropBtn = document.createElement('button');
+  dropBtn.style.cssText = 'font-size:12px;font-weight:600;color:#516f90;background:#fff;border:1px solid #dfe3eb;border-radius:6px;padding:5px 12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
+  dropBtn.innerHTML = `Filter tags <span style="font-size:9px;color:#99acc2">▾</span>`;
+  dropBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const existing = document.getElementById('tag-filter-dropdown');
+    if (existing) { existing.remove(); return; }
+
+    const rect = dropBtn.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.id = 'tag-filter-dropdown';
+    dd.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left}px;min-width:220px;max-height:320px;overflow-y:auto;background:#fff;border:1px solid #dfe3eb;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.12);z-index:10001;padding:8px 0;font-family:inherit;`;
+
+    // "All" option
+    const allOpt = document.createElement('div');
+    allOpt.style.cssText = `display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:600;color:${activeTag === null ? '#FF7A59' : '#2d3e50'};transition:background 0.1s;`;
+    allOpt.textContent = '✓ Show all (clear filter)';
+    allOpt.addEventListener('mouseenter', () => { allOpt.style.background = '#f5f3f0'; });
+    allOpt.addEventListener('mouseleave', () => { allOpt.style.background = ''; });
+    allOpt.addEventListener('click', () => { activeTag = null; dd.remove(); updateTagsToolbar(); render(); });
+    dd.appendChild(allOpt);
+
+    // Divider
+    const hr = document.createElement('div');
+    hr.style.cssText = 'height:1px;background:#eaf0f6;margin:4px 0;';
+    dd.appendChild(hr);
+
+    allTagsInUse.forEach(tag => {
+      const c = tagColor(tag);
+      const opt = document.createElement('div');
+      opt.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 14px;cursor:pointer;transition:background 0.1s;${activeTag === tag ? 'background:rgba(255,122,89,0.06);' : ''}`;
+
+      const left = document.createElement('div');
+      left.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      const dot = document.createElement('span');
+      dot.style.cssText = `width:8px;height:8px;border-radius:50%;background:${c.border};flex-shrink:0;`;
+      const name = document.createElement('span');
+      name.style.cssText = `font-size:12px;font-weight:${activeTag === tag ? '700' : '500'};color:${activeTag === tag ? '#FF7A59' : '#2d3e50'};`;
+      name.textContent = tag;
+      left.appendChild(dot);
+      left.appendChild(name);
+
+      const count = document.createElement('span');
+      count.style.cssText = 'font-size:11px;color:#7c98b6;';
+      count.textContent = allCompanies.filter(co => (co.tags || []).includes(tag)).length;
+
+      opt.appendChild(left);
+      opt.appendChild(count);
+      opt.addEventListener('mouseenter', () => { opt.style.background = '#f5f3f0'; });
+      opt.addEventListener('mouseleave', () => { opt.style.background = activeTag === tag ? 'rgba(255,122,89,0.06)' : ''; });
+      opt.addEventListener('click', () => {
+        activeTag = activeTag === tag ? null : tag;
+        dd.remove();
+        updateTagsToolbar();
+        render();
+      });
+      dd.appendChild(opt);
+    });
+
+    document.body.appendChild(dd);
+    const closeDd = (ev) => { if (!dd.contains(ev.target) && ev.target !== dropBtn) { dd.remove(); document.removeEventListener('click', closeDd); } };
+    setTimeout(() => document.addEventListener('click', closeDd), 0);
+  });
+  toolbar.appendChild(dropBtn);
+
+  // Show active tag as a pill (if one is selected)
+  if (activeTag !== null) {
+    const c = tagColor(activeTag);
+    const pill = document.createElement('span');
+    pill.style.cssText = `display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:16px;border:1px solid ${c.border};color:${c.color};background:${c.bg};cursor:pointer;`;
 
     const dot = document.createElement('span');
-    dot.className = 'tag-swatch-dot';
-    dot.style.background = c.border;
-    dot.title = 'Change tag color';
-    dot.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const currIdx = customTagColors[tag] !== undefined ? customTagColors[tag] : tagColorIndex(tag);
-      showColorPicker(dot, TAG_PALETTE.map(p => p.border), currIdx, (idx) => saveTagColor(tag, idx));
-    });
+    dot.style.cssText = `width:7px;height:7px;border-radius:50%;background:${c.border};flex-shrink:0;`;
+    pill.appendChild(dot);
 
-    const label = document.createElement('span');
-    label.textContent = tag;
-    label.addEventListener('click', () => {
-      activeTag = activeTag === tag ? null : tag;
-      updateTagsToolbar();
-      render();
-    });
+    const txt = document.createElement('span');
+    txt.textContent = activeTag;
+    pill.appendChild(txt);
 
-    const del = document.createElement('span');
-    del.textContent = '✕';
-    del.title = `Remove "${tag}" from all entries`;
-    del.style.cssText = 'font-size:10px;opacity:0.6;cursor:pointer;font-weight:700;';
-    del.addEventListener('mouseenter', () => { del.style.opacity = '1'; del.style.color = '#e5483b'; });
-    del.addEventListener('mouseleave', () => { del.style.opacity = '0.6'; del.style.color = ''; });
-    del.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!confirm(`Remove tag "${tag}" from all entries?`)) return;
-      allCompanies = allCompanies.map(c => ({ ...c, tags: (c.tags || []).filter(t => t !== tag) }));
-      allKnownTags = allKnownTags.filter(t => t !== tag);
-      chrome.storage.local.set({ savedCompanies: allCompanies, allTags: allKnownTags });
-      if (activeTag === tag) activeTag = null;
-      updateTagsToolbar();
-      render();
-    });
+    const x = document.createElement('span');
+    x.textContent = '✕';
+    x.style.cssText = 'font-size:10px;opacity:0.7;margin-left:2px;';
+    pill.appendChild(x);
 
-    btn.appendChild(dot);
-    btn.appendChild(label);
-    btn.appendChild(del);
-    toolbar.appendChild(btn);
-  });
+    pill.addEventListener('click', () => { activeTag = null; updateTagsToolbar(); render(); });
+    toolbar.appendChild(pill);
+  }
 }
 
 function updateStatusToolbar() {
@@ -677,8 +1053,11 @@ function render() {
   });
 
   // Update stats
-  document.getElementById('company-count').textContent = allCompanies.length;
-  document.getElementById('job-count').textContent = allCompanies.filter(c => !!c.isOpportunity).length;
+  // Company/opp counts are rendered in the pipeline overview stat cards now
+  const _companyCountEl = document.getElementById('company-count');
+  const _jobCountEl = document.getElementById('job-count');
+  if (_companyCountEl) _companyCountEl.textContent = allCompanies.length;
+  if (_jobCountEl) _jobCountEl.textContent = allCompanies.filter(c => !!c.isOpportunity).length;
 
   if (viewMode === 'kanban' && activePipeline !== 'all') {
     grid.style.display = 'none';
@@ -1385,7 +1764,7 @@ function renderKanban(filtered) {
           <div class="col-color-dot" data-col="${statusKey}" style="background:${s.border}"></div>
           <span class="kanban-col-title">${statusLabel}</span>
           <span class="kanban-col-count">${cards.length}</span>
-          ${statusKey === QUEUE_STAGE && activePipeline === 'opportunity' ? `<button class="col-rescore-btn" data-col="${statusKey}" title="Re-score entries missing quickTake data">↻ Re-score</button>` : ''}
+          ${statusKey === QUEUE_STAGE && activePipeline === 'opportunity' ? `<button class="col-rescore-btn" data-col="${statusKey}" title="Re-score all entries in queue">↻ Re-score</button>` : ''}
           <button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>
           <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4L6 8l4 4"/></svg></button>
         </div>
@@ -1489,7 +1868,8 @@ function renderKanbanCard(c) {
           return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
         })() : '';
         const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
-        const hardDQHtml = hardDQ?.flagged ? '<span class="hard-dq-badge">\u{1F6AB} Hard DQ</span>' : '';
+        const entryScore = c.jobMatch?.score ?? c.quickFitScore ?? null;
+        const hardDQHtml = hardDQ?.flagged && entryScore != null && entryScore <= 3 ? '<span class="hard-dq-badge">\u{1F6AB} Hard DQ</span>' : '';
         return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
       ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
@@ -1527,7 +1907,16 @@ function renderKanbanCard(c) {
           return `<span class="review-chip${warn ? ' review-warn' : ''}">${warn ? '\u26A0\uFE0F' : '\u2B50'} ${rating} ${ratingReview.source || 'Glassdoor'}</span>`;
         })() : '';
       })()}
-      ${c.oneLiner && c.jobTitle && !c.oneLiner.toLowerCase().startsWith(c.jobTitle.toLowerCase()) ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : c.oneLiner && !c.jobTitle ? `<div class="kanban-card-oneliner">${c.oneLiner}</div>` : ''}
+      ${(() => {
+        if (!c.oneLiner) return '';
+        if (c.jobTitle) {
+          const titleLower = c.jobTitle.toLowerCase().trim();
+          const oneLower = c.oneLiner.toLowerCase().trim();
+          // Hide if oneliner starts with or substantially contains the job title (redundant)
+          if (oneLower.startsWith(titleLower) || titleLower.startsWith(oneLower.slice(0, titleLower.length))) return '';
+        }
+        return `<div class="kanban-card-oneliner">${c.oneLiner}</div>`;
+      })()}
       <div class="card-tags" id="tags-${c.id}">
         ${(c.tags || []).map(tag => {
           const cl = tagColor(tag);
@@ -1788,17 +2177,15 @@ function bindKanbanEvents(board) {
     });
   });
 
-  // Re-score button for AI Scoring Queue
+  // Re-score button for Coop's AI Scoring Queue
   board.querySelectorAll('.col-rescore-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const queueEntries = allCompanies.filter(c => {
         if (!c.isOpportunity || (c.jobStage || 'needs_review') !== QUEUE_STAGE) return false;
-        const hasQuickTake = c.quickTake?.length > 0 || c.jobMatch?.quickTake?.length > 0;
-        const hasHardDQ = c.hardDQ !== undefined || c.jobMatch?.hardDQ !== undefined;
-        return !(hasQuickTake && hasHardDQ); // skip if both exist
+        return true; // re-score all entries in queue
       });
-      if (!queueEntries.length) { btn.textContent = '✓ All up to date'; setTimeout(() => btn.textContent = '↻ Re-score', 2000); return; }
+      if (!queueEntries.length) { btn.textContent = '✓ Queue empty'; setTimeout(() => btn.textContent = '↻ Re-score', 2000); return; }
 
       btn.disabled = true;
       let done = 0;
@@ -2025,11 +2412,17 @@ function bindKanbanEvents(board) {
     });
   });
 
-  // Compact card click navigation (body area, not buttons)
+  // Compact card click — open score preview modal (queue cards) or full page (others)
   board.querySelectorAll('.compact-card').forEach(cardEl => {
     cardEl.addEventListener('click', (e) => {
       if (e.target.closest('button, a')) return;
-      window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+      const entry = allCompanies.find(c => c.id === cardEl.dataset.id);
+      if (!entry) return;
+      if (entry.jobMatch?.score != null || entry.quickFitScore != null) {
+        openScoreModal(entry);
+      } else {
+        window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+      }
     });
   });
 
@@ -2255,25 +2648,220 @@ function bindKanbanEvents(board) {
 }
 
 // View toggle
-document.getElementById('view-grid-btn').addEventListener('click', () => {
-  viewMode = 'grid';
-  localStorage.setItem('ci_viewMode', 'grid');
-  document.getElementById('view-grid-btn').classList.add('active');
-  document.getElementById('view-kanban-btn').classList.remove('active');
-  render();
-});
-document.getElementById('view-kanban-btn').addEventListener('click', () => {
-  viewMode = 'kanban';
-  localStorage.setItem('ci_viewMode', 'kanban');
-  document.getElementById('view-kanban-btn').classList.add('active');
-  document.getElementById('view-grid-btn').classList.remove('active');
-  render();
-});
+function setViewMode(mode) {
+  viewMode = mode;
+  localStorage.setItem('ci_viewMode', mode);
+  document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+  const btnId = mode === 'kanban' ? 'view-kanban-btn' : mode === 'tasks' ? 'view-tasks-btn' : 'view-grid-btn';
+  document.getElementById(btnId)?.classList.add('active');
+
+  const grid = document.getElementById('grid');
+  const kanban = document.getElementById('kanban-board');
+  const tasks = document.getElementById('tasks-view');
+  // Show/hide toolbars for CRM views vs tasks
+  document.querySelectorAll('.toolbar').forEach(t => t.style.display = mode === 'tasks' ? 'none' : '');
+  document.getElementById('activity-section').style.display = mode === 'tasks' ? 'none' : '';
+
+  if (mode === 'tasks') {
+    grid.style.display = 'none';
+    kanban.style.display = 'none';
+    tasks.style.display = '';
+    renderTasksView();
+  } else {
+    tasks.style.display = 'none';
+    render();
+  }
+}
+document.getElementById('view-grid-btn').addEventListener('click', () => setViewMode('grid'));
+document.getElementById('view-kanban-btn').addEventListener('click', () => setViewMode('kanban'));
+document.getElementById('view-tasks-btn').addEventListener('click', () => setViewMode('tasks'));
+document.getElementById('header-tasks-link')?.addEventListener('click', e => { e.preventDefault(); setViewMode('tasks'); });
 // Restore toggle state on load
 if (viewMode === 'kanban') {
   document.getElementById('view-kanban-btn').classList.add('active');
   document.getElementById('view-grid-btn').classList.remove('active');
+} else if (viewMode === 'tasks') {
+  document.getElementById('view-tasks-btn').classList.add('active');
+  document.getElementById('view-grid-btn').classList.remove('active');
 }
+
+// ── Tasks ──────────────────────────────────────────────────────────────────
+
+let _taskFilter = 'active'; // active | completed | all
+
+function loadTasks(callback) {
+  chrome.storage.local.get(['userTasks'], data => {
+    callback(data.userTasks || []);
+  });
+}
+
+function saveTasks(tasks, callback) {
+  chrome.storage.local.set({ userTasks: tasks }, () => {
+    void chrome.runtime.lastError;
+    if (callback) callback();
+  });
+}
+
+function taskDateLabel(dateStr) {
+  if (!dateStr) return { text: '', cls: '' };
+  const d = new Date(dateStr + 'T12:00:00');
+  const now = new Date(); now.setHours(12,0,0,0);
+  const diff = Math.round((d - now) / 86400000);
+  if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, cls: 'overdue' };
+  if (diff === 0) return { text: 'Today', cls: 'today' };
+  if (diff === 1) return { text: 'Tomorrow', cls: 'upcoming' };
+  return { text: `in ${diff}d`, cls: 'upcoming' };
+}
+
+function renderTasksView() {
+  const container = document.getElementById('tasks-view');
+  if (!container) return;
+
+  loadTasks(tasks => {
+    // Sort: overdue first, then by date, then by priority (high > normal > low)
+    const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
+    const sorted = [...tasks].sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      const da = a.dueDate || '9999-12-31', db = b.dueDate || '9999-12-31';
+      if (da !== db) return da.localeCompare(db);
+      return priVal(a.priority) - priVal(b.priority);
+    });
+
+    const filtered = _taskFilter === 'all' ? sorted
+      : _taskFilter === 'completed' ? sorted.filter(t => t.completed)
+      : sorted.filter(t => !t.completed);
+
+    const activeCount = tasks.filter(t => !t.completed).length;
+    const completedCount = tasks.filter(t => t.completed).length;
+
+    container.innerHTML = `
+      <div class="tasks-header">
+        <div class="tasks-title">Tasks</div>
+        <button class="tasks-add-btn" id="task-add-btn">+ New Task</button>
+      </div>
+      <div id="task-form-container"></div>
+      <div class="task-filters">
+        <button class="task-filter-btn ${_taskFilter === 'active' ? 'active' : ''}" data-filter="active">Active (${activeCount})</button>
+        <button class="task-filter-btn ${_taskFilter === 'completed' ? 'active' : ''}" data-filter="completed">Completed (${completedCount})</button>
+        <button class="task-filter-btn ${_taskFilter === 'all' ? 'active' : ''}" data-filter="all">All</button>
+      </div>
+      <div class="task-list">${filtered.map(t => {
+        const dl = taskDateLabel(t.dueDate);
+        return `<div class="task-item ${t.completed ? 'completed' : ''}" data-task-id="${t.id}">
+          <div class="task-check">${t.completed ? '✓' : ''}</div>
+          <div class="task-content">
+            <div class="task-text">${escHtml(t.text)}</div>
+            <div class="task-meta">
+              ${t.company ? `<span class="task-company-link" data-company="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
+              <span class="task-priority ${t.priority || 'normal'}">${(t.priority || 'normal')}</span>
+              ${t.dueDate ? `<span>${t.dueDate}</span>` : ''}
+            </div>
+          </div>
+          ${dl.text ? `<span class="task-date ${dl.cls}">${dl.text}</span>` : ''}
+          <button class="task-delete-btn" data-task-id="${t.id}">&times;</button>
+        </div>`;
+      }).join('') || '<div style="text-align:center;color:#7c98b6;padding:40px;font-size:13px;">No tasks yet — click "+ New Task" to add one</div>'}</div>`;
+
+    // Wire events
+    container.querySelector('#task-add-btn')?.addEventListener('click', () => showTaskForm());
+    container.querySelectorAll('.task-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => { _taskFilter = btn.dataset.filter; renderTasksView(); });
+    });
+    container.querySelectorAll('.task-check').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.closest('.task-item').dataset.taskId;
+        loadTasks(tasks => {
+          const t = tasks.find(t => t.id === id);
+          if (t) { t.completed = !t.completed; saveTasks(tasks, () => renderTasksView()); }
+        });
+      });
+    });
+    container.querySelectorAll('.task-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.taskId;
+        loadTasks(tasks => {
+          saveTasks(tasks.filter(t => t.id !== id), () => renderTasksView());
+        });
+      });
+    });
+    container.querySelectorAll('.task-company-link').forEach(el => {
+      el.addEventListener('click', () => {
+        const name = el.dataset.company;
+        const entry = allCompanies.find(c => c.company === name);
+        if (entry) window.open(`company.html?id=${entry.id}`, '_blank');
+      });
+    });
+  });
+}
+
+function showTaskForm(editTask) {
+  const fc = document.getElementById('task-form-container');
+  if (!fc) return;
+
+  // Build company options from pipeline
+  const companyOpts = allCompanies
+    .filter(c => c.company)
+    .map(c => `<option value="${escHtml(c.company)}" ${editTask?.company === c.company ? 'selected' : ''}>${escHtml(c.company)}</option>`)
+    .join('');
+
+  fc.innerHTML = `
+    <div class="task-form">
+      <input type="text" class="task-form-input" id="task-input-text" placeholder="What needs to be done?" value="${escHtml(editTask?.text || '')}">
+      <div class="task-form-row">
+        <select class="task-form-select" id="task-input-company">
+          <option value="">No company</option>
+          ${companyOpts}
+        </select>
+        <input type="date" class="task-form-input" id="task-input-date" style="max-width:160px" value="${editTask?.dueDate || ''}">
+        <div class="task-priority-group" id="task-input-priority">
+          <button type="button" class="task-priority-btn ${editTask?.priority === 'low' ? 'active' : ''}" data-pri="low">Low</button>
+          <button type="button" class="task-priority-btn ${(!editTask || editTask?.priority === 'normal') ? 'active' : ''}" data-pri="normal">Normal</button>
+          <button type="button" class="task-priority-btn ${editTask?.priority === 'high' ? 'active' : ''}" data-pri="high">High</button>
+        </div>
+      </div>
+      <div class="task-form-actions">
+        <button class="task-form-save" id="task-save-btn">${editTask ? 'Update' : 'Add Task'}</button>
+        <button class="task-form-cancel" id="task-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+
+  fc.querySelector('#task-input-text')?.focus();
+
+  // Priority button group
+  fc.querySelectorAll('.task-priority-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      fc.querySelectorAll('.task-priority-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  fc.querySelector('#task-save-btn').addEventListener('click', () => {
+    const text = fc.querySelector('#task-input-text').value.trim();
+    if (!text) return;
+    const company = fc.querySelector('#task-input-company').value;
+    const dueDate = fc.querySelector('#task-input-date').value;
+    const priority = fc.querySelector('.task-priority-btn.active')?.dataset.pri || 'normal';
+
+    loadTasks(tasks => {
+      if (editTask) {
+        const t = tasks.find(t => t.id === editTask.id);
+        if (t) { Object.assign(t, { text, company, dueDate, priority }); }
+      } else {
+        tasks.push({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          text, company: company || null, companyId: null,
+          dueDate: dueDate || null, priority,
+          completed: false, createdAt: Date.now()
+        });
+      }
+      saveTasks(tasks, () => { fc.innerHTML = ''; renderTasksView(); });
+    });
+  });
+  fc.querySelector('#task-cancel-btn').addEventListener('click', () => { fc.innerHTML = ''; });
+}
+
+// escHtml for tasks — use escHtmlGlobal if no local one in scope
+if (typeof escHtml === 'undefined') { var escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // Restore pipeline state on load (updatePipelineUI is defined later, call after DOM ready)
 document.addEventListener('DOMContentLoaded', () => {}, { once: true });
 // Pipeline UI is initialized via updatePipelineUI() called from load()
@@ -2683,6 +3271,7 @@ function renderActivitySection() {
     <div class="activity-head">
       <div class="activity-head-left">
         <span class="activity-section-title">Pipeline Overview</span>
+        <span style="font-size:12px;color:#7c98b6;margin-left:16px"><b style="color:#2d3e50">${allCompanies.length}</b> companies &nbsp; <b style="color:#2d3e50">${opps.length}</b> opportunities</span>
       </div>
       <div class="period-toggle">
         <div class="period-tabs">
@@ -2944,24 +3533,90 @@ function openStatCardEditor() {
   let history = [];
   let isMinimized = false;
 
-  // Model switcher — default GPT-4.1 mini, click to cycle
-  const GC_MODELS = [
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
-    { id: 'claude-sonnet-4-5-20250514', label: 'Sonnet', icon: '✦' },
-    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
+  // Model switcher — dropdown picklist, ordered by cost (cheapest first)
+  const GC_ALL_MODELS = [
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆', provider: 'openai', cost: '$', tier: 'Fast & cheap' },
+    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆', provider: 'openai', cost: '$', tier: 'Fastest' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', icon: '⚡', provider: 'anthropic', cost: '$', tier: 'Fast & cheap' },
+    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', icon: '✦', provider: 'anthropic', cost: '$$', tier: 'Balanced' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆', provider: 'openai', cost: '$$', tier: 'Balanced' },
+    { id: 'gpt-5', label: 'GPT-5', icon: '◆', provider: 'openai', cost: '$$$', tier: 'Most capable' },
+    { id: 'claude-opus-4-0-20250514', label: 'Claude Opus', icon: '★', provider: 'anthropic', cost: '$$$', tier: 'Most capable' },
   ];
   let gcModelIdx = 0;
+  let gcAvailableModels = GC_ALL_MODELS; // filtered after key check
   const gcModelToggle = document.getElementById('gc-model-toggle');
   const gcModelLabel = document.getElementById('gc-model-label');
+
+  // Load key status + pipeline config, set default model from Pipeline settings
+  Promise.all([
+    new Promise(r => chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, s => { void chrome.runtime.lastError; r(s); })),
+    new Promise(r => chrome.storage.local.get(['pipelineConfig'], d => r(d.pipelineConfig)))
+  ]).then(([status, pipelineCfg]) => {
+    if (status) {
+      gcAvailableModels = GC_ALL_MODELS.filter(m => {
+        if (m.provider === 'openai') return !!status.openai;
+        if (m.provider === 'anthropic') return !!status.anthropic;
+        return true;
+      });
+      if (!gcAvailableModels.length) gcAvailableModels = GC_ALL_MODELS;
+    }
+    const configModel = pipelineCfg?.aiModels?.chat;
+    if (configModel) {
+      const idx = gcAvailableModels.findIndex(m => m.id === configModel);
+      if (idx >= 0) gcModelIdx = idx;
+    }
+    updateGcModelLabel();
+  });
+
   function updateGcModelLabel() {
-    if (gcModelLabel) gcModelLabel.textContent = GC_MODELS[gcModelIdx].icon + ' ' + GC_MODELS[gcModelIdx].label;
+    const m = gcAvailableModels[gcModelIdx] || gcAvailableModels[0];
+    if (gcModelLabel && m) gcModelLabel.textContent = m.icon + ' ' + m.label;
   }
-  updateGcModelLabel();
+
+  // Dropdown picklist
   if (gcModelToggle) {
-    gcModelToggle.addEventListener('click', () => {
-      gcModelIdx = (gcModelIdx + 1) % GC_MODELS.length;
-      updateGcModelLabel();
+    gcModelToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Remove existing dropdown if open
+      const existing = document.getElementById('gc-model-dropdown');
+      if (existing) { existing.remove(); return; }
+
+      const rect = gcModelToggle.getBoundingClientRect();
+      const dropdown = document.createElement('div');
+      dropdown.id = 'gc-model-dropdown';
+      dropdown.style.cssText = `position:fixed;top:${rect.bottom + 6}px;left:${rect.left}px;min-width:200px;background:#1C2D3A;border:1px solid #2D3E50;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.4);z-index:10001;padding:6px 0;font-family:inherit;`;
+
+      dropdown.innerHTML = gcAvailableModels.map((m, i) => `
+        <div class="gc-model-option" data-idx="${i}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;cursor:pointer;transition:background 0.1s;${i === gcModelIdx ? 'background:rgba(255,122,89,0.15);' : ''}border-radius:0;">
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:12px;font-weight:600;color:${i === gcModelIdx ? '#FF7A59' : '#e2e8f0'}">${m.icon} ${m.label}</span>
+            <span style="font-size:10px;color:#7c98b6">${m.tier}</span>
+          </div>
+          <span style="font-size:10px;font-weight:700;color:${m.cost === '$' ? '#5DCAA5' : m.cost === '$$' ? '#facc15' : '#FF7A59'};letter-spacing:1px">${m.cost}</span>
+        </div>
+      `).join('');
+
+      document.body.appendChild(dropdown);
+
+      dropdown.querySelectorAll('.gc-model-option').forEach(opt => {
+        opt.addEventListener('mouseenter', () => { opt.style.background = 'rgba(255,255,255,0.06)'; });
+        opt.addEventListener('mouseleave', () => { opt.style.background = parseInt(opt.dataset.idx) === gcModelIdx ? 'rgba(255,122,89,0.15)' : ''; });
+        opt.addEventListener('click', () => {
+          gcModelIdx = parseInt(opt.dataset.idx);
+          updateGcModelLabel();
+          dropdown.remove();
+        });
+      });
+
+      // Close on click outside
+      const closeDropdown = (ev) => {
+        if (!dropdown.contains(ev.target) && ev.target !== gcModelToggle) {
+          dropdown.remove();
+          document.removeEventListener('click', closeDropdown);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeDropdown), 0);
     });
   }
   let sizeState = 0;
@@ -3082,7 +3737,7 @@ function openStatCardEditor() {
             messages: apiMessages,
             pipeline,
             enrichments,
-            chatModel: GC_MODELS[gcModelIdx].id,
+            chatModel: gcAvailableModels[gcModelIdx].id,
           }, r => {
             if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
             else resolve(r);
@@ -3098,7 +3753,7 @@ function openStatCardEditor() {
     sendBtn.textContent = 'Send';
 
     if (result?.reply) {
-      const fallbackNote = (result.model && result.model !== GC_MODELS[gcModelIdx].id)
+      const fallbackNote = (result.model && result.model !== gcAvailableModels[gcModelIdx].id)
         ? `\n\n*— answered by ${result.model.startsWith('gpt') ? result.model : result.model.replace('claude-', '').replace(/-\d+$/, '')} (fallback)*`
         : '';
       history.push({ role: 'assistant', content: result.reply + fallbackNote });
@@ -3192,3 +3847,119 @@ document.getElementById('action-filter-btns')?.addEventListener('click', e => {
 });
 
 load();
+
+// ── Inbox: unified email view across all pipeline companies ──────────────────
+
+let inboxVisible = false;
+let inboxFilter = 'all';
+
+document.getElementById('inbox-toggle')?.addEventListener('click', () => {
+  inboxVisible = !inboxVisible;
+  const inboxView = document.getElementById('inbox-view');
+  const grid = document.getElementById('grid');
+  const kanban = document.getElementById('kanban-board');
+  const tasks = document.getElementById('tasks-view');
+  const btn = document.getElementById('inbox-toggle');
+
+  if (inboxVisible) {
+    grid.style.display = 'none';
+    kanban.style.display = 'none';
+    tasks.style.display = 'none';
+    inboxView.style.display = 'block';
+    btn.style.background = 'rgba(255,122,89,0.2)';
+    btn.style.color = '#FF7A59';
+    btn.style.borderColor = '#FF7A59';
+    renderInbox();
+  } else {
+    inboxView.style.display = 'none';
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+    render();
+  }
+});
+
+function renderInbox() {
+  const container = document.getElementById('inbox-view');
+  if (!container) return;
+
+  const allEmails = [];
+  const companyMap = {};
+  (allCompanies || []).forEach(entry => {
+    if (!entry.cachedEmails?.length) return;
+    const favDomain = entry.companyWebsite ? entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+    entry.cachedEmails.forEach(email => {
+      allEmails.push({
+        ...email,
+        _company: entry.company,
+        _companyId: entry.id,
+        _favDomain: favDomain,
+        _date: email.date ? new Date(email.date).getTime() : 0,
+      });
+    });
+    companyMap[entry.id] = entry.company;
+  });
+
+  allEmails.sort((a, b) => b._date - a._date);
+
+  const filtered = inboxFilter === 'all' ? allEmails
+    : allEmails.filter(e => e._companyId === inboxFilter);
+
+  const companiesWithEmails = [...new Set(allEmails.map(e => e._companyId))];
+  const filterBtns = [
+    `<button class="inbox-filter ${inboxFilter === 'all' ? 'active' : ''}" data-inbox-filter="all">All (${allEmails.length})</button>`,
+    ...companiesWithEmails.slice(0, 20).map(id => {
+      const name = companyMap[id] || id;
+      const count = allEmails.filter(e => e._companyId === id).length;
+      return `<button class="inbox-filter ${inboxFilter === id ? 'active' : ''}" data-inbox-filter="${id}">${escHtmlGlobal(name)} (${count})</button>`;
+    })
+  ].join('');
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.round((now - d) / 86400000);
+    if (diffDays === 0) return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const emailRows = filtered.length ? filtered.slice(0, 200).map(e => {
+    const favHtml = e._favDomain
+      ? `<img class="inbox-email-favicon" src="https://www.google.com/s2/favicons?domain=${e._favDomain}&sz=32" onerror="this.style.display='none'">`
+      : '';
+    return `<div class="inbox-email" data-company-id="${e._companyId}">
+      <div class="inbox-email-company">${favHtml}<span class="inbox-email-company-name">${escHtmlGlobal(e._company)}</span></div>
+      <div class="inbox-email-body">
+        <div class="inbox-email-subject">${escHtmlGlobal(e.subject || '(no subject)')}</div>
+        <div class="inbox-email-snippet">${escHtmlGlobal(e.snippet || '')}</div>
+        <div class="inbox-email-from">${escHtmlGlobal((e.from || '').replace(/<[^>]+>/, '').trim())}</div>
+      </div>
+      <div class="inbox-email-date">${formatDate(e.date)}</div>
+    </div>`;
+  }).join('') : '<div class="inbox-empty">No emails found. Emails sync when you view companies with Gmail connected.</div>';
+
+  container.innerHTML = `
+    <div class="inbox-header">
+      <div class="inbox-title">Inbox</div>
+      <div class="inbox-count">${filtered.length} emails across ${companiesWithEmails.length} companies</div>
+    </div>
+    <div class="inbox-filters">${filterBtns}</div>
+    <div id="inbox-emails">${emailRows}</div>
+  `;
+
+  container.querySelectorAll('.inbox-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      inboxFilter = btn.dataset.inboxFilter;
+      renderInbox();
+    });
+  });
+
+  container.querySelectorAll('.inbox-email').forEach(row => {
+    row.addEventListener('click', () => {
+      window.open(chrome.runtime.getURL('company.html') + '?id=' + row.dataset.companyId, '_blank');
+    });
+  });
+}
