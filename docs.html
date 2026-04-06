@@ -2,18 +2,19 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <link rel="stylesheet" href="design-tokens.css">
   <title>CompanyIntel — Documentation</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f8fa; color: #33475b; font-size: 14px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--ci-bg-base); color: var(--ci-text-primary); font-size: 14px; }
 
     /* Header */
-    .header { background: #2d3e50; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; position: sticky; top: 0; z-index: 100; }
-    .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; }
-    .logo span { color: #FF7A59; }
-    .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
-    .header-link { color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid #4a6580; border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; text-decoration: none; transition: all 0.15s; }
-    .header-link:hover { color: #fff; border-color: #7c98b6; }
+    .header { background: var(--ci-bg-header); padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; position: sticky; top: 0; z-index: 100; }
+    .logo { font-size: 18px; font-weight: 700; color: var(--ci-text-on-dark); letter-spacing: -0.01em; }
+    .logo span { color: var(--ci-accent-primary); }
+    .logo .slash { font-weight: 400; color: var(--ci-text-tertiary); font-size: 14px; }
+    .header-link { color: var(--ci-text-on-dark-muted); font-size: 13px; font-weight: 600; padding: 7px 14px; border: 1px solid var(--ci-bg-header-hover); border-radius: 8px; background: rgba(255,255,255,0.08); cursor: pointer; text-decoration: none; transition: all 0.15s; }
+    .header-link:hover { color: #fff; border-color: var(--ci-text-tertiary); }
 
     /* Layout */
     .layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 40px; gap: 40px; }
@@ -21,11 +22,11 @@
     /* Sidebar nav */
     .doc-nav { width: 220px; flex-shrink: 0; }
     .doc-nav-inner { position: sticky; top: 88px; }
-    .doc-nav-title { font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
-    .doc-nav a { display: block; font-size: 13px; color: #516f90; text-decoration: none; padding: 6px 10px; border-radius: 6px; margin-bottom: 2px; transition: all 0.12s; border-left: 2px solid transparent; }
-    .doc-nav a:hover { background: #eaf0f6; color: #33475b; }
-    .doc-nav a.active { background: #eaf0f6; color: #ff7a59; border-left-color: #ff7a59; font-weight: 600; }
-    .doc-nav-divider { height: 1px; background: #dfe3eb; margin: 10px 0; }
+    .doc-nav-title { font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+    .doc-nav a { display: block; font-size: 13px; color: var(--ci-text-secondary); text-decoration: none; padding: 6px 10px; border-radius: var(--ci-radius-sm); margin-bottom: 2px; transition: all 0.12s; border-left: 2px solid transparent; }
+    .doc-nav a:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .doc-nav a.active { background: var(--ci-bg-inset); color: var(--ci-accent-primary); border-left-color: var(--ci-accent-primary); font-weight: 600; }
+    .doc-nav-divider { height: 1px; background: var(--ci-border-default); margin: 10px 0; }
 
     /* Main content */
     .doc-content { flex: 1; min-width: 0; }
@@ -33,30 +34,30 @@
     /* Section */
     .doc-section { margin-bottom: 56px; }
     .doc-section-anchor { display: block; height: 1px; margin-top: -80px; padding-top: 80px; }
-    .doc-section-title { font-size: 22px; font-weight: 800; color: #2d3e50; letter-spacing: -0.02em; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 2px solid #dfe3eb; }
-    .doc-section-lead { font-size: 15px; color: #516f90; line-height: 1.7; margin-bottom: 24px; }
+    .doc-section-title { font-size: 22px; font-weight: 800; color: var(--ci-text-primary); letter-spacing: -0.02em; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 2px solid var(--ci-border-default); }
+    .doc-section-lead { font-size: 15px; color: var(--ci-text-secondary); line-height: 1.7; margin-bottom: 24px; }
 
     /* Feature cards */
     .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-    .feature-card { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 18px 20px; }
-    .feature-card-title { font-size: 13px; font-weight: 700; color: #2d3e50; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .feature-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px 20px; }
+    .feature-card-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
     .feature-card-title .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
     .badge-new { background: rgba(74,222,128,0.12); color: #16a34a; border: 1px solid rgba(74,222,128,0.3); }
     .badge-beta { background: rgba(99,102,241,0.1); color: #4f46e5; border: 1px solid rgba(99,102,241,0.2); }
-    .feature-card p { font-size: 13px; color: #516f90; line-height: 1.6; }
+    .feature-card p { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; }
 
     /* Steps */
     .steps { display: flex; flex-direction: column; gap: 16px; margin: 16px 0; }
     .step { display: flex; gap: 14px; align-items: flex-start; }
-    .step-num { width: 26px; height: 26px; border-radius: 50%; background: #ff7a59; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .step-num { width: 26px; height: 26px; border-radius: 50%; background: var(--ci-accent-primary); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
     .step-body { flex: 1; }
-    .step-title { font-size: 13px; font-weight: 700; color: #2d3e50; margin-bottom: 4px; }
-    .step-desc { font-size: 13px; color: #516f90; line-height: 1.6; }
+    .step-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; }
+    .step-desc { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; }
 
     /* Info blocks */
-    .info-block { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; padding: 18px 20px; margin: 16px 0; }
-    .info-block h3 { font-size: 13px; font-weight: 700; color: #2d3e50; margin-bottom: 10px; }
-    .info-block p, .info-block li { font-size: 13px; color: #516f90; line-height: 1.7; }
+    .info-block { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px 20px; margin: 16px 0; }
+    .info-block h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 10px; }
+    .info-block p, .info-block li { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.7; }
     .info-block ul { padding-left: 18px; }
     .info-block li { margin-bottom: 4px; }
 
@@ -68,20 +69,20 @@
     .callout-icon { font-size: 16px; flex-shrink: 0; }
 
     /* UI anatomy diagram */
-    .ui-diagram { background: #fff; border: 1px solid #dfe3eb; border-radius: 10px; overflow: hidden; margin: 16px 0; }
-    .ui-diagram-header { background: #2d3e50; padding: 10px 16px; font-size: 12px; font-weight: 700; color: #b0c1d4; letter-spacing: 0.05em; text-transform: uppercase; }
+    .ui-diagram { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; margin: 16px 0; }
+    .ui-diagram-header { background: var(--ci-bg-header); padding: 10px 16px; font-size: 12px; font-weight: 700; color: var(--ci-text-on-dark-muted); letter-spacing: 0.05em; text-transform: uppercase; }
     .ui-diagram-row { display: flex; }
-    .ui-col { padding: 14px 16px; border-right: 1px solid #dfe3eb; }
+    .ui-col { padding: 14px 16px; border-right: 1px solid var(--ci-border-default); }
     .ui-col:last-child { border-right: none; }
-    .ui-col-label { font-size: 11px; font-weight: 700; color: #ff7a59; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
-    .ui-col-item { font-size: 12px; color: #516f90; padding: 3px 0; line-height: 1.5; }
-    .ui-col-item strong { color: #33475b; font-weight: 600; }
+    .ui-col-label { font-size: 11px; font-weight: 700; color: var(--ci-accent-primary); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+    .ui-col-item { font-size: 12px; color: var(--ci-text-secondary); padding: 3px 0; line-height: 1.5; }
+    .ui-col-item strong { color: var(--ci-text-primary); font-weight: 600; }
     .ui-col-left { width: 200px; flex-shrink: 0; }
     .ui-col-main { flex: 1; }
     .ui-col-right { width: 190px; flex-shrink: 0; }
 
     /* Integration status */
-    .integration-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0f3f8; }
+    .integration-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--ci-border-subtle); }
     .integration-row:last-child { border-bottom: none; }
     .integration-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
     .integration-icon.gmail { background: #fef2f2; }
@@ -90,37 +91,37 @@
     .integration-icon.claude { background: #fdf4ff; }
     .integration-icon.serper { background: #fff7ed; }
     .integration-info { flex: 1; }
-    .integration-name { font-size: 13px; font-weight: 700; color: #2d3e50; }
-    .integration-desc { font-size: 12px; color: #7c98b6; margin-top: 2px; line-height: 1.5; }
-    .integration-setup { font-size: 12px; font-weight: 600; color: #ff7a59; text-decoration: none; }
+    .integration-name { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); }
+    .integration-desc { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 2px; line-height: 1.5; }
+    .integration-setup { font-size: 12px; font-weight: 600; color: var(--ci-accent-primary); text-decoration: none; }
     .integration-setup:hover { text-decoration: underline; }
 
     /* Tag pill */
     .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 2px; }
     .pill-blue { background: rgba(30,136,229,0.1); color: #1e88e5; }
-    .pill-gray { background: #eaf0f6; color: #516f90; }
+    .pill-gray { background: var(--ci-bg-inset); color: var(--ci-text-secondary); }
     .pill-green { background: rgba(74,222,128,0.1); color: #16a34a; }
 
     /* Inline code */
-    code { background: #eaf0f6; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; color: #2d3e50; }
+    code { background: var(--ci-bg-inset); border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--ci-text-primary); }
 
-    h3.sub { font-size: 15px; font-weight: 700; color: #2d3e50; margin: 24px 0 10px; }
-    p.body { font-size: 13px; color: #516f90; line-height: 1.7; margin-bottom: 12px; }
+    h3.sub { font-size: 15px; font-weight: 700; color: var(--ci-text-primary); margin: 24px 0 10px; }
+    p.body { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.7; margin-bottom: 12px; }
 
     /* ── Shared Settings Sidebar ── */
     .settings-layout { display: flex; min-height: 100vh; }
     .settings-sidebar {
-      width: 180px; flex-shrink: 0; background: #f5f8fa; border-right: 0.5px solid #e2e8f0;
+      width: 180px; flex-shrink: 0; background: var(--ci-bg-sidebar); border-right: 0.5px solid var(--ci-border-default);
       padding: 20px 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
     }
     .settings-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
     .settings-nav-item {
-      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: #516f90;
-      text-decoration: none; border-radius: 6px; border-left: 2px solid transparent; transition: all 0.12s;
+      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--ci-text-secondary);
+      text-decoration: none; border-radius: var(--ci-radius-sm); border-left: 2px solid transparent; transition: all 0.12s;
     }
-    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: #2d3e50; }
-    .settings-nav-item.active { background: #fff; color: #2d3e50; font-weight: 600; border-left-color: #FF7A59; }
-    .settings-nav-divider { height: 1px; background: #e2e8f0; margin: 10px 14px; }
+    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: var(--ci-text-primary); }
+    .settings-nav-item.active { background: var(--ci-bg-raised); color: var(--ci-text-primary); font-weight: 600; border-left-color: var(--ci-accent-primary); }
+    .settings-nav-divider { height: 1px; background: var(--ci-border-subtle); margin: 10px 14px; }
     .settings-content { flex: 1; min-width: 0; }
   </style>
 </head>
@@ -157,6 +158,11 @@
       <a href="#meetings">Meetings</a>
       <a href="#contacts">Known Contacts</a>
       <a href="#ai-chat">AI Chat</a>
+      <a href="#screen-share">Screen Share</a>
+      <a href="#qualifications">Qualification Matching</a>
+      <a href="#score-breakdown">Score Breakdown</a>
+      <a href="#scoring-system">How Scoring Works</a>
+      <a href="#inbox">Inbox</a>
       <a href="#celebrations">Celebrations</a>
       <div class="doc-nav-divider"></div>
       <a href="#integrations">Integrations</a>
@@ -527,6 +533,183 @@
       </div>
     </div>
 
+    <!-- Screen Share -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="screen-share"></span>
+      <div class="doc-section-title">Screen Share with Coop</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">Share your screen with Coop so he can see exactly what you're looking at. When enabled, Coop captures a screenshot of your active browser tab before each message and sends it to the AI model for visual analysis.</p>
+
+      <h3 class="sub">How to use</h3>
+      <div class="info-block">
+        <ol style="font-size:13px;color:#516f90;line-height:1.8;padding-left:18px;">
+          <li>Look for the <strong>monitor icon</strong> in Coop's chat header (between the title and pop-out button)</li>
+          <li>Click it to enable — it turns <strong style="color:#FF7A59;">coral</strong> when active</li>
+          <li>A <strong>preview thumbnail</strong> appears above the input showing what Coop will see</li>
+          <li>Send any message — Coop sees both your text and your screen</li>
+          <li>Click the icon again to disable</li>
+        </ol>
+      </div>
+
+      <h3 class="sub">What Coop sees</h3>
+      <p class="body">Coop receives a JPEG screenshot of the visible browser tab. He can read text, see layouts, identify form fields, and understand page structure. He <strong>cannot</strong> see videos, animations, or content behind login walls on other tabs.</p>
+
+      <h3 class="sub">Great for</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;color:#516f90;line-height:1.8;">
+          <li>Filling out application forms — "help me answer this question"</li>
+          <li>Reading job postings — "what do you think of this role?"</li>
+          <li>Email drafting — "help me respond to this"</li>
+          <li>Any page where context matters</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>Cost: ~$0.0003-0.005 per message with screenshot depending on model. Only charged when you send a message, not for preview updates.</span>
+      </div>
+    </div>
+
+    <!-- Qualification Matching -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="qualifications"></span>
+      <div class="doc-section-title">Qualification Matching</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">When Coop scores a job, he now extracts up to 10 specific qualifications from the posting and matches each one against your resume, skills, and experience.</p>
+
+      <h3 class="sub">How it works</h3>
+      <p class="body">Each qualification is classified as:</p>
+      <div class="info-block">
+        <ul style="font-size:13px;color:#516f90;line-height:1.8;">
+          <li><strong style="color:#00BDA5;">&#x2713; Met</strong> — clear match found in your background</li>
+          <li><strong style="color:#d97706;">&#x25D0; Partial</strong> — related experience but not exact</li>
+          <li><strong style="color:#f87171;">&#x2717; Unmet</strong> — no evidence in your profile</li>
+          <li><strong style="color:#94a3b8;">? Unknown</strong> — can't determine from available info</li>
+        </ul>
+      </div>
+
+      <p class="body">Each qualification also shows its importance level (<span class="pill pill-coral" style="font-size:10px;">required</span> <span class="pill pill-blue" style="font-size:10px;">preferred</span> <span class="pill pill-gray" style="font-size:10px;">bonus</span>) and evidence from your background.</p>
+
+      <h3 class="sub">Where to find it</h3>
+      <p class="body">In the sidepanel job opportunity section, look for the collapsible <strong>"Qualifications (N/M met)"</strong> section below Green/Red Flags. Also visible on the Opportunity detail page.</p>
+
+      <h3 class="sub">Curation</h3>
+      <p class="body">Click the <strong>&#x00D7;</strong> button on any qualification to dismiss it. Dismissed qualifications show as strikethrough and persist across sessions.</p>
+    </div>
+
+    <!-- Score Breakdown -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="score-breakdown"></span>
+      <div class="doc-section-title">Score Breakdown</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">Every job match score now includes a visual breakdown showing what drove the number. Five components are scored 1-10:</p>
+
+      <div class="info-block">
+        <ul style="font-size:13px;color:#516f90;line-height:1.8;">
+          <li><strong>Qualifications</strong> — how well your background matches stated requirements</li>
+          <li><strong>Green Flags</strong> — how many of your attracted-to signals are present</li>
+          <li><strong>Red Flag Impact</strong> — severity of dealbreakers found (10 = no issues)</li>
+          <li><strong>Compensation</strong> — alignment with your salary/OTE thresholds</li>
+          <li><strong>Role & Co. Fit</strong> — overall role type, seniority, company stage alignment</li>
+        </ul>
+      </div>
+
+      <p class="body">Each component displays as a colored horizontal bar — green (7+), amber (4-6), red (1-3). Find it in the collapsible <strong>"Score Breakdown"</strong> section in the sidepanel and opportunity detail page.</p>
+
+      <h3 class="sub">Flag curation</h3>
+      <p class="body">Individual red flags can be dismissed in the score modal (Kanban card view). Click <strong>&#x00D7;</strong> on any red flag to mark it as wrong/overblown. Dismissed flags are excluded from re-scoring — Coop learns from your feedback.</p>
+
+      <h3 class="sub">Gradient colors</h3>
+      <p class="body">Green and red flags now use gradient colors — the most important signal is darkest, fading lighter for less critical ones. This gives you an instant visual sense of severity.</p>
+    </div>
+
+    <!-- How Scoring Works -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="scoring-system"></span>
+      <div class="doc-section-title">How Scoring Works</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">Coop's scoring system evaluates every opportunity from two angles: <strong>how much you'd want it</strong> (preference fit) and <strong>how likely you'd get it</strong> (qualification fit). The overall score blends both — a dream role you'd never land doesn't score 9/10.</p>
+
+      <h3 class="sub">The overall score (1-10)</h3>
+      <p class="body">A weighted blend of five components. Qualification fit heavily influences the cap — if you're a 3/10 on qualifications, the overall score won't exceed 4-5 even with perfect preference alignment. This prevents wasting time on unrealistic opportunities.</p>
+
+      <h3 class="sub">Score components</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Qualification Fit (1-10)</strong> — Employer's perspective: how desirable a candidate are you? Factors in seniority gap, company scale experience, years of experience, scope, and specific skill matches. A Head of Revenue at a 50-person startup is not comparable to the same title at Salesforce.</li>
+          <li><strong>Preference Fit (1-10)</strong> — Your green flags and attracted-to items. High-importance (4-5) matches boost this significantly.</li>
+          <li><strong>Dealbreakers (1-10)</strong> — Impact of red flags. 10 = no issues. Each triggered dealbreaker drops this. Hard dealbreakers (severity 4-5) can trigger Hard DQ.</li>
+          <li><strong>Compensation (1-10)</strong> — Base and OTE compared to your floor and strong-offer thresholds. 10 = exceeds strong offer. 5 = meets floor. 1 = below floor. If undisclosed, defaults to 5 (neutral).</li>
+          <li><strong>Role Fit (1-10)</strong> — Is this a realistic next step or a 2-3 level jump? Considers role type, seniority progression, company stage alignment.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Qualification matching</h3>
+      <p class="body">Coop extracts <strong>all</strong> qualifications from the job posting — including implicit ones based on role level and company. Each is rated:</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Met</strong> (✓) — Clear evidence in your profile/resume</li>
+          <li><strong>Partial</strong> (◐) — Related experience but with a gap (e.g., "managed 5-person team; role needs 50+")</li>
+          <li><strong>Unmet</strong> (✗) — No evidence in your background</li>
+          <li><strong>Unknown</strong> (?) — Can't determine from available information</li>
+        </ul>
+      </div>
+      <p class="body">Click any qualification's status icon to <strong>override it and explain why</strong>. Coop learns from your corrections and applies them to future scoring.</p>
+
+      <h3 class="sub">Training Coop's scoring</h3>
+      <p class="body">Coop improves through your feedback. Every correction is stored as a high-priority learned insight:</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Dismiss a flag</strong> — Click &#x00D7; on any red or green flag, optionally explain why. Coop won't repeat dismissed flags and learns from your reasoning.</li>
+          <li><strong>Override a qualification</strong> — Click the status icon (✓/◐/✗) to change it. Add evidence from your background that Coop missed.</li>
+          <li><strong>Rescore</strong> — After giving feedback, hit "Rescore" to see Coop's updated assessment.</li>
+          <li><strong>Profile updates</strong> — Keep your Career OS profile current. Coop can only match qualifications against what he knows about you.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Hard disqualification (DQ)</h3>
+      <p class="body">A Hard DQ flags roles with absolute verified dealbreakers — on-site when you require remote, base salary max below your floor, or fundamentally wrong role type. These show a red warning banner on the queue card.</p>
+
+      <h3 class="sub">Auto-rescore</h3>
+      <p class="body">When enabled (Coop Settings), profile changes trigger automatic rescoring. You control which pipeline stages get rescored — by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on.</p>
+    </div>
+
+    <!-- Inbox -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="inbox"></span>
+      <div class="doc-section-title">Inbox</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">A dedicated email inbox page that aggregates all cached emails across your pipeline companies in a three-panel layout.</p>
+
+      <h3 class="sub">Layout</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;color:#516f90;line-height:1.8;">
+          <li><strong>Left sidebar</strong> — company list with email counts, sorted by most recent activity. Unread counts show as coral badges.</li>
+          <li><strong>Center</strong> — email list with sender, subject, snippet, and relative date. Unread emails marked with a coral dot.</li>
+          <li><strong>Right</strong> — email detail panel with full body, thread messages (collapsible), and "Open in Gmail" link.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Filters</h3>
+      <p class="body">Filter by <strong>pipeline stage</strong> (AI Queue, Applied, Conversations, Offer Stage, etc.) and <strong>direction</strong> (All, Inbound, Sent by Me). Search across subject, sender, and snippet text.</p>
+
+      <h3 class="sub">Unread tracking</h3>
+      <p class="body">Emails newer than your last inbox visit show as unread with a coral dot. The <strong>Inbox</strong> link on the pipeline page shows a badge with the unread count. Opening the inbox resets the counter.</p>
+
+      <h3 class="sub">Keyboard navigation</h3>
+      <p class="body">Use <strong>j/k</strong> to move through emails, <strong>Enter</strong> to open detail, <strong>Escape</strong> to close.</p>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>Emails sync automatically when you view companies with Gmail connected. The inbox aggregates all cached emails — it doesn't fetch new ones on its own.</span>
+      </div>
+    </div>
+
     <!-- Celebrations -->
     <div class="doc-section">
       <span class="doc-section-anchor" id="celebrations"></span>
@@ -617,7 +800,7 @@
           <div class="integration-icon claude">🤖</div>
           <div class="integration-info">
             <div class="integration-name">Anthropic / Claude</div>
-            <div class="integration-desc">Powers company intelligence summaries, job match scoring, and the Ask AI chat panel. Uses Claude Sonnet 4.5 by default. Requires an Anthropic API key.</div>
+            <div class="integration-desc">Powers company intelligence summaries, job match scoring, and Coop chat. Uses Claude Sonnet 4.5 by default. Requires an Anthropic API key.</div>
           </div>
           <a class="integration-setup" href="integrations.html">Add API key</a>
         </div>

@@ -25,6 +25,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
+  if (message.type === '_SIDEPANEL_OPENED') {
+    // Side panel is open — hide floating trigger, it's redundant
+    const strip = document.getElementById('ci-sb-strip');
+    if (strip) strip.style.display = 'none';
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === '_SIDEPANEL_CLOSED') {
+    // Side panel closed — show floating trigger again
+    const strip = document.getElementById('ci-sb-strip');
+    if (strip) { strip.style.display = ''; strip.style.width = '0px'; strip.style.opacity = '0'; }
+    sendResponse({ ok: true });
+    return true;
+  }
 
   return true;
 });
@@ -1116,7 +1130,7 @@ function extractLinkedInJobMeta() {
   }
   const scope = panel || document;
 
-  // Try specific insight selectors first
+  // Try specific insight selectors first — LinkedIn changes these frequently
   const candidateTexts = [];
   scope.querySelectorAll(
     '.job-details-jobs-unified-top-card__job-insight, ' +
@@ -1124,10 +1138,22 @@ function extractLinkedInJobMeta() {
     'li[class*="job-insight"], ' +
     '[class*="workplace-type"], ' +
     '[class*="preference-pill"], ' +
-    '[class*="job-detail-preference"]'
+    '[class*="job-detail-preference"], ' +
+    '[class*="job-details-fit-level"], ' +
+    '.tvm__text, ' +
+    '[class*="top-card"] li, ' +
+    '[class*="top-card"] span[class*="pill"], ' +
+    '[class*="top-card"] span[class*="tag"], ' +
+    '[class*="description__job-criteria-item"]'
   ).forEach(el => {
     const t = el.textContent?.trim();
     if (t && t.length > 0 && t.length < 120) candidateTexts.push(t);
+  });
+
+  // Also scan aria-labels and title attributes on buttons/spans in the top card
+  scope.querySelectorAll('[aria-label], [title]').forEach(el => {
+    const t = (el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
+    if (t && t.length > 1 && t.length < 80) candidateTexts.push(t);
   });
 
   // Broad fallback: scan all leaf-node spans and buttons for short text fragments
@@ -1154,11 +1180,11 @@ function extractLinkedInJobMeta() {
     }
     if (/\$[\d,K]+/.test(t) && t.length < 60) {
       if (PERK_RE.test(t)) result.perks.push(t);
-      // Don't extract salary from insight chips — LinkedIn shows market estimates
-      // (e.g. "$70K/yr - $80K/yr") that aren't from the posting. Salary is only
-      // extracted from the job description body in the dedicated scan below.
-      else if (/\$[\d,K]+/.test(t)) {
-        console.log('[Salary] Skipped insight chip (may be LinkedIn estimate):', t);
+      // Extract salary from insight chips — LinkedIn shows compensation ranges
+      // that may be from the posting or LinkedIn estimates. Either way, it's useful signal.
+      else if (!result.salary) {
+        result.salary = t.trim();
+        console.log('[Salary] Extracted from chip:', t);
       }
     }
   }
@@ -1416,18 +1442,27 @@ function injectCoopButton() {
     '.jobs-s-apply',                              // Older layout
     '.job-details-jobs-unified-top-card__container .mt2', // Unified card
     '.jobs-unified-top-card__content--two-pane .mt2',
+    '.jobs-details-top-card__action-container',   // Details page layout
+    '.job-details-jobs-unified-top-card__primary-description-container + div', // Alt unified
   ];
   let actionBar = null;
   for (const sel of containers) {
     actionBar = document.querySelector(sel);
     if (actionBar) break;
   }
-  // Fallback: find the parent of the Apply button
+  // Fallback: find the parent of the Apply button (button OR link)
   if (!actionBar) {
-    const applyBtn = document.querySelector(
-      'button[aria-label*="Apply"], button.jobs-apply-button, .jobs-apply-button--top-card button'
+    const applyEl = document.querySelector(
+      'button[aria-label*="Apply"], a[aria-label*="Apply"], button.jobs-apply-button, .jobs-apply-button--top-card button, a.jobs-apply-button, [data-job-id] button[aria-label*="apply" i], [data-job-id] a[aria-label*="apply" i]'
     );
-    if (applyBtn) actionBar = applyBtn.parentElement;
+    if (applyEl) actionBar = applyEl.parentElement;
+  }
+  // Last resort: find any Save/Saved button and use its parent
+  if (!actionBar) {
+    const saveEl = document.querySelector(
+      'button[aria-label*="Save"], button[aria-label*="Saved"]'
+    );
+    if (saveEl) actionBar = saveEl.parentElement;
   }
   if (!actionBar) return;
 
@@ -1498,6 +1533,11 @@ function injectCoopButton() {
         btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
         btn.classList.add('scooped');
         btn.style.background = '#f0f0f0'; btn.style.color = '#999'; btn.style.borderColor = '#ddd';
+        btn.style.cursor = 'pointer';
+        btn.disabled = false;
+        btn.addEventListener('click', () => {
+          chrome.runtime.sendMessage({ type: 'OPEN_QUEUE' }, () => void chrome.runtime.lastError);
+        });
         return;
       }
 
@@ -1537,10 +1577,15 @@ function injectCoopButton() {
       // Queue for scoring
       chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
 
-      // Success state
+      // Success state — clickable to open queue
       btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
       btn.classList.add('scooped');
       btn.style.background = '#FF7A59'; btn.style.color = '#fff'; btn.style.borderColor = '#FF7A59';
+      btn.style.cursor = 'pointer';
+      btn.disabled = false;
+      btn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'OPEN_QUEUE' }, () => void chrome.runtime.lastError);
+      });
 
       // Subtle bounce
       btn.style.transform = 'scale(1.05)';
@@ -1614,13 +1659,12 @@ if (/linkedin\.com/.test(window.location.hostname)) {
 (function initFloatingSidebar() {
   // Don't inject on extension pages
   if (window.location.protocol === 'chrome-extension:') return;
-  // Remove the old floating widget if present — this sidebar replaces it
+  // Remove the old floating widget if present
   const oldWidget = document.getElementById('ci-widget-host');
   if (oldWidget) oldWidget.remove();
 
-  let state = 1; // 1=idle, 2=strip, 3=icons, 4=open
   let retractTimer = null;
-  let isLocked = false; // true when panel is clicked open
+  let sidepanelOpen = false;
 
   const container = document.createElement('div');
   container.id = 'ci-sidebar-host';
@@ -1652,80 +1696,20 @@ if (/linkedin\.com/.test(window.location.hostname)) {
       }
       .ci-sb-trigger-icon svg { flex-shrink: 0; border-radius: 50%; }
       .ci-sb-trigger.ci-sb-dragging { transition: none !important; cursor: grabbing; }
-
-      /* State 4: full panel */
-      .ci-sb-panel {
-        position: absolute; top: 0; right: 0; width: 0; height: 100%;
-        transition: width 0.3s ease;
-        overflow: hidden; pointer-events: auto;
-        box-shadow: -8px 0 30px rgba(0,0,0,0.2);
-      }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-panel { width: var(--ci-panel-width, 380px); }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-trigger { opacity: 0; width: 0; pointer-events: none; }
-
-      .ci-sb-panel iframe {
-        width: 100%; height: 100%; border: none; background: #1a2c3a;
-      }
-
-      .ci-sb-close {
-        position: absolute; top: 8px; left: -24px; z-index: 30;
-        background: none; color: #99acc2; border: none;
-        width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
-        font-size: 16px; line-height: 1; display: none; align-items: center; justify-content: center;
-        transition: color 0.15s; padding: 0;
-      }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-close { display: flex; pointer-events: auto; }
-      .ci-sb-close:hover { color: #2d3e50; }
-
-      /* Resize handle on left edge of panel */
-      .ci-sb-resize {
-        position: absolute; top: 0; left: -4px; width: 12px; height: 100%;
-        cursor: col-resize; z-index: 20; opacity: 0; pointer-events: none;
-        transition: opacity 0.15s;
-      }
-      .ci-sb-resize::after {
-        content: ''; position: absolute; top: 50%; left: 4px; transform: translateY(-50%);
-        width: 4px; height: 48px; border-radius: 2px; background: #4a6580;
-      }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-resize { pointer-events: auto; }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-resize:hover { opacity: 1; }
-      .ci-sb-resize.ci-sb-resizing { opacity: 1; }
-
-      /* Backdrop for click-outside-to-close */
-      .ci-sb-backdrop {
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        z-index: -1; display: none;
-      }
-      #ci-sidebar-host.ci-sb-s4 .ci-sb-backdrop { display: block; }
     </style>
 
-    <div class="ci-sb-backdrop" id="ci-sb-backdrop"></div>
     <div class="ci-sb-trigger" id="ci-sb-strip">
       <span class="ci-sb-trigger-icon">${typeof COOP !== 'undefined' ? COOP.avatar(32) : '<svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#ct)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/><path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/></g></svg>'}<span style="margin-left:2px">Chat with Coop</span></span>
-    </div>
-    <div class="ci-sb-panel" id="ci-sb-panel">
-      <div class="ci-sb-resize" id="ci-sb-resize"></div>
-      <button class="ci-sb-close" id="ci-sb-close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   `;
   document.body.appendChild(container);
 
   const strip = container.querySelector('#ci-sb-strip');
-  const panel = container.querySelector('#ci-sb-panel');
-  const closeBtn = container.querySelector('#ci-sb-close');
-  const backdrop = container.querySelector('#ci-sb-backdrop');
-  let iframeLoaded = false;
 
   // Set initial vertical position from localStorage or center
   const savedY = localStorage.getItem('ci_sidebar_y');
   strip.style.top = savedY ? savedY + 'px' : '50%';
   if (!savedY) strip.style.transform = 'translateY(-50%)';
-
-  function setState(s) {
-    if (s === state) return;
-    state = s;
-    container.className = s >= 2 ? `ci-sb-s${s}` : '';
-  }
 
   // Vertical drag to reposition
   let isDragging = false, dragStartY, dragStartTop;
@@ -1734,12 +1718,10 @@ if (/linkedin\.com/.test(window.location.hostname)) {
     dragStartY = e.clientY;
     dragStartTop = strip.getBoundingClientRect().top;
     const onMove = ev => {
-      const dy = Math.abs(ev.clientY - dragStartY);
-      if (dy > 4) isDragging = true;
+      if (Math.abs(ev.clientY - dragStartY) > 4) isDragging = true;
       if (isDragging) {
         strip.classList.add('ci-sb-dragging');
-        const newTop = Math.max(20, Math.min(window.innerHeight - 70, dragStartTop + (ev.clientY - dragStartY)));
-        strip.style.top = newTop + 'px';
+        strip.style.top = Math.max(20, Math.min(window.innerHeight - 70, dragStartTop + (ev.clientY - dragStartY))) + 'px';
         strip.style.transform = 'none';
       }
     };
@@ -1747,193 +1729,84 @@ if (/linkedin\.com/.test(window.location.hostname)) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       strip.classList.remove('ci-sb-dragging');
-      if (isDragging) {
-        localStorage.setItem('ci_sidebar_y', parseInt(strip.style.top));
-        isDragging = false;
-      }
+      if (isDragging) { localStorage.setItem('ci_sidebar_y', parseInt(strip.style.top)); isDragging = false; }
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
 
-  function pushPage(width) {
-    document.documentElement.style.transition = 'margin-right 0.3s ease';
-    document.documentElement.style.marginRight = width + 'px';
-    document.documentElement.style.overflow = 'auto';
-  }
-
-  function unpushPage() {
-    document.documentElement.style.marginRight = '';
-    setTimeout(() => { document.documentElement.style.transition = ''; }, 300);
-  }
-
-  function openPanel() {
-    isLocked = true;
-    clearTimeout(retractTimer);
-    // Hide trigger
-    strip.style.width = '0px';
-    strip.style.opacity = '0';
-    // Apply saved width
-    const savedWidth = Math.min(500, parseInt(localStorage.getItem('ci_sidebar_width')) || 400);
-    container.style.setProperty('--ci-panel-width', savedWidth + 'px');
-    pushPage(savedWidth);
-    setState(4);
-    // Lazy-load iframe on first open
-    if (!iframeLoaded) {
-      const iframe = document.createElement('iframe');
-      iframe.src = chrome.runtime.getURL('sidepanel.html');
-      iframe.allow = 'clipboard-read; clipboard-write';
-      panel.appendChild(iframe);
-      iframeLoaded = true;
-    }
-  }
-
-  function closePanel() {
-    isLocked = false;
-    strip.style.width = '0px';
-    strip.style.opacity = '0';
-    const icon = strip.querySelector('.ci-sb-trigger-icon');
-    if (icon) icon.style.opacity = '0';
-    // Clear inline width/transition from resize drag so CSS class removal takes effect
-    panel.style.width = '';
-    panel.style.transition = '';
-    document.documentElement.style.transition = '';
-    document.documentElement.style.marginRight = '';
-    unpushPage();
-    setState(1);
-  }
+  // Click → open Chrome side panel (the only action this trigger performs)
+  strip.addEventListener('click', () => {
+    if (isDragging) return;
+    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }, () => void chrome.runtime.lastError);
+    strip.style.display = 'none';
+    sidepanelOpen = true;
+  });
 
   // Register global toggle for extension icon click
   _ciSidebarToggle = () => {
-    if (state === 4) closePanel();
-    else openPanel();
+    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }, () => void chrome.runtime.lastError);
+    strip.style.display = 'none';
+    sidepanelOpen = true;
   };
 
-  // Mouse proximity detection
-  const MAX_DIST = 480;  // start revealing at this distance from edge
-  const MAX_WIDTH = 170;  // fully revealed trigger width (Coop avatar + label)
-  const MIN_WIDTH = 0;
+  // Mouse proximity detection — reveal trigger as mouse approaches right edge
+  const MAX_DIST = 480;
+  const MAX_WIDTH = 170;
 
   document.addEventListener('mousemove', e => {
-    if (isLocked) return;
-    if (isDragging) return;
+    if (sidepanelOpen || isDragging) return;
     const distFromRight = window.innerWidth - e.clientX;
-
     clearTimeout(retractTimer);
 
     if (distFromRight <= MAX_DIST) {
-      // Two-phase reveal:
-      // Phase 1 (far → 70% threshold): gradually reveal to 1/3 max width, then plateau
-      // Phase 2 (past 70% threshold): pop out to full width
-      const rawProgress = (MAX_DIST - distFromRight) / MAX_DIST; // 0 at MAX_DIST, 1 at edge
-      const SNAP_THRESHOLD = 0.85; // at 85% of the way, snap to full
-      const PLATEAU_WIDTH = MAX_WIDTH * 0.33; // 1/3 max width during phase 1
-
+      const rawProgress = (MAX_DIST - distFromRight) / MAX_DIST;
+      const SNAP_THRESHOLD = 0.85;
+      const PLATEAU_WIDTH = MAX_WIDTH * 0.33;
       let w, op;
       if (rawProgress < SNAP_THRESHOLD) {
-        // Phase 1: ease into plateau
-        const phase1 = rawProgress / SNAP_THRESHOLD; // 0→1 within phase 1
+        const phase1 = rawProgress / SNAP_THRESHOLD;
         w = phase1 * PLATEAU_WIDTH;
         op = Math.min(0.7, phase1 * 0.9);
       } else {
-        // Phase 2: snap to full
         w = MAX_WIDTH;
         op = 1;
       }
-
       strip.style.width = w + 'px';
       strip.style.opacity = op;
-      const shadowProgress = w / MAX_WIDTH;
-      strip.style.boxShadow = `-${Math.round(shadowProgress * 3)}px 0 ${Math.round(shadowProgress * 12)}px rgba(0,0,0,${(shadowProgress * 0.18).toFixed(2)})`;
+      const sp = w / MAX_WIDTH;
+      strip.style.boxShadow = `-${Math.round(sp * 3)}px 0 ${Math.round(sp * 12)}px rgba(0,0,0,${(sp * 0.18).toFixed(2)})`;
       const icon = strip.querySelector('.ci-sb-trigger-icon');
       if (icon) icon.style.opacity = rawProgress >= SNAP_THRESHOLD ? 1 : 0;
-      if (state !== 3 && state !== 4) setState(3);
-    } else if (state > 1 && state < 4) {
+    } else {
       retractTimer = setTimeout(() => {
-        if (!isLocked && state < 4) {
+        if (!sidepanelOpen) {
           strip.style.width = '0px';
           strip.style.opacity = '0';
           const icon = strip.querySelector('.ci-sb-trigger-icon');
           if (icon) icon.style.opacity = '0';
-          setState(1);
         }
       }, 400);
     }
   });
 
-  // Click strip to open
-  strip.addEventListener('click', () => { if (!isDragging) openPanel(); });
-
-  // Close button
-  closeBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    closePanel();
-  });
-
-  // Resize panel by dragging left edge
-  const resizeHandle = container.querySelector('#ci-sb-resize');
-  let panelWidth = parseInt(localStorage.getItem('ci_sidebar_width')) || 400;
-
-  resizeHandle.addEventListener('mousedown', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    resizeHandle.classList.add('ci-sb-resizing');
-    const startX = e.clientX;
-    const startWidth = panel.offsetWidth;
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-    // Block iframe from stealing mouse events during drag
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:15;cursor:col-resize;';
-    panel.appendChild(overlay);
-
-    const onMove = ev => {
-      const newWidth = Math.max(300, Math.min(800, startWidth + (startX - ev.clientX)));
-      panel.style.width = newWidth + 'px';
-      panel.style.transition = 'none';
-      document.documentElement.style.transition = 'none';
-      document.documentElement.style.marginRight = newWidth + 'px';
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      overlay.remove();
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      resizeHandle.classList.remove('ci-sb-resizing');
-      panel.style.transition = '';
-      panelWidth = panel.offsetWidth;
-      localStorage.setItem('ci_sidebar_width', panelWidth);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-
-  // Click outside to close
-  backdrop.addEventListener('click', closePanel);
-
-  // Prevent hover flicker — keep strip visible when mouse is over it
+  // Hover: fully reveal
   strip.addEventListener('mouseenter', () => {
+    if (sidepanelOpen) return;
     clearTimeout(retractTimer);
-    if (!isLocked && state < 4) {
-      // Fully reveal when hovering directly on the trigger
-      strip.style.width = MAX_WIDTH + 'px';
-      strip.style.opacity = '1';
-      strip.style.boxShadow = '-3px 0 12px rgba(0,0,0,0.18)';
-      const icon = strip.querySelector('.ci-sb-trigger-icon');
-      if (icon) icon.style.opacity = '1';
-    }
+    strip.style.width = MAX_WIDTH + 'px';
+    strip.style.opacity = '1';
+    strip.style.boxShadow = '-3px 0 12px rgba(0,0,0,0.18)';
+    const icon = strip.querySelector('.ci-sb-trigger-icon');
+    if (icon) icon.style.opacity = '1';
   });
-
   strip.addEventListener('mouseleave', () => {
-    if (!isLocked && state < 4) {
-      retractTimer = setTimeout(() => {
-        strip.style.width = '0px';
-        strip.style.opacity = '0';
-        const icon = strip.querySelector('.ci-sb-trigger-icon');
-        if (icon) icon.style.opacity = '0';
-        setState(1);
-      }, 400);
-    }
+    if (sidepanelOpen) return;
+    retractTimer = setTimeout(() => {
+      strip.style.width = '0px';
+      strip.style.opacity = '0';
+      const icon = strip.querySelector('.ci-sb-trigger-icon');
+      if (icon) icon.style.opacity = '0';
+    }, 400);
   });
 })();

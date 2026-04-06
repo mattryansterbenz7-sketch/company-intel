@@ -1,5 +1,27 @@
 // Floating sidebar is the primary UI — icon click toggles it
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
+// ── Debug log ring buffer — last 50 entries, accessible via message ──
+const _debugLog = [];
+function dlog(msg) {
+  const entry = `[${new Date().toISOString().slice(11, 23)}] ${msg}`;
+  _debugLog.push(entry);
+  if (_debugLog.length > 50) _debugLog.shift();
+  console.log(msg);
+}
+
+// ── Screenshot port: receives large screenshot data from sidepanel ──
+let _pendingScreenshot = null;
+chrome.runtime.onConnect.addListener(port => {
+  if (port.name === 'coop-screenshot') {
+    port.onMessage.addListener(msg => {
+      if (msg.screenshot) {
+        _pendingScreenshot = msg.screenshot;
+        dlog(`[Screenshot] Received via port (${Math.round(msg.screenshot.length / 1024)}KB) — stored in memory`);
+      }
+    });
+  }
+});
 
 // ── Contact extraction helper ───────────────────────────────────────────────
 function parseEmailContact(fromStr) {
@@ -140,11 +162,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
   // Auto-rescore active opportunities when Career OS profile changes
   const profileKeys = ['profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'];
   const changedProfileKeys = profileKeys.filter(k => changes[k]);
-  if (area === 'local' && changedProfileKeys.length) {
-    console.log('[AutoRescore] Profile changed:', changedProfileKeys, '— rescoring active opportunities');
+  if (area === 'local' && changedProfileKeys.length && coopConfig.automations?.autoRescore !== false) {
+    const rescoreStages = coopConfig.rescoreStages || ['needs_review', 'want_to_apply'];
+    console.log('[AutoRescore] Profile changed:', changedProfileKeys, '— rescoring stages:', rescoreStages);
     chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
       const active = (savedCompanies || []).filter(c =>
-        c.isOpportunity && c.jobStage && c.jobStage !== 'needs_review' && c.jobStage !== 'rejected'
+        c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
       );
       if (!active.length) return;
       console.log(`[AutoRescore] Rescoring ${active.length} active opportunities`);
@@ -198,6 +221,46 @@ const DEFAULT_PIPELINE_CONFIG = {
 };
 let pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG };
 
+// ── Coop personality presets (tone + style only — UI labels live in preferences.js) ──
+const COOP_PRESETS_BG = {
+  'sharp-colleague': {
+    tone: `confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.`,
+    style: `Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.`,
+  },
+  'strategic-advisor': {
+    tone: `thoughtful and analytical — a seasoned advisor who pushes on long-term implications. You ask the questions others miss and challenge assumptions when the stakes matter.`,
+    style: `Structure responses around trade-offs and second-order effects. Use frameworks when they add clarity. Be willing to say "slow down" when a decision deserves more thought. Medium-length responses are fine when depth is warranted.`,
+  },
+  'hype-man': {
+    tone: `encouraging and energizing — the colleague who genuinely believes in your strengths and makes sure you see them too. You highlight wins, reframe setbacks, and keep momentum high.`,
+    style: `Lead with strengths and positive framing. Be specific about what makes the user strong for each opportunity. Keep energy high without being fake. Short, punchy responses that build confidence.`,
+  },
+  'formal-analyst': {
+    tone: `precise and structured — a senior analyst delivering clear, evidence-based assessments. You organize information systematically and let data drive conclusions.`,
+    style: `Use headers and structured sections freely. Prefer numbered lists and tables when comparing options. Cite specific data points from context. Longer, more thorough responses are expected. Professional tone throughout.`,
+  },
+};
+
+let coopConfig = {};
+chrome.storage.local.get(['coopConfig'], d => {
+  if (d.coopConfig) coopConfig = d.coopConfig;
+});
+
+function buildIdentityPrompt(cfg, { globalChat, contextType }) {
+  const preset = COOP_PRESETS_BG[cfg.preset] || COOP_PRESETS_BG['sharp-colleague'];
+  const tone = cfg.toneOverride || preset.tone;
+  const style = cfg.styleOverride || preset.style;
+  const customInstructions = cfg.customInstructions ? `\n\n=== CUSTOM INSTRUCTIONS FROM USER ===\n${cfg.customInstructions}` : '';
+
+  const capabilitiesGlobal = `You have full visibility across Matt's job search pipeline. You know his background, values, and preferences. You can see every company and opportunity he's tracking. When screen sharing is active, you can see screenshots of his browser — use them to help with whatever is on screen.\n\nHelp him prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When he mentions a specific company or person, use the pipeline context to inform your response.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about him. Don't be sycophantic.`;
+
+  const capabilitiesCompany = `You have deep, full context about this ${contextType || 'company'} including meeting transcripts, emails, notes, and company research. You ALSO have visibility across the full pipeline — you can compare this opportunity to others and give strategic advice. When screen sharing is active, you can see screenshots of his browser — use them to help with whatever is on screen.\n\nUse ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.`;
+
+  const capabilities = globalChat ? capabilitiesGlobal : capabilitiesCompany;
+
+  return `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're ${tone}\n\n${capabilities}\n\nResponse style: ${style}\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.${customInstructions}`;
+}
+
 // Load pipeline config
 chrome.storage.local.get(['pipelineConfig'], d => {
   if (d.pipelineConfig) {
@@ -231,18 +294,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.pipelineConfig) {
     pipelineConfig = { ...DEFAULT_PIPELINE_CONFIG, ...changes.pipelineConfig.newValue };
   }
+  if (area === 'local' && changes.coopConfig) {
+    coopConfig = changes.coopConfig.newValue || {};
+  }
   // Auto-rescore active opportunities when salary/work prefs change
-  if (area === 'sync' && changes.prefs) {
+  if (area === 'sync' && changes.prefs && coopConfig.automations?.autoRescore !== false) {
     const oldPrefs = changes.prefs.oldValue || {};
     const newPrefs = changes.prefs.newValue || {};
     const salaryChanged = oldPrefs.salaryFloor !== newPrefs.salaryFloor || oldPrefs.salaryStrong !== newPrefs.salaryStrong ||
       oldPrefs.oteFloor !== newPrefs.oteFloor || oldPrefs.oteStrong !== newPrefs.oteStrong;
     const workChanged = JSON.stringify(oldPrefs.workArrangement) !== JSON.stringify(newPrefs.workArrangement);
     if (salaryChanged || workChanged) {
-      console.log('[AutoRescore] Salary/work prefs changed — rescoring active opportunities');
+      const rescoreStages = coopConfig.rescoreStages || ['needs_review', 'want_to_apply'];
+      console.log('[AutoRescore] Salary/work prefs changed — rescoring stages:', rescoreStages);
       chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
         const active = (savedCompanies || []).filter(c =>
-          c.isOpportunity && c.jobStage && c.jobStage !== 'needs_review' && c.jobStage !== 'rejected'
+          c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
         );
         let i = 0;
         const processBatch = () => {
@@ -492,7 +559,18 @@ async function claudeApiCall(body, maxRetries = 3) {
 async function openAiChatCall({ model, system, messages, max_tokens }, maxRetries = 3) {
   const oaiMessages = [{ role: 'system', content: system }];
   for (const m of messages) {
-    oaiMessages.push({ role: m.role, content: m.content });
+    // Convert Claude multimodal format to OpenAI format
+    if (Array.isArray(m.content)) {
+      const oaiContent = m.content.map(block => {
+        if (block.type === 'image' && block.source?.type === 'base64') {
+          return { type: 'image_url', image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` } };
+        }
+        return block; // text blocks are the same format
+      });
+      oaiMessages.push({ role: m.role, content: oaiContent });
+    } else {
+      oaiMessages.push({ role: m.role, content: m.content });
+    }
   }
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -587,6 +665,51 @@ let _apolloExhausted = false;
 let _serperExhausted = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'GET_DEBUG_LOG') {
+    sendResponse({ log: _debugLog.join('\n') });
+    return false;
+  }
+  if (message.type === 'OPEN_QUEUE') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('queue.html') });
+    return false;
+  }
+  if (message.type === 'OPEN_SIDE_PANEL') {
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab) {
+          await chrome.sidePanel.open({ tabId: tab.id });
+        }
+      } catch (e) {
+        console.warn('[SidePanel] Failed to open:', e.message);
+      }
+    })();
+    return false;
+  }
+  if (message.type === 'CLOSE_SIDE_PANEL') {
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab) {
+          // Try tabId first (Chrome 120+), fall back to windowId
+          try { await chrome.sidePanel.close({ tabId: tab.id }); }
+          catch { await chrome.sidePanel.close({ windowId: tab.windowId }); }
+        }
+      } catch (e) {
+        console.warn('[Close] sidePanel.close failed:', e.message);
+        // Fallback: disable the side panel for this tab
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tab) {
+            await chrome.sidePanel.setOptions({ tabId: tab.id, enabled: false });
+            // Re-enable after a tick so it can be opened again
+            setTimeout(() => chrome.sidePanel.setOptions({ tabId: tab.id, enabled: true }), 100);
+          }
+        } catch {}
+      }
+    })();
+    return false;
+  }
   if (message.type === 'QUICK_LOOKUP') {
     quickLookup(message.company, message.domain, message.companyLinkedin, message.linkedinFirmo).then(sendResponse);
     return true;
@@ -1066,7 +1189,8 @@ async function processQuickFitScore(entryId) {
     chrome.storage.local.get([
       'profileGreenLights', 'profileRedLights', 'profileSkills',
       'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
-      'profileRoleICP', 'profileCompanyICP'
+      'profileRoleICP', 'profileCompanyICP',
+      'profileResume', 'profileExperience'
     ], resolve)
   );
   const syncData = await new Promise(resolve =>
@@ -1111,10 +1235,44 @@ async function processQuickFitScore(entryId) {
     console.log('[QuickFit] Keyword pre-scan hits:', keywordHits);
   }
 
+  // ── Deterministic comp threshold check ──
+  const compDealbreakers = dealbreakers.filter(d => d.category === 'comp' && d.compThreshold);
+  for (const cd of compDealbreakers) {
+    const salaryField = cd.compType === 'ote'
+      ? (entry.oteTotalComp || entry.jobSnapshot?.oteTotalComp || entry.jobSnapshot?.salary || '')
+      : (entry.baseSalaryRange || entry.jobSnapshot?.baseSalaryRange || entry.jobSnapshot?.salary || '');
+    const nums = String(salaryField).match(/[\d,]+/g)?.map(s => parseInt(s.replace(/,/g, ''))) || [];
+    const maxPosted = nums.length ? Math.max(...nums.filter(n => n > 10000)) : null;
+    if (maxPosted && maxPosted < cd.compThreshold) {
+      const sev = typeof cd.severity === 'number' ? cd.severity : 3;
+      keywordHits.dealbreaker.push({ keyword: `${cd.compType} < $${cd.compThreshold.toLocaleString()}`, entry: cd.text, severity: sev });
+      if (sev >= 4) keywordHits.hardDQ.push({ keyword: `${cd.compType} max $${maxPosted.toLocaleString()} < floor $${cd.compThreshold.toLocaleString()}`, entry: cd.text, severity: sev });
+      console.log(`[QuickFit] Comp threshold hit: posted ${cd.compType} $${maxPosted} < floor $${cd.compThreshold}`);
+    } else if (!maxPosted && cd.compUnknownNeutral) {
+      // No salary posted + unknown=neutral → skip, don't penalize
+      console.log(`[QuickFit] Comp not disclosed, treating as neutral per user setting`);
+    }
+  }
+
+  // ── Deterministic work arrangement check ──
+  const userWorkPref = (Array.isArray(prefs.workArrangement) ? prefs.workArrangement : [prefs.workArrangement]).map(s => (s || '').toLowerCase()).filter(Boolean);
+  const jobArrangement = (entry.jobSnapshot?.workArrangement || entry.workArrangement || '').toLowerCase();
+  if (userWorkPref.length && jobArrangement) {
+    const prefersRemoteOnly = userWorkPref.length === 1 && userWorkPref[0] === 'remote';
+    const isHybrid = jobArrangement.includes('hybrid');
+    const isOnsite = jobArrangement.includes('on-site') || jobArrangement.includes('onsite') || jobArrangement.includes('in-office');
+    if (prefersRemoteOnly && (isHybrid || isOnsite)) {
+      const label = isOnsite ? 'On-site' : 'Hybrid';
+      keywordHits.dealbreaker.push({ keyword: `${label} role`, entry: `${label} conflicts with Remote-only preference`, severity: isOnsite ? 5 : 4 });
+      keywordHits.hardDQ.push({ keyword: `${label} role vs Remote preference`, entry: `${label} conflicts with Remote-only preference`, severity: isOnsite ? 5 : 4 });
+      console.log(`[QuickFit] Work arrangement mismatch: job is ${label}, user prefers Remote only`);
+    }
+  }
+
   // ── Build structured candidate preferences for prompt ──
   let candidateSection = '[Candidate Preferences]\n';
   if (attractedTo.length) {
-    candidateSection += 'Attracted To (structured, importance 1-5 where 5=must-have):\n' + attractedTo.map(e => {
+    candidateSection += 'Attracted To (structured, importance 1-5 where 5=dream factor, strongest positive signal):\n' + attractedTo.map(e => {
       const sev = typeof e.severity === 'number' ? e.severity : 2;
       return `- [${e.category}/importance:${sev}] ${e.text}${e.keywords?.length ? ` (keywords: ${e.keywords.join(', ')})` : ''}`;
     }).join('\n') + '\n';
@@ -1130,6 +1288,10 @@ async function processQuickFitScore(entryId) {
     candidateSection += `Red lights: ${redLights}\n`;
   }
   candidateSection += `Background: ${skills}`;
+  const resumeText = localData.profileResume?.content || prefs.resumeText || '';
+  const experienceText = localData.profileExperience || '';
+  if (resumeText) candidateSection += `\nResume/Experience:\n${resumeText.slice(0, 2000)}`;
+  if (experienceText && experienceText !== resumeText) candidateSection += `\nExperience Details:\n${experienceText.slice(0, 1500)}`;
   if (skillTags.length) candidateSection += `\nSkill tags: ${skillTags.join(', ')}`;
   if (roleICP.targetFunction || roleICP.seniority) {
     candidateSection += `\nRole ICP: ${[roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
@@ -1145,6 +1307,12 @@ async function processQuickFitScore(entryId) {
   candidateSection += `\n  OTE WALK AWAY (reject below): $${prefs.oteFloor || 'Not specified'}`;
   candidateSection += `\n  OTE STRONG OFFER (excited above): $${prefs.oteStrong || 'Not specified'}`;
   candidateSection += `\nLocation: ${prefs.userLocation || 'Not specified'}, prefers ${prefs.workArrangement || 'Not specified'}`;
+
+  // Include previously dismissed flags as calibration
+  const existingDismissed = entry.jobMatch?.dismissedFlags || [];
+  if (existingDismissed.length) {
+    candidateSection += `\n\n[USER FEEDBACK — Dismissed Red Flags (do NOT repeat these)]\n${existingDismissed.map(f => `- "${f}"`).join('\n')}`;
+  }
 
   // Add deterministic keyword hits to prompt
   let keywordContext = '';
@@ -1178,16 +1346,40 @@ ${companyContext ? `\n[Company Context from Web]\n${companyContext}` : ''}
 SCORING RULES:
 - quickTake: 2-4 most decisive signals (green for fits, red for dealbreakers). 8-15 words each. Lead with the most important.
 - strongFits: Only genuinely strong alignment backed by real evidence. Empty array is fine.
-- redFlags: Only real evidence of concern — comp below floor, on-site when remote needed, poor reviews, role misalignment. Do NOT flag missing information (missing salary, missing travel info, missing equity). Empty array is fine.
-- The "Work Arrangement" field above is authoritative. If it says "Remote", the job IS remote.
-- hardDQ: true ONLY for absolute verified dealbreakers (on-site vs remote requirement, base max below salary floor, fundamentally wrong role type). When in doubt, do NOT flag.
+- redFlags: Only real evidence of concern — comp below floor, on-site when remote needed, poor reviews, role misalignment. Do NOT flag missing information (missing salary, missing travel info, missing equity). Compensation not disclosed is NEVER a red flag — it is simply unknown and not a factor. Empty array is fine.
+- CRITICAL: Only flag concerns the candidate has EXPLICITLY stated in their preferences, dealbreakers, or profile. Do NOT infer or extrapolate dealbreakers they haven't expressed. If the candidate hasn't said they dislike a role type (e.g. client success, account management), do not flag it as a mismatch. Stick to what they've actually written.
+- "No equity mentioned" is NEVER a red flag. Only flag equity concerns if the candidate has explicitly listed equity as a dealbreaker.
+- The "Work Arrangement" field above is authoritative. If it says "Remote", the job IS remote. If it says "Not specified", scan the job description for work arrangement clues (remote, hybrid, on-site mentions) and use what you find. Similarly, if Compensation says "Not specified", scan the description for salary/compensation ranges — companies often include these in the posting body or legal compliance sections.
+- hardDQ: true ONLY for absolute verified dealbreakers (on-site or hybrid vs remote-only preference, base max below salary floor, fundamentally wrong role type that directly contradicts an explicit dealbreaker). If user prefers Remote and job is Hybrid or On-site, this IS a hard DQ — Hybrid requires in-office days which a remote-only candidate cannot do. When in doubt on other factors, do NOT flag.
 - reason: explain WHY you gave this score. Do NOT repeat job title or company name.
 - Green flag importance matters: high-importance (4-5) green flags that match should significantly boost the score. A role matching multiple importance-5 green flags should score higher even if minor red flags exist. Green flags counterbalance red flags — weigh both sides.
 
-QUALIFICATION MATCH:
-- Compare the posting's stated skills, qualifications, mindset, and experience requirements against the candidate's actual background.
-- qualificationMatch: 1-2 sentences assessing fit. Be specific — reference actual skills/experience the candidate has (or lacks) vs what the posting asks for.
-- qualificationScore: 1-5 (1=severely underqualified, 3=meets most requirements, 5=exceeds all requirements). Factor this into the overall score.
+QUALIFICATION MATCH — CANDIDATE vs JOB REQUIREMENTS ONLY:
+This section assesses ONLY whether the candidate is qualified for the role. NOT whether the role matches their preferences — that's handled separately by preferenceFit and dealbreakers.
+- Extract ALL qualifications/requirements listed in the posting (no cap — if there are 15, list all 15). Also add any implicit requirements that the JOB DEMANDS based on role level and company context (e.g. a VP Sales at Salesforce implies enterprise sales leadership at scale even if not written). Do NOT skip soft skills like communication, problem-solving, or independence — these matter to hiring managers.
+- Include both explicit requirements AND implicit ones: seniority level, team size to manage, revenue scope, industry expertise, company scale experience, technical skills.
+- For each, determine importance: "required" (must-have or clearly implied by the role level), "preferred" (nice-to-have), or "bonus" (optional).
+- Match each against the candidate's ACTUAL experience — resume, skills, accomplishments, and career trajectory. Status: "met" (clear evidence), "partial" (related but gap exists — explain the gap), "unmet" (no evidence), "unknown" (can't determine).
+- For "met" and "partial", cite specific evidence from the candidate's background in under 15 words. For "partial", also note the gap (e.g., "Managed 5-person team; role needs 50+").
+- qualificationMatch: 2-3 sentences HONEST assessment. Would a hiring manager at this company seriously consider this candidate? What's the biggest gap? What's the strongest match?
+- qualificationScore: 1-10 (1-2=severely underqualified, 3-4=significant gaps, 5-6=meets most but stretch on some, 7-8=strong match, 9-10=exceeds all/overqualified). This measures how desirable of a candidate the user would be FROM THE EMPLOYER'S PERSPECTIVE — not whether the user would like the job. This score MUST factor into the overall score at the top. A dream role where you'd never get hired should not score 8/10 overall.
+
+REALISTIC GAP ANALYSIS — THIS IS CRITICAL:
+The score MUST account for the gap between the candidate's actual level and what the role demands. Do not inflate scores based on keyword overlap alone. Evaluate these dimensions honestly:
+- SENIORITY GAP: If the role requires VP/C-suite at a Fortune 500 and the candidate has been a director/head at a startup, that's a 3-4 point gap. Managing 5 people vs managing 500 is not "partial match" — it's a different job.
+- COMPANY SCALE: A Head of Revenue at a 50-person startup is NOT comparable to the same title at a 10,000-person enterprise. If the role is at a large/public company and the candidate's experience is primarily at startups (or vice versa), acknowledge the gap.
+- SCOPE: Owning $1M ARR vs $100M ARR. Managing one product line vs a full portfolio. Regional coverage vs global. These are real gaps, not minor differences.
+- YEARS: If the role asks for 10+ years and the candidate has 5, that's a real gap even if skills overlap.
+- The score should reflect REALISTIC likelihood of getting hired, not just preference alignment. A role you'd love but would never get past the screening call should score 3-4, not 8-9.
+- If the candidate would be a stretch hire (could do the job with a ramp but would face skepticism from hiring managers), say so explicitly in qualificationMatch.
+
+SCORE BREAKDOWN:
+- Break the overall score into 5 components, each 1-10:
+  - qualificationFit: HONEST match of experience, seniority, scale, and skills against requirements. A "partial" match on 3 required qualifications = 4-5, not 7-8.
+  - preferenceFit: How many of the candidate's green flags / attracted-to items are present?
+  - dealbreakers: Impact of red flags and dealbreakers (10=no issues, 1=fatal)
+  - compFit: Compensation alignment (10=exceeds strong offer, 5=meets floor, 1=below floor, 5=unknown)
+  - roleFit: Overall role type, seniority, company stage alignment — is this a REALISTIC next step or a 2-3 level jump?
 
 ROLE BRIEF:
 - roleSummary: 2-3 sentences on what this role actually is, what you'd own, and what success looks like. Write it for the candidate, not a recruiter.
@@ -1195,15 +1387,19 @@ ROLE BRIEF:
 - concerns: 1-2 sentences on legitimate open questions or risks worth investigating before applying. Not missing data — real strategic concerns.
 - compSummary: one line summarizing known comp (base, OTE, equity) or "Not disclosed" if truly nothing.
 
+COMPANY VERIFICATION:
+- detectedCompany: The actual company name this job is for, as stated in the job description. Extract from the posting text, not from the Company field above (which may be wrong).
+- detectedTitle: The actual clean job title from the posting, without trailing numbers or artifacts.
+
 Respond in JSON only:
-{"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "signal"}], "strongFits": [], "redFlags": [], "hardDQ": {"flagged": boolean, "reasons": []}, "roleBrief": {"roleSummary": "", "whyInteresting": "", "concerns": "", "compSummary": "", "qualificationMatch": "", "qualificationScore": number 1-5}}`;
+{"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "signal"}], "strongFits": [], "redFlags": [], "hardDQ": {"flagged": boolean, "reasons": []}, "qualifications": [{"requirement": "string", "status": "met/partial/unmet/unknown", "evidence": "string or null", "importance": "required/preferred/bonus"}], "scoreBreakdown": {"qualificationFit": number, "preferenceFit": number, "dealbreakers": number, "compFit": number, "roleFit": number}, "roleBrief": {"roleSummary": "", "whyInteresting": "", "concerns": "", "compSummary": "", "qualificationMatch": "", "qualificationScore": number 1-10}, "detectedCompany": "string", "detectedTitle": "string"}`;
 
   const quickFitModel = getModelForTask('quickFitScoring');
   const { reply, error } = await chatWithFallback({
     model: quickFitModel,
     system: 'You are a precise job-fit scoring and role analysis assistant. Respond with valid JSON only.',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 1000,
+    max_tokens: 2200,
     tag: 'QuickFit'
   });
 
@@ -1217,6 +1413,10 @@ Respond in JSON only:
   let redFlags = [];
   let hardDQ = { flagged: false, reasons: [] };
   let roleBrief = null;
+  let qualifications = [];
+  let scoreBreakdown = null;
+  let detectedCompany = null;
+  let detectedTitle = null;
   try {
     const jsonMatch = reply.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -1228,6 +1428,30 @@ Respond in JSON only:
       redFlags = parsed.redFlags || [];
       hardDQ = parsed.hardDQ || { flagged: false, reasons: [] };
       roleBrief = parsed.roleBrief || null;
+      // Structured qualification line items
+      if (parsed.qualifications) {
+        qualifications = parsed.qualifications.map((q, i) => ({
+          id: `q${i}`,
+          requirement: q.requirement || '',
+          status: q.status || 'unknown',
+          evidence: q.evidence || null,
+          importance: q.importance || 'required',
+          dismissed: false
+        }));
+      }
+      // Score breakdown components
+      if (parsed.scoreBreakdown) {
+        scoreBreakdown = {
+          qualificationFit: parsed.scoreBreakdown.qualificationFit || 5,
+          preferenceFit: parsed.scoreBreakdown.preferenceFit || 5,
+          dealbreakers: parsed.scoreBreakdown.dealbreakers || 5,
+          compFit: parsed.scoreBreakdown.compFit || 5,
+          roleFit: parsed.scoreBreakdown.roleFit || 5
+        };
+      }
+      // Company/title verification
+      if (parsed.detectedCompany) detectedCompany = parsed.detectedCompany;
+      if (parsed.detectedTitle) detectedTitle = parsed.detectedTitle;
     }
   } catch (parseErr) {
     console.warn('[QuickFit] Failed to parse response:', reply);
@@ -1270,6 +1494,25 @@ Respond in JSON only:
     freshEntries[idx].quickTake = quickTake;
     freshEntries[idx].hardDQ = hardDQ;
     freshEntries[idx].quickFitScoredAt = Date.now();
+    // Auto-correct company name if AI detected a mismatch
+    if (detectedCompany && detectedCompany !== freshEntries[idx].company) {
+      const currentName = (freshEntries[idx].company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const aiName = detectedCompany.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!aiName.includes(currentName) && !currentName.includes(aiName)) {
+        console.log(`[QuickFit] Company name mismatch: entry="${freshEntries[idx].company}" → AI detected="${detectedCompany}" — auto-correcting`);
+        freshEntries[idx].company = detectedCompany;
+      }
+    }
+    // Auto-correct job title if AI detected a cleaner version
+    if (detectedTitle && freshEntries[idx].jobTitle) {
+      const currentTitle = freshEntries[idx].jobTitle.trim();
+      const aiTitle = detectedTitle.trim();
+      // Only correct if AI title is shorter (cleaned) or current has artifacts (trailing numbers, "Undefined" prefix)
+      if (aiTitle !== currentTitle && (currentTitle.match(/\s\d+$/) || currentTitle.startsWith('Undefined') || aiTitle.length < currentTitle.length)) {
+        console.log(`[QuickFit] Title cleanup: "${currentTitle}" → "${aiTitle}"`);
+        freshEntries[idx].jobTitle = aiTitle;
+      }
+    }
     // Write flags to jobMatch so the detail page shows them
     const existing = freshEntries[idx].jobMatch || {};
     freshEntries[idx].jobMatch = {
@@ -1279,6 +1522,10 @@ Respond in JSON only:
       strongFits: strongFits.length ? strongFits : existing.strongFits || [],
       redFlags: redFlags.length ? redFlags : existing.redFlags || [],
       roleBrief: roleBrief || existing.roleBrief || null,
+      qualifications: qualifications.length ? qualifications : existing.qualifications || [],
+      scoreBreakdown: scoreBreakdown || existing.scoreBreakdown || null,
+      dismissedFlags: existing.dismissedFlags || [],
+      dismissedFlagsWithReasons: existing.dismissedFlagsWithReasons || [],
       lastUpdatedBy: 'quick_fit',
       lastUpdatedAt: Date.now()
     };
@@ -1733,6 +1980,14 @@ async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext)
   }
   if (rc.candidateProfile) richSection += `\nCandidate Career OS Profile:${rc.candidateProfile}\n`;
   if (rc.matchFeedback) richSection += `\nPrevious assessment feedback: ${rc.matchFeedback}\n`;
+  if (rc.dismissedFlags?.length) {
+    const withReasons = rc.dismissedFlagsWithReasons || [];
+    const lines = rc.dismissedFlags.map(f => {
+      const r = withReasons.find(x => x.flag === f);
+      return r?.reason ? `- "${f}" — USER SAYS: ${r.reason}` : `- "${f}"`;
+    });
+    richSection += `\nUser dismissed these flags as wrong/overblown (do NOT repeat them, and learn from the reasons given):\n${lines.join('\n')}\n`;
+  }
 
   const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
 
@@ -1760,13 +2015,13 @@ ${prefs.roleHated ? `- A role that was a bad fit: ${prefs.roleHated}` : ''}
 Analysis rules:
 1. Work arrangement and location are DEALBREAKERS. If the user prefers Remote and the job is On-site or Hybrid-only, this is a MAJOR mismatch — drop the score by at least 3 points and add it as a red flag (e.g., "On-site role conflicts with Remote preference"). If the user prefers Hybrid and the job is On-site, drop by 2 points. A matching work arrangement is a strong fit worth noting.
 2. Only flag things explicitly stated or directly evidenced in the posting. Do NOT flag the absence of information — if equity isn't mentioned, that is not a red flag. If reporting structure isn't mentioned, do not speculate. No "Unclear:" prefixes — if you can't support it with evidence from the posting, leave it out.
-3. Red flags must be genuine concerns a reasonable person would want to know — not stylistic differences or things the user said they're okay with. If the user hasn't flagged something as a dealbreaker, don't treat it as one.
+3. CRITICAL: Red flags must be backed by something the candidate EXPLICITLY stated in their preferences, dealbreakers, or profile. Do NOT infer dealbreakers they never expressed. If the candidate hasn't said they dislike a role type, don't flag it. "No equity mentioned" is NEVER a red flag. Don't extrapolate — stick to what they actually wrote.
 4. Travel: if the posting explicitly mentions travel requirements, compare against max travel preference and flag only if it clearly exceeds it.
 5. Bridge the language gap: the user describes themselves in personal terms; job postings use corporate language. Map them — e.g. "I love autonomy and building from scratch" → look for early-stage, greenfield, founder-led signals. "Manage and grow existing accounts" → retention focus, not new business ownership.
 6. Read between the lines on culture, scope, and autonomy — but only from what the posting actually implies, not from what it omits.
 7. Use loved/hated role examples as calibration for concrete signals you find in the posting.
 8. Salary: extract the BASE salary or base salary range if stated anywhere in the posting (including legal/compliance disclosure sections at the bottom). If multiple figures are given (e.g., base + OTE/commission), extract the base salary only and set salaryType to "base". If only total/OTE compensation is mentioned, extract that and set salaryType to "ote". If no number is mentioned anywhere, use null for both.
-9. Do NOT flag missing salary information as a red flag. Most job postings don't include salary — it's normal and expected, not a negative signal.
+9. Do NOT flag missing salary information as a red flag or mention it in redFlags at all. Compensation not disclosed is NEVER a negative signal — it is simply unknown and not a factor. Do not speculate that undisclosed comp is "likely below" any threshold.
 10. Compensation evaluation — compare disclosed pay against the candidate's thresholds:
   - If BASE salary is disclosed and is below the candidate's BASE floor → MAJOR red flag with specific numbers (e.g., "Base $80K is below your $150K base floor"). Drop score by 2+ points.
   - If only OTE/total comp is disclosed and is below the candidate's OTE floor → red flag (e.g., "OTE $160K is below your $200K OTE floor"). Drop score by 1-2 points.
@@ -1787,8 +2042,8 @@ If none clearly apply, set hardDQ.flagged to false. When in doubt, do NOT flag.
 {
   "jobMatch": {
     "jobSummary": "<2-3 sentences on core responsibilities and what success looks like in this role>",
-    "score": <1-10 fit score: work arrangement, skills vs background, role type vs targets, loved/hated role signals>,
-    "verdict": "<one direct, honest sentence — should they apply and why>",
+    "score": <1-10 REALISTIC fit score. This is a WEIGHTED BLEND of: qualificationScore (how desirable a candidate from the employer's view), preference fit (green/red flags), compensation alignment, and role fit. The qualificationScore should heavily influence this number — a role where the candidate is underqualified (qualificationScore 3-4) should cap the overall score around 4-5 even if preferences match perfectly. Be honest about whether they'd realistically get hired.>,
+    "verdict": "<one direct, honest sentence — should they apply and why. If they're underqualified, say so clearly.>",
     "strongFits": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
     "redFlags": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
     "quickTake": [{"type": "green or red", "text": "8-15 word bullet summarizing a key signal"}],
@@ -2647,7 +2902,7 @@ async function buildCoopProfileContext() {
 async function buildCoopPipelineSummary() {
   const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
   const entries = savedCompanies || [];
-  if (!entries.length) return '';
+  if (!entries.length) return { summary: '', entries };
   const lines = entries.map(e => {
     const parts = [e.company];
     if (e.jobStage) parts.push(`Stage: ${e.jobStage}`);
@@ -2660,7 +2915,155 @@ async function buildCoopPipelineSummary() {
     if (e.tags?.length) parts.push(`Tags: ${e.tags.join(', ')}`);
     return `- ${parts.join(' | ')}`;
   }).join('\n');
-  return `\n=== YOUR FULL PIPELINE (${entries.length} entries) ===\n${lines}`;
+  return { summary: `\n=== YOUR FULL PIPELINE (${entries.length} entries) ===\n${lines}`, entries };
+}
+
+// ── Content-Aware Context: Intent Detection + Cross-Company Aggregation ─────
+
+function truncateToTokenBudget(text, maxChars) {
+  if (!text || text.length <= maxChars) return text;
+  const truncated = text.slice(0, maxChars);
+  const lastPara = truncated.lastIndexOf('\n\n');
+  if (lastPara > maxChars * 0.7) return truncated.slice(0, lastPara) + '\n\n[...truncated]';
+  const lastNl = truncated.lastIndexOf('\n');
+  if (lastNl > maxChars * 0.8) return truncated.slice(0, lastNl) + '\n[...truncated]';
+  return truncated + '\n[...truncated]';
+}
+
+function detectContextIntent(message, entries) {
+  const lower = message.toLowerCase();
+  const modules = new Set();
+  const mentionedCompanies = [];
+
+  // Detect mentioned companies by name
+  for (const e of entries) {
+    if (e.company && e.company.length > 2 && lower.includes(e.company.toLowerCase())) {
+      mentionedCompanies.push(e.id);
+    }
+  }
+
+  const INTENT_MAP = [
+    { patterns: [/\b(?:meeting|conversation|call|interview|spoke|talked|discussed|met with|best conversation|worst conversation)\b/i], module: 'meetings' },
+    { patterns: [/\b(?:email|emails|messaged|correspondence|thread|inbox|sent|replied|follow.?up)\b/i], module: 'emails' },
+    { patterns: [/\b(?:contact|contacts|people|who do i know|connections|network|who have i)\b/i], module: 'contacts' },
+    { patterns: [/\b(?:compare|rank|prioritize|all (?:my |the )?(?:companies|opportunities|roles))\b/i], module: 'pipeline_full' },
+    { patterns: [/\b(?:strategy|next steps|game plan|what should i|where should i focus)\b/i], module: 'meetings,pipeline_full' },
+    { patterns: [/\b(?:draft|write|compose)\b/i], module: 'emails,contacts' },
+    { patterns: [/\b(?:best|worst|recent|latest|strongest|weakest)\b.*\b(?:conversation|meeting|email|interaction|interview|call)\b/i], module: 'meetings,emails' },
+  ];
+
+  for (const { patterns, module } of INTENT_MAP) {
+    if (patterns.some(p => p.test(lower))) {
+      module.split(',').forEach(m => modules.add(m.trim()));
+    }
+  }
+
+  const needsCrossCompany = modules.has('meetings') || modules.has('emails') || modules.has('contacts');
+  return { modules, mentionedCompanies, needsCrossCompany };
+}
+
+function buildCrossCompanyMeetings(entries, opts = {}) {
+  const { totalBudget = 8000, mentionedCompanies = [] } = opts;
+  const filtered = mentionedCompanies.length
+    ? entries.filter(e => mentionedCompanies.includes(e.id))
+    : entries;
+
+  const allMeetings = [];
+  for (const e of filtered) {
+    const meetings = e.cachedMeetings || [];
+    for (const m of meetings) {
+      allMeetings.push({
+        company: e.company,
+        title: m.title || 'Untitled',
+        date: m.date || '',
+        time: m.time || '',
+        summary: m.summaryMarkdown || '',
+        transcript: (m.transcript || '').slice(0, 800),
+        _ts: m.date ? new Date(m.date + 'T12:00:00').getTime() : 0,
+      });
+    }
+    // Also include manual meetings
+    if (e.manualMeetings?.length) {
+      for (const m of e.manualMeetings) {
+        allMeetings.push({
+          company: e.company,
+          title: m.title || 'Manual meeting',
+          date: m.date || '',
+          time: m.time || '',
+          summary: '',
+          transcript: (m.transcript || m.notes || '').slice(0, 800),
+          _ts: m.date ? new Date(m.date + 'T12:00:00').getTime() : 0,
+        });
+      }
+    }
+  }
+
+  if (!allMeetings.length) return '';
+  allMeetings.sort((a, b) => b._ts - a._ts);
+
+  let text = `\n=== MEETINGS ACROSS PIPELINE (${allMeetings.length} meetings) ===\n`;
+  for (const m of allMeetings) {
+    const entry = `--- ${m.company}: ${m.title} | ${m.date}${m.time ? ' ' + m.time : ''} ---\n`;
+    const body = m.summary ? `Summary: ${m.summary}\n` : '';
+    const trans = m.transcript ? `Transcript: ${m.transcript}\n` : '';
+    text += entry + body + trans + '\n';
+    if (text.length > totalBudget) break;
+  }
+  return truncateToTokenBudget(text, totalBudget);
+}
+
+function buildCrossCompanyEmails(entries, opts = {}) {
+  const { totalBudget = 4000, mentionedCompanies = [] } = opts;
+  const filtered = mentionedCompanies.length
+    ? entries.filter(e => mentionedCompanies.includes(e.id))
+    : entries;
+
+  const allEmails = [];
+  for (const e of filtered) {
+    for (const em of (e.cachedEmails || []).slice(0, 15)) {
+      allEmails.push({
+        company: e.company,
+        from: (em.from || '').replace(/<[^>]+>/, '').trim(),
+        subject: em.subject || '',
+        date: em.date || '',
+        snippet: (em.snippet || '').slice(0, 150),
+        _ts: em.date ? new Date(em.date).getTime() : 0,
+      });
+    }
+  }
+
+  if (!allEmails.length) return '';
+  allEmails.sort((a, b) => b._ts - a._ts);
+
+  let text = `\n=== EMAILS ACROSS PIPELINE (${allEmails.length} emails) ===\n`;
+  for (const em of allEmails.slice(0, 50)) {
+    text += `[${em.date}] ${em.company} — "${em.subject}" from ${em.from}\n  ${em.snippet}\n`;
+    if (text.length > totalBudget) break;
+  }
+  return truncateToTokenBudget(text, totalBudget);
+}
+
+function buildCrossCompanyContacts(entries, opts = {}) {
+  const { totalBudget = 3000, mentionedCompanies = [] } = opts;
+  const filtered = mentionedCompanies.length
+    ? entries.filter(e => mentionedCompanies.includes(e.id))
+    : entries;
+
+  const lines = [];
+  for (const e of filtered) {
+    if (!e.knownContacts?.length) continue;
+    const contacts = e.knownContacts.slice(0, 5).map(c => {
+      const parts = [c.name];
+      if (c.title) parts.push(c.title);
+      if (c.email) parts.push(`<${c.email}>`);
+      return parts.join(' | ');
+    }).join('; ');
+    lines.push(`${e.company}: ${contacts}`);
+  }
+
+  if (!lines.length) return '';
+  const text = `\n=== CONTACTS ACROSS PIPELINE ===\n${lines.join('\n')}`;
+  return truncateToTokenBudget(text, totalBudget);
 }
 
 async function handleCoopMessage({ messages, context, globalChat, pipeline, enrichments, chatModel, careerOSChat }) {
@@ -2684,16 +3087,17 @@ async function handleCoopMessage({ messages, context, globalChat, pipeline, enri
     return ` (${Math.round(n/30)} months ago)`;
   };
 
-  // Layer 1: Coop identity
-  const identityPrompt = globalChat
-    ? `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have full visibility across Matt's job search pipeline. You know his background, values, and preferences. You can see every company and opportunity he's tracking.\n\nHelp him prioritize opportunities, draft follow-up messages, compare options, and make strategic decisions. When he mentions a specific company or person, use the pipeline context to inform your response.\n\nBe direct, opinionated, and honest. Push back when something doesn't align with what you know about him. Don't be sycophantic.\n\nResponse style: Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.`
-    : `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. You ALSO have visibility across the full pipeline — you can compare this opportunity to others and give strategic advice.\n\nUse ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.\n\nResponse style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.`;
+  // Layer 1: Coop identity (driven by coopConfig presets + custom instructions)
+  const identityPrompt = buildIdentityPrompt(coopConfig, {
+    globalChat,
+    contextType: context.type === 'job' ? 'job opportunity' : 'company',
+  });
 
   const systemParts = [identityPrompt, `\n=== TODAY ===\n${todayStr}`,
     `\nCRITICAL RULE: You have the user's FULL Career OS profile loaded in your context — their story, experience, accomplishments, skills, resume, preferences, and everything they've told you. ALWAYS use this data first. When helping with applications, DRAFT an answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information that's already in your context. If they ask you to write something about their background, write it immediately using what you have.`];
 
-  // Layer 2: Application helper mode (if active)
-  if (context._applicationMode) {
+  // Layer 2: Application helper mode (if active, and not disabled by user)
+  if (context._applicationMode && coopConfig.automations?.applicationModeDetection !== false) {
     systemParts.push(`\n=== APPLICATION HELPER MODE ===\nSITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.\n\nVOICE & TONE:\n- Write as the user in first person. Conversational, confident, specific.\n- Sound like a smart person talking, not an AI writing.\n- No dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.\n\nLENGTH: 2-5 sentences unless the user specifies otherwise.\n\nOUTPUT FORMAT:\n- Give ONE clean answer the user can copy-paste directly.\n- No preamble, no alternatives unless asked, no commentary after.\n- NEVER wrap in quotation marks.\n\nWhen the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
   }
 
@@ -2748,8 +3152,20 @@ When the user asks to switch models, change defaults, or adjust settings, respon
   }
 
   // Layer 4: Pipeline summary (ALWAYS — this is the key unification)
-  const pipelineSummary = pipeline || await buildCoopPipelineSummary();
-  if (pipelineSummary) systemParts.push(pipelineSummary);
+  let pipelineEntries = [];
+  if (pipeline) {
+    systemParts.push(pipeline);
+  } else {
+    const pipelineResult = await buildCoopPipelineSummary();
+    if (pipelineResult.summary) systemParts.push(pipelineResult.summary);
+    pipelineEntries = pipelineResult.entries || [];
+  }
+
+  // Intent detection for cross-company context (global/careerOS chats only)
+  const lastUserMsg_intent = messages[messages.length - 1]?.content || '';
+  const contextIntent = (globalChat || careerOSChat) && pipelineEntries.length
+    ? detectContextIntent(lastUserMsg_intent, pipelineEntries)
+    : { modules: new Set(), mentionedCompanies: [], needsCrossCompany: false };
 
   // Layer 5: Deep company context (when on a company page)
   if (!globalChat && context.company) {
@@ -2850,6 +3266,23 @@ When the user asks to switch models, change defaults, or adjust settings, respon
     }
   }
 
+  // Layer 5b: Content-aware cross-company context (global/careerOS chats)
+  if (contextIntent.needsCrossCompany && pipelineEntries.length) {
+    console.log(`[Coop] Intent detected modules: ${[...contextIntent.modules].join(', ')} | mentioned: ${contextIntent.mentionedCompanies.length} companies`);
+    if (contextIntent.modules.has('meetings')) {
+      const mtgCtx = buildCrossCompanyMeetings(pipelineEntries, { mentionedCompanies: contextIntent.mentionedCompanies });
+      if (mtgCtx) systemParts.push(mtgCtx);
+    }
+    if (contextIntent.modules.has('emails')) {
+      const emailCtx = buildCrossCompanyEmails(pipelineEntries, { mentionedCompanies: contextIntent.mentionedCompanies });
+      if (emailCtx) systemParts.push(emailCtx);
+    }
+    if (contextIntent.modules.has('contacts')) {
+      const contactCtx = buildCrossCompanyContacts(pipelineEntries, { mentionedCompanies: contextIntent.mentionedCompanies });
+      if (contactCtx) systemParts.push(contactCtx);
+    }
+  }
+
   // Layer 6: Entry update proposals (company context only)
   if (!globalChat && !careerOSChat && context.company) {
     systemParts.push(`\n=== ENTRY UPDATE PROPOSALS ===
@@ -2925,7 +3358,52 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
   const isSimpleCareerOS = careerOSChat && SIMPLE_CAREER_OS.some(p => p.test(lowerMsg));
   const isSimpleEntry = !globalChat && !careerOSChat && context.company && SIMPLE_ENTRY_UPDATE.some(p => p.test(lowerMsg));
 
-  if (isSimpleCareerOS || isSimpleEntry) {
+  // ── Screenshot: read from in-memory variable (sent via port) or context fallback ────
+  let hasImages = false;
+  const screenshotFlag = context._hasScreenshot || context.hasScreenshot;
+  // Use port data if available, otherwise fall back to inline context data
+  const screenshotData = _pendingScreenshot || context._screenshotData || null;
+  dlog(`[Screenshot] Flag check: ${screenshotFlag}, port: ${_pendingScreenshot ? Math.round(_pendingScreenshot.length/1024)+'KB' : 'null'}, context: ${context._screenshotData ? Math.round(context._screenshotData.length/1024)+'KB' : 'null'}`);
+  if (screenshotFlag && screenshotData) {
+    const screenshot = screenshotData;
+    _pendingScreenshot = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        const textContent = typeof messages[i].content === 'string' ? messages[i].content : String(messages[i].content);
+        messages[i] = {
+          role: 'user',
+          content: [
+            { type: 'text', text: textContent },
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: screenshot } }
+          ]
+        };
+        hasImages = true;
+        dlog(`[Screenshot] ✅ Injected ${Math.round(screenshot.length / 1024)}KB into message #${i}`);
+        break;
+      }
+    }
+  } else if (screenshotFlag && !screenshotData) {
+    dlog(`[Screenshot] ❌ Flag set but no screenshot data — port and context fallback both empty`);
+  }
+  if (hasImages) {
+    const visionModels = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'gpt-4o', 'gpt-4.1', 'gpt-4.1-mini'];
+    if (!visionModels.some(v => (chatModel || '').includes(v.split('-')[0]))) {
+      chatModel = ANTHROPIC_KEY ? 'claude-haiku-4-5-20251001' : 'gpt-4.1-mini';
+    }
+    console.log(`[Coop] Using vision model: ${chatModel}`);
+  }
+
+  // ── Screen sharing context: vision + page text (must be before tier routing) ──
+  if (hasImages) {
+    systemParts.push(`\n=== SCREEN SHARING (VISION ACTIVE) ===\nMatt is sharing his screen with you. A screenshot of his current browser tab is attached to his latest message as an image. You CAN see it — describe what you see, answer questions about it, and use the visual context to help him. This is a real screenshot, not a placeholder.`);
+  }
+  if (context.visiblePageContent) {
+    systemParts.push(`\n=== PAGE TEXT FROM USER'S ACTIVE TAB (extracted automatically — you CAN see this) ===\nURL: ${context.currentTabUrl || 'unknown'}\nIMPORTANT: The text below was automatically extracted from the page the user is currently viewing. When the user asks about what's on their screen, refer to this text AND the screenshot (if attached).\n\n${context.visiblePageContent.slice(0, 4000)}`);
+  } else if (context.currentTabUrl && (context._hasScreenshot || context.hasScreenshot)) {
+    systemParts.push(`\n=== CURRENT TAB ===\nURL: ${context.currentTabUrl}\nTab sharing is active. Use the screenshot to see what's on the page.`);
+  }
+
+  if ((isSimpleCareerOS || isSimpleEntry) && !hasImages) {
     const slimParts = [systemParts[0]];
     // Always include profile — prompt caching makes this nearly free
     const profileLayer = systemParts.find(p => p.includes('[Your Story]') || p.includes('[Personal Info]') || p.includes('[Experience'));
@@ -2962,9 +3440,49 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     /apply|application|help me answer|brag|accomplish|achievement|award|recognition|qualification/i,
     /do you know|tell me about|what do you know/i,
     /salesbricks|rep\.ai|navless|tourial|captivate/i,
+    /\b(?:best|worst|recent|strongest)\b.*\b(?:conversation|meeting|email|call|interview)\b/i,
+    /\b(?:all|across|every)\b.*\b(?:meeting|email|conversation|contact)\b/i,
+    /who (?:have i|did i|am i) (?:talk|speak|met|email|contact)/i,
   ];
-  const needsFullContext = NEEDS_FULL_CONTEXT.some(p => p.test(lowerMsg));
-  const isFollowUp = !isFirstMessage && !needsFullContext;
+  const needsFullContext = NEEDS_FULL_CONTEXT.some(p => p.test(lowerMsg)) || contextIntent.needsCrossCompany;
+  const isFollowUp = !isFirstMessage && !needsFullContext && !hasImages;
+
+  // Tier 2.5: Vision-optimized — screenshot messages that don't need full context
+  if (hasImages && !needsFullContext) {
+    const visionParts = [systemParts[0]]; // identity
+    visionParts.push(`\n=== TODAY ===\n${todayStr}`);
+    const profileLayer = systemParts.find(p => p.includes('[Your Story]') || p.includes('[Personal Info]') || p.includes('[Experience'));
+    if (profileLayer) visionParts.push(profileLayer);
+    if (!globalChat && context.company) {
+      const companyOverview = systemParts.find(p => p.includes('CURRENT COMPANY / OPPORTUNITY'));
+      if (companyOverview) visionParts.push(companyOverview);
+      const intelSection = systemParts.find(p => p.includes('COMPANY INTELLIGENCE'));
+      if (intelSection) visionParts.push(intelSection);
+      const jobSection = systemParts.find(p => p.includes('JOB DETAILS'));
+      if (jobSection) visionParts.push(jobSection);
+      const entryLayer = systemParts.find(p => p.includes('ENTRY UPDATE PROPOSALS'));
+      if (entryLayer) visionParts.push(entryLayer);
+    }
+    // Include vision and page text context
+    const visionSection = systemParts.find(p => p.includes('SCREEN SHARING') || p.includes('PAGE TEXT FROM'));
+    if (visionSection) visionParts.push(visionSection);
+    const pageTextSection = systemParts.find(p => p.includes('PAGE TEXT FROM') && p !== visionSection);
+    if (pageTextSection) visionParts.push(pageTextSection);
+    const tabSection = systemParts.find(p => p.includes('CURRENT TAB'));
+    if (tabSection) visionParts.push(tabSection);
+    const visionSystem = visionParts.join('\n');
+    const visionModel = chatModel || (ANTHROPIC_KEY ? 'claude-haiku-4-5-20251001' : 'gpt-4.1-mini');
+    console.log(`[Coop] ROUTED → Tier 2.5 (vision) | ${visionModel} | ${visionSystem.length} chars (${Math.round((1 - visionSystem.length/fullSize) * 100)}% saved vs full)`);
+    try {
+      const result = await chatWithFallback({ model: visionModel, system: visionSystem, messages, max_tokens: 2048, tag: 'Chat-Vision' });
+      if (!result.error) {
+        const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
+        if (hasTrigger) await _doExtractInsightsFromChat(lastUserMsg, result.reply, source);
+        else extractInsightsFromChat(lastUserMsg, result.reply, source);
+        return { reply: result.reply, model: result.usedModel, usage: result.usage, routed: 'vision' };
+      }
+    } catch (e) { console.warn('[Coop] Vision tier failed, escalating to full:', e.message); }
+  }
 
   if (isFollowUp) {
     // Build medium context: identity + today + profile + company context + proposals
@@ -3007,7 +3525,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
 
   // Auto-fetch URLs in the user's message
   const urlPattern = /https?:\/\/[^\s<>"')\]]+/gi;
-  const urls = (lastUserMsg.match(urlPattern) || []).slice(0, 3); // max 3 URLs
+  const urls = coopConfig.automations?.autoFetchUrls !== false ? (lastUserMsg.match(urlPattern) || []).slice(0, 3) : [];
   if (urls.length) {
     const fetched = [];
     for (const url of urls) {
@@ -3044,9 +3562,11 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     }
   }
 
+  // (Screenshot + vision context already handled above, before tier routing)
+
   try {
     const systemText = systemParts.join('\n');
-    const model = chatModel || getModelForTask('chat');
+    let model = chatModel || getModelForTask('chat');
     console.log(`[Coop] ROUTED → Tier 3 (full) | ${model} | ${systemText.length} chars | global: ${!!globalChat} | company: ${context.company || '(none)'}`);
     const result = await chatWithFallback({ model, system: systemText, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat' });
     if (result.error) return result;
@@ -3094,7 +3614,15 @@ async function _oldHandleChatMessage({ messages, context, chatModel }) {
   };
 
   const systemParts = [
-    `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.\n\nYou have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. Use ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.\n\nResponse style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable and open in new tabs. Images will render inline. Use these when they add value — don't force formatting where plain text works.`,
+    `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.
+
+About you: You are part of CompanyIntel, a Chrome extension built by Matt Sterbenz as a personal CRM for managing his GTM job search. CompanyIntel auto-detects companies from any website, enriches them with multi-source research, scores job postings against Matt's preferences, manages a pipeline with Kanban workflow, and provides AI-powered chat (that's you). All data stays local in the browser. You were designed to replace the painful stack of manual research, spreadsheet tracking, and context-less AI sessions that job searching normally requires.
+
+You have deep, full context about this ${context.type === 'job' ? 'job opportunity' : 'company'} including meeting transcripts, emails, notes, and company research. When tab sharing is active, you receive the extracted TEXT content from the page Matt is viewing (look for the "PAGE TEXT FROM USER'S ACTIVE TAB" section in your context). This is real text from his browser — use it to help with application questions, emails, or anything on the page. You cannot see images, videos, or visual layout — only extracted text. Use ALL available context to give specific, grounded answers. If something isn't in your context, say so — never fabricate.
+
+Response style: Keep answers short and direct. Use short paragraphs, not walls of text. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless the user asks for a structured breakdown. Write like a smart colleague in Slack, not a formal report.
+
+Formatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable and open in new tabs. Images will render inline. Use these when they add value — don't force formatting where plain text works.`,
     `\n=== TODAY ===\n${todayStr}`
   ];
 
@@ -3344,6 +3872,13 @@ When the user first enters this mode, respond: "Paste the application question a
     }
   }
 
+  // ── Visible page content (tab sharing) ─────────────────────────────────────
+  if (context.visiblePageContent) {
+    systemParts.push(`\n=== PAGE TEXT FROM USER'S ACTIVE TAB (extracted automatically — you CAN see this) ===\nURL: ${context.currentTabUrl || 'unknown'}\nIMPORTANT: The text below was automatically extracted from the page the user is currently viewing. You DO have access to this content. When the user asks about what's on their screen, refer to this text. If it's empty or minimal, tell them the page didn't have much extractable text (e.g. video pages, image-heavy pages).\n\n${context.visiblePageContent.slice(0, 4000)}`);
+  } else if (context.currentTabUrl) {
+    systemParts.push(`\n=== CURRENT TAB (no page text extracted) ===\nURL: ${context.currentTabUrl}\nNote: Tab sharing is active but no text was extracted from this page. You cannot see the page content. If the user asks what's on screen, explain that you can see the URL but the page didn't yield extractable text.`);
+  }
+
   // Check for trigger phrases that should make extraction blocking
   const lastUserMsg = messages[messages.length - 1]?.content || '';
   const hasTrigger = /remember this|remember that|don't forget|from now on|always\s+(?:lead|start|use|mention|include)|never\s+(?:say|mention|use|include)|update my profile|add this to/i.test(lastUserMsg);
@@ -3498,6 +4033,7 @@ let _insightExtractionTimer = null;
 let _pendingInsightArgs = null;   // { userMessage, assistantResponse, source }
 
 function extractInsightsFromChat(userMessage, assistantResponse, source) {
+  if (coopConfig.automations?.insightExtraction === false) return;
   // Debounce: accumulate latest message pair, fire after 60s of chat inactivity
   _pendingInsightArgs = { userMessage, assistantResponse, source };
   if (_insightExtractionTimer) clearTimeout(_insightExtractionTimer);

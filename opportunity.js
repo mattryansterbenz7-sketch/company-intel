@@ -21,7 +21,7 @@ const PANEL_DEFS = [
   { id: 'company_intel', title: 'Company Intel',        full: false },
   { id: 'reviews',       title: 'Employee Reviews',     full: false },
   { id: 'activity',      title: 'Activity',             full: true  },
-  { id: 'chat',          title: 'Ask AI',               full: true  },
+  { id: 'chat',          title: 'Coop',                  full: true  },
 ];
 
 let panelOrder      = JSON.parse(localStorage.getItem('ci_panel_order')     || 'null') || PANEL_DEFS.map(p => p.id);
@@ -323,7 +323,7 @@ function renderHeader() {
     <input class="hdr-title" id="hdr-title" value="${titleVal}" placeholder="Job title…">
     <div class="hdr-spacer"></div>
     <select class="hdr-status" id="hdr-status"
-      style="border-color:${color};color:${color}">
+      style="border-color:${color}66;color:${color}">
       ${statusOptions}
     </select>
     <div class="hdr-stars" id="hdr-stars">${stars}</div>
@@ -342,7 +342,7 @@ function renderHeader() {
   document.getElementById('hdr-status').addEventListener('change', e => {
     const sel = e.target;
     const c = stageColor(sel.value);
-    sel.style.borderColor = c;
+    sel.style.borderColor = c + '66';
     sel.style.color = c;
     saveEntry({ status: sel.value });
   });
@@ -717,12 +717,76 @@ function renderPanelBody(pid) {
     case 'job_match': {
       const fits  = e.jobMatch?.strongFits || [];
       const flags = e.jobMatch?.redFlags   || [];
-      if (!fits.length && !flags.length) {
+      const quals = e.jobMatch?.qualifications || [];
+      const breakdown = e.jobMatch?.scoreBreakdown;
+      if (!fits.length && !flags.length && !quals.length) {
         return `<div class="p-empty">No match analysis yet. Make sure your profile is set up in Settings, then save this role from the LinkedIn job posting page.</div>`;
       }
-      const fitsCol  = fits.length  ? `<div><div class="p-label">Green Flags</div><ul class="p-bullets">${fits.map(f  => `<li class="fit"><span>🟢</span><span>${f}</span></li>`).join('')}</ul></div>`  : '';
-      const flagsCol = flags.length ? `<div><div class="p-label">Red Flags</div><ul  class="p-bullets">${flags.map(f => `<li class="flag"><span>🔴</span><span>${f}</span></li>`).join('')}</ul></div>` : '';
-      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">${fitsCol}${flagsCol}</div>`;
+      // Green gradient: strongest first (dark green → light green)
+      const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
+      const fitsCol  = fits.length  ? `<div><div class="p-label">Green Flags</div><ul class="p-bullets">${fits.map((f, i) => {
+        const color = greenShades[Math.min(i, greenShades.length - 1)];
+        return `<li class="fit"><span style="color:${color};font-size:16px;">&#x2714;</span><span>${f}</span></li>`;
+      }).join('')}</ul></div>`  : '';
+      // Red gradient: worst first (dark red → light red)
+      const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
+      const flagsCol = flags.length ? `<div><div class="p-label">Red Flags</div><ul  class="p-bullets">${flags.map((f, i) => {
+        const color = redShades[Math.min(i, redShades.length - 1)];
+        return `<li class="flag"><span style="color:${color};font-size:16px;">&#x25CF;</span><span>${f}</span></li>`;
+      }).join('')}</ul></div>` : '';
+      let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">${fitsCol}${flagsCol}</div>`;
+
+      // Qualifications checklist
+      if (quals.length) {
+        const metCount = quals.filter(q => q.status === 'met' && !q.dismissed).length;
+        const reqCount = quals.filter(q => q.importance === 'required').length;
+        const reqMetCount = quals.filter(q => q.importance === 'required' && q.status === 'met' && !q.dismissed).length;
+        const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '?' };
+        const iconColors = { met: '#00BDA5', partial: '#d97706', unmet: '#f87171', unknown: '#94a3b8' };
+        const badgeColors = { required: '#f87171', preferred: '#d97706', bonus: '#94a3b8' };
+        const badgeBgs = { required: 'rgba(248,113,113,0.1)', preferred: 'rgba(245,158,11,0.1)', bonus: 'rgba(148,163,184,0.1)' };
+        html += `<div style="margin-top:20px"><div class="p-label">Qualifications <span style="font-weight:400;color:#6B6560">(${metCount}/${quals.length} met${reqCount ? `, ${reqMetCount}/${reqCount} required` : ''})</span></div>`;
+        html += `<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px">`;
+        quals.forEach(q => {
+          const dimStyle = q.dismissed ? 'opacity:0.35;' : '';
+          const strikeStyle = q.dismissed ? 'text-decoration:line-through;' : '';
+          html += `<div class="qual-row" data-qual-id="${q.id}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #f0eeeb;${dimStyle}">
+            <span style="flex-shrink:0;width:18px;text-align:center;font-size:13px;font-weight:700;color:${iconColors[q.status] || '#94a3b8'};margin-top:1px">${icons[q.status] || '?'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:#33475b;line-height:1.4;${strikeStyle}">${q.requirement}</div>
+              ${q.evidence ? `<div style="font-size:11px;color:#7c98b6;margin-top:2px;line-height:1.4">${q.evidence}</div>` : ''}
+            </div>
+            <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:0.04em;background:${badgeBgs[q.importance] || badgeBgs.bonus};color:${badgeColors[q.importance] || badgeColors.bonus}">${q.importance}</span>
+            <button class="opp-qual-dismiss" data-qual-id="${q.id}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="${q.dismissed ? 'Restore' : 'Dismiss'}">${q.dismissed ? '↩' : '×'}</button>
+          </div>`;
+        });
+        html += `</div></div>`;
+      }
+
+      // Score breakdown
+      if (breakdown) {
+        const components = [
+          { key: 'qualificationFit', label: 'Qualifications' },
+          { key: 'preferenceFit', label: 'Green Flags' },
+          { key: 'dealbreakers', label: 'Red Flag Impact' },
+          { key: 'compFit', label: 'Compensation' },
+          { key: 'roleFit', label: 'Role & Co. Fit' }
+        ];
+        html += `<div style="margin-top:20px"><div class="p-label">Score Breakdown</div><div style="margin-top:8px">`;
+        components.forEach(c => {
+          const val = breakdown[c.key] || 5;
+          const pct = val * 10;
+          const color = val >= 7 ? '#00BDA5' : val >= 4 ? '#d97706' : '#f87171';
+          html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:11px;color:#6B6560;width:110px;flex-shrink:0;font-weight:500">${c.label}</span>
+            <div style="flex:1;height:6px;background:#e8e5e0;border-radius:3px;overflow:hidden"><div style="height:100%;border-radius:3px;width:${pct}%;background:${color}"></div></div>
+            <span style="font-size:11px;font-weight:700;width:20px;text-align:right;color:${color}">${val}</span>
+          </div>`;
+        });
+        html += `</div></div>`;
+      }
+
+      return html;
     }
 
     case 'company_intel': {
@@ -885,5 +949,33 @@ function bindPanelDrag() {
     });
   });
 }
+
+// Qualification dismiss handler (delegated)
+document.addEventListener('click', e => {
+  const dismissBtn = e.target.closest('.opp-qual-dismiss');
+  if (!dismissBtn) return;
+  const qualId = dismissBtn.dataset.qualId;
+  if (!qualId) return;
+  const entryId = new URLSearchParams(window.location.search).get('id');
+  if (!entryId) return;
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const companies = savedCompanies || [];
+    const idx = companies.findIndex(c => c.id === entryId);
+    if (idx === -1 || !companies[idx].jobMatch?.qualifications) return;
+    const qual = companies[idx].jobMatch.qualifications.find(q => q.id === qualId);
+    if (!qual) return;
+    qual.dismissed = !qual.dismissed;
+    chrome.storage.local.set({ savedCompanies: companies }, () => {
+      const row = dismissBtn.closest('.qual-row');
+      if (row) {
+        row.style.opacity = qual.dismissed ? '0.35' : '';
+        const reqEl = row.querySelector('div[style*="font-weight:600"]');
+        if (reqEl) reqEl.style.textDecoration = qual.dismissed ? 'line-through' : '';
+        dismissBtn.textContent = qual.dismissed ? '↩' : '×';
+        dismissBtn.title = qual.dismissed ? 'Restore' : 'Dismiss';
+      }
+    });
+  });
+});
 
 init();

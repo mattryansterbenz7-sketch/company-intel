@@ -2,12 +2,13 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <link rel="stylesheet" href="design-tokens.css">
   <title>CompanyIntel — Career OS</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f0eeeb; color: #2d3e50; min-height: 100vh; font-size: 14px;
+      background: var(--ci-bg-inset); color: var(--ci-text-primary); min-height: 100vh; font-size: 14px;
       padding: 0;
     }
 
@@ -17,20 +18,20 @@
     /* ── Compact Coop identity bar ── */
     .coop-bar {
       display: flex; align-items: center; gap: 16px;
-      background: #fff; border: 1px solid #C8C5C0; border-radius: 10px;
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-md);
       padding: 14px 20px; margin-bottom: 14px;
-      box-shadow: 0 1px 3px rgba(45,62,80,0.06);
+      box-shadow: var(--ci-shadow-sm);
     }
     .coop-bar svg { width: 40px; height: 40px; flex-shrink: 0; }
     .coop-bar-info { flex: 1; min-width: 0; }
     .coop-bar-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
-    .coop-bar-name { font-size: 16px; font-weight: 700; color: #1A1A1A; }
-    .coop-bar-role { font-size: 12px; color: #516f90; }
+    .coop-bar-name { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); }
+    .coop-bar-role { font-size: 12px; color: var(--ci-text-secondary); }
     .coop-bar-desc { font-size: 12px; color: #3D3D3D; line-height: 1.5; }
     .coop-bio-traits { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; flex-shrink: 0; }
     .coop-bio-trait {
       font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
-      background: rgba(255,122,89,0.1); color: #e0593a; letter-spacing: 0.02em;
+      background: rgba(255,122,89,0.1); color: var(--ci-accent-primary-hover); letter-spacing: 0.02em;
     }
 
     /* ── DEPRECATED: page-header (kept for JS compat) ── */
@@ -38,21 +39,21 @@
 
     /* ── Collapsible cards ── */
     .card {
-      background: #fff; border: 1px solid #C8C5C0; border-radius: 10px;
-      padding: 0; margin-bottom: 10px; transition: box-shadow 0.2s ease;
-      box-shadow: 0 1px 3px rgba(45,62,80,0.06);
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-md);
+      padding: 0; margin-bottom: 10px; transition: box-shadow var(--ci-transition-normal);
+      box-shadow: var(--ci-shadow-sm);
     }
-    .card:hover { box-shadow: 0 3px 12px rgba(45,62,80,0.1); }
+    .card:hover { box-shadow: var(--ci-shadow-md); }
     .card-header {
       display: flex; align-items: flex-start; justify-content: space-between;
       padding: 14px 16px; cursor: pointer; user-select: none;
     }
     .card-header-text { flex: 1; }
-    .card-title { font-size: 14px; font-weight: 700; color: #1A1A1A; }
-    .card-subtitle { font-size: 12px; color: #516f90; margin-top: 2px; line-height: 1.4; }
+    .card-title { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
+    .card-subtitle { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; line-height: 1.4; }
     .card-chevron {
       flex-shrink: 0; width: 18px; height: 18px; margin-left: 10px; margin-top: 2px;
-      transition: transform 0.2s ease; color: #7c98b6;
+      transition: transform 0.2s ease; color: var(--ci-text-tertiary);
     }
     .card.collapsed .card-chevron { transform: rotate(-90deg); }
     .card-body { padding: 0 16px 14px; }
@@ -60,7 +61,7 @@
 
     /* ── Non-collapsible section label ── */
     .section-label {
-      font-size: 11px; font-weight: 600; color: #516f90; text-transform: uppercase;
+      font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); text-transform: uppercase;
       letter-spacing: 0.5px; margin-bottom: 10px;
     }
 
@@ -78,23 +79,23 @@
 
     /* ── Tab navigation ── */
     .cos-tabs {
-      display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #d0ccc6;
-      position: sticky; top: 0; background: #f0eeeb; z-index: 10; padding: 0 2px;
+      display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid var(--ci-border-strong);
+      position: sticky; top: 0; background: var(--ci-bg-inset); z-index: 10; padding: 0 2px;
     }
     .cos-tab {
-      padding: 9px 18px; font-size: 13px; font-weight: 600; color: #516f90;
+      padding: 9px 18px; font-size: 13px; font-weight: 600; color: var(--ci-text-secondary);
       cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
       transition: color 0.15s, border-color 0.15s; user-select: none;
       background: none; border-top: none; border-left: none; border-right: none;
     }
-    .cos-tab:hover { color: #1A1A1A; }
-    .cos-tab.active { color: #e0593a; border-bottom-color: #e0593a; }
+    .cos-tab:hover { color: var(--ci-text-primary); }
+    .cos-tab.active { color: var(--ci-accent-primary-hover); border-bottom-color: var(--ci-accent-primary-hover); }
     .cos-tab-panel { display: none; }
     .cos-tab-panel.active { display: block; }
 
     /* ── Section headers within tabs ── */
     .cos-section-label {
-      font-size: 11px; font-weight: 700; color: #e0593a; letter-spacing: 0.08em;
+      font-size: 11px; font-weight: 700; color: var(--ci-accent-primary-hover); letter-spacing: 0.08em;
       text-transform: uppercase; margin: 16px 0 8px; padding-left: 2px;
     }
     .cos-section-label:first-child { margin-top: 0; }
@@ -102,17 +103,104 @@
     /* ── Input fields ── */
     .field { margin-bottom: 14px; }
     .field:last-child { margin-bottom: 0; }
-    .field-label { font-size: 12px; color: #3D5468; margin-bottom: 5px; display: block; font-weight: 500; }
+    .field-label { font-size: 12px; color: var(--ci-text-secondary); margin-bottom: 5px; display: block; font-weight: 500; }
     .field-input {
-      width: 100%; background: #FAF9F7; border: 1px solid #e8e6e3; border-radius: 8px;
-      color: #2d3e50; font-size: 13px; font-family: inherit; padding: 9px 12px;
+      width: 100%; background: var(--ci-bg-base); border: 1px solid var(--ci-border-default);  border-radius: 8px;
+      color: var(--ci-text-primary); font-size: 13px; font-family: inherit; padding: 9px 12px;
       line-height: 1.6; transition: border-color 0.15s, background 0.15s;
     }
-    .field-input:focus { outline: none; border-color: #AFA9EC; background: #fff; box-shadow: 0 0 0 3px rgba(175,169,236,0.1); }
-    .field-input::placeholder { color: #8a8780; }
+    .field-input:focus { outline: none; border-color: var(--ci-accent-purple); background: var(--ci-bg-raised); box-shadow: 0 0 0 3px var(--ci-accent-purple-soft); }
+    .field-input::placeholder { color: var(--ci-text-tertiary); }
     input.field-input { height: 38px; resize: none; }
     textarea.field-input { resize: none; }
-    .ta-see-more { display: none; background: none; border: none; color: #FF7A59; font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 0 2px; letter-spacing: 0.01em; }
+
+    /* ── Rich text editor ── */
+    .rt-editor-wrap { position: relative; }
+    .rt-toolbar {
+      display: flex; gap: 2px; padding: 4px 6px; background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default); border-bottom: none;
+      border-radius: var(--ci-radius-sm) var(--ci-radius-sm) 0 0;
+    }
+    .rt-toolbar button {
+      background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer;
+      padding: 4px 7px; border-radius: 4px; font-size: 13px; font-family: inherit;
+      font-weight: 600; line-height: 1; transition: all 0.1s;
+    }
+    .rt-toolbar button:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .rt-toolbar button.active { background: var(--ci-accent-primary-soft); color: var(--ci-accent-primary); }
+    .rt-toolbar .rt-sep { width: 1px; background: var(--ci-border-subtle); margin: 2px 4px; }
+    .rt-editable {
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default);
+      border-radius: 0 0 var(--ci-radius-sm) var(--ci-radius-sm);
+      padding: 10px 12px; font-size: 14px; line-height: 1.6; color: var(--ci-text-primary);
+      min-height: 80px; max-height: 300px; overflow-y: auto; outline: none;
+      font-family: inherit; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .rt-editable:focus { border-color: var(--ci-accent-purple); box-shadow: 0 0 0 3px var(--ci-accent-purple-soft); }
+    .rt-editable:empty::before { content: attr(data-placeholder); color: var(--ci-text-tertiary); pointer-events: none; }
+    .rt-editable h3 { font-size: 14px; font-weight: 700; margin: 8px 0 4px; color: var(--ci-text-primary); }
+    .rt-editable ul, .rt-editable ol { margin: 4px 0; padding-left: 20px; }
+    .rt-editable li { margin-bottom: 2px; }
+    .rt-editable p { margin: 0 0 6px; }
+    .rt-editable ul ul, .rt-editable ol ol, .rt-editable ul ol, .rt-editable ol ul { margin: 2px 0 2px 16px; font-size: 0.95em; }
+    .rt-editable b, .rt-editable strong { font-weight: 600; }
+    .rt-editable.rt-sm { font-size: 13px; min-height: 60px; }
+
+    /* FAQ Q&A pairs */
+    .faq-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); margin-bottom: 8px; position: relative; }
+    .faq-pair-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-tertiary); margin-bottom: 4px; }
+    .faq-pair-label.q { color: var(--ci-accent-primary); }
+    .faq-pair-label.a { color: var(--ci-accent-teal); }
+    .faq-pair textarea { width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); font-family: inherit; background: var(--ci-bg-raised); color: var(--ci-text-primary); outline: none; resize: vertical; min-height: 50px; line-height: 1.5; }
+    .faq-pair textarea:focus { border-color: var(--ci-accent-purple); box-shadow: 0 0 0 2px var(--ci-accent-purple-soft); }
+    .faq-pair-delete { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer; font-size: 14px; opacity: 0; transition: opacity 0.12s; }
+    .faq-pair:hover .faq-pair-delete { opacity: 1; }
+    .faq-pair-delete:hover { color: var(--ci-accent-red); }
+
+    /* Info tooltips */
+    .field-info {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; border-radius: 50%; background: var(--ci-bg-inset);
+      color: var(--ci-text-tertiary); font-size: 9px; font-weight: 700; cursor: help;
+      margin-left: 4px; position: relative; vertical-align: middle; border: 1px solid var(--ci-border-subtle);
+    }
+    .field-info:hover { background: var(--ci-accent-primary-soft); color: var(--ci-accent-primary); border-color: var(--ci-accent-primary); }
+    .field-info::after {
+      content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--ci-bg-header); color: var(--ci-text-on-dark); font-size: 11px; font-weight: 400;
+      padding: 6px 10px; border-radius: var(--ci-radius-sm); white-space: normal; width: 220px;
+      pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100;
+      box-shadow: var(--ci-shadow-md); line-height: 1.4;
+    }
+    .field-info:hover::after { opacity: 1; }
+
+    /* Structured experience entries */
+    .exp-entry { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px; margin-bottom: 10px; position: relative; box-shadow: var(--ci-shadow-sm); }
+    .exp-entry-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .exp-entry-company { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); flex: 1; }
+    .exp-entry-dates { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500; }
+    .exp-entry-delete { position: absolute; top: 10px; right: 10px; background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer; font-size: 16px; opacity: 0; transition: opacity 0.12s; }
+    .exp-entry:hover .exp-entry-delete { opacity: 1; }
+    .exp-entry-delete:hover { color: var(--ci-accent-red); }
+    .exp-entry .field { margin-bottom: 8px; }
+    .exp-entry .field-label { font-size: 11px; }
+    .exp-entry .field-input { font-size: 12px; padding: 6px 10px; }
+    .exp-entry textarea.field-input { min-height: 50px; resize: vertical; }
+    .exp-entry-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-tertiary); margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--ci-border-subtle); }
+    .exp-entry-collapsed { padding: 12px 16px; cursor: pointer; }
+    .exp-entry-collapsed:hover { background: var(--ci-bg-raised); }
+    .exp-entry-collapsed .exp-entry-summary { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }
+    .rt-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+    .rt-column { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 10px 12px; min-height: 40px; }
+    .rt-column-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--ci-border-subtle); }
+    .rt-column-header.green { color: var(--ci-accent-teal); }
+    .rt-column-header.red { color: var(--ci-accent-red); }
+    .rt-columns { position: relative; }
+    .rt-col-controls { position: absolute; top: -10px; right: -4px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.12s; z-index: 5; }
+    .rt-columns:hover .rt-col-controls { opacity: 1; }
+    .rt-col-btn { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.1s; box-shadow: var(--ci-shadow-sm); }
+    .rt-col-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .ta-see-more { display: none; background: none; border: none; color: var(--ci-accent-primary); font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 0 2px; letter-spacing: 0.01em; }
     .ta-see-more:hover { text-decoration: underline; }
     .ta-see-more.visible { display: inline-block; }
 
@@ -122,23 +210,23 @@
 
     /* ── Resume upload ── */
     .resume-upload {
-      border: 1.5px dashed #d8d5d0; border-radius: 8px; padding: 20px;
+      border: 1.5px dashed var(--ci-border-strong); border-radius: 8px; padding: 20px;
       text-align: center; margin-top: 14px; transition: border-color 0.15s;
     }
-    .resume-upload:hover { border-color: #AFA9EC; }
-    .resume-upload-text { font-size: 13px; color: #516f90; margin-bottom: 8px; }
+    .resume-upload:hover { border-color: var(--ci-accent-purple); }
+    .resume-upload-text { font-size: 13px; color: var(--ci-text-secondary); margin-bottom: 8px; }
     .resume-upload-btn {
-      font-size: 12px; font-weight: 600; color: #516f90; background: #fff;
-      border: 1px solid #dfe3eb; border-radius: 6px; padding: 6px 16px;
+      font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 6px 16px;
       cursor: pointer; font-family: inherit; transition: all 0.15s;
     }
-    .resume-upload-btn:hover { border-color: #AFA9EC; color: #2d3e50; }
+    .resume-upload-btn:hover { border-color: var(--ci-accent-purple); color: var(--ci-text-primary); }
     .resume-file-info {
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      margin-top: 14px; font-size: 13px; color: #516f90;
+      margin-top: 14px; font-size: 13px; color: var(--ci-text-secondary);
     }
     .resume-file-info .replace-btn {
-      font-size: 12px; color: #AFA9EC; cursor: pointer; font-weight: 600;
+      font-size: 12px; color: var(--ci-accent-purple); cursor: pointer; font-weight: 600;
       background: none; border: none; font-family: inherit;
     }
     .resume-file-info .replace-btn:hover { color: #7c6fe0; }
@@ -150,93 +238,123 @@
     }
     .ai-toggle-icon { flex-shrink: 0; }
     .ai-toggle-icon svg { display: block; }
-    .ai-toggle-text { font-size: 13px; color: #516f90; }
+    .ai-toggle-text { font-size: 13px; color: var(--ci-text-secondary); }
     .two-col .ai-toggle-text { font-size: 12px; }
     .ai-toggle-chevron {
-      width: 12px; height: 12px; color: #99acc2; transition: transform 0.2s;
+      width: 12px; height: 12px; color: var(--ci-text-on-dark-muted); transition: transform 0.2s;
     }
     .ai-toggle.open .ai-toggle-chevron { transform: rotate(90deg); }
     .ai-panel {
-      display: none; background: #F5F3F0; border-radius: 8px;
-      padding: 12px; margin-top: 8px; font-size: 12px; color: #7c98b6; line-height: 1.6;
+      display: none; background: var(--ci-bg-inset); border-radius: 8px;
+      padding: 12px; margin-top: 8px; font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.6;
     }
     .ai-toggle.open + .ai-panel { display: block; }
-    .ai-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(175,169,236,0.3); border-top-color: #AFA9EC; border-radius: 50%; animation: aiSpin 0.5s linear infinite; }
+    .ai-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(175,169,236,0.3); border-top-color: var(--ci-accent-purple); border-radius: 50%; animation: aiSpin 0.5s linear infinite; }
     @keyframes aiSpin { to { transform: rotate(360deg); } }
 
     /* ── Helper text ── */
     .helper-text { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
 
     /* ── Divider ── */
-    .divider { border: none; border-top: 1px solid #e8e6e3; margin: 20px 0; }
+    .divider { border: none; border-top: 1px solid var(--ci-border-default); margin: 20px 0; }
 
     /* ── Green/Red light cards ── */
-    .light-card { background: #fff; border: 1px solid #C8C5C0; border-radius: 10px; padding: 16px; }
-    .light-card.green { border-top: 2.5px solid #5DCAA5; }
-    .light-card.red { border-top: 2.5px solid #E24B4A; }
+    .light-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-md); padding: 16px; }
+    .light-card.green { border-top: 2.5px solid var(--ci-accent-teal); }
+    .light-card.red { border-top: 2.5px solid var(--ci-accent-red); }
     .light-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .light-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .light-dot.green { background: #5DCAA5; }
-    .light-dot.red { background: #E24B4A; }
-    .light-title { font-size: 15px; font-weight: 600; color: #2d3e50; }
-    .light-subtitle { font-size: 12px; color: #516f90; margin-bottom: 12px; line-height: 1.4; }
+    .light-dot.green { background: var(--ci-accent-teal); }
+    .light-dot.red { background: var(--ci-accent-red); }
+    .light-title { font-size: 15px; font-weight: 600; color: var(--ci-text-primary); }
+    .light-subtitle { font-size: 12px; color: var(--ci-text-secondary); margin-bottom: 12px; line-height: 1.4; }
 
     /* ── Location & comp section ── */
     .check-group { display: flex; gap: 20px; flex-wrap: wrap; padding: 4px 0; }
-    .check-label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #2d3e50; cursor: pointer; }
-    .check-label input { accent-color: #5DCAA5; width: 15px; height: 15px; cursor: pointer; }
+    .check-label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ci-text-primary); cursor: pointer; }
+    .check-label input { accent-color: var(--ci-accent-teal); width: 15px; height: 15px; cursor: pointer; }
 
     .salary-row { display: flex; flex-direction: column; gap: 10px; }
     .salary-item { display: flex; align-items: center; gap: 12px; }
     .salary-label { font-size: 12px; white-space: nowrap; flex: 1; }
-    .salary-label.red { color: #E24B4A; }
-    .salary-label.green { color: #5DCAA5; }
+    .salary-label.red { color: var(--ci-accent-red); }
+    .salary-label.green { color: var(--ci-accent-teal); }
     .salary-input { width: 90px; text-align: right; }
 
     /* ── Toggle ── */
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0; }
     .toggle-info { display: flex; flex-direction: column; gap: 3px; }
-    .toggle-label-text { font-size: 14px; font-weight: 600; color: #1A1A1A; }
-    .toggle-desc { font-size: 12px; color: #516f90; }
+    .toggle-label-text { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); }
+    .toggle-desc { font-size: 12px; color: var(--ci-text-secondary); }
     .toggle-switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
     .toggle-track {
-      position: absolute; inset: 0; background: #dfe3eb; border-radius: 11px; cursor: pointer; transition: background 0.2s;
+      position: absolute; inset: 0; background: var(--ci-border-default); border-radius: 11px; cursor: pointer; transition: background 0.2s;
     }
     .toggle-track::before {
       content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
-      background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      background: var(--ci-bg-raised); border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     }
-    .toggle-switch input:checked + .toggle-track { background: #5DCAA5; }
+    .toggle-switch input:checked + .toggle-track { background: var(--ci-accent-teal); }
     .toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
+
+    /* ── Coop Presets ── */
+    .coop-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+    .coop-preset-btn {
+      display: flex; flex-direction: column; gap: 4px; padding: 14px 16px;
+      background: var(--ci-bg-base); border: 2px solid var(--ci-border-default); border-radius: var(--ci-radius-md);
+      cursor: pointer; transition: all 0.15s; text-align: left;
+    }
+    .coop-preset-btn:hover { border-color: var(--ci-border-strong); background: var(--ci-bg-raised); }
+    .coop-preset-btn.active { border-color: var(--ci-accent-purple); background: var(--ci-bg-raised); box-shadow: 0 0 0 3px var(--ci-accent-purple-soft); }
+    .coop-preset-label { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); }
+    .coop-preset-subtitle { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.4; }
+    .coop-prompt-preview {
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: 8px;
+      padding: 12px 14px; margin-top: 12px; font-size: 12px; line-height: 1.6;
+    }
+    .coop-prompt-preview-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px; gap: 8px;
+    }
+    .coop-prompt-preview-title { font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+    .coop-prompt-preview-reset {
+      font-size: 11px; color: var(--ci-accent-purple); background: none; border: none;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px; display: none;
+    }
+    .coop-prompt-preview-reset:hover { background: var(--ci-border-default); }
+    .coop-prompt-preview-reset.visible { display: inline-block; }
+    .coop-prompt-field { width: 100%; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: inherit; line-height: 1.5; color: var(--ci-text-primary); resize: vertical; min-height: 48px; }
+    .coop-prompt-field:focus { border-color: var(--ci-accent-purple); outline: none; box-shadow: 0 0 0 2px var(--ci-accent-purple-soft); }
+    .coop-prompt-field-label { font-size: 11px; font-weight: 500; color: var(--ci-text-secondary); margin-bottom: 4px; }
 
     /* ── Import ── */
     .import-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
     .import-btn {
-      font-size: 12px; font-weight: 600; color: #516f90; background: #fff;
-      border: 1px solid #dfe3eb; border-radius: 6px; padding: 6px 12px;
+      font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 6px 12px;
       cursor: pointer; font-family: inherit; transition: all 0.15s; display: flex; align-items: center; gap: 5px;
     }
-    .import-btn:hover { border-color: #99acc2; color: #2d3e50; }
-    .import-status { font-size: 12px; font-weight: 600; color: #5DCAA5; min-height: 18px; margin-bottom: 6px; }
-    .import-status.err { color: #E24B4A; }
+    .import-btn:hover { border-color: var(--ci-text-on-dark-muted); color: var(--ci-text-primary); }
+    .import-status { font-size: 12px; font-weight: 600; color: var(--ci-accent-teal); min-height: 18px; margin-bottom: 6px; }
+    .import-status.err { color: var(--ci-accent-red); }
 
     /* ── Integrations link ── */
     .integrations-link {
-      background: #F5F3F0; border-radius: 12px; padding: 14px;
+      background: var(--ci-bg-inset); border-radius: 12px; padding: 14px;
       text-align: center; margin-bottom: 12px;
     }
     .integrations-link a {
       color: #7c6fe0; font-weight: 500; font-size: 14px; text-decoration: none;
     }
     .integrations-link a:hover { text-decoration: underline; }
-    .integrations-link .sub { font-size: 12px; color: #7c98b6; margin-top: 4px; }
+    .integrations-link .sub { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 4px; }
 
     /* ── Save status ── */
     @keyframes spin { to { transform: rotate(360deg); } }
     .save-status {
       position: fixed; bottom: 20px; right: 20px;
-      background: #2d3e50; color: #5DCAA5; font-size: 13px; font-weight: 600;
+      background: var(--ci-bg-header); color: var(--ci-accent-teal); font-size: 13px; font-weight: 600;
       display: flex; align-items: center; gap: 7px;
       padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity 0.3s;
       pointer-events: none; z-index: 100;
@@ -244,17 +362,17 @@
     .save-status.show { opacity: 1; }
     .save-status.saving .save-spinner { display: inline-block; }
     .save-status.saving .save-check { display: none; }
-    .save-status .save-spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(93,202,165,0.3); border-top-color: #5DCAA5; border-radius: 50%; animation: spin 0.5s linear infinite; }
+    .save-status .save-spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(0,189,165,0.3); border-top-color: var(--ci-accent-teal); border-radius: 50%; animation: spin 0.5s linear infinite; }
     .save-status .save-check { display: inline; }
 
     /* ── Stages & Colors ── */
     .stages-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-    .stage-card { background: #fff; border: 0.5px solid #dfe3eb; border-radius: 12px; padding: 1.25rem; }
+    .stage-card { background: var(--ci-bg-raised); border: 0.5px solid var(--ci-border-default); border-radius: 12px; padding: 1.25rem; }
     .stage-card-title {
-      font-size: 13px; font-weight: 800; color: #516f90; text-transform: uppercase;
-      letter-spacing: 0.09em; padding-bottom: 14px; border-bottom: 1px solid #eaf0f6; margin-bottom: 12px;
+      font-size: 13px; font-weight: 800; color: var(--ci-text-secondary); text-transform: uppercase;
+      letter-spacing: 0.09em; padding-bottom: 14px; border-bottom: 1px solid var(--ci-border-subtle); margin-bottom: 12px;
     }
-    .stage-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f0f3f8; }
+    .stage-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--ci-border-subtle); }
     .stage-row:last-child { border-bottom: none; }
     .stage-color-wrap { position: relative; flex-shrink: 0; }
     .stage-color-dot {
@@ -265,33 +383,33 @@
     .stage-color-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: none; padding: 0; }
     .stage-label-input {
       flex: 1; border: 1px solid transparent; border-radius: 6px; padding: 4px 8px;
-      font-size: 13px; font-weight: 600; color: #2d3e50; background: transparent; font-family: inherit;
+      font-size: 13px; font-weight: 600; color: var(--ci-text-primary); background: transparent; font-family: inherit;
     }
-    .stage-label-input:hover { border-color: #dfe3eb; background: #FAF9F7; }
-    .stage-label-input:focus { outline: none; border-color: #AFA9EC; background: #fff; }
+    .stage-label-input:hover { border-color: var(--ci-border-default); background: var(--ci-bg-base); }
+    .stage-label-input:focus { outline: none; border-color: var(--ci-accent-purple); background: var(--ci-bg-raised); }
     .color-palette { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 4px; }
     .color-swatch {
       width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
       transition: transform 0.1s, border-color 0.1s; flex-shrink: 0;
     }
     .color-swatch:hover { transform: scale(1.2); border-color: rgba(0,0,0,0.2); }
-    .color-palette-label { font-size: 11px; color: #7c98b6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .color-palette-label { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 
     /* ── Structured entries ── */
     .structured-list { margin-bottom: 8px; }
     .structured-empty { font-size: 12px; color: #6b7280; padding: 12px 0; }
     .structured-entry {
       display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
-      padding: 10px 12px; border: 0.5px solid #eaf0f6; border-radius: 8px; margin-bottom: 6px;
-      background: #FDFCFB; transition: background 0.15s;
+      padding: 10px 12px; border: 0.5px solid var(--ci-border-subtle); border-radius: 8px; margin-bottom: 6px;
+      background: var(--ci-bg-base); transition: background 0.15s;
     }
-    .structured-entry:hover { background: #F5F3F0; }
+    .structured-entry:hover { background: var(--ci-bg-inset); }
     .structured-entry:hover .entry-actions { opacity: 1; }
     .entry-content { flex: 1; min-width: 0; }
     .entry-badges { display: flex; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
     .entry-category-badge {
       font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-      background: #eef2f7; color: #516f90; padding: 2px 8px; border-radius: 4px;
+      background: var(--ci-bg-inset); color: var(--ci-text-secondary); padding: 2px 8px; border-radius: 4px;
     }
     .entry-severity-badge {
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
@@ -299,108 +417,108 @@
     }
     .entry-severity-badge.soft { background: #FFF3E0; color: #e65100; }
     .entry-severity-badge.hard { background: #FFEBEE; color: #c62828; }
-    .entry-text { font-size: 13px; color: #2d3e50; line-height: 1.5; }
+    .entry-text { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; }
     .entry-keywords { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
     .keyword-pill {
-      font-size: 11px; font-weight: 500; background: linear-gradient(135deg, rgba(175,169,236,0.12), rgba(93,202,165,0.12));
-      color: #516f90; padding: 2px 8px; border-radius: 10px; border: 0.5px solid rgba(175,169,236,0.3);
+      font-size: 11px; font-weight: 500; background: linear-gradient(135deg, var(--ci-accent-purple-soft), var(--ci-accent-teal-soft));
+      color: var(--ci-text-secondary); padding: 2px 8px; border-radius: 10px; border: 0.5px solid rgba(175,169,236,0.3);
     }
     .entry-actions { opacity: 0; display: flex; gap: 4px; flex-shrink: 0; transition: opacity 0.15s; }
     .entry-edit-btn, .entry-delete-btn {
-      background: none; border: none; cursor: pointer; font-size: 14px; color: #99acc2;
+      background: none; border: none; cursor: pointer; font-size: 14px; color: var(--ci-text-on-dark-muted);
       width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
       font-family: inherit; transition: all 0.12s;
     }
-    .entry-edit-btn:hover { background: #eef2f7; color: #516f90; }
+    .entry-edit-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-secondary); }
     .entry-delete-btn:hover { background: #FFEBEE; color: #c62828; }
 
     /* ── Entry form ── */
     .entry-form {
-      background: #F5F3F0; border-radius: 8px; padding: 12px; margin-top: 8px;
+      background: var(--ci-bg-inset); border-radius: 8px; padding: 12px; margin-top: 8px;
       display: flex; flex-direction: column; gap: 8px;
     }
     .entry-form-text { min-height: 50px !important; font-size: 13px; }
     .entry-form-row { display: flex; gap: 8px; align-items: center; }
     .entry-form-category { max-width: 160px; height: 34px; font-size: 12px; }
-    .severity-toggle { display: flex; border: 1px solid #dfe3eb; border-radius: 6px; overflow: hidden; }
+    .severity-toggle { display: flex; border: 1px solid var(--ci-border-default); border-radius: 6px; overflow: hidden; }
     .sev-btn {
       font-size: 11px; font-weight: 600; padding: 5px 12px; border: none; cursor: pointer;
-      background: #fff; color: #7c98b6; font-family: inherit; transition: all 0.12s;
+      background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-family: inherit; transition: all 0.12s;
     }
-    .sev-btn.active { background: #2d3e50; color: #fff; }
+    .sev-btn.active { background: var(--ci-bg-header); color: #fff; }
     .sev-btn[data-sev="hard"].active { background: #c62828; color: #fff; }
     .entry-form-keywords { font-size: 12px; height: 34px; }
     .entry-form-actions { display: flex; gap: 8px; }
     .entry-form-save {
       font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px; border: none;
-      background: #2d3e50; color: #fff; cursor: pointer; font-family: inherit; transition: all 0.15s;
+      background: var(--ci-bg-header); color: #fff; cursor: pointer; font-family: inherit; transition: all 0.15s;
     }
     .entry-form-save:hover { background: #1a2c3a; }
     .entry-form-cancel {
       font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 6px;
-      border: 1px solid #dfe3eb; background: #fff; color: #516f90; cursor: pointer; font-family: inherit;
+      border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit;
     }
     .entry-add-btn {
       font-size: 12px; font-weight: 600; color: #7c6fe0; background: none; border: 1px dashed #d0cdf0;
       border-radius: 8px; padding: 8px 16px; cursor: pointer; width: 100%; margin-top: 6px;
       font-family: inherit; transition: all 0.15s;
     }
-    .entry-add-btn:hover { background: rgba(175,169,236,0.08); border-color: #AFA9EC; }
+    .entry-add-btn:hover { background: var(--ci-accent-purple-soft); border-color: var(--ci-accent-purple); }
 
     /* ── Skill tags ── */
     .skill-tags-container { margin-top: 10px; }
     .skill-tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 10px; }
     .skill-tag {
-      font-size: 12px; font-weight: 500; background: #eef2f7; color: #2d3e50;
+      font-size: 12px; font-weight: 500; background: var(--ci-bg-inset); color: var(--ci-text-primary);
       padding: 4px 10px; border-radius: 12px; display: flex; align-items: center; gap: 4px;
     }
     .skill-tag-x {
-      background: none; border: none; cursor: pointer; font-size: 14px; color: #99acc2;
+      background: none; border: none; cursor: pointer; font-size: 14px; color: var(--ci-text-on-dark-muted);
       padding: 0; line-height: 1; font-family: inherit;
     }
     .skill-tag-x:hover { color: #c62828; }
     #skill-tag-input { height: 32px; font-size: 12px; }
 
     /* ── ICP cards ── */
-    .icp-card { background: #fff; border: 1px solid #C8C5C0; border-radius: 10px; padding: 16px; margin-bottom: 10px; }
+    .icp-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-md); padding: 16px; margin-bottom: 10px; }
     .icp-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .icp-card-icon { width: 20px; height: 20px; color: #AFA9EC; }
-    .icp-card-title { font-size: 15px; font-weight: 600; color: #2d3e50; }
-    .icp-card-subtitle { font-size: 12px; color: #516f90; margin-bottom: 12px; line-height: 1.4; }
+    .icp-card-icon { width: 20px; height: 20px; color: var(--ci-accent-purple); }
+    .icp-card-title { font-size: 15px; font-weight: 600; color: var(--ci-text-primary); }
+    .icp-card-subtitle { font-size: 12px; color: var(--ci-text-secondary); margin-bottom: 12px; line-height: 1.4; }
     .icp-autofill-btn {
-      font-size: 12px; font-weight: 600; color: #FF7A59; background: rgba(255,122,89,0.06);
+      font-size: 12px; font-weight: 600; color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft);
       border: 1px solid rgba(255,122,89,0.25); border-radius: 8px; padding: 7px 16px;
       cursor: pointer; font-family: inherit; margin-bottom: 10px; transition: all 0.15s;
       display: inline-flex; align-items: center; gap: 6px;
     }
-    .icp-autofill-btn:hover { background: rgba(255,122,89,0.12); border-color: #FF7A59; }
+    .icp-autofill-btn:hover { background: rgba(255,122,89,0.12); border-color: var(--ci-accent-primary); }
     .icp-autofill-btn:disabled { opacity: 0.5; cursor: default; }
     .icp-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .icp-attrs .field { margin-bottom: 0; }
 
     /* ── Interview learnings ── */
     .learning-entry {
-      position: relative; padding: 10px 30px 10px 12px; border: 0.5px solid #eaf0f6;
-      border-radius: 8px; margin-bottom: 6px; background: #FDFCFB;
+      position: relative; padding: 10px 30px 10px 12px; border: 0.5px solid var(--ci-border-subtle);
+      border-radius: 8px; margin-bottom: 6px; background: var(--ci-bg-base);
     }
-    .learning-entry:hover { background: #F5F3F0; }
+    .learning-entry:hover { background: var(--ci-bg-inset); }
     .learning-entry:hover .learning-delete { opacity: 1; }
-    .learning-text { font-size: 13px; color: #2d3e50; line-height: 1.5; }
-    .learning-meta { font-size: 11px; color: #516f90; margin-top: 4px; }
+    .learning-text { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; }
+    .learning-meta { font-size: 11px; color: var(--ci-text-secondary); margin-top: 4px; }
     .learning-delete { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity 0.15s; }
     .learning-add-row { display: flex; gap: 8px; margin-top: 8px; }
     .learning-add-row input { flex: 1; }
     .learning-add-row textarea { flex: 2; min-height: 38px; }
     .learning-add-btn-el {
       font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; border: none;
-      background: #2d3e50; color: #fff; cursor: pointer; font-family: inherit; white-space: nowrap;
+      background: var(--ci-bg-header); color: #fff; cursor: pointer; font-family: inherit; white-space: nowrap;
     }
 
     /* ── Coop chat drawer ── */
     .coop-chat-toggle {
       position: fixed; bottom: 24px; right: 24px; height: 48px;
       border-radius: 24px; border: none; cursor: pointer; z-index: 200;
-      background: #fff; color: #2d3e50;
+      background: var(--ci-bg-raised); color: var(--ci-text-primary);
       display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px;
       box-shadow: 0 4px 20px rgba(45,62,80,0.15), 0 0 0 1px rgba(0,0,0,0.06);
       transition: all 0.2s; font-family: inherit;
@@ -412,20 +530,20 @@
 
     .coop-chat-drawer {
       position: fixed; top: 0; right: -420px; width: 400px; height: 100dvh;
-      background: #2d3e50; border-left: 1px solid #3a5068; z-index: 199;
+      background: var(--ci-bg-header); border-left: 1px solid var(--ci-bg-header-hover); z-index: 199;
       display: flex; flex-direction: column; transition: right 0.3s ease;
       box-shadow: -8px 0 40px rgba(0,0,0,0.15);
     }
     .coop-chat-drawer.open { right: 0; }
     .coop-chat-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 20px; border-bottom: 1px solid #3a5068; flex-shrink: 0;
-      background: #344d63;
+      padding: 14px 20px; border-bottom: 1px solid var(--ci-bg-header-hover); flex-shrink: 0;
+      background: var(--ci-bg-header-hover);
     }
-    .coop-chat-title { font-size: 15px; font-weight: 700; color: #FF7A59; }
-    .coop-chat-subtitle { font-size: 11px; color: #99acc2; }
+    .coop-chat-title { font-size: 15px; font-weight: 700; color: var(--ci-accent-primary); }
+    .coop-chat-subtitle { font-size: 11px; color: var(--ci-text-on-dark-muted); }
     .coop-chat-close-btn {
-      background: none; border: none; cursor: pointer; font-size: 20px; color: #7c98b6;
+      background: none; border: none; cursor: pointer; font-size: 20px; color: var(--ci-text-tertiary);
       width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
     }
     .coop-chat-close-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
@@ -434,34 +552,34 @@
     }
     .coop-chat-messages::-webkit-scrollbar { width: 4px; }
     .coop-chat-messages::-webkit-scrollbar-track { background: transparent; }
-    .coop-chat-messages::-webkit-scrollbar-thumb { background: #3a5068; border-radius: 4px; }
+    .coop-chat-messages::-webkit-scrollbar-thumb { background: var(--ci-bg-header-hover); border-radius: 4px; }
     .coop-msg { max-width: 90%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; }
-    .coop-msg-user { align-self: flex-end; background: #FF7A59; color: #fff; border-bottom-right-radius: 4px; }
+    .coop-msg-user { align-self: flex-end; background: var(--ci-accent-primary); color: #fff; border-bottom-right-radius: 4px; }
     .coop-msg-assistant { align-self: flex-start; background: rgba(255,255,255,0.08); color: #e8ecf1; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
-    .coop-typing { color: #99acc2; display: flex; align-items: center; gap: 8px; }
+    .coop-typing { color: var(--ci-text-on-dark-muted); display: flex; align-items: center; gap: 8px; }
     .coop-proposal {
-      margin-top: 8px; padding: 10px; background: rgba(175,169,236,0.1); border: 1px solid rgba(175,169,236,0.25);
+      margin-top: 8px; padding: 10px; background: var(--ci-accent-purple-soft); border: 1px solid rgba(175,169,236,0.25);
       border-radius: 8px; font-size: 12px;
     }
     .coop-proposal-text { margin-bottom: 8px; color: #e2e8f0; }
     .coop-proposal-actions { display: flex; gap: 8px; }
     .coop-accept-btn {
       font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 5px; border: none;
-      background: #5DCAA5; color: #fff; cursor: pointer; font-family: inherit;
+      background: var(--ci-accent-teal); color: #fff; cursor: pointer; font-family: inherit;
     }
     .coop-reject-btn {
       font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 5px;
-      border: 1px solid #dfe3eb; background: #fff; color: #7c98b6; cursor: pointer; font-family: inherit;
+      border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit;
     }
     .coop-model-toggle {
       background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); padding: 3px 10px; border-radius: 8px;
-      cursor: pointer; font: inherit; font-size: 10px; font-weight: 600; color: #7c98b6;
+      cursor: pointer; font: inherit; font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
       text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
     }
-    .coop-model-toggle:hover { border-color: #FF7A59; color: #e2e8f0; }
+    .coop-model-toggle:hover { border-color: var(--ci-accent-primary); color: #e2e8f0; }
     .coop-model-dropdown {
-      position: absolute; top: 52px; right: 48px; min-width: 200px; background: #344d63;
-      border: 1px solid #4a6580; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+      position: absolute; top: 52px; right: 48px; min-width: 200px; background: var(--ci-bg-header-hover);
+      border: 1px solid var(--ci-bg-header-hover); border-radius: var(--ci-radius-md); box-shadow: 0 12px 40px rgba(0,0,0,0.3);
       z-index: 210; padding: 6px 0;
     }
     .coop-model-opt {
@@ -471,42 +589,42 @@
     .coop-model-opt:hover { background: rgba(255,255,255,0.08); }
     .coop-model-opt.active { background: rgba(255,122,89,0.15); }
     .coop-model-name { font-size: 12px; font-weight: 600; color: #e8ecf1; }
-    .coop-model-tier { font-size: 10px; color: #7c98b6; }
+    .coop-model-tier { font-size: 10px; color: var(--ci-text-tertiary); }
     .coop-model-cost { font-size: 10px; font-weight: 700; letter-spacing: 1px; }
     .coop-token-info {
-      font-size: 10px; color: #516f90; text-align: right; padding: 2px 14px 0;
+      font-size: 10px; color: var(--ci-text-secondary); text-align: right; padding: 2px 14px 0;
     }
     .coop-chat-input-row {
-      display: flex; gap: 8px; padding: 12px 20px 24px; border-top: 1px solid #3a5068; flex-shrink: 0;
-      background: #344d63;
+      display: flex; gap: 8px; padding: 12px 20px 24px; border-top: 1px solid var(--ci-bg-header-hover); flex-shrink: 0;
+      background: var(--ci-bg-header-hover);
     }
     .coop-chat-input-row textarea {
       flex: 1; min-height: 42px; max-height: 140px; resize: none;
-      font-size: 14px; padding: 10px 14px; border: 1px solid #4a6580; border-radius: 10px;
+      font-size: 14px; padding: 10px 14px; border: 1px solid var(--ci-bg-header-hover); border-radius: var(--ci-radius-md);
       font-family: inherit; line-height: 1.5; background: rgba(255,255,255,0.08); color: #e8ecf1;
       overflow-y: auto;
     }
-    .coop-chat-input-row textarea::placeholder { color: #7c98b6; }
-    .coop-chat-input-row textarea:focus { outline: none; border-color: #FF7A59; }
+    .coop-chat-input-row textarea::placeholder { color: var(--ci-text-tertiary); }
+    .coop-chat-input-row textarea:focus { outline: none; border-color: var(--ci-accent-primary); }
     .coop-chat-send-btn {
       width: 38px; height: 38px; border-radius: 8px; border: none; cursor: pointer;
-      background: #FF7A59; color: #fff; font-size: 16px; display: flex; align-items: center;
+      background: var(--ci-accent-primary); color: #fff; font-size: 16px; display: flex; align-items: center;
       justify-content: center; flex-shrink: 0; transition: all 0.15s;
     }
-    .coop-chat-send-btn:hover { background: #e5613f; }
+    .coop-chat-send-btn:hover { background: var(--ci-accent-primary-hover); }
 
     /* ── Coop memory ── */
     .memory-entry {
-      position: relative; padding: 10px 32px 10px 12px; border: 0.5px solid #eaf0f6;
-      border-radius: 8px; margin-bottom: 4px; background: #FDFCFB; transition: background 0.12s;
+      position: relative; padding: 10px 32px 10px 12px; border: 0.5px solid var(--ci-border-subtle);
+      border-radius: 8px; margin-bottom: 4px; background: var(--ci-bg-base); transition: background 0.12s;
     }
-    .memory-entry:hover { background: #F5F3F0; }
+    .memory-entry:hover { background: var(--ci-bg-inset); }
     .memory-entry:hover .memory-delete { opacity: 1; }
-    .memory-insight { font-size: 13px; color: #2d3e50; line-height: 1.5; }
+    .memory-insight { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; }
     .memory-meta { font-size: 10px; color: #6b7280; margin-top: 3px; display: flex; gap: 8px; }
     .memory-cat {
       font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-      padding: 1px 6px; border-radius: 3px; background: #eef2f7; color: #516f90;
+      padding: 1px 6px; border-radius: 3px; background: var(--ci-bg-inset); color: var(--ci-text-secondary);
     }
     .memory-cat.style_instruction { background: #EDE9FE; color: #6d28d9; }
     .memory-cat.green_light { background: #D1FAE5; color: #065f46; }
@@ -520,11 +638,11 @@
     .memory-delete:hover { color: #ef4444; }
     .memory-filter-btn {
       font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px;
-      border: 1px solid #dfe3eb; background: #fff; color: #516f90; cursor: pointer; font-family: inherit;
+      border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit;
     }
-    .memory-filter-btn.active { background: #2d3e50; color: #fff; border-color: #2d3e50; }
+    .memory-filter-btn.active { background: var(--ci-bg-header); color: #fff; border-color: var(--ci-bg-header); }
     .memory-section-title {
-      font-size: 11px; font-weight: 700; color: #7c98b6; text-transform: uppercase;
+      font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase;
       letter-spacing: 0.06em; margin-bottom: 8px; padding-top: 4px;
     }
 
@@ -535,26 +653,26 @@
     /* ── Shared Settings Sidebar ── */
     .settings-layout { display: flex; min-height: 100vh; }
     .settings-sidebar {
-      width: 180px; flex-shrink: 0; background: #f5f8fa; border-right: 0.5px solid #e2e8f0;
+      width: 180px; flex-shrink: 0; background: var(--ci-bg-sidebar); border-right: 0.5px solid var(--ci-border-default);
       padding: 20px 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
     }
     .settings-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
     .settings-nav-item {
-      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: #516f90;
-      text-decoration: none; border-radius: 6px; border-left: 2px solid transparent; transition: all 0.12s;
+      display: block; padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--ci-text-secondary);
+      text-decoration: none; border-radius: var(--ci-radius-sm); border-left: 2px solid transparent; transition: all 0.12s;
     }
-    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: #2d3e50; }
-    .settings-nav-item.active { background: #fff; color: #2d3e50; font-weight: 600; border-left-color: #FF7A59; }
-    .settings-nav-divider { height: 1px; background: #e2e8f0; margin: 10px 14px; }
+    .settings-nav-item:hover { background: rgba(0,0,0,0.04); color: var(--ci-text-primary); }
+    .settings-nav-item.active { background: var(--ci-bg-raised); color: var(--ci-text-primary); font-weight: 600; border-left-color: var(--ci-accent-primary); }
+    .settings-nav-divider { height: 1px; background: var(--ci-border-subtle); margin: 10px 14px; }
     .settings-content { flex: 1; min-width: 0; }
 
-    .header { background: #2d3e50; padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
-    .header .logo { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; text-decoration: none; }
-    .header .logo span { color: #FF7A59; }
-    .header .logo .slash { font-weight: 400; color: #7c98b6; font-size: 14px; }
+    .header { background: var(--ci-bg-header); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
+    .header .logo { font-size: 18px; font-weight: 700; color: var(--ci-text-on-dark); letter-spacing: -0.01em; text-decoration: none; }
+    .header .logo span { color: var(--ci-accent-primary); }
+    .header .logo .slash { font-weight: 400; color: var(--ci-text-tertiary); font-size: 14px; }
     .header-nav { display: flex; align-items: center; gap: 6px; }
     .header-nav-item {
-      color: #b0c1d4; font-size: 13px; font-weight: 600; padding: 7px 16px;
+      color: var(--ci-text-on-dark-muted); font-size: 13px; font-weight: 600; padding: 7px 16px;
       border: 1px solid transparent; border-radius: 8px; background: transparent;
       cursor: pointer; transition: all 0.15s; font-family: inherit; text-decoration: none;
     }
@@ -632,10 +750,10 @@
 
     <!-- ── Tab Navigation ── -->
     <div class="cos-tabs">
-      <button class="cos-tab active" data-tab="profile">Your Profile</button>
-      <button class="cos-tab" data-tab="fit">Skills &amp; Fit</button>
-      <button class="cos-tab" data-tab="flags">Green &amp; Red Flags</button>
-      <button class="cos-tab" data-tab="memory">Coop's Memory</button>
+      <button class="cos-tab active" data-tab="profile">Profile</button>
+      <button class="cos-tab" data-tab="fit">Experience</button>
+      <button class="cos-tab" data-tab="icp">ICP &amp; Preferences</button>
+      <button class="cos-tab" data-tab="memory">Coop</button>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -722,13 +840,29 @@
     <div class="card" id="card-story" data-card="story">
       <div class="card-header">
         <div class="card-header-text">
-          <div class="card-title">My story</div>
+          <div class="card-title">My story <span class="field-info" data-tip="Your career narrative. Coop uses this to understand your trajectory and frame your background when drafting responses.">i</span></div>
           <div class="card-subtitle">The narrative arc — what drives you, where you've been, where you're headed</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input" id="profile-story" style="font-size:14px; line-height:1.6;" placeholder="Tell your career story — what drives you, where you've been, where you're headed..."></textarea>
+        <textarea class="field-input" id="profile-story" style="display:none;"></textarea>
+        <div class="rt-editor-wrap">
+          <div class="rt-toolbar" data-target="profile-story-rt">
+            <button data-cmd="bold" title="Bold"><b>B</b></button>
+            <button data-cmd="italic" title="Italic"><i>I</i></button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+            <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+            <button data-cmd="outdent" title="Outdent">←</button>
+            <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertColumns" title="Insert 2-column layout (e.g. pros/cons)">⫴</button>
+          </div>
+          <div class="rt-editable" id="profile-story-rt" contenteditable="true" data-placeholder="Tell your career story — what drives you, where you've been, where you're headed..." data-bucket="profileStory"></div>
+        </div>
         <div class="ai-toggle" data-ai="story">
           <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="ai-g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#AFA9EC"/><stop offset="100%" style="stop-color:#5DCAA5"/></linearGradient></defs><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="ai-toggle-text">How Coop reads this</span>
@@ -738,31 +872,11 @@
       </div>
     </div>
 
-    <!-- ── 3. Experience & Accomplishments ── -->
-    <div class="card" id="card-experience" data-card="experience">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Experience &amp; accomplishments</div>
-          <div class="card-subtitle">Specific roles, projects, and results — the evidence behind your story</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <textarea class="field-input" id="profile-experience" style="font-size:14px; line-height:1.6;" placeholder="What you've done — roles, results, things you built, specific accomplishments..."></textarea>
-        <div class="ai-toggle" data-ai="experience">
-          <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><use href="#ai-brain-path"/><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="ai-toggle-text">How Coop reads this</span>
-          <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
-        </div>
-        <div class="ai-panel" data-ai-panel="experience">AI interpretation will appear here in a future update. For now, what you've written above is used directly in the AI's context.</div>
-      </div>
-    </div>
-
     <!-- ── 4. Motivators & Values (merged Principles + Motivators) ── -->
     <div class="card" id="card-principles" data-card="principles">
       <div class="card-header">
         <div class="card-header-text">
-          <div class="card-title">Motivators &amp; values</div>
+          <div class="card-title">Motivators &amp; values <span class="field-info" data-tip="What drives you and how you operate. Coop uses this to assess culture fit and flag roles that conflict with your values.">i</span></div>
           <div class="card-subtitle">How you operate, what drives you, what environments bring out your best</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
@@ -770,11 +884,37 @@
       <div class="card-body">
         <div class="field">
           <label class="field-label">Operating principles</label>
-          <textarea class="field-input" id="profile-principles" style="font-size:13px;" placeholder="How you operate — ownership, speed, collaboration style, decision-making..."></textarea>
+          <textarea class="field-input" id="profile-principles" style="display:none;"></textarea>
+          <div class="rt-editor-wrap">
+            <div class="rt-toolbar" data-target="profile-principles-rt">
+              <button data-cmd="bold" title="Bold"><b>B</b></button>
+              <button data-cmd="italic" title="Italic"><i>I</i></button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+            <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+            <button data-cmd="outdent" title="Outdent">←</button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+            </div>
+            <div class="rt-editable rt-sm" id="profile-principles-rt" contenteditable="true" data-placeholder="How you operate — ownership, speed, collaboration style, decision-making..." data-bucket="profilePrinciples"></div>
+          </div>
         </div>
         <div class="field" style="margin-top:10px">
           <label class="field-label">What drives you</label>
-          <textarea class="field-input" id="profile-motivators" style="font-size:13px;" placeholder="What fuels you — competition, autonomy, learning, building? What personality traits define how you show up?"></textarea>
+          <textarea class="field-input" id="profile-motivators" style="display:none;"></textarea>
+          <div class="rt-editor-wrap">
+            <div class="rt-toolbar" data-target="profile-motivators-rt">
+              <button data-cmd="bold" title="Bold"><b>B</b></button>
+              <button data-cmd="italic" title="Italic"><i>I</i></button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+            <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+            <button data-cmd="outdent" title="Outdent">←</button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+            </div>
+            <div class="rt-editable rt-sm" id="profile-motivators-rt" contenteditable="true" data-placeholder="What fuels you — competition, autonomy, learning, building? What personality traits define how you show up?" data-bucket="profileMotivators"></div>
+          </div>
         </div>
         <div class="ai-toggle" data-ai="principles">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -800,7 +940,20 @@
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input field-input-sm" id="profile-voice" style="font-size:13px;" placeholder="Direct? Conversational? Do you use humor? Formal in writing but casual in speech?"></textarea>
+        <textarea class="field-input" id="profile-voice" style="display:none;"></textarea>
+        <div class="rt-editor-wrap">
+          <div class="rt-toolbar" data-target="profile-voice-rt">
+            <button data-cmd="bold" title="Bold"><b>B</b></button>
+            <button data-cmd="italic" title="Italic"><i>I</i></button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+            <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+            <button data-cmd="outdent" title="Outdent">←</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+          </div>
+          <div class="rt-editable rt-sm" id="profile-voice-rt" contenteditable="true" data-placeholder="Direct? Conversational? Do you use humor? Formal in writing but casual in speech?" data-bucket="profileVoice"></div>
+        </div>
         <div class="helper-text">Helps Coop match your tone in emails and applications</div>
         <div class="ai-toggle" data-ai="voice">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -813,17 +966,20 @@
       </div>
       <div class="prefs-col">
     <!-- ── 5b. FAQ / Polished Responses ── -->
-    <div class="card" id="card-faq" data-card="faq">
+    <div class="card" id="card-faq" data-card="faq" style="max-width:none;">
       <div class="card-header">
         <div class="card-header-text">
           <div class="card-title">FAQ / polished responses</div>
-          <div class="card-subtitle">Go-to answers for recurring questions</div>
+          <div class="card-subtitle">Structured Q&A pairs — Coop reuses these instead of generating from scratch</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input field-input-sm" id="profile-faq" style="font-size:13px;" placeholder="'Why are you looking?' 'Tell me about yourself' 'What are you looking for?'"></textarea>
-        <div class="helper-text">Coop reuses these instead of generating from scratch</div>
+        <textarea class="field-input" id="profile-faq" style="display:none;"></textarea>
+        <div id="faq-pairs-list"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button id="faq-add-pair" style="font-size:12px;font-weight:600;padding:6px 14px;border:1px dashed var(--ci-border-default);border-radius:var(--ci-radius-sm);background:none;color:var(--ci-text-tertiary);cursor:pointer;font-family:inherit;transition:all 0.12s;">+ Add Q&A pair</button>
+        </div>
         <div class="ai-toggle" data-ai="faq">
           <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="ai-toggle-text">How Coop reads this</span>
@@ -842,17 +998,46 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <div class="cos-tab-panel" data-panel="fit">
 
+    <!-- ── Experience & Accomplishments (moved from Profile) ── -->
+    <div class="card" id="card-experience" data-card="experience">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Experience &amp; accomplishments <span class="field-info" data-tip="Coop matches this against job qualifications. Structure by company with specific metrics, titles, and accomplishments.">i</span></div>
+          <div class="card-subtitle">Organized by company — Coop uses this to match qualifications and understand your trajectory</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <textarea class="field-input" id="profile-experience" style="display:none;"></textarea>
+        <div id="experience-entries-list"></div>
+        <button id="experience-add-btn" style="font-size:12px;font-weight:600;padding:8px 16px;border:1px dashed var(--ci-border-default);border-radius:var(--ci-radius-sm);background:none;color:var(--ci-text-tertiary);cursor:pointer;font-family:inherit;transition:all 0.12s;margin-top:8px;">+ Add company experience</button>
+      </div>
+    </div>
+
     <!-- ── Skills & Intangibles ── -->
     <div class="card" id="card-skills" data-card="skills">
       <div class="card-header">
         <div class="card-header-text">
-          <div class="card-title">Skills &amp; intangibles</div>
+          <div class="card-title">Skills &amp; intangibles <span class="field-info" data-tip="Hard skills, tools, and soft skills. Coop matches these against job requirements for qualification scoring.">i</span></div>
           <div class="card-subtitle">Hard skills, soft skills, domain expertise, and quick-match tags</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <textarea class="field-input" id="profile-skills" style="font-size:13px;" placeholder="Technical skills, tools, domain knowledge, deal sizes, team sizes, languages, certifications..."></textarea>
+        <textarea class="field-input" id="profile-skills" style="display:none;"></textarea>
+        <div class="rt-editor-wrap">
+          <div class="rt-toolbar" data-target="profile-skills-rt">
+            <button data-cmd="bold" title="Bold"><b>B</b></button>
+            <button data-cmd="italic" title="Italic"><i>I</i></button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+            <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+            <button data-cmd="outdent" title="Outdent">←</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+          </div>
+          <div class="rt-editable rt-sm" id="profile-skills-rt" contenteditable="true" data-placeholder="Technical skills, tools, domain knowledge, deal sizes, team sizes, languages, certifications..." data-bucket="profileSkills"></div>
+        </div>
         <div class="skill-tags-container" id="skill-tags-container">
           <label class="field-label" style="margin-top:10px">Skill tags <span style="color:#6b7280">(press Enter to add)</span></label>
           <div class="skill-tags-wrap" id="skill-tags-wrap"></div>
@@ -886,12 +1071,18 @@
 
     <div class="cos-section-label">Ideal fit</div>
 
-    <!-- ── Role ICP + Company ICP side by side ── -->
+    </div><!-- end fit tab panel -->
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB: ICP (Ideal Customer/Company Profile)                          -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="cos-tab-panel" data-panel="icp">
+
     <div class="grid-2" style="margin-bottom:10px;">
       <div class="icp-card" style="margin-bottom:0;">
         <div class="icp-card-header">
           <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-          <div class="icp-card-title">Role ICP</div>
+          <div class="icp-card-title">Role ICP <span class="field-info" data-tip="Your ideal role profile. Coop compares every job posting against these criteria for the Role Fit score.">i</span></div>
         </div>
         <div class="icp-card-subtitle">Your ideal role profile — what Coop uses to evaluate fit</div>
         <button class="icp-autofill-btn" id="role-icp-autofill">Let Coop fill this in</button>
@@ -907,7 +1098,7 @@
       <div class="icp-card" style="margin-bottom:0;">
         <div class="icp-card-header">
           <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
-          <div class="icp-card-title">Company ICP</div>
+          <div class="icp-card-title">Company ICP <span class="field-info" data-tip="Your ideal company profile. Coop checks company stage, size, and culture signals against these.">i</span></div>
         </div>
         <div class="icp-card-subtitle">Your ideal company profile — stage, size, industry, culture</div>
         <button class="icp-autofill-btn" id="company-icp-autofill">Let Coop fill this in</button>
@@ -921,74 +1112,53 @@
       </div>
     </div>
 
-    <!-- ── Location & Comp side by side ── -->
-    <div class="grid-2" style="margin-bottom:10px;">
+    <!-- Compensation & Logistics -->
+    <div style="margin-bottom:10px;">
       <div class="light-card" style="border-top: none;">
-        <div class="section-label">LOCATION &amp; LOGISTICS</div>
-        <div class="grid-2" style="margin-bottom: 10px;">
-          <div class="field">
-            <label class="field-label">City</label>
-            <input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off">
-          </div>
-          <div class="field">
-            <label class="field-label">State</label>
-            <select class="field-input" id="pref-location-state" style="height:38px;">
-              <option value="">State</option>
-              <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
-            </select>
-          </div>
-        </div>
-        <div class="field" style="margin-bottom: 10px;">
-          <label class="field-label">Work arrangement</label>
-          <div class="check-group">
-            <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
-            <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
-            <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label">Max travel</label>
-          <input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None">
-        </div>
-      </div>
-      <div class="light-card" style="border-top: none;">
-        <div class="section-label">COMPENSATION SIGNALS</div>
-        <div class="field" style="margin-bottom: 12px;">
-          <label class="field-label" style="margin-bottom: 8px;">Base Salary</label>
-          <div class="salary-row">
-            <div class="salary-item">
-              <span class="salary-label red">Walk away below</span>
-              <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="$120K">
+        <div class="section-label">COMPENSATION &amp; LOGISTICS</div>
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div>
+            <div class="field" style="margin-bottom: 12px;">
+              <label class="field-label" style="margin-bottom: 8px;">Base Salary</label>
+              <div class="salary-row">
+                <div class="salary-item"><span class="salary-label red">Walk away below</span><input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="$120K"></div>
+                <div class="salary-item"><span class="salary-label green">Strong offer above</span><input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="$180K"></div>
+              </div>
             </div>
-            <div class="salary-item">
-              <span class="salary-label green">Strong offer above</span>
-              <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="$180K">
+            <div class="field">
+              <label class="field-label" style="margin-bottom: 8px;">OTE / Total Comp</label>
+              <div class="salary-row">
+                <div class="salary-item"><span class="salary-label red">OTE walk away below</span><input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="$200K"></div>
+                <div class="salary-item"><span class="salary-label green">OTE strong above</span><input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="$300K"></div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="field">
-          <label class="field-label" style="margin-bottom: 8px;">OTE / Total Comp</label>
-          <div class="salary-row">
-            <div class="salary-item">
-              <span class="salary-label red">OTE walk away below</span>
-              <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="$200K">
+          <div>
+            <div class="grid-2" style="margin-bottom: 10px;">
+              <div class="field"><label class="field-label">City</label><input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off"></div>
+              <div class="field"><label class="field-label">State</label>
+                <select class="field-input" id="pref-location-state" style="height:38px;">
+                  <option value="">State</option>
+                  <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
+                </select>
+              </div>
             </div>
-            <div class="salary-item">
-              <span class="salary-label green">OTE strong above</span>
-              <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="$300K">
+            <div class="field" style="margin-bottom: 10px;">
+              <label class="field-label">Work arrangement</label>
+              <div class="check-group">
+                <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
+                <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
+                <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
+              </div>
             </div>
+            <div class="field"><label class="field-label">Max travel</label><input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. Up to 20%, Minimal, None"></div>
           </div>
         </div>
       </div>
     </div>
 
-    </div><!-- end fit tab panel -->
-
-    <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- TAB 3: GREEN & RED FLAGS                                            -->
-    <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div class="cos-tab-panel" data-panel="flags">
-
+    
+    <!-- Green & Red Flags -->
     <div class="grid-2" style="margin-bottom:10px;">
       <div class="light-card green">
         <div class="light-header">
@@ -1022,17 +1192,166 @@
       </div>
     </div>
 
-    </div><!-- end flags tab panel -->
+    </div><!-- end ICP tab panel -->
+
+    
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- TAB 4: COOP'S MEMORY                                               -->
+    <!-- TAB 4: COOP                                                         -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <div class="cos-tab-panel" data-panel="memory">
 
+    <!-- ── Coop's Ideal Role Assessment ── -->
+    <div class="card" id="card-coop-assessment" data-card="coop-assessment">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Coop's assessment of your ideal role</div>
+          <div class="card-subtitle">Coop's synthesized understanding based on your profile, preferences, and all conversations</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div id="coop-assessment-content" style="font-size:13px;line-height:1.7;color:var(--ci-text-secondary);min-height:40px;">
+          <span style="color:var(--ci-text-tertiary);">Click "Refresh" to generate Coop's assessment</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+          <button id="coop-assessment-refresh" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--ci-accent-primary);color:#fff;border:none;border-radius:var(--ci-radius-sm);font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:all 0.15s;">
+            <svg width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.2)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.6)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.8)"/></g></svg>
+            Ask Coop to refresh
+          </button>
+          <span id="coop-assessment-date" style="font-size:10px;color:var(--ci-text-tertiary);"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Personality & Voice ── -->
+    <div class="card" id="card-coop-personality" data-card="coop-personality">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Personality &amp; voice</div>
+          <div class="card-subtitle">Choose how Coop communicates — pick a preset and optionally add custom instructions</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="field-label" style="margin-bottom:8px;">Preset</div>
+        <div class="coop-presets" id="coop-presets">
+          <button class="coop-preset-btn active" data-preset="sharp-colleague">
+            <span class="coop-preset-label">Sharp Colleague</span>
+            <span class="coop-preset-subtitle">Direct, opinionated, Slack-style</span>
+          </button>
+          <button class="coop-preset-btn" data-preset="strategic-advisor">
+            <span class="coop-preset-label">Strategic Advisor</span>
+            <span class="coop-preset-subtitle">Measured, analytical, long-term thinking</span>
+          </button>
+          <button class="coop-preset-btn" data-preset="hype-man">
+            <span class="coop-preset-label">Hype Man</span>
+            <span class="coop-preset-subtitle">Encouraging, confidence-building</span>
+          </button>
+          <button class="coop-preset-btn" data-preset="formal-analyst">
+            <span class="coop-preset-label">Formal Analyst</span>
+            <span class="coop-preset-subtitle">Structured, data-driven, report-style</span>
+          </button>
+        </div>
+        <div class="coop-prompt-preview" id="coop-prompt-preview">
+          <div class="coop-prompt-preview-header">
+            <span class="coop-prompt-preview-title">System prompt — sent to Coop on every message</span>
+            <button class="coop-prompt-preview-reset" id="coop-prompt-reset" title="Reset to preset default">Reset to default</button>
+          </div>
+          <div style="font-size:11px;color:var(--ci-text-tertiary);margin-bottom:8px;">Edit these to change exactly what Coop receives. Changes apply immediately.</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <div class="coop-prompt-field-label">Tone instruction — "You're [this text]"</div>
+              <textarea class="coop-prompt-field" id="coop-prompt-tone" rows="3"></textarea>
+            </div>
+            <div>
+              <div class="coop-prompt-field-label">Style instruction — "Response style: [this text]"</div>
+              <textarea class="coop-prompt-field" id="coop-prompt-style" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label class="field-label" for="coop-custom-instructions">Custom instructions</label>
+          <textarea class="field-input" id="coop-custom-instructions" rows="4" placeholder="e.g., Always push back on remote-only roles. Be more tactical right now — I'm in final rounds. Don't sugarcoat red flags." style="resize:vertical;min-height:80px;"></textarea>
+          <div style="font-size:11px;color:#A09A94;margin-top:4px;">These are appended to the preset — Coop will follow both.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Automations ── -->
+    <div class="card" id="card-coop-automations" data-card="coop-automations">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Automations</div>
+          <div class="card-subtitle">Control what Coop does automatically in the background</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label-text">Learn from conversations</span>
+            <span class="toggle-desc">Coop extracts insights from every chat to build your profile over time</span>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="coop-auto-insights" checked><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label-text">Auto-rescore on profile changes</span>
+            <span class="toggle-desc">When you update preferences, only re-score opportunities in these stages:</span>
+            <div id="rescore-stages" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+              <!-- Populated dynamically from pipeline stages -->
+            </div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="coop-auto-rescore" checked><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label-text">Auto-fetch URLs in chat</span>
+            <span class="toggle-desc">When you paste a link, Coop fetches and summarizes the page content</span>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="coop-auto-urls" checked><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label-text">Application mode auto-detection</span>
+            <span class="toggle-desc">Coop automatically switches to app-helper mode on career pages</span>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="coop-auto-appmode" checked><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label-text">Contextual suggestions</span>
+            <span class="toggle-desc">Show context-aware quick prompts when the chat is empty</span>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="coop-auto-suggestions" checked><span class="toggle-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-label-text">Sound effects</span>
+            <span class="toggle-desc">Play subtle audio feedback for send, receive, screen share, and snip</span>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="coop-sounds" checked><span class="toggle-track"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Coop's Memory ── -->
     <div class="card" id="card-coop-memory" data-card="coop-memory">
       <div class="card-header">
         <div class="card-header-text">
-          <div class="card-title">Coop's memory</div>
+          <div class="card-title" style="display:flex;align-items:center;gap:10px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;">
+              <circle cx="12" cy="12" r="10" stroke="var(--ci-accent-purple)" stroke-width="1.5" fill="var(--ci-accent-purple-soft)"/>
+              <path d="M12 7v0a3 3 0 013 3v1a3 3 0 01-3 3v0a3 3 0 01-3-3v-1a3 3 0 013-3z" stroke="var(--ci-accent-purple)" stroke-width="1.3"/>
+              <path d="M8 17c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="var(--ci-accent-purple)" stroke-width="1.3" stroke-linecap="round"/>
+              <circle cx="12" cy="12" r="10" stroke="var(--ci-accent-purple)" stroke-width="1.5" fill="none" opacity="0.3">
+                <animate attributeName="r" values="10;12;10" dur="3s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.3;0;0.3" dur="3s" repeatCount="indefinite"/>
+              </circle>
+            </svg>
+            Coop's memory
+          </div>
           <div class="card-subtitle">Everything Coop has learned from your conversations — browse, verify, or delete</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
@@ -1048,10 +1367,6 @@
 
   </div><!-- /.page -->
 
-  <div class="integrations-link">
-    <a href="integrations.html">Manage integrations &rarr;</a>
-    <div class="sub">Gmail, Granola, API keys, and all connections</div>
-  </div>
 
   <!-- ── Stages & Colors (hidden for now) ── -->
   <div id="stages-section" style="display:none"></div>

@@ -782,7 +782,7 @@ function saveStages() {
 
 // ── Structured profile migration ─────────────────────────────────────────────
 
-const STRUCTURED_CATEGORIES = ['role_type', 'industry', 'culture', 'product', 'team_structure', 'comp', 'other'];
+const STRUCTURED_CATEGORIES = ['role_type', 'industry', 'culture', 'product', 'team_structure', 'comp', 'location', 'other'];
 
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -907,7 +907,7 @@ function renderStructuredList(containerId, storageKey, entries, opts = {}) {
     const sev = typeof entry.severity === 'number' ? entry.severity : (entry.severity === 'hard' ? 4 : 2);
     const greenColors = ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'];
     const redColors = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-    const greenLabels = ['Nice to Have','Preferred','Important','Essential','Must Have'];
+    const greenLabels = ['Nice Perk','Good Signal','Strong Draw','Huge Benefit','Dream Factor'];
     const redLabels = ['Minor','Preference','Notable','Dealbreaker','Hard Stop'];
     const colors = isGreen ? greenColors : redColors;
     const labels = isGreen ? greenLabels : redLabels;
@@ -984,7 +984,7 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
         ${opts.showSeverity ? (() => {
           const isGreenForm = storageKey === 'profileAttractedTo';
           const sevColors = isGreenForm ? ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'] : ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-          const sevLabels = isGreenForm ? ['nice to have','preferred','important','essential','must have'] : ['minor','preference','notable','dealbreaker','hard stop'];
+          const sevLabels = isGreenForm ? ['nice perk','good signal','strong draw','huge benefit','dream factor'] : ['minor','preference','notable','dealbreaker','hard stop'];
           const current = editEntry?.severity ?? 2;
           const numSev = typeof current === 'number' ? current : (current === 'hard' ? 4 : 2);
           return `
@@ -997,6 +997,17 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
           </div>`;
         })() : ''}
       </div>
+      <div class="comp-threshold-row" style="display:${(storageKey === 'profileDealbreakers' && (editEntry?.category === 'comp')) ? 'flex' : 'none'};align-items:center;gap:8px;flex-wrap:wrap;">
+        <select class="field-input comp-type-select" style="width:auto;font-size:12px;padding:4px 8px;">
+          <option value="base" ${editEntry?.compType === 'base' || !editEntry?.compType ? 'selected' : ''}>Base salary</option>
+          <option value="ote" ${editEntry?.compType === 'ote' ? 'selected' : ''}>OTE</option>
+        </select>
+        <span style="font-size:12px;color:#6B6560;">floor</span>
+        <input type="text" class="field-input comp-threshold-input" placeholder="e.g. 150000" value="${editEntry?.compThreshold || ''}" style="width:100px;font-size:12px;padding:4px 8px;">
+        <label style="font-size:11px;color:#6B6560;display:flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" class="comp-unknown-neutral" ${editEntry?.compUnknownNeutral !== false ? 'checked' : ''}> If not disclosed = neutral
+        </label>
+      </div>
       <div class="entry-form-row">
         <input type="text" class="field-input entry-form-keywords" placeholder="Keywords (comma-separated, e.g. grit, hustle)" value="${escHtml((editEntry?.keywords || []).join(', '))}">
       </div>
@@ -1006,13 +1017,22 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
       </div>
     </div>`;
 
+  // Show/hide comp threshold when category changes
+  const catSelect = formWrap.querySelector('.entry-form-category');
+  const compRow = formWrap.querySelector('.comp-threshold-row');
+  if (catSelect && compRow) {
+    catSelect.addEventListener('change', () => {
+      compRow.style.display = (storageKey === 'profileDealbreakers' && catSelect.value === 'comp') ? 'flex' : 'none';
+    });
+  }
+
   // Severity scale toggle
   formWrap.querySelectorAll('.sev-num-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const scaleEl = formWrap.querySelector('.severity-scale');
       const isGreenForm = scaleEl?.dataset.flagType === 'green';
       const colors = isGreenForm ? ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'] : ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-      const sevLabels = isGreenForm ? ['nice to have','preferred','important','essential','must have'] : ['minor','preference','notable','dealbreaker','hard stop'];
+      const sevLabels = isGreenForm ? ['nice perk','good signal','strong draw','huge benefit','dream factor'] : ['minor','preference','notable','dealbreaker','hard stop'];
       formWrap.querySelectorAll('.sev-num-btn').forEach(b => {
         b.classList.remove('active');
         const n = parseInt(b.dataset.sev);
@@ -1040,6 +1060,13 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
 
     const entryData = { text, category, keywords, source: 'manual' };
     if (opts.showSeverity) entryData.severity = severity;
+    // Comp threshold fields (dealbreakers only)
+    if (storageKey === 'profileDealbreakers' && category === 'comp') {
+      const threshold = formWrap.querySelector('.comp-threshold-input')?.value.replace(/[^0-9]/g, '');
+      if (threshold) entryData.compThreshold = parseInt(threshold);
+      entryData.compType = formWrap.querySelector('.comp-type-select')?.value || 'base';
+      entryData.compUnknownNeutral = formWrap.querySelector('.comp-unknown-neutral')?.checked !== false;
+    }
 
     if (editEntry) {
       updateStructuredEntry(storageKey, editEntry.id, entryData, arr => {
@@ -1284,11 +1311,11 @@ function initFlagsAutofill() {
   }
 
   autofillFlags('green-flags-autofill', 'profileAttractedTo', 'attracted-to-entries', { showSeverity: true },
-    `Based on everything you know about me — my story, experience, motivators, skills, past conversations, and learned insights — generate my green flags (things that attract me to opportunities). Respond ONLY with a JSON array: [{"text": "description", "category": "role_type|industry|culture|product|team_structure|comp|other", "keywords": ["keyword1", "keyword2"]}]. Include 5-8 entries. Keywords should be specific terms that would appear in job postings.`
+    `Based on everything you know about me — my story, experience, motivators, skills, past conversations, and learned insights — generate my green flags (things that attract me to opportunities). Respond ONLY with a JSON array: [{"text": "description", "category": "role_type|industry|culture|product|team_structure|comp|location|other", "keywords": ["keyword1", "keyword2"]}]. Include 5-8 entries. Keywords should be specific terms that would appear in job postings.`
   );
 
   autofillFlags('red-flags-autofill', 'profileDealbreakers', 'dealbreaker-entries', { showSeverity: true },
-    `Based on everything you know about me — my story, experience, motivators, skills, past conversations, and learned insights — generate my red flags (dealbreakers). Respond ONLY with a JSON array: [{"text": "description", "category": "role_type|industry|culture|product|team_structure|comp|other", "severity": "hard|soft", "keywords": ["keyword1", "keyword2"]}]. Include 5-8 entries. Use "hard" for absolute dealbreakers, "soft" for preferences. Keywords should be specific terms that would appear in job postings.`
+    `Based on everything you know about me — my story, experience, motivators, skills, past conversations, and learned insights — generate my red flags (dealbreakers). Respond ONLY with a JSON array: [{"text": "description", "category": "role_type|industry|culture|product|team_structure|comp|location|other", "severity": "hard|soft", "keywords": ["keyword1", "keyword2"]}]. Include 5-8 entries. Use "hard" for absolute dealbreakers, "soft" for preferences. Keywords should be specific terms that would appear in job postings.`
   );
 }
 
@@ -1308,11 +1335,15 @@ function initFlagsSeverityRating() {
       const prompt = `Based on everything you know about this person — their story, experience, motivators, values, career goals, and past conversations — rate the severity/importance of each ${flagType} flag on a 1-5 scale.
 
 Scale:
-1 = Minor (nice to have, won't reject over this)
+${flagType === 'green' ? `1 = Nice Perk (small positive, won't move the needle alone)
+2 = Good Signal (notable positive, slight scoring boost)
+3 = Strong Draw (significant attractor, meaningful boost)
+4 = Huge Benefit (major draw, this makes a role exciting)
+5 = Dream Factor (the kind of thing that makes a role a dream job)` : `1 = Minor (nice to have, won't reject over this)
 2 = Preference (notable, slight scoring impact)
 3 = Notable (significant factor, meaningful impact)
-4 = Dealbreaker (major red/green flag, strong scoring impact)
-5 = ${flagType === 'green' ? 'Must-have (absolute requirement, role without this is a non-starter)' : 'Hard stop (absolute dealbreaker, auto-DQ)'}
+4 = Dealbreaker (major red flag, strong scoring impact)
+5 = Hard stop (absolute dealbreaker, auto-DQ)`}
 
 Consider what you know about this person's priorities. Someone who values autonomy highly should have "Autonomy / Freedom" rated 4-5. Generic nice-to-haves like "problem solving" might be 1-2.
 
@@ -1436,7 +1467,12 @@ function initInterviewLearnings() {
   if (!container) return;
 
   chrome.storage.local.get(['profileInterviewLearnings'], data => {
-    renderLearnings(data.profileInterviewLearnings || []);
+    // Filter out corrupted entries with no text
+    const clean = (data.profileInterviewLearnings || []).filter(e => e.text?.trim());
+    if (clean.length !== (data.profileInterviewLearnings || []).length) {
+      chrome.storage.local.set({ profileInterviewLearnings: clean }); // auto-fix
+    }
+    renderLearnings(clean);
   });
 
   document.getElementById('learning-add-btn')?.addEventListener('click', () => {
@@ -1874,6 +1910,444 @@ function estimateTokenCost(modelId, inputTokens, outputTokens) {
   return cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3);
 }
 
+// ── Coop settings (personality + automations) ──────────────────────────────
+
+const COOP_PRESETS = {
+  'sharp-colleague': {
+    label: 'Sharp Colleague',
+    subtitle: 'Direct, opinionated, Slack-style',
+    tone: `confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.`,
+    style: `Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.`,
+  },
+  'strategic-advisor': {
+    label: 'Strategic Advisor',
+    subtitle: 'Measured, analytical, long-term thinking',
+    tone: `thoughtful and analytical — a seasoned advisor who pushes on long-term implications. You ask the questions others miss and challenge assumptions when the stakes matter.`,
+    style: `Structure responses around trade-offs and second-order effects. Use frameworks when they add clarity. Be willing to say "slow down" when a decision deserves more thought. Medium-length responses are fine when depth is warranted.`,
+  },
+  'hype-man': {
+    label: 'Hype Man',
+    subtitle: 'Encouraging, confidence-building',
+    tone: `encouraging and energizing — the colleague who genuinely believes in your strengths and makes sure you see them too. You highlight wins, reframe setbacks, and keep momentum high.`,
+    style: `Lead with strengths and positive framing. Be specific about what makes the user strong for each opportunity. Keep energy high without being fake. Short, punchy responses that build confidence.`,
+  },
+  'formal-analyst': {
+    label: 'Formal Analyst',
+    subtitle: 'Structured, data-driven, report-style',
+    tone: `precise and structured — a senior analyst delivering clear, evidence-based assessments. You organize information systematically and let data drive conclusions.`,
+    style: `Use headers and structured sections freely. Prefer numbered lists and tables when comparing options. Cite specific data points from context. Longer, more thorough responses are expected. Professional tone throughout.`,
+  },
+};
+
+const DEFAULT_COOP_CONFIG = {
+  preset: 'sharp-colleague',
+  customInstructions: '',
+  toneOverride: null,   // null = use preset default, string = custom override
+  styleOverride: null,
+  automations: {
+    insightExtraction: true,
+    autoRescore: true,
+    autoFetchUrls: true,
+    applicationModeDetection: true,
+    contextualSuggestions: true,
+  },
+};
+
+function initCoopSettings() {
+  chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
+    const cfg = { ...DEFAULT_COOP_CONFIG, ...coopConfig, automations: { ...DEFAULT_COOP_CONFIG.automations, ...(coopConfig?.automations || {}) } };
+
+    // ── Prompt preview fields ──
+    const toneEl = document.getElementById('coop-prompt-tone');
+    const styleEl = document.getElementById('coop-prompt-style');
+    const resetBtn = document.getElementById('coop-prompt-reset');
+
+    function updatePromptPreview() {
+      const preset = COOP_PRESETS[cfg.preset] || COOP_PRESETS['sharp-colleague'];
+      const currentTone = cfg.toneOverride ?? preset.tone;
+      const currentStyle = cfg.styleOverride ?? preset.style;
+      if (toneEl) toneEl.value = currentTone;
+      if (styleEl) styleEl.value = currentStyle;
+      // Show reset button if user has customized
+      const isCustomized = cfg.toneOverride !== null || cfg.styleOverride !== null;
+      if (resetBtn) resetBtn.classList.toggle('visible', isCustomized);
+    }
+
+    // ── Preset buttons ──
+    const presetBtns = document.querySelectorAll('.coop-preset-btn');
+    presetBtns.forEach(btn => {
+      if (btn.dataset.preset === cfg.preset) btn.classList.add('active');
+      else btn.classList.remove('active');
+
+      btn.addEventListener('click', () => {
+        presetBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfg.preset = btn.dataset.preset;
+        cfg.toneOverride = null;  // reset overrides when switching preset
+        cfg.styleOverride = null;
+        chrome.storage.local.set({ coopConfig: cfg });
+        updatePromptPreview();
+        showSaveStatus();
+      });
+    });
+
+    // Populate prompt preview on load
+    updatePromptPreview();
+
+    // Save tone/style edits as overrides
+    if (toneEl) {
+      toneEl.addEventListener('blur', () => {
+        const preset = COOP_PRESETS[cfg.preset] || COOP_PRESETS['sharp-colleague'];
+        const val = toneEl.value.trim();
+        cfg.toneOverride = (val === preset.tone) ? null : val;
+        chrome.storage.local.set({ coopConfig: cfg });
+        if (resetBtn) resetBtn.classList.toggle('visible', cfg.toneOverride !== null || cfg.styleOverride !== null);
+        showSaveStatus();
+      });
+    }
+    if (styleEl) {
+      styleEl.addEventListener('blur', () => {
+        const preset = COOP_PRESETS[cfg.preset] || COOP_PRESETS['sharp-colleague'];
+        const val = styleEl.value.trim();
+        cfg.styleOverride = (val === preset.style) ? null : val;
+        chrome.storage.local.set({ coopConfig: cfg });
+        if (resetBtn) resetBtn.classList.toggle('visible', cfg.toneOverride !== null || cfg.styleOverride !== null);
+        showSaveStatus();
+      });
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        cfg.toneOverride = null;
+        cfg.styleOverride = null;
+        chrome.storage.local.set({ coopConfig: cfg });
+        updatePromptPreview();
+        showSaveStatus();
+      });
+    }
+
+    // ── Custom instructions ──
+    const instrEl = document.getElementById('coop-custom-instructions');
+    if (instrEl) {
+      instrEl.value = cfg.customInstructions || '';
+      instrEl.addEventListener('blur', () => {
+        cfg.customInstructions = instrEl.value.trim();
+        chrome.storage.local.set({ coopConfig: cfg });
+        showSaveStatus();
+      });
+    }
+
+    // ── Automation toggles ──
+    const toggleMap = {
+      'coop-auto-insights': 'insightExtraction',
+      'coop-auto-rescore': 'autoRescore',
+      'coop-auto-urls': 'autoFetchUrls',
+      'coop-auto-appmode': 'applicationModeDetection',
+      'coop-auto-suggestions': 'contextualSuggestions',
+    };
+    for (const [elId, key] of Object.entries(toggleMap)) {
+      const el = document.getElementById(elId);
+      if (!el) continue;
+      el.checked = cfg.automations[key] !== false;
+      el.addEventListener('change', () => {
+        cfg.automations[key] = el.checked;
+        chrome.storage.local.set({ coopConfig: cfg });
+        showSaveStatus();
+      });
+    }
+
+    // ── Sound toggle ──
+    const soundEl = document.getElementById('coop-sounds');
+    if (soundEl) {
+      soundEl.checked = cfg.soundsMuted !== true;
+      soundEl.addEventListener('change', () => {
+        cfg.soundsMuted = !soundEl.checked;
+        chrome.storage.local.set({ coopConfig: cfg });
+        showSaveStatus();
+      });
+    }
+
+    // ── Rescore stages (dynamic from pipeline) ──
+    const rescoreStagesEl = document.getElementById('rescore-stages');
+    if (rescoreStagesEl) {
+      chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
+        const defaultStages = [
+          { key: 'needs_review', label: "Scoring Queue" },
+          { key: 'want_to_apply', label: "Interested" },
+          { key: 'applied', label: "Applied" },
+          { key: 'interviewing', label: "Interviewing" },
+          { key: 'phone_screen', label: "Phone Screen" },
+          { key: 'interview', label: "Interview" },
+          { key: 'final_round', label: "Final Round" },
+          { key: 'offer', label: "Offer" },
+        ];
+        const stages = stageData.opportunityStages || stageData.customStages || defaultStages;
+        const selected = cfg.rescoreStages || ['needs_review', 'want_to_apply'];
+        rescoreStagesEl.innerHTML = stages.map(s => `
+          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-raised);">
+            <input type="checkbox" class="rescore-stage-cb" value="${s.key}" ${selected.includes(s.key) ? 'checked' : ''} style="margin:0;"> ${s.label}
+          </label>
+        `).join('');
+        rescoreStagesEl.querySelectorAll('.rescore-stage-cb').forEach(cb => {
+          cb.addEventListener('change', () => {
+            cfg.rescoreStages = [...document.querySelectorAll('.rescore-stage-cb:checked')].map(el => el.value);
+            chrome.storage.local.set({ coopConfig: cfg });
+            showSaveStatus();
+          });
+        });
+      });
+    }
+  });
+}
+
+// ── Structured Experience Entries ────────────────────────────────────────────
+
+function initStructuredExperience() {
+  const list = document.getElementById('experience-entries-list');
+  const addBtn = document.getElementById('experience-add-btn');
+  const hiddenTa = document.getElementById('profile-experience');
+  if (!list || !addBtn) return;
+
+  let entries = [];
+
+  chrome.storage.local.get(['profileExperienceEntries'], d => {
+    entries = d.profileExperienceEntries || [];
+    renderEntries();
+  });
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function renderEntries() {
+    list.innerHTML = entries.map((e, i) => `
+      <div class="exp-entry" data-idx="${i}">
+        <button class="exp-entry-delete" data-idx="${i}" title="Delete">×</button>
+        <div class="exp-entry-header">
+          <div class="exp-entry-company">${esc(e.company) || '<span style="color:var(--ci-text-tertiary)">Company name</span>'}</div>
+          <div class="exp-entry-dates">${esc(e.dateRange) || ''}</div>
+        </div>
+        <div class="field">
+          <label class="field-label">Company</label>
+          <input type="text" class="field-input exp-field" data-idx="${i}" data-key="company" value="${esc(e.company)}" placeholder="e.g. Acme Corp">
+        </div>
+        <div class="field">
+          <label class="field-label">What the company does</label>
+          <textarea class="field-input exp-field" data-idx="${i}" data-key="description" rows="2" placeholder="Product, customers, market, how it evolved...">${esc(e.description)}</textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label class="field-label">Title(s) held</label>
+            <input type="text" class="field-input exp-field" data-idx="${i}" data-key="titles" value="${esc(e.titles)}" placeholder="e.g. AE → Senior AE → Head of Revenue">
+          </div>
+          <div class="field">
+            <label class="field-label">Date range</label>
+            <input type="text" class="field-input exp-field" data-idx="${i}" data-key="dateRange" value="${esc(e.dateRange)}" placeholder="e.g. Mar 2021 – Present">
+          </div>
+        </div>
+        <div class="exp-entry-section-label">Key accomplishments</div>
+        <textarea class="field-input exp-field" data-idx="${i}" data-key="accomplishments" rows="3" placeholder="Revenue milestones, team built, processes created, awards...">${esc(e.accomplishments)}</textarea>
+        <div class="exp-entry-section-label">Skills &amp; exposures</div>
+        <textarea class="field-input exp-field" data-idx="${i}" data-key="exposures" rows="2" placeholder="Tools, methodologies, domains, deal sizes, team sizes...">${esc(e.exposures)}</textarea>
+      </div>
+    `).join('');
+    bindEntryEvents();
+  }
+
+  function save() {
+    chrome.storage.local.set({ profileExperienceEntries: entries });
+    // Sync to legacy profileExperience for Coop context backwards compat
+    const text = entries.map(e => {
+      const parts = [`## ${e.company || 'Company'} (${e.dateRange || ''})`];
+      if (e.titles) parts.push(`**Titles:** ${e.titles}`);
+      if (e.description) parts.push(e.description);
+      if (e.accomplishments) parts.push(`**Accomplishments:**\n${e.accomplishments}`);
+      if (e.exposures) parts.push(`**Skills/Exposures:** ${e.exposures}`);
+      return parts.join('\n');
+    }).join('\n\n---\n\n');
+    saveBucket('profileExperience', text);
+    if (hiddenTa) hiddenTa.value = text;
+    showSaveStatus();
+  }
+
+  function bindEntryEvents() {
+    list.querySelectorAll('.exp-field').forEach(el => {
+      el.addEventListener('blur', () => {
+        const idx = parseInt(el.dataset.idx);
+        const key = el.dataset.key;
+        entries[idx][key] = el.value.trim();
+        save();
+      });
+    });
+    list.querySelectorAll('.exp-entry-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        entries.splice(parseInt(btn.dataset.idx), 1);
+        renderEntries();
+        save();
+      });
+    });
+  }
+
+  addBtn.addEventListener('click', () => {
+    entries.push({ company: '', description: '', titles: '', dateRange: '', accomplishments: '', exposures: '' });
+    renderEntries();
+    const lastCompany = list.querySelector('.exp-entry:last-child input[data-key="company"]');
+    if (lastCompany) lastCompany.focus();
+  });
+}
+
+// ── FAQ Q&A Pairs ──────────────────────────────────────────────────────────
+
+function initFaqPairs() {
+  const list = document.getElementById('faq-pairs-list');
+  const addBtn = document.getElementById('faq-add-pair');
+  const hiddenTa = document.getElementById('profile-faq');
+  if (!list || !addBtn) return;
+
+  let pairs = [];
+
+  // Load from storage — try structured first, fall back to parsing old text
+  chrome.storage.local.get(['profileFaqPairs', 'profileFAQ'], d => {
+    if (d.profileFaqPairs?.length) {
+      pairs = d.profileFaqPairs;
+    } else if (d.profileFAQ) {
+      // Migration: parse old freeform text into Q&A pairs
+      const lines = d.profileFAQ.replace(/<[^>]+>/g, '\n').split('\n').filter(l => l.trim());
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i].trim();
+        if (/^['""]/.test(l) || /\?$/.test(l) || /^(why|what|how|tell|where|when|describe|walk)/i.test(l)) {
+          pairs.push({ q: l.replace(/^['""]+|['""]+$/g, ''), a: lines[i + 1]?.trim() || '' });
+          i++; // skip next line (assumed answer)
+        }
+      }
+      if (!pairs.length && lines.length) {
+        pairs.push({ q: '', a: lines.join('\n') });
+      }
+    }
+    renderPairs();
+  });
+
+  function renderPairs() {
+    list.innerHTML = pairs.map((p, i) => `
+      <div class="faq-pair" data-idx="${i}">
+        <div><div class="faq-pair-label q">Question</div><textarea class="faq-q" placeholder="e.g., Why are you looking?">${escHtml(p.q)}</textarea></div>
+        <div><div class="faq-pair-label a">Answer</div><textarea class="faq-a" placeholder="Your polished response...">${escHtml(p.a)}</textarea></div>
+        <button class="faq-pair-delete" data-idx="${i}" title="Delete">×</button>
+      </div>
+    `).join('');
+    bindPairEvents();
+  }
+
+  function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function save() {
+    chrome.storage.local.set({ profileFaqPairs: pairs });
+    // Also sync to old profileFAQ field for backwards compat with Coop context
+    const text = pairs.map(p => `Q: ${p.q}\nA: ${p.a}`).join('\n\n');
+    saveBucket('profileFAQ', text);
+    if (hiddenTa) hiddenTa.value = text;
+    showSaveStatus();
+  }
+
+  function bindPairEvents() {
+    list.querySelectorAll('.faq-q').forEach(ta => {
+      ta.addEventListener('blur', () => {
+        const idx = parseInt(ta.closest('.faq-pair').dataset.idx);
+        pairs[idx].q = ta.value.trim();
+        save();
+      });
+    });
+    list.querySelectorAll('.faq-a').forEach(ta => {
+      ta.addEventListener('blur', () => {
+        const idx = parseInt(ta.closest('.faq-pair').dataset.idx);
+        pairs[idx].a = ta.value.trim();
+        save();
+      });
+    });
+    list.querySelectorAll('.faq-pair-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pairs.splice(parseInt(btn.dataset.idx), 1);
+        renderPairs();
+        save();
+      });
+    });
+  }
+
+  addBtn.addEventListener('click', () => {
+    pairs.push({ q: '', a: '' });
+    renderPairs();
+    const lastQ = list.querySelector('.faq-pair:last-child .faq-q');
+    if (lastQ) lastQ.focus();
+  });
+}
+
+// ── Coop's Ideal Role Assessment ────────────────────────────────────────────
+
+function initCoopAssessment() {
+  const contentEl = document.getElementById('coop-assessment-content');
+  const dateEl = document.getElementById('coop-assessment-date');
+  const refreshBtn = document.getElementById('coop-assessment-refresh');
+  if (!contentEl || !refreshBtn) return;
+
+  // Load existing assessment
+  chrome.storage.local.get(['coopIdealRoleAssessment'], d => {
+    const a = d.coopIdealRoleAssessment;
+    if (a?.text) {
+      contentEl.innerHTML = a.text;
+      if (a.date) {
+        const days = Math.floor((Date.now() - new Date(a.date).getTime()) / 86400000);
+        dateEl.textContent = days === 0 ? 'Generated today' : days === 1 ? 'Generated yesterday' : `Generated ${days}d ago`;
+      }
+    }
+  });
+
+  refreshBtn.addEventListener('click', async () => {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Coop is thinking...';
+    contentEl.innerHTML = '<span style="color:var(--ci-text-tertiary);">Analyzing your profile, preferences, and conversations...</span>';
+
+    try {
+      const result = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: 'GLOBAL_CHAT_MESSAGE',
+          messages: [{ role: 'user', content: `Based on everything you know about me — my full Career OS profile, skills, experience, green flags, red flags, dealbreakers, company ICP, role ICP, compensation thresholds, interview learnings, and everything we've discussed — write a detailed description of my IDEAL next role.
+
+Format it as rich HTML with these sections:
+1. **Role Summary** — 2-3 sentences describing the perfect title, company stage, and what I'd own
+2. **Must-Haves** — bullet list of non-negotiable requirements
+3. **Dream Factors** — what would make this role a 10/10 for me
+4. **Red Lines** — what would make me walk away
+5. **Compensation Target** — what I should be targeting based on my experience
+6. **Where to Look** — types of companies, industries, or specific companies that fit
+
+Be specific and opinionated. Use what you actually know about me, not generic advice. If something in my profile is unclear or contradictory, call it out.` }],
+          chatModel: 'gpt-4.1-mini'
+        }, r => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else if (r?.error) reject(new Error(r.error));
+          else resolve(r);
+        });
+      });
+
+      const text = result.reply || 'Could not generate assessment.';
+      // Simple markdown-to-HTML
+      const html = text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n- /g, '\n<li>')
+        .replace(/(<li>.*?)(?=\n<li>|\n\n|\n<strong>|$)/gs, '$1</li>')
+        .replace(/(<li>.*?<\/li>\n?)+/g, '<ul>$&</ul>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+
+      contentEl.innerHTML = html;
+      const now = new Date().toISOString();
+      dateEl.textContent = 'Generated just now';
+      chrome.storage.local.set({ coopIdealRoleAssessment: { text: html, date: now } });
+    } catch (e) {
+      contentEl.innerHTML = `<span style="color:var(--ci-accent-red);">Error: ${e.message}</span>`;
+    }
+    refreshBtn.disabled = false;
+    refreshBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.2)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.6)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.8)"/></g></svg> Ask Coop to refresh`;
+  });
+}
+
 // ── Coop's memory viewer ────────────────────────────────────────────────────
 
 let _memoryFilter = 'all';
@@ -2097,6 +2571,205 @@ function initUrlFetchInTextareas() {
 
 // ── Auto-save on blur ────────────────────────────────────────────────────────
 
+// ── Rich text editor ────────────────────────────────────────────────────────
+
+function initRichTextEditors() {
+  // Wire toolbar buttons
+  document.querySelectorAll('.rt-toolbar').forEach(toolbar => {
+    toolbar.addEventListener('mousedown', e => e.preventDefault()); // prevent blur on contenteditable
+    toolbar.querySelectorAll('button[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = toolbar.dataset.target;
+        const editor = document.getElementById(targetId);
+        if (!editor) return;
+        editor.focus();
+        const cmd = btn.dataset.cmd;
+        const val = btn.dataset.val || null;
+        if (cmd === 'insertColumns') {
+          // Show column count picker
+          const existing = document.querySelector('.rt-col-picker');
+          if (existing) { existing.remove(); return; }
+          const picker = document.createElement('div');
+          picker.className = 'rt-col-picker';
+          picker.style.cssText = 'position:absolute;top:100%;left:0;background:#fff;border:1px solid var(--ci-border-default);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.1);padding:6px;display:flex;gap:4px;z-index:100;';
+          [2, 3, 4].forEach(n => {
+            const opt = document.createElement('button');
+            opt.textContent = `${n} cols`;
+            opt.style.cssText = 'font-size:11px;padding:5px 10px;border:1px solid var(--ci-border-default);border-radius:5px;background:var(--ci-bg-inset);cursor:pointer;font-family:inherit;font-weight:600;color:var(--ci-text-secondary);';
+            opt.addEventListener('click', () => {
+              picker.remove();
+              editor.focus();
+              const cols = Array.from({ length: n }, (_, i) => {
+                const hdrClass = i === 0 ? 'green' : i === 1 ? 'red' : '';
+                const hdrText = n === 2 ? (i === 0 ? 'Pros / Strengths' : 'Cons / Gaps') : `Column ${i + 1}`;
+                return `<div class="rt-column"><div class="rt-column-header ${hdrClass}">${hdrText}</div><p>...</p></div>`;
+              }).join('');
+              document.execCommand('insertHTML', false, `<div class="rt-columns" style="grid-template-columns:repeat(${n},1fr)">${cols}</div><p><br></p>`);
+            });
+            picker.appendChild(opt);
+          });
+          toolbar.style.position = 'relative';
+          toolbar.appendChild(picker);
+          setTimeout(() => document.addEventListener('click', function rm(e) { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', rm); } }, { once: false }), 10);
+        } else {
+          document.execCommand(cmd, false, val);
+        }
+        updateToolbarState(toolbar, editor);
+      });
+    });
+  });
+
+  // Auto-save on blur for contenteditable editors
+  document.querySelectorAll('.rt-editable[data-bucket]').forEach(editor => {
+    const bucket = editor.dataset.bucket;
+    const hiddenTextarea = editor.id.replace('-rt', '');
+    const ta = document.getElementById(hiddenTextarea);
+
+    editor.addEventListener('blur', () => {
+      const html = editor.innerHTML.trim();
+      // Sync to hidden textarea for backwards compat
+      if (ta) ta.value = html;
+      saveBucket(bucket, html);
+    });
+
+    // Update toolbar active states on selection change
+    editor.addEventListener('keyup', () => {
+      const toolbar = document.querySelector(`.rt-toolbar[data-target="${editor.id}"]`);
+      if (toolbar) updateToolbarState(toolbar, editor);
+    });
+    editor.addEventListener('mouseup', () => {
+      const toolbar = document.querySelector(`.rt-toolbar[data-target="${editor.id}"]`);
+      if (toolbar) updateToolbarState(toolbar, editor);
+    });
+  });
+}
+
+// Inject column controls on hover
+function initColumnControls() {
+  document.querySelectorAll('.rt-editable').forEach(editor => {
+    editor.addEventListener('mouseover', e => {
+      const cols = e.target.closest('.rt-columns');
+      if (!cols || cols.querySelector('.rt-col-controls')) return;
+      const controls = document.createElement('div');
+      controls.className = 'rt-col-controls';
+      controls.contentEditable = 'false';
+      controls.innerHTML = `<button class="rt-col-btn" data-action="add" title="Add column">+</button><button class="rt-col-btn" data-action="remove" title="Remove last column">−</button><button class="rt-col-btn" data-action="delete" title="Delete columns">×</button>`;
+      cols.appendChild(controls);
+      controls.addEventListener('click', ev => {
+        ev.preventDefault(); ev.stopPropagation();
+        const action = ev.target.closest('[data-action]')?.dataset.action;
+        if (!action) return;
+        if (action === 'delete') {
+          const p = document.createElement('p');
+          p.innerHTML = '<br>';
+          cols.replaceWith(p);
+        } else if (action === 'add') {
+          const colCount = cols.querySelectorAll('.rt-column').length;
+          const newCol = document.createElement('div');
+          newCol.className = 'rt-column';
+          newCol.innerHTML = `<div class="rt-column-header">Column ${colCount + 1}</div><p>...</p>`;
+          cols.insertBefore(newCol, controls);
+          cols.style.gridTemplateColumns = `repeat(${colCount + 1}, 1fr)`;
+        } else if (action === 'remove') {
+          const columns = cols.querySelectorAll('.rt-column');
+          if (columns.length > 1) {
+            columns[columns.length - 1].remove();
+            cols.style.gridTemplateColumns = `repeat(${columns.length - 1}, 1fr)`;
+          }
+        }
+        // Trigger save
+        editor.dispatchEvent(new Event('blur'));
+      });
+    });
+    editor.addEventListener('mouseout', e => {
+      if (!e.relatedTarget?.closest('.rt-columns')) {
+        editor.querySelectorAll('.rt-col-controls').forEach(c => c.remove());
+      }
+    });
+  });
+}
+
+function updateToolbarState(toolbar, editor) {
+  toolbar.querySelectorAll('button[data-cmd]').forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    if (cmd === 'bold' || cmd === 'italic' || cmd === 'insertUnorderedList' || cmd === 'insertOrderedList') {
+      btn.classList.toggle('active', document.queryCommandState(cmd));
+    }
+  });
+}
+
+function initRichTextSeeMore() {
+  const COLLAPSED_H = 90;
+  document.querySelectorAll('.rt-editable').forEach(editor => {
+    const wrap = editor.closest('.rt-editor-wrap');
+    if (!wrap) return;
+
+    // Start collapsed
+    editor.style.maxHeight = COLLAPSED_H + 'px';
+    editor.style.overflow = 'hidden';
+
+    const btn = document.createElement('button');
+    btn.className = 'ta-see-more';
+    btn.type = 'button';
+    btn.innerHTML = 'See more &#9660;';
+    wrap.appendChild(btn);
+
+    let expanded = false;
+
+    function collapse() {
+      expanded = false;
+      editor.style.maxHeight = COLLAPSED_H + 'px';
+      editor.style.overflow = 'hidden';
+      btn.innerHTML = 'See more &#9660;';
+      checkOverflow();
+    }
+    function expand() {
+      expanded = true;
+      editor.style.maxHeight = 'none';
+      editor.style.overflow = 'visible';
+      btn.innerHTML = 'See less &#9650;';
+      btn.classList.add('visible');
+    }
+    function checkOverflow() {
+      if (expanded) return;
+      btn.classList.toggle('visible', editor.scrollHeight > COLLAPSED_H + 4);
+    }
+
+    btn.addEventListener('click', e => { e.preventDefault(); expanded ? collapse() : expand(); });
+    editor.addEventListener('focus', () => { expand(); });
+    // Delay collapse on blur — don't collapse if focus moved to toolbar or within the editor wrap
+    editor.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (wrap.contains(document.activeElement)) return; // still inside editor wrap
+        collapse();
+      }, 300);
+    });
+
+    checkOverflow();
+    // Re-check after content loads
+    setTimeout(checkOverflow, 500);
+  });
+}
+
+function loadRichTextEditors(data) {
+  document.querySelectorAll('.rt-editable[data-bucket]').forEach(editor => {
+    const bucket = editor.dataset.bucket;
+    const content = data[bucket] || '';
+    if (content) {
+      // If content looks like plain text (no HTML tags), wrap in paragraphs
+      if (!/<[a-z][\s\S]*>/i.test(content)) {
+        editor.innerHTML = content.split('\n').filter(l => l.trim()).map(l => `<p>${l}</p>`).join('');
+      } else {
+        editor.innerHTML = content;
+      }
+    }
+    // Also sync to hidden textarea
+    const hiddenId = editor.id.replace('-rt', '');
+    const ta = document.getElementById(hiddenId);
+    if (ta) ta.value = content;
+  });
+}
+
 function initAutoSave() {
   // Bucket textarea fields
   const bucketFields = {
@@ -2206,8 +2879,15 @@ loadPrefsWithMigration(syncPrefs => {
     document.getElementById('profile-red-lights').value           = localData.profileRedLights          || '';
     document.getElementById('profile-skills').value               = localData.profileSkills             || localData.profileBackgroundStrengths || '';
 
+    // Load rich text editors with stored data
+    loadRichTextEditors(localData);
+    initRichTextEditors();
+    initRichTextSeeMore();
+    initColumnControls();
+
     // Update "How the AI reads this" panels for empty motivators
-    const motivatorsVal = document.getElementById('profile-motivators').value.trim();
+    const motivatorsEl = document.getElementById('profile-motivators-rt');
+    const motivatorsVal = motivatorsEl ? motivatorsEl.textContent.trim() : document.getElementById('profile-motivators').value.trim();
     if (!motivatorsVal) {
       const panel = document.querySelector('.ai-panel[data-ai-panel="motivators"]');
       if (panel) panel.textContent = 'Nothing here yet — add your motivators to see Coop\'s interpretation';
@@ -2244,6 +2924,10 @@ loadPrefsWithMigration(syncPrefs => {
     initFlagsAutofill();
     initInterviewLearnings();
     initCoopMemory();
+    initCoopSettings();
+    initCoopAssessment();
+    initFaqPairs();
+    initStructuredExperience();
   });
   initCoopChatDrawer();
 });

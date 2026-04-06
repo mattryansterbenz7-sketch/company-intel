@@ -1,3 +1,24 @@
+// ── Coop config (loaded for automation guards) ─────────────────────────────
+let _coopConfig = {};
+chrome.storage.local.get(['coopConfig'], d => { _coopConfig = d.coopConfig || {}; });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.coopConfig) _coopConfig = changes.coopConfig.newValue || {};
+});
+
+// ── Notify content script that side panel is open/closed ────────────────────
+(async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: '_SIDEPANEL_OPENED' }).catch(() => {});
+  } catch {}
+})();
+window.addEventListener('beforeunload', async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: '_SIDEPANEL_CLOSED' }).catch(() => {});
+  } catch {}
+});
+
 // ── API Health Dot ──────────────────────────────────────────────────────────
 
 function updateHealthDot() {
@@ -30,6 +51,17 @@ document.getElementById('sp-health-dot')?.addEventListener('click', () => {
 const searchBtn = document.getElementById('search-btn');
 const settingsBtn = document.getElementById('settings-btn');
 
+// Debug log: copy background.js logs to clipboard for bug reporting
+document.getElementById('sp-debug-btn')?.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOG' }, (res) => {
+    const log = res?.log || '(no logs)';
+    navigator.clipboard.writeText(log).then(() => {
+      const btn = document.getElementById('sp-debug-btn');
+      if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = '🐛'; }, 1500); }
+    });
+  });
+});
+
 // ── Chat/Intel Mode Toggle ──────────────────────────────────────────────────
 const coopToggleBtn = document.getElementById('coop-toggle-btn');
 const chatBackBtn = document.getElementById('sp-chat-back');
@@ -43,11 +75,18 @@ function enterChatMode() {
   document.body.classList.add('chat-mode');
   const chatEl = document.getElementById('sp-chat');
   if (chatEl) chatEl.style.display = 'flex';
+  // Ensure messages and input are visible (undo minimized state)
+  const msgs = document.getElementById('sp-chat-messages');
+  const inputRow = chatEl?.querySelector('.sp-chat-input-row');
+  if (msgs) { msgs.style.display = ''; msgs.style.maxHeight = 'none'; msgs.style.minHeight = '0'; }
+  if (inputRow) inputRow.style.display = '';
   localStorage.setItem('ci_sp_mode', 'chat');
 }
 
 function exitChatMode() {
   document.body.classList.remove('chat-mode');
+  const chatEl = document.getElementById('sp-chat');
+  if (chatEl) chatEl.style.display = '';  // clear inline display set by enterChatMode
   localStorage.setItem('ci_sp_mode', 'intel');
 }
 
@@ -1128,7 +1167,12 @@ function renderHomeState() {
     document.getElementById('sp-home-greeting').innerHTML = `
       <div class="sp-home-greeting">Good ${timeOfDay}${firstName ? ', ' + firstName : ''}</div>
       <div class="sp-home-greeting-sub">Navigate to any company page to start research</div>
+      <button class="sp-open-pipeline-btn" id="sp-open-pipeline" title="Open full pipeline dashboard">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="14" height="14" rx="2"/><path d="M1 6h14M6 6v9"/></svg>
+        Open Pipeline
+      </button>
     `;
+    document.getElementById('sp-open-pipeline')?.addEventListener('click', openDashboard);
 
     // Scoring queue count
     const queueCount = companies.filter(c => c.isOpportunity && (c.jobStage || 'needs_review') === 'needs_review').length;
@@ -1143,7 +1187,7 @@ function renderHomeState() {
     ` : '';
 
     document.getElementById('sp-home-queue-link')?.addEventListener('click', () => {
-      window.open(chrome.runtime.getURL('saved.html'), '_blank');
+      window.open(chrome.runtime.getURL('queue.html'), '_blank');
     });
 
     // Next Steps — company-specific next steps with dates (not completable)
@@ -1945,10 +1989,88 @@ function checkAlreadySaved(company) {
         syncContactsForEntry(match);
       }
     }
+    // Show/hide manual link panel
+    const manualLinkPanel = document.getElementById('manual-link-panel');
+    if (manualLinkPanel) {
+      manualLinkPanel.style.display = match ? 'none' : 'block';
+    }
     resolve();
   });
   });
 }
+
+// ── Manual link to saved opportunity ────────────────────────────────────────
+(function initManualLink() {
+  const toggle = document.getElementById('manual-link-toggle');
+  const searchBox = document.getElementById('manual-link-search');
+  const input = document.getElementById('manual-link-input');
+  const results = document.getElementById('manual-link-results');
+  if (!toggle || !searchBox || !input || !results) return;
+
+  toggle.addEventListener('click', () => {
+    const open = searchBox.style.display !== 'none';
+    searchBox.style.display = open ? 'none' : 'block';
+    if (!open) { input.focus(); input.value = ''; renderLinkResults(''); }
+  });
+
+  function renderLinkResults(query) {
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const entries = (savedCompanies || []).filter(c => c.company);
+      const q = query.toLowerCase().trim();
+      const filtered = q
+        ? entries.filter(c => c.company.toLowerCase().includes(q) || (c.jobTitle || '').toLowerCase().includes(q))
+        : entries.slice(0, 15);
+      if (!filtered.length) {
+        results.innerHTML = `<div style="font-size:12px;color:#A09A94;padding:8px 0;">No matches</div>`;
+        return;
+      }
+      results.innerHTML = filtered.slice(0, 15).map(c => {
+        const stage = (c.jobStage || 'saved').replace(/_/g, ' ');
+        return `<div class="manual-link-result" data-id="${c.id}">
+          <div style="flex:1;min-width:0;">
+            <div class="mlr-name">${c.company}</div>
+            ${c.jobTitle ? `<div class="mlr-title">${c.jobTitle}</div>` : ''}
+          </div>
+          <span class="mlr-stage">${stage}</span>
+        </div>`;
+      }).join('');
+    });
+  }
+
+  input.addEventListener('input', () => renderLinkResults(input.value));
+
+  results.addEventListener('click', (e) => {
+    const row = e.target.closest('.manual-link-result');
+    if (!row) return;
+    const id = row.dataset.id;
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const entries = savedCompanies || [];
+      const match = entries.find(c => c.id === id);
+      if (!match) return;
+      // Update the detected company name to the saved entry's name
+      companyNameEl.textContent = match.company;
+      // If the linked entry is an opportunity, set job context so Coop knows
+      if (match.isOpportunity && match.jobTitle) {
+        currentJobTitle = match.jobTitle;
+        currentJobMeta = match.jobSnapshot || null;
+      }
+      // Hide the link panel and re-run the saved check
+      const panel = document.getElementById('manual-link-panel');
+      if (panel) panel.style.display = 'none';
+      const searchPanel = document.getElementById('manual-link-search');
+      if (searchPanel) searchPanel.style.display = 'none';
+      // Re-trigger the full saved-entry flow
+      checkAlreadySaved(match.company);
+      showSaveBar(match.company, currentJobTitle);
+      // Re-render chat empty state with opportunity-aware suggestions
+      const chatMsgs = document.getElementById('sp-chat-messages');
+      if (chatMsgs && chatMsgs.querySelector('.sp-chat-empty')) {
+        // Force re-render of suggestions by dispatching a custom event
+        chatMsgs.dispatchEvent(new CustomEvent('context-updated'));
+      }
+    });
+  });
+})();
 
 // ── Rejection email detection (regex-only, zero AI cost) ─────────────────────
 function detectRejectionEmail(emails, entry) {
@@ -2237,6 +2359,8 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
           <div id="sp-thumb-form" style="display:none"></div>
           ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
           ${(jobMatch.redFlags || jobMatch.watchOuts) ? `<details open class="flags-red"><summary>Red Flags</summary><div class="detail-body">${renderBullets(jobMatch.redFlags || jobMatch.watchOuts, 'flag')}</div></details>` : ''}
+          ${jobMatch.qualifications?.length ? `<details class="flags-qual"><summary>Qualifications (${jobMatch.qualifications.filter(q => q.status === 'met' && !q.dismissed).length}/${jobMatch.qualifications.length})</summary><div class="detail-body">${renderQualifications(jobMatch.qualifications)}</div></details>` : ''}
+          ${jobMatch.scoreBreakdown ? `<details class="flags-breakdown"><summary>Score Breakdown</summary><div class="detail-body">${renderScoreBreakdown(jobMatch.scoreBreakdown)}</div></details>` : ''}
         `;
         })() : ''}
       </div>
@@ -2321,6 +2445,124 @@ document.addEventListener('click', e => {
   });
 });
 
+// Qualification dismiss handler (delegated)
+document.addEventListener('click', e => {
+  const dismissBtn = e.target.closest('.qual-dismiss');
+  if (!dismissBtn) return;
+  const qualId = dismissBtn.dataset.qualId;
+  if (!qualId) return;
+  const company = companyNameEl.textContent;
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const companies = savedCompanies || [];
+    const idx = companies.findIndex(c => companiesMatch(c.company, company));
+    if (idx === -1 || !companies[idx].jobMatch?.qualifications) return;
+    const qual = companies[idx].jobMatch.qualifications.find(q => q.id === qualId);
+    if (!qual) return;
+    qual.dismissed = !qual.dismissed;
+    chrome.storage.local.set({ savedCompanies: companies }, () => {
+      // Update the row visually
+      const row = dismissBtn.closest('.qual-row');
+      if (row) {
+        row.classList.toggle('dismissed', qual.dismissed);
+        dismissBtn.textContent = qual.dismissed ? '↩' : '×';
+        dismissBtn.title = qual.dismissed ? 'Restore' : 'Dismiss';
+      }
+      // Update the summary in the details summary
+      const qualDetails = document.querySelector('.flags-qual summary');
+      if (qualDetails) {
+        const allQuals = companies[idx].jobMatch.qualifications;
+        const metCount = allQuals.filter(q => q.status === 'met' && !q.dismissed).length;
+        qualDetails.textContent = `Qualifications (${metCount}/${allQuals.length})`;
+      }
+    });
+  });
+});
+
+// Qualification status edit handler (click the icon to change status + give feedback)
+document.addEventListener('click', e => {
+  const iconBtn = e.target.closest('.qual-icon[data-qual-idx]');
+  if (!iconBtn) return;
+  const qualIdx = parseInt(iconBtn.dataset.qualIdx);
+  const row = iconBtn.closest('.qual-row');
+  if (!row || row.querySelector('.qual-status-picker')) return; // already open
+
+  const statuses = ['met', 'partial', 'unmet'];
+  const labels = { met: '✓ Met', partial: '◐ Partial', unmet: '✗ Unmet' };
+
+  const picker = document.createElement('div');
+  picker.className = 'qual-status-picker';
+  picker.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:6px;padding:8px 10px;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;';
+  picker.innerHTML = `
+    <div style="display:flex;gap:4px;">
+      ${statuses.map(s => `<button class="qual-status-opt" data-status="${s}">${labels[s]}</button>`).join('')}
+    </div>
+    <textarea placeholder="Why? (e.g., I managed 70+ client logos which qualifies as enterprise relationship management)" style="width:100%;font-size:11px;padding:6px 8px;border:1px solid var(--ci-border-default);border-radius:6px;font-family:inherit;background:var(--ci-bg-inset);color:var(--ci-text-primary);outline:none;resize:vertical;min-height:40px;line-height:1.4;"></textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end;">
+      <button class="qual-fb-cancel" style="font-size:11px;padding:4px 10px;border:1px solid var(--ci-border-default);border-radius:6px;background:var(--ci-bg-raised);color:var(--ci-text-tertiary);cursor:pointer;font-family:inherit;">Cancel</button>
+      <button class="qual-fb-save" style="font-size:11px;padding:4px 12px;border:none;border-radius:6px;background:var(--ci-accent-primary);color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save</button>
+    </div>`;
+
+  const textEl = row.querySelector('.qual-text');
+  textEl.appendChild(picker);
+
+  let selectedStatus = null;
+  picker.querySelectorAll('.qual-status-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      picker.querySelectorAll('.qual-status-opt').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedStatus = btn.dataset.status;
+    });
+  });
+
+  picker.querySelector('.qual-fb-cancel').addEventListener('click', () => picker.remove());
+  picker.querySelector('.qual-fb-save').addEventListener('click', () => {
+    const feedback = picker.querySelector('textarea').value.trim();
+    if (!selectedStatus && !feedback) { picker.remove(); return; }
+
+    const company = companyNameEl.textContent;
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const companies = savedCompanies || [];
+      const idx = companies.findIndex(c => companiesMatch(c.company, company));
+      if (idx === -1 || !companies[idx].jobMatch?.qualifications) return;
+      const qual = companies[idx].jobMatch.qualifications[qualIdx];
+      if (!qual) return;
+      if (selectedStatus) qual.userOverrideStatus = selectedStatus;
+      if (feedback) qual.userFeedback = feedback;
+      chrome.storage.local.set({ savedCompanies: companies });
+
+      // Save feedback as learned insight
+      if (feedback) {
+        chrome.storage.local.get(['storyTime'], d => {
+          const st = d.storyTime || {};
+          st.learnedInsights = st.learnedInsights || [];
+          st.learnedInsights.push({
+            source: company,
+            date: new Date().toISOString().slice(0, 10),
+            insight: `Qualification "${qual.requirement}" — user says ${selectedStatus || qual.status}: ${feedback}`,
+            category: 'scoring_feedback',
+            priority: 'high',
+          });
+          st.learnedInsights = st.learnedInsights.slice(-100);
+          chrome.storage.local.set({ storyTime: st });
+        });
+      }
+
+      // Update icon
+      const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '?' };
+      const newStatus = selectedStatus || qual.status;
+      iconBtn.textContent = icons[newStatus] || '?';
+      iconBtn.className = `qual-icon ${newStatus}`;
+
+      picker.remove();
+      // Show confirmation
+      const note = document.createElement('div');
+      note.className = 'qual-feedback-note';
+      note.textContent = `💬 ${feedback || 'Status updated'}`;
+      textEl.appendChild(note);
+    });
+  });
+});
+
 function renderQuickData(data) {
   const companySlug = companyNameEl.textContent.toLowerCase().replace(/\s+/g, '-');
   const crunchbaseUrl = `https://www.crunchbase.com/organization/${companySlug}`;
@@ -2369,7 +2611,14 @@ function renderBullets(items, type) {
   if (bullets.length === 0) return '';
   const icon = type === 'fit' ? '✓' : '✗';
   const cls = type === 'fit' ? 'bullet-fit' : 'bullet-flag';
-  return `<ul class="match-bullets">${bullets.map(b => `<li class="${cls}"><span class="bullet-icon">${icon}</span><span>${boldKeyPhrase(b.trim())}</span></li>`).join('')}</ul>`;
+  // Gradient: strongest signal first → darkest color, fading lighter
+  const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
+  const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
+  const shades = type === 'fit' ? greenShades : redShades;
+  return `<ul class="match-bullets">${bullets.map((b, i) => {
+    const color = shades[Math.min(i, shades.length - 1)];
+    return `<li class="${cls}"><span class="bullet-icon" style="color:${color}">${icon}</span><span>${boldKeyPhrase(b.trim())}</span></li>`;
+  }).join('')}</ul>`;
 }
 
 // Bold the key signal phrase in a flag bullet — typically the first clause
@@ -2386,6 +2635,57 @@ function boldKeyPhrase(text) {
   if (dashSplit) return `<strong>${dashSplit[1]}</strong> — ${dashSplit[2]}`;
   // No split point found — just return as-is
   return text;
+}
+
+function renderQualifications(qualifications) {
+  if (!qualifications?.length) return '';
+  const metCount = qualifications.filter(q => q.status === 'met' && !q.dismissed).length;
+  const reqCount = qualifications.filter(q => q.importance === 'required').length;
+  const reqMetCount = qualifications.filter(q => q.importance === 'required' && q.status === 'met' && !q.dismissed).length;
+  const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '?' };
+  const summary = `<div class="qual-summary">
+    <span class="qual-summary-item"><strong>${metCount}</strong>/${qualifications.length} met</span>
+    ${reqCount ? `<span class="qual-summary-item"><strong>${reqMetCount}</strong>/${reqCount} required</span>` : ''}
+  </div>`;
+  const rows = qualifications.map((q, idx) => {
+    const dismissed = q.dismissed ? ' dismissed' : '';
+    const feedbackNote = q.userFeedback ? `<div class="qual-feedback-note">💬 ${q.userFeedback}</div>` : '';
+    const overridden = q.userOverrideStatus ? ` (you said: ${q.userOverrideStatus})` : '';
+    return `<div class="qual-row${dismissed}" data-qual-id="${q.id}" data-qual-idx="${idx}">
+      <button class="qual-icon ${q.userOverrideStatus || q.status}" data-qual-idx="${idx}" title="Click to change status">${icons[q.userOverrideStatus || q.status] || '?'}</button>
+      <div class="qual-text">
+        <div class="qual-req">${q.requirement}</div>
+        ${q.evidence ? `<div class="qual-evidence">${q.evidence}${overridden}</div>` : ''}
+        ${feedbackNote}
+      </div>
+      <div class="qual-right">
+        <span class="qual-badge ${q.importance}">${q.importance}</span>
+        <button class="qual-dismiss" data-qual-id="${q.id}" title="${q.dismissed ? 'Restore' : 'Dismiss'}">${q.dismissed ? '↩' : '×'}</button>
+      </div>
+    </div>`;
+  }).join('');
+  return summary + rows;
+}
+
+function renderScoreBreakdown(breakdown) {
+  if (!breakdown) return '';
+  const components = [
+    { key: 'qualificationFit', label: 'Qualifications' },
+    { key: 'preferenceFit', label: 'Green Flags' },
+    { key: 'dealbreakers', label: 'Red Flag Impact' },
+    { key: 'compFit', label: 'Compensation' },
+    { key: 'roleFit', label: 'Role & Co. Fit' }
+  ];
+  return components.map(c => {
+    const val = breakdown[c.key] || 5;
+    const pct = val * 10;
+    const color = val >= 7 ? '#00BDA5' : val >= 4 ? '#d97706' : '#f87171';
+    return `<div class="breakdown-row">
+      <span class="breakdown-label">${c.label}</span>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="breakdown-val" style="color:${color}">${val}</span>
+    </div>`;
+  }).join('');
 }
 
 function setFavicon(domain) {
@@ -2619,6 +2919,225 @@ function renderContactsSection(el, contacts) {
   let tabContextActive = true;
   let tabContextLabel = '';
 
+  // ── Screen share (vision) — uses getDisplayMedia for native picker ──
+  let screenShareActive = false;
+  let latestScreenshotDataUrl = null;
+  let _displayStream = null;       // MediaStream from getDisplayMedia
+  let _captureInterval = null;     // periodic frame capture
+  const screenToggle = document.getElementById('sp-screenshare-toggle');
+  const screenPreview = document.getElementById('sp-screen-preview');
+  const screenPreviewImg = document.getElementById('sp-screen-preview-img');
+  const screenFlash = document.getElementById('sp-screen-flash');
+
+  function captureFrameFromStream() {
+    if (!_displayStream || !_displayStream.active) return null;
+    const video = screenToggle._video;
+    if (!video || video.readyState < 2) return null; // HAVE_CURRENT_DATA
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1920;
+      canvas.height = video.videoHeight || 1080;
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      latestScreenshotDataUrl = dataUrl;
+      if (screenPreviewImg) screenPreviewImg.src = dataUrl;
+      if (screenPreview) screenPreview.classList.add('visible');
+      if (screenFlash) { screenFlash.classList.remove('flash'); void screenFlash.offsetWidth; screenFlash.classList.add('flash'); }
+      return dataUrl;
+    } catch (e) {
+      console.warn('[ScreenShare] Frame capture failed:', e.message);
+      return null;
+    }
+  }
+
+  async function startScreenShare() {
+    try {
+      _displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' },
+        audio: false,
+      });
+      screenShareActive = true;
+      screenToggle.classList.add('active');
+      screenToggle.title = 'Stop sharing screen';
+
+      // Pipe stream into the live preview video element
+      const previewVideo = document.getElementById('sp-screen-preview-video');
+      if (previewVideo) {
+        previewVideo.srcObject = _displayStream;
+        previewVideo.style.display = 'block';
+        if (screenPreviewImg) screenPreviewImg.style.display = 'none';
+      }
+
+      // Also keep a hidden video for frame capture on send
+      const captureVideo = document.createElement('video');
+      captureVideo.srcObject = _displayStream;
+      captureVideo.muted = true;
+      captureVideo.play();
+      await new Promise(r => { captureVideo.onloadedmetadata = r; setTimeout(r, 1000); });
+      screenToggle._video = captureVideo;
+
+      // Show preview
+      if (screenPreview) screenPreview.classList.add('visible');
+
+      // Auto-stop when user ends share via browser UI
+      _displayStream.getVideoTracks()[0].addEventListener('ended', () => {
+        stopScreenShare();
+      });
+
+      if (typeof CISounds !== 'undefined') CISounds.shareStart();
+      console.log('[ScreenShare] Started via getDisplayMedia — live preview active');
+    } catch (e) {
+      console.warn('[ScreenShare] User cancelled or error:', e.message);
+      screenShareActive = false;
+      screenToggle.classList.remove('active');
+      screenToggle.title = 'Share your screen with Coop';
+    }
+  }
+
+  function stopScreenShare() {
+    screenShareActive = false;
+    screenToggle.classList.remove('active');
+    screenToggle.title = 'Share your screen with Coop';
+    latestScreenshotDataUrl = null;
+    if (screenPreview) screenPreview.classList.remove('visible');
+    // Reset preview elements
+    const previewVideo = document.getElementById('sp-screen-preview-video');
+    if (previewVideo) { previewVideo.srcObject = null; previewVideo.style.display = 'none'; }
+    if (screenPreviewImg) { screenPreviewImg.style.display = ''; screenPreviewImg.src = ''; }
+    if (_displayStream) {
+      _displayStream.getTracks().forEach(t => t.stop());
+      _displayStream = null;
+    }
+    if (screenToggle._video) { screenToggle._video.srcObject = null; screenToggle._video = null; }
+    if (typeof CISounds !== 'undefined') CISounds.shareStop();
+    console.log('[ScreenShare] Stopped');
+  }
+
+  // Override captureScreenshot for the send() function to use stream frames
+  async function captureScreenshot() {
+    if (_displayStream?.active) return captureFrameFromStream();
+    // Fallback to tab capture if no stream
+    try {
+      const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 70 });
+      latestScreenshotDataUrl = dataUrl;
+      if (screenPreviewImg) screenPreviewImg.src = dataUrl;
+      if (screenPreview) screenPreview.classList.add('visible');
+      if (screenFlash) { screenFlash.classList.remove('flash'); void screenFlash.offsetWidth; screenFlash.classList.add('flash'); }
+      return dataUrl;
+    } catch (e) {
+      console.warn('[ScreenShare] Capture failed:', e.message);
+      return null;
+    }
+  }
+
+  if (screenToggle) {
+    screenToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (screenShareActive) {
+        stopScreenShare();
+      } else {
+        startScreenShare();
+      }
+    });
+  }
+
+  // Share border removed — for entire-screen/window shares, a per-tab border is misleading.
+  function injectShareBorder(_show) { /* no-op */ }
+
+  // ── Snip tool: select a region on the active tab to send to Coop ──
+  const snipBtn = document.getElementById('sp-snip-btn');
+  let _pendingSnip = null; // stores cropped base64 for next message
+
+  if (snipBtn) {
+    snipBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      snipBtn.classList.add('active');
+      try {
+        // 1. Capture the full visible tab
+        const fullDataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 85 });
+        if (!fullDataUrl) { snipBtn.classList.remove('active'); return; }
+
+        // 2. Inject crosshair overlay on the active tab for region selection
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) { snipBtn.classList.remove('active'); return; }
+
+        const [{ result: rect }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            return new Promise(resolve => {
+              const overlay = document.createElement('div');
+              overlay.id = '__coop-snip-overlay';
+              Object.assign(overlay.style, {
+                position: 'fixed', inset: '0', zIndex: '2147483647',
+                cursor: 'crosshair', background: 'rgba(0,0,0,0.15)',
+              });
+              const box = document.createElement('div');
+              Object.assign(box.style, {
+                position: 'fixed', border: '2px solid #F06A52', background: 'rgba(240,106,82,0.08)',
+                borderRadius: '4px', pointerEvents: 'none', zIndex: '2147483647',
+              });
+              document.body.appendChild(overlay);
+              document.body.appendChild(box);
+
+              let startX, startY, selecting = false;
+              overlay.addEventListener('mousedown', e => {
+                startX = e.clientX; startY = e.clientY; selecting = true;
+                box.style.left = startX + 'px'; box.style.top = startY + 'px';
+                box.style.width = '0'; box.style.height = '0';
+                box.style.display = 'block';
+              });
+              overlay.addEventListener('mousemove', e => {
+                if (!selecting) return;
+                const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
+                const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
+                Object.assign(box.style, { left: x+'px', top: y+'px', width: w+'px', height: h+'px' });
+              });
+              overlay.addEventListener('mouseup', e => {
+                selecting = false;
+                const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
+                const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
+                overlay.remove(); box.remove();
+                if (w < 10 || h < 10) { resolve(null); return; } // too small, cancel
+                // Account for device pixel ratio
+                const dpr = window.devicePixelRatio || 1;
+                resolve({ x: x * dpr, y: y * dpr, w: w * dpr, h: h * dpr });
+              });
+              // Escape to cancel
+              const onKey = e => { if (e.key === 'Escape') { overlay.remove(); box.remove(); document.removeEventListener('keydown', onKey); resolve(null); } };
+              document.addEventListener('keydown', onKey);
+            });
+          }
+        });
+
+        snipBtn.classList.remove('active');
+        if (!rect) return; // cancelled
+
+        // 3. Crop the full screenshot to the selected region
+        const img = new Image();
+        await new Promise(r => { img.onload = r; img.src = fullDataUrl; });
+        const canvas = document.createElement('canvas');
+        canvas.width = rect.w;
+        canvas.height = rect.h;
+        canvas.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        const compressed = croppedDataUrl.split(',')[1];
+
+        // 4. Store for next message + show preview
+        _pendingSnip = compressed;
+        latestScreenshotDataUrl = croppedDataUrl;
+        if (screenPreviewImg) screenPreviewImg.src = croppedDataUrl;
+        if (screenPreview) screenPreview.classList.add('visible');
+        if (screenFlash) { screenFlash.classList.remove('flash'); void screenFlash.offsetWidth; screenFlash.classList.add('flash'); }
+
+        if (typeof CISounds !== 'undefined') CISounds.snip();
+        console.log(`[Snip] Captured ${rect.w}x${rect.h} region (${Math.round(compressed.length / 1024)}KB)`);
+      } catch (e) {
+        console.warn('[Snip] Failed:', e.message);
+        snipBtn.classList.remove('active');
+      }
+    });
+  }
+
   function getTabContextLabel() {
     const url = currentUrl || '';
     const company = companyNameEl?.textContent || '';
@@ -2675,6 +3194,7 @@ function renderContactsSection(el, contacts) {
     job: [
       { label: 'Score this role for me', prompt: 'Score this role against my profile and ICP' },
       { label: 'Help me apply', prompt: 'Help me answer application questions for this role' },
+      { label: 'Help me respond', prompt: 'Help me draft a response based on what you see on my screen right now' },
       { label: 'Compare to my ICP', prompt: 'Compare this role to my ideal company profile' },
     ],
     linkedin: [
@@ -2689,6 +3209,7 @@ function renderContactsSection(el, contacts) {
     ],
     company: [
       { label: 'Prep me for an interview', prompt: 'What should I know before interviewing here?' },
+      { label: 'Help me respond', prompt: 'Help me draft a response based on what you see on my screen right now' },
       { label: 'Draft a follow-up email', prompt: 'Draft a follow-up email for this company' },
       { label: 'What are the risks?', prompt: "What are the red flags or risks I should know about?" },
     ],
@@ -2697,24 +3218,30 @@ function renderContactsSection(el, contacts) {
   function detectSuggestionContext() {
     const url = currentUrl || '';
     if (currentJobTitle) return 'job';
+    // Detect ATS application pages even without a detected job title
+    if (currentSavedEntry?.isOpportunity) return 'job';
+    if (/careers\.|jobs\.|apply\.|lever\.co|greenhouse\.io|ashbyhq\.com|myworkdayjobs\.com|jobvite\.com|smartrecruiters\.com|workable\.com/i.test(url)) return 'job';
     if (url.includes('linkedin.com')) return 'linkedin';
     if (url.includes('chrome-extension://') && url.includes('saved')) return 'saved';
     return 'company';
   }
 
   function buildEmptyStateHTML() {
-    const ctx = detectSuggestionContext();
-    const suggestions = SUGGESTIONS_BY_CONTEXT[ctx] || SUGGESTIONS_BY_CONTEXT.company;
     const avatarHTML = typeof COOP !== 'undefined' ? COOP.avatar(48) : '';
-    const suggestionsHTML = suggestions.map(s =>
-      `<button class="sp-suggestion-btn" data-suggestion-prompt="${s.prompt.replace(/"/g, '&quot;')}">${s.label}</button>`
-    ).join('');
+    let suggestionsHTML = '';
+    if (_coopConfig.automations?.contextualSuggestions !== false) {
+      const ctx = detectSuggestionContext();
+      const suggestions = SUGGESTIONS_BY_CONTEXT[ctx] || SUGGESTIONS_BY_CONTEXT.company;
+      suggestionsHTML = suggestions.map(s =>
+        `<button class="sp-suggestion-btn" data-suggestion-prompt="${s.prompt.replace(/"/g, '&quot;')}">${s.label}</button>`
+      ).join('');
+    }
     return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:32px 24px 20px;">
       <div style="margin-bottom:8px;">${avatarHTML}</div>
       <div style="font-size:22px;font-weight:700;color:#FF7A59;line-height:1.2;">Hello, Matt</div>
       <div style="font-size:20px;font-weight:600;color:#2D2D2D;line-height:1.3;">How can I help you today?</div>
     </div>
-    <div class="sp-suggestions">${suggestionsHTML}</div>`;
+    ${suggestionsHTML ? `<div class="sp-suggestions">${suggestionsHTML}</div>` : ''}`;
   }
 
   // Restore saved chat height
@@ -3001,14 +3528,30 @@ function renderContactsSection(el, contacts) {
         } else {
           bubble = escHtml(m.content);
         }
-        const copyBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
+        const copyBtn = (m.role === 'assistant' && m.content)
           ? `<button class="sp-chat-copy" data-idx="${idx}" title="Copy to clipboard">📋</button>`
           : '';
         const saveAnswerBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
           ? `<button class="sp-chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern">💾 Save</button>`
           : '';
         const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${proposalHTML}${copyBtn}${saveAnswerBtn}</div>`;
+        // Token usage badge for assistant messages
+        const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
+          const inp = m._usage.input || 0;
+          const out = m._usage.output || 0;
+          const total = inp + out;
+          const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
+          // Estimate cost (rough per-token rates)
+          const isGpt = (m._model || '').startsWith('gpt');
+          const isMini = (m._model || '').includes('mini') || (m._model || '').includes('nano');
+          const isHaiku = (m._model || '').includes('haiku');
+          const inRate = isGpt ? (isMini ? 0.0004 : 0.01) : (isHaiku ? 0.0008 : 0.003);
+          const outRate = isGpt ? (isMini ? 0.0016 : 0.03) : (isHaiku ? 0.004 : 0.015);
+          const cost = (inp / 1000) * inRate + (out / 1000) * outRate;
+          const costStr = cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
+          return `<div class="sp-chat-usage">${modelShort} &middot; ${total.toLocaleString()} tokens (${inp.toLocaleString()} in, ${out.toLocaleString()} out) &middot; ${costStr}</div>`;
+        })() : '';
+        return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${proposalHTML}${copyBtn}${saveAnswerBtn}${usageBadge}</div>`;
       }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
@@ -3130,8 +3673,79 @@ function renderContactsSection(el, contacts) {
     history.push({ role: 'user', content: text });
     renderMessages(true);
     sendBtn.disabled = true;
+    if (typeof CISounds !== 'undefined') CISounds.send();
 
     const context = buildChatContext();
+    // Fetch visible page content from the active tab if tab sharing is on
+    if (tabContextActive) {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id) {
+          const [{ result: pageText }] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => document.body.innerText?.slice(0, 4000) || ''
+          });
+          if (pageText) context.visiblePageContent = pageText;
+        }
+      } catch (e) { /* content script may not have access — that's fine */ }
+    }
+
+    // Capture screenshot if screen sharing is active
+    if (screenShareActive) {
+      try {
+        let dataUrl = null;
+        // Prefer getDisplayMedia stream frame if available
+        if (_displayStream?.active && screenToggle._video?.readyState >= 2) {
+          const video = screenToggle._video;
+          const canvas = document.createElement('canvas');
+          const scale = Math.min(1, 800 / video.videoWidth);
+          canvas.width = video.videoWidth * scale;
+          canvas.height = video.videoHeight * scale;
+          canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+          dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+        } else {
+          // Fallback to tab capture
+          dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 40 });
+        }
+        if (dataUrl) {
+          const compressed = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          // Send screenshot via port AND store on context as fallback
+          try {
+            const port = chrome.runtime.connect({ name: 'coop-screenshot' });
+            port.postMessage({ screenshot: compressed });
+            port.disconnect();
+          } catch (e) { console.warn('[ScreenShare] Port send failed:', e.message); }
+          if (screenPreviewImg) screenPreviewImg.src = dataUrl;
+          if (screenPreview) screenPreview.classList.add('visible');
+          if (screenFlash) { screenFlash.classList.remove('flash'); void screenFlash.offsetWidth; screenFlash.classList.add('flash'); }
+          history[history.length - 1]._screenshot = true;
+          context._hasScreenshot = true;
+          context.hasScreenshot = true;
+          context._screenshotData = compressed;
+          await new Promise(r => setTimeout(r, 150));
+          console.log(`[ScreenShare] Sent ${Math.round(compressed.length / 1024)}KB screenshot`);
+        }
+      } catch (e) { console.warn('[ScreenShare] Capture failed:', e.message); }
+    }
+
+    // Attach pending snip if available (one-shot — clears after use)
+    if (_pendingSnip && !context._hasScreenshot) {
+      try {
+        const port = chrome.runtime.connect({ name: 'coop-screenshot' });
+        port.postMessage({ screenshot: _pendingSnip });
+        port.disconnect();
+      } catch (e) { /* ignore */ }
+      history[history.length - 1]._screenshot = true;
+      context._hasScreenshot = true;
+      context.hasScreenshot = true;
+      context._screenshotData = _pendingSnip;
+      await new Promise(r => setTimeout(r, 150));
+      console.log(`[Snip] Attached ${Math.round(_pendingSnip.length / 1024)}KB snip to message`);
+      _pendingSnip = null;
+      if (screenPreview) screenPreview.classList.remove('visible');
+    }
+
+    // Text-only messages through the channel — screenshot read from memory by background.js
     const apiMessages = history.map(m => ({ role: m.role, content: m.content }));
 
     let result;
@@ -3150,24 +3764,145 @@ function renderContactsSection(el, contacts) {
     }
 
     sendBtn.disabled = false;
+    if (typeof CISounds !== 'undefined') {
+      if (result?.error) CISounds.error();
+      else CISounds.receive();
+    }
     // If the backend fell back to a different model, show which one was used
     const replyText = result?.reply || result?.error || 'Something went wrong.';
     const fallbackNote = (result?.model && result.model !== spAvailableModels[chatModelIdx].id)
       ? `\n\n*— answered by ${result.model.includes('gpt') ? 'GPT-4.1 mini' : result.model} (fallback)*`
       : '';
-    history.push({ role: 'assistant', content: replyText + fallbackNote });
+    const msgEntry = { role: 'assistant', content: replyText + fallbackNote };
+    // Store usage metadata for display
+    if (result?.usage) msgEntry._usage = result.usage;
+    if (result?.model) msgEntry._model = result.model;
+    if (result?.routed) msgEntry._routed = result.routed;
+    history.push(msgEntry);
     renderMessages();
   }
 
+  // ── @ Mention autocomplete ──
+  const mentionDropdown = document.getElementById('sp-mention-dropdown');
+  let mentionActive = false;
+  let mentionStartIdx = -1;
+  let mentionSelectedIdx = 0;
+  let mentionEntries = [];
+
   sendBtn.addEventListener('click', send);
   inputEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === 'Enter' && !e.shiftKey && !mentionActive) { e.preventDefault(); send(); }
   });
   inputEl.addEventListener('input', () => {
     inputEl.style.height = '';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
     // Toggle send button active state
     sendBtn.classList.toggle('has-text', inputEl.value.trim().length > 0);
+    // @ mention detection
+    handleMentionInput();
+  });
+
+  function handleMentionInput() {
+    const val = inputEl.value;
+    const cursor = inputEl.selectionStart;
+    // Find the last @ before cursor that isn't preceded by a word char
+    const before = val.slice(0, cursor);
+    const atMatch = before.match(/(^|[\s(])@([^\s@]*)$/);
+    if (!atMatch) { closeMentionDropdown(); return; }
+    mentionStartIdx = before.lastIndexOf('@');
+    const query = atMatch[2].toLowerCase();
+    // Load saved companies and filter
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const entries = (savedCompanies || []).filter(c => c.company);
+      const filtered = query
+        ? entries.filter(c => c.company.toLowerCase().includes(query) || (c.jobTitle || '').toLowerCase().includes(query))
+        : entries.slice(0, 12);
+      // Sort: exact prefix first, then alphabetical
+      filtered.sort((a, b) => {
+        const aPrefix = a.company.toLowerCase().startsWith(query) ? 0 : 1;
+        const bPrefix = b.company.toLowerCase().startsWith(query) ? 0 : 1;
+        return aPrefix - bPrefix || a.company.localeCompare(b.company);
+      });
+      mentionEntries = filtered.slice(0, 10);
+      mentionSelectedIdx = 0;
+      renderMentionDropdown();
+    });
+  }
+
+  function renderMentionDropdown() {
+    if (!mentionEntries.length) {
+      mentionDropdown.innerHTML = '<div class="sp-mention-empty">No matching companies</div>';
+      mentionDropdown.classList.add('visible');
+      mentionActive = true;
+      return;
+    }
+    mentionDropdown.innerHTML = mentionEntries.map((e, i) => {
+      const stage = e.jobStage || e.status || '';
+      const stageHTML = stage ? `<span class="sp-mention-item-stage">${stage.replace(/_/g, ' ')}</span>` : '';
+      const meta = e.isOpportunity && e.jobTitle ? e.jobTitle : (e.industry || '');
+      return `<div class="sp-mention-item${i === mentionSelectedIdx ? ' active' : ''}" data-idx="${i}">
+        <span class="sp-mention-item-name">${escHtml(e.company)}</span>
+        ${meta ? `<span class="sp-mention-item-meta">${escHtml(meta)}</span>` : ''}
+        ${stageHTML}
+      </div>`;
+    }).join('');
+    mentionDropdown.classList.add('visible');
+    mentionActive = true;
+    // Click handler for items
+    mentionDropdown.querySelectorAll('.sp-mention-item').forEach(el => {
+      el.addEventListener('mousedown', ev => {
+        ev.preventDefault(); // don't blur input
+        selectMention(parseInt(el.dataset.idx));
+      });
+    });
+  }
+
+  function selectMention(idx) {
+    const entry = mentionEntries[idx];
+    if (!entry) return;
+    const val = inputEl.value;
+    const before = val.slice(0, mentionStartIdx);
+    const after = val.slice(inputEl.selectionStart);
+    const insertText = `@${entry.company} `;
+    inputEl.value = before + insertText + after;
+    inputEl.selectionStart = inputEl.selectionEnd = before.length + insertText.length;
+    closeMentionDropdown();
+    inputEl.focus();
+    sendBtn.classList.toggle('has-text', inputEl.value.trim().length > 0);
+  }
+
+  function closeMentionDropdown() {
+    mentionDropdown.classList.remove('visible');
+    mentionActive = false;
+    mentionEntries = [];
+  }
+
+  // Keyboard navigation for mention dropdown
+  inputEl.addEventListener('keydown', e => {
+    if (!mentionActive || !mentionEntries.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mentionSelectedIdx = (mentionSelectedIdx + 1) % mentionEntries.length;
+      renderMentionDropdown();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mentionSelectedIdx = (mentionSelectedIdx - 1 + mentionEntries.length) % mentionEntries.length;
+      renderMentionDropdown();
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      selectMention(mentionSelectedIdx);
+    } else if (e.key === 'Escape') {
+      closeMentionDropdown();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      selectMention(mentionSelectedIdx);
+    }
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.sp-mention-dropdown') && e.target !== inputEl) closeMentionDropdown();
   });
 
   // Quick action buttons (clear in bottom bar)
@@ -3181,9 +3916,16 @@ function renderContactsSection(el, contacts) {
 
   // ── Pop-out chat window ──
   if (popoutBtn) {
-    popoutBtn.addEventListener('click', () => {
+    popoutBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent bubbling to chatHeader minimize handler
       const chatState = JSON.stringify(history);
-      chrome.storage.local.set({ _coopPopoutHistory: chatState, _coopPopoutModel: chatModelIdx }, () => {
+      const popoutContext = {
+        company: companyNameEl?.textContent || '',
+        entryId: currentSavedEntry?.id || null,
+        jobTitle: currentJobTitle || null,
+        tabUrl: currentUrl || null,
+      };
+      chrome.storage.local.set({ _coopPopoutHistory: chatState, _coopPopoutModel: chatModelIdx, _coopPopoutContext: popoutContext }, () => {
         chrome.windows.create({
           url: chrome.runtime.getURL('sidepanel.html?popout=1'),
           type: 'popup',
@@ -3191,16 +3933,27 @@ function renderContactsSection(el, contacts) {
           height: 620,
           focused: true
         });
+        // Minimize chat in sidepanel so user isn't seeing it in two places
+        if (document.body.classList.contains('chat-mode')) {
+          // Exit full chat mode back to normal intel view
+          document.body.classList.remove('chat-mode');
+          chatSizeState = 'minimized';
+          applyChatSize();
+        } else {
+          chatSizeState = 'minimized';
+          applyChatSize();
+        }
       });
     });
   }
 
   // Chat size states: 'normal' → 'expanded' → 'minimized' → 'normal'
-  let chatSizeState = 'normal'; // normal | expanded | minimized
+  let chatSizeState = 'minimized'; // start minimized — user clicks to expand
   const inputRow = chatEl.querySelector('.sp-chat-input-row');
 
-  const SVG_EXPAND = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l-2 2m0 0h4m-4 0V8M12 6l2-2m0 0h-4m4 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const SVG_COLLAPSE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 2v4h4M2 10h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  // Outward arrows = "expand", Inward arrows = "collapse/shrink"
+  const SVG_EXPAND = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 10v4h-4M2 6V2h4M14 14L10 10M2 2l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const SVG_COLLAPSE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l-2 2m0 0h4m-4 0V8M12 6l2-2m0 0h-4m4 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const SVG_MINIMIZE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
   function applyChatSize() {
@@ -3211,7 +3964,7 @@ function renderContactsSection(el, contacts) {
       msgsEl.style.display = '';
       if (inputRow) inputRow.style.display = '';
       if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
-      if (detachBtn) { detachBtn.innerHTML = SVG_COLLAPSE; detachBtn.title = 'Minimize chat'; }
+      if (detachBtn) { detachBtn.innerHTML = SVG_COLLAPSE; detachBtn.title = 'Shrink chat'; }
     } else if (chatSizeState === 'minimized') {
       msgsEl.style.display = 'none';
       if (inputRow) inputRow.style.display = 'none';
@@ -3229,15 +3982,20 @@ function renderContactsSection(el, contacts) {
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
   }
+  applyChatSize(); // apply initial state (minimized)
 
-  detachBtn?.addEventListener('click', () => {
-    if (document.body.classList.contains('chat-mode')) return; // no resize in full chat mode
-    if (chatSizeState === 'normal') chatSizeState = 'expanded';
-    else if (chatSizeState === 'expanded') chatSizeState = 'minimized';
-    else chatSizeState = 'normal';
-    applyChatSize();
-    if (chatSizeState !== 'minimized') {
-      chatEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  detachBtn?.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent bubbling to chatHeader minimize handler
+    if (document.body.classList.contains('chat-mode')) {
+      // Already in full chat mode — exit back to intel
+      exitChatMode();
+      detachBtn.innerHTML = SVG_EXPAND;
+      detachBtn.title = 'Full-screen chat';
+    } else {
+      // Enter full-panel chat mode
+      enterChatMode();
+      detachBtn.innerHTML = SVG_COLLAPSE;
+      detachBtn.title = 'Back to Intel view';
     }
   });
 
@@ -3273,18 +4031,50 @@ function renderContactsSection(el, contacts) {
     if (popoutBtn) popoutBtn.style.display = 'none';
     const backBtn = document.getElementById('sp-chat-back');
     if (backBtn) backBtn.style.display = 'none';
-    // Restore history from storage
-    chrome.storage.local.get(['_coopPopoutHistory', '_coopPopoutModel'], data => {
+    // Restore history + context from storage
+    chrome.storage.local.get(['_coopPopoutHistory', '_coopPopoutModel', '_coopPopoutContext'], data => {
       if (data._coopPopoutHistory) {
         try { history = JSON.parse(data._coopPopoutHistory); } catch {}
       }
       if (typeof data._coopPopoutModel === 'number') chatModelIdx = data._coopPopoutModel;
+      // Restore company/opportunity context so Coop stays connected
+      if (data._coopPopoutContext) {
+        const ctx = data._coopPopoutContext;
+        if (ctx.company) companyNameEl.textContent = ctx.company;
+        if (ctx.jobTitle) currentJobTitle = ctx.jobTitle;
+        if (ctx.tabUrl) currentUrl = ctx.tabUrl;
+        if (ctx.entryId) {
+          chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+            const entry = (savedCompanies || []).find(c => c.id === ctx.entryId);
+            if (entry) {
+              currentSavedEntry = entry;
+              currentJobMeta = entry.jobSnapshot || null;
+              if (entry.jobDescription) currentJobDescription = entry.jobDescription;
+              currentResearch = {
+                intelligence: entry.intelligence,
+                employees: entry.employees,
+                funding: entry.funding,
+                industry: entry.industry,
+                reviews: entry.reviews || [],
+                leaders: entry.leaders || [],
+                jobMatch: entry.jobMatch,
+                jobSnapshot: entry.jobSnapshot,
+              };
+            }
+          });
+        }
+      }
       updateModelLabel();
       renderMessages();
     });
   }
 
   renderMessages();
+
+  // Re-render suggestions when context changes (e.g., manual link to saved opportunity)
+  msgsEl.addEventListener('context-updated', () => {
+    if (history.length === 0) renderMessages();
+  });
 
   // Listen for INSIGHTS_CAPTURED broadcasts and annotate the last assistant message
   chrome.runtime.onMessage.addListener((msg) => {

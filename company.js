@@ -2430,7 +2430,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
       html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
       for (const m of dayMeetings) {
         const manualBadge = m._isManual ? `<span class="mtg-manual-badge">Manual</span>` : '';
-        const dismissBtn = !m._isManual ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company" style="font-size:10px;color:#99acc2;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0.5;transition:opacity 0.15s;">✕ wrong</button>` : '';
+        const dismissBtn = !m._isManual ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company" style="font-size:10px;color:#99acc2;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0;transition:opacity 0.15s;">✕</button>` : '';
         const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : dismissBtn;
         html += `
           <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}" data-is-manual="${m._isManual ? '1' : '0'}">
@@ -3189,15 +3189,17 @@ function extractContactsFromEmails(emails) {
   emails.forEach(e => {
     const allAddrs = [...parseAddrs(e.from), ...parseAddrs(e.to), ...parseAddrs(e.cc)];
     // Only process emails that involve someone from the company domain
-    const hasCompanyParticipant = domain && allAddrs.some(a => isCompanyEmail(a.email));
-    if (!hasCompanyParticipant && domain) return;
+    // If no domain is known, skip contact extraction entirely — we can't filter
+    if (!domain) return;
+    const hasCompanyParticipant = allAddrs.some(a => isCompanyEmail(a.email));
+    if (!hasCompanyParticipant) return;
 
     allAddrs.forEach(({ name, email }) => {
       if (!email) return;
       if (detectedUserEmail && email === detectedUserEmail) return;
       if (existing.has(email)) return;
       // Only add contacts from the company's domain
-      if (domain && !isCompanyEmail(email)) return;
+      if (!isCompanyEmail(email)) return;
       // Filter out non-human / mass email senders
       if (isNonHumanEmail(email)) return;
       existing.add(email);

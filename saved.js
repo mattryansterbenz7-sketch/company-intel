@@ -304,11 +304,13 @@ function renderCompactCard(c) {
   const arr = c.jobSnapshot?.workArrangement || c.jobMatch?.workArrangement || '';
   const meta = [salary, arr].filter(Boolean).join(' \u00b7 ');
 
-  // Action buttons (only in queue stage)
-  const inQueue = (c.jobStage || 'needs_review') === QUEUE_STAGE;
-  const actionsHtml = inQueue && score != null ? `
+  // Action buttons — ONLY in the scoring queue (initial stage)
+  const currentStage = c.jobStage || 'needs_review';
+  const inQueue = currentStage === QUEUE_STAGE;
+  const showActions = inQueue && score != null;
+  const actionsHtml = showActions ? `
     <div class="compact-actions">
-      <button class="compact-apply-btn" data-id="${c.id}">Apply</button>
+      <button class="compact-apply-btn" data-id="${c.id}">Interested</button>
       <button class="compact-dismiss-btn" data-id="${c.id}">Dismiss</button>
     </div>` : '';
 
@@ -352,12 +354,12 @@ function renderCompactCard(c) {
           return reason ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(reason)}</div>` : '';
         })() : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
-        ${(() => {
+        ${inQueue ? (() => {
           const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
           return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 2).map(qt =>
             `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtmlGlobal(qt.text)}</div>`
           ).join('')}</div>` : '';
-        })()}
+        })() : ''}
         ${tagsHtml}
         ${actionsHtml}
       </div>
@@ -386,16 +388,29 @@ function openScoreModal(entry) {
     ? `<div class="score-modal-dq">\u{1F6AB} Hard Disqualifier${hardDQ.reasons?.length ? ': ' + hardDQ.reasons.join('; ') : ''}</div>`
     : '';
 
-  // Flags — side by side
+  // Flags — side by side with gradient colors
   const strongFits = jm.strongFits || [];
   const redFlags = jm.redFlags || jm.watchOuts || [];
+  const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
+  const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
+  const dismissedFlags = jm.dismissedFlags || [];
   const greenCol = strongFits.length ? `<div class="score-modal-flag-col green">
     <div class="score-modal-flag-heading green">Green Flags</div>
-    ${strongFits.map(f => `<div class="score-modal-flag"><span class="score-modal-flag-icon">\u{2705}</span><span>${escHtmlGlobal(f)}</span></div>`).join('')}
+    ${strongFits.map((f, i) => {
+      const isDismissed = dismissedFlags.includes(f);
+      const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
+      const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
+      return `<div class="score-modal-flag" style="${dimOpacity}"><span class="score-modal-flag-icon" style="color:${greenShades[Math.min(i, greenShades.length - 1)]}">&#x2714;</span><span${strikeStyle}>${escHtmlGlobal(f)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f)}" data-entry-id="${entry.id}" data-flag-type="green" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
+    }).join('')}
   </div>` : '';
   const redCol = redFlags.length ? `<div class="score-modal-flag-col red">
     <div class="score-modal-flag-heading red">Red Flags</div>
-    ${redFlags.map(f => `<div class="score-modal-flag"><span class="score-modal-flag-icon">\u{1F534}</span><span>${escHtmlGlobal(f)}</span></div>`).join('')}
+    ${redFlags.map((f, i) => {
+      const isDismissed = dismissedFlags.includes(f);
+      const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
+      const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
+      return `<div class="score-modal-flag" style="${dimOpacity}" data-flag-text="${escHtmlGlobal(f)}"><span class="score-modal-flag-icon" style="color:${redShades[Math.min(i, redShades.length - 1)]}">&#x25CF;</span><span${strikeStyle}>${escHtmlGlobal(f)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f)}" data-entry-id="${entry.id}" data-flag-type="red" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
+    }).join('')}
   </div>` : '';
   const flagsHtml = (greenCol || redCol) ? `${greenCol}${redCol}` : '';
 
@@ -423,15 +438,53 @@ function openScoreModal(entry) {
         <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit">${favHtml} ${escHtmlGlobal(entry.company)}</a>
         <div class="score-modal-title">${entry.jobUrl ? `<a href="${escHtmlGlobal(entry.jobUrl)}" target="_blank">${escHtmlGlobal(entry.jobTitle || '')}</a>` : escHtmlGlobal(entry.jobTitle || '')}</div>
         ${meta ? `<div class="score-modal-meta">${escHtmlGlobal(meta)}</div>` : ''}
+        ${jm.lastUpdatedAt ? `<div style="font-size:10px;color:#9CA0A6;margin-top:4px;">Scored ${(() => {
+          const mins = Math.floor((Date.now() - jm.lastUpdatedAt) / 60000);
+          if (mins < 1) return 'just now';
+          if (mins < 60) return mins + 'm ago';
+          const hrs = Math.floor(mins / 60);
+          if (hrs < 24) return hrs + 'h ' + (mins % 60) + 'm ago';
+          const days = Math.floor(hrs / 24);
+          if (days === 1) return 'yesterday';
+          if (days < 7) return days + 'd ago';
+          return new Date(jm.lastUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        })()}${jm.lastUpdatedBy ? ' · ' + jm.lastUpdatedBy.replace(/_/g, ' ') : ''}</div>` : ''}
       </div>
     </div>
+    ${(() => {
+      const linkStyle = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;text-decoration:none;padding:3px 10px;border-radius:14px;transition:all 0.12s;';
+      const links = [];
+      if (entry.companyWebsite) {
+        const domain = entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+        links.push(`<a href="${escHtmlGlobal(entry.companyWebsite)}" target="_blank" style="${linkStyle}color:#516f90;background:rgba(81,111,144,0.08);border:1px solid rgba(81,111,144,0.15);">↗ ${escHtmlGlobal(domain)}</a>`);
+      }
+      if (entry.companyLinkedin) links.push(`<a href="${escHtmlGlobal(entry.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
+      const reviews = entry.reviews || entry.intelligence?.reviews || [];
+      if (reviews.length) {
+        const glassdoor = reviews.find(r => /glassdoor/i.test(r.source || r.url || ''));
+        if (glassdoor?.url) links.push(`<a href="${escHtmlGlobal(glassdoor.url)}" target="_blank" style="${linkStyle}color:#0caa41;background:rgba(12,170,65,0.06);border:1px solid rgba(12,170,65,0.15);">★ Glassdoor</a>`);
+        reviews.filter(r => r.url && !/glassdoor/i.test(r.source || r.url || '')).slice(0, 2).forEach(r => {
+          const name = (r.source || 'Review').replace(/https?:\/\/(www\.)?/, '').split('/')[0];
+          links.push(`<a href="${escHtmlGlobal(r.url)}" target="_blank" style="${linkStyle}color:#6B6560;background:rgba(107,101,96,0.06);border:1px solid rgba(107,101,96,0.12);">★ ${escHtmlGlobal(name)}</a>`);
+        });
+      }
+      const industry = entry.industry || entry.intelligence?.industry || '';
+      const eli5 = entry.intelligence?.eli5 || entry.intelligence?.whatItDoes || '';
+      const hasContext = links.length || industry || eli5;
+      if (!hasContext) return '';
+      return `<div style="padding:0 20px 8px;border-bottom:1px solid #f0eeeb;margin-bottom:4px;">
+        ${links.length ? `<div style="display:flex;gap:12px;align-items:center;margin-bottom:${industry || eli5 ? '6' : '0'}px;">${links.join('')}</div>` : ''}
+        ${industry ? `<div style="font-size:11px;font-weight:600;color:#A09A94;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">${escHtmlGlobal(industry)}</div>` : ''}
+        ${eli5 ? `<div style="font-size:12px;color:#6B6560;line-height:1.5;">${escHtmlGlobal(eli5)}</div>` : ''}
+      </div>`;
+    })()}
     <div class="score-modal-body">
       ${dqHtml}
       ${summary ? `<div class="score-modal-verdict">${escHtmlGlobal(summary)}</div>` : ''}
       ${flagsHtml ? `<div class="score-modal-flags">${flagsHtml}</div>` : ''}
       ${rb.whyInteresting ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#1D9E75;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Why interesting</strong><br>${escHtmlGlobal(rb.whyInteresting)}</div>` : ''}
       ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtmlGlobal(rb.concerns)}</div>` : ''}
-      ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/5)` : ''}</strong><br>${escHtmlGlobal(rb.qualificationMatch)}</div>` : ''}
+      ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/10)` : ''}</strong><br>${escHtmlGlobal(rb.qualificationMatch)}</div>` : ''}
       ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtmlGlobal(rb.compSummary)}</div>` : ''}
       ${tagsHtml ? `<div class="score-modal-tags">${tagsHtml}</div>` : ''}
       <div style="display:flex;gap:8px;">
@@ -443,7 +496,7 @@ function openScoreModal(entry) {
     </div>
     <div class="score-modal-actions">
       <button class="score-modal-dismiss" id="score-modal-dismiss-btn">Pass</button>
-      <button class="score-modal-apply" id="score-modal-apply-btn">Apply</button>
+      <button class="score-modal-apply" id="score-modal-apply-btn"${(entry.jobStage || 'needs_review') === 'want_to_apply' ? ' style="background:#1D9E75"' : ''}>${(entry.jobStage || 'needs_review') === 'want_to_apply' ? 'I Applied' : 'Interested'}</button>
     </div>
   `;
 
@@ -460,6 +513,110 @@ function openScoreModal(entry) {
     overlay.classList.remove('open');
     const btn = document.querySelector(`.compact-dismiss-btn[data-id="${entry.id}"]`);
     if (btn) btn.click();
+  });
+
+  // Flag dismiss buttons — with optional reason
+  document.querySelectorAll('.flag-dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const flagText = btn.dataset.flag;
+      const entryId = btn.dataset.entryId;
+      const flagType = btn.dataset.flagType || 'red'; // 'red' or 'green'
+      if (!flagText || !entryId) return;
+
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const companies = savedCompanies || [];
+        const idx = companies.findIndex(c => c.id === entryId);
+        if (idx === -1) return;
+        const jm = companies[idx].jobMatch || {};
+        const dismissed = jm.dismissedFlags || [];
+        const dismissedWithReasons = jm.dismissedFlagsWithReasons || [];
+        const alreadyDismissed = dismissed.includes(flagText);
+
+        if (alreadyDismissed) {
+          // Restore — simple toggle back
+          jm.dismissedFlags = dismissed.filter(f => f !== flagText);
+          jm.dismissedFlagsWithReasons = dismissedWithReasons.filter(f => f.flag !== flagText);
+          companies[idx].jobMatch = jm;
+          chrome.storage.local.set({ savedCompanies: companies }, () => {
+            const flagEl = btn.closest('.score-modal-flag');
+            if (flagEl) {
+              flagEl.style.opacity = '';
+              const textSpan = flagEl.querySelector('span:nth-child(2)');
+              if (textSpan) textSpan.style.textDecoration = '';
+            }
+            btn.textContent = '×'; btn.title = 'Dismiss — this is wrong';
+            // Remove reason input if present
+            const reasonRow = flagEl?.querySelector('.flag-reason-row');
+            if (reasonRow) reasonRow.remove();
+            const memEntry = allCompanies.find(c => c.id === entryId);
+            if (memEntry?.jobMatch) {
+              memEntry.jobMatch.dismissedFlags = jm.dismissedFlags;
+              memEntry.jobMatch.dismissedFlagsWithReasons = jm.dismissedFlagsWithReasons;
+            }
+          });
+        } else {
+          // Dismiss — show reason input
+          const flagEl = btn.closest('.score-modal-flag');
+          if (flagEl) {
+            flagEl.style.opacity = '0.35';
+            // Apply strikethrough only to the text span, not the whole flag (so reason input isn't struck)
+            const textSpan = flagEl.querySelector('span:nth-child(2)');
+            if (textSpan) textSpan.style.textDecoration = 'line-through';
+            btn.textContent = '↩'; btn.title = 'Restore flag';
+            // Add reason input row if not already present
+            if (!flagEl.querySelector('.flag-reason-row')) {
+              const row = document.createElement('div');
+              row.className = 'flag-reason-row';
+              row.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:8px;opacity:1;text-decoration:none;padding:10px 12px;background:#fff;border:1px solid #E0DDD8;border-radius:8px;';
+              row.innerHTML = `<div style="font-size:11px;font-weight:600;color:#6B6F76;">Tell Coop why this is wrong — he'll learn from it</div>
+                <textarea class="flag-reason-input" placeholder="e.g., This role is actually remote. Comp is disclosed in the posting." style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;background:#FAF9F8;color:#1A1A1A;outline:none;resize:vertical;min-height:50px;line-height:1.5;"></textarea>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                  <button class="flag-reason-skip" style="font-size:11px;padding:5px 12px;border:1px solid #E0DDD8;border-radius:6px;background:#fff;color:#6B6F76;cursor:pointer;font-family:inherit;font-weight:600;">Skip</button>
+                  <button class="flag-reason-save" style="font-size:11px;padding:5px 14px;border:none;border-radius:6px;background:#F06A52;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save Feedback</button>
+                </div>`;
+              flagEl.appendChild(row);
+              const textarea = row.querySelector('.flag-reason-input');
+              textarea.focus();
+              // Save on click or Enter
+              const saveFn = () => {
+                const reason = textarea.value.trim();
+                jm.dismissedFlags = [...dismissed, flagText];
+                jm.dismissedFlagsWithReasons = [...dismissedWithReasons, { flag: flagText, reason: reason || null, type: flagType, date: new Date().toISOString().slice(0, 10) }];
+                companies[idx].jobMatch = jm;
+                chrome.storage.local.set({ savedCompanies: companies });
+                const memEntry = allCompanies.find(c => c.id === entryId);
+                if (memEntry?.jobMatch) {
+                  memEntry.jobMatch.dismissedFlags = jm.dismissedFlags;
+                  memEntry.jobMatch.dismissedFlagsWithReasons = jm.dismissedFlagsWithReasons;
+                }
+                // Save reason as a Coop learned insight for future scoring
+                if (reason) {
+                  chrome.storage.local.get(['storyTime'], d => {
+                    const st = d.storyTime || {};
+                    st.learnedInsights = st.learnedInsights || [];
+                    st.learnedInsights.push({
+                      source: companies[idx].company || 'scoring-feedback',
+                      date: new Date().toISOString().slice(0, 10),
+                      insight: `Dismissed ${flagType} flag "${flagText}" — reason: ${reason}`,
+                      category: 'scoring_feedback',
+                      priority: 'high',
+                    });
+                    st.learnedInsights = st.learnedInsights.slice(-100);
+                    chrome.storage.local.set({ storyTime: st });
+                  });
+                }
+                row.innerHTML = `<span style="font-size:11px;color:#8B8680;">✓ ${reason ? 'Feedback saved — Coop will remember this' : 'Dismissed'}</span>`;
+                setTimeout(() => row.remove(), 2000);
+              };
+              row.querySelector('.flag-reason-save').addEventListener('click', saveFn);
+              row.querySelector('.flag-reason-skip')?.addEventListener('click', () => { saveFn(); });
+              textarea.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveFn(); } });
+            }
+          }
+        }
+      });
+    });
   });
 
   // Re-score button
@@ -577,6 +734,9 @@ function initSwipeGesture(entry) {
   const passLabel = document.getElementById('swipe-pass');
   const applyLabel = document.getElementById('swipe-apply');
   if (!modal) return;
+  // Set swipe label based on current stage
+  const curStage = entry.jobStage || 'needs_review';
+  if (applyLabel) applyLabel.textContent = curStage === 'want_to_apply' ? 'I APPLIED' : 'INTERESTED';
 
   const THRESHOLD = 120; // px to trigger action
   let startX = 0, currentX = 0, dragging = false;
@@ -877,6 +1037,7 @@ function load() {
     updateTagsToolbar();
     render();
     renderActivitySection();
+    updateInboxBadge();
   });
 }
 
@@ -1058,6 +1219,12 @@ function render() {
   const _jobCountEl = document.getElementById('job-count');
   if (_companyCountEl) _companyCountEl.textContent = allCompanies.length;
   if (_jobCountEl) _jobCountEl.textContent = allCompanies.filter(c => !!c.isOpportunity).length;
+  // Update queue header button count
+  const queueLabel = document.getElementById('queue-header-label');
+  if (queueLabel) {
+    const qCount = allCompanies.filter(c => c.isOpportunity && (c.jobStage || 'needs_review') === QUEUE_STAGE).length;
+    queueLabel.textContent = qCount > 0 ? `Coop's Scoring Queue (${qCount})` : `Coop's Scoring Queue`;
+  }
 
   if (viewMode === 'kanban' && activePipeline !== 'all') {
     grid.style.display = 'none';
@@ -1717,7 +1884,9 @@ function renderKanban(filtered) {
   const board = document.getElementById('kanban-board');
   const stages = currentStages();
   const validKeys = new Set(stages.map(s => s.key));
-  board.innerHTML = stages.map(({ key: statusKey, label: statusLabel }) => {
+  // Skip the scoring queue column in opportunity pipeline — it has its own dedicated page
+  const renderStages = (activePipeline === 'opportunity') ? stages.filter(s => s.key !== QUEUE_STAGE) : stages;
+  board.innerHTML = renderStages.map(({ key: statusKey, label: statusLabel }) => {
     const cards = filtered.filter(c => {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
       return validKeys.has(s) ? s === statusKey : statusKey === stages[0].key;
@@ -2336,13 +2505,15 @@ function bindKanbanEvents(board) {
       const entry = allCompanies.find(c => c.id === id);
       if (!entry) return;
       const stages = currentStages();
-      const queueIdx = stages.findIndex(s => s.key === QUEUE_STAGE);
-      const nextStage = queueIdx >= 0 && queueIdx + 1 < stages.length ? stages[queueIdx + 1].key : 'want_to_apply';
+      const curStage = entry.jobStage || 'needs_review';
+      const curIdx = stages.findIndex(s => s.key === curStage);
+      const nextStage = curIdx >= 0 && curIdx + 1 < stages.length ? stages[curIdx + 1].key : 'applied';
       const now = Date.now();
       const changes = {
         jobStage: nextStage,
         ...stageEnterTimestamp(entry, nextStage),
       };
+      if (nextStage === 'applied') changes.appliedDate = now;
       const autoAction = defaultActionStatus(nextStage);
       if (autoAction) changes.actionStatus = autoAction;
       updateCompany(id, changes);
@@ -3024,6 +3195,9 @@ document.getElementById('stage-editor-modal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('stage-editor-modal')) closeStageEditor();
 });
 document.getElementById('edit-stages-btn').addEventListener('click', openStageEditor);
+document.getElementById('queue-header-btn')?.addEventListener('click', () => {
+  window.open(chrome.runtime.getURL('queue.html'), '_blank');
+});
 
 // Search
 document.getElementById('search').addEventListener('input', render);
@@ -3848,118 +4022,30 @@ document.getElementById('action-filter-btns')?.addEventListener('click', e => {
 
 load();
 
-// ── Inbox: unified email view across all pipeline companies ──────────────────
+// ── Inbox: opens dedicated inbox page ────────────────────────────────────────
 
-let inboxVisible = false;
-let inboxFilter = 'all';
-
-document.getElementById('inbox-toggle')?.addEventListener('click', () => {
-  inboxVisible = !inboxVisible;
-  const inboxView = document.getElementById('inbox-view');
-  const grid = document.getElementById('grid');
-  const kanban = document.getElementById('kanban-board');
-  const tasks = document.getElementById('tasks-view');
-  const btn = document.getElementById('inbox-toggle');
-
-  if (inboxVisible) {
-    grid.style.display = 'none';
-    kanban.style.display = 'none';
-    tasks.style.display = 'none';
-    inboxView.style.display = 'block';
-    btn.style.background = 'rgba(255,122,89,0.2)';
-    btn.style.color = '#FF7A59';
-    btn.style.borderColor = '#FF7A59';
-    renderInbox();
-  } else {
-    inboxView.style.display = 'none';
-    btn.style.background = '';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-    render();
-  }
+document.getElementById('inbox-link')?.addEventListener('click', () => {
+  window.open(chrome.runtime.getURL('inbox.html'), '_blank');
 });
 
-function renderInbox() {
-  const container = document.getElementById('inbox-view');
-  if (!container) return;
-
-  const allEmails = [];
-  const companyMap = {};
-  (allCompanies || []).forEach(entry => {
-    if (!entry.cachedEmails?.length) return;
-    const favDomain = entry.companyWebsite ? entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
-    entry.cachedEmails.forEach(email => {
-      allEmails.push({
-        ...email,
-        _company: entry.company,
-        _companyId: entry.id,
-        _favDomain: favDomain,
-        _date: email.date ? new Date(email.date).getTime() : 0,
+// Badge count for inbox link
+function updateInboxBadge() {
+  chrome.storage.local.get(['lastInboxViewedAt'], ({ lastInboxViewedAt }) => {
+    const lastViewed = lastInboxViewedAt || 0;
+    let unread = 0;
+    (allCompanies || []).forEach(c => {
+      (c.cachedEmails || []).forEach(e => {
+        if (e.date && new Date(e.date).getTime() > lastViewed) unread++;
       });
     });
-    companyMap[entry.id] = entry.company;
-  });
-
-  allEmails.sort((a, b) => b._date - a._date);
-
-  const filtered = inboxFilter === 'all' ? allEmails
-    : allEmails.filter(e => e._companyId === inboxFilter);
-
-  const companiesWithEmails = [...new Set(allEmails.map(e => e._companyId))];
-  const filterBtns = [
-    `<button class="inbox-filter ${inboxFilter === 'all' ? 'active' : ''}" data-inbox-filter="all">All (${allEmails.length})</button>`,
-    ...companiesWithEmails.slice(0, 20).map(id => {
-      const name = companyMap[id] || id;
-      const count = allEmails.filter(e => e._companyId === id).length;
-      return `<button class="inbox-filter ${inboxFilter === id ? 'active' : ''}" data-inbox-filter="${id}">${escHtmlGlobal(name)} (${count})</button>`;
-    })
-  ].join('');
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diffDays = Math.round((now - d) / 86400000);
-    if (diffDays === 0) return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const emailRows = filtered.length ? filtered.slice(0, 200).map(e => {
-    const favHtml = e._favDomain
-      ? `<img class="inbox-email-favicon" src="https://www.google.com/s2/favicons?domain=${e._favDomain}&sz=32" onerror="this.style.display='none'">`
-      : '';
-    return `<div class="inbox-email" data-company-id="${e._companyId}">
-      <div class="inbox-email-company">${favHtml}<span class="inbox-email-company-name">${escHtmlGlobal(e._company)}</span></div>
-      <div class="inbox-email-body">
-        <div class="inbox-email-subject">${escHtmlGlobal(e.subject || '(no subject)')}</div>
-        <div class="inbox-email-snippet">${escHtmlGlobal(e.snippet || '')}</div>
-        <div class="inbox-email-from">${escHtmlGlobal((e.from || '').replace(/<[^>]+>/, '').trim())}</div>
-      </div>
-      <div class="inbox-email-date">${formatDate(e.date)}</div>
-    </div>`;
-  }).join('') : '<div class="inbox-empty">No emails found. Emails sync when you view companies with Gmail connected.</div>';
-
-  container.innerHTML = `
-    <div class="inbox-header">
-      <div class="inbox-title">Inbox</div>
-      <div class="inbox-count">${filtered.length} emails across ${companiesWithEmails.length} companies</div>
-    </div>
-    <div class="inbox-filters">${filterBtns}</div>
-    <div id="inbox-emails">${emailRows}</div>
-  `;
-
-  container.querySelectorAll('.inbox-filter').forEach(btn => {
-    btn.addEventListener('click', () => {
-      inboxFilter = btn.dataset.inboxFilter;
-      renderInbox();
-    });
-  });
-
-  container.querySelectorAll('.inbox-email').forEach(row => {
-    row.addEventListener('click', () => {
-      window.open(chrome.runtime.getURL('company.html') + '?id=' + row.dataset.companyId, '_blank');
-    });
+    const badge = document.getElementById('inbox-badge');
+    if (badge) {
+      if (unread > 0) {
+        badge.textContent = unread > 99 ? '99+' : String(unread);
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
   });
 }

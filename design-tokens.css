@@ -1,0 +1,93 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CompanyIntel Design Tokens
+   Warm, sophisticated, premium — Linear/Raycast-inspired
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Surfaces (layered depth) ── */
+  --ci-bg-base:          #FFF0E6;       /* Page body — warm peach */
+  --ci-bg-raised:        #FFF8F4;       /* Cards, panels — peach-tinted white */
+  --ci-bg-overlay:       #FFFFFF;       /* Modals, dropdowns */
+  --ci-bg-inset:         #FCEEE4;       /* Inputs, inset areas — slightly deeper peach */
+  --ci-bg-header:        #1B2A4A;       /* Top nav — deep indigo-navy */
+  --ci-bg-header-hover:  #253760;       /* Header interactive — slightly brighter indigo */
+  --ci-bg-sidebar:       #FCEEE4;       /* Settings sidebar nav — matches inset */
+
+  /* ── Text (all pass WCAG AA against expected bg) ── */
+  --ci-text-primary:     #1E1F21;       /* Main body text — near-black with warmth */
+  --ci-text-secondary:   #6B6F76;       /* Descriptions — neutral gray, not cool or warm */
+  --ci-text-tertiary:    #9CA0A6;       /* Timestamps, labels — legible soft gray */
+  --ci-text-on-dark:     #F5F4F2;       /* Text on dark header */
+  --ci-text-on-dark-muted: #A3AEBE;     /* Secondary text on dark bg */
+  --ci-text-link:        #4573D2;       /* Links — Asana-style saturated blue */
+
+  /* ── Borders ── */
+  --ci-border-default:   #E2DFD9;       /* Standard card/section borders — warm */
+  --ci-border-subtle:    #EEECE8;       /* Very light separators */
+  --ci-border-strong:    #CBC7C0;       /* Active/focus states */
+
+  /* ── Accent Colors ── */
+  --ci-accent-primary:       #F06A52;   /* Warm coral-red — HubSpot energy, slightly deeper */
+  --ci-accent-primary-hover: #D9563E;   /* Darker on hover */
+  --ci-accent-primary-soft:  rgba(240, 106, 82, 0.08);
+  --ci-accent-teal:          #36B37E;   /* Fresh green — Asana-style success, less cyan */
+  --ci-accent-teal-soft:     rgba(54, 179, 126, 0.08);
+  --ci-accent-blue:          #4573D2;   /* Saturated blue — Asana link/info blue */
+  --ci-accent-amber:         #F5A623;   /* Rich amber — warm gold for ratings */
+  --ci-accent-red:           #E8384F;   /* Vibrant red — Asana urgency red */
+  --ci-accent-red-soft:      rgba(232, 56, 79, 0.07);
+  --ci-accent-purple:        #7C6EF0;   /* Electric purple — Asana's signature, used for focus */
+  --ci-accent-purple-soft:   rgba(124, 110, 240, 0.08);
+
+  /* ── Shadows (slightly warmer tint) ── */
+  --ci-shadow-sm:   0 1px 3px rgba(30, 31, 33, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --ci-shadow-md:   0 4px 14px rgba(30, 31, 33, 0.07), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --ci-shadow-lg:   0 10px 32px rgba(30, 31, 33, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
+
+  /* ── Radii ── */
+  --ci-radius-sm:   6px;
+  --ci-radius-md:   10px;
+  --ci-radius-lg:   14px;
+  --ci-radius-full: 9999px;
+
+  /* ── Typography ── */
+  --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  --ci-font-mono:   'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+
+  /* ── Transitions ── */
+  --ci-transition-fast:   120ms ease;
+  --ci-transition-normal: 200ms ease;
+}
+
+/* ── Base reset ── */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: var(--ci-font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--ci-text-primary);
+  background: var(--ci-bg-base);
+}
+
+/* ── Utility: card surface ── */
+.ci-card {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  box-shadow: var(--ci-shadow-sm);
+  transition: box-shadow var(--ci-transition-normal), border-color var(--ci-transition-normal);
+}
+.ci-card:hover {
+  box-shadow: var(--ci-shadow-md);
+}
+
+/* ── Utility: focus ring ── */
+.ci-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ci-accent-primary-soft), 0 0 0 3px var(--ci-accent-primary);
+}
+
+/* ── Utility: smooth interactions ── */
+a { transition: color var(--ci-transition-fast); }
+button, [role="button"] { transition: background var(--ci-transition-fast), color var(--ci-transition-fast), border-color var(--ci-transition-fast), box-shadow var(--ci-transition-fast); }
+input, textarea, select { transition: border-color var(--ci-transition-fast), background var(--ci-transition-fast), box-shadow var(--ci-transition-fast); }
