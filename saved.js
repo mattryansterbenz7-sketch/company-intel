@@ -1237,20 +1237,6 @@ function render() {
     const aCount = allCompanies.filter(c => c.isOpportunity && c.jobStage === 'want_to_apply').length;
     applyLabel.textContent = aCount > 0 ? `Apply Queue (${aCount})` : `Apply Queue`;
   }
-  const dqLabel = document.getElementById('dq-header-label');
-  if (dqLabel) {
-    const terminalDQ = new Set(['rejected', 'closed_lost', 'offer', 'accepted', 'want_to_apply', QUEUE_STAGE]);
-    const opps = allCompanies.filter(c => c.isOpportunity);
-    const stages = customOpportunityStages.map(s => s.key);
-    const appliedIdx = stages.indexOf('applied');
-    const activeKeys = new Set(
-      appliedIdx !== -1
-        ? stages.filter((k, i) => i >= appliedIdx && !terminalDQ.has(k))
-        : stages.filter(k => !terminalDQ.has(k))
-    );
-    const dqCount = opps.filter(c => activeKeys.has(c.jobStage || '')).length;
-    dqLabel.textContent = dqCount > 0 ? `Active Review (${dqCount})` : `Active Review`;
-  }
 
   if (viewMode === 'kanban' && activePipeline !== 'all') {
     grid.style.display = 'none';
@@ -3269,9 +3255,6 @@ document.getElementById('queue-header-btn')?.addEventListener('click', () => {
 });
 document.getElementById('apply-header-btn')?.addEventListener('click', () => {
   window.open(chrome.runtime.getURL('queue.html?mode=apply'), '_blank');
-});
-document.getElementById('dq-header-btn')?.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('queue.html?mode=dq'), '_blank');
 });
 
 // Search
