@@ -2298,13 +2298,23 @@ function syncContactsForEntry(savedEntry) {
         all.forEach(({ name, email }) => {
           if (!email || (selfEmail && email === selfEmail) || existing.has(email) || blocked.has(email.toLowerCase())) return;
           existing.add(email);
+          // Classify why this email was matched, for traceability
+          const emailDomain = (email.split('@')[1] || '').toLowerCase();
+          let matchedVia;
+          if (emailDomain === domain) {
+            matchedVia = { type: 'email-domain', detail: `Email participant on @${domain}` };
+          } else if (baseDomain && emailDomain.split('.')[0] === baseDomain) {
+            matchedVia = { type: 'email-sibling-domain', detail: `Email participant on sibling domain @${emailDomain} (base name matches @${domain})` };
+          } else {
+            matchedVia = { type: 'email-sender', detail: `Gmail thread matched by company name "${savedEntry.company}"` };
+          }
           // Merge into existing contact if same name, otherwise add new
           const match = name && name.split(/\s+/).length >= 2
             ? current.find(c => namesMatch(c.name, name)) : null;
           if (match) {
             match.aliases.push(email);
           } else {
-            current.push({ name: name || email.split('@')[0], email, aliases: [], source: 'email', detectedAt: Date.now() });
+            current.push({ name: name || email.split('@')[0], email, aliases: [], source: 'email', detectedAt: Date.now(), matchedVia });
           }
         });
       });
@@ -3005,14 +3015,37 @@ document.addEventListener('click', e => {
 
 function renderContactsSection(el, contacts) {
   if (!contacts.length) return;
+  const MATCHED_VIA_LABELS = {
+    'email-domain':          '✉ email · domain match',
+    'email-sibling-domain':  '✉ email · sibling domain',
+    'email-sender':          '✉ email · name match',
+    'granola-email-domain':  '📅 meeting · email domain',
+    'granola-folder':        '📅 meeting · folder',
+    'granola-attendee-name': '📅 meeting · attendee',
+    'granola-title':         '📅 meeting · title',
+    'granola-meeting':       '📅 meeting',
+    'manual':                '✎ manual',
+    'leader-promoted':       '✎ leader · promoted',
+  };
+  const getSourceLabel = c => {
+    if (c.matchedVia?.type) return MATCHED_VIA_LABELS[c.matchedVia.type] || c.matchedVia.type;
+    return c.source === 'manual' ? '✎ manual' : c.source === 'email' ? '✉ email' : '📅 calendar';
+  };
+  const getSourceTitle = c => {
+    if (c.matchedVia?.detail) return c.matchedVia.detail;
+    return 'Added before match reasoning was recorded.';
+  };
   const html = contacts.map(c => {
     const initials = c.name.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
     const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(c.name + ' ' + companyNameEl.textContent)}`;
+    const sourceLabel = getSourceLabel(c);
+    const sourceTitle = getSourceTitle(c).replace(/"/g, '&quot;');
     return `<div class="leader-item">
       <div class="leader-avatar-initials" style="background:linear-gradient(135deg,#0d9488,#0077b5);color:#fff">${initials}</div>
       <div class="leader-info">
         <div class="leader-name">${c.name}</div>
         <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" data-copy-email="${c.email.replace(/"/g,'&quot;')}">⎘</button></div>
+        <div style="font-size:10px;color:#7c98b6;margin-top:2px" title="${sourceTitle}">${sourceLabel}</div>
       </div>
       <div class="leader-links">
         <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
