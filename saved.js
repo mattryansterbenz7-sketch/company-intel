@@ -3154,11 +3154,15 @@ function renderStageEditor() {
     inp.addEventListener('input', () => { editingStages[inp.dataset.i].label = inp.value; });
   });
   list.querySelectorAll('.stage-color-swatch').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const i = parseInt(btn.dataset.i);
-      const curr = STAGE_COLOR_PALETTE.indexOf(editingStages[i].color);
-      editingStages[i].color = STAGE_COLOR_PALETTE[(curr + 1) % STAGE_COLOR_PALETTE.length];
-      renderStageEditor();
+      const currIdx = STAGE_COLOR_PALETTE.indexOf(editingStages[i].color);
+      showColorPicker(btn, STAGE_COLOR_PALETTE, currIdx === -1 ? 0 : currIdx, (idx) => {
+        editingStages[i].color = STAGE_COLOR_PALETTE[idx];
+        btn.style.background = STAGE_COLOR_PALETTE[idx];
+        btn.style.borderColor = STAGE_COLOR_PALETTE[idx];
+      });
     });
   });
   list.querySelectorAll('.stage-move-btn').forEach(btn => {

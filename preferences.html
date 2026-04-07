@@ -220,12 +220,21 @@
     .exp-rt-wrap .rt-editable { min-height: 40px; max-height: 200px; font-size: 13px; }
     .exp-rt-wrap .rt-toolbar { padding: 2px 4px; }
     .exp-rt-wrap .rt-toolbar button { padding: 3px 6px; font-size: 12px; }
-    .exp-date-range { display: flex; align-items: center; gap: 6px; }
-    .exp-date-range input[type="month"] { flex: 1; font-size: 12px; font-weight: 600; }
+    .exp-date-range { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     input[data-key="titles"] { font-weight: 600; }
     .exp-date-sep { color: var(--ci-text-tertiary); font-size: 13px; }
     .exp-date-present { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ci-text-secondary); cursor: pointer; white-space: nowrap; user-select: none; }
     .exp-date-present input { margin: 0; }
+    .exp-date-group { display: flex; gap: 4px; flex: 1; min-width: 0; }
+    .exp-date-group select, .exp-date-group input[type="number"] {
+      font-size: 12px; font-weight: 600; padding: 6px 8px; border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm); background: var(--ci-bg-inset); color: var(--ci-text-primary);
+      font-family: inherit; outline: none; cursor: pointer;
+    }
+    .exp-date-group select { flex: 1; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239ca3af'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 22px; }
+    .exp-date-group input[type="number"] { width: 64px; -moz-appearance: textfield; }
+    .exp-date-group input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .exp-date-group select:focus, .exp-date-group input:focus { border-color: var(--ci-accent-purple); box-shadow: 0 0 0 2px var(--ci-accent-purple-soft); }
     .exp-entry-collapsed { padding: 12px 16px; cursor: pointer; }
     .exp-entry-collapsed:hover { background: var(--ci-bg-raised); }
     .exp-entry-collapsed .exp-entry-summary { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }
@@ -928,9 +937,9 @@
             <button data-cmd="italic" title="Italic"><i>I</i></button>
             <div class="rt-sep"></div>
             <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+            <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
             <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
             <button data-cmd="outdent" title="Outdent">←</button>
-            <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
             <div class="rt-sep"></div>
             <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
             <div class="rt-sep"></div>

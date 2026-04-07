@@ -1673,6 +1673,18 @@ function initICPFields() {
     renderPicklist('company-icp-stage', ICP_PICKLIST_OPTIONS.stage, normalizeToArray(company.stage), saveCompanyICP);
     renderPicklist('company-icp-size', ICP_PICKLIST_OPTIONS.sizeRange, normalizeToArray(company.sizeRange), saveCompanyICP);
     renderPicklist('company-icp-industries', ICP_PICKLIST_OPTIONS.industryPreferences, normalizeToArray(company.industryPreferences), saveCompanyICP);
+
+    // Re-check see more/less for ICP textareas now that content is loaded
+    setTimeout(() => {
+      ['role-icp-text', 'company-icp-text'].forEach(id => {
+        const ta = document.getElementById(id);
+        if (!ta) return;
+        const btn = ta.nextElementSibling;
+        if (btn?.classList?.contains('ta-see-more')) {
+          btn.classList.toggle('visible', ta.scrollHeight > 84);
+        }
+      });
+    }, 100);
   });
 
   function setVal(id, val) {
@@ -2420,9 +2432,21 @@ function initStructuredExperience() {
           <div class="field">
             <label class="field-label">Date range</label>
             <div class="exp-date-range" data-idx="${i}">
-              <input type="month" class="field-input exp-date-field" data-idx="${i}" data-key="dateStart" value="${esc(e.dateStart || '')}" title="Start date">
-              <span class="exp-date-sep">&ndash;</span>
-              <input type="month" class="field-input exp-date-field" data-idx="${i}" data-key="dateEnd" value="${e.datePresent ? '' : esc(e.dateEnd || '')}" ${e.datePresent ? 'disabled' : ''} title="End date">
+              <div class="exp-date-group">
+                <select class="exp-date-month" data-idx="${i}" data-key="dateStart" title="Start month">
+                  <option value="">Month</option>
+                  ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, mi) => `<option value="${String(mi+1).padStart(2,'0')}"${(e.dateStart||'').split('-')[1] === String(mi+1).padStart(2,'0') ? ' selected' : ''}>${m}</option>`).join('')}
+                </select>
+                <input type="number" class="exp-date-year" data-idx="${i}" data-key="dateStart" min="1990" max="2035" placeholder="Year" value="${(e.dateStart||'').split('-')[0] || ''}" title="Start year">
+              </div>
+              <span class="exp-date-sep">\u2013</span>
+              <div class="exp-date-group">
+                <select class="exp-date-month" data-idx="${i}" data-key="dateEnd" title="End month" ${e.datePresent ? 'disabled' : ''}>
+                  <option value="">Month</option>
+                  ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, mi) => `<option value="${String(mi+1).padStart(2,'0')}"${!e.datePresent && (e.dateEnd||'').split('-')[1] === String(mi+1).padStart(2,'0') ? ' selected' : ''}>${m}</option>`).join('')}
+                </select>
+                <input type="number" class="exp-date-year" data-idx="${i}" data-key="dateEnd" min="1990" max="2035" placeholder="Year" value="${!e.datePresent ? ((e.dateEnd||'').split('-')[0] || '') : ''}" title="End year" ${e.datePresent ? 'disabled' : ''}>
+              </div>
               <label class="exp-date-present"><input type="checkbox" class="exp-present-cb" data-idx="${i}" ${e.datePresent ? 'checked' : ''}> Present</label>
             </div>
           </div>
@@ -2652,12 +2676,19 @@ function initStructuredExperience() {
         });
       });
     });
-    // Date fields
-    list.querySelectorAll('.exp-date-field').forEach(el => {
+    // Date fields (month select + year input)
+    function readDateGroup(idx, key) {
+      const monthEl = list.querySelector(`.exp-date-month[data-idx="${idx}"][data-key="${key}"]`);
+      const yearEl = list.querySelector(`.exp-date-year[data-idx="${idx}"][data-key="${key}"]`);
+      const month = monthEl?.value || '';
+      const year = yearEl?.value || '';
+      return (year && month) ? `${year}-${month}` : year ? `${year}-01` : '';
+    }
+    list.querySelectorAll('.exp-date-month, .exp-date-year').forEach(el => {
       el.addEventListener('change', () => {
         const idx = parseInt(el.dataset.idx);
         const key = el.dataset.key;
-        entries[idx][key] = el.value;
+        entries[idx][key] = readDateGroup(idx, key);
         entries[idx].dateRange = formatDateRange(entries[idx]);
         save();
       });
@@ -2666,11 +2697,11 @@ function initStructuredExperience() {
       cb.addEventListener('change', () => {
         const idx = parseInt(cb.dataset.idx);
         entries[idx].datePresent = cb.checked;
-        const endInput = list.querySelector(`.exp-date-field[data-idx="${idx}"][data-key="dateEnd"]`);
-        if (endInput) {
-          endInput.disabled = cb.checked;
-          if (cb.checked) endInput.value = '';
-        }
+        list.querySelectorAll(`.exp-date-month[data-idx="${idx}"][data-key="dateEnd"], .exp-date-year[data-idx="${idx}"][data-key="dateEnd"]`).forEach(el => {
+          el.disabled = cb.checked;
+          if (cb.checked) el.value = el.tagName === 'SELECT' ? '' : '';
+        });
+        if (cb.checked) entries[idx].dateEnd = '';
         entries[idx].dateRange = formatDateRange(entries[idx]);
         save();
       });
@@ -3446,46 +3477,47 @@ function initRichTextEditors() {
 
 // Inject column controls on hover
 function initColumnControls() {
-  document.querySelectorAll('.rt-editable').forEach(editor => {
-    editor.addEventListener('mouseover', e => {
-      const cols = e.target.closest('.rt-columns');
-      if (!cols || cols.querySelector('.rt-col-controls')) return;
-      const controls = document.createElement('div');
-      controls.className = 'rt-col-controls';
-      controls.contentEditable = 'false';
-      controls.innerHTML = `<button class="rt-col-btn" data-action="add" title="Add column">+</button><button class="rt-col-btn" data-action="remove" title="Remove last column">−</button><button class="rt-col-btn" data-action="delete" title="Delete columns">×</button>`;
-      cols.appendChild(controls);
-      controls.addEventListener('click', ev => {
-        ev.preventDefault(); ev.stopPropagation();
-        const action = ev.target.closest('[data-action]')?.dataset.action;
-        if (!action) return;
-        if (action === 'delete') {
-          const p = document.createElement('p');
-          p.innerHTML = '<br>';
-          cols.replaceWith(p);
-        } else if (action === 'add') {
-          const colCount = cols.querySelectorAll('.rt-column').length;
-          const newCol = document.createElement('div');
-          newCol.className = 'rt-column';
-          newCol.innerHTML = `<div class="rt-column-header">Column ${colCount + 1}</div><p>...</p>`;
-          cols.insertBefore(newCol, controls);
-          cols.style.gridTemplateColumns = `repeat(${colCount + 1}, 1fr)`;
-        } else if (action === 'remove') {
-          const columns = cols.querySelectorAll('.rt-column');
-          if (columns.length > 1) {
-            columns[columns.length - 1].remove();
-            cols.style.gridTemplateColumns = `repeat(${columns.length - 1}, 1fr)`;
-          }
+  // Use event delegation so it works for both static and dynamically created editors
+  document.addEventListener('mouseover', e => {
+    const cols = e.target.closest('.rt-columns');
+    if (!cols || cols.querySelector('.rt-col-controls')) return;
+    const editor = cols.closest('.rt-editable');
+    if (!editor) return;
+    const controls = document.createElement('div');
+    controls.className = 'rt-col-controls';
+    controls.contentEditable = 'false';
+    controls.innerHTML = `<button class="rt-col-btn" data-action="add" title="Add column">+</button><button class="rt-col-btn" data-action="remove" title="Remove last column">\u2212</button><button class="rt-col-btn" data-action="delete" title="Delete columns">\u00d7</button>`;
+    cols.appendChild(controls);
+    controls.addEventListener('click', ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const action = ev.target.closest('[data-action]')?.dataset.action;
+      if (!action) return;
+      if (action === 'delete') {
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        cols.replaceWith(p);
+      } else if (action === 'add') {
+        const colCount = cols.querySelectorAll('.rt-column').length;
+        const newCol = document.createElement('div');
+        newCol.className = 'rt-column';
+        newCol.innerHTML = `<div class="rt-column-header">Column ${colCount + 1}</div><p>...</p>`;
+        cols.insertBefore(newCol, controls);
+        cols.style.gridTemplateColumns = `repeat(${colCount + 1}, 1fr)`;
+      } else if (action === 'remove') {
+        const columns = cols.querySelectorAll('.rt-column');
+        if (columns.length > 1) {
+          columns[columns.length - 1].remove();
+          cols.style.gridTemplateColumns = `repeat(${columns.length - 1}, 1fr)`;
         }
-        // Trigger save
-        editor.dispatchEvent(new Event('blur'));
-      });
-    });
-    editor.addEventListener('mouseout', e => {
-      if (!e.relatedTarget?.closest('.rt-columns')) {
-        editor.querySelectorAll('.rt-col-controls').forEach(c => c.remove());
       }
+      editor.dispatchEvent(new Event('blur'));
     });
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.relatedTarget?.closest('.rt-columns')) {
+      const editor = e.target.closest('.rt-editable');
+      if (editor) editor.querySelectorAll('.rt-col-controls').forEach(c => c.remove());
+    }
   });
 }
 
