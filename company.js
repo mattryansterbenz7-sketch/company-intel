@@ -9,6 +9,7 @@ let customFieldDefs = []; // user-created fields
 let gmailUserEmail = ''; // user's own Gmail address, used to exclude self from Known Contacts
 let _stageCelebrations = {}; // loaded from storage for confetti/sound on stage changes
 let _researchAttempted = false; // guards against repeated RESEARCH_COMPANY calls per page session
+let _cacheMetadata = null; // { ts, _usage } from researchCache for current company
 
 // Auto-set "Action On" based on stage
 function defaultActionStatus(stageKey) {
@@ -281,13 +282,18 @@ function init() {
     }, 1500);
 
     // Fill missing firmographic fields from research cache (display-only, not persisted)
-    const cached = (data.researchCache || {})[entry.company?.toLowerCase()]?.data;
+    const cacheEntry = (data.researchCache || {})[entry.company?.toLowerCase()];
+    const cached = cacheEntry?.data;
     if (cached) {
       if (!entry.funding  && cached.funding)  entry = { ...entry, funding:  cached.funding  };
       if (!entry.founded  && cached.founded)  entry = { ...entry, founded:  cached.founded  };
       if (!entry.industry && cached.industry) entry = { ...entry, industry: cached.industry };
       if (!entry.employees && cached.employees) entry = { ...entry, employees: cached.employees };
       if (!entry.jobListings?.length && cached.jobListings?.length) entry = { ...entry, jobListings: cached.jobListings };
+    }
+    // Store cache metadata (timestamp and usage info) for display in Intel tab
+    if (cacheEntry) {
+      _cacheMetadata = { ts: cacheEntry.ts, _usage: cacheEntry._usage };
     }
 
     // Pull website/LinkedIn from linked opportunity if missing on company entry
@@ -1592,6 +1598,16 @@ function buildIntelTab() {
       <button class="conflict-reenrich-btn" id="reenrich-btn">Re-enrich \u2192</button>
     </div>` : '';
 
+  // Research metadata (when last researched, APIs used)
+  const researchMetaHtml = (() => {
+    if (!_cacheMetadata?.ts) return '';
+    const date = new Date(_cacheMetadata.ts);
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+    const apisUsed = _cacheMetadata._usage?.apisUsed || [];
+    const apisStr = apisUsed.length ? ' — ' + apisUsed.join(', ') : '';
+    return `<div style="font-size:11px;color:#a09a94;text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;">Last researched ${dateStr}${apisStr}</div>`;
+  })();
+
   return `
     ${conflictBanner}
     <div class="hub-intel-block">${overview}</div>
@@ -1606,6 +1622,7 @@ function buildIntelTab() {
       <div class="hub-section-label">Hiring Signals</div>
       ${buildHiring()}
     </div>
+    ${researchMetaHtml}
   `.trim();
 }
 
@@ -3141,6 +3158,7 @@ function mergeExtractedContacts(extracted) {
       email: contact.email,
       source: contact.source || 'auto-extracted',
       addedAt: Date.now(),
+      matchedVia: contact.matchedVia || null,
     });
     existingEmails.add(email);
     added++;
@@ -3213,6 +3231,13 @@ function extractContactsFromEmails(emails) {
     const d = (email.split('@')[1] || '').toLowerCase();
     return d === domain || (baseDomain && d.split('.')[0] === baseDomain);
   };
+  // Classify which specific domain rule an email matched, for traceability.
+  const classifyDomain = email => {
+    const d = (email.split('@')[1] || '').toLowerCase();
+    if (d === domain) return { type: 'email-domain', detail: `Email participant on @${domain}` };
+    if (baseDomain && d.split('.')[0] === baseDomain) return { type: 'email-sibling-domain', detail: `Email participant on sibling domain @${d} (base name matches @${domain})` };
+    return { type: 'email-domain', detail: `Email participant on @${d}` };
+  };
 
   const parseAddrs = field => {
     if (!field) return [];
@@ -3256,7 +3281,7 @@ function extractContactsFromEmails(emails) {
       // Filter out non-human / mass email senders
       if (isNonHumanEmail(email)) return;
       existing.add(email);
-      newContacts.push({ name: name || email.split('@')[0], email, source: 'email', detectedAt: Date.now() });
+      newContacts.push({ name: name || email.split('@')[0], email, source: 'email', detectedAt: Date.now(), matchedVia: classifyDomain(email) });
     });
   });
 
@@ -3328,11 +3353,37 @@ function buildLeadership() {
 function buildContacts() {
   const contacts = entry.knownContacts || [];
   const leaders = entry.leaders || [];
+  // Human-readable short label + full reason for each matchedVia type.
+  // Contacts created before this field existed fall back to the generic source icon.
+  const MATCHED_VIA_LABELS = {
+    'email-domain':          { label: '✉ email · domain match',        fallback: 'Matched because the sender/recipient email is on the company domain.' },
+    'email-sibling-domain':  { label: '✉ email · sibling domain',      fallback: 'Matched on a sibling domain sharing the company base name.' },
+    'email-sender':          { label: '✉ email · name match',          fallback: 'Matched via a Gmail thread found by searching the company name.' },
+    'granola-email-domain':  { label: '📅 meeting · email domain',     fallback: 'Matched because a meeting attendee email is on the company domain.' },
+    'granola-folder':        { label: '📅 meeting · Granola folder',   fallback: 'Matched because the meeting lives in a Granola folder named for the company.' },
+    'granola-attendee-name': { label: '📅 meeting · attendee name',    fallback: 'Matched because a meeting attendee name matched an existing known contact.' },
+    'granola-title':         { label: '📅 meeting · title match',      fallback: 'Matched because the meeting title mentions the company name.' },
+    'granola-meeting':       { label: '📅 meeting',                    fallback: 'Matched via a Granola meeting associated with the company.' },
+    'manual':                { label: '✎ manual',                      fallback: 'Added manually.' },
+    'leader-promoted':       { label: '✎ leader · promoted',           fallback: 'Promoted from the leadership card into contacts.' },
+  };
+  const formatMatchedVia = (c) => {
+    const mv = c.matchedVia;
+    if (!mv || !mv.type) {
+      // Legacy fallback for contacts created before traceability existed
+      const legacy = c.source === 'manual' ? '✎ manual' : c.source === 'email' ? '✉ email' : '📅 calendar';
+      return { label: legacy, detail: 'This contact was added before match reasoning was recorded, so only the high-level source is known.' };
+    }
+    const def = MATCHED_VIA_LABELS[mv.type] || { label: mv.type, fallback: 'No description available.' };
+    return { label: def.label, detail: mv.detail || def.fallback };
+  };
   const cardsHtml = contacts.length === 0
     ? `<div class="p-empty" style="font-size:12px;color:#7c98b6">No contacts yet. Add one below or scan emails.</div>`
     : contacts.map(c => {
         const initials = c.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
-        const sourceLabel = c.source === 'manual' ? '✎ manual' : c.source === 'email' ? '✉ email' : '📅 calendar';
+        const mv = formatMatchedVia(c);
+        const sourceLabel = mv.label;
+        const sourceTitle = mv.detail.replace(/"/g, '&quot;');
         const safeEmail = c.email.replace(/"/g, '&quot;');
         const allEmails = [c.email, ...(c.aliases || [])];
         const emailsHtml = allEmails.map(em => {
@@ -3352,7 +3403,7 @@ function buildContacts() {
               <div class="contact-name">${c.name}</div>
               ${emailsHtml}
               ${liHtml}
-              <div class="contact-source">${sourceLabel}</div>
+              <div class="contact-source" title="${sourceTitle}">${sourceLabel}</div>
             </div>
             <div class="contact-card-actions">
               <button class="contact-edit-btn" data-email="${safeEmail}" title="Edit">✎</button>
@@ -3673,7 +3724,7 @@ function bindPanelBodyEvents(pid) {
       if (!email || !email.includes('@')) return;
       const existing = entry.knownContacts || [];
       if (existing.some(c => c.email === email)) return;
-      saveEntry({ knownContacts: [...existing, { name: name || email.split('@')[0], email, source: 'manual', detectedAt: Date.now() }] });
+      saveEntry({ knownContacts: [...existing, { name: name || email.split('@')[0], email, source: 'manual', detectedAt: Date.now(), matchedVia: { type: 'manual', detail: 'Added manually via the Add contact form' } }] });
       renderPanel('contacts'); bindPanelBodyEvents('contacts');
     };
     document.getElementById('contact-add-save')?.addEventListener('click', doAdd);
@@ -3717,7 +3768,7 @@ function bindPanelBodyEvents(pid) {
         }
         const existing = entry.knownContacts || [];
         if (!existing.some(c => c.email === email)) {
-          saveEntry({ knownContacts: [...existing, { name, email, source: 'manual', detectedAt: Date.now() }] });
+          saveEntry({ knownContacts: [...existing, { name, email, source: 'manual', detectedAt: Date.now(), matchedVia: { type: 'leader-promoted', detail: `Promoted from leadership card "${name}"` } }] });
         }
         renderPanel('leadership'); bindPanelBodyEvents('leadership');
         renderPanel('contacts'); bindPanelBodyEvents('contacts');

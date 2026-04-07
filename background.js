@@ -204,6 +204,8 @@ const DEFAULT_PIPELINE_CONFIG = {
     deepFitAnalysis: 'claude-haiku-4-5-20251001',
     nextStepExtraction: 'claude-haiku-4-5-20251001',
     chat: 'claude-haiku-4-5-20251001',
+    coopAutofill: 'claude-haiku-4-5-20251001',
+    coopMemorySynthesis: 'claude-sonnet-4-6',
   },
   searchCounts: { reviewScout: 3, reviewDrill: 2, leaders: 5, jobs: 5, product: 3 },
   photos: {
@@ -806,7 +808,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'CHAT_MESSAGE') {
-    handleChatMessage(message).then(sendResponse);
+    handleChatMessage(message)
+      .then(sendResponse)
+      .catch(e => {
+        console.error('[CHAT_MESSAGE] handler error:', e);
+        sendResponse({ error: e?.message || 'Chat handler failed', reply: '' });
+      });
     return true;
   }
   if (message.type === 'QUICK_ENRICH_FIRMO') {
@@ -1858,11 +1865,13 @@ async function getCached(key) {
   );
 }
 
-async function setCached(key, data) {
+async function setCached(key, data, usage) {
   key = key.replace(/[,;:!?.]+$/, '').trim(); // normalize
   return new Promise(resolve =>
     chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
-      const updated = { ...(researchCache || {}), [key]: { data, ts: Date.now() } };
+      const entry = { data, ts: Date.now() };
+      if (usage) entry._usage = usage;
+      const updated = { ...(researchCache || {}), [key]: entry };
       // Prune entries older than TTL to keep storage lean
       for (const k of Object.keys(updated)) {
         if (Date.now() - updated[k].ts > CACHE_TTL) delete updated[k];
@@ -1973,7 +1982,16 @@ async function researchCompany(company, domain, prefs, companyLinkedin, linkedin
       if (!result.employees && linkedinFirmo.employees) { result.employees = linkedinFirmo.employees; result.employeesSource = 'LinkedIn (page)'; }
       if (!result.industry && linkedinFirmo.industry) { result.industry = linkedinFirmo.industry; result.industrySource = 'LinkedIn (page)'; }
     }
-    await setCached(cacheKey, result);
+    // Track research metadata: APIs used and estimated cost
+    const researchMeta = {
+      apisUsed: [],
+      estimatedCost: 'Low (~$0.01)',
+    };
+    if (enrichment.source === 'Apollo') researchMeta.apisUsed.push('Apollo');
+    if (reviewResults.length || leaderResults.length || jobResults.length || productResults.length) researchMeta.apisUsed.push('Serper');
+    if (aiSummary) researchMeta.apisUsed.push('Claude');
+
+    await setCached(cacheKey, result, researchMeta);
     return result;
   } catch (err) {
     return { error: 'Something went wrong: ' + err.message };
@@ -2823,20 +2841,32 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           if (/@(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|jobvite\.com|myworkday\.com|reachdesk\.com|mailchimp|sendgrid|hubspot|salesforce\.com|marketo)/.test(a)) return true;
           return false;
         };
+        // Classify each sender by which part of the Gmail query likely matched it:
+        // primary domain, sibling domain, or company-name bootstrap search.
+        const classifyEmailContact = (emailAddr) => {
+          const senderDomain = (emailAddr.split('@')[1] || '').toLowerCase();
+          if (senderDomain === domain) {
+            return { type: 'email-domain', detail: `Gmail sender/recipient on @${domain}` };
+          }
+          if (senderDomain && baseDomain && senderDomain.split('.')[0] === baseDomain) {
+            return { type: 'email-sibling-domain', detail: `Gmail sender on sibling domain @${senderDomain} (base name matches @${domain})` };
+          }
+          return { type: 'email-sender', detail: `Gmail thread matched by company name "${companyName}"` };
+        };
         const extractedContacts = [];
         const seenEmails = new Set();
         for (const thread of allEmails) {
           const fromParts = parseEmailContact(thread.from);
           if (fromParts && !isBulkAddr(fromParts.email) && !seenEmails.has(fromParts.email.toLowerCase())) {
             seenEmails.add(fromParts.email.toLowerCase());
-            extractedContacts.push({ ...fromParts, source: 'email' });
+            extractedContacts.push({ ...fromParts, source: 'email', matchedVia: classifyEmailContact(fromParts.email.toLowerCase()) });
           }
           if (thread.messages) {
             for (const msg of thread.messages) {
               const msgFrom = parseEmailContact(msg.from);
               if (msgFrom && !isBulkAddr(msgFrom.email) && !seenEmails.has(msgFrom.email.toLowerCase())) {
                 seenEmails.add(msgFrom.email.toLowerCase());
-                extractedContacts.push({ ...msgFrom, source: 'email' });
+                extractedContacts.push({ ...msgFrom, source: 'email', matchedVia: classifyEmailContact(msgFrom.email.toLowerCase()) });
               }
             }
           }
@@ -3275,7 +3305,10 @@ When the user asks to switch models, change defaults, or adjust settings, respon
     if (context.knownContacts?.length) {
       systemParts.push(`\n=== KNOWN CONTACTS AT ${(context.company || '').toUpperCase()} ===\n${context.knownContacts.map(c => `- ${[c.name, c.title, c.email ? `<${c.email}>` : ''].filter(Boolean).join(' | ')}`).join('\n')}`);
     }
-    if (context.roleBrief) systemParts.push(`\n=== ROLE BRIEF (AI-synthesized understanding) ===\n${context.roleBrief.slice(0, 4000)}`);
+    if (context.roleBrief) {
+      const briefStr = typeof context.roleBrief === 'string' ? context.roleBrief : JSON.stringify(context.roleBrief);
+      systemParts.push(`\n=== ROLE BRIEF (AI-synthesized understanding) ===\n${briefStr.slice(0, 4000)}`);
+    }
     if (context.jobDescription || context.jobMatch) {
       const job = [`\n=== JOB DETAILS ===`];
       if (context.jobDescription) job.push(`Full job description:\n${context.jobDescription.slice(0, 5000)}`);
@@ -4987,7 +5020,7 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
     const meetings = [];
     const transcripts = [];
     const granolaContacts = [];
-    for (const { note } of sortedMatches) {
+    for (const { note, reason } of sortedMatches) {
       const full = await granolaFetch('/v1/notes/' + note.id + '?include=transcript');
       if (!full) continue;
 
@@ -5013,11 +5046,22 @@ async function searchGranolaNotes(companyName, companyDomain, contactNames = [])
         calendarTitle: calEvent.event_title || null,
       });
 
-      // Extract attendee contacts
+      // Extract attendee contacts. The `reason` captures WHY this meeting was
+      // associated with the company (email-domain, folder, attendee-name, title-company),
+      // which in turn is why each of its attendees is being pulled in as a contact.
       if (full.attendees?.length) {
+        const meetingTitle = note.title || note.calendarTitle || 'Untitled meeting';
+        const folderNames = (note.folderNames || []).join(', ');
+        const matchedViaMap = {
+          'email-domain':   { type: 'granola-email-domain',   detail: `Meeting "${meetingTitle}" — attendee email on ${companyDomain || 'company domain'}` },
+          'folder':         { type: 'granola-folder',         detail: `Meeting "${meetingTitle}" — in Granola folder "${folderNames}"` },
+          'attendee-name':  { type: 'granola-attendee-name',  detail: `Meeting "${meetingTitle}" — attendee name matched a known contact` },
+          'title-company':  { type: 'granola-title',          detail: `Meeting "${meetingTitle}" — company name in meeting title` },
+        };
+        const matchedVia = matchedViaMap[reason] || { type: 'granola-meeting', detail: `Meeting "${meetingTitle}"` };
         for (const att of full.attendees) {
           if (att.email && att.name) {
-            granolaContacts.push({ name: att.name, email: att.email.toLowerCase(), source: 'meeting' });
+            granolaContacts.push({ name: att.name, email: att.email.toLowerCase(), source: 'meeting', matchedVia });
           }
         }
       }
