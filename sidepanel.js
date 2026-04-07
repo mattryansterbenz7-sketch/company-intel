@@ -75,10 +75,13 @@ function enterChatMode() {
   document.body.classList.add('chat-mode');
   const chatEl = document.getElementById('sp-chat');
   if (chatEl) chatEl.style.display = 'flex';
-  // Ensure messages and input are visible (undo minimized state)
+  // Ensure messages and input are visible (undo minimized state). Clear ALL inline
+  // height constraints — chat-mode CSS handles sizing via flex:1, and any leftover
+  // inline maxHeight (e.g. from a prior resize stored in localStorage) would cap the
+  // messages container and prevent scrolling.
   const msgs = document.getElementById('sp-chat-messages');
   const inputRow = chatEl?.querySelector('.sp-chat-input-row');
-  if (msgs) { msgs.style.display = ''; msgs.style.maxHeight = 'none'; msgs.style.minHeight = '0'; }
+  if (msgs) { msgs.style.display = ''; msgs.style.maxHeight = ''; msgs.style.minHeight = ''; msgs.style.height = ''; }
   if (inputRow) inputRow.style.display = '';
   localStorage.setItem('ci_sp_mode', 'chat');
 }
@@ -3675,9 +3678,18 @@ function renderContactsSection(el, contacts) {
     msgsEl.querySelectorAll('.sp-chat-copy').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.idx);
-        const text = history[idx]?.content || '';
-        // Strip any quotation mark wrapping and preamble
+        let text = history[idx]?.content || '';
+
+        // Extract only the answer portion, stripping preamble and closing commentary
+        // Remove common opening phrases (case-insensitive)
+        text = text.replace(/^(?:here['\s]*s(?:\s+my)?|i['\s]*d\s+(?:suggest|say|emphasize|highlight|point\s+out)|i\s+think|i\s+would|the\s+answer|my\s+answer|this\s+would\s+be)[:\s]*/i, '').trim();
+
+        // Remove common closing questions/offers (after the answer)
+        text = text.replace(/\n\n(?:does\s+that|what(?:\s+do\s+)?you|feel\s+free|let\s+me|you\s+could|happy\s+to|does\s+this|would\s+that|any\s+other)[\w\s.,?;!-]*/i, '').trim();
+
+        // Strip outer quotation marks if present
         const clean = text.replace(/^["']|["']$/g, '').trim();
+
         navigator.clipboard.writeText(clean).then(() => {
           btn.textContent = '✓';
           btn.style.color = '#00BDA5';
@@ -4058,6 +4070,15 @@ function renderContactsSection(el, contacts) {
   const SVG_MINIMIZE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
   function applyChatSize() {
+    // In full-screen chat-mode, sizing is handled entirely by CSS (flex:1 + overflow:auto).
+    // Inline display/maxHeight overrides here would break scrolling.
+    if (document.body.classList.contains('chat-mode')) {
+      msgsEl.style.display = '';
+      msgsEl.style.maxHeight = '';
+      msgsEl.style.minHeight = '';
+      if (inputRow) inputRow.style.display = '';
+      return;
+    }
     const tabInd = document.getElementById('sp-tab-indicator');
     if (chatSizeState === 'expanded') {
       msgsEl.style.maxHeight = '70vh';
@@ -4109,10 +4130,15 @@ function renderContactsSection(el, contacts) {
     applyChatSize();
   });
 
-  // Show chat when company is detected
+  // Show chat when company is detected. Use 'flex' in chat-mode (full-screen) so that
+  // .sp-inline-chat remains a flex item and the messages container can scroll via flex:1.
+  // Using 'block' here would collapse the flex chain and break scrolling.
+  const showChatEl = () => {
+    chatEl.style.display = document.body.classList.contains('chat-mode') ? 'flex' : 'block';
+  };
   const observer = new MutationObserver(() => {
     if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
-      chatEl.style.display = 'block';
+      showChatEl();
       updateTabIndicator();
       // Re-render empty state with fresh context-aware suggestions
       if (history.length === 0) renderMessages();
@@ -4120,7 +4146,7 @@ function renderContactsSection(el, contacts) {
   });
   observer.observe(companyNameEl, { childList: true, characterData: true, subtree: true });
   if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
-    chatEl.style.display = 'block';
+    showChatEl();
     updateTabIndicator();
   }
 
@@ -4128,6 +4154,13 @@ function renderContactsSection(el, contacts) {
   if (new URLSearchParams(window.location.search).get('popout') === '1') {
     document.body.classList.add('chat-mode');
     chatEl.style.display = 'flex';
+    // Undo the initial 'minimized' applyChatSize() — popout must always show messages + input.
+    // chat-mode CSS handles sizing, so clear the inline overrides applyChatSize set.
+    chatSizeState = 'expanded';
+    msgsEl.style.display = '';
+    msgsEl.style.maxHeight = '';
+    msgsEl.style.minHeight = '';
+    if (inputRow) inputRow.style.display = '';
     // Hide back + pop-out buttons in pop-out window
     if (popoutBtn) popoutBtn.style.display = 'none';
     const backBtn = document.getElementById('sp-chat-back');
