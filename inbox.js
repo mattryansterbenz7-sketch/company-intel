@@ -83,6 +83,16 @@ chrome.storage.local.get(['savedCompanies', 'lastInboxViewedAt', 'gmailUserEmail
   init();
 });
 
+// Live-refresh stage list when pipeline config changes elsewhere
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes.opportunityStages || changes.customStages) {
+    const v = (changes.opportunityStages?.newValue) || (changes.customStages?.newValue) || [];
+    configuredStages = v.map(s => ({ key: s.key, label: s.label || s.name || s.key }));
+    if (typeof renderEmailList === 'function') renderEmailList();
+  }
+});
+
 function buildEmailIndex() {
   allEmails = [];
   companyMap = {};
@@ -97,20 +107,31 @@ function buildEmailIndex() {
 
     entry.cachedEmails.forEach(email => {
       const key = emailKey(email);
-      const newerThanLastView = email.date ? new Date(email.date).getTime() > lastViewedAt : false;
+      // Unread = "I haven't clicked it yet AND it arrived since I last opened the inbox".
+      // Once an email is in readEmailKeys, it stays read forever, regardless of dates.
+      // Older-than-last-view emails are auto-read on first sight (no manual click needed).
+      const ts = email.date ? new Date(email.date).getTime() : 0;
+      const isInReadSet = readEmailKeys.has(key);
+      const newerThanLastView = ts > lastViewedAt;
+      const isUnread = newerThanLastView && !isInReadSet;
+      // Auto-add older emails to readEmailKeys so they persist as read across sessions
+      if (!isUnread && !isInReadSet && key) readEmailKeys.add(key);
       allEmails.push({
         ...email,
         _company: entry.company,
         _companyId: entry.id,
         _favDomain: favDomain,
         _stage: stage,
-        _ts: email.date ? new Date(email.date).getTime() : 0,
-        _unread: newerThanLastView && !readEmailKeys.has(key),
+        _ts: ts,
+        _unread: isUnread,
       });
     });
   });
 
   allEmails.sort((a, b) => b._ts - a._ts);
+
+  // Persist any auto-read additions so the read state survives reloads
+  chrome.storage.local.set({ readEmailKeys: [...readEmailKeys] });
 }
 
 // ── Initialization ──────────────────────────────────────────────────────────
@@ -233,17 +254,15 @@ function getFilteredEmails() {
 }
 
 function getStages() {
-  // Source of truth: configured pipeline stages, in pipeline order.
-  // Fall back to whatever stages currently appear on emails (for legacy data).
+  // Source of truth: configured pipeline stages only, in pipeline order.
+  // Legacy/orphaned stage values from old entries are intentionally excluded
+  // from the filter dropdown — they remain visible under "All Stages".
+  if (configuredStages.length) {
+    return configuredStages.map(s => ({ key: s.key, label: s.label }));
+  }
+  // No config loaded yet — fall back to whatever stages exist on emails
   const present = new Set();
   allEmails.forEach(e => { if (e._stage) present.add(e._stage); });
-  if (configuredStages.length) {
-    const fromConfig = configuredStages.map(s => ({ key: s.key, label: s.label }));
-    // Append any stages that exist on emails but aren't in the configured list
-    const configuredKeys = new Set(configuredStages.map(s => s.key));
-    [...present].filter(k => !configuredKeys.has(k)).forEach(k => fromConfig.push({ key: k, label: k.replace(/_/g, ' ') }));
-    return fromConfig;
-  }
   return [...present].map(k => ({ key: k, label: k.replace(/_/g, ' ') }));
 }
 

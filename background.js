@@ -4118,9 +4118,21 @@ Return ONLY a JSON object:
 Rules:
 - ONLY save things that will be useful in FUTURE conversations. Skip ephemeral chatter, restated context, or facts already obvious from his profile.
 - Prefer updating an existing entry over creating a near-duplicate.
-- If nothing is worth saving, return {"actions": []}.
+- If nothing is worth saving, return {"actions": []}. Empty arrays are PERFECTLY FINE and often correct.
 - Never save sensitive credentials.
 - Do NOT save raw application answers — those belong in the experience profile, not memory.
+
+Body formatting (CRITICAL — match Claude Code's project memory style):
+- For type=user: 1-3 sentences. Plain prose. No frontmatter, no labels.
+- For type=feedback or type=project: structure as:
+  Line 1: the rule, decision, or fact (one clear sentence).
+  Line 2: empty.
+  Line 3: "**Why:** <one sentence on motivation, constraint, or stakeholder>"
+  Line 4: "**How to apply:** <one sentence on when this kicks in / how it should shape Coop's behavior>"
+- For type=reference: one line with the pointer + a brief note on what lives there.
+- Do NOT use bullet lists. Do NOT use headers. Do NOT echo the type or name inside the body.
+- Names should be 3-6 words, specific (not "User feedback" — say "Avoid trailing summaries").
+- Descriptions should be a one-line hook (under 150 chars) that helps Coop decide if the memory is relevant in a future conversation.
 
 Conversation:
 User: ${userMessage}

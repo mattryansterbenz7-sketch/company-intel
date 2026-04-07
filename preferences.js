@@ -3397,6 +3397,31 @@ function renderCoopMemory() {
     const groups = {};
     filtered.forEach(e => { (groups[e.type] = groups[e.type] || []).push(e); });
 
+    // Render body in Claude-Code project-memory style:
+    // - **bold** spans become <strong>
+    // - "Why: …" and "How to apply: …" lines get pulled into stylized blocks
+    const renderMemoryBody = (raw) => {
+      if (!raw) return '';
+      const lines = raw.split('\n');
+      const out = [];
+      for (const ln of lines) {
+        const whyMatch = ln.match(/^\s*\*?\*?(Why)\*?\*?\s*[:：]\s*(.+)$/i);
+        const howMatch = ln.match(/^\s*\*?\*?(How to apply)\*?\*?\s*[:：]\s*(.+)$/i);
+        if (whyMatch) {
+          out.push(`<span class="why-line"><strong>Why:</strong> ${escHtml(whyMatch[2])}</span>`);
+        } else if (howMatch) {
+          out.push(`<span class="how-line"><strong>How to apply:</strong> ${escHtml(howMatch[2])}</span>`);
+        } else {
+          // Inline **bold** support
+          const safe = escHtml(ln).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          out.push(safe);
+        }
+      }
+      return out.join('<br>');
+    };
+
+    const fmtDate = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
     listEl.innerHTML = COOP_MEMORY_TYPES.filter(t => groups[t]).map(t => `
       <div class="memory-section">
         <div class="memory-section-title">
@@ -3404,14 +3429,14 @@ function renderCoopMemory() {
           <span style="font-weight:400;color:#7c98b6;font-size:11px;margin-left:8px;">${COOP_MEMORY_TYPE_DESCRIPTIONS[t]}</span>
         </div>
         ${groups[t].map(e => `
-          <div class="memory-entry" data-id="${e.id}">
-            <div class="memory-name">${escHtml(e.name || 'Untitled')}</div>
-            ${e.description ? `<div class="memory-desc">${escHtml(e.description)}</div>` : ''}
-            <div class="memory-body">${escHtml(e.body || '').replace(/\n/g, '<br>')}</div>
-            <div class="memory-meta">
-              ${e.updatedAt ? `<span>Updated ${new Date(e.updatedAt).toLocaleDateString()}</span>` : ''}
-              ${e.source ? `<span>· ${escHtml(e.source)}</span>` : ''}
+          <div class="memory-entry ${t}" data-id="${e.id}">
+            <div class="memory-frontmatter">
+              <div><span class="fm-key">name:</span> <span class="fm-val">${escHtml(e.name || 'untitled')}</span></div>
+              ${e.description ? `<div><span class="fm-key">description:</span> <span class="fm-val">${escHtml(e.description)}</span></div>` : ''}
+              <div><span class="fm-key">type:</span> <span class="fm-val">${t}</span></div>
+              <div><span class="fm-key">updated:</span> <span class="fm-val">${fmtDate(e.updatedAt)}</span>${e.source ? ` <span class="fm-key">· source:</span> <span class="fm-val">${escHtml(e.source)}</span>` : ''}</div>
             </div>
+            <div class="memory-body">${renderMemoryBody(e.body || '')}</div>
             <div class="memory-actions">
               <button class="memory-edit" data-id="${e.id}" title="Edit">✎</button>
               <button class="memory-delete" data-id="${e.id}" title="Delete">×</button>

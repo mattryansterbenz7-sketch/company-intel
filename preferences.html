@@ -710,9 +710,27 @@
 
     /* ── Coop memory ── */
     .memory-entry {
-      position: relative; padding: 10px 32px 10px 12px; border: 0.5px solid var(--ci-border-subtle);
-      border-radius: 8px; margin-bottom: 4px; background: var(--ci-bg-base); transition: background 0.12s;
+      position: relative; padding: 14px 36px 14px 16px; border: 0.5px solid var(--ci-border-subtle);
+      border-left: 3px solid var(--ci-border-default);
+      border-radius: 8px; margin-bottom: 6px; background: var(--ci-bg-base); transition: all 0.12s;
     }
+    .memory-entry.user { border-left-color: #3B82F6; }
+    .memory-entry.feedback { border-left-color: #F59E0B; }
+    .memory-entry.project { border-left-color: #10B981; }
+    .memory-entry.reference { border-left-color: #8B5CF6; }
+    .memory-frontmatter {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px; color: var(--ci-text-muted); padding: 6px 8px; background: var(--ci-bg-inset);
+      border-radius: 4px; margin-bottom: 8px; line-height: 1.7;
+    }
+    .memory-frontmatter .fm-key { color: #6b7280; }
+    .memory-frontmatter .fm-val { color: var(--ci-text); }
+    .memory-body strong { color: var(--ci-text); font-weight: 700; }
+    .memory-body .why-line, .memory-body .how-line {
+      display: block; margin-top: 6px; padding-left: 8px;
+      border-left: 2px solid var(--ci-border-subtle); color: var(--ci-text-secondary);
+    }
+    .memory-body .why-line strong, .memory-body .how-line strong { color: var(--ci-text); }
     .memory-entry:hover { background: var(--ci-bg-inset); }
     .memory-entry:hover .memory-delete { opacity: 1; }
     .memory-insight { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; }
