@@ -3400,7 +3400,8 @@ function renderActivitySection() {
   const periodName = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[activityPeriod];
   const goals = activityGoals[activityPeriod];
   const opps = allCompanies.filter(c => c.isOpportunity);
-  const inPeriod = ts => ts && ts >= start && ts <= end;
+  const toMs = ts => typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const inPeriod = ts => { const n = toMs(ts); return !!n && n >= start && n <= end; };
 
   // Config-driven stat counting — supports activity mode (period-based) and snapshot mode (current state)
   const smap = Object.fromEntries(customOpportunityStages.map(s => [s.key, s.label]));

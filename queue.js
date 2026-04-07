@@ -3,9 +3,23 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const QUEUE_STAGE_FALLBACK = 'needs_review';
+const MODE = (new URLSearchParams(location.search).get('mode') === 'apply') ? 'apply' : 'score';
+const QUEUE_CONFIG = {
+  score: { title: "Coop's Scoring Queue", emptyTitle: 'Queue is clear', emptySub: 'New opportunities will appear here when saved', showCta: false, passLabel: 'Pass', interestedLabel: 'Interested' },
+  apply: { title: 'Apply Queue', emptyTitle: 'All caught up', emptySub: 'Nothing left to apply to right now', showCta: true, passLabel: 'Skip', interestedLabel: 'Applied' }
+};
+const CFG = QUEUE_CONFIG[MODE];
 let queue = [];
 let currentIdx = 0;
 let currentQueueStage = QUEUE_STAGE_FALLBACK; // resolved on load
+let allStages = []; // populated on load, used for Move-to dropdown
+
+// Update header title for current mode
+document.addEventListener('DOMContentLoaded', () => {
+  const titleEl = document.querySelector('.header-title');
+  if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/><path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/></g></svg><span>${CFG.title}</span>`;
+  document.title = 'CompanyIntel — ' + CFG.title;
+});
 
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
@@ -22,8 +36,15 @@ function loadQueue() {
     const companies = data.savedCompanies || [];
     // Determine queue stage: explicit config > first stage in pipeline > fallback
     const stages = data.opportunityStages || data.customStages || [];
+    allStages = stages;
     const firstStageKey = stages.length > 0 ? stages[0].key : null;
-    const queueStage = data.pipelineConfig?.scoring?.queueStage || firstStageKey || QUEUE_STAGE_FALLBACK;
+    let queueStage;
+    if (MODE === 'apply') {
+      const match = stages.find(s => s.key === 'want_to_apply' || /want.to.apply/i.test(s.label || ''));
+      queueStage = match ? match.key : 'want_to_apply';
+    } else {
+      queueStage = data.pipelineConfig?.scoring?.queueStage || firstStageKey || QUEUE_STAGE_FALLBACK;
+    }
     currentQueueStage = queueStage;
     queue = companies.filter(c => c.isOpportunity && (c.jobStage || QUEUE_STAGE_FALLBACK) === queueStage);
     // Sort: scored first, then by score desc
@@ -50,9 +71,9 @@ function renderCurrent() {
     main.innerHTML = `
       <div class="queue-empty">
         <div class="queue-empty-icon">✓</div>
-        <div class="queue-empty-title">Queue is clear</div>
-        <div class="queue-empty-sub">New opportunities will appear here when saved</div>
-        <button id="queue-reset-recent" style="margin-top:16px;padding:8px 16px;font-size:12px;font-weight:600;border:1px solid #d8d5d0;border-radius:8px;background:none;color:#FF7A59;cursor:pointer;font-family:inherit;">Re-queue recent opportunities</button>
+        <div class="queue-empty-title">${CFG.emptyTitle}</div>
+        <div class="queue-empty-sub">${CFG.emptySub}</div>
+        <button id="queue-reset-recent" style="${MODE === 'apply' ? 'display:none;' : ''}" style="margin-top:16px;padding:8px 16px;font-size:12px;font-weight:600;border:1px solid #d8d5d0;border-radius:8px;background:none;color:#FF7A59;cursor:pointer;font-family:inherit;">Re-queue recent opportunities</button>
       </div>`;
     document.getElementById('queue-reset-recent')?.addEventListener('click', function() {
       var btn = this;
@@ -210,6 +231,9 @@ function renderCurrent() {
   if (c.companyLinkedin) links.push(`<a href="${escHtml(c.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
   const linksHtml = links.length ? `<div class="qc-links">${links.join('')}</div>` : '';
 
+  // Apply-mode CTA: prominent "Open Application" button (does NOT auto-advance)
+  const ctaHtml = (CFG.showCta) ? `<div style="padding:0 24px 12px;">${c.jobUrl ? `<a href="${escHtml(c.jobUrl)}" target="_blank" id="qc-apply-cta" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;background:var(--ci-accent-primary);color:#fff;text-decoration:none;border-radius:var(--ci-radius-md);font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(240,106,82,0.25);transition:all 0.15s;">📋 Open Application ↗</a>` : `<div style="padding:12px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);font-size:12px;color:var(--ci-text-tertiary);text-align:center;">No application link saved for this opportunity</div>`}</div>` : '';
+
   main.innerHTML = `
     <div class="queue-card" id="queue-card">
       <div class="qc-header">
@@ -227,6 +251,7 @@ function renderCurrent() {
         </div>
       </div>
       ${linksHtml}
+      ${ctaHtml}
       <div class="qc-body">
         ${dqHtml}
         ${summary ? `<div class="qc-summary">${escHtml(summary)}</div>` : ''}
@@ -264,8 +289,8 @@ function renderCurrent() {
         <button class="queue-rescore-btn" id="btn-rescore" title="Re-score with latest preferences">↻ Rescore</button>
       </div>
       <div class="queue-actions">
-        <button class="queue-action-btn pass" id="btn-pass">Pass <span class="kbd">←</span></button>
-        <button class="queue-action-btn interested" id="btn-interested">Interested <span class="kbd">→</span></button>
+        <button class="queue-action-btn pass" id="btn-pass">${CFG.passLabel} <span class="kbd">←</span></button>
+        <button class="queue-action-btn interested" id="btn-interested">${CFG.interestedLabel} <span class="kbd">→</span></button>
       </div>
     </div>`;
 
@@ -435,6 +460,16 @@ function triageAction(action, fromDrag) {
     let newStage;
     if (action === 'pass') {
       newStage = 'rejected';
+    } else if (MODE === 'apply') {
+      // Apply queue: always land on `applied` if it exists in pipeline, else next stage
+      const appliedIdx = stageKeys.indexOf('applied');
+      if (appliedIdx !== -1) {
+        newStage = 'applied';
+      } else {
+        let curIdxInStages = stageKeys.indexOf(currentStage);
+        if (curIdxInStages === -1) curIdxInStages = stageKeys.indexOf(currentQueueStage);
+        newStage = stageKeys[curIdxInStages + 1] || stageKeys[curIdxInStages] || currentStage;
+      }
     } else {
       // Always advance one position from wherever the entry currently sits.
       // If the entry's stage is unknown to the pipeline (legacy/renamed), treat
@@ -450,7 +485,7 @@ function triageAction(action, fromDrag) {
     }
     companies[idx].jobStage = newStage;
     companies[idx].stageTimestamps = companies[idx].stageTimestamps || {};
-    companies[idx].stageTimestamps[newStage] = new Date().toISOString();
+    companies[idx].stageTimestamps[newStage] = Date.now();
     if (action !== 'pass') {
       companies[idx].actionStatus = 'my_court';
     }
@@ -491,7 +526,7 @@ function initCardSwipe() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.className = 'swipe-overlay';
-    overlay.innerHTML = '<span class="swipe-label pass">PASS</span><span class="swipe-label interested">INTERESTED</span>';
+    overlay.innerHTML = `<span class="swipe-label pass">${MODE === 'apply' ? 'SKIP' : 'PASS'}</span><span class="swipe-label interested">${MODE === 'apply' ? 'APPLIED' : 'INTERESTED'}</span>`;
     card.style.position = 'relative';
     card.appendChild(overlay);
   }
