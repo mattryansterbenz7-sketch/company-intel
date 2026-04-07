@@ -546,8 +546,10 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
   if (currentJobMeta?.easyApply && !currentSaveTags.includes('linkedin easy apply')) {
     currentSaveTags.push('linkedin easy apply');
   }
-  // Silently enrich — keep existing jobMatch untouched, backfill missing data
+  // Enrich and reset to scoring queue for re-evaluation
   const enriched = { ...prev };
+  enriched.jobStage = 'needs_review';
+  enriched.jobMatch = null; // clear old score for fresh evaluation
   // Use longer/more detailed job description
   if (currentJobDescription && (!prev.jobDescription || currentJobDescription.length > prev.jobDescription.length)) {
     enriched.jobDescription = currentJobDescription;
@@ -591,6 +593,8 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
     markAsSaved();
     showToast(`Updated existing opportunity at ${prev.company} with new details.`);
     showCrmLink(enriched);
+    // Auto-queue scoring
+    chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: enriched.id });
   });
 }
 
