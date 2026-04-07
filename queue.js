@@ -436,7 +436,7 @@ function initCardSwipe() {
   const card = document.getElementById('queue-card');
   if (!card) return;
 
-  let startX = 0, startY = 0, currentX = 0, dragging = false, scrolling = false;
+  let startX = 0, startY = 0, currentX = 0, dragging = false, scrolling = false, mouseDown = false;
   const THRESHOLD = 120; // px to trigger action
 
   // Create drag overlay labels
@@ -449,6 +449,19 @@ function initCardSwipe() {
     card.appendChild(overlay);
   }
 
+  function resetState() {
+    dragging = false;
+    mouseDown = false;
+    scrolling = false;
+    currentX = 0;
+    card.style.transition = 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)';
+    card.style.transform = '';
+    const pl = overlay.querySelector('.swipe-label.pass');
+    const il = overlay.querySelector('.swipe-label.interested');
+    if (pl) pl.style.opacity = 0;
+    if (il) il.style.opacity = 0;
+  }
+
   function onStart(e) {
     if (e.target.closest('button, a, input, textarea, .queue-action-btn')) return;
     const touch = e.touches ? e.touches[0] : e;
@@ -457,11 +470,12 @@ function initCardSwipe() {
     currentX = 0;
     dragging = false;
     scrolling = false;
+    mouseDown = true;
     card.style.transition = 'none';
   }
 
   function onMove(e) {
-    if (scrolling) return;
+    if (!mouseDown || scrolling) return;
     const touch = e.touches ? e.touches[0] : e;
     const dx = touch.clientX - startX;
     const dy = touch.clientY - startY;
@@ -497,14 +511,12 @@ function initCardSwipe() {
   }
 
   function onEnd() {
-    if (!dragging) return;
+    if (!mouseDown) return;
+    mouseDown = false;
+    if (!dragging) { resetState(); return; }
     dragging = false;
 
     const passLabel = overlay.querySelector('.swipe-label.pass');
-    const intLabel = overlay.querySelector('.swipe-label.interested');
-    passLabel.style.opacity = 0;
-    intLabel.style.opacity = 0;
-
     if (Math.abs(currentX) >= THRESHOLD) {
       // Trigger action
       card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
@@ -513,9 +525,7 @@ function initCardSwipe() {
       card.style.opacity = '0';
       setTimeout(() => triageAction(direction, true), 150);
     } else {
-      // Snap back
-      card.style.transition = 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)';
-      card.style.transform = 'translateX(0) rotate(0)';
+      resetState();
     }
   }
 
