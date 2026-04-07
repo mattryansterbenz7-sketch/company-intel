@@ -579,7 +579,7 @@ function openScoreModal(entry) {
                 <textarea class="flag-reason-input" placeholder="e.g., This role is actually remote. Comp is disclosed in the posting." style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;background:#FAF9F8;color:#1A1A1A;outline:none;resize:vertical;min-height:50px;line-height:1.5;"></textarea>
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
                   <button class="flag-reason-skip" style="font-size:11px;padding:5px 12px;border:1px solid #E0DDD8;border-radius:6px;background:#fff;color:#6B6F76;cursor:pointer;font-family:inherit;font-weight:600;">Skip</button>
-                  <button class="flag-reason-save" style="font-size:11px;padding:5px 14px;border:none;border-radius:6px;background:#F06A52;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save Feedback</button>
+                  <button class="flag-reason-save" style="font-size:11px;padding:5px 14px;border:none;border-radius:6px;background:#FC636B;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save Feedback</button>
                 </div>`;
               flagEl.appendChild(row);
               const textarea = row.querySelector('.flag-reason-input');
@@ -2061,7 +2061,10 @@ function renderKanbanCard(c) {
           const color = score >= 7 ? '#00897b' : score >= 5 ? '#d97706' : '#e5483b';
           return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${score}</span>`;
         };
-        return `<div style="display:flex;gap:6px;padding:4px 0;margin-bottom:4px;font-size:11px;">${icpMatch != null ? renderBadge('ICP Match', icpMatch) : ''} ${qualMatch != null ? renderBadge('Qual Match', qualMatch) : ''}</div>`;
+        const uc = c.jobMatch?.userCorrections;
+        const ucCount = uc?.pendingRescore ? Object.keys(uc.requirements || {}).length + (uc.overall ? 1 : 0) : 0;
+        const ucPill = ucCount ? `<span title="You have unsaved corrections to this score" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#FFF1EC;color:#FF7A59;white-space:nowrap;">${ucCount} pending re-score</span>` : '';
+        return `<div style="display:flex;gap:6px;padding:4px 0;margin-bottom:4px;font-size:11px;">${icpMatch != null ? renderBadge('ICP Match', icpMatch) : ''} ${qualMatch != null ? renderBadge('Qual Match', qualMatch) : ''} ${ucPill}</div>`;
       })() : ''}
       <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => {
         const { final, mod } = applyExcitementModifier(c.jobMatch.score, c.rating);
@@ -2940,10 +2943,11 @@ function renderTasksView() {
 
     const activeCount = tasks.filter(t => !t.completed).length;
     const completedCount = tasks.filter(t => t.completed).length;
+    const unreviewedCount = tasks.filter(t => t.source === 'email' && !t.reviewed && !t.completed).length;
 
     container.innerHTML = `
       <div class="tasks-header">
-        <div class="tasks-title">Tasks</div>
+        <div class="tasks-title">Tasks${unreviewedCount ? ` <span style="background:#FF7A59;color:#fff;border-radius:10px;padding:2px 8px;font-size:11px;margin-left:6px;vertical-align:middle">${unreviewedCount} new</span>` : ''}</div>
         <button class="tasks-add-btn" id="task-add-btn">+ New Task</button>
       </div>
       <div id="task-form-container"></div>
@@ -2954,15 +2958,20 @@ function renderTasksView() {
       </div>
       <div class="task-list">${filtered.map(t => {
         const dl = taskDateLabel(t.dueDate);
-        return `<div class="task-item ${t.completed ? 'completed' : ''}" data-task-id="${t.id}">
+        const isAuto = t.source === 'email';
+        const unreviewed = isAuto && !t.reviewed && !t.completed;
+        return `<div class="task-item ${t.completed ? 'completed' : ''}" data-task-id="${t.id}" style="${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}">
           <div class="task-check">${t.completed ? '✓' : ''}</div>
           <div class="task-content">
             <div class="task-text">${escHtml(t.text)}</div>
             <div class="task-meta">
               ${t.company ? `<span class="task-company-link" data-company="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
               <span class="task-priority ${t.priority || 'normal'}">${(t.priority || 'normal')}</span>
+              ${isAuto ? `<span class="task-priority" style="background:#FFF1EC;color:#FF7A59">from email</span>` : ''}
               ${t.dueDate ? `<span>${t.dueDate}</span>` : ''}
+              ${unreviewed ? `<a href="#" class="task-keep" style="color:#FF7A59;font-weight:600">keep</a> · <a href="#" class="task-dismiss" style="color:#7c98b6">dismiss</a>` : ''}
             </div>
+            ${isAuto && t.rationale ? `<div style="font-size:11px;color:#7c98b6;font-style:italic;margin-top:2px">"${escHtml(t.rationale)}"</div>` : ''}
           </div>
           ${dl.text ? `<span class="task-date ${dl.cls}">${dl.text}</span>` : ''}
           <button class="task-delete-btn" data-task-id="${t.id}">&times;</button>
@@ -2988,6 +2997,26 @@ function renderTasksView() {
         const id = btn.dataset.taskId;
         loadTasks(tasks => {
           saveTasks(tasks.filter(t => t.id !== id), () => renderTasksView());
+        });
+      });
+    });
+    container.querySelectorAll('.task-keep').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        const id = el.closest('.task-item').dataset.taskId;
+        loadTasks(tasks => {
+          const t = tasks.find(t => t.id === id);
+          if (t) { t.reviewed = true; saveTasks(tasks, () => renderTasksView()); }
+        });
+      });
+    });
+    container.querySelectorAll('.task-dismiss').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        const id = el.closest('.task-item').dataset.taskId;
+        loadTasks(tasks => {
+          const t = tasks.find(t => t.id === id);
+          if (t) { t.reviewed = true; t.completed = true; saveTasks(tasks, () => renderTasksView()); }
         });
       });
     });

@@ -246,7 +246,7 @@ function renderCurrent() {
   // Links
   const linkStyle = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;text-decoration:none;padding:3px 10px;border-radius:14px;transition:all 0.12s;';
   const links = [];
-  if (c.jobUrl) links.push(`<a href="${escHtml(c.jobUrl)}" target="_blank" style="${linkStyle}color:#F06A52;background:rgba(240,106,82,0.08);border:1px solid rgba(240,106,82,0.2);">📋 Job Posting</a>`);
+  if (c.jobUrl) links.push(`<a href="${escHtml(c.jobUrl)}" target="_blank" style="${linkStyle}color:#FC636B;background:rgba(252,99,107,0.08);border:1px solid rgba(252,99,107,0.2);">📋 Job Posting</a>`);
   if (c.companyWebsite) {
     const domain = c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
     links.push(`<a href="${escHtml(c.companyWebsite)}" target="_blank" style="${linkStyle}color:#5C5854;background:rgba(92,88,84,0.06);border:1px solid rgba(92,88,84,0.12);">↗ ${escHtml(domain)}</a>`);
@@ -255,7 +255,7 @@ function renderCurrent() {
   const linksHtml = links.length ? `<div class="qc-links">${links.join('')}</div>` : '';
 
   // Apply-mode CTA: prominent "Open Application" button (does NOT auto-advance)
-  const ctaHtml = (CFG.showCta) ? `<div style="padding:0 24px 12px;">${c.jobUrl ? `<a href="${escHtml(c.jobUrl)}" target="_blank" id="qc-apply-cta" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;background:var(--ci-accent-primary);color:#fff;text-decoration:none;border-radius:var(--ci-radius-md);font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(240,106,82,0.25);transition:all 0.15s;">📋 Open Application ↗</a>` : `<div style="padding:12px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);font-size:12px;color:var(--ci-text-tertiary);text-align:center;">No application link saved for this opportunity</div>`}</div>` : '';
+  const ctaHtml = (CFG.showCta) ? `<div style="padding:0 24px 12px;">${c.jobUrl ? `<a href="${escHtml(c.jobUrl)}" target="_blank" id="qc-apply-cta" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;background:var(--ci-accent-primary);color:#fff;text-decoration:none;border-radius:var(--ci-radius-md);font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(252,99,107,0.25);transition:all 0.15s;">📋 Open Application ↗</a>` : `<div style="padding:12px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);font-size:12px;color:var(--ci-text-tertiary);text-align:center;">No application link saved for this opportunity</div>`}</div>` : '';
 
   main.innerHTML = `
     <div class="queue-card" id="queue-card">
@@ -420,12 +420,12 @@ function renderCurrent() {
             btn.textContent = '↩';
             const row = document.createElement('div');
             row.className = 'qc-reason-row';
-            row.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:8px;opacity:1;text-decoration:none;padding:10px 12px;background:#fff;border:1px solid #E2DFD9;border-radius:8px;';
+            row.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:8px;opacity:1;text-decoration:none;padding:10px 12px;background:#fff;border:1px solid #E0E4E8;border-radius:8px;';
             row.innerHTML = `<div style="font-size:11px;font-weight:600;color:#6B6F76;">Tell Coop why this is wrong — he'll learn from it</div>
-              <textarea placeholder="e.g., This role is actually remote — the listing is mislabeled. Comp is disclosed at $104K-$163K in the posting." style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #E2DFD9;border-radius:6px;font-family:inherit;background:#FAF9F8;color:#1E1F21;outline:none;resize:vertical;min-height:50px;line-height:1.5;"></textarea>
+              <textarea placeholder="e.g., This role is actually remote — the listing is mislabeled. Comp is disclosed at $104K-$163K in the posting." style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #E0E4E8;border-radius:6px;font-family:inherit;background:#F6F8F9;color:#1E1F21;outline:none;resize:vertical;min-height:50px;line-height:1.5;"></textarea>
               <div style="display:flex;gap:8px;justify-content:flex-end;">
-                <button class="reason-cancel" style="font-size:11px;padding:5px 12px;border:1px solid #E2DFD9;border-radius:6px;background:#fff;color:#6B6F76;cursor:pointer;font-family:inherit;font-weight:600;">Skip</button>
-                <button class="reason-save" style="font-size:11px;padding:5px 14px;border:none;border-radius:6px;background:#F06A52;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save Feedback</button>
+                <button class="reason-cancel" style="font-size:11px;padding:5px 12px;border:1px solid #E0E4E8;border-radius:6px;background:#fff;color:#6B6F76;cursor:pointer;font-family:inherit;font-weight:600;">Skip</button>
+                <button class="reason-save" style="font-size:11px;padding:5px 14px;border:none;border-radius:6px;background:#FC636B;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save Feedback</button>
               </div>`;
             flagEl.appendChild(row);
             const textarea = row.querySelector('textarea');

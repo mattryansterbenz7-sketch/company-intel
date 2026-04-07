@@ -1174,24 +1174,18 @@ searchBtn.addEventListener('click', () => {
         chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
           const linked = (savedCompanies || []).find(c => c.id === _manualLinkId);
           if (linked) {
-            // Check if we're still on a related page (same domain or sub-URL)
-            const linkedDomain = (linked.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').toLowerCase();
-            const currentDomain = (response.domain || '').toLowerCase();
-            const tabDomain = (tab.url || '').replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
-            const isRelated = !linkedDomain || tabDomain.includes(linkedDomain.split('.')[0]) || (response.company && companiesMatch(response.company, linked.company));
-            if (isRelated) {
-              // Keep manual association — just update URL context
-              currentUrl = tab.url || null;
-              detectedDomain = response.domain || detectedDomain;
-              if (response.jobTitle) currentJobTitle = response.jobTitle;
-              if (response.linkedinFirmo) detectedLinkedinFirmo = response.linkedinFirmo;
-              updateJobTitleBar();
-              triggerResearch(linked.company, false);
-              setTimeout(() => { searchBtn.classList.remove('refreshing'); searchBtn.disabled = false; }, 500);
-              return;
-            }
-            // Different site — clear manual link
-            _manualLinkId = null;
+            // Manual binds are sticky — they persist across tab/page changes until the user
+            // explicitly unbinds or rebinds. Aggregator surfaces (Gmail, Calendar, LinkedIn
+            // inbox) detect unrelated "companies" that would otherwise blow away the bind.
+            currentSavedEntry = linked;
+            currentUrl = tab.url || null;
+            detectedDomain = response.domain || detectedDomain;
+            if (response.jobTitle) currentJobTitle = response.jobTitle;
+            if (response.linkedinFirmo) detectedLinkedinFirmo = response.linkedinFirmo;
+            companyNameEl.textContent = linked.company;
+            updateJobTitleBar();
+            triggerResearch(linked.company, false);
+            setTimeout(() => { searchBtn.classList.remove('refreshing'); searchBtn.disabled = false; }, 500);
           }
         });
         return; // async — will handle inside callback
@@ -3170,6 +3164,31 @@ function renderContactsSection(el, contacts) {
         if (match.jobTitle) { currentJobTitle = match.jobTitle; currentJobMeta = match.jobSnapshot || null; }
         if (bindPanel) bindPanel.classList.remove('open');
         updateBindBtnLabel();
+        // Flip the side panel header from "Save Company" → "View in CRM" so the
+        // detected card matches the bound state. Also hydrate research/job match.
+        try {
+          if (typeof showCrmLink === 'function') showCrmLink(match);
+          if (match.intelligence || match.employees || match.industry) {
+            currentResearch = {
+              intelligence: match.intelligence,
+              employees: match.employees,
+              funding: match.funding,
+              industry: match.industry,
+              companyWebsite: match.companyWebsite,
+              companyLinkedin: match.companyLinkedin,
+              reviews: match.reviews || [],
+              leaders: match.leaders || [],
+              jobListings: match.jobListings || [],
+              jobMatch: match.jobMatch,
+              jobSnapshot: match.jobSnapshot,
+              enrichmentSource: 'Saved data',
+            };
+            if (typeof renderResults === 'function') renderResults(currentResearch);
+            if (match.jobMatch && typeof renderJobOpportunity === 'function') {
+              renderJobOpportunity(match.jobMatch, match.jobSnapshot || currentJobMeta || null);
+            }
+          }
+        } catch (e) { console.warn('[SP Bind] hydrate failed:', e); }
         // Show a brief confirmation in chat
         const confirmMsg = document.createElement('div');
         confirmMsg.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);text-align:center;padding:4px 0;';
@@ -3177,33 +3196,55 @@ function renderContactsSection(el, contacts) {
         msgsEl.appendChild(confirmMsg);
         msgsEl.scrollTop = msgsEl.scrollHeight;
 
-        // Auto-fetch Granola transcripts if the entry doesn't already have them cached.
-        // Without this, binding from Gmail/Calendar gives Coop no meeting context.
-        if (!match.cachedMeetingTranscript && !match.cachedMeetingNotes && (!match.cachedMeetings || !match.cachedMeetings.length)) {
+        // Auto-fetch Granola transcripts if the entry doesn't already have transcript text cached.
+        // cachedMeetings may exist with metadata-only entries (no transcript field) — still fetch.
+        const hasTranscriptText = !!(match.cachedMeetingTranscript || match.cachedMeetingNotes ||
+          (match.cachedMeetings || []).some(m => m && (m.transcript || m.summary)));
+        if (!hasTranscriptText) {
           const contactNames = (match.knownContacts || []).map(c => c.name).filter(Boolean);
           const companyDomain = (match.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '') || null;
+          const fetchingMsg = document.createElement('div');
+          fetchingMsg.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);text-align:center;padding:4px 0;';
+          fetchingMsg.textContent = `📝 Fetching meeting notes from Granola…`;
+          msgsEl.appendChild(fetchingMsg);
+          msgsEl.scrollTop = msgsEl.scrollHeight;
           chrome.runtime.sendMessage(
             { type: 'GRANOLA_SEARCH', companyName: match.company, companyDomain, contactNames },
             result => {
               void chrome.runtime.lastError;
-              if (!result || result.error) return;
-              const notes = result.transcript || result.notes;
-              let loadedCount = 0;
-              if (notes && currentSavedEntry?.id === id) {
-                currentSavedEntry.cachedMeetingTranscript = notes;
-                loadedCount++;
+              if (!result || result.error) {
+                fetchingMsg.textContent = `📝 No Granola notes found${result?.error ? ' (' + result.error + ')' : ''}`;
+                return;
               }
-              if (result.meetings?.length && currentSavedEntry?.id === id) {
-                currentSavedEntry.cachedMeetings = result.meetings;
-                loadedCount += result.meetings.length;
+              const transcriptText = result.transcript || result.notes;
+              let loadedCount = 0;
+              if (currentSavedEntry?.id === id) {
+                if (transcriptText) {
+                  currentSavedEntry.cachedMeetingTranscript = transcriptText;
+                  loadedCount++;
+                }
+                if (result.meetings?.length) {
+                  currentSavedEntry.cachedMeetings = result.meetings;
+                  loadedCount += result.meetings.length;
+                }
               }
               if (loadedCount) {
-                const note = document.createElement('div');
-                note.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);text-align:center;padding:4px 0;';
-                note.textContent = `📝 Loaded meeting notes from Granola`;
-                msgsEl.appendChild(note);
-                msgsEl.scrollTop = msgsEl.scrollHeight;
+                fetchingMsg.textContent = `📝 Loaded ${result.meetings?.length || 1} meeting${(result.meetings?.length || 1) > 1 ? 's' : ''} from Granola`;
+                // Persist back to storage so future binds and background context have it
+                chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+                  void chrome.runtime.lastError;
+                  const list = savedCompanies || [];
+                  const idx = list.findIndex(c => c.id === id);
+                  if (idx >= 0) {
+                    if (transcriptText) list[idx].cachedMeetingTranscript = transcriptText;
+                    if (result.meetings?.length) list[idx].cachedMeetings = result.meetings;
+                    chrome.storage.local.set({ savedCompanies: list });
+                  }
+                });
+              } else {
+                fetchingMsg.textContent = `📝 No matching Granola notes for ${match.company}`;
               }
+              msgsEl.scrollTop = msgsEl.scrollHeight;
             }
           );
         }
@@ -3372,7 +3413,7 @@ function renderContactsSection(el, contacts) {
               });
               const box = document.createElement('div');
               Object.assign(box.style, {
-                position: 'fixed', border: '2px solid #F06A52', background: 'rgba(240,106,82,0.08)',
+                position: 'fixed', border: '2px solid #FC636B', background: 'rgba(252,99,107,0.08)',
                 borderRadius: '4px', pointerEvents: 'none', zIndex: '2147483647',
               });
               document.body.appendChild(overlay);
@@ -3980,7 +4021,8 @@ function renderContactsSection(el, contacts) {
       knownContacts: entry.knownContacts || [],
       emails: (entry.cachedEmails || []).slice(0, 20).map(e => ({ subject: e.subject, from: e.from, date: e.date, snippet: e.snippet })),
       meetings: entry.cachedMeetings || [],
-      granolaNote: entry.cachedMeetingTranscript || entry.cachedMeetingNotes || null,
+      granolaNote: entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
+        ((entry.cachedMeetings || []).map(m => m && (m.transcript || m.summary)).filter(Boolean).join('\n\n---\n\n') || null),
       _applicationMode: isApplicationMode,
       currentTabUrl: tabContextActive ? currentUrl : null,
       tabContext: tabContextActive ? tabContextLabel : null,
@@ -4002,7 +4044,19 @@ function renderContactsSection(el, contacts) {
     sendBtn.disabled = true;
     if (typeof CISounds !== 'undefined') CISounds.send();
 
+    // If a manual bind is active, refresh currentSavedEntry from storage so we always
+    // pull the latest cachedMeetings/cachedEmails/transcripts written by company.js
+    const boundId = _boundEntryId || _manualLinkId;
+    if (boundId) {
+      try {
+        const fresh = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+        const found = (fresh.savedCompanies || []).find(c => c.id === boundId);
+        if (found) currentSavedEntry = found;
+      } catch (e) {}
+    }
+
     const context = buildChatContext();
+    console.log('[SP Chat] Context built — bound:', !!boundId, 'meetings:', context.meetings?.length, 'granolaNote:', context.granolaNote ? context.granolaNote.length + ' chars' : 'null');
     // Fetch visible page content from the active tab if tab sharing is on
     if (tabContextActive) {
       try {

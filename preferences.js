@@ -3923,18 +3923,18 @@ function openMemoryEditor(entry) {
     <div style="background:#fff;border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow:auto;font-family:inherit;">
       <h3 style="margin:0 0 16px;font-size:16px;font-weight:700;">${isNew ? 'New memory entry' : 'Edit memory entry'}</h3>
       <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Type</label>
-      <select id="me-type" style="width:100%;padding:8px;border:1px solid #E2DFD9;border-radius:6px;margin-bottom:12px;font-family:inherit;">
+      <select id="me-type" style="width:100%;padding:8px;border:1px solid #E0E4E8;border-radius:6px;margin-bottom:12px;font-family:inherit;">
         ${COOP_MEMORY_TYPES.map(t => `<option value="${t}" ${e.type === t ? 'selected' : ''}>${COOP_MEMORY_TYPE_LABELS[t]} — ${COOP_MEMORY_TYPE_DESCRIPTIONS[t]}</option>`).join('')}
       </select>
       <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Name</label>
-      <input id="me-name" value="${escHtml(e.name)}" style="width:100%;padding:8px;border:1px solid #E2DFD9;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
+      <input id="me-name" value="${escHtml(e.name)}" style="width:100%;padding:8px;border:1px solid #E0E4E8;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
       <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Description (one line, ≤150 chars)</label>
-      <input id="me-desc" value="${escHtml(e.description)}" style="width:100%;padding:8px;border:1px solid #E2DFD9;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
+      <input id="me-desc" value="${escHtml(e.description)}" style="width:100%;padding:8px;border:1px solid #E0E4E8;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
       <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Body</label>
-      <textarea id="me-body" style="width:100%;padding:10px;border:1px solid #E2DFD9;border-radius:6px;font-family:inherit;font-size:13px;min-height:140px;resize:vertical;">${escHtml(e.body)}</textarea>
+      <textarea id="me-body" style="width:100%;padding:10px;border:1px solid #E0E4E8;border-radius:6px;font-family:inherit;font-size:13px;min-height:140px;resize:vertical;">${escHtml(e.body)}</textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-        <button id="me-cancel" style="padding:8px 16px;border:1px solid #E2DFD9;border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Cancel</button>
-        <button id="me-save" style="padding:8px 16px;border:none;border-radius:6px;background:#F06A52;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Save</button>
+        <button id="me-cancel" style="padding:8px 16px;border:1px solid #E0E4E8;border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Cancel</button>
+        <button id="me-save" style="padding:8px 16px;border:none;border-radius:6px;background:#FC636B;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Save</button>
       </div>
     </div>`;
   document.body.appendChild(modal);

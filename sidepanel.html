@@ -523,7 +523,7 @@
     .sp-chat-msg { display: flex; flex-direction: column; }
     .sp-chat-msg-user { align-items: flex-end; }
     .sp-chat-msg-assistant { align-items: flex-start; }
-    .sp-chat-msg-user .sp-chat-bubble { background: var(--ci-accent-primary); color: #fff; padding: 10px 14px; border-radius: 18px 18px 4px 18px; font-size: 13px; line-height: 1.5; max-width: 85%; box-shadow: 0 1px 4px rgba(240,106,82,0.15); }
+    .sp-chat-msg-user .sp-chat-bubble { background: var(--ci-accent-primary); color: #fff; padding: 10px 14px; border-radius: 18px 18px 4px 18px; font-size: 13px; line-height: 1.5; max-width: 85%; box-shadow: 0 1px 4px rgba(252,99,107,0.15); }
     .sp-chat-msg-assistant .sp-chat-bubble { color: var(--ci-text-primary); font-size: 13px; line-height: 1.55; padding: 10px 14px; max-width: 95%; background: var(--ci-bg-raised); border-radius: 18px 18px 18px 4px; border: 1px solid var(--ci-border-subtle); box-shadow: var(--ci-shadow-sm); }
     .sp-chat-msg-assistant .sp-chat-bubble p { margin: 0 0 6px 0; }
     .sp-chat-msg-assistant .sp-chat-bubble p:last-child { margin-bottom: 0; }
@@ -536,7 +536,7 @@
     .sp-chat-input-main { display: flex; gap: 8px; align-items: flex-end; }
     .sp-chat-input-bottom { display: flex; align-items: center; gap: 6px; padding: 0 2px; }
     .sp-chat-input { flex: 1; background: var(--ci-bg-base); border: 1.5px solid var(--ci-border-default); border-radius: 14px; color: var(--ci-text-primary); font-size: 14px; padding: 10px 16px; font-family: inherit; resize: none; outline: none; min-height: 42px; max-height: 100px; line-height: 1.4; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s; }
-    .sp-chat-input:focus { border-color: var(--ci-accent-primary); background: var(--ci-bg-raised); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft), 0 2px 8px rgba(240,106,82,0.06); }
+    .sp-chat-input:focus { border-color: var(--ci-accent-primary); background: var(--ci-bg-raised); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft), 0 2px 8px rgba(252,99,107,0.06); }
     .sp-chat-input::placeholder { color: var(--ci-text-tertiary); }
 
     /* @ Mention dropdown */
@@ -561,8 +561,8 @@
     .sp-mention-empty { padding: 12px 14px; font-size: 13px; color: var(--ci-text-tertiary); text-align: center; }
     .sp-chat-send { background: none; border: none; cursor: pointer; padding: 8px; border-radius: var(--ci-radius-full); transition: all 0.15s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--ci-border-strong); }
     .sp-chat-send:hover { background: var(--ci-bg-inset); }
-    .sp-chat-send.has-text { color: #fff; background: var(--ci-accent-primary); box-shadow: 0 2px 8px rgba(240,106,82,0.25); }
-    .sp-chat-send.has-text:hover { background: var(--ci-accent-primary-hover); box-shadow: 0 3px 12px rgba(240,106,82,0.3); transform: scale(1.05); }
+    .sp-chat-send.has-text { color: #fff; background: var(--ci-accent-primary); box-shadow: 0 2px 8px rgba(252,99,107,0.25); }
+    .sp-chat-send.has-text:hover { background: var(--ci-accent-primary-hover); box-shadow: 0 3px 12px rgba(252,99,107,0.3); transform: scale(1.05); }
     .sp-chat-send:disabled { color: var(--ci-border-default); cursor: default; background: none; box-shadow: none; transform: none; }
     .sp-chat-send svg { width: 20px; height: 20px; }
     .sp-chat-actions { display: flex; gap: 6px; padding: 8px 14px 10px; flex-wrap: wrap; background: var(--ci-bg-raised); }
@@ -589,7 +589,7 @@
     .sp-thinking-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes sp-dot-pulse {
       0%, 80%, 100% { opacity: 0.15; transform: scale(0.7); }
-      40% { opacity: 1; transform: scale(1.15); box-shadow: 0 0 10px rgba(240,106,82,0.35); }
+      40% { opacity: 1; transform: scale(1.15); box-shadow: 0 0 10px rgba(252,99,107,0.35); }
     }
     .sp-chat-bubble p { margin: 0 0 6px; }
     .sp-chat-bubble p:last-child { margin: 0; }
@@ -615,8 +615,8 @@
     .sp-chat-proposal-text { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); margin-bottom: 10px; }
     .sp-chat-proposal-actions { display: flex; gap: 8px; }
     .sp-chat-proposal-actions button { border: none; border-radius: var(--ci-radius-sm); padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-    .sp-chat-proposal-accept { background: var(--ci-accent-primary); color: white; box-shadow: 0 1px 4px rgba(240,106,82,0.2); }
-    .sp-chat-proposal-accept:hover { background: var(--ci-accent-primary-hover); box-shadow: 0 2px 8px rgba(240,106,82,0.3); transform: translateY(-1px); }
+    .sp-chat-proposal-accept { background: var(--ci-accent-primary); color: white; box-shadow: 0 1px 4px rgba(252,99,107,0.2); }
+    .sp-chat-proposal-accept:hover { background: var(--ci-accent-primary-hover); box-shadow: 0 2px 8px rgba(252,99,107,0.3); transform: translateY(-1px); }
     .sp-chat-proposal-dismiss { background: var(--ci-bg-inset); color: var(--ci-text-secondary); }
     .sp-chat-proposal-dismiss:hover { background: var(--ci-border-default); }
     .sp-chat-img { max-width: 100%; border-radius: 6px; margin: 6px 0; }

@@ -1,35 +1,35 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    CompanyIntel Design Tokens
-   Warm, sophisticated, premium — Linear/Raycast-inspired
+   Asana-inspired — pure white base, cool grays, coral accent, deep navy header
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
   /* ── Surfaces (layered depth) ── */
-  --ci-bg-base:          #FFF0E6;       /* Page body — warm peach */
-  --ci-bg-raised:        #FFF8F4;       /* Cards, panels — peach-tinted white */
+  --ci-bg-base:          #FFFFFF;       /* Page body — pure white */
+  --ci-bg-raised:        #F6F8F9;       /* Cards, panels — cool light gray so they read against white */
   --ci-bg-overlay:       #FFFFFF;       /* Modals, dropdowns */
-  --ci-bg-inset:         #FCEEE4;       /* Inputs, inset areas — slightly deeper peach */
-  --ci-bg-header:        #1B2A4A;       /* Top nav — deep indigo-navy */
-  --ci-bg-header-hover:  #253760;       /* Header interactive — slightly brighter indigo */
-  --ci-bg-sidebar:       #FCEEE4;       /* Settings sidebar nav — matches inset */
+  --ci-bg-inset:         #EEF1F3;       /* Inputs, inset areas — cool light gray */
+  --ci-bg-header:        #151B26;       /* Top nav — Asana deep navy */
+  --ci-bg-header-hover:  #1F2A3C;       /* Header interactive — slightly lighter navy */
+  --ci-bg-sidebar:       #EEF1F3;       /* Settings sidebar nav — matches inset */
 
   /* ── Text (all pass WCAG AA against expected bg) ── */
-  --ci-text-primary:     #1E1F21;       /* Main body text — near-black with warmth */
-  --ci-text-secondary:   #6B6F76;       /* Descriptions — neutral gray, not cool or warm */
-  --ci-text-tertiary:    #9CA0A6;       /* Timestamps, labels — legible soft gray */
+  --ci-text-primary:     #0A0B0D;       /* Main body text — near-pure black for maximum bite */
+  --ci-text-secondary:   #6F7782;       /* Descriptions — cool slate */
+  --ci-text-tertiary:    #8A8E94;       /* Timestamps, labels — legible mid gray */
   --ci-text-on-dark:     #F5F4F2;       /* Text on dark header */
   --ci-text-on-dark-muted: #A3AEBE;     /* Secondary text on dark bg */
   --ci-text-link:        #4573D2;       /* Links — Asana-style saturated blue */
 
   /* ── Borders ── */
-  --ci-border-default:   #E2DFD9;       /* Standard card/section borders — warm */
-  --ci-border-subtle:    #EEECE8;       /* Very light separators */
-  --ci-border-strong:    #CBC7C0;       /* Active/focus states */
+  --ci-border-default:   #E0E4E8;       /* Standard card/section borders — cool gray */
+  --ci-border-subtle:    #EAECEF;       /* Very light separators */
+  --ci-border-strong:    #C4CAD1;       /* Active/focus states */
 
   /* ── Accent Colors ── */
-  --ci-accent-primary:       #F06A52;   /* Warm coral-red — HubSpot energy, slightly deeper */
-  --ci-accent-primary-hover: #D9563E;   /* Darker on hover */
-  --ci-accent-primary-soft:  rgba(240, 106, 82, 0.08);
+  --ci-accent-primary:       #FC636B;   /* Asana coral */
+  --ci-accent-primary-hover: #E04E56;   /* Darker on hover */
+  --ci-accent-primary-soft:  rgba(252, 99, 107, 0.08);
   --ci-accent-teal:          #36B37E;   /* Fresh green — Asana-style success, less cyan */
   --ci-accent-teal-soft:     rgba(54, 179, 126, 0.08);
   --ci-accent-blue:          #4573D2;   /* Saturated blue — Asana link/info blue */
@@ -85,6 +85,17 @@ body {
 .ci-focus-ring:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--ci-accent-primary-soft), 0 0 0 3px var(--ci-accent-primary);
+}
+
+/* ── Utility: Asana coral→amber gradient (hero CTAs) ── */
+.ci-btn-gradient {
+  background: linear-gradient(135deg, #FC636B 0%, #F89B29 100%);
+  color: #fff;
+  border: none;
+}
+.ci-btn-gradient:hover {
+  background: linear-gradient(135deg, #E04E56 0%, #D9860F 100%);
+  color: #fff;
 }
 
 /* ── Utility: smooth interactions ── */
