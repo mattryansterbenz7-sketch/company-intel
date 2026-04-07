@@ -1,5 +1,11 @@
 // preferences.js — Career OS preferences editor
 
+// ── Coop model config (loaded once at startup) ───────────────────────────────
+let _coopModels = {};
+chrome.storage.local.get(['pipelineConfig'], d => {
+  if (d.pipelineConfig?.aiModels) _coopModels = d.pipelineConfig.aiModels;
+});
+
 // ── Storage helpers ──────────────────────────────────────────────────────────
 
 function showSaveStatus() {
@@ -291,7 +297,6 @@ function requestInterpretation(panelKey, storageKey, content) {
 function initCoopSummarize() {
   const targets = [
     { id: 'profile-story', label: 'story' },
-    { id: 'profile-experience', label: 'experience and accomplishments' },
     { id: 'profile-skills', label: 'skills and intangibles' },
     { id: 'profile-principles', label: 'operating principles' },
     { id: 'profile-motivators', label: 'motivators and values' },
@@ -316,7 +321,8 @@ function initCoopSummarize() {
             type: 'COOP_CHAT',
             messages: [{ role: 'user', content: `Consolidate and organize the following ${label} content. Remove redundancy, group related items, preserve every specific fact/number/metric/company name. Format it as clean, scannable bullet points grouped by theme. Keep the user's voice and specifics — just make it more organized and digestible. If you notice obvious gaps (e.g. no metrics, no dates, vague claims), add a brief "Gaps to fill:" section at the end suggesting what to add.\n\nContent:\n${content}` }],
             globalChat: true,
-            careerOSChat: true
+            careerOSChat: true,
+            chatModel: _coopModels.coopAutofill
           }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
         });
         if (result?.reply) {
@@ -1229,7 +1235,8 @@ ${sourceContent}`;
           type: 'COOP_CHAT',
           messages: [{ role: 'user', content: prompt }],
           globalChat: true,
-          careerOSChat: true
+          careerOSChat: true,
+          chatModel: _coopModels.coopAutofill
         }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
       });
 
@@ -1335,7 +1342,8 @@ function initICPAutofill() {
           type: 'COOP_CHAT',
           messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Role ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal role", "targetFunction": ["GTM", "Sales"], "seniority": "e.g. VP, Director", "scope": "e.g. Full P&L, Regional", "sellingMotion": "e.g. Enterprise, PLG", "teamSizePreference": "e.g. 5-15 direct reports"}. targetFunction must be an array of strings.` }],
           globalChat: true,
-          careerOSChat: true
+          careerOSChat: true,
+          chatModel: _coopModels.coopAutofill
         }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
       });
 
@@ -1379,7 +1387,8 @@ function initICPAutofill() {
           type: 'COOP_CHAT',
           messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Company ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal company", "stage": ["Series B", "Series C"], "sizeRange": ["51-200", "201-500"], "industryPreferences": ["SaaS", "FinTech"], "cultureMarkers": ["transparent", "ownership"]}. stage, sizeRange, and industryPreferences must be arrays of strings.` }],
           globalChat: true,
-          careerOSChat: true
+          careerOSChat: true,
+          chatModel: _coopModels.coopAutofill
         }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
       });
 
@@ -1426,7 +1435,8 @@ function initFlagsAutofill() {
             type: 'COOP_CHAT',
             messages: [{ role: 'user', content: prompt }],
             globalChat: true,
-            careerOSChat: true
+            careerOSChat: true,
+            chatModel: _coopModels.coopAutofill
           }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
         });
 
@@ -1511,7 +1521,8 @@ Respond ONLY with a JSON array of numbers in the same order: [3, 4, 2, 5, ...] �
             type: 'COOP_CHAT',
             messages: [{ role: 'user', content: prompt }],
             globalChat: true,
-            careerOSChat: true
+            careerOSChat: true,
+            chatModel: _coopModels.coopAutofill
           }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
         });
 
@@ -1874,7 +1885,16 @@ function initCoopChatDrawer() {
   }
 
   let chatHistory = [];
+  window.__coopChatHistory = chatHistory;
   let isOpen = false;
+
+  // Dock the chat as a right column on wide screens
+  const docked = window.matchMedia('(min-width: 1280px)').matches;
+  if (docked) {
+    document.body.classList.add('coop-docked');
+    drawer.classList.add('open');
+    isOpen = true;
+  }
 
   // Listen for insight extraction confirmations
   chrome.runtime.onMessage.addListener((msg) => {
@@ -1900,6 +1920,9 @@ function initCoopChatDrawer() {
       appendMessage('assistant', "Hey! I can see your full Career OS profile. Ask me anything — or tell me something and I'll propose an update.\n\nTry: *\"Add a dealbreaker for grit culture\"* or *\"What are my dealbreakers?\"*");
     }
   });
+  if (docked && !chatHistory.length) {
+    appendMessage('assistant', "Hey! I'm docked here as your Career OS sidekick. Ask me anything about your profile — or talk through your context window and we can regenerate it together.");
+  }
   closeBtn?.addEventListener('click', () => {
     isOpen = false;
     drawer.classList.remove('open');
@@ -2372,11 +2395,24 @@ function initCoopSettings() {
 // ── Structured Experience Entries ────────────────────────────────────────────
 
 const EXPERIENCE_TAG_VOCAB = [
+  // Industries / verticals
   'martech', 'adtech', 'salestech', 'revops', 'fintech', 'healthtech', 'edtech', 'logistics', 'supply chain',
-  'B2B SaaS', 'B2C', 'AI-native', 'PLG', 'enterprise', 'mid-market', 'SMB', 'startup', 'series A', 'series B',
   'demo automation', 'conversational AI', 'sales enablement', 'marketing automation', 'CDP', 'CRM',
   'analytics', 'data infrastructure', 'developer tools', 'vertical SaaS', 'horizontal SaaS',
-  'GTM', 'founding AE', 'first sales hire', 'IC', 'player-coach', 'people manager'
+  // Company / business model
+  'B2B SaaS', 'B2C', 'AI-native', 'PLG', 'enterprise', 'mid-market', 'SMB', 'startup', 'seed', 'series A', 'series B', 'series C', 'pre-IPO',
+  // Role / motion
+  'GTM', 'founding AE', 'first sales hire', 'IC', 'player-coach', 'people manager', 'sales leadership', 'team builder',
+  'inbound', 'outbound', 'channel', 'partnerships', 'land and expand', 'expansion', 'renewals', 'new logo',
+  // Skills / craft
+  'pricing strategy', 'forecasting', 'pipeline management', 'discovery', 'demos', 'negotiation', 'closing',
+  'territory planning', 'quota carrying', 'enterprise selling', 'multi-threading', 'C-suite selling',
+  'customer success', 'onboarding', 'implementation', 'GTM ops', 'rev ops', 'sales engineering',
+  // Tools / methodologies
+  'Salesforce', 'HubSpot', 'Outreach', 'Gong', 'MEDDIC', 'MEDDPICC', 'Challenger', 'Sandler', 'SPIN',
+  'Command of the Message', 'Force Management',
+  // Deal context
+  'six-figure ACV', 'seven-figure ACV', 'transactional', 'complex sales', 'long sales cycle', 'short sales cycle'
 ];
 
 function initStructuredExperience() {
@@ -2409,6 +2445,11 @@ function initStructuredExperience() {
         <div class="exp-entry-header">
           <div class="exp-entry-company">${esc(e.company) || '<span style="color:var(--ci-text-tertiary)">Company name</span>'}</div>
           <div class="exp-entry-dates">${esc(e.dateRange) || ''}</div>
+        </div>
+        <div class="exp-tags exp-tags-top" data-idx="${i}">
+          ${(e.tags || []).map(t => `<span class="exp-tag" data-tag="${esc(t)}">${esc(t)}<span class="exp-tag-x" data-idx="${i}" data-tag="${esc(t)}" title="Remove">×</span></span>`).join('')}
+          ${(e.suggestedTags || []).filter(t => !(e.tags || []).includes(t)).map(t => `<span class="exp-tag suggested" data-idx="${i}" data-tag="${esc(t)}" title="Click to accept">${esc(t)}<span class="exp-tag-x suggested-x" data-idx="${i}" data-tag="${esc(t)}" title="Reject">×</span></span>`).join('')}
+          <button class="exp-tag-add" data-idx="${i}">+ Add tag</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div class="field">
@@ -2500,12 +2541,6 @@ function initStructuredExperience() {
             <button data-cmd="insertColumns" title="Insert columns">\u2AF4</button>
           </div>
           <div class="rt-editable exp-rt-field field-input" id="exp-exp-${i}" contenteditable="true" data-idx="${i}" data-key="exposures" data-placeholder="Tools, methodologies, domains, deal sizes, team sizes...">${e.exposures || ''}</div>
-        </div>
-        <div class="exp-entry-section-label">Industry & vertical tags</div>
-        <div class="exp-tags" data-idx="${i}">
-          ${(e.tags || []).map(t => `<span class="exp-tag" data-tag="${esc(t)}">${esc(t)}<span class="exp-tag-x" data-idx="${i}" data-tag="${esc(t)}" title="Remove">×</span></span>`).join('')}
-          ${(e.suggestedTags || []).filter(t => !(e.tags || []).includes(t)).map(t => `<span class="exp-tag suggested" data-idx="${i}" data-tag="${esc(t)}" title="Click to accept">${esc(t)}<span class="exp-tag-x suggested-x" data-idx="${i}" data-tag="${esc(t)}" title="Reject">×</span></span>`).join('')}
-          <button class="exp-tag-add" data-idx="${i}">+ Add tag</button>
         </div>
       </div>
     `).join('');
@@ -2973,7 +3008,8 @@ ${sourceContent}`;
             type: 'COOP_CHAT',
             messages: [{ role: 'user', content: prompt }],
             globalChat: true,
-            careerOSChat: true
+            careerOSChat: true,
+            chatModel: _coopModels.coopAutofill
           }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
         });
 
@@ -3047,9 +3083,16 @@ ${sourceContent}`;
         const stripHtml = (h) => (h || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         const summary = currentEntries.map((e, i) => `[${i}] ${e.company || 'Unknown'} — ${stripHtml(e.description).slice(0, 400)}\n    Titles: ${e.titles || ''}\n    Exposures: ${stripHtml(e.exposures).slice(0, 300)}\n    Existing tags: ${(e.tags || []).join(', ') || 'none'}`).join('\n\n');
 
-        const prompt = `You are tagging work experience entries with industry/vertical/motion tags so a downstream AI can correctly classify the candidate's background.
+        const prompt = `You are tagging work experience entries so a downstream AI can correctly classify the candidate's background. Tags should cover MULTIPLE dimensions:
+- Industry / vertical the company operates in (e.g. martech, adtech, salestech, fintech, logistics)
+- Business model / company stage (e.g. B2B SaaS, AI-native, PLG, enterprise, mid-market, series B)
+- GTM motion the candidate ran (e.g. outbound, founding AE, land and expand, channel)
+- Role context (e.g. IC, player-coach, people manager, first sales hire)
+- Skills / craft demonstrated (e.g. enterprise selling, pricing strategy, multi-threading, C-suite selling)
+- Tools / methodologies used (e.g. Salesforce, MEDDIC, Outreach, Gong)
+- Deal context (e.g. six-figure ACV, complex sales, long sales cycle)
 
-For each entry below, suggest 3-7 tags that describe what the company does, the GTM motion, and the candidate's role context. Only suggest tags NOT already in the existing tags list for that entry.
+For each entry below, suggest 5-10 tags spanning these dimensions. Only suggest tags NOT already in the existing tags list for that entry. Be specific and accurate — if the description doesn't support a tag, don't invent one.
 
 Strongly prefer tags from this canonical vocabulary when applicable (but you may invent new ones if a better-fitting tag exists):
 ${EXPERIENCE_TAG_VOCAB.join(', ')}
@@ -3065,7 +3108,8 @@ Respond with ONLY a JSON object mapping entry index to an array of suggested tag
             type: 'COOP_CHAT',
             messages: [{ role: 'user', content: prompt }],
             globalChat: true,
-            careerOSChat: true
+            careerOSChat: true,
+            chatModel: _coopModels.coopAutofill
           }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
         });
 
@@ -3237,11 +3281,110 @@ function initCoopAssessment() {
   const refreshBtn = document.getElementById('coop-assessment-refresh');
   if (!contentEl || !refreshBtn) return;
 
+  contentEl.classList.add('ctx-md');
+  const editBtn = document.getElementById('coop-assessment-edit');
+
+  editBtn?.addEventListener('click', () => {
+    chrome.storage.local.get(['coopIdealRoleAssessment'], d => {
+      const a = d.coopIdealRoleAssessment || {};
+      const seed = a.markdown || (a.text ? a.text.replace(/<[^>]+>/g, m => {
+        // crude HTML→markdown for legacy saves
+        return m === '</p>' || m === '</li>' || m === '</h2>' || m === '</h3>' ? '\n'
+          : m === '<li>' ? '- '
+          : m === '<h2>' || m === '<h3>' ? '## '
+          : m.startsWith('<strong>') || m.startsWith('</strong>') ? '**'
+          : '';
+      }) : '');
+      const ta = document.createElement('textarea');
+      ta.className = 'ctx-edit-area';
+      ta.value = seed;
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'icp-autofill-btn icp-autofill-btn--primary';
+      saveBtn.style.marginTop = '10px';
+      saveBtn.textContent = 'Save edits';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'icp-autofill-btn';
+      cancelBtn.style.cssText = 'margin-top:10px;margin-left:8px;';
+      cancelBtn.textContent = 'Cancel';
+      const wrap = document.createElement('div');
+      wrap.appendChild(ta);
+      const btnRow = document.createElement('div');
+      btnRow.appendChild(saveBtn);
+      btnRow.appendChild(cancelBtn);
+      wrap.appendChild(btnRow);
+      const prevHTML = contentEl.innerHTML;
+      contentEl.innerHTML = '';
+      contentEl.appendChild(wrap);
+      cancelBtn.addEventListener('click', () => { contentEl.innerHTML = prevHTML; });
+      saveBtn.addEventListener('click', () => {
+        const md = ta.value;
+        const html = renderAssessmentMarkdown(md);
+        const date = a.date || new Date().toISOString();
+        chrome.storage.local.set({
+          coopIdealRoleAssessment: { ...a, text: html, markdown: md, date, editedAt: new Date().toISOString() }
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('[CoopAssessment] save edits failed:', chrome.runtime.lastError);
+            alert('Save failed: ' + chrome.runtime.lastError.message);
+            return;
+          }
+          contentEl.innerHTML = html;
+          if (dateEl) dateEl.textContent = (dateEl.textContent || 'Generated') + ' · edited just now';
+        });
+      });
+    });
+  });
+
+  function renderAssessmentMarkdown(md) {
+    if (!md) return '';
+    // Strip code fences (```html, ```, etc.)
+    md = md.replace(/^\s*```[a-z]*\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    // If the model already returned HTML, pass it through unchanged
+    if (/<(h[1-3]|ul|ol|li|p|strong|em)\b/i.test(md)) {
+      return md;
+    }
+    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = md.split('\n');
+    const out = [];
+    let inList = false;
+    for (let raw of lines) {
+      if (/^#{1,3}\s+/.test(raw)) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        const level = raw.match(/^#+/)[0].length;
+        out.push(`<h${level}>${escapeHtml(raw.replace(/^#+\s+/, ''))}</h${level}>`);
+      } else if (/^\d+\.\s+/.test(raw) && /\*\*/.test(raw)) {
+        // Numbered section header like "1. **Role Summary**"
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<h2>${escapeHtml(raw.replace(/^\d+\.\s+/, '').replace(/\*\*/g, ''))}</h2>`);
+      } else if (/^[-*]\s+/.test(raw)) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${escapeHtml(raw.replace(/^[-*]\s+/, ''))}</li>`);
+      } else if (raw.trim() === '') {
+        if (inList) { out.push('</ul>'); inList = false; }
+      } else {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p>${escapeHtml(raw)}</p>`);
+      }
+    }
+    if (inList) out.push('</ul>');
+    return out.join('\n')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+  }
+
   // Load existing assessment
   chrome.storage.local.get(['coopIdealRoleAssessment'], d => {
     const a = d.coopIdealRoleAssessment;
     if (a?.text) {
-      contentEl.innerHTML = a.text;
+      // Old saves stored already-rendered HTML; new saves store raw markdown.
+      // Detect by sniffing for HTML tags.
+      if (a.markdown) {
+        contentEl.innerHTML = renderAssessmentMarkdown(a.markdown);
+      } else if (/<(h[1-3]|ul|li|p)\b/i.test(a.text)) {
+        contentEl.innerHTML = a.text;
+      } else {
+        contentEl.innerHTML = renderAssessmentMarkdown(a.text);
+      }
       if (a.date) {
         const days = Math.floor((Date.now() - new Date(a.date).getTime()) / 86400000);
         dateEl.textContent = days === 0 ? 'Generated today' : days === 1 ? 'Generated yesterday' : `Generated ${days}d ago`;
@@ -3260,16 +3403,31 @@ function initCoopAssessment() {
           type: 'GLOBAL_CHAT_MESSAGE',
           messages: [{ role: 'user', content: `Based on everything you know about me — my full Career OS profile, skills, experience, green flags, red flags, dealbreakers, company ICP, role ICP, compensation thresholds, interview learnings, and everything we've discussed — write a detailed description of my IDEAL next role.
 
-Format it as rich HTML with these sections:
-1. **Role Summary** — 2-3 sentences describing the perfect title, company stage, and what I'd own
-2. **Must-Haves** — bullet list of non-negotiable requirements
-3. **Dream Factors** — what would make this role a 10/10 for me
-4. **Red Lines** — what would make me walk away
-5. **Compensation Target** — what I should be targeting based on my experience
-6. **Where to Look** — types of companies, industries, or specific companies that fit
+Format it as clean markdown with ## for each section heading. Use these sections in order:
 
-Be specific and opinionated. Use what you actually know about me, not generic advice. If something in my profile is unclear or contradictory, call it out.` }],
-          chatModel: 'gpt-4.1-mini'
+## Role Summary
+2-3 sentences describing the perfect title, company stage, and what I'd own.
+
+## Must-Haves
+Bullet list of non-negotiable requirements.
+
+## Dream Factors
+What would make this role a 10/10 for me.
+
+## Red Lines
+What would make me walk away.
+
+## Compensation Target
+What I should be targeting based on my experience.
+
+## Where to Look
+Types of companies, industries, or specific companies that fit.
+
+Rules:
+- Use markdown only — ## for headings, **bold** for emphasis, - for bullets. Do NOT return HTML tags or code fences.
+- Be specific and opinionated. Use what you actually know about me, not generic advice.
+- If something in my profile is unclear or contradictory, call it out.` }],
+          chatModel: _coopModels.coopMemorySynthesis || 'claude-sonnet-4-6'
         }, r => {
           if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
           else if (r?.error) reject(new Error(r.error));
@@ -3278,25 +3436,306 @@ Be specific and opinionated. Use what you actually know about me, not generic ad
       });
 
       const text = result.reply || 'Could not generate assessment.';
-      // Simple markdown-to-HTML
-      const html = text
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n- /g, '\n<li>')
-        .replace(/(<li>.*?)(?=\n<li>|\n\n|\n<strong>|$)/gs, '$1</li>')
-        .replace(/(<li>.*?<\/li>\n?)+/g, '<ul>$&</ul>')
-        .replace(/\n\n/g, '<br><br>')
-        .replace(/\n/g, '<br>');
-
+      const html = renderAssessmentMarkdown(text);
       contentEl.innerHTML = html;
       const now = new Date().toISOString();
       dateEl.textContent = 'Generated just now';
-      chrome.storage.local.set({ coopIdealRoleAssessment: { text: html, date: now } });
+      chrome.storage.local.set({ coopIdealRoleAssessment: { text: html, markdown: text, date: now } }, () => {
+        if (chrome.runtime.lastError) console.error('[CoopAssessment] save failed:', chrome.runtime.lastError);
+      });
     } catch (e) {
       contentEl.innerHTML = `<span style="color:var(--ci-accent-red);">Error: ${e.message}</span>`;
     }
     refreshBtn.disabled = false;
     refreshBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.2)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.6)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.8)"/></g></svg> Ask Coop to refresh`;
   });
+}
+
+// ── Coop's Context Window (Claude project-memory style narrative) ──────────
+
+function initCoopContextWindow() {
+  const contentEl = document.getElementById('coop-context-window-content');
+  const metaEl = document.getElementById('coop-context-meta');
+  const regenBtn = document.getElementById('coop-context-regenerate');
+  if (!contentEl || !regenBtn) return;
+
+  function renderSavedContext(onLoaded) {
+    chrome.storage.local.get(['coopContextWindow'], d => {
+      if (chrome.runtime.lastError) {
+        console.warn('[CoopContextWindow] load error:', chrome.runtime.lastError);
+        onLoaded?.(null);
+        return;
+      }
+      const ctx = d.coopContextWindow;
+      if (!ctx?.markdown) {
+        console.log('[CoopContextWindow] no saved context found');
+        onLoaded?.(null);
+        return;
+      }
+      contentEl.innerHTML = renderMarkdown(ctx.markdown);
+      if (metaEl && ctx.generatedAt) {
+        const days = Math.floor((Date.now() - new Date(ctx.generatedAt).getTime()) / 86400000);
+        const when = days === 0 ? 'Generated today' : days === 1 ? 'Generated yesterday' : `Generated ${days}d ago`;
+        const tokens = ctx.sourceTokens ? ` · ${ctx.sourceTokens.toLocaleString()} tokens` : '';
+        metaEl.textContent = when + tokens;
+      }
+      onLoaded?.(ctx);
+    });
+  }
+  renderSavedContext(ctx => {
+    // Auto-refresh once per day — only fires while user is on this page
+    const age = ctx?.generatedAt ? Date.now() - new Date(ctx.generatedAt).getTime() : Infinity;
+    if (age > 24 * 60 * 60 * 1000) {
+      console.log('[CoopContextWindow] Auto-refreshing stale context (age:', Math.round(age / 3600000), 'h)');
+      setTimeout(() => runRegen(false), 1500);
+    }
+  });
+
+  function renderMarkdown(md) {
+    if (!md) return '';
+    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = md.split('\n');
+    const out = [];
+    let inList = false;
+    for (let raw of lines) {
+      if (/^#{1,3}\s+/.test(raw)) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        const level = raw.match(/^#+/)[0].length;
+        out.push(`<h${level}>${escapeHtml(raw.replace(/^#+\s+/, ''))}</h${level}>`);
+      } else if (/^[-*]\s+/.test(raw)) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${escapeHtml(raw.replace(/^[-*]\s+/, ''))}</li>`);
+      } else if (raw.trim() === '') {
+        if (inList) { out.push('</ul>'); inList = false; }
+      } else {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p>${escapeHtml(raw)}</p>`);
+      }
+    }
+    if (inList) out.push('</ul>');
+    return out.join('\n')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+  }
+
+  const editBtn = document.getElementById('coop-context-edit');
+  const regenChatBtn = document.getElementById('coop-context-regen-chat');
+
+  // ── Edit affordance ──
+  editBtn?.addEventListener('click', () => {
+    chrome.storage.local.get(['coopContextWindow'], d => {
+      const ctx = d.coopContextWindow || { markdown: '' };
+      const ta = document.createElement('textarea');
+      ta.className = 'ctx-edit-area';
+      ta.value = ctx.markdown || '';
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'icp-autofill-btn icp-autofill-btn--primary';
+      saveBtn.style.marginTop = '10px';
+      saveBtn.textContent = 'Save edits';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'icp-autofill-btn';
+      cancelBtn.style.cssText = 'margin-top:10px;margin-left:8px;';
+      cancelBtn.textContent = 'Cancel';
+      const wrap = document.createElement('div');
+      wrap.appendChild(ta);
+      const btnRow = document.createElement('div');
+      btnRow.appendChild(saveBtn);
+      btnRow.appendChild(cancelBtn);
+      wrap.appendChild(btnRow);
+      const prevHTML = contentEl.innerHTML;
+      contentEl.innerHTML = '';
+      contentEl.appendChild(wrap);
+      cancelBtn.addEventListener('click', () => { contentEl.innerHTML = prevHTML; });
+      saveBtn.addEventListener('click', () => {
+        const md = ta.value;
+        const generatedAt = ctx.generatedAt || new Date().toISOString();
+        chrome.storage.local.set({
+          coopContextWindow: { ...ctx, markdown: md, generatedAt, editedAt: new Date().toISOString() }
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('[CoopContextWindow] save edits failed:', chrome.runtime.lastError);
+            alert('Save failed: ' + chrome.runtime.lastError.message);
+            return;
+          }
+          renderSavedContext();
+          if (metaEl) metaEl.textContent = (metaEl.textContent || 'Generated') + ' · edited just now';
+        });
+      });
+    });
+  });
+
+  // ── Regen-from-chat: visible when there's chat history ──
+  function refreshRegenFromChatVisibility() {
+    if (!regenChatBtn) return;
+    const hist = window.__coopChatHistory || [];
+    regenChatBtn.style.display = hist.length >= 2 ? '' : 'none';
+  }
+  setInterval(refreshRegenFromChatVisibility, 1500);
+
+  async function runRegen(includeChat) {
+    regenBtn.disabled = true;
+    if (regenChatBtn) regenChatBtn.disabled = true;
+    const origText = regenBtn.textContent;
+    regenBtn.textContent = 'Coop is regenerating...';
+    contentEl.innerHTML = '<span style="color:var(--ci-text-tertiary);font-size:13px;">Coop is reading everything you\'ve given him and writing a fresh narrative...</span>';
+    if (metaEl) metaEl.textContent = '';
+    try {
+      await doRegen(includeChat);
+    } finally {
+      regenBtn.disabled = false;
+      if (regenChatBtn) regenChatBtn.disabled = false;
+      regenBtn.textContent = origText;
+    }
+  }
+
+  regenBtn.addEventListener('click', () => runRegen(false));
+  regenChatBtn?.addEventListener('click', () => runRegen(true));
+
+  async function doRegen(includeChat) {
+    const _noop = () => {};
+    _noop();
+
+    try {
+      // Gather all source data
+      const localKeys = [
+        'profileResume', 'profileStory', 'profileExperience', 'profileExperienceEntries',
+        'profilePrinciples', 'profileMotivators', 'profileSkills', 'profileFAQ',
+        'profileGreenLights', 'profileRedLights', 'profileLinks',
+        'coopMemory', 'coopIdealRoleAssessment', 'storyTime'
+      ];
+      const localData = await new Promise(r => chrome.storage.local.get(localKeys, r));
+      const syncData = await new Promise(r => chrome.storage.sync.get(['prefs'], r));
+
+      const sourceParts = [];
+      if (localData.profileStory) sourceParts.push(`## STORY\n${localData.profileStory.slice(0, 3000)}`);
+      if (localData.profileExperience) sourceParts.push(`## EXPERIENCE\n${localData.profileExperience.slice(0, 5000)}`);
+      if (localData.profileExperienceEntries?.length) {
+        const tagSummary = {};
+        localData.profileExperienceEntries.forEach(e => {
+          (e.tags || []).forEach(t => {
+            if (!tagSummary[t]) tagSummary[t] = [];
+            if (e.company) tagSummary[t].push(e.company);
+          });
+        });
+        const tagLines = Object.keys(tagSummary).sort().map(t => `- ${t}: ${tagSummary[t].join(', ')}`);
+        if (tagLines.length) sourceParts.push(`## EXPERIENCE TAG ROLLUP\n${tagLines.join('\n')}`);
+      }
+      if (localData.profileSkills) sourceParts.push(`## SKILLS\n${localData.profileSkills.slice(0, 2000)}`);
+      if (localData.profilePrinciples) sourceParts.push(`## PRINCIPLES\n${localData.profilePrinciples.slice(0, 2000)}`);
+      if (localData.profileMotivators) sourceParts.push(`## MOTIVATORS\n${localData.profileMotivators.slice(0, 2000)}`);
+      if (localData.profileGreenLights) sourceParts.push(`## GREEN LIGHTS\n${localData.profileGreenLights.slice(0, 2000)}`);
+      if (localData.profileRedLights) sourceParts.push(`## RED LIGHTS / DEALBREAKERS\n${localData.profileRedLights.slice(0, 2000)}`);
+      if (syncData.prefs) {
+        const p = syncData.prefs;
+        const prefsLines = [];
+        if (p.roles) prefsLines.push(`Target roles: ${Array.isArray(p.roles) ? p.roles.join(', ') : p.roles}`);
+        if (p.salaryFloor) prefsLines.push(`Salary floor: ${p.salaryFloor}`);
+        if (p.oteFloor) prefsLines.push(`OTE floor: ${p.oteFloor}`);
+        if (p.workArrangement) prefsLines.push(`Work arrangement: ${p.workArrangement}`);
+        if (prefsLines.length) sourceParts.push(`## PREFERENCES\n${prefsLines.join('\n')}`);
+      }
+      if (localData.coopMemory?.entries?.length) {
+        const memLines = localData.coopMemory.entries.slice(0, 30).map(e => `- [${e.type || 'note'}] ${e.text || e.body || ''}`.slice(0, 300));
+        sourceParts.push(`## TYPED MEMORY ENTRIES\n${memLines.join('\n')}`);
+      }
+      if (localData.coopIdealRoleAssessment?.text) {
+        const stripped = localData.coopIdealRoleAssessment.text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 2500);
+        sourceParts.push(`## PRIOR IDEAL-ROLE ASSESSMENT\n${stripped}`);
+      }
+
+      if (!sourceParts.length) {
+        contentEl.innerHTML = '<span style="color:var(--ci-accent-red);font-size:13px;">No profile data found. Fill in your Story, Experience, or other sections first.</span>';
+        return;
+      }
+
+      // Optionally include recent chat with Coop as additional context
+      if (includeChat && Array.isArray(window.__coopChatHistory) && window.__coopChatHistory.length) {
+        const recent = window.__coopChatHistory.slice(-20);
+        const lines = recent.map(m => `${m.role === 'user' ? 'Matt' : 'Coop'}: ${(m.content || '').slice(0, 600)}`);
+        sourceParts.push(`## RECENT CONVERSATION WITH MATT\nUse these exchanges to update your understanding — pay attention to corrections, new facts, or shifts in direction.\n${lines.join('\n')}`);
+      }
+
+      const sourceContent = sourceParts.join('\n\n');
+
+      const prompt = `You are Coop, an AI career advisor. Write a "context window" document — a narrative summary of everything you currently know about this user. This document is what you, Coop, will read at the start of every future conversation to remember who they are and what they're trying to do. It should be written in YOUR voice, in third person ("Matt is...", "He's looking for..."), structured as a living memory document like Claude's project memory feature.
+
+Structure the document with these markdown headings (use ## for each):
+
+## Purpose & context
+2-3 paragraphs. Who they are, what they're doing right now, why this matters.
+
+## Current state
+What they're actively working on, what stage of the search they're in, what's in flight.
+
+## Background & experience
+A factual rollup of their work history, with INDUSTRIES they've actually worked in (use the experience tag rollup as ground truth — do NOT hallucinate or guess). Be specific about companies, roles, and what each company actually does. Call out concentrations of expertise (e.g. "Most of his career has been in martech / salestech across X, Y, Z.").
+
+## Strengths & superpowers
+What they're uniquely good at, based on accomplishments and patterns across roles.
+
+## What they want next
+Target role, comp, motion, vertical, company stage, geography. Be specific.
+
+## Dealbreakers & red lines
+Things to flag immediately if they come up in any opportunity.
+
+## Voice & working style
+How to communicate with them — based on their style preferences and how they've corrected me in the past.
+
+## Open questions
+Things I'm unsure about that I should ask them when relevant — DO NOT make up facts to fill gaps. Be honest about what's unclear.
+
+Rules:
+- Write in clean markdown. Use ## for section headings, **bold** for emphasis, - for bullets.
+- Be specific. Use real company names, real numbers, real tags. Never generic.
+- If the experience tag rollup says martech, say martech. Do not contradict the data.
+- If something is missing or contradictory, surface it in "Open questions" rather than fabricating.
+- Length: aim for 600-1000 words total. Dense, scannable, no filler.
+
+Source data:
+${sourceContent}`;
+
+      const result = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: 'COOP_CHAT',
+          messages: [{ role: 'user', content: prompt }],
+          globalChat: true,
+          careerOSChat: true,
+          chatModel: _coopModels.coopMemorySynthesis || 'claude-sonnet-4-6'
+        }, r => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else if (r?.error) reject(new Error(r.error));
+          else resolve(r);
+        });
+      });
+
+      const md = result.reply || '';
+      if (!md.trim()) throw new Error('Empty response from Coop');
+
+      const generatedAt = new Date().toISOString();
+      const tokens = result.usage ? (result.usage.input || 0) + (result.usage.output || 0) : null;
+
+      await new Promise((resolve, reject) => {
+        chrome.storage.local.set({
+          coopContextWindow: { markdown: md, generatedAt, sourceTokens: tokens }
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('[CoopContextWindow] save failed:', chrome.runtime.lastError);
+            reject(new Error('Save failed: ' + chrome.runtime.lastError.message));
+          } else {
+            console.log('[CoopContextWindow] saved', md.length, 'chars');
+            resolve();
+          }
+        });
+      });
+
+      contentEl.innerHTML = renderMarkdown(md);
+      if (metaEl) metaEl.textContent = 'Generated just now' + (tokens ? ` · ${tokens.toLocaleString()} tokens` : '');
+    } catch (e) {
+      console.error('[CoopContextWindow] Error:', e);
+      contentEl.innerHTML = `<span style="color:var(--ci-accent-red);font-size:13px;">Error: ${e.message}</span>`;
+    }
+  }
 }
 
 // ── Coop's memory viewer (Claude Code-style typed entries) ──────────────────
@@ -4051,6 +4490,7 @@ loadPrefsWithMigration(syncPrefs => {
     initCoopMemory();
     initCoopSettings();
     initCoopAssessment();
+    initCoopContextWindow();
     initFaqPairs();
     initStructuredExperience();
   });

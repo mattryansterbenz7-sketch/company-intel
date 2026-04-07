@@ -477,6 +477,8 @@ function getModelForTask(taskId) {
     quickFitScoring: 'claude-haiku-4-5-20251001',
     profileInterpret: 'claude-haiku-4-5-20251001',
     chat: 'claude-haiku-4-5-20251001',
+    coopAutofill: 'claude-haiku-4-5-20251001',
+    coopMemorySynthesis: 'claude-sonnet-4-6',
     // These tasks inherit from the user-facing "Fit Scoring" setting (quickFitScoring)
     jobMatchScoring: 'claude-haiku-4-5-20251001',
     deepFitAnalysis: 'claude-haiku-4-5-20251001',
