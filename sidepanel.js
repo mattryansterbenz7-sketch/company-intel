@@ -3080,6 +3080,106 @@ function renderContactsSection(el, contacts) {
     if (headerTitle) headerTitle.innerHTML = COOP.headerHTML();
   }
 
+  // ── Entry bind (attach Coop context to a saved company/opportunity) ──
+  const bindBtn = document.getElementById('sp-chat-bind-btn');
+  const bindPanel = document.getElementById('sp-chat-bind-panel');
+  const bindInput = document.getElementById('sp-chat-bind-input');
+  const bindResults = document.getElementById('sp-chat-bind-results');
+
+  let _boundEntryId = null; // chat-session binding (separate from _manualLinkId which is for intel panel)
+
+  function updateBindBtnLabel() {
+    if (!bindBtn) return;
+    if (_boundEntryId && currentSavedEntry) {
+      const name = currentSavedEntry.company || '';
+      const job = currentSavedEntry.jobTitle ? ` · ${currentSavedEntry.jobTitle}` : '';
+      bindBtn.textContent = `📎 ${name}${job} ×`;
+      bindBtn.classList.add('bound');
+      bindBtn.title = 'Click to unbind';
+    } else {
+      bindBtn.textContent = '📎 Bind';
+      bindBtn.classList.remove('bound');
+      bindBtn.title = 'Bind Coop to a saved company or opportunity';
+    }
+  }
+
+  function renderBindResults(query) {
+    if (!bindResults) return;
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      void chrome.runtime.lastError;
+      const entries = (savedCompanies || []).filter(c => c.company);
+      const q = (query || '').toLowerCase().trim();
+      const filtered = q
+        ? entries.filter(c => c.company.toLowerCase().includes(q) || (c.jobTitle || '').toLowerCase().includes(q))
+        : entries.slice(0, 12);
+      if (!filtered.length) {
+        bindResults.innerHTML = `<div style="font-size:11px;color:var(--ci-text-tertiary);padding:6px 4px">No matches</div>`;
+        return;
+      }
+      bindResults.innerHTML = filtered.slice(0, 12).map(c => {
+        const stage = (c.jobStage || c.status || 'saved').replace(/_/g, ' ');
+        const job = c.jobTitle ? ` — ${c.jobTitle}` : '';
+        return `<div class="sp-chat-bind-row" data-id="${c.id}">
+          <span class="sp-chat-bind-name">${c.company}${job}</span>
+          <span class="sp-chat-bind-stage">${stage}</span>
+        </div>`;
+      }).join('');
+    });
+  }
+
+  if (bindBtn) {
+    bindBtn.addEventListener('click', () => {
+      // If already bound, clicking unbinds
+      if (_boundEntryId) {
+        _boundEntryId = null;
+        if (bindPanel) bindPanel.classList.remove('open');
+        updateBindBtnLabel();
+        return;
+      }
+      const isOpen = bindPanel?.classList.contains('open');
+      if (bindPanel) bindPanel.classList.toggle('open', !isOpen);
+      if (!isOpen && bindInput) {
+        bindInput.value = '';
+        renderBindResults('');
+        bindInput.focus();
+      }
+    });
+  }
+
+  if (bindInput) {
+    bindInput.addEventListener('input', () => renderBindResults(bindInput.value));
+  }
+
+  if (bindResults) {
+    bindResults.addEventListener('click', e => {
+      const row = e.target.closest('.sp-chat-bind-row');
+      if (!row) return;
+      const id = row.dataset.id;
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        void chrome.runtime.lastError;
+        const match = (savedCompanies || []).find(c => c.id === id);
+        if (!match) return;
+        // Bind the entry — updates currentSavedEntry so buildChatContext() picks it up
+        _boundEntryId = id;
+        currentSavedEntry = match;
+        _manualLinkId = id;
+        if (match.company) companyNameEl.textContent = match.company;
+        if (match.jobTitle) { currentJobTitle = match.jobTitle; currentJobMeta = match.jobSnapshot || null; }
+        if (bindPanel) bindPanel.classList.remove('open');
+        updateBindBtnLabel();
+        // Show a brief confirmation in chat
+        const confirmMsg = document.createElement('div');
+        confirmMsg.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);text-align:center;padding:4px 0;';
+        confirmMsg.textContent = `📎 Coop is now using context from ${match.company}${match.jobTitle ? ' — ' + match.jobTitle : ''}`;
+        msgsEl.appendChild(confirmMsg);
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+      });
+    });
+  }
+
+  // Update bind button label whenever context changes
+  document.addEventListener('context-updated', updateBindBtnLabel);
+
   // ── Tab/page awareness ──
   let tabContextActive = true;
   let tabContextLabel = '';
