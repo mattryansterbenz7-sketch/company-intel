@@ -50,7 +50,35 @@ function renderCurrent() {
         <div class="queue-empty-icon">✓</div>
         <div class="queue-empty-title">Queue is clear</div>
         <div class="queue-empty-sub">New opportunities will appear here when saved</div>
+        <button id="queue-reset-recent" style="margin-top:16px;padding:8px 16px;font-size:12px;font-weight:600;border:1px solid #d8d5d0;border-radius:8px;background:none;color:#FF7A59;cursor:pointer;font-family:inherit;">Re-queue recent opportunities</button>
       </div>`;
+    document.getElementById('queue-reset-recent')?.addEventListener('click', function() {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+      chrome.storage.local.get(['savedCompanies', 'opportunityStages', 'customStages'], function(data) {
+        var c = data.savedCompanies || [];
+        var stages = data.opportunityStages || data.customStages || [];
+        var qStage = stages.length > 0 ? stages[0].key : 'needs_review';
+        var recent = c.filter(function(e) { return e.isOpportunity; }).sort(function(a, b) { return (b.savedAt || 0) - (a.savedAt || 0); }).slice(0, 15);
+        var count = 0;
+        recent.forEach(function(e) {
+          if (e.jobStage !== qStage) {
+            e.jobStage = qStage;
+            e.jobMatch = null;
+            count++;
+          }
+        });
+        chrome.storage.local.set({ savedCompanies: c }, function() {
+          btn.textContent = 'Reset ' + count + ' to queue';
+          // Trigger scoring for reset entries
+          recent.forEach(function(e) {
+            if (!e.jobMatch) chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: e.id });
+          });
+          setTimeout(loadQueue, 1000);
+        });
+      });
+    });
     return;
   }
 
