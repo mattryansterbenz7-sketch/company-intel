@@ -171,6 +171,38 @@ function companiesMatch(a, b) {
   return false;
 }
 
+function getDomainFromUrl(url) {
+  return (url || '').replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '').toLowerCase();
+}
+
+// Fallback: if content script detection fails, match the tab URL against saved companies by domain.
+// Calls onMatch(savedEntry) if found, onFail() otherwise.
+function tryShowCompanyFromUrl(tabUrl, onFail) {
+  if (!tabUrl || /^chrome|^about|^moz-extension/.test(tabUrl)) { onFail(); return; }
+  const tabDomain = getDomainFromUrl(tabUrl);
+  if (!tabDomain) { onFail(); return; }
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    void chrome.runtime.lastError;
+    const match = (savedCompanies || []).find(c => {
+      const savedDomain = getDomainFromUrl(c.companyWebsite || '');
+      return savedDomain && savedDomain.length > 3 && tabDomain === savedDomain;
+    });
+    if (match) {
+      const homeEl = document.getElementById('sp-home');
+      if (homeEl) homeEl.style.display = 'none';
+      const companyContent = document.getElementById('company-content');
+      if (companyContent) companyContent.style.display = '';
+      if (searchBtn) searchBtn.style.display = '';
+      companyNameEl.textContent = match.company;
+      detectedDomain = getDomainFromUrl(match.companyWebsite || '') || null;
+      detectedCompanyLinkedin = match.companyLinkedin || null;
+      triggerResearch(match.company);
+    } else {
+      onFail();
+    }
+  });
+}
+
 function loadPrefsWithMigration(callback) {
   chrome.storage.sync.get(['prefs'], (syncResult) => {
     void chrome.runtime.lastError;
@@ -804,9 +836,12 @@ showPipelineStats();
 chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
   currentUrl = tabs[0]?.url || null;
   currentTabId = tabs[0]?.id || null;
-  chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_COMPANY' }, (response) => {
+  const tabId = tabs[0]?.id;
+
+  function handleInitialDetection(response) {
     if (chrome.runtime.lastError || !response || !response.company) {
-      renderHomeState();
+      // Content script didn't respond — try URL-based match against saved companies
+      tryShowCompanyFromUrl(currentUrl, renderHomeState);
       return;
     }
     // Company detected — hide home state, show company UI
@@ -830,9 +865,20 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
 
     // Concurrently extract description — fires in parallel with research
     if (currentJobTitle) {
-      startJobDescriptionFlow(tabs[0].id);
+      startJobDescriptionFlow(tabId);
     }
-  });
+  }
+
+  if (!tabId) {
+    tryShowCompanyFromUrl(currentUrl, renderHomeState);
+    return;
+  }
+
+  // Inject content script in case it wasn't loaded yet, then query
+  chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
+  setTimeout(() => {
+    chrome.tabs.sendMessage(tabId, { type: 'GET_COMPANY' }, handleInitialDetection);
+  }, 300);
 });
 
 function startJobDescriptionFlow(tabId) {
@@ -1100,9 +1146,10 @@ searchBtn.addEventListener('click', () => {
           setTimeout(() => { searchBtn.classList.remove('refreshing'); searchBtn.disabled = false; }, 1000);
           return;
         }
-        renderHomeState();
+        // Try URL-based match against saved companies before showing home state
         searchBtn.classList.remove('refreshing');
         searchBtn.disabled = false;
+        tryShowCompanyFromUrl(currentUrl, renderHomeState);
         return;
       }
       // Company detected — hide home state, show company UI
