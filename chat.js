@@ -53,6 +53,7 @@ function buildChatPanel(container, entry) {
   const sendBtn   = container.querySelector(`#chat-send-${panelId}`);
   const statusEl  = container.querySelector(`#chat-email-status-${panelId}`);
   const modelBtn  = container.querySelector(`#chat-model-${panelId}`);
+  const actionsEl = container.querySelector('.chat-actions');
   function updateChatModelBtn() {
     if (modelBtn) modelBtn.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
   }
@@ -305,7 +306,22 @@ function buildChatPanel(container, entry) {
       const count = result.meetings?.length || (result.transcript ? 'transcripts' : 'notes');
       showStatus(`Meeting ${typeof count === 'number' ? count + ' meeting(s)' : count} loaded into context.`, 'ok');
     }
+
+    // Chat journeys for opportunities
+    if (action === 'journey-coverletter') {
+      const journeyPrompt = `Help me write a custom cover letter for this ${entry.jobTitle || 'role'} application. Make it compelling and personalized.`;
+      inputEl.value = journeyPrompt;
+      inputEl.focus();
+      send();
+      return;
+    }
   });
+
+  // Add journey buttons for opportunities
+  if (entry.isOpportunity && actionsEl) {
+    const journeyHtml = `<button class="chat-action-btn" data-action="journey-coverletter" style="background-color:rgba(255, 122, 89, 0.08);color:#FF7A59;font-weight:600;">✎ Cover letter</button>`;
+    actionsEl.insertAdjacentHTML('afterbegin', journeyHtml);
+  }
 
   function showStatus(msg, type) {
     statusEl.style.display = 'block';
