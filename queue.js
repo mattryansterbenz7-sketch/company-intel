@@ -3,10 +3,12 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const QUEUE_STAGE_FALLBACK = 'needs_review';
-const MODE = (new URLSearchParams(location.search).get('mode') === 'apply') ? 'apply' : 'score';
+const _rawMode = new URLSearchParams(location.search).get('mode');
+const MODE = _rawMode === 'apply' ? 'apply' : _rawMode === 'dq' ? 'dq' : 'score';
 const QUEUE_CONFIG = {
   score: { title: "Coop's Scoring Queue", emptyTitle: 'Queue is clear', emptySub: 'New opportunities will appear here when saved', showCta: false, passLabel: 'Pass', interestedLabel: 'Interested' },
-  apply: { title: 'Apply Queue', emptyTitle: 'All caught up', emptySub: 'Nothing left to apply to right now', showCta: true, passLabel: 'Skip', interestedLabel: 'Applied' }
+  apply: { title: 'Apply Queue', emptyTitle: 'All caught up', emptySub: 'Nothing left to apply to right now', showCta: true, passLabel: 'Skip', interestedLabel: 'Applied' },
+  dq:    { title: 'Active Review', emptyTitle: 'All caught up', emptySub: 'No active opportunities to review', showCta: false, passLabel: 'DQ', interestedLabel: 'Still Active' },
 };
 const CFG = QUEUE_CONFIG[MODE];
 let queue = [];
@@ -46,15 +48,36 @@ function loadQueue() {
       queueStage = data.pipelineConfig?.scoring?.queueStage || firstStageKey || QUEUE_STAGE_FALLBACK;
     }
     currentQueueStage = queueStage;
-    queue = companies.filter(c => c.isOpportunity && (c.jobStage || QUEUE_STAGE_FALLBACK) === queueStage);
-    // Sort: scored first, then by score desc
-    queue.sort((a, b) => {
-      const sa = a.jobMatch?.score ?? -1;
-      const sb = b.jobMatch?.score ?? -1;
-      if (sa === -1 && sb !== -1) return 1;
-      if (sb === -1 && sa !== -1) return -1;
-      return sb - sa;
-    });
+
+    if (MODE === 'dq') {
+      // DQ mode: show opportunities in Applied+ stages (not scoring queue, want_to_apply, or terminal)
+      const terminalKeys = new Set(['rejected', 'closed_lost', 'offer', 'accepted', 'want_to_apply', queueStage]);
+      // Find the applied stage index to determine "applied+"
+      const stageKeys = stages.map(s => s.key);
+      const appliedIdx = stageKeys.indexOf('applied');
+      const activeKeys = new Set(
+        appliedIdx !== -1
+          ? stageKeys.filter((k, i) => i >= appliedIdx && !terminalKeys.has(k))
+          : stageKeys.filter(k => !terminalKeys.has(k))
+      );
+      queue = companies.filter(c => c.isOpportunity && activeKeys.has(c.jobStage || ''));
+      // Sort: most recently updated first (stalest shown last)
+      queue.sort((a, b) => {
+        const ta = Math.max(...Object.values(a.stageTimestamps || {}), a.savedAt || 0);
+        const tb = Math.max(...Object.values(b.stageTimestamps || {}), b.savedAt || 0);
+        return ta - tb; // oldest first
+      });
+    } else {
+      queue = companies.filter(c => c.isOpportunity && (c.jobStage || QUEUE_STAGE_FALLBACK) === queueStage);
+      // Sort: scored first, then by score desc
+      queue.sort((a, b) => {
+        const sa = a.jobMatch?.score ?? -1;
+        const sb = b.jobMatch?.score ?? -1;
+        if (sa === -1 && sb !== -1) return 1;
+        if (sb === -1 && sa !== -1) return -1;
+        return sb - sa;
+      });
+    }
     currentIdx = 0;
     updateCount();
     renderCurrent();
@@ -73,7 +96,7 @@ function renderCurrent() {
         <div class="queue-empty-icon">✓</div>
         <div class="queue-empty-title">${CFG.emptyTitle}</div>
         <div class="queue-empty-sub">${CFG.emptySub}</div>
-        <button id="queue-reset-recent" style="${MODE === 'apply' ? 'display:none;' : ''}" style="margin-top:16px;padding:8px 16px;font-size:12px;font-weight:600;border:1px solid #d8d5d0;border-radius:8px;background:none;color:#FF7A59;cursor:pointer;font-family:inherit;">Re-queue recent opportunities</button>
+        <button id="queue-reset-recent" style="${(MODE === 'apply' || MODE === 'dq') ? 'display:none;' : ''}" style="margin-top:16px;padding:8px 16px;font-size:12px;font-weight:600;border:1px solid #d8d5d0;border-radius:8px;background:none;color:#FF7A59;cursor:pointer;font-family:inherit;">Re-queue recent opportunities</button>
       </div>`;
     document.getElementById('queue-reset-recent')?.addEventListener('click', function() {
       var btn = this;
@@ -526,7 +549,7 @@ function initCardSwipe() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.className = 'swipe-overlay';
-    overlay.innerHTML = `<span class="swipe-label pass">${MODE === 'apply' ? 'SKIP' : 'PASS'}</span><span class="swipe-label interested">${MODE === 'apply' ? 'APPLIED' : 'INTERESTED'}</span>`;
+    overlay.innerHTML = `<span class="swipe-label pass">${MODE === 'apply' ? 'SKIP' : MODE === 'dq' ? 'DQ' : 'PASS'}</span><span class="swipe-label interested">${MODE === 'apply' ? 'APPLIED' : MODE === 'dq' ? 'ACTIVE' : 'INTERESTED'}</span>`;
     card.style.position = 'relative';
     card.appendChild(overlay);
   }
