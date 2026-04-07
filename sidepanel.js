@@ -3093,9 +3093,9 @@ function renderContactsSection(el, contacts) {
     if (_boundEntryId && currentSavedEntry) {
       const name = currentSavedEntry.company || '';
       const job = currentSavedEntry.jobTitle ? ` · ${currentSavedEntry.jobTitle}` : '';
-      bindBtn.textContent = `📎 ${name}${job} ×`;
+      bindBtn.textContent = `📎 ${name} ×`;
       bindBtn.classList.add('bound');
-      bindBtn.title = 'Click to unbind';
+      bindBtn.title = `Bound to ${name}${job} — click to unbind`;
     } else {
       bindBtn.textContent = '📎 Bind';
       bindBtn.classList.remove('bound');
@@ -3173,6 +3173,37 @@ function renderContactsSection(el, contacts) {
         confirmMsg.textContent = `📎 Coop is now using context from ${match.company}${match.jobTitle ? ' — ' + match.jobTitle : ''}`;
         msgsEl.appendChild(confirmMsg);
         msgsEl.scrollTop = msgsEl.scrollHeight;
+
+        // Auto-fetch Granola transcripts if the entry doesn't already have them cached.
+        // Without this, binding from Gmail/Calendar gives Coop no meeting context.
+        if (!match.cachedMeetingTranscript && !match.cachedMeetingNotes && (!match.cachedMeetings || !match.cachedMeetings.length)) {
+          const contactNames = (match.knownContacts || []).map(c => c.name).filter(Boolean);
+          const companyDomain = (match.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '') || null;
+          chrome.runtime.sendMessage(
+            { type: 'GRANOLA_SEARCH', companyName: match.company, companyDomain, contactNames },
+            result => {
+              void chrome.runtime.lastError;
+              if (!result || result.error) return;
+              const notes = result.transcript || result.notes;
+              let loadedCount = 0;
+              if (notes && currentSavedEntry?.id === id) {
+                currentSavedEntry.cachedMeetingTranscript = notes;
+                loadedCount++;
+              }
+              if (result.meetings?.length && currentSavedEntry?.id === id) {
+                currentSavedEntry.cachedMeetings = result.meetings;
+                loadedCount += result.meetings.length;
+              }
+              if (loadedCount) {
+                const note = document.createElement('div');
+                note.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);text-align:center;padding:4px 0;';
+                note.textContent = `📝 Loaded meeting notes from Granola`;
+                msgsEl.appendChild(note);
+                msgsEl.scrollTop = msgsEl.scrollHeight;
+              }
+            }
+          );
+        }
       });
     });
   }
