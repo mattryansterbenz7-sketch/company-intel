@@ -216,6 +216,17 @@
     .exp-entry .field-input { font-size: 12px; padding: 6px 10px; }
     .exp-entry textarea.field-input { min-height: 50px; resize: vertical; }
     .exp-entry-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-tertiary); margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--ci-border-subtle); }
+    .exp-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0; }
+    .exp-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); color: var(--ci-text-secondary); }
+    .exp-tag .exp-tag-x { cursor: pointer; opacity: 0.4; font-size: 13px; line-height: 1; }
+    .exp-tag .exp-tag-x:hover { opacity: 1; color: var(--ci-accent-red); }
+    .exp-tag.suggested { background: rgba(175, 169, 236, 0.12); border-color: rgba(175, 169, 236, 0.55); border-style: dashed; color: #5b56a8; cursor: pointer; }
+    .exp-tag.suggested:hover { background: rgba(175, 169, 236, 0.22); }
+    .exp-tag.suggested .exp-tag-x { color: var(--ci-text-tertiary); }
+    .exp-tag-add { background: none; border: 1px dashed var(--ci-border-default); color: var(--ci-text-tertiary); font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; cursor: pointer; font-family: inherit; }
+    .exp-tag-add:hover { color: var(--ci-text-secondary); border-color: var(--ci-text-tertiary); }
+    .exp-tag-input { font-size: 11px; padding: 4px 9px; border: 1px solid #AFA9EC; border-radius: 999px; font-family: inherit; min-width: 120px; outline: none; }
+    .exp-tag-datalist-hint { font-size: 10px; color: var(--ci-text-tertiary); }
     .exp-rt-wrap { margin-bottom: 2px; }
     .exp-rt-wrap .rt-editable { min-height: 40px; max-height: 200px; font-size: 13px; }
     .exp-rt-wrap .rt-toolbar { padding: 2px 4px; }
@@ -725,6 +736,29 @@
       border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit;
     }
     .memory-filter-btn.active { background: var(--ci-bg-header); color: #fff; border-color: var(--ci-bg-header); }
+    .memory-section { margin-bottom: 18px; }
+    .memory-type-chip {
+      display: inline-block; padding: 3px 10px; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase; border-radius: 10px;
+      background: var(--ci-bg-inset); color: var(--ci-text-muted);
+    }
+    .memory-type-chip.user { background: #DBEAFE; color: #1E40AF; }
+    .memory-type-chip.feedback { background: #FEF3C7; color: #92400E; }
+    .memory-type-chip.project { background: #D1FAE5; color: #065F46; }
+    .memory-type-chip.reference { background: #EDE9FE; color: #6D28D9; }
+    .memory-name { font-size: 13px; font-weight: 700; color: var(--ci-text); margin-bottom: 2px; }
+    .memory-desc { font-size: 11px; color: var(--ci-text-muted); margin-bottom: 8px; font-style: italic; }
+    .memory-body { font-size: 12px; line-height: 1.55; color: var(--ci-text); white-space: pre-wrap; padding: 8px 10px; background: var(--ci-bg-inset); border-radius: 6px; margin-bottom: 6px; }
+    .memory-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+    .memory-entry { position: relative; }
+    .memory-entry:hover .memory-actions { opacity: 1; }
+    .memory-edit, .memory-delete {
+      width: 24px; height: 24px; border: 1px solid var(--ci-border); border-radius: 6px;
+      background: #fff; cursor: pointer; font-size: 12px; color: var(--ci-text-muted);
+      display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .memory-edit:hover { color: var(--ci-accent); }
+    .memory-delete:hover { color: #E8384F; border-color: #E8384F; }
     .memory-section-title {
       font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase;
       letter-spacing: 0.06em; margin-bottom: 8px; padding-top: 4px;
@@ -1093,6 +1127,7 @@
         <div class="exp-autofill-row">
           <span class="exp-autofill-btn-wrap">
             <button class="icp-autofill-btn" id="experience-coop-autofill">Let Coop fill this in</button>
+            <button class="icp-autofill-btn" id="experience-coop-tag" style="margin-left:6px;">Coop, tag my experience</button>
             <div class="source-tooltip" id="experience-source-tooltip">
               Coop will extract experience from:<br>
               <span class="source-label">Resume</span> &middot; <span class="source-label">Story</span> &middot; <span class="source-label">Profile sections</span>
@@ -1454,7 +1489,7 @@
             </svg>
             Coop's memory
           </div>
-          <div class="card-subtitle">Everything Coop has learned from your conversations — browse, verify, or delete</div>
+          <div class="card-subtitle">Coop's persistent memory — typed entries (User, Feedback, Project, Reference) that carry across conversations. Built like Claude Code's project memory.</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>

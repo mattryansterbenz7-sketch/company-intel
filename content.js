@@ -1530,7 +1530,9 @@ function injectCoopButton() {
       });
 
       if (dup) {
-        btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
+        const { opportunityStages, customStages } = await new Promise(r => chrome.storage.local.get(['opportunityStages', 'customStages'], r));
+        const dupLabel = _coopStageLabel(dup.jobStage, opportunityStages || customStages || []);
+        btn.innerHTML = `${coopFace}<span style="margin-left:4px">${dupLabel} ✓</span>`;
         btn.classList.add('scooped');
         btn.style.background = '#f0f0f0'; btn.style.color = '#999'; btn.style.borderColor = '#ddd';
         btn.style.cursor = 'pointer';
@@ -1605,20 +1607,29 @@ function injectCoopButton() {
   checkCoopStatus(btn, coopFace);
 }
 
+function _coopStageLabel(stageKey, stages) {
+  if (!stageKey) return 'Sent to Coop';
+  const s = (stages || []).find(x => x.key === stageKey);
+  if (s && s.label) return s.label;
+  // Humanize fallback
+  return stageKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 async function checkCoopStatus(btn, coopFace) {
   try {
     const detected = await detectCompanyAndJob();
     const company = detected?.company;
-    const jobTitle = detected?.jobTitle;
     if (!company) return;
-    const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+    const { savedCompanies, opportunityStages, customStages } = await new Promise(r => chrome.storage.local.get(['savedCompanies', 'opportunityStages', 'customStages'], r));
+    const stages = opportunityStages || customStages || [];
     const dup = (savedCompanies || []).find(c => {
       if (!c.company) return false;
       const nameMatch = c.company.toLowerCase().replace(/[^a-z0-9]/g,'') === company.toLowerCase().replace(/[^a-z0-9]/g,'');
       return nameMatch && c.isOpportunity;
     });
     if (dup) {
-      btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
+      const label = _coopStageLabel(dup.jobStage, stages);
+      btn.innerHTML = `${coopFace}<span style="margin-left:4px">${label} ✓</span>`;
       btn.classList.add('scooped');
       btn.style.background = '#f0f0f0'; btn.style.color = '#999'; btn.style.borderColor = '#ddd';
       btn.disabled = true;

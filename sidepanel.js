@@ -1243,11 +1243,27 @@ function renderHomeState() {
     });
 
     // Next Steps — company-specific next steps with dates (not completable)
+    const sourceLabel = (s) => {
+      if (!s) return 'Manually set';
+      if (s === 'calendar') return 'From calendar event';
+      if (s === 'transcript') return 'From meeting transcript';
+      if (s === 'notes') return 'From meeting notes';
+      if (s === 'email') return 'From recent email';
+      return `Source: ${s}`;
+    };
+    const sourceIcon = (s) => {
+      if (!s) return '✎';
+      if (s === 'calendar') return '📅';
+      if (s === 'transcript') return '🎙';
+      if (s === 'notes') return '📝';
+      if (s === 'email') return '✉';
+      return '·';
+    };
     const nextSteps = companies
       .filter(c => c.isOpportunity && c.nextStepDate)
       .map(c => {
         const daysUntil = Math.round((new Date(c.nextStepDate + 'T12:00:00') - new Date()) / 86400000);
-        return { id: c.id, company: c.company, text: (c.nextStep || '').slice(0, 50), daysUntil };
+        return { id: c.id, company: c.company, text: (c.nextStep || '').slice(0, 50), daysUntil, source: c.nextStepSource || null, evidence: c.nextStepEvidence || null };
       })
       .sort((a, b) => a.daysUntil - b.daysUntil)
       .slice(0, 5);
@@ -1260,10 +1276,11 @@ function renderHomeState() {
             ${nextSteps.map(c => {
               const dateClass = c.daysUntil < 0 ? 'overdue' : c.daysUntil === 0 ? 'today' : 'upcoming';
               const dateLabel = c.daysUntil < 0 ? `${Math.abs(c.daysUntil)}d overdue` : c.daysUntil === 0 ? 'Today' : c.daysUntil === 1 ? 'Tomorrow' : `in ${c.daysUntil}d`;
+              const tip = sourceLabel(c.source) + (c.evidence ? ` — "${c.evidence.replace(/"/g, '\\"')}"` : '');
               return `<div class="sp-home-action-item" data-id="${c.id}" data-type="company">
                 <div>
                   <div class="sp-home-action-company">${c.company}</div>
-                  <div class="sp-home-action-step">${c.text}</div>
+                  <div class="sp-home-action-step">${c.text} <span class="sp-home-action-source" title="${tip.replace(/"/g, '&quot;')}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${sourceIcon(c.source)}</span></div>
                 </div>
                 <span class="sp-home-action-date ${dateClass}">${dateLabel}</span>
               </div>`;
@@ -2661,24 +2678,28 @@ function renderQuickData(data) {
 }
 
 function renderBullets(items, type) {
-  // Handles both array (new) and string (legacy) formats
+  // Handles strings (legacy) AND {text, source, evidence} objects (new)
   let bullets;
   if (Array.isArray(items)) {
-    bullets = items.filter(Boolean);
+    bullets = items.filter(Boolean).map(b => typeof b === 'string'
+      ? { text: b, source: null, evidence: null }
+      : { text: b?.text || '', source: b?.source || null, evidence: b?.evidence || null }
+    ).filter(b => b.text);
   } else {
-    // Split prose on sentence boundaries to approximate bullets
-    bullets = String(items).split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 4);
+    bullets = String(items).split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 4).map(s => ({ text: s, source: null, evidence: null }));
   }
   if (bullets.length === 0) return '';
   const icon = type === 'fit' ? '✓' : '✗';
   const cls = type === 'fit' ? 'bullet-fit' : 'bullet-flag';
-  // Gradient: strongest signal first → darkest color, fading lighter
   const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
   const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
   const shades = type === 'fit' ? greenShades : redShades;
+  const srcLabel = s => ({ job_posting: 'From job posting', company_data: 'From company research', preferences: 'From your preferences', candidate_profile: 'From your profile', dealbreaker_keyword: 'From your dealbreaker keywords' }[s] || (s ? `Source: ${s}` : 'No source linked'));
+  const srcIcon = s => ({ job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' }[s] || 'ⓘ');
   return `<ul class="match-bullets">${bullets.map((b, i) => {
     const color = shades[Math.min(i, shades.length - 1)];
-    return `<li class="${cls}"><span class="bullet-icon" style="color:${color}">${icon}</span><span>${boldKeyPhrase(b.trim())}</span></li>`;
+    const tip = (srcLabel(b.source) + (b.evidence ? ` — "${b.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
+    return `<li class="${cls}"><span class="bullet-icon" style="color:${color}">${icon}</span><span>${boldKeyPhrase(b.text.trim())}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${srcIcon(b.source)}</span></li>`;
   }).join('')}</ul>`;
 }
 

@@ -3,7 +3,33 @@
     "allow": [
       "Bash(python3:*)",
       "Read(//Users/mattsterbenz/Desktop/mattsterbenz-site/**)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "WebSearch",
+      "Bash(grep -E \"\\\\.\\(js|json\\)$\")",
+      "Bash(wc:*)",
+      "Bash(claude --version)",
+      "Bash(grep -r \"chrome\\\\.\\\\|tabCapture\\\\|getDisplayMedia\" /Users/mattsterbenz/Desktop/Coding/company-intel/*.js)",
+      "Bash(grep captureVisibleTab\\\\|getDisplayMedia:*)",
+      "Bash(node -c background.js)",
+      "Bash(node -c sidepanel.js)",
+      "Bash(node -c preferences.js)",
+      "Bash(node -c content.js)",
+      "Bash(ls -la *.html)",
+      "Bash(grep -E \"\\\\.html$\")",
+      "Bash(chmod +x /tmp/color_search.sh)",
+      "Bash(bash /tmp/color_search.sh)",
+      "Read(//tmp/**)",
+      "Bash(node -c sounds.js)",
+      "Bash(node -c saved.js)",
+      "Bash(node -c queue.js)",
+      "Bash(node -c company.js)",
+      "Bash(sed -i '' '/data-target=\"profile-principles-rt\"/,/<\\\\/div>/{:*)",
+      "Bash(sed -i '' '/data-target=\"profile-motivators-rt\"/,/<\\\\/div>/{:*)",
+      "Bash(sed -i '' '/data-target=\"profile-voice-rt\"/,/<\\\\/div>/{:*)",
+      "Bash(sed -i '' '/data-target=\"profile-faq-rt\"/,/<\\\\/div>/{:*)",
+      "Bash(sed -i '' '/data-target=\"profile-skills-rt\"/,/<\\\\/div>/{:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

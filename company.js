@@ -527,6 +527,8 @@ function maybeExtractNextSteps() {
       saveEntry({
         nextStep: result.nextStep || null,
         nextStepDate: result.nextStepDate || null,
+        nextStepSource: result.nextStepSource || null,
+        nextStepEvidence: result.nextStepEvidence || null,
         nextStepExtractedAt: Date.now()
       });
       renderPanel('opportunity');
@@ -993,17 +995,42 @@ function buildOpportunity() {
         </select>
       </div>
     </div>
+    ${(() => {
+      const nsSrc = entry.nextStepSource;
+      const nsEv = entry.nextStepEvidence;
+      if (!entry.nextStep && !entry.nextStepDate) return '';
+      const lbl = !nsSrc ? 'Manually set' : nsSrc === 'calendar' ? 'From calendar event' : nsSrc === 'transcript' ? 'From meeting transcript' : nsSrc === 'notes' ? 'From meeting notes' : nsSrc === 'email' ? 'From recent email' : `Source: ${nsSrc}`;
+      const icon = !nsSrc ? '✎' : nsSrc === 'calendar' ? '📅' : nsSrc === 'transcript' ? '🎙' : nsSrc === 'notes' ? '📝' : nsSrc === 'email' ? '✉' : '·';
+      const tip = (lbl + (nsEv ? ` — "${nsEv}"` : '')).replace(/"/g, '&quot;');
+      return `<span class="next-step-source-pill" title="${tip}" style="display:none;"></span>`;
+    })()}
     <div class="prop-row${!entry.nextStep && suggestions.nextStep ? ' has-suggestion' : ''}">
       <span class="prop-label">Next Step</span>
-      <div class="prop-val-wrap">
-        <input class="prop-input ${!entry.nextStep ? 'prop-empty' : ''}" id="opp-next-step-input" value="${(entry.nextStep || '').replace(/"/g,'&quot;')}" placeholder="e.g. Send proposal…">
+      <div class="prop-val-wrap" style="display:flex;align-items:center;gap:6px;">
+        <input class="prop-input ${!entry.nextStep ? 'prop-empty' : ''}" id="opp-next-step-input" value="${(entry.nextStep || '').replace(/"/g,'&quot;')}" placeholder="e.g. Send proposal…" style="flex:1;">
+        ${entry.nextStep ? (() => {
+          const nsSrc = entry.nextStepSource;
+          const nsEv = entry.nextStepEvidence;
+          const lbl = !nsSrc ? 'Manually set' : nsSrc === 'calendar' ? 'From calendar event' : nsSrc === 'transcript' ? 'From meeting transcript' : nsSrc === 'notes' ? 'From meeting notes' : nsSrc === 'email' ? 'From recent email' : `Source: ${nsSrc}`;
+          const icon = !nsSrc ? '✎' : nsSrc === 'calendar' ? '📅' : nsSrc === 'transcript' ? '🎙' : nsSrc === 'notes' ? '📝' : nsSrc === 'email' ? '✉' : '·';
+          const tip = (lbl + (nsEv ? ` — "${nsEv}"` : '')).replace(/"/g, '&quot;');
+          return `<span class="prop-source-icon" title="${tip}" style="font-size:11px;opacity:0.55;cursor:help;">${icon}</span>`;
+        })() : ''}
       </div>
       ${!entry.nextStep && suggestions.nextStep ? renderSuggestionPill('nextStep', suggestions.nextStep) : ''}
     </div>
     <div class="prop-row${!entry.nextStepDate && suggestions.nextStepDate ? ' has-suggestion' : ''}">
       <span class="prop-label">Next Step Date</span>
-      <div class="prop-val-wrap">
-        <input class="prop-input${entry.nextStepDate ? ' has-value' : ''}" id="opp-next-step-date" type="date" value="${entry.nextStepDate || ''}">
+      <div class="prop-val-wrap" style="display:flex;align-items:center;gap:6px;">
+        <input class="prop-input${entry.nextStepDate ? ' has-value' : ''}" id="opp-next-step-date" type="date" value="${entry.nextStepDate || ''}" style="flex:1;">
+        ${entry.nextStepDate ? (() => {
+          const nsSrc = entry.nextStepSource;
+          const nsEv = entry.nextStepEvidence;
+          const lbl = !nsSrc ? 'Manually set' : nsSrc === 'calendar' ? 'From calendar event' : nsSrc === 'transcript' ? 'From meeting transcript' : nsSrc === 'notes' ? 'From meeting notes' : nsSrc === 'email' ? 'From recent email' : `Source: ${nsSrc}`;
+          const icon = !nsSrc ? '✎' : nsSrc === 'calendar' ? '📅' : nsSrc === 'transcript' ? '🎙' : nsSrc === 'notes' ? '📝' : nsSrc === 'email' ? '✉' : '·';
+          const tip = (lbl + (nsEv ? ` — "${nsEv}"` : '')).replace(/"/g, '&quot;');
+          return `<span class="prop-source-icon" title="${tip}" style="font-size:11px;opacity:0.55;cursor:help;">${icon}</span>`;
+        })() : ''}
       </div>
       ${!entry.nextStepDate && suggestions.nextStepDate ? renderSuggestionPill('nextStepDate', suggestions.nextStepDate) : ''}
     </div>
@@ -1764,8 +1791,12 @@ function buildFitSection() {
   // Unified scoring — one source of truth: jobMatch
   const jm         = entry.jobMatch || {};
   const score      = jm.score;
-  const strongFits = jm.strongFits || [];
-  const redFlags   = jm.redFlags   || jm.watchOuts || [];
+  const _normFlag = f => typeof f === 'string' ? { text: f, source: null, evidence: null } : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null };
+  const strongFits = (jm.strongFits || []).map(_normFlag).filter(f => f.text);
+  const redFlags   = (jm.redFlags || jm.watchOuts || []).map(_normFlag).filter(f => f.text);
+  const _flagSrcLabel = s => ({ job_posting: 'From job posting', company_data: 'From company research', preferences: 'From your preferences', candidate_profile: 'From your profile', dealbreaker_keyword: 'From your dealbreaker keywords' }[s] || (s ? `Source: ${s}` : 'No source linked'));
+  const _flagSrcIcon = s => ({ job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' }[s] || 'ⓘ');
+  const _flagTipHtml = f => (_flagSrcLabel(f.source) + (f.evidence ? ` — "${f.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
   const jobSummary = jm.jobSummary  || entry.jobSummary || '';
   const reason     = jm.verdict || entry.quickFitReason || '';
   const v          = score ? scoreToVerdict(score) : null;
@@ -1811,13 +1842,13 @@ function buildFitSection() {
     <div class="fit-flags-col fit-flags-green">
       <div class="fit-flags-header">✓ Green Flags</div>
       ${strongFits.length
-        ? strongFits.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
+        ? strongFits.map(f => `<div class="fit-flag" title="${_flagTipHtml(f)}" style="cursor:help;">${escapeHtml(f.text)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></div>`).join('')
         : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
     </div>
     <div class="fit-flags-col fit-flags-red">
       <div class="fit-flags-header">⚠ Red Flags</div>
       ${redFlags.length
-        ? redFlags.map(f => `<div class="fit-flag">${escapeHtml(f)}</div>`).join('')
+        ? redFlags.map(f => `<div class="fit-flag" title="${_flagTipHtml(f)}" style="cursor:help;">${escapeHtml(f.text)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></div>`).join('')
         : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
     </div>
   </div>`;
@@ -3826,7 +3857,7 @@ function bindPanelBodyEvents(pid) {
 
     const nextStepInput = document.getElementById('opp-next-step-input');
     if (nextStepInput) {
-      nextStepInput.addEventListener('blur', () => saveEntry({ nextStep: nextStepInput.value.trim() || null, nextStepManuallySetAt: Date.now() }));
+      nextStepInput.addEventListener('blur', () => saveEntry({ nextStep: nextStepInput.value.trim() || null, nextStepSource: null, nextStepEvidence: null, nextStepManuallySetAt: Date.now() }));
       nextStepInput.addEventListener('keydown', e => { if (e.key === 'Enter') nextStepInput.blur(); });
     }
 
@@ -3834,7 +3865,7 @@ function bindPanelBodyEvents(pid) {
     if (nextStepDate) {
       nextStepDate.addEventListener('change', () => {
         nextStepDate.classList.toggle('has-value', !!nextStepDate.value);
-        saveEntry({ nextStepDate: nextStepDate.value || null, nextStepManuallySetAt: Date.now() });
+        saveEntry({ nextStepDate: nextStepDate.value || null, nextStepSource: null, nextStepEvidence: null, nextStepManuallySetAt: Date.now() });
       });
     }
 

@@ -1444,8 +1444,12 @@ Respond in JSON only:
       score = Number(parsed.score);
       reason = parsed.reason || 'No reason provided';
       quickTake = parsed.quickTake || [];
-      strongFits = parsed.strongFits || [];
-      redFlags = parsed.redFlags || [];
+      // Normalize: support both legacy strings and new {text, source, evidence} objects
+      const normalizeFlag = f => typeof f === 'string'
+        ? { text: f, source: null, evidence: null }
+        : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null };
+      strongFits = (parsed.strongFits || []).map(normalizeFlag).filter(f => f.text);
+      redFlags = (parsed.redFlags || []).map(normalizeFlag).filter(f => f.text);
       hardDQ = parsed.hardDQ || { flagged: false, reasons: [] };
       roleBrief = parsed.roleBrief || null;
       // Structured qualification line items
@@ -1490,7 +1494,7 @@ Respond in JSON only:
   if (highGreenHits.length >= 2 && score < 6 && !hardDQ.flagged) {
     console.log(`[QuickFit] Green flag boost: ${highGreenHits.length} high-importance matches — flooring score from ${score} to 6`);
     score = Math.max(score, 6);
-    strongFits = [...strongFits, ...highGreenHits.map(h => `Matches "${h.keyword}" (importance ${h.severity})`)];
+    strongFits = [...strongFits, ...highGreenHits.map(h => ({ text: `Matches "${h.keyword}" (importance ${h.severity})`, source: 'preferences', evidence: `Green flag keyword: "${h.keyword}"` }))];
   }
 
   // Post-AI override: hard dealbreaker keyword matches force flagging
@@ -1499,7 +1503,7 @@ Respond in JSON only:
     hardDQ.flagged = true;
     hardDQ.reasons = [...(hardDQ.reasons || []), ...keywordHits.hardDQ.map(h => `Keyword "${h.keyword}" matched: ${h.entry}`)];
     if (score > 2) score = 2;
-    redFlags = [...redFlags, ...keywordHits.hardDQ.map(h => `Hard dealbreaker keyword "${h.keyword}" detected`)];
+    redFlags = [...redFlags, ...keywordHits.hardDQ.map(h => ({ text: `Hard dealbreaker keyword "${h.keyword}" detected`, source: 'dealbreaker_keyword', evidence: `Matched dealbreaker entry: ${h.entry}` }))];
   }
 
   // Save result to the entry
@@ -2074,8 +2078,8 @@ If none clearly apply, set hardDQ.flagged to false. When in doubt, do NOT flag.
     "jobSummary": "<2-3 sentences on core responsibilities and what success looks like in this role>",
     "score": <1-10 REALISTIC fit score. This is a WEIGHTED BLEND of: qualificationScore (how desirable a candidate from the employer's view), preference fit (green/red flags), compensation alignment, and role fit. The qualificationScore should heavily influence this number — a role where the candidate is underqualified (qualificationScore 3-4) should cap the overall score around 4-5 even if preferences match perfectly. Be honest about whether they'd realistically get hired.>,
     "verdict": "<one direct, honest sentence — should they apply and why. If they're underqualified, say so clearly.>",
-    "strongFits": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
-    "redFlags": ["<concrete signal explicitly stated or strongly evidenced in the posting, 8-14 words>"],
+    "strongFits": [{"text": "<concrete signal, 8-14 words>", "source": "<job_posting | company_data | preferences | candidate_profile>", "evidence": "<short verbatim quote or phrase from the source — REQUIRED>"}],
+    "redFlags": [{"text": "<concrete signal, 8-14 words>", "source": "<job_posting | company_data | preferences | dealbreaker_keyword>", "evidence": "<short verbatim quote or phrase from the source proving this concern — REQUIRED. If you cannot quote evidence, do NOT include this red flag>"}],
     "quickTake": [{"type": "green or red", "text": "8-15 word bullet summarizing a key signal"}],
     "hardDQ": {"flagged": true/false, "reasons": ["short reason string"]}
   },
@@ -2699,8 +2703,10 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           return d === domain || d.split('.')[0] === baseDomain;
         }).length < 3;
         if (isBootstrap && companyName && companyName.length > 3) {
-          // Search for company name but exclude bulk senders
-          parts.push(`"${companyName}" -from:linkedin.com -from:noreply -from:notifications`);
+          // Search for company name — keep LinkedIn excluded (too noisy),
+          // but allow noreply/notifications through so ATS platforms (Greenhouse,
+          // Lever, Reachdesk, etc.) can be matched via subject/body in post-filter.
+          parts.push(`"${companyName}" -from:linkedin.com`);
         }
         const query = parts.join(' OR ');
         const fetchMessages = async (q) => {
@@ -2755,16 +2761,42 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           }
         }
 
-        // Filter out bulk/notification senders that aren't real company correspondence
+        // Filter out bulk/notification senders that aren't real company correspondence —
+        // UNLESS the subject or body explicitly mentions this specific company.
+        // This lets legitimate ATS/recruiter-platform emails (Greenhouse, Lever, Reachdesk,
+        // etc.) attach to the right company without polluting every other pipeline entry.
         const BULK_SENDERS = /noreply|no-reply|notifications?@|mailer-daemon|postmaster|digest@|newsletter|updates?@|marketing@|news@|hello@linkedin|member@linkedin|invitations@linkedin|jobs-listings@linkedin|messages-noreply@linkedin/i;
+        const companyLower = (companyName || '').toLowerCase().trim();
+        // Normalized variants for matching (strip "Inc", punctuation, etc.)
+        const companyVariants = new Set();
+        if (companyLower) {
+          companyVariants.add(companyLower);
+          const cleaned = companyLower.replace(/\b(inc|llc|ltd|co|corp|corporation|company|the)\b/g, '').replace(/[.,']/g, '').trim();
+          if (cleaned && cleaned.length > 2) companyVariants.add(cleaned);
+        }
+        if (baseDomain && baseDomain.length > 2) companyVariants.add(baseDomain);
+
+        const mentionsCompany = (e) => {
+          if (!companyVariants.size) return false;
+          const hay = `${e.subject || ''} ${e.snippet || ''} ${(e.body || '').slice(0, 2000)}`.toLowerCase();
+          for (const v of companyVariants) {
+            // Word-boundary-ish match to avoid false hits ("acme" inside "acmebank")
+            const re = new RegExp(`(^|[^a-z0-9])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
+            if (re.test(hay)) return true;
+          }
+          return false;
+        };
+
         allEmails = allEmails.filter(e => {
           const fromAddr = (e.from || '').toLowerCase();
-          // Skip known bulk senders
-          if (BULK_SENDERS.test(fromAddr)) return false;
-          // Skip LinkedIn notification emails (from: "LinkedIn <xxx@linkedin.com>") unless subject contains exact company name
+          const isBulk = BULK_SENDERS.test(fromAddr);
+          if (isBulk) {
+            // Allow only if the email content confidently references this company
+            return mentionsCompany(e);
+          }
+          // LinkedIn notification senders: keep only when subject mentions company
           if (fromAddr.includes('linkedin.com') && companyName) {
             const subjectLower = (e.subject || '').toLowerCase();
-            const companyLower = companyName.toLowerCase();
             if (!subjectLower.includes(companyLower)) return false;
           }
           return true;
@@ -2779,21 +2811,30 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
           if (userEmail) chrome.storage.local.set({ gmailUserEmail: userEmail });
         } catch(e) {}
 
-        // Extract contacts from email headers
+        // Extract contacts from email headers — but NEVER promote bulk/ATS senders
+        // (noreply@greenhouse, notifications@lever, etc.) to "known contacts". They
+        // aren't real humans and would leak across opportunities on future searches.
+        const isBulkAddr = (addr) => {
+          const a = (addr || '').toLowerCase();
+          if (!a) return true;
+          if (BULK_SENDERS.test(a)) return true;
+          // Common ATS/notification domains — the email is valid evidence of the
+          // opportunity but must not become a reusable contact for sibling lookups
+          if (/@(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|jobvite\.com|myworkday\.com|reachdesk\.com|mailchimp|sendgrid|hubspot|salesforce\.com|marketo)/.test(a)) return true;
+          return false;
+        };
         const extractedContacts = [];
         const seenEmails = new Set();
         for (const thread of allEmails) {
-          // Parse From field
           const fromParts = parseEmailContact(thread.from);
-          if (fromParts && !seenEmails.has(fromParts.email.toLowerCase())) {
+          if (fromParts && !isBulkAddr(fromParts.email) && !seenEmails.has(fromParts.email.toLowerCase())) {
             seenEmails.add(fromParts.email.toLowerCase());
             extractedContacts.push({ ...fromParts, source: 'email' });
           }
-          // Parse individual messages if available
           if (thread.messages) {
             for (const msg of thread.messages) {
               const msgFrom = parseEmailContact(msg.from);
-              if (msgFrom && !seenEmails.has(msgFrom.email.toLowerCase())) {
+              if (msgFrom && !isBulkAddr(msgFrom.email) && !seenEmails.has(msgFrom.email.toLowerCase())) {
                 seenEmails.add(msgFrom.email.toLowerCase());
                 extractedContacts.push({ ...msgFrom, source: 'email' });
               }
@@ -2823,7 +2864,7 @@ async function buildCoopProfileContext() {
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
   const profileKeys = ['profileLinks', 'profileStory', 'profileExperience', 'profilePrinciples',
     'profileMotivators', 'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
-    'profileResume', 'profileSkills', 'storyTime',
+    'profileResume', 'profileSkills', 'storyTime', 'coopMemory',
     'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
     'profileRoleICP', 'profileCompanyICP', 'profileInterviewLearnings'];
   const profileData = await new Promise(r => chrome.storage.local.get(profileKeys, r));
@@ -2922,19 +2963,11 @@ async function buildCoopProfileContext() {
   if (prefs.oteStrong)    compParts.push(`OTE strong offer (exciting above): $${prefs.oteStrong}`);
   if (compParts.length) parts.push(`\n[Compensation]\n${compParts.join('\n')}`);
 
-  // AI-learned insights
-  const storyTime = profileData.storyTime;
-  if (storyTime?.learnedInsights?.length) {
-    const normalized = storyTime.learnedInsights.map(i => typeof i === 'string' ? { insight: i, category: 'general', priority: 'normal' } : i);
-    const highPriority = normalized.filter(i => i.priority === 'high');
-    const styleInstructions = normalized.filter(i => i.category === 'style_instruction');
-    const normalInsights = normalized.filter(i => i.priority !== 'high' && i.category !== 'style_instruction');
-    if (styleInstructions.length) parts.push(`\n=== STYLE INSTRUCTIONS (from past corrections) ===\n${styleInstructions.map(i => `- ${i.insight}`).join('\n')}`);
-    const injected = [...highPriority, ...normalInsights.slice(-15)];
-    if (injected.length) parts.push(`\n[AI-Learned Insights]\n${injected.map(i => `- ${i.insight}`).join('\n')}`);
-    if (storyTime?.answerPatterns?.length) {
-      parts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${storyTime.answerPatterns.slice(-10).map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
-    }
+  // Coop's structured persistent memory (typed entries — Claude Code style)
+  const memBlockA = buildCoopMemoryBlock(profileData.coopMemory);
+  if (memBlockA) parts.push(memBlockA);
+  if (profileData.storyTime?.answerPatterns?.length) {
+    parts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${profileData.storyTime.answerPatterns.slice(-10).map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
   }
 
   return parts.join('\n');
@@ -3248,8 +3281,8 @@ When the user asks to switch models, change defaults, or adjust settings, respon
       if (context.jobDescription) job.push(`Full job description:\n${context.jobDescription.slice(0, 5000)}`);
       if (context.jobMatch?.verdict)           job.push(`Match verdict: ${context.jobMatch.verdict}`);
       if (context.jobMatch?.score)             job.push(`Match score: ${context.jobMatch.score}/10`);
-      if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
-      if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
+      if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
+      if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
       if (context.matchFeedback) {
         const fb = context.matchFeedback;
         job.push(`User feedback on match: ${fb.type === 'up' ? '👍 Agreed' : '👎 Disagreed'}${fb.note ? ` — "${fb.note}"` : ''}`);
@@ -3752,8 +3785,8 @@ When the user first enters this mode, respond: "Paste the application question a
     if (context.jobDescription) job.push(`Full job description:\n${context.jobDescription.slice(0, 5000)}`);
     if (context.jobMatch?.verdict)     job.push(`Match verdict: ${context.jobMatch.verdict}`);
     if (context.jobMatch?.score)       job.push(`Match score: ${context.jobMatch.score}/10`);
-    if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.join('; ')}`);
-    if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.join('; ')}`);
+    if (context.jobMatch?.strongFits?.length) job.push(`Strong fits: ${context.jobMatch.strongFits.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
+    if (context.jobMatch?.redFlags?.length)   job.push(`Red flags: ${context.jobMatch.redFlags.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
     if (context.matchFeedback) {
       const fb = context.matchFeedback;
       job.push(`User feedback on match: ${fb.type === 'up' ? '👍 Agreed' : '👎 Disagreed'}${fb.note ? ` — "${fb.note}"` : ''}`);
@@ -3829,7 +3862,7 @@ When the user first enters this mode, respond: "Paste the application question a
   // ── User profile (Career OS buckets + legacy prefs) ──────────────────────
   const profileKeys = ['profileLinks', 'profileStory', 'profileExperience', 'profilePrinciples',
     'profileMotivators', 'profileVoice', 'profileFAQ', 'profileGreenLights', 'profileRedLights',
-    'profileResume', 'profileSkills', 'storyTime'];
+    'profileResume', 'profileSkills', 'storyTime', 'coopMemory'];
   const profileData = await new Promise(r => chrome.storage.local.get(profileKeys, r));
 
   // Personal Info
@@ -3885,33 +3918,14 @@ When the user first enters this mode, respond: "Paste the application question a
   if (prefs.oteStrong)    compParts.push(`OTE strong offer (exciting above): $${prefs.oteStrong}`);
   if (compParts.length) systemParts.push(`\n[Compensation]\n${compParts.join('\n')}`);
 
-  // AI-learned insights (from passive learning)
-  const storyTime = profileData.storyTime;
-  if (storyTime?.learnedInsights?.length) {
-    const allInsights = storyTime.learnedInsights;
-    // Backward compat: handle old string-format insights
-    const normalized = allInsights.map(i => typeof i === 'string' ? { insight: i, category: 'general', priority: 'normal' } : i);
-    const highPriority = normalized.filter(i => i.priority === 'high');
-    const styleInstructions = normalized.filter(i => i.category === 'style_instruction');
-    const normalInsights = normalized.filter(i => i.priority !== 'high' && i.category !== 'style_instruction');
-    const recentNormal = normalInsights.slice(-15);
+  // Coop's structured persistent memory (typed entries — Claude Code style)
+  const memBlock = buildCoopMemoryBlock(profileData.coopMemory);
+  if (memBlock) systemParts.push(memBlock);
 
-    // Style instructions get their own section
-    if (styleInstructions.length) {
-      systemParts.push(`\n=== STYLE INSTRUCTIONS (from past corrections) ===\n${styleInstructions.map(i => `- ${i.insight}`).join('\n')}`);
-    }
-
-    // High-priority insights always included + recent normal
-    const injectedInsights = [...highPriority, ...recentNormal];
-    if (injectedInsights.length) {
-      systemParts.push(`\n[AI-Learned Insights]\n${injectedInsights.map(i => `- ${i.insight}`).join('\n')}`);
-    }
-
-    // Answer patterns for application helper mode
-    if (context._applicationMode && storyTime?.answerPatterns?.length) {
-      const patterns = storyTime.answerPatterns.slice(-10);
-      systemParts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${patterns.map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
-    }
+  // Legacy answer patterns (still supported for application helper mode)
+  if (context._applicationMode && profileData.storyTime?.answerPatterns?.length) {
+    const patterns = profileData.storyTime.answerPatterns.slice(-10);
+    systemParts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${patterns.map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
   }
 
   // ── Visible page content (tab sharing) ─────────────────────────────────────
@@ -4010,31 +4024,13 @@ async function _oldHandleGlobalChatMessage({ messages, pipeline, enrichments, ch
   if (prefs.oteStrong)    gcCompParts.push(`OTE strong offer: $${prefs.oteStrong}`);
   if (gcCompParts.length) systemParts.push(`\n[Compensation]\n${gcCompParts.join('\n')}`);
 
-  if (storyTime?.learnedInsights?.length) {
-    const allInsights = storyTime.learnedInsights;
-    // Backward compat: handle old string-format insights
-    const normalized = allInsights.map(i => typeof i === 'string' ? { insight: i, category: 'general', priority: 'normal' } : i);
-    const highPriority = normalized.filter(i => i.priority === 'high');
-    const styleInstructions = normalized.filter(i => i.category === 'style_instruction');
-    const normalInsights = normalized.filter(i => i.priority !== 'high' && i.category !== 'style_instruction');
-    const recentNormal = normalInsights.slice(-15);
-
-    // Style instructions get their own section
-    if (styleInstructions.length) {
-      systemParts.push(`\n=== STYLE INSTRUCTIONS (from past corrections) ===\n${styleInstructions.map(i => `- ${i.insight}`).join('\n')}`);
-    }
-
-    // High-priority insights always included + recent normal
-    const injectedInsights = [...highPriority, ...recentNormal];
-    if (injectedInsights.length) {
-      systemParts.push(`\n[AI-Learned Insights]\n${injectedInsights.map(i => `- ${i.insight}`).join('\n')}`);
-    }
-
-    // Answer patterns for global chat (pipeline advisor may help with applications too)
-    if (storyTime?.answerPatterns?.length) {
-      const patterns = storyTime.answerPatterns.slice(-10);
-      systemParts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${patterns.map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
-    }
+  // Coop's structured persistent memory (typed entries — Claude Code style)
+  const { coopMemory: gcCoopMemory } = await new Promise(r => chrome.storage.local.get(['coopMemory'], r));
+  const memBlockGC = buildCoopMemoryBlock(gcCoopMemory);
+  if (memBlockGC) systemParts.push(memBlockGC);
+  if (storyTime?.answerPatterns?.length) {
+    const patterns = storyTime.answerPatterns.slice(-10);
+    systemParts.push(`\n=== ANSWER PATTERNS (approaches that worked well) ===\n${patterns.map(p => `[${p.date}] ${p.context || ''}\n${p.text}`).join('\n\n')}\n\nUse these as templates — adapt specifics to the current company.`);
   }
 
   // Pipeline summary
@@ -4089,62 +4085,145 @@ function extractInsightsFromChat(userMessage, assistantResponse, source) {
 
 async function _doExtractInsightsFromChat(userMessage, assistantResponse, source) {
   try {
-    const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
-    const st = storyTime || {};
-    const existing = (st.learnedInsights || []).slice(-20).map(i => typeof i === 'string' ? i : i.insight).join('\n');
+    const { coopMemory } = await new Promise(r => chrome.storage.local.get(['coopMemory'], r));
+    const mem = coopMemory || { entries: [] };
+    const existingIndex = (mem.entries || []).map(e => `- [${e.type}] ${e.name}: ${e.description}`).join('\n') || '(none)';
 
     const res = await claudeApiCall({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        messages: [{ role: 'user', content: `You observed a conversation between the user and their AI career advisor. Extract structured learnings.
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: `You observed a conversation between the user (Matt) and Coop, his AI career advisor. Decide whether anything in this exchange should be saved to Coop's persistent memory so it can inform future conversations.
+
+Coop's memory mirrors Claude Code's project-memory format. Each saved entry has:
+- type: one of "user" | "feedback" | "project" | "reference"
+- name: short title (3-6 words)
+- description: one-line hook (under 150 chars), what makes this entry useful
+- body: the full memory content. For feedback/project, structure as: rule/fact, then "Why:" line, then "How to apply:" line.
+
+Type definitions:
+- user: facts about who Matt is, his role, goals, expertise, preferences as a person
+- feedback: corrections or validated approaches Matt has given Coop ("don't do X", "yes that worked")
+- project: specific in-flight work, opportunities, deadlines, strategic decisions tied to a company/role
+- reference: pointers to where info lives (links, dashboards, tools, accounts)
 
 Return ONLY a JSON object:
 {
-  "insights": [
-    {
-      "text": "the insight in plain language",
-      "category": "experience_update | green_light | red_light | answer_pattern | strategic_preference | style_instruction | general",
-      "priority": "high | normal",
-      "target_field": "profileGreenLights | profileRedLights | rawInput | null",
-      "context": "what triggered this"
-    }
+  "actions": [
+    { "op": "create", "type": "...", "name": "...", "description": "...", "body": "..." },
+    { "op": "update", "match_name": "existing entry name", "body": "new body" },
+    { "op": "delete", "match_name": "existing entry name" }
   ]
 }
 
 Rules:
-- Only extract NEW insights not in the existing list
-- "high" priority: user explicitly said to remember, gave a direct instruction, or corrected the AI
-- target_field: set when the insight maps to a preference field
-- answer_pattern: include the refined answer text
-- style_instruction: capture exact instruction ("shorter answers", "no bullets")
-- If no insights, return {"insights": []}
+- ONLY save things that will be useful in FUTURE conversations. Skip ephemeral chatter, restated context, or facts already obvious from his profile.
+- Prefer updating an existing entry over creating a near-duplicate.
+- If nothing is worth saving, return {"actions": []}.
+- Never save sensitive credentials.
+- Do NOT save raw application answers — those belong in the experience profile, not memory.
 
 Conversation:
 User: ${userMessage}
 Assistant: ${assistantResponse}
 
-Existing insights (don't repeat):
-${existing}` }]
+Existing memory index (avoid duplicates):
+${existingIndex}` }]
     });
     const data = await res.json();
     if (!res.ok) { console.warn('[Insights] Skipped — API busy (', res.status, ')'); return; }
 
     const text = (data.content?.[0]?.text || '').trim();
-    let insights;
+    let actions;
     try {
-      // Extract JSON from response (handle markdown code fences)
       const jsonStr = text.replace(/^```json?\s*/i, '').replace(/\s*```$/, '');
       const parsed = JSON.parse(jsonStr);
-      insights = parsed.insights || (Array.isArray(parsed) ? parsed.map(s => typeof s === 'string' ? { text: s, category: 'general', priority: 'normal' } : s) : []);
+      actions = parsed.actions || [];
     } catch (e) { return; }
 
-    if (!insights.length) return;
-
-    await routeInsights(insights, source);
-    console.log(`[Insights] Extracted ${insights.length} new insight(s) from ${source}`);
+    if (!actions.length) return;
+    await applyCoopMemoryActions(actions, source);
+    console.log(`[CoopMemory] Applied ${actions.length} action(s) from ${source}`);
   } catch (err) {
-    console.error('[Insights] Error:', err.message);
+    console.error('[CoopMemory] Error:', err.message);
   }
+}
+
+// ── Coop memory store (Claude Code-style typed entries) ─────────────────────
+const VALID_MEMORY_TYPES = ['user', 'feedback', 'project', 'reference'];
+
+function _newMemId() {
+  return 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+async function applyCoopMemoryActions(actions, source) {
+  const { coopMemory } = await new Promise(r => chrome.storage.local.get(['coopMemory'], r));
+  const mem = coopMemory && Array.isArray(coopMemory.entries) ? coopMemory : { entries: [] };
+  const now = new Date().toISOString();
+  const findByName = name => mem.entries.findIndex(e => e.name?.toLowerCase() === (name || '').toLowerCase());
+
+  for (const a of actions) {
+    if (!a || !a.op) continue;
+    if (a.op === 'create') {
+      if (!a.type || !VALID_MEMORY_TYPES.includes(a.type)) continue;
+      if (!a.name || !a.body) continue;
+      // Skip if name collides — convert to update instead
+      const existing = findByName(a.name);
+      if (existing !== -1) {
+        mem.entries[existing] = { ...mem.entries[existing], body: a.body, description: a.description || mem.entries[existing].description, updatedAt: now, source };
+      } else {
+        mem.entries.push({
+          id: _newMemId(),
+          type: a.type,
+          name: a.name.slice(0, 80),
+          description: (a.description || '').slice(0, 200),
+          body: a.body,
+          createdAt: now,
+          updatedAt: now,
+          source,
+        });
+      }
+    } else if (a.op === 'update') {
+      const idx = findByName(a.match_name);
+      if (idx === -1) continue;
+      mem.entries[idx] = {
+        ...mem.entries[idx],
+        body: a.body || mem.entries[idx].body,
+        description: a.description || mem.entries[idx].description,
+        updatedAt: now,
+        source,
+      };
+    } else if (a.op === 'delete') {
+      const idx = findByName(a.match_name);
+      if (idx !== -1) mem.entries.splice(idx, 1);
+    }
+  }
+
+  // Cap at 200 entries to keep prompts bounded
+  if (mem.entries.length > 200) {
+    mem.entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    mem.entries = mem.entries.slice(0, 200);
+  }
+  mem.updatedAt = now;
+  chrome.storage.local.set({ coopMemory: mem });
+}
+
+// Build a MEMORY.md-style block for prompt injection
+function buildCoopMemoryBlock(coopMemory) {
+  if (!coopMemory?.entries?.length) return '';
+  const groups = { user: [], feedback: [], project: [], reference: [] };
+  for (const e of coopMemory.entries) {
+    if (groups[e.type]) groups[e.type].push(e);
+  }
+  const sections = [];
+  for (const type of ['user', 'feedback', 'project', 'reference']) {
+    const list = groups[type];
+    if (!list.length) continue;
+    sections.push(`### ${type.toUpperCase()}\n` + list.map(e =>
+      `[${e.name}] ${e.description || ''}\n${e.body}`
+    ).join('\n\n'));
+  }
+  if (!sections.length) return '';
+  return `\n=== COOP MEMORY (persistent, typed) ===\nThese are things you've learned about Matt across past conversations. Treat as authoritative unless contradicted by current context.\n\n${sections.join('\n\n')}\n=== END COOP MEMORY ===\n`;
 }
 
 async function routeInsights(insights, source) {
@@ -4509,8 +4588,8 @@ async function deepFitAnalysis({ company, jobTitle, jobSummary, jobSnapshot, job
     const snap = typeof jobSnapshot === 'string' ? jobSnapshot : JSON.stringify(jobSnapshot);
     contextParts.push(`Job posting details:\n${snap.slice(0, 2000)}`);
   }
-  if (jobMatch?.strongFits?.length) contextParts.push(`Initial green flags: ${jobMatch.strongFits.join('; ')}`);
-  if (jobMatch?.redFlags?.length)   contextParts.push(`Initial red flags: ${jobMatch.redFlags.join('; ')}`);
+  if (jobMatch?.strongFits?.length) contextParts.push(`Initial green flags: ${jobMatch.strongFits.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
+  if (jobMatch?.redFlags?.length)   contextParts.push(`Initial red flags: ${jobMatch.redFlags.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
   if (notes) contextParts.push(`My notes: ${notes.slice(0, 800)}`);
   if (transcripts) contextParts.push(`Meeting transcripts:\n${transcripts.slice(0, 3000)}`);
   if (emails?.length) {
@@ -4538,7 +4617,7 @@ Be specific. Reference real details. Don't hedge or restate the obvious. If tran
 IMPORTANT: You MUST start your response with the structured assessment block FIRST, before your narrative:
 
 <fit_update>
-{"score": <1-10 updated fit score reflecting ALL context — meetings, emails, notes, not just the posting>, "verdict": "<updated one-sentence verdict>", "strongFits": ["<concrete green flag grounded in specific evidence, 8-14 words>"], "redFlags": ["<concrete red flag grounded in specific evidence, 8-14 words>"]}
+{"score": <1-10 updated fit score reflecting ALL context — meetings, emails, notes, not just the posting>, "verdict": "<updated one-sentence verdict>", "strongFits": [{"text": "<concrete green flag, 8-14 words>", "source": "<job_posting | company_data | preferences | candidate_profile>", "evidence": "<short verbatim quote/phrase justifying this — REQUIRED>"}], "redFlags": [{"text": "<concrete red flag, 8-14 words>", "source": "<job_posting | company_data | preferences | dealbreaker_keyword>", "evidence": "<short verbatim quote/phrase justifying this — REQUIRED. Omit the flag if you cannot quote evidence.>"}]}
 </fit_update>
 
 Then write your 2-4 sentence narrative analysis.
@@ -4597,23 +4676,27 @@ async function extractNextSteps(notes, calendarEvents, transcripts, emailContext
   if (notes) contextParts.push(`Meeting notes:\n${notes.slice(0, 1500)}`);
   if (emailContext) contextParts.push(`Recent emails:\n${emailContext}`);
 
-  if (!contextParts.length) return { nextStep: null, nextStepDate: null };
+  if (!contextParts.length) return { nextStep: null, nextStepDate: null, nextStepSource: null, nextStepEvidence: null };
 
   try {
     const result = await aiCall('nextStepExtraction', {
-      system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON: {"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null"}. Dates like "Thursday" should be resolved to absolute dates relative to today.`,
+      system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON:
+{"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null","source":"calendar | transcript | notes | email | null","evidence":"short quote or phrase from the source that justifies this next step"}
+Dates like "Thursday" should be resolved to absolute dates relative to today. The "source" field MUST be the input bucket the answer came from.`,
       messages: [{ role: 'user', content: contextParts.join('\n\n') }],
-      max_tokens: 120
+      max_tokens: 220
     });
     const text = result.text || '{}';
     const match = text.match(/\{[\s\S]*?\}/);
     const json = match ? JSON.parse(match[0]) : {};
     return {
       nextStep: (json.nextStep && json.nextStep !== 'null') ? json.nextStep : null,
-      nextStepDate: (json.nextStepDate && json.nextStepDate !== 'null') ? json.nextStepDate : null
+      nextStepDate: (json.nextStepDate && json.nextStepDate !== 'null') ? json.nextStepDate : null,
+      nextStepSource: (json.source && json.source !== 'null') ? json.source : null,
+      nextStepEvidence: (json.evidence && json.evidence !== 'null') ? json.evidence : null,
     };
   } catch (e) {
-    return { nextStep: null, nextStepDate: null };
+    return { nextStep: null, nextStepDate: null, nextStepSource: null, nextStepEvidence: null };
   }
 }
 

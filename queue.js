@@ -5,6 +5,7 @@
 const QUEUE_STAGE_FALLBACK = 'needs_review';
 let queue = [];
 let currentIdx = 0;
+let currentQueueStage = QUEUE_STAGE_FALLBACK; // resolved on load
 
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
@@ -23,6 +24,7 @@ function loadQueue() {
     const stages = data.opportunityStages || data.customStages || [];
     const firstStageKey = stages.length > 0 ? stages[0].key : null;
     const queueStage = data.pipelineConfig?.scoring?.queueStage || firstStageKey || QUEUE_STAGE_FALLBACK;
+    currentQueueStage = queueStage;
     queue = companies.filter(c => c.isOpportunity && (c.jobStage || QUEUE_STAGE_FALLBACK) === queueStage);
     // Sort: scored first, then by score desc
     queue.sort((a, b) => {
@@ -88,8 +90,10 @@ function renderCurrent() {
   const tier = score >= 7 ? 'green' : score >= 5 ? 'amber' : 'red';
   const rb = jm.roleBrief || {};
   const summary = jm.jobSummary || rb.roleSummary || jm.verdict || '';
-  const strongFits = jm.strongFits || [];
-  const redFlags = jm.redFlags || [];
+  // Normalize flags to {text, source, evidence} regardless of legacy string shape
+  const _normFlag = f => typeof f === 'string' ? { text: f, source: null, evidence: null } : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null };
+  const strongFits = (jm.strongFits || []).map(_normFlag).filter(f => f.text);
+  const redFlags = (jm.redFlags || []).map(_normFlag).filter(f => f.text);
   const quickTake = jm.quickTake || c.quickTake || [];
   const breakdown = jm.scoreBreakdown || {};
   const qualMatch = rb.qualificationMatch || '';
@@ -127,17 +131,43 @@ function renderCurrent() {
     return 'flags';
   }
   const configIcon = (tab) => `<a href="${chrome.runtime.getURL('preferences.html')}#${tab}" target="_blank" class="qc-flag-config" title="Edit this in Career OS">⚙</a>`;
+  const sourceLabel = (s) => {
+    if (!s) return 'No source linked';
+    const map = {
+      job_posting: 'From job posting',
+      company_data: 'From company research',
+      preferences: 'From your preferences',
+      candidate_profile: 'From your profile',
+      dealbreaker_keyword: 'From your dealbreaker keywords',
+    };
+    return map[s] || `Source: ${s}`;
+  };
+  const sourceIcon = (s) => {
+    const map = { job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' };
+    return map[s] || 'ⓘ';
+  };
+  const flagBubble = (f) => {
+    const tip = (sourceLabel(f.source) + (f.evidence ? ` — "${f.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
+    return `<span class="qc-flag-source" title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${sourceIcon(f.source)}</span>`;
+  };
   const greenHtml = strongFits.map(f => {
-    const isDismissed = dismissedFlags.includes(f);
-    return `<div class="qc-flag${isDismissed ? ' dismissed' : ''}" data-flag="${escHtml(f)}"><span class="qc-flag-dot" style="color:#36B37E">●</span> <span${isDismissed ? ' style="text-decoration:line-through"' : ''}>${escHtml(f)}</span>${configIcon(flagConfigLink(f))}<button class="qc-flag-dismiss" data-flag="${escHtml(f)}" data-type="green" title="${isDismissed ? 'Restore' : 'Dismiss'}">${isDismissed ? '↩' : '×'}</button></div>`;
+    const isDismissed = dismissedFlags.includes(f.text);
+    return `<div class="qc-flag${isDismissed ? ' dismissed' : ''}" data-flag="${escHtml(f.text)}"><span class="qc-flag-dot" style="color:#36B37E">●</span> <span${isDismissed ? ' style="text-decoration:line-through"' : ''}>${escHtml(f.text)}</span>${flagBubble(f)}${configIcon(flagConfigLink(f.text))}<button class="qc-flag-dismiss" data-flag="${escHtml(f.text)}" data-type="green" title="${isDismissed ? 'Restore' : 'Dismiss'}">${isDismissed ? '↩' : '×'}</button></div>`;
   }).join('');
   const redHtml = redFlags.map(f => {
-    const isDismissed = dismissedFlags.includes(f);
-    return `<div class="qc-flag${isDismissed ? ' dismissed' : ''}" data-flag="${escHtml(f)}"><span class="qc-flag-dot" style="color:#E8384F">●</span> <span${isDismissed ? ' style="text-decoration:line-through"' : ''}>${escHtml(f)}</span>${configIcon(flagConfigLink(f))}<button class="qc-flag-dismiss" data-flag="${escHtml(f)}" data-type="red" title="${isDismissed ? 'Restore' : 'Dismiss'}">${isDismissed ? '↩' : '×'}</button></div>`;
+    const isDismissed = dismissedFlags.includes(f.text);
+    return `<div class="qc-flag${isDismissed ? ' dismissed' : ''}" data-flag="${escHtml(f.text)}"><span class="qc-flag-dot" style="color:#E8384F">●</span> <span${isDismissed ? ' style="text-decoration:line-through"' : ''}>${escHtml(f.text)}</span>${flagBubble(f)}${configIcon(flagConfigLink(f.text))}<button class="qc-flag-dismiss" data-flag="${escHtml(f.text)}" data-type="red" title="${isDismissed ? 'Restore' : 'Dismiss'}">${isDismissed ? '↩' : '×'}</button></div>`;
   }).join('');
 
   // Breakdown bars
   const barColor = v => v >= 7 ? '#36B37E' : v >= 5 ? '#F5A623' : '#E8384F';
+  const BAR_TIPS = {
+    Qualification: 'Employer perspective: would this company seriously consider hiring you? Based ONLY on whether you meet their stated qualifications — your preferences are NOT factored in here.',
+    Preferences: 'Candidate perspective: how well does this role align with the role types, scope, seniority, selling motion, and team size you said you want?',
+    Dealbreakers: 'How well the role avoids your hard dealbreakers (work arrangement, role types you don\'t want, explicit dislikes). 10 = no dealbreakers triggered.',
+    Compensation: 'Match against your salary floor / OTE floor / strong-comp targets. 10 = posted comp meets or exceeds your strong target.',
+    'Role Fit': 'Day-to-day overlap between the role\'s actual responsibilities and the kind of work you said you do best.',
+  };
   const bars = [
     { label: 'Qualification', val: breakdown.qualificationFit },
     { label: 'Preferences', val: breakdown.preferenceFit },
@@ -149,8 +179,8 @@ function renderCurrent() {
     <div class="qc-section-label">Score Breakdown</div>
     <div class="qc-breakdown">
       ${bars.map(b => `
-        <div class="qc-bar-row">
-          <div class="qc-bar-label">${b.label}</div>
+        <div class="qc-bar-row" title="${(BAR_TIPS[b.label] || '').replace(/"/g, '&quot;')}" style="cursor:help;">
+          <div class="qc-bar-label">${b.label} <span style="opacity:0.4;font-size:10px;">ⓘ</span></div>
           <div class="qc-bar-track"><div class="qc-bar-fill" style="width:${b.val * 10}%;background:${barColor(b.val)}"></div></div>
           <div class="qc-bar-val" style="color:${barColor(b.val)}">${b.val}</div>
         </div>
@@ -394,20 +424,37 @@ function triageAction(action, fromDrag) {
     else CISounds.send();
   }
 
-  // Update entry stage
-  const newStage = action === 'pass' ? 'rejected' : 'want_to_apply';
-  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+  // Update entry stage — advance dynamically based on configured pipeline
+  chrome.storage.local.get(['savedCompanies', 'opportunityStages', 'customStages'], ({ savedCompanies, opportunityStages, customStages }) => {
     const companies = savedCompanies || [];
     const idx = companies.findIndex(c => c.id === entry.id);
-    if (idx !== -1) {
-      companies[idx].jobStage = newStage;
-      companies[idx].stageTimestamps = companies[idx].stageTimestamps || {};
-      companies[idx].stageTimestamps[newStage] = new Date().toISOString();
-      if (newStage === 'want_to_apply') {
-        companies[idx].actionStatus = 'my_court';
+    if (idx === -1) return;
+    const stages = opportunityStages || customStages || [];
+    const stageKeys = stages.map(s => s.key);
+    const currentStage = companies[idx].jobStage;
+    let newStage;
+    if (action === 'pass') {
+      newStage = 'rejected';
+    } else {
+      // Always advance one position from wherever the entry currently sits.
+      // If the entry's stage is unknown to the pipeline (legacy/renamed), treat
+      // it as if it were at the queue stage and advance from there. This ensures
+      // a swipe-right ALWAYS moves the entry forward by one stage, regardless
+      // of whether it was already past the queue.
+      let curIdxInStages = stageKeys.indexOf(currentStage);
+      if (curIdxInStages === -1) {
+        const queueIdx = stageKeys.indexOf(currentQueueStage);
+        curIdxInStages = queueIdx === -1 ? 0 : queueIdx;
       }
-      chrome.storage.local.set({ savedCompanies: companies });
+      newStage = stageKeys[curIdxInStages + 1] || stageKeys[curIdxInStages] || currentStage;
     }
+    companies[idx].jobStage = newStage;
+    companies[idx].stageTimestamps = companies[idx].stageTimestamps || {};
+    companies[idx].stageTimestamps[newStage] = new Date().toISOString();
+    if (action !== 'pass') {
+      companies[idx].actionStatus = 'my_court';
+    }
+    chrome.storage.local.set({ savedCompanies: companies });
   });
 
   // Next card after animation

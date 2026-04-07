@@ -2371,11 +2371,27 @@ function initCoopSettings() {
 
 // ── Structured Experience Entries ────────────────────────────────────────────
 
+const EXPERIENCE_TAG_VOCAB = [
+  'martech', 'adtech', 'salestech', 'revops', 'fintech', 'healthtech', 'edtech', 'logistics', 'supply chain',
+  'B2B SaaS', 'B2C', 'AI-native', 'PLG', 'enterprise', 'mid-market', 'SMB', 'startup', 'series A', 'series B',
+  'demo automation', 'conversational AI', 'sales enablement', 'marketing automation', 'CDP', 'CRM',
+  'analytics', 'data infrastructure', 'developer tools', 'vertical SaaS', 'horizontal SaaS',
+  'GTM', 'founding AE', 'first sales hire', 'IC', 'player-coach', 'people manager'
+];
+
 function initStructuredExperience() {
   const list = document.getElementById('experience-entries-list');
   const addBtn = document.getElementById('experience-add-btn');
   const hiddenTa = document.getElementById('profile-experience');
   if (!list || !addBtn) return;
+
+  // Shared datalist for tag autocomplete
+  if (!document.getElementById('exp-tag-datalist')) {
+    const dl = document.createElement('datalist');
+    dl.id = 'exp-tag-datalist';
+    dl.innerHTML = EXPERIENCE_TAG_VOCAB.map(t => `<option value="${t}">`).join('');
+    document.body.appendChild(dl);
+  }
 
   let entries = [];
 
@@ -2485,6 +2501,12 @@ function initStructuredExperience() {
           </div>
           <div class="rt-editable exp-rt-field field-input" id="exp-exp-${i}" contenteditable="true" data-idx="${i}" data-key="exposures" data-placeholder="Tools, methodologies, domains, deal sizes, team sizes...">${e.exposures || ''}</div>
         </div>
+        <div class="exp-entry-section-label">Industry & vertical tags</div>
+        <div class="exp-tags" data-idx="${i}">
+          ${(e.tags || []).map(t => `<span class="exp-tag" data-tag="${esc(t)}">${esc(t)}<span class="exp-tag-x" data-idx="${i}" data-tag="${esc(t)}" title="Remove">×</span></span>`).join('')}
+          ${(e.suggestedTags || []).filter(t => !(e.tags || []).includes(t)).map(t => `<span class="exp-tag suggested" data-idx="${i}" data-tag="${esc(t)}" title="Click to accept">${esc(t)}<span class="exp-tag-x suggested-x" data-idx="${i}" data-tag="${esc(t)}" title="Reject">×</span></span>`).join('')}
+          <button class="exp-tag-add" data-idx="${i}">+ Add tag</button>
+        </div>
       </div>
     `).join('');
     bindEntryEvents();
@@ -2515,10 +2537,24 @@ function initStructuredExperience() {
       if (e.description) parts.push(htmlToText(e.description));
       if (e.accomplishments) parts.push(`**Accomplishments:**\n${htmlToText(e.accomplishments)}`);
       if (e.exposures) parts.push(`**Skills/Exposures:** ${htmlToText(e.exposures)}`);
+      if (e.tags && e.tags.length) parts.push(`**Tags:** ${e.tags.join(', ')}`);
       return parts.join('\n');
     }).join('\n\n---\n\n');
-    saveBucket('profileExperience', text);
-    if (hiddenTa) hiddenTa.value = text;
+
+    // Build a tag rollup so Coop sees structured industry/vertical context up front
+    const tagRollup = {};
+    entries.forEach(e => {
+      (e.tags || []).forEach(t => {
+        if (!tagRollup[t]) tagRollup[t] = [];
+        if (e.company) tagRollup[t].push(e.company);
+      });
+    });
+    const rollupLines = Object.keys(tagRollup).sort().map(t => `- ${t}: ${tagRollup[t].join(', ')}`);
+    const fullText = rollupLines.length
+      ? `## Experience tag rollup (industries & verticals)\n${rollupLines.join('\n')}\n\n---\n\n${text}`
+      : text;
+    saveBucket('profileExperience', fullText);
+    if (hiddenTa) hiddenTa.value = fullText;
     showSaveStatus();
   }
 
@@ -2775,7 +2811,77 @@ function initStructuredExperience() {
       checkOverflow();
       setTimeout(checkOverflow, 200);
     });
+
+    // Tag chip interactions
+    list.querySelectorAll('.exp-tag-x').forEach(x => {
+      x.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const idx = parseInt(x.dataset.idx);
+        const tag = x.dataset.tag;
+        if (x.classList.contains('suggested-x')) {
+          // Reject suggestion
+          entries[idx].suggestedTags = (entries[idx].suggestedTags || []).filter(t => t !== tag);
+        } else {
+          entries[idx].tags = (entries[idx].tags || []).filter(t => t !== tag);
+        }
+        renderEntries();
+        save();
+      });
+    });
+    list.querySelectorAll('.exp-tag.suggested').forEach(chip => {
+      chip.addEventListener('click', ev => {
+        if (ev.target.classList.contains('exp-tag-x')) return;
+        const idx = parseInt(chip.dataset.idx);
+        const tag = chip.dataset.tag;
+        entries[idx].tags = entries[idx].tags || [];
+        if (!entries[idx].tags.includes(tag)) entries[idx].tags.push(tag);
+        entries[idx].suggestedTags = (entries[idx].suggestedTags || []).filter(t => t !== tag);
+        renderEntries();
+        save();
+      });
+    });
+    list.querySelectorAll('.exp-tag-add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'exp-tag-input';
+        input.placeholder = 'tag name';
+        input.setAttribute('list', 'exp-tag-datalist');
+        btn.parentNode.insertBefore(input, btn);
+        btn.style.display = 'none';
+        input.focus();
+        const commit = () => {
+          const val = input.value.trim();
+          if (val) {
+            entries[idx].tags = entries[idx].tags || [];
+            if (!entries[idx].tags.includes(val)) entries[idx].tags.push(val);
+            renderEntries();
+            save();
+          } else {
+            input.remove();
+            btn.style.display = '';
+          }
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { input.remove(); btn.style.display = ''; }
+        });
+      });
+    });
   }
+
+  // Expose for the Coop tag button below
+  initStructuredExperience._getEntries = () => entries;
+  initStructuredExperience._setSuggestions = (suggestionsByIdx) => {
+    Object.keys(suggestionsByIdx).forEach(k => {
+      const i = parseInt(k);
+      if (entries[i]) entries[i].suggestedTags = suggestionsByIdx[k];
+    });
+    renderEntries();
+    save();
+  };
 
   addBtn.addEventListener('click', () => {
     entries.push({ company: '', website: '', description: '', titles: '', dateRange: '', dateStart: '', dateEnd: '', datePresent: false, accomplishments: '', exposures: '' });
@@ -2920,6 +3026,69 @@ ${sourceContent}`;
 
       coopBtn.disabled = false;
       coopBtn.textContent = 'Let Coop fill this in';
+    });
+  }
+
+  // ── Coop, tag my experience ──
+  const tagBtn = document.getElementById('experience-coop-tag');
+  if (tagBtn) {
+    tagBtn.addEventListener('click', async () => {
+      const currentEntries = initStructuredExperience._getEntries();
+      if (!currentEntries.length) {
+        if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">Add experience entries first</span>';
+        return;
+      }
+      tagBtn.disabled = true;
+      const origText = tagBtn.textContent;
+      tagBtn.textContent = 'Coop is tagging...';
+      if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-text-tertiary)">Coop is analyzing each role...</span>';
+
+      try {
+        const stripHtml = (h) => (h || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const summary = currentEntries.map((e, i) => `[${i}] ${e.company || 'Unknown'} — ${stripHtml(e.description).slice(0, 400)}\n    Titles: ${e.titles || ''}\n    Exposures: ${stripHtml(e.exposures).slice(0, 300)}\n    Existing tags: ${(e.tags || []).join(', ') || 'none'}`).join('\n\n');
+
+        const prompt = `You are tagging work experience entries with industry/vertical/motion tags so a downstream AI can correctly classify the candidate's background.
+
+For each entry below, suggest 3-7 tags that describe what the company does, the GTM motion, and the candidate's role context. Only suggest tags NOT already in the existing tags list for that entry.
+
+Strongly prefer tags from this canonical vocabulary when applicable (but you may invent new ones if a better-fitting tag exists):
+${EXPERIENCE_TAG_VOCAB.join(', ')}
+
+Entries:
+${summary}
+
+Respond with ONLY a JSON object mapping entry index to an array of suggested tag strings. Example:
+{"0": ["martech", "B2B SaaS", "PLG"], "1": ["salestech", "AI-native"]}`;
+
+        const result = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            type: 'COOP_CHAT',
+            messages: [{ role: 'user', content: prompt }],
+            globalChat: true,
+            careerOSChat: true
+          }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
+        });
+
+        if (result?.reply) {
+          const match = result.reply.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            initStructuredExperience._setSuggestions(parsed);
+            const total = Object.values(parsed).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+            if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-text-tertiary)">${total} tags suggested — click to accept, × to reject</span>`;
+          } else {
+            if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">Coop didn\'t return valid tags — try again</span>';
+          }
+        } else if (result?.error) {
+          if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">${result.error}</span>`;
+        }
+      } catch (err) {
+        console.error('[ExperienceTagging] Error:', err);
+        if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">Error: ${err.message}</span>`;
+      }
+
+      tagBtn.disabled = false;
+      tagBtn.textContent = origText;
     });
   }
 }
@@ -3130,12 +3299,62 @@ Be specific and opinionated. Use what you actually know about me, not generic ad
   });
 }
 
-// ── Coop's memory viewer ────────────────────────────────────────────────────
+// ── Coop's memory viewer (Claude Code-style typed entries) ──────────────────
 
-let _memoryFilter = 'all';
+const COOP_MEMORY_TYPES = ['user', 'feedback', 'project', 'reference'];
+const COOP_MEMORY_TYPE_LABELS = {
+  user: 'User',
+  feedback: 'Feedback',
+  project: 'Project',
+  reference: 'Reference',
+};
+const COOP_MEMORY_TYPE_DESCRIPTIONS = {
+  user: 'Who you are — role, goals, expertise, working style',
+  feedback: 'Corrections and validated approaches Coop has learned from you',
+  project: 'In-flight opportunities, deadlines, and strategic decisions',
+  reference: 'Pointers to where info lives (links, dashboards, tools)',
+};
+let _memoryTypeFilter = 'all';
+
+// One-time migration from legacy storyTime.learnedInsights → coopMemory entries
+function migrateLegacyMemoryIfNeeded(callback) {
+  chrome.storage.local.get(['coopMemory', 'storyTime'], data => {
+    if (data.coopMemory?._migrated) { callback?.(data.coopMemory); return; }
+    const mem = data.coopMemory && Array.isArray(data.coopMemory.entries)
+      ? data.coopMemory
+      : { entries: [] };
+    const insights = (data.storyTime?.learnedInsights || []).filter(Boolean);
+    insights.forEach(item => {
+      const i = typeof item === 'string' ? { insight: item, category: 'general' } : item;
+      const cat = i.category || 'general';
+      let type = 'user';
+      if (cat === 'style_instruction' || cat === 'answer_pattern') type = 'feedback';
+      else if (cat === 'green_light' || cat === 'red_light' || cat === 'strategic_preference') type = 'user';
+      else if (cat === 'experience_update') type = 'user';
+      else if (cat === 'scoring_feedback') type = 'feedback';
+      else if (i.source && /^chat:/.test(i.source)) type = 'project';
+      const text = i.insight || '';
+      if (!text) return;
+      const name = (text.split(/[.!?\n]/)[0] || 'Insight').slice(0, 60);
+      mem.entries.push({
+        id: 'mem_' + Math.random().toString(36).slice(2, 10),
+        type,
+        name,
+        description: text.length > 60 ? text.slice(0, 140) : '',
+        body: text,
+        createdAt: i.date ? new Date(i.date).toISOString() : new Date().toISOString(),
+        updatedAt: i.date ? new Date(i.date).toISOString() : new Date().toISOString(),
+        source: i.source || 'legacy',
+      });
+    });
+    mem._migrated = true;
+    mem.updatedAt = new Date().toISOString();
+    chrome.storage.local.set({ coopMemory: mem }, () => callback?.(mem));
+  });
+}
 
 function initCoopMemory() {
-  renderCoopMemory();
+  migrateLegacyMemoryIfNeeded(() => renderCoopMemory());
 }
 
 function renderCoopMemory() {
@@ -3144,99 +3363,138 @@ function renderCoopMemory() {
   const patternsEl = document.getElementById('coop-memory-patterns');
   if (!listEl) return;
 
-  chrome.storage.local.get(['storyTime'], data => {
-    const st = data.storyTime || {};
-    const insights = (st.learnedInsights || []).map((item, idx) => {
-      if (typeof item === 'string') return { insight: item, category: 'general', priority: 'normal', idx };
-      return { ...item, idx };
+  chrome.storage.local.get(['coopMemory'], data => {
+    const mem = data.coopMemory && Array.isArray(data.coopMemory.entries) ? data.coopMemory : { entries: [] };
+    const entries = mem.entries.slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+
+    // Counts per type
+    const counts = { all: entries.length };
+    COOP_MEMORY_TYPES.forEach(t => counts[t] = 0);
+    entries.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
+
+    // Type filter chips
+    filtersEl.innerHTML =
+      `<button class="memory-filter-btn ${_memoryTypeFilter === 'all' ? 'active' : ''}" data-filter="all">All (${counts.all})</button>` +
+      COOP_MEMORY_TYPES.map(t =>
+        `<button class="memory-filter-btn ${_memoryTypeFilter === t ? 'active' : ''}" data-filter="${t}">${COOP_MEMORY_TYPE_LABELS[t]} (${counts[t]})</button>`
+      ).join('') +
+      `<button class="memory-filter-btn" id="coop-memory-add" style="margin-left:auto;">+ Add</button>`;
+
+    filtersEl.querySelectorAll('.memory-filter-btn[data-filter]').forEach(btn => {
+      btn.addEventListener('click', () => { _memoryTypeFilter = btn.dataset.filter; renderCoopMemory(); });
     });
-    const patterns = st.answerPatterns || [];
+    document.getElementById('coop-memory-add')?.addEventListener('click', () => openMemoryEditor(null));
 
-    // Category counts
-    const cats = {};
-    insights.forEach(i => { const c = i.category || 'general'; cats[c] = (cats[c] || 0) + 1; });
-
-    // Filters
-    const allCats = ['all', ...Object.keys(cats).sort()];
-    filtersEl.innerHTML = allCats.map(c =>
-      `<button class="memory-filter-btn ${_memoryFilter === c ? 'active' : ''}" data-filter="${c}">${c === 'all' ? `All (${insights.length})` : `${c.replace(/_/g, ' ')} (${cats[c]})`}</button>`
-    ).join('');
-    filtersEl.querySelectorAll('.memory-filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => { _memoryFilter = btn.dataset.filter; renderCoopMemory(); });
-    });
-
-    // Filter
-    const filtered = _memoryFilter === 'all' ? insights : insights.filter(i => (i.category || 'general') === _memoryFilter);
+    const filtered = _memoryTypeFilter === 'all' ? entries : entries.filter(e => e.type === _memoryTypeFilter);
 
     if (!filtered.length) {
-      listEl.innerHTML = '<div style="text-align:center;color:#7c98b6;padding:20px;font-size:13px;">No learned insights yet. Chat with Coop and he\'ll start building memory.</div>';
-    } else {
-      // Show newest first
-      listEl.innerHTML = [...filtered].reverse().map(i => `
-        <div class="memory-entry" data-idx="${i.idx}">
-          <div class="memory-insight">${escHtml(i.insight)}</div>
-          <div class="memory-meta">
-            <span class="memory-cat ${i.category || 'general'}">${(i.category || 'general').replace(/_/g, ' ')}</span>
-            ${i.priority === 'high' ? '<span class="memory-cat high">high priority</span>' : ''}
-            ${i.source ? `<span>${escHtml(i.source)}</span>` : ''}
-            ${i.date ? `<span>${i.date}</span>` : ''}
-          </div>
-          <button class="memory-delete" data-idx="${i.idx}" title="Delete this insight">&times;</button>
-        </div>
-      `).join('');
-
-      listEl.querySelectorAll('.memory-delete').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = parseInt(btn.dataset.idx);
-          chrome.storage.local.get(['storyTime'], d => {
-            const st2 = d.storyTime || {};
-            if (st2.learnedInsights) {
-              st2.learnedInsights.splice(idx, 1);
-              chrome.storage.local.set({ storyTime: st2 }, () => {
-                showSaveStatus();
-                renderCoopMemory();
-              });
-            }
-          });
-        });
-      });
-    }
-
-    // Answer patterns
-    if (patterns.length) {
-      patternsEl.innerHTML = `
-        <div class="memory-section-title">Answer patterns (${patterns.length})</div>
-        ${[...patterns].reverse().slice(0, 10).map((p, i) => `
-          <div class="memory-entry" data-pattern-idx="${patterns.length - 1 - i}">
-            <div class="memory-insight">${escHtml(p.text?.slice(0, 200) || '')}</div>
-            <div class="memory-meta">
-              <span class="memory-cat answer_pattern">answer pattern</span>
-              ${p.context ? `<span>${escHtml(p.context)}</span>` : ''}
-              ${p.date ? `<span>${p.date}</span>` : ''}
-              ${p.source ? `<span>${escHtml(p.source)}</span>` : ''}
-            </div>
-            <button class="memory-delete" data-pattern-idx="${patterns.length - 1 - i}" title="Delete">&times;</button>
-          </div>
-        `).join('')}`;
-
-      patternsEl.querySelectorAll('.memory-delete').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = parseInt(btn.dataset.patternIdx);
-          chrome.storage.local.get(['storyTime'], d => {
-            const st2 = d.storyTime || {};
-            if (st2.answerPatterns) {
-              st2.answerPatterns.splice(idx, 1);
-              chrome.storage.local.set({ storyTime: st2 }, () => {
-                showSaveStatus();
-                renderCoopMemory();
-              });
-            }
-          });
-        });
-      });
-    } else {
+      listEl.innerHTML = `<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No memory entries yet. Chat with Coop and he'll start building memory — or click <strong>+ Add</strong> to write one yourself.</div>`;
       patternsEl.innerHTML = '';
+      return;
     }
+
+    // Group by type for display
+    const groups = {};
+    filtered.forEach(e => { (groups[e.type] = groups[e.type] || []).push(e); });
+
+    listEl.innerHTML = COOP_MEMORY_TYPES.filter(t => groups[t]).map(t => `
+      <div class="memory-section">
+        <div class="memory-section-title">
+          <span class="memory-type-chip ${t}">${COOP_MEMORY_TYPE_LABELS[t]}</span>
+          <span style="font-weight:400;color:#7c98b6;font-size:11px;margin-left:8px;">${COOP_MEMORY_TYPE_DESCRIPTIONS[t]}</span>
+        </div>
+        ${groups[t].map(e => `
+          <div class="memory-entry" data-id="${e.id}">
+            <div class="memory-name">${escHtml(e.name || 'Untitled')}</div>
+            ${e.description ? `<div class="memory-desc">${escHtml(e.description)}</div>` : ''}
+            <div class="memory-body">${escHtml(e.body || '').replace(/\n/g, '<br>')}</div>
+            <div class="memory-meta">
+              ${e.updatedAt ? `<span>Updated ${new Date(e.updatedAt).toLocaleDateString()}</span>` : ''}
+              ${e.source ? `<span>· ${escHtml(e.source)}</span>` : ''}
+            </div>
+            <div class="memory-actions">
+              <button class="memory-edit" data-id="${e.id}" title="Edit">✎</button>
+              <button class="memory-delete" data-id="${e.id}" title="Delete">×</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.memory-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const e = entries.find(x => x.id === btn.dataset.id);
+        if (e) openMemoryEditor(e);
+      });
+    });
+    listEl.querySelectorAll('.memory-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        chrome.storage.local.get(['coopMemory'], d => {
+          const m = d.coopMemory || { entries: [] };
+          m.entries = (m.entries || []).filter(x => x.id !== id);
+          m.updatedAt = new Date().toISOString();
+          chrome.storage.local.set({ coopMemory: m }, () => {
+            showSaveStatus();
+            renderCoopMemory();
+          });
+        });
+      });
+    });
+
+    patternsEl.innerHTML = '';
+  });
+}
+
+function openMemoryEditor(entry) {
+  const isNew = !entry;
+  const e = entry || { id: 'mem_' + Math.random().toString(36).slice(2, 10), type: 'user', name: '', description: '', body: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), source: 'manual' };
+
+  // Remove any existing modal
+  document.getElementById('memory-editor-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'memory-editor-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow:auto;font-family:inherit;">
+      <h3 style="margin:0 0 16px;font-size:16px;font-weight:700;">${isNew ? 'New memory entry' : 'Edit memory entry'}</h3>
+      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Type</label>
+      <select id="me-type" style="width:100%;padding:8px;border:1px solid #E2DFD9;border-radius:6px;margin-bottom:12px;font-family:inherit;">
+        ${COOP_MEMORY_TYPES.map(t => `<option value="${t}" ${e.type === t ? 'selected' : ''}>${COOP_MEMORY_TYPE_LABELS[t]} — ${COOP_MEMORY_TYPE_DESCRIPTIONS[t]}</option>`).join('')}
+      </select>
+      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Name</label>
+      <input id="me-name" value="${escHtml(e.name)}" style="width:100%;padding:8px;border:1px solid #E2DFD9;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
+      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Description (one line, ≤150 chars)</label>
+      <input id="me-desc" value="${escHtml(e.description)}" style="width:100%;padding:8px;border:1px solid #E2DFD9;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
+      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Body</label>
+      <textarea id="me-body" style="width:100%;padding:10px;border:1px solid #E2DFD9;border-radius:6px;font-family:inherit;font-size:13px;min-height:140px;resize:vertical;">${escHtml(e.body)}</textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button id="me-cancel" style="padding:8px 16px;border:1px solid #E2DFD9;border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Cancel</button>
+        <button id="me-save" style="padding:8px 16px;border:none;border-radius:6px;background:#F06A52;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#me-cancel').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', ev => { if (ev.target === modal) modal.remove(); });
+  modal.querySelector('#me-save').addEventListener('click', () => {
+    const type = modal.querySelector('#me-type').value;
+    const name = modal.querySelector('#me-name').value.trim();
+    const description = modal.querySelector('#me-desc').value.trim();
+    const body = modal.querySelector('#me-body').value.trim();
+    if (!name || !body) { alert('Name and Body are required'); return; }
+    chrome.storage.local.get(['coopMemory'], d => {
+      const m = d.coopMemory && Array.isArray(d.coopMemory.entries) ? d.coopMemory : { entries: [] };
+      const idx = m.entries.findIndex(x => x.id === e.id);
+      const updated = { ...e, type, name, description, body, updatedAt: new Date().toISOString() };
+      if (idx === -1) m.entries.push(updated);
+      else m.entries[idx] = updated;
+      m.updatedAt = new Date().toISOString();
+      chrome.storage.local.set({ coopMemory: m }, () => {
+        showSaveStatus();
+        modal.remove();
+        renderCoopMemory();
+      });
+    });
   });
 }
 

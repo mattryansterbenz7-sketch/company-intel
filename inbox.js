@@ -11,6 +11,21 @@ let searchQuery = '';
 let stageFilter = 'all';
 let directionFilter = 'all'; // all, inbound, outbound
 let gmailUserEmail = '';
+let configuredStages = []; // [{ key, label }] from opportunityStages/customStages
+let readEmailKeys = new Set();
+
+function emailKey(email) {
+  return email.id || email.messageId || email.threadId || `${email.subject || ''}|${email.date || ''}|${email.from || ''}`;
+}
+
+function markEmailRead(email) {
+  const k = emailKey(email);
+  if (!k || readEmailKeys.has(k)) return;
+  readEmailKeys.add(k);
+  // Mark in-memory copies so the next render reflects it
+  allEmails.forEach(e => { if (emailKey(e) === k) e._unread = false; });
+  chrome.storage.local.set({ readEmailKeys: [...readEmailKeys] });
+}
 
 function escHtml(s) {
   const d = document.createElement('div');
@@ -53,9 +68,12 @@ function parseFromEmail(from) {
 
 // ── Data Loading ────────────────────────────────────────────────────────────
 
-chrome.storage.local.get(['savedCompanies', 'lastInboxViewedAt', 'gmailUserEmail'], data => {
+chrome.storage.local.get(['savedCompanies', 'lastInboxViewedAt', 'gmailUserEmail', 'opportunityStages', 'customStages', 'readEmailKeys'], data => {
   gmailUserEmail = (data.gmailUserEmail || '').toLowerCase();
   allCompanies = data.savedCompanies || [];
+  const stages = data.opportunityStages || data.customStages || [];
+  configuredStages = stages.map(s => ({ key: s.key, label: s.label || s.name || s.key }));
+  readEmailKeys = new Set(Array.isArray(data.readEmailKeys) ? data.readEmailKeys : []);
   // First ever open: set to now so nothing shows as unread
   // Subsequent opens: use the stored timestamp
   const isFirstOpen = data.lastInboxViewedAt === undefined || data.lastInboxViewedAt === null;
@@ -78,6 +96,8 @@ function buildEmailIndex() {
     companyMap[entry.id] = { name: entry.company, favDomain, id: entry.id, stage, isOpportunity: !!entry.isOpportunity };
 
     entry.cachedEmails.forEach(email => {
+      const key = emailKey(email);
+      const newerThanLastView = email.date ? new Date(email.date).getTime() > lastViewedAt : false;
       allEmails.push({
         ...email,
         _company: entry.company,
@@ -85,7 +105,7 @@ function buildEmailIndex() {
         _favDomain: favDomain,
         _stage: stage,
         _ts: email.date ? new Date(email.date).getTime() : 0,
-        _unread: email.date ? new Date(email.date).getTime() > lastViewedAt : false,
+        _unread: newerThanLastView && !readEmailKeys.has(key),
       });
     });
   });
@@ -213,22 +233,25 @@ function getFilteredEmails() {
 }
 
 function getStages() {
-  const stages = new Set();
-  allEmails.forEach(e => { if (e._stage) stages.add(e._stage); });
-  return [...stages];
+  // Source of truth: configured pipeline stages, in pipeline order.
+  // Fall back to whatever stages currently appear on emails (for legacy data).
+  const present = new Set();
+  allEmails.forEach(e => { if (e._stage) present.add(e._stage); });
+  if (configuredStages.length) {
+    const fromConfig = configuredStages.map(s => ({ key: s.key, label: s.label }));
+    // Append any stages that exist on emails but aren't in the configured list
+    const configuredKeys = new Set(configuredStages.map(s => s.key));
+    [...present].filter(k => !configuredKeys.has(k)).forEach(k => fromConfig.push({ key: k, label: k.replace(/_/g, ' ') }));
+    return fromConfig;
+  }
+  return [...present].map(k => ({ key: k, label: k.replace(/_/g, ' ') }));
 }
 
 function renderEmailList() {
   const listEl = document.getElementById('inbox-list');
   const emails = getFilteredEmails();
   const companyName = selectedCompanyId ? (companyMap[selectedCompanyId]?.name || 'Unknown') : 'All Mail';
-  const stages = getStages();
-
-  const stageLabels = {
-    needs_review: 'AI Queue', want_to_apply: 'Want to Apply', applied: 'Applied',
-    intro_requested: 'Intro Requested', conversations: 'Conversations', offer_stage: 'Offer Stage',
-    saved: 'Saved', watching: 'Watching',
-  };
+  const stages = getStages(); // [{ key, label }]
 
   let html = `<div class="list-header">
     <span class="list-header-title">${escHtml(companyName)}</span>
@@ -238,7 +261,7 @@ function renderEmailList() {
     <div class="filter-row">
       <select class="filter-select" id="stage-filter">
         <option value="all"${stageFilter === 'all' ? ' selected' : ''}>All Stages</option>
-        ${stages.map(s => `<option value="${s}"${stageFilter === s ? ' selected' : ''}>${escHtml(stageLabels[s] || s.replace(/_/g, ' '))}</option>`).join('')}
+        ${stages.map(s => `<option value="${s.key}"${stageFilter === s.key ? ' selected' : ''}>${escHtml(s.label)}</option>`).join('')}
       </select>
       <select class="filter-select" id="direction-filter">
         <option value="all"${directionFilter === 'all' ? ' selected' : ''}>All Emails</option>
@@ -276,9 +299,15 @@ function renderEmailList() {
     row.addEventListener('click', () => {
       const idx = parseInt(row.dataset.idx);
       selectedEmailIdx = idx;
-      highlightRow();
       const email = getFilteredEmails()[idx];
-      if (email) renderDetail(email);
+      if (email) {
+        markEmailRead(email);
+        renderDetail(email);
+        // Reflect read state in list + sidebar counts
+        renderEmailList();
+        buildSidebar();
+      }
+      highlightRow();
     });
   });
 

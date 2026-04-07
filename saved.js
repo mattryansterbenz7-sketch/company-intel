@@ -388,28 +388,34 @@ function openScoreModal(entry) {
     ? `<div class="score-modal-dq">\u{1F6AB} Hard Disqualifier${hardDQ.reasons?.length ? ': ' + hardDQ.reasons.join('; ') : ''}</div>`
     : '';
 
-  // Flags — side by side with gradient colors
-  const strongFits = jm.strongFits || [];
-  const redFlags = jm.redFlags || jm.watchOuts || [];
+  // Flags — side by side with gradient colors. Normalize legacy strings
+  const _normFlag = f => typeof f === 'string' ? { text: f, source: null, evidence: null } : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null };
+  const _flagSrcLabel = s => ({ job_posting: 'From job posting', company_data: 'From company research', preferences: 'From your preferences', candidate_profile: 'From your profile', dealbreaker_keyword: 'From your dealbreaker keywords' }[s] || (s ? `Source: ${s}` : 'No source linked'));
+  const _flagSrcIcon = s => ({ job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' }[s] || 'ⓘ');
+  const _flagTip = f => (_flagSrcLabel(f.source) + (f.evidence ? ` — "${f.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
+  const strongFits = (jm.strongFits || []).map(_normFlag).filter(f => f.text);
+  const redFlags = (jm.redFlags || jm.watchOuts || []).map(_normFlag).filter(f => f.text);
   const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
   const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
   const dismissedFlags = jm.dismissedFlags || [];
   const greenCol = strongFits.length ? `<div class="score-modal-flag-col green">
     <div class="score-modal-flag-heading green">Green Flags</div>
     ${strongFits.map((f, i) => {
-      const isDismissed = dismissedFlags.includes(f);
+      const isDismissed = dismissedFlags.includes(f.text);
       const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
       const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
-      return `<div class="score-modal-flag" style="${dimOpacity}"><span class="score-modal-flag-icon" style="color:${greenShades[Math.min(i, greenShades.length - 1)]}">&#x2714;</span><span${strikeStyle}>${escHtmlGlobal(f)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f)}" data-entry-id="${entry.id}" data-flag-type="green" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
+      const tip = _flagTip(f);
+      return `<div class="score-modal-flag" style="${dimOpacity}"><span class="score-modal-flag-icon" style="color:${greenShades[Math.min(i, greenShades.length - 1)]}">&#x2714;</span><span${strikeStyle}>${escHtmlGlobal(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f.text)}" data-entry-id="${entry.id}" data-flag-type="green" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
     }).join('')}
   </div>` : '';
   const redCol = redFlags.length ? `<div class="score-modal-flag-col red">
     <div class="score-modal-flag-heading red">Red Flags</div>
     ${redFlags.map((f, i) => {
-      const isDismissed = dismissedFlags.includes(f);
+      const isDismissed = dismissedFlags.includes(f.text);
       const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
       const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
-      return `<div class="score-modal-flag" style="${dimOpacity}" data-flag-text="${escHtmlGlobal(f)}"><span class="score-modal-flag-icon" style="color:${redShades[Math.min(i, redShades.length - 1)]}">&#x25CF;</span><span${strikeStyle}>${escHtmlGlobal(f)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f)}" data-entry-id="${entry.id}" data-flag-type="red" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
+      const tip = _flagTip(f);
+      return `<div class="score-modal-flag" style="${dimOpacity}" data-flag-text="${escHtmlGlobal(f.text)}"><span class="score-modal-flag-icon" style="color:${redShades[Math.min(i, redShades.length - 1)]}">&#x25CF;</span><span${strikeStyle}>${escHtmlGlobal(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f.text)}" data-entry-id="${entry.id}" data-flag-type="red" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
     }).join('')}
   </div>` : '';
   const flagsHtml = (greenCol || redCol) ? `${greenCol}${redCol}` : '';
@@ -1318,8 +1324,8 @@ function render() {
         <details class="card-analysis">
           <summary>Full Analysis</summary>
           <div class="analysis-body">
-            ${c.jobMatch?.strongFits?.length ? `<div><div class="analysis-section-label">Green Flags</div><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div>` : ''}
-            ${c.jobMatch?.redFlags?.length ? `<div><div class="analysis-section-label">Red Flags</div><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div>` : ''}
+            ${c.jobMatch?.strongFits?.length ? `<div><div class="analysis-section-label">Green Flags</div><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="fit" title="${ev.replace(/"/g,'&quot;')}"><span>🟢</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div>` : ''}
+            ${c.jobMatch?.redFlags?.length ? `<div><div class="analysis-section-label">Red Flags</div><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="flag" title="${ev.replace(/"/g,'&quot;')}"><span>🔴</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div>` : ''}
             ${c.intelligence?.eli5 ? `<div><div class="analysis-section-label">Simple Explanation</div><div class="analysis-section-body">${c.intelligence.eli5}</div></div>` : ''}
             ${c.intelligence?.whosBuyingIt ? `<div><div class="analysis-section-label">Who Buys It</div><div class="analysis-section-body">${c.intelligence.whosBuyingIt}</div></div>` : ''}
             ${c.intelligence?.howItWorks ? `<div><div class="analysis-section-label">How It Works</div><div class="analysis-section-body">${c.intelligence.howItWorks}</div></div>` : ''}
@@ -2007,8 +2013,8 @@ function renderKanbanCard(c) {
       <div class="kanban-details-body">
         ${c.jobMatch?.jobSummary && (!c.jobTitle || !c.jobMatch.jobSummary.toLowerCase().startsWith(c.jobTitle.toLowerCase())) ? `<div class="kanban-detail-summary">${c.jobMatch.jobSummary}</div>` : ''}
         ${c.jobMatch?.verdict ? `<div class="kanban-detail-verdict">${c.jobMatch.verdict}</div>` : ''}
-        ${c.jobMatch?.strongFits?.length ? `<details class="card-analysis"><summary>Green Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => `<li class="fit"><span>🟢</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div></details>` : ''}
-        ${c.jobMatch?.redFlags?.length ? `<details class="card-analysis"><summary>Red Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => `<li class="flag"><span>🔴</span><span>${boldKeyPhrase(f)}</span></li>`).join('')}</ul></div></details>` : ''}
+        ${c.jobMatch?.strongFits?.length ? `<details class="card-analysis"><summary>Green Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="fit" title="${ev.replace(/"/g,'&quot;')}"><span>🟢</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div></details>` : ''}
+        ${c.jobMatch?.redFlags?.length ? `<details class="card-analysis"><summary>Red Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="flag" title="${ev.replace(/"/g,'&quot;')}"><span>🔴</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div></details>` : ''}
         ${c.intelligence?.eli5 ? `<details class="card-analysis"><summary>About the Company</summary><div class="analysis-body"><div class="analysis-section-body">${c.intelligence.eli5}</div></div></details>` : ''}
         ${c.intelligence?.whosBuyingIt ? `<details class="card-analysis"><summary>Who Buys It</summary><div class="analysis-body"><div class="analysis-section-body">${c.intelligence.whosBuyingIt}</div></div></details>` : ''}
         ${c.reviews?.length ? `<details class="card-analysis"><summary>Reviews & Signal</summary><div class="analysis-body">${c.reviews.slice(0,3).map(r => `<div class="analysis-review">"${r.snippet}"<div class="analysis-review-src">${r.source || ''}</div></div>`).join('')}</div></details>` : ''}
@@ -3879,8 +3885,8 @@ function openStatCardEditor() {
       if (c.intelligence?.whosBuyingIt) parts.push(`Who buys it: ${c.intelligence.whosBuyingIt}`);
       if (c.jobTitle) parts.push(`Role: ${c.jobTitle}`);
       if (c.jobMatch?.verdict) parts.push(`Match verdict: ${c.jobMatch.verdict} (${c.jobMatch.score}/10)`);
-      if (c.jobMatch?.strongFits?.length) parts.push(`Strong fits: ${c.jobMatch.strongFits.join('; ')}`);
-      if (c.jobMatch?.redFlags?.length) parts.push(`Red flags: ${c.jobMatch.redFlags.join('; ')}`);
+      if (c.jobMatch?.strongFits?.length) parts.push(`Strong fits: ${c.jobMatch.strongFits.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
+      if (c.jobMatch?.redFlags?.length) parts.push(`Red flags: ${c.jobMatch.redFlags.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
       if (c.jobDescription) parts.push(`Job description:\n${c.jobDescription.slice(0, 3000)}`);
       if (c.leaders?.length) parts.push(`Leadership: ${c.leaders.map(l => `${l.name} (${l.title || ''})`).join(', ')}`);
       if (c.notes) parts.push(`Notes: ${c.notes}`);
