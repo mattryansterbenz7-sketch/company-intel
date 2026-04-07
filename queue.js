@@ -2,7 +2,7 @@
 // CompanyIntel — Scoring Queue (Triage UI)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const QUEUE_STAGE = 'needs_review';
+const QUEUE_STAGE_FALLBACK = 'needs_review';
 let queue = [];
 let currentIdx = 0;
 
@@ -17,10 +17,13 @@ document.getElementById('back-btn').addEventListener('click', e => {
 
 // Load queue entries
 function loadQueue() {
-  chrome.storage.local.get(['savedCompanies', 'pipelineConfig'], data => {
+  chrome.storage.local.get(['savedCompanies', 'pipelineConfig', 'opportunityStages', 'customStages'], data => {
     const companies = data.savedCompanies || [];
-    const queueStage = data.pipelineConfig?.scoring?.queueStage || QUEUE_STAGE;
-    queue = companies.filter(c => c.isOpportunity && (c.jobStage || 'needs_review') === queueStage);
+    // Determine queue stage: explicit config > first stage in pipeline > fallback
+    const stages = data.opportunityStages || data.customStages || [];
+    const firstStageKey = stages.length > 0 ? stages[0].key : null;
+    const queueStage = data.pipelineConfig?.scoring?.queueStage || firstStageKey || QUEUE_STAGE_FALLBACK;
+    queue = companies.filter(c => c.isOpportunity && (c.jobStage || QUEUE_STAGE_FALLBACK) === queueStage);
     // Sort: scored first, then by score desc
     queue.sort((a, b) => {
       const sa = a.jobMatch?.score ?? -1;

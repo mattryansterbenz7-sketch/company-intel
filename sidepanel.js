@@ -129,6 +129,16 @@ let currentJobMeta = null;
 let currentPrefs = null;
 let saveRating = 0;
 let _sessionSaves = [];
+let _queueStageKey = 'needs_review'; // dynamically resolved on load
+
+// Resolve the queue stage key from pipeline config or first stage
+function resolveQueueStage() {
+  chrome.storage.local.get(['pipelineConfig', 'opportunityStages', 'customStages'], data => {
+    const stages = data.opportunityStages || data.customStages || [];
+    _queueStageKey = data.pipelineConfig?.scoring?.queueStage || (stages.length > 0 ? stages[0].key : 'needs_review');
+  });
+}
+resolveQueueStage();
 
 // Auto-set "Action On" based on stage
 function defaultActionStatus(stageKey) {
@@ -548,7 +558,7 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
   }
   // Enrich and reset to scoring queue for re-evaluation
   const enriched = { ...prev };
-  enriched.jobStage = 'needs_review';
+  enriched.jobStage = _queueStageKey;
   enriched.jobMatch = null; // clear old score for fresh evaluation
   // Use longer/more detailed job description
   if (currentJobDescription && (!prev.jobDescription || currentJobDescription.length > prev.jobDescription.length)) {
@@ -1187,7 +1197,7 @@ function renderHomeState() {
     document.getElementById('sp-open-pipeline')?.addEventListener('click', openDashboard);
 
     // Scoring queue count
-    const queueCount = companies.filter(c => c.isOpportunity && (c.jobStage || 'needs_review') === 'needs_review').length;
+    const queueCount = companies.filter(c => c.isOpportunity && (c.jobStage || _queueStageKey) === _queueStageKey).length;
     document.getElementById('sp-home-queue').innerHTML = queueCount > 0 ? `
       <div class="sp-home-card sp-home-queue-card" id="sp-home-queue-link">
         <span class="sp-home-queue-count">${queueCount}</span>
@@ -4213,7 +4223,7 @@ function buildQueueEntry() {
     leaders:          currentResearch?.leaders      || null,
     status:           'co_watchlist',
     isOpportunity:    true,
-    jobStage:         'needs_review',
+    jobStage:         _queueStageKey,
     jobTitle:         currentJobTitle || null,
     jobUrl:           currentUrl || null,
     jobMatch:         currentResearch?.jobMatch    || null,
