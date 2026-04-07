@@ -508,8 +508,15 @@ renderCurrent = function() {
 
 // Listen for real-time score updates
 chrome.runtime.onMessage?.addListener((msg) => {
-  if (msg.type === 'SCORE_UPDATED' || msg.type === 'QUICK_FIT_DONE') {
+  if (msg.type === 'SCORE_UPDATED' || msg.type === 'QUICK_FIT_DONE' || msg.type === 'QUICK_FIT_COMPLETE') {
     loadQueue(); // refresh
+  }
+});
+
+// Auto-refresh when savedCompanies changes (e.g. new save from sidepanel)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.savedCompanies) {
+    loadQueue();
   }
 });
 

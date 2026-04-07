@@ -479,6 +479,10 @@ saveConfirmBtn.addEventListener('click', () => {
       if (isJobSave) { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
       else           { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
       showCrmLink(entry);
+      // Auto-queue scoring for new job saves
+      if (isJobSave) {
+        chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
+      }
     });
   });
 });
@@ -509,10 +513,10 @@ function mergeAndSave(prev, existing, dupIdx) {
     founded:        prev.founded   || currentResearch?.founded   || null,
     ...(isJobSave ? {
       isOpportunity:  true,
-      jobStage:       prev.jobStage || jobStageValue,
+      jobStage:       jobStageValue, // Always reset to scoring queue on new save
       jobTitle:       currentJobTitle || prev.jobTitle || null,
       jobUrl:         currentUrl || prev.jobUrl || null,
-      jobMatch:       prev.jobMatch || currentResearch?.jobMatch || null,
+      jobMatch:       currentResearch?.jobMatch || null, // Clear old score for re-evaluation
       jobSnapshot:    currentResearch?.jobSnapshot || prev.jobSnapshot || null,
       jobDescription: currentJobDescription || prev.jobDescription || null,
     } : {
@@ -530,6 +534,10 @@ function mergeAndSave(prev, existing, dupIdx) {
     void chrome.runtime.lastError;
     markAsSaved();
     showCrmLink(merged);
+    // Auto-queue scoring for job saves
+    if (merged.isOpportunity) {
+      chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: merged.id });
+    }
   });
 }
 
