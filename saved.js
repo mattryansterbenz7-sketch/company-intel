@@ -1232,6 +1232,11 @@ function render() {
     const qCount = allCompanies.filter(c => c.isOpportunity && (c.jobStage || 'needs_review') === QUEUE_STAGE).length;
     queueLabel.textContent = qCount > 0 ? `Coop's Scoring Queue (${qCount})` : `Coop's Scoring Queue`;
   }
+  const applyLabel = document.getElementById('apply-header-label');
+  if (applyLabel) {
+    const aCount = allCompanies.filter(c => c.isOpportunity && c.jobStage === 'want_to_apply').length;
+    applyLabel.textContent = aCount > 0 ? `Apply Queue (${aCount})` : `Apply Queue`;
+  }
 
   if (viewMode === 'kanban' && activePipeline !== 'all') {
     grid.style.display = 'none';
@@ -1891,8 +1896,8 @@ function renderKanban(filtered) {
   const board = document.getElementById('kanban-board');
   const stages = currentStages();
   const validKeys = new Set(stages.map(s => s.key));
-  // Skip the scoring queue column in opportunity pipeline — it has its own dedicated page
-  const renderStages = (activePipeline === 'opportunity') ? stages.filter(s => s.key !== QUEUE_STAGE) : stages;
+  // Skip the scoring queue + apply queue columns in opportunity pipeline — they have dedicated pages
+  const renderStages = (activePipeline === 'opportunity') ? stages.filter(s => s.key !== QUEUE_STAGE && s.key !== 'want_to_apply') : stages;
   board.innerHTML = renderStages.map(({ key: statusKey, label: statusLabel }) => {
     const cards = filtered.filter(c => {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
@@ -2034,6 +2039,16 @@ function renderKanbanCard(c) {
         </div>
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
+      ${isJob && (c.jobMatch?.scoreBreakdown?.preferenceFit != null || c.jobMatch?.roleBrief?.qualificationScore != null) ? (() => {
+        const icpMatch = c.jobMatch?.scoreBreakdown?.preferenceFit;
+        const qualMatch = c.jobMatch?.roleBrief?.qualificationScore;
+        const renderBadge = (label, score) => {
+          if (score == null) return '';
+          const color = score >= 7 ? '#00897b' : score >= 5 ? '#d97706' : '#e5483b';
+          return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${score}</span>`;
+        };
+        return `<div style="display:flex;gap:6px;padding:4px 0;margin-bottom:4px;font-size:11px;">${icpMatch != null ? renderBadge('ICP Match', icpMatch) : ''} ${qualMatch != null ? renderBadge('Qual Match', qualMatch) : ''}</div>`;
+      })() : ''}
       <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => {
         const { final, mod } = applyExcitementModifier(c.jobMatch.score, c.rating);
         const v = scoreToVerdict(final);
@@ -3208,6 +3223,9 @@ document.getElementById('stage-editor-modal').addEventListener('click', (e) => {
 document.getElementById('edit-stages-btn').addEventListener('click', openStageEditor);
 document.getElementById('queue-header-btn')?.addEventListener('click', () => {
   window.open(chrome.runtime.getURL('queue.html'), '_blank');
+});
+document.getElementById('apply-header-btn')?.addEventListener('click', () => {
+  window.open(chrome.runtime.getURL('queue.html?mode=apply'), '_blank');
 });
 
 // Search
