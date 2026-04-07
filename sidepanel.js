@@ -874,8 +874,11 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     return;
   }
 
-  // Inject content script in case it wasn't loaded yet, then query
-  chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
+  // Only inject content script on real web pages — skip chrome://, extension pages, etc.
+  const isWebPage = currentUrl && /^https?:\/\//i.test(currentUrl);
+  if (isWebPage) {
+    chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
+  }
   setTimeout(() => {
     chrome.tabs.sendMessage(tabId, { type: 'GET_COMPANY' }, handleInitialDetection);
   }, 300);
