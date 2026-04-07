@@ -153,10 +153,22 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Swipe animation */
+    .queue-card { cursor: grab; user-select: none; }
+    .queue-card:active { cursor: grabbing; }
     .queue-card.swipe-left { animation: swipeLeft 0.3s ease forwards; }
     .queue-card.swipe-right { animation: swipeRight 0.3s ease forwards; }
     @keyframes swipeLeft { to { opacity: 0; transform: translateX(-120%) rotate(-8deg); } }
     @keyframes swipeRight { to { opacity: 0; transform: translateX(120%) rotate(8deg); } }
+
+    /* Swipe overlay labels */
+    .swipe-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
+    .swipe-label {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      font-size: 28px; font-weight: 900; letter-spacing: 0.06em; padding: 10px 24px;
+      border-radius: 12px; border: 4px solid; opacity: 0; transition: opacity 0.05s;
+    }
+    .swipe-label.pass { left: 24px; color: var(--ci-accent-red); border-color: var(--ci-accent-red); background: rgba(232,56,79,0.08); }
+    .swipe-label.interested { right: 24px; color: var(--ci-accent-teal); border-color: var(--ci-accent-teal); background: rgba(54,179,126,0.08); }
 
     /* Scored timestamp */
     .qc-scored-at { font-size: 10px; color: var(--ci-text-tertiary); margin-top: 6px; }

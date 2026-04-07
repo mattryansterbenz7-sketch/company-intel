@@ -337,7 +337,7 @@ function initCoopSummarize() {
 }
 
 function initAIToggles() {
-  // Toggle open/close
+  // Toggle open/close — generate interpretation on demand if none exists
   document.querySelectorAll('.ai-toggle').forEach(toggle => {
     toggle.addEventListener('click', () => {
       toggle.classList.toggle('open');
@@ -347,6 +347,13 @@ function initAIToggles() {
       const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
       if (panel && textarea && !textarea.value.trim()) {
         panel.innerHTML = '<div style="color:#A09A94;font-size:12px">Nothing here yet — add content above to see Coop\'s interpretation</div>';
+      } else if (panel && toggle.classList.contains('open') && !_interpretedHashes[panelKey]) {
+        // Generate on demand when toggle is opened for the first time
+        const storageKey = AI_SECTION_MAP[panelKey];
+        const content = textarea?.value?.trim();
+        if (content && storageKey) {
+          requestInterpretation(panelKey, storageKey, content);
+        }
       }
     });
   });
@@ -401,7 +408,8 @@ function loadStoredInterpretations() {
         const el2 = fieldId2 ? document.getElementById(fieldId2) : null;
         if (el2?.value?.trim()) requestInterpretation(panelKey, storageKey, el2.value.trim());
       } else {
-        // No stored interpretation — auto-generate if the section has content
+        // No stored interpretation — only generate on demand (when user opens the toggle), not on page load
+        // This prevents 9+ API calls every time the preferences page is opened
         const fieldId = {
           story: 'profile-story', experience: 'profile-experience', skills: 'profile-skills',
           principles: 'profile-principles', motivators: 'profile-motivators',
@@ -410,9 +418,7 @@ function loadStoredInterpretations() {
         }[panelKey];
         const el = fieldId ? document.getElementById(fieldId) : null;
         const content = el?.value?.trim();
-        if (content) {
-          requestInterpretation(panelKey, storageKey, content);
-        } else {
+        if (!content) {
           const panel = document.querySelector(`.ai-panel[data-ai-panel="${panelKey}"]`);
           if (panel) panel.innerHTML = '<div style="color:#A09A94;font-size:12px">Add content above to generate an AI interpretation</div>';
         }
@@ -826,8 +832,8 @@ function migrateToStructured(callback) {
 
     // Init empty structured fields if they don't exist
     if (!data.profileSkillTags) migrations.profileSkillTags = [];
-    if (!data.profileRoleICP) migrations.profileRoleICP = { text: '', targetFunction: '', seniority: '', scope: '', sellingMotion: '', teamSizePreference: '' };
-    if (!data.profileCompanyICP) migrations.profileCompanyICP = { text: '', stage: '', sizeRange: '', industryPreferences: [], cultureMarkers: [] };
+    if (!data.profileRoleICP) migrations.profileRoleICP = { text: '', targetFunction: [], seniority: '', scope: '', sellingMotion: '', teamSizePreference: '' };
+    if (!data.profileCompanyICP) migrations.profileCompanyICP = { text: '', stage: [], sizeRange: [], industryPreferences: [], cultureMarkers: [] };
     if (!data.profileInterviewLearnings) migrations.profileInterviewLearnings = [];
 
     migrations._migratedStructuredV1 = true;
@@ -1130,6 +1136,139 @@ function initStructuredSection(containerId, storageKey, opts = {}) {
   });
 }
 
+// ── Skills & Intangibles auto-generate ──────────────────────────────────────
+
+function initSkillsAutoGenerate() {
+  const btn = document.getElementById('skills-coop-generate');
+  const metaEl = document.getElementById('skills-autofill-meta');
+  const editor = document.getElementById('profile-skills-rt');
+  const hiddenTa = document.getElementById('profile-skills');
+  if (!btn || !editor) return;
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is analyzing your profile...';
+    if (metaEl) metaEl.textContent = '';
+
+    try {
+      const data = await new Promise(r => chrome.storage.local.get([
+        'profileResume', 'profileStory', 'profileExperience', 'profileExperienceEntries',
+        'profileSkills', 'profilePrinciples', 'profileMotivators',
+        'storyTime', 'profileSkillTags'
+      ], r));
+
+      const sources = [];
+      let sourceContent = '';
+
+      // Experience entries (structured)
+      const expEntries = data.profileExperienceEntries || [];
+      if (expEntries.length) {
+        sources.push('Experience');
+        sourceContent += '\n=== EXPERIENCE ENTRIES ===\n';
+        expEntries.forEach(e => {
+          sourceContent += `\n## ${e.company} (${e.dateRange || ''})\n`;
+          if (e.titles) sourceContent += `Titles: ${e.titles}\n`;
+          if (e.description) sourceContent += `${e.description}\n`;
+          if (e.accomplishments) sourceContent += `Accomplishments: ${e.accomplishments}\n`;
+          if (e.exposures) sourceContent += `Skills/Exposures: ${e.exposures}\n`;
+        });
+      }
+
+      const resume = data.profileResume;
+      if (resume?.content) {
+        sources.push('Resume');
+        sourceContent += `\n=== RESUME ===\n${resume.content.slice(0, 4000)}\n`;
+      }
+      const story = data.profileStory || data.storyTime?.rawInput;
+      if (story) {
+        sources.push('Story');
+        sourceContent += `\n=== STORY ===\n${story.slice(0, 3000)}\n`;
+      }
+      const principles = data.profilePrinciples;
+      if (principles) {
+        sources.push('Principles');
+        sourceContent += `\n=== OPERATING PRINCIPLES ===\n${principles.slice(0, 1500)}\n`;
+      }
+      const motivators = data.profileMotivators;
+      if (motivators) {
+        sources.push('Motivators');
+        sourceContent += `\n=== MOTIVATORS ===\n${motivators.slice(0, 1500)}\n`;
+      }
+      const skillTags = data.profileSkillTags || [];
+      if (skillTags.length) {
+        sourceContent += `\n=== EXISTING SKILL TAGS ===\n${skillTags.join(', ')}\n`;
+      }
+      const stProfile = data.storyTime?.profileSummary;
+      if (stProfile) {
+        sourceContent += `\n=== STORY TIME PROFILE ===\n${stProfile.slice(0, 2000)}\n`;
+      }
+
+      if (!sourceContent.trim()) {
+        btn.disabled = false;
+        btn.textContent = 'Let Coop fill this in';
+        if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">No profile data found — add experience or upload a resume first</span>';
+        return;
+      }
+
+      const prompt = `Based on the following profile data, generate a comprehensive "Core Competencies & Intangibles" section. Use HTML formatting for rich display.
+
+Structure it as:
+1. Major competency categories as <h3> headings (e.g. "Revenue & Commercial Leadership", "GTM Strategy", "Technical Skills")
+2. Under each heading, bold sub-themes with bullet points of specific capabilities
+3. Include both hard skills (tools, methodologies, platforms) and soft skills (leadership style, deal instincts, relationship building)
+4. Reference specific metrics, company names, and achievements from their experience
+5. End with an "Intangibles" section covering what makes this person uniquely effective
+
+Use these HTML tags: <h3> for headings, <b> for bold, <ul><li> for bullets, <p> for paragraphs.
+Do NOT use markdown. Output only the HTML content, no wrapper tags.
+
+${sourceContent}`;
+
+      const result = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: 'COOP_CHAT',
+          messages: [{ role: 'user', content: prompt }],
+          globalChat: true,
+          careerOSChat: true
+        }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
+      });
+
+      if (result?.reply) {
+        // Strip any markdown artifacts, keep HTML
+        let html = result.reply
+          .replace(/```html?\n?/g, '').replace(/```/g, '')
+          .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+          .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+          .replace(/^# (.+)$/gm, '<h3>$1</h3>')
+          .replace(/^- (.+)$/gm, '<li>$1</li>')
+          .trim();
+
+        editor.innerHTML = html;
+        if (hiddenTa) hiddenTa.value = html;
+        saveBucket('profileSkills', html);
+        showSaveStatus();
+
+        // Show sources + token usage
+        const usage = result.usage;
+        let metaHtml = `<span class="source-label">Sources:</span> ${sources.join(', ')}`;
+        if (usage) {
+          const totalTokens = (usage.input || 0) + (usage.output || 0);
+          metaHtml += ` <span class="exp-autofill-usage">${totalTokens.toLocaleString()} tokens</span>`;
+        }
+        if (metaEl) metaEl.innerHTML = metaHtml;
+      } else if (result?.error) {
+        if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">Coop couldn\'t generate skills — try again</span>';
+      }
+    } catch (err) {
+      console.error('[SkillsGenerate] Error:', err);
+      if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">Error: ${err.message}</span>`;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Let Coop fill this in';
+  });
+}
+
 // ── Skill tags ──────────────────────────────────────────────────────────────
 
 function initSkillTags() {
@@ -1194,7 +1333,7 @@ function initICPAutofill() {
       const result = await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({
           type: 'COOP_CHAT',
-          messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Role ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal role", "targetFunction": "e.g. GTM, Sales Leadership", "seniority": "e.g. VP, Director", "scope": "e.g. Full P&L, Regional", "sellingMotion": "e.g. Enterprise, PLG", "teamSizePreference": "e.g. 5-15 direct reports"}` }],
+          messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Role ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal role", "targetFunction": ["GTM", "Sales"], "seniority": "e.g. VP, Director", "scope": "e.g. Full P&L, Regional", "sellingMotion": "e.g. Enterprise, PLG", "teamSizePreference": "e.g. 5-15 direct reports"}. targetFunction must be an array of strings.` }],
           globalChat: true,
           careerOSChat: true
         }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
@@ -1206,8 +1345,15 @@ function initICPAutofill() {
           const data = JSON.parse(match[0]);
           // Only fill empty fields — never overwrite user's manual entries
           const fillIfEmpty = (id, val) => { const el = document.getElementById(id); if (el && val && !el.value.trim()) el.value = val; };
+          const fillPicklistIfEmpty = (id, val, options, saveFn) => {
+            const current = getPicklistValues(id, options);
+            if (current.length === 0 && val) {
+              const arr = normalizeToArray(val);
+              if (arr.length) renderPicklist(id, options, arr, saveFn);
+            }
+          };
           fillIfEmpty('role-icp-text', data.text);
-          fillIfEmpty('role-icp-function', data.targetFunction);
+          fillPicklistIfEmpty('role-icp-function', data.targetFunction, ICP_PICKLIST_OPTIONS.targetFunction, saveRoleICP);
           fillIfEmpty('role-icp-seniority', data.seniority);
           fillIfEmpty('role-icp-scope', data.scope);
           fillIfEmpty('role-icp-selling-motion', data.sellingMotion);
@@ -1231,7 +1377,7 @@ function initICPAutofill() {
       const result = await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({
           type: 'COOP_CHAT',
-          messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Company ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal company", "stage": "e.g. Series B-D, Growth", "sizeRange": "e.g. 50-500 employees", "industryPreferences": ["SaaS", "FinTech"], "cultureMarkers": ["transparent", "ownership"]}` }],
+          messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Company ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal company", "stage": ["Series B", "Series C"], "sizeRange": ["51-200", "201-500"], "industryPreferences": ["SaaS", "FinTech"], "cultureMarkers": ["transparent", "ownership"]}. stage, sizeRange, and industryPreferences must be arrays of strings.` }],
           globalChat: true,
           careerOSChat: true
         }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
@@ -1243,10 +1389,17 @@ function initICPAutofill() {
           const data = JSON.parse(match[0]);
           // Only fill empty fields — never overwrite user's manual entries
           const fillIfEmpty = (id, val) => { const el = document.getElementById(id); if (el && val && !el.value.trim()) el.value = typeof val === 'string' ? val : Array.isArray(val) ? val.join(', ') : val; };
+          const fillPicklistIfEmpty = (id, val, options, saveFn) => {
+            const current = getPicklistValues(id, options);
+            if (current.length === 0 && val) {
+              const arr = normalizeToArray(val);
+              if (arr.length) renderPicklist(id, options, arr, saveFn);
+            }
+          };
           fillIfEmpty('company-icp-text', data.text);
-          fillIfEmpty('company-icp-stage', data.stage);
-          fillIfEmpty('company-icp-size', data.sizeRange);
-          fillIfEmpty('company-icp-industries', data.industryPreferences);
+          fillPicklistIfEmpty('company-icp-stage', data.stage, ICP_PICKLIST_OPTIONS.stage, saveCompanyICP);
+          fillPicklistIfEmpty('company-icp-size', data.sizeRange, ICP_PICKLIST_OPTIONS.sizeRange, saveCompanyICP);
+          fillPicklistIfEmpty('company-icp-industries', data.industryPreferences, ICP_PICKLIST_OPTIONS.industryPreferences, saveCompanyICP);
           fillIfEmpty('company-icp-culture', data.cultureMarkers);
           saveCompanyICP();
         }
@@ -1394,27 +1547,132 @@ Respond ONLY with a JSON array of numbers in the same order: [3, 4, 2, 5, ...] �
   rateSeverity('red-flags-rate', 'profileDealbreakers', 'dealbreaker-entries', { showSeverity: true }, 'red');
 }
 
+// ── Picklist definitions ──
+const ICP_PICKLIST_OPTIONS = {
+  targetFunction: [
+    'GTM', 'Sales', 'Revenue Operations', 'Account Management',
+    'Customer Success', 'Marketing', 'Business Development',
+    'Partnerships', 'Sales Engineering', 'Product Marketing'
+  ],
+  stage: [
+    'Pre-Seed', 'Seed', 'Series A', 'Series B', 'Series C',
+    'Series D+', 'Growth', 'Public', 'Bootstrapped'
+  ],
+  sizeRange: [
+    '1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+'
+  ],
+  industryPreferences: [
+    'SaaS', 'AI/ML', 'FinTech', 'HealthTech', 'DevTools',
+    'Infrastructure', 'Security', 'E-Commerce', 'EdTech',
+    'MarTech', 'RevTech', 'Data & Analytics', 'Cloud', 'Enterprise Software'
+  ]
+};
+
+function normalizeToArray(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
+function renderPicklist(containerId, options, selectedValues, onChangeCb) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  const selected = new Set(selectedValues);
+
+  // Render predefined chips
+  options.forEach(opt => {
+    const chip = document.createElement('span');
+    chip.className = 'icp-chip' + (selected.has(opt) ? ' selected' : '');
+    chip.textContent = opt;
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('selected');
+      onChangeCb();
+    });
+    container.appendChild(chip);
+  });
+
+  // Render custom values (not in predefined list)
+  selectedValues.filter(v => !options.includes(v)).forEach(custom => {
+    appendCustomChip(container, custom, onChangeCb);
+  });
+
+  // "+ Add" button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'icp-add-custom';
+  addBtn.textContent = '+ Other';
+  addBtn.addEventListener('click', () => {
+    addBtn.style.display = 'none';
+    const input = document.createElement('input');
+    input.className = 'icp-custom-input';
+    input.placeholder = 'Type & press Enter';
+    container.appendChild(input);
+    input.focus();
+    const commit = () => {
+      const val = input.value.trim();
+      input.remove();
+      addBtn.style.display = '';
+      if (val && !getPicklistValues(containerId, options).includes(val)) {
+        appendCustomChip(container, val, onChangeCb);
+        container.appendChild(addBtn); // move add button to end
+        onChangeCb();
+      }
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { input.remove(); addBtn.style.display = ''; } });
+    input.addEventListener('blur', commit);
+  });
+  container.appendChild(addBtn);
+}
+
+function appendCustomChip(container, value, onChangeCb) {
+  const chip = document.createElement('span');
+  chip.className = 'icp-chip-custom';
+  chip.dataset.customValue = value;
+  chip.innerHTML = `${escHtml(value)} <button class="chip-remove">&times;</button>`;
+  chip.querySelector('.chip-remove').addEventListener('click', () => {
+    chip.remove();
+    onChangeCb();
+  });
+  // Insert before the "+ Other" button
+  const addBtn = container.querySelector('.icp-add-custom');
+  if (addBtn) container.insertBefore(chip, addBtn);
+  else container.appendChild(chip);
+}
+
+function getPicklistValues(containerId, options) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  const values = [];
+  // Selected predefined chips
+  container.querySelectorAll('.icp-chip.selected').forEach(chip => values.push(chip.textContent));
+  // Custom chips
+  container.querySelectorAll('.icp-chip-custom').forEach(chip => values.push(chip.dataset.customValue));
+  return values;
+}
+
 function initICPFields() {
-  // Role ICP
-  const roleFields = ['role-icp-text', 'role-icp-function', 'role-icp-seniority', 'role-icp-scope', 'role-icp-selling-motion', 'role-icp-team-size'];
-  const companyFields = ['company-icp-text', 'company-icp-stage', 'company-icp-size', 'company-icp-industries', 'company-icp-culture'];
+  // Text fields (unchanged)
+  const roleTextFields = ['role-icp-text', 'role-icp-seniority', 'role-icp-scope', 'role-icp-selling-motion', 'role-icp-team-size'];
+  const companyTextFields = ['company-icp-text', 'company-icp-culture'];
 
   chrome.storage.local.get(['profileRoleICP', 'profileCompanyICP'], data => {
     const role = data.profileRoleICP || {};
     const company = data.profileCompanyICP || {};
 
     setVal('role-icp-text', role.text);
-    setVal('role-icp-function', role.targetFunction);
     setVal('role-icp-seniority', role.seniority);
     setVal('role-icp-scope', role.scope);
     setVal('role-icp-selling-motion', role.sellingMotion);
     setVal('role-icp-team-size', role.teamSizePreference);
 
     setVal('company-icp-text', company.text);
-    setVal('company-icp-stage', company.stage);
-    setVal('company-icp-size', company.sizeRange);
-    setVal('company-icp-industries', (company.industryPreferences || []).join(', '));
     setVal('company-icp-culture', (company.cultureMarkers || []).join(', '));
+
+    // Picklists
+    renderPicklist('role-icp-function', ICP_PICKLIST_OPTIONS.targetFunction, normalizeToArray(role.targetFunction), saveRoleICP);
+    renderPicklist('company-icp-stage', ICP_PICKLIST_OPTIONS.stage, normalizeToArray(company.stage), saveCompanyICP);
+    renderPicklist('company-icp-size', ICP_PICKLIST_OPTIONS.sizeRange, normalizeToArray(company.sizeRange), saveCompanyICP);
+    renderPicklist('company-icp-industries', ICP_PICKLIST_OPTIONS.industryPreferences, normalizeToArray(company.industryPreferences), saveCompanyICP);
   });
 
   function setVal(id, val) {
@@ -1422,13 +1680,13 @@ function initICPFields() {
     if (el && val) el.value = val;
   }
 
-  // Auto-save on blur
-  roleFields.forEach(id => {
+  // Auto-save on blur for remaining text fields
+  roleTextFields.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('blur', saveRoleICP);
   });
-  companyFields.forEach(id => {
+  companyTextFields.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('blur', saveCompanyICP);
@@ -1439,7 +1697,7 @@ function saveRoleICP() {
   const gv = id => (document.getElementById(id)?.value || '').trim();
   const icp = {
     text: gv('role-icp-text'),
-    targetFunction: gv('role-icp-function'),
+    targetFunction: getPicklistValues('role-icp-function', ICP_PICKLIST_OPTIONS.targetFunction),
     seniority: gv('role-icp-seniority'),
     scope: gv('role-icp-scope'),
     sellingMotion: gv('role-icp-selling-motion'),
@@ -1452,9 +1710,9 @@ function saveCompanyICP() {
   const gv = id => (document.getElementById(id)?.value || '').trim();
   const icp = {
     text: gv('company-icp-text'),
-    stage: gv('company-icp-stage'),
-    sizeRange: gv('company-icp-size'),
-    industryPreferences: gv('company-icp-industries').split(',').map(s => s.trim()).filter(Boolean),
+    stage: getPicklistValues('company-icp-stage', ICP_PICKLIST_OPTIONS.stage),
+    sizeRange: getPicklistValues('company-icp-size', ICP_PICKLIST_OPTIONS.sizeRange),
+    industryPreferences: getPicklistValues('company-icp-industries', ICP_PICKLIST_OPTIONS.industryPreferences),
     cultureMarkers: gv('company-icp-culture').split(',').map(s => s.trim()).filter(Boolean),
   };
   saveBucket('profileCompanyICP', icp);
@@ -2124,31 +2382,103 @@ function initStructuredExperience() {
           <div class="exp-entry-company">${esc(e.company) || '<span style="color:var(--ci-text-tertiary)">Company name</span>'}</div>
           <div class="exp-entry-dates">${esc(e.dateRange) || ''}</div>
         </div>
-        <div class="field">
-          <label class="field-label">Company</label>
-          <input type="text" class="field-input exp-field" data-idx="${i}" data-key="company" value="${esc(e.company)}" placeholder="e.g. Acme Corp">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label class="field-label">Company</label>
+            <input type="text" class="field-input exp-field" data-idx="${i}" data-key="company" value="${esc(e.company)}" placeholder="e.g. Acme Corp">
+          </div>
+          <div class="field">
+            <label class="field-label">Website</label>
+            <input type="url" class="field-input exp-field" data-idx="${i}" data-key="website" value="${esc(e.website || '')}" placeholder="e.g. acme.com">
+          </div>
         </div>
         <div class="field">
           <label class="field-label">What the company does</label>
-          <textarea class="field-input exp-field" data-idx="${i}" data-key="description" rows="2" placeholder="Product, customers, market, how it evolved...">${esc(e.description)}</textarea>
+          <div class="exp-rt-wrap">
+            <div class="rt-toolbar exp-rt-toolbar" data-target="exp-desc-${i}">
+              <button data-cmd="bold" title="Bold"><b>B</b></button>
+              <button data-cmd="italic" title="Italic"><i>I</i></button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertUnorderedList" title="Bullet list">\u2022\u2261</button>
+              <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+              <button data-cmd="indent" title="Indent">\u2192</button>
+              <button data-cmd="outdent" title="Outdent">\u2190</button>
+              <div class="rt-sep"></div>
+              <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertColumns" title="Insert columns">\u2AF4</button>
+            </div>
+
+            <div class="rt-editable exp-rt-field field-input" id="exp-desc-${i}" contenteditable="true" data-idx="${i}" data-key="description" data-placeholder="Product, customers, market, how it evolved...">${e.description || ''}</div>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div class="field">
             <label class="field-label">Title(s) held</label>
-            <input type="text" class="field-input exp-field" data-idx="${i}" data-key="titles" value="${esc(e.titles)}" placeholder="e.g. AE → Senior AE → Head of Revenue">
+            <input type="text" class="field-input exp-field" data-idx="${i}" data-key="titles" value="${esc(e.titles)}" placeholder="e.g. AE &rarr; Senior AE &rarr; Head of Revenue">
           </div>
           <div class="field">
             <label class="field-label">Date range</label>
-            <input type="text" class="field-input exp-field" data-idx="${i}" data-key="dateRange" value="${esc(e.dateRange)}" placeholder="e.g. Mar 2021 – Present">
+            <div class="exp-date-range" data-idx="${i}">
+              <input type="month" class="field-input exp-date-field" data-idx="${i}" data-key="dateStart" value="${esc(e.dateStart || '')}" title="Start date">
+              <span class="exp-date-sep">&ndash;</span>
+              <input type="month" class="field-input exp-date-field" data-idx="${i}" data-key="dateEnd" value="${e.datePresent ? '' : esc(e.dateEnd || '')}" ${e.datePresent ? 'disabled' : ''} title="End date">
+              <label class="exp-date-present"><input type="checkbox" class="exp-present-cb" data-idx="${i}" ${e.datePresent ? 'checked' : ''}> Present</label>
+            </div>
           </div>
         </div>
         <div class="exp-entry-section-label">Key accomplishments</div>
-        <textarea class="field-input exp-field" data-idx="${i}" data-key="accomplishments" rows="3" placeholder="Revenue milestones, team built, processes created, awards...">${esc(e.accomplishments)}</textarea>
+        <div class="exp-rt-wrap">
+          <div class="rt-toolbar exp-rt-toolbar" data-target="exp-acc-${i}">
+            <button data-cmd="bold" title="Bold"><b>B</b></button>
+            <button data-cmd="italic" title="Italic"><i>I</i></button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertUnorderedList" title="Bullet list">\u2022\u2261</button>
+            <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+            <button data-cmd="indent" title="Sub-bullet">\u2192</button>
+            <button data-cmd="outdent" title="Outdent">\u2190</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertColumns" title="Insert columns">\u2AF4</button>
+          </div>
+          <div class="rt-editable exp-rt-field field-input" id="exp-acc-${i}" contenteditable="true" data-idx="${i}" data-key="accomplishments" data-placeholder="Revenue milestones, team built, processes created, awards..." style="min-height:60px;">${e.accomplishments || ''}</div>
+        </div>
         <div class="exp-entry-section-label">Skills &amp; exposures</div>
-        <textarea class="field-input exp-field" data-idx="${i}" data-key="exposures" rows="2" placeholder="Tools, methodologies, domains, deal sizes, team sizes...">${esc(e.exposures)}</textarea>
+        <div class="exp-rt-wrap">
+          <div class="rt-toolbar exp-rt-toolbar" data-target="exp-exp-${i}">
+            <button data-cmd="bold" title="Bold"><b>B</b></button>
+            <button data-cmd="italic" title="Italic"><i>I</i></button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertUnorderedList" title="Bullet list">\u2022\u2261</button>
+            <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+            <button data-cmd="indent" title="Sub-bullet">\u2192</button>
+            <button data-cmd="outdent" title="Outdent">\u2190</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
+            <div class="rt-sep"></div>
+            <button data-cmd="insertColumns" title="Insert columns">\u2AF4</button>
+          </div>
+          <div class="rt-editable exp-rt-field field-input" id="exp-exp-${i}" contenteditable="true" data-idx="${i}" data-key="exposures" data-placeholder="Tools, methodologies, domains, deal sizes, team sizes...">${e.exposures || ''}</div>
+        </div>
       </div>
     `).join('');
     bindEntryEvents();
+  }
+
+  function htmlToText(html) {
+    if (!html) return '';
+    // Convert common HTML to readable plain text
+    return html
+      .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n**$1**\n')
+      .replace(/<li[^>]*>(.*?)<\/li>/gi, '  - $1\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   function save() {
@@ -2156,10 +2486,11 @@ function initStructuredExperience() {
     // Sync to legacy profileExperience for Coop context backwards compat
     const text = entries.map(e => {
       const parts = [`## ${e.company || 'Company'} (${e.dateRange || ''})`];
+      if (e.website) parts.push(`**Website:** ${e.website}`);
       if (e.titles) parts.push(`**Titles:** ${e.titles}`);
-      if (e.description) parts.push(e.description);
-      if (e.accomplishments) parts.push(`**Accomplishments:**\n${e.accomplishments}`);
-      if (e.exposures) parts.push(`**Skills/Exposures:** ${e.exposures}`);
+      if (e.description) parts.push(htmlToText(e.description));
+      if (e.accomplishments) parts.push(`**Accomplishments:**\n${htmlToText(e.accomplishments)}`);
+      if (e.exposures) parts.push(`**Skills/Exposures:** ${htmlToText(e.exposures)}`);
       return parts.join('\n');
     }).join('\n\n---\n\n');
     saveBucket('profileExperience', text);
@@ -2167,12 +2498,180 @@ function initStructuredExperience() {
     showSaveStatus();
   }
 
+  function parseDateRange(str) {
+    // Parse strings like "Mar 2021 – Present", "2019-03 – 2022-01", "January 2020 - December 2023"
+    const months = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12,
+      january:1, february:2, march:3, april:4, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
+    const present = /present|current|now|ongoing/i.test(str);
+    const parts = str.split(/\s*[–—-]\s*/);
+    const parseOne = s => {
+      if (!s) return '';
+      // "2021-03" format
+      const isoMatch = s.match(/(\d{4})-(\d{2})/);
+      if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
+      // "Mar 2021" or "March 2021"
+      const wordMatch = s.match(/([a-z]+)\s+(\d{4})/i);
+      if (wordMatch) {
+        const m = months[wordMatch[1].toLowerCase()];
+        if (m) return `${wordMatch[2]}-${String(m).padStart(2, '0')}`;
+      }
+      // "2021" alone
+      const yearMatch = s.match(/\b(20\d{2}|19\d{2})\b/);
+      if (yearMatch) return `${yearMatch[1]}-01`;
+      return '';
+    };
+    return { start: parseOne(parts[0]), end: present ? '' : parseOne(parts[1]), present };
+  }
+
+  function formatDateRange(entry) {
+    const fmtMonth = val => {
+      if (!val) return '';
+      const [y, m] = val.split('-');
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${months[parseInt(m) - 1]} ${y}`;
+    };
+    const start = fmtMonth(entry.dateStart);
+    const end = entry.datePresent ? 'Present' : fmtMonth(entry.dateEnd);
+    if (!start && !end) return entry.dateRange || '';
+    return [start, end].filter(Boolean).join(' – ');
+  }
+
   function bindEntryEvents() {
+    // Plain text/input fields
     list.querySelectorAll('.exp-field').forEach(el => {
       el.addEventListener('blur', () => {
         const idx = parseInt(el.dataset.idx);
         const key = el.dataset.key;
         entries[idx][key] = el.value.trim();
+        save();
+      });
+    });
+    // Rich text contenteditable fields
+    list.querySelectorAll('.exp-rt-field').forEach(editor => {
+      editor.addEventListener('blur', () => {
+        const idx = parseInt(editor.dataset.idx);
+        const key = editor.dataset.key;
+        entries[idx][key] = editor.innerHTML.trim();
+        save();
+      });
+      // URL auto-fetch on paste
+      editor.addEventListener('paste', () => {
+        setTimeout(async () => {
+          const html = editor.innerHTML;
+          const urlMatch = html.match(/https?:\/\/[^\s<>"')\]&]+/gi);
+          if (!urlMatch) return;
+          const newUrls = urlMatch.filter(u => !html.includes(`Fetched from ${u}`));
+          if (!newUrls.length) return;
+
+          for (const url of newUrls.slice(0, 2)) {
+            // Insert fetching marker
+            const markerId = 'fetch-' + Date.now();
+            const marker = document.createElement('div');
+            marker.id = markerId;
+            marker.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);padding:4px 0;';
+            marker.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border:2px solid rgba(175,169,236,0.3);border-top-color:#AFA9EC;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Fetching ${url.length > 60 ? url.slice(0, 60) + '...' : url}</span>`;
+            editor.appendChild(marker);
+
+            try {
+              const result = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ type: 'FETCH_URL', url }, r => {
+                  if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                  else resolve(r);
+                });
+              });
+
+              const el = document.getElementById(markerId);
+              if (el && result?.text) {
+                const content = result.text.slice(0, 3000);
+                el.outerHTML = `<details style="font-size:12px;margin:6px 0;border:1px solid var(--ci-border-subtle);border-radius:6px;padding:6px 10px;background:var(--ci-bg-base);"><summary style="cursor:pointer;font-weight:600;color:var(--ci-text-secondary);font-size:11px;">Fetched from ${url.length > 50 ? url.slice(0, 50) + '...' : url}</summary><div style="white-space:pre-wrap;margin-top:6px;color:var(--ci-text-secondary);line-height:1.5;">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></details>`;
+              } else if (el) {
+                el.outerHTML = `<div style="font-size:11px;color:var(--ci-text-tertiary);padding:2px 0;">Could not fetch ${url}</div>`;
+              }
+            } catch (err) {
+              const el = document.getElementById(markerId);
+              if (el) el.outerHTML = `<div style="font-size:11px;color:var(--ci-accent-red);padding:2px 0;">Could not fetch: ${err.message}</div>`;
+            }
+
+            // Save updated content
+            const idx = parseInt(editor.dataset.idx);
+            const key = editor.dataset.key;
+            entries[idx][key] = editor.innerHTML.trim();
+            save();
+          }
+        }, 100);
+      });
+      editor.addEventListener('keyup', () => {
+        const toolbar = list.querySelector(`.exp-rt-toolbar[data-target="${editor.id}"]`);
+        if (toolbar) updateToolbarState(toolbar, editor);
+      });
+      editor.addEventListener('mouseup', () => {
+        const toolbar = list.querySelector(`.exp-rt-toolbar[data-target="${editor.id}"]`);
+        if (toolbar) updateToolbarState(toolbar, editor);
+      });
+    });
+    // Wire toolbar buttons for experience entries
+    list.querySelectorAll('.exp-rt-toolbar').forEach(toolbar => {
+      toolbar.addEventListener('mousedown', e => e.preventDefault());
+      toolbar.querySelectorAll('button[data-cmd]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = toolbar.dataset.target;
+          const editor = document.getElementById(targetId);
+          if (!editor) return;
+          editor.focus();
+          const cmd = btn.dataset.cmd;
+          const val = btn.dataset.val || null;
+          if (cmd === 'insertColumns') {
+            const existing = document.querySelector('.rt-col-picker');
+            if (existing) { existing.remove(); return; }
+            const picker = document.createElement('div');
+            picker.className = 'rt-col-picker';
+            picker.style.cssText = 'position:absolute;top:100%;left:0;background:#fff;border:1px solid var(--ci-border-default);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.1);padding:6px;display:flex;gap:4px;z-index:100;';
+            [2, 3].forEach(n => {
+              const opt = document.createElement('button');
+              opt.textContent = `${n} cols`;
+              opt.style.cssText = 'font-size:11px;padding:5px 10px;border:1px solid var(--ci-border-default);border-radius:5px;background:var(--ci-bg-inset);cursor:pointer;font-family:inherit;font-weight:600;color:var(--ci-text-secondary);';
+              opt.addEventListener('click', () => {
+                picker.remove();
+                editor.focus();
+                const cols = Array.from({ length: n }, (_, i) => {
+                  const hdrClass = i === 0 ? 'green' : i === 1 ? 'red' : '';
+                  const hdrText = n === 2 ? (i === 0 ? 'Pros / Strengths' : 'Cons / Gaps') : `Column ${i + 1}`;
+                  return `<div class="rt-column"><div class="rt-column-header ${hdrClass}">${hdrText}</div><p>...</p></div>`;
+                }).join('');
+                document.execCommand('insertHTML', false, `<div class="rt-columns" style="grid-template-columns:repeat(${n},1fr)">${cols}</div><p><br></p>`);
+              });
+              picker.appendChild(opt);
+            });
+            toolbar.style.position = 'relative';
+            toolbar.appendChild(picker);
+            setTimeout(() => document.addEventListener('click', function rm(e) { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', rm); } }), 10);
+          } else {
+            document.execCommand(cmd, false, val);
+          }
+          updateToolbarState(toolbar, editor);
+        });
+      });
+    });
+    // Date fields
+    list.querySelectorAll('.exp-date-field').forEach(el => {
+      el.addEventListener('change', () => {
+        const idx = parseInt(el.dataset.idx);
+        const key = el.dataset.key;
+        entries[idx][key] = el.value;
+        entries[idx].dateRange = formatDateRange(entries[idx]);
+        save();
+      });
+    });
+    list.querySelectorAll('.exp-present-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.idx);
+        entries[idx].datePresent = cb.checked;
+        const endInput = list.querySelector(`.exp-date-field[data-idx="${idx}"][data-key="dateEnd"]`);
+        if (endInput) {
+          endInput.disabled = cb.checked;
+          if (cb.checked) endInput.value = '';
+        }
+        entries[idx].dateRange = formatDateRange(entries[idx]);
         save();
       });
     });
@@ -2183,14 +2682,215 @@ function initStructuredExperience() {
         save();
       });
     });
+    // See more / See less for experience rich text fields
+    const EXP_COLLAPSED_H = 80;
+    list.querySelectorAll('.exp-rt-wrap').forEach(wrap => {
+      const editor = wrap.querySelector('.rt-editable');
+      if (!editor) return;
+      // Remove existing see-more button if re-rendering
+      wrap.querySelectorAll('.exp-see-more').forEach(b => b.remove());
+
+      editor.style.maxHeight = EXP_COLLAPSED_H + 'px';
+      editor.style.overflow = 'hidden';
+
+      const seeBtn = document.createElement('button');
+      seeBtn.className = 'ta-see-more exp-see-more';
+      seeBtn.type = 'button';
+      seeBtn.innerHTML = 'See more &#9660;';
+      wrap.appendChild(seeBtn);
+
+      let expanded = false;
+      function collapse() {
+        expanded = false;
+        editor.style.maxHeight = EXP_COLLAPSED_H + 'px';
+        editor.style.overflow = 'hidden';
+        seeBtn.innerHTML = 'See more &#9660;';
+        checkOverflow();
+      }
+      function expand() {
+        if (expanded) return;
+        expanded = true;
+        // Save cursor position before layout change
+        const sel = window.getSelection();
+        const savedRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+        editor.style.maxHeight = 'none';
+        editor.style.overflow = 'visible';
+        seeBtn.innerHTML = 'See less &#9650;';
+        seeBtn.classList.add('visible');
+        // Restore cursor position after layout reflow
+        if (savedRange) {
+          requestAnimationFrame(() => {
+            sel.removeAllRanges();
+            sel.addRange(savedRange);
+          });
+        }
+      }
+      function checkOverflow() {
+        if (expanded) return;
+        seeBtn.classList.toggle('visible', editor.scrollHeight > EXP_COLLAPSED_H + 4);
+      }
+      let blurTimer = null;
+      seeBtn.addEventListener('mousedown', e => e.preventDefault()); // prevent stealing focus from editor
+      seeBtn.addEventListener('click', e => { e.preventDefault(); expanded ? collapse() : expand(); });
+      editor.addEventListener('focus', expand);
+      editor.addEventListener('blur', () => {
+        blurTimer = setTimeout(() => {
+          if (wrap.contains(document.activeElement)) return;
+          collapse();
+        }, 400);
+      });
+      // Cancel blur-collapse if focus returns quickly (e.g. clicking toolbar or see-more)
+      editor.addEventListener('focus', () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } });
+      checkOverflow();
+      setTimeout(checkOverflow, 200);
+    });
   }
 
   addBtn.addEventListener('click', () => {
-    entries.push({ company: '', description: '', titles: '', dateRange: '', accomplishments: '', exposures: '' });
+    entries.push({ company: '', website: '', description: '', titles: '', dateRange: '', dateStart: '', dateEnd: '', datePresent: false, accomplishments: '', exposures: '' });
     renderEntries();
     const lastCompany = list.querySelector('.exp-entry:last-child input[data-key="company"]');
     if (lastCompany) lastCompany.focus();
   });
+
+  // ── Coop auto-fill experience from resume/story/profile ──
+  const coopBtn = document.getElementById('experience-coop-autofill');
+  const metaEl = document.getElementById('experience-autofill-meta');
+  const tooltipEl = document.getElementById('experience-source-tooltip');
+
+  if (coopBtn) {
+    coopBtn.addEventListener('click', async () => {
+      coopBtn.disabled = true;
+      coopBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is reading your profile...';
+      if (metaEl) metaEl.textContent = '';
+
+      try {
+        // Gather all source data
+        const data = await new Promise(r => chrome.storage.local.get([
+          'profileResume', 'profileStory', 'profileExperience',
+          'profileSkills', 'profilePrinciples', 'profileMotivators',
+          'storyTime', 'profileExperienceEntries'
+        ], r));
+
+        const sources = [];
+        let sourceContent = '';
+
+        const resume = data.profileResume;
+        if (resume?.content) {
+          sources.push('Resume');
+          sourceContent += `\n=== RESUME ===\n${resume.content.slice(0, 4000)}\n`;
+        }
+        const story = data.profileStory || data.storyTime?.rawInput;
+        if (story) {
+          sources.push('Story');
+          sourceContent += `\n=== STORY ===\n${story.slice(0, 3000)}\n`;
+        }
+        const skills = data.profileSkills;
+        if (skills) {
+          sources.push('Skills');
+          sourceContent += `\n=== SKILLS ===\n${skills.slice(0, 1500)}\n`;
+        }
+        const stProfile = data.storyTime?.profileSummary;
+        if (stProfile) {
+          sources.push('Story Time profile');
+          sourceContent += `\n=== STORY TIME PROFILE ===\n${stProfile.slice(0, 2000)}\n`;
+        }
+        const stInsights = data.storyTime?.learnedInsights;
+        if (stInsights?.length) {
+          sourceContent += `\n=== LEARNED INSIGHTS ===\n${stInsights.slice(0, 20).map(i => `- ${i}`).join('\n')}\n`;
+        }
+
+        // Update tooltip with actual sources found
+        if (tooltipEl) {
+          if (sources.length) {
+            tooltipEl.innerHTML = `Coop will extract from:<br>${sources.map(s => `<span class="source-label">${s}</span>`).join(' &middot; ')}`;
+          } else {
+            tooltipEl.innerHTML = 'No profile data found yet.<br>Upload a resume or fill in your Story first.';
+          }
+        }
+
+        if (!sourceContent.trim()) {
+          coopBtn.disabled = false;
+          coopBtn.textContent = 'Let Coop fill this in';
+          if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">No data found — upload a resume or fill in your Story first</span>';
+          return;
+        }
+
+        const existingCount = entries.length;
+        const prompt = `Extract structured work experience from the following profile data. For each company/role, return a JSON array of objects with these exact keys:
+[{"company": "Company Name", "description": "What the company does (1-2 sentences)", "titles": "Title progression e.g. AE → Senior AE → Head of Revenue", "dateRange": "e.g. Mar 2021 – Present", "accomplishments": "Key accomplishments with specific metrics, bullet-point style", "exposures": "Tools, methodologies, domains, deal sizes, team sizes"}]
+
+Rules:
+- Extract EVERY distinct company/role you can find
+- Preserve specific metrics, numbers, team sizes, revenue figures
+- Order chronologically (most recent first)
+- If date ranges are unclear, make your best guess based on context
+- For accomplishments, use bullet-point style with specific numbers where available
+- Respond with ONLY the JSON array, no other text
+${existingCount > 0 ? `\nThe user already has ${existingCount} experience entries. Only add companies NOT already listed: ${entries.map(e => e.company).filter(Boolean).join(', ')}` : ''}
+
+${sourceContent}`;
+
+        const result = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            type: 'COOP_CHAT',
+            messages: [{ role: 'user', content: prompt }],
+            globalChat: true,
+            careerOSChat: true
+          }, r => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(r));
+        });
+
+        if (result?.reply) {
+          const match = result.reply.match(/\[[\s\S]*\]/);
+          let added = 0;
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            if (Array.isArray(parsed) && parsed.length) {
+              parsed.forEach(exp => {
+                const dr = parseDateRange(exp.dateRange || '');
+                entries.push({
+                  company: exp.company || '',
+                  website: exp.website || '',
+                  description: exp.description || '',
+                  titles: exp.titles || '',
+                  dateRange: exp.dateRange || '',
+                  dateStart: dr.start,
+                  dateEnd: dr.end,
+                  datePresent: dr.present,
+                  accomplishments: exp.accomplishments || '',
+                  exposures: exp.exposures || '',
+                });
+              });
+              added = parsed.length;
+              renderEntries();
+              save();
+            }
+          }
+
+          if (added > 0) {
+            // Show sources + token usage
+            const usage = result.usage;
+            let metaHtml = `<span class="source-label">Sources:</span> ${sources.join(', ')}`;
+            if (usage) {
+              const totalTokens = (usage.input || 0) + (usage.output || 0);
+              metaHtml += ` <span class="exp-autofill-usage">${totalTokens.toLocaleString()} tokens</span>`;
+            }
+            if (metaEl) metaEl.innerHTML = metaHtml;
+          } else {
+            if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-text-tertiary)">No new experience entries found — try adding more detail to your Resume or Story</span>';
+          }
+        } else if (result?.error) {
+          if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">Coop couldn\'t generate experience — try again</span>';
+        }
+      } catch (err) {
+        console.error('[ExperienceAutofill] Error:', err);
+        if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">Error: ${err.message}</span>`;
+      }
+
+      coopBtn.disabled = false;
+      coopBtn.textContent = 'Let Coop fill this in';
+    });
+  }
 }
 
 // ── FAQ Q&A Pairs ──────────────────────────────────────────────────────────
@@ -2227,40 +2927,91 @@ function initFaqPairs() {
   function renderPairs() {
     list.innerHTML = pairs.map((p, i) => `
       <div class="faq-pair" data-idx="${i}">
-        <div><div class="faq-pair-label q">Question</div><textarea class="faq-q" placeholder="e.g., Why are you looking?">${escHtml(p.q)}</textarea></div>
-        <div><div class="faq-pair-label a">Answer</div><textarea class="faq-a" placeholder="Your polished response...">${escHtml(p.a)}</textarea></div>
-        <button class="faq-pair-delete" data-idx="${i}" title="Delete">×</button>
+        <div>
+          <div class="faq-pair-label q">Question</div>
+          <div class="rt-editable faq-rt-field field-input" id="faq-q-${i}" contenteditable="true" data-idx="${i}" data-key="q" data-placeholder="e.g., Why are you looking?" style="min-height:32px;font-weight:600;">${p.q || ''}</div>
+        </div>
+        <div>
+          <div class="faq-pair-label a">Answer</div>
+          <div class="exp-rt-wrap">
+            <div class="rt-toolbar faq-rt-toolbar" data-target="faq-a-${i}">
+              <button data-cmd="bold" title="Bold"><b>B</b></button>
+              <button data-cmd="italic" title="Italic"><i>I</i></button>
+              <div class="rt-sep"></div>
+              <button data-cmd="insertUnorderedList" title="Bullet list">\u2022\u2261</button>
+              <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+              <button data-cmd="indent" title="Sub-bullet">\u2192</button>
+              <button data-cmd="outdent" title="Outdent">\u2190</button>
+              <div class="rt-sep"></div>
+              <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
+            </div>
+            <div class="rt-editable faq-rt-field field-input" id="faq-a-${i}" contenteditable="true" data-idx="${i}" data-key="a" data-placeholder="Your polished response..." style="min-height:50px;">${p.a || ''}</div>
+          </div>
+        </div>
+        <button class="faq-pair-delete" data-idx="${i}" title="Delete">\u00d7</button>
       </div>
     `).join('');
     bindPairEvents();
   }
 
-  function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  function faqHtmlToText(html) {
+    if (!html) return '';
+    return html
+      .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n**$1**\n')
+      .replace(/<li[^>]*>(.*?)<\/li>/gi, '  - $1\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
 
   function save() {
     chrome.storage.local.set({ profileFaqPairs: pairs });
-    // Also sync to old profileFAQ field for backwards compat with Coop context
-    const text = pairs.map(p => `Q: ${p.q}\nA: ${p.a}`).join('\n\n');
+    // Sync to old profileFAQ field — strip HTML for clean Coop context
+    const text = pairs.map(p => `Q: ${faqHtmlToText(p.q)}\nA: ${faqHtmlToText(p.a)}`).join('\n\n');
     saveBucket('profileFAQ', text);
     if (hiddenTa) hiddenTa.value = text;
     showSaveStatus();
   }
 
   function bindPairEvents() {
-    list.querySelectorAll('.faq-q').forEach(ta => {
-      ta.addEventListener('blur', () => {
-        const idx = parseInt(ta.closest('.faq-pair').dataset.idx);
-        pairs[idx].q = ta.value.trim();
+    // Rich text contenteditable fields (both Q and A)
+    list.querySelectorAll('.faq-rt-field').forEach(editor => {
+      editor.addEventListener('blur', () => {
+        const idx = parseInt(editor.dataset.idx);
+        const key = editor.dataset.key;
+        pairs[idx][key] = editor.innerHTML.trim();
         save();
       });
-    });
-    list.querySelectorAll('.faq-a').forEach(ta => {
-      ta.addEventListener('blur', () => {
-        const idx = parseInt(ta.closest('.faq-pair').dataset.idx);
-        pairs[idx].a = ta.value.trim();
-        save();
+      editor.addEventListener('keyup', () => {
+        const toolbar = list.querySelector(`.faq-rt-toolbar[data-target="${editor.id}"]`);
+        if (toolbar) updateToolbarState(toolbar, editor);
+      });
+      editor.addEventListener('mouseup', () => {
+        const toolbar = list.querySelector(`.faq-rt-toolbar[data-target="${editor.id}"]`);
+        if (toolbar) updateToolbarState(toolbar, editor);
       });
     });
+    // Wire toolbar buttons for FAQ answer fields
+    list.querySelectorAll('.faq-rt-toolbar').forEach(toolbar => {
+      toolbar.addEventListener('mousedown', e => e.preventDefault());
+      toolbar.querySelectorAll('button[data-cmd]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = toolbar.dataset.target;
+          const editor = document.getElementById(targetId);
+          if (!editor) return;
+          editor.focus();
+          const cmd = btn.dataset.cmd;
+          const val = btn.dataset.val || null;
+          document.execCommand(cmd, false, val);
+          updateToolbarState(toolbar, editor);
+        });
+      });
+    });
+    // Delete buttons
     list.querySelectorAll('.faq-pair-delete').forEach(btn => {
       btn.addEventListener('click', () => {
         pairs.splice(parseInt(btn.dataset.idx), 1);
@@ -2273,7 +3024,7 @@ function initFaqPairs() {
   addBtn.addEventListener('click', () => {
     pairs.push({ q: '', a: '' });
     renderPairs();
-    const lastQ = list.querySelector('.faq-pair:last-child .faq-q');
+    const lastQ = list.querySelector('.faq-pair:last-child .faq-rt-field[data-key="q"]');
     if (lastQ) lastQ.focus();
   });
 }
@@ -2573,6 +3324,55 @@ function initUrlFetchInTextareas() {
 
 // ── Rich text editor ────────────────────────────────────────────────────────
 
+// Fix Enter key inside columns — prevent browser from escaping the column
+function initColumnEnterFix() {
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const column = sel.getRangeAt(0).startContainer.nodeType === 3
+      ? sel.getRangeAt(0).startContainer.parentElement?.closest('.rt-column')
+      : sel.getRangeAt(0).startContainer.closest?.('.rt-column');
+    if (!column) return;
+    // Let browser handle Enter natively inside list items — it creates new <li> correctly
+    const node = sel.getRangeAt(0).startContainer;
+    const inList = node.nodeType === 3 ? node.parentElement?.closest('li') : node.closest?.('li');
+    if (inList) return;
+    // We're inside a column but not in a list — handle Enter ourselves
+    e.preventDefault();
+    const newP = document.createElement('p');
+    newP.innerHTML = '<br>';
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    // If cursor is inside a text node or inline element, split at cursor
+    const block = range.startContainer.nodeType === 3
+      ? range.startContainer.parentElement
+      : range.startContainer;
+    const closestBlock = block.closest('p, li, div:not(.rt-column):not(.rt-columns):not(.rt-column-header)');
+    if (closestBlock && column.contains(closestBlock) && closestBlock !== column) {
+      // Split the block at cursor position
+      const afterRange = document.createRange();
+      afterRange.setStart(range.startContainer, range.startOffset);
+      afterRange.setEndAfter(closestBlock.lastChild || closestBlock);
+      const afterContent = afterRange.extractContents();
+      newP.innerHTML = '';
+      newP.appendChild(afterContent);
+      if (!newP.textContent.trim() && !newP.querySelector('br')) newP.innerHTML = '<br>';
+      if (!closestBlock.textContent.trim() && !closestBlock.querySelector('br')) closestBlock.innerHTML = '<br>';
+      closestBlock.after(newP);
+    } else {
+      // Append new paragraph at end of column
+      column.appendChild(newP);
+    }
+    // Move cursor into new paragraph
+    const newRange = document.createRange();
+    newRange.setStart(newP, 0);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+  });
+}
+
 function initRichTextEditors() {
   // Wire toolbar buttons
   document.querySelectorAll('.rt-toolbar').forEach(toolbar => {
@@ -2724,25 +3524,33 @@ function initRichTextSeeMore() {
       checkOverflow();
     }
     function expand() {
+      if (expanded) return;
       expanded = true;
+      const sel = window.getSelection();
+      const savedRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
       editor.style.maxHeight = 'none';
       editor.style.overflow = 'visible';
       btn.innerHTML = 'See less &#9650;';
       btn.classList.add('visible');
+      if (savedRange) {
+        requestAnimationFrame(() => { sel.removeAllRanges(); sel.addRange(savedRange); });
+      }
     }
     function checkOverflow() {
       if (expanded) return;
       btn.classList.toggle('visible', editor.scrollHeight > COLLAPSED_H + 4);
     }
 
+    let blurTimer = null;
+    btn.addEventListener('mousedown', e => e.preventDefault()); // prevent stealing focus from editor
     btn.addEventListener('click', e => { e.preventDefault(); expanded ? collapse() : expand(); });
-    editor.addEventListener('focus', () => { expand(); });
+    editor.addEventListener('focus', () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } expand(); });
     // Delay collapse on blur — don't collapse if focus moved to toolbar or within the editor wrap
     editor.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (wrap.contains(document.activeElement)) return; // still inside editor wrap
+      blurTimer = setTimeout(() => {
+        if (wrap.contains(document.activeElement)) return;
         collapse();
-      }, 300);
+      }, 400);
     });
 
     checkOverflow();
@@ -2884,6 +3692,7 @@ loadPrefsWithMigration(syncPrefs => {
     initRichTextEditors();
     initRichTextSeeMore();
     initColumnControls();
+    initColumnEnterFix();
 
     // Update "How the AI reads this" panels for empty motivators
     const motivatorsEl = document.getElementById('profile-motivators-rt');
@@ -2919,6 +3728,7 @@ loadPrefsWithMigration(syncPrefs => {
     initStructuredSection('attracted-to-entries', 'profileAttractedTo', { showSeverity: true });
     initStructuredSection('dealbreaker-entries', 'profileDealbreakers', { showSeverity: true });
     initSkillTags();
+    initSkillsAutoGenerate();
     initICPFields();
     initICPAutofill();
     initFlagsAutofill();

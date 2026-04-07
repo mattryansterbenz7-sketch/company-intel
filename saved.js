@@ -682,8 +682,9 @@ function openScoreModal(entry) {
         const attractedTo = localData.profileAttractedTo || [];
         const dealbreakers = localData.profileDealbreakers || [];
         let candidateProfile = '';
-        if (roleICP.text || roleICP.targetFunction) candidateProfile += `\nRole ICP: ${roleICP.text || ''} ${[roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
-        if (companyICP.text || companyICP.stage) candidateProfile += `\nCompany ICP: ${companyICP.text || ''} ${[companyICP.stage, companyICP.sizeRange, (companyICP.industryPreferences||[]).join('/')].filter(Boolean).join(' | ')}`;
+        const _aj = v => Array.isArray(v) ? v.join(', ') : (v || '');
+        if (roleICP.text || _aj(roleICP.targetFunction)) candidateProfile += `\nRole ICP: ${roleICP.text || ''} ${[_aj(roleICP.targetFunction), roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
+        if (companyICP.text || _aj(companyICP.stage)) candidateProfile += `\nCompany ICP: ${companyICP.text || ''} ${[_aj(companyICP.stage), _aj(companyICP.sizeRange), _aj(companyICP.industryPreferences)].filter(Boolean).join(' | ')}`;
         if (attractedTo.length) candidateProfile += `\nGreen flags: ${attractedTo.map(e => e.text).join('; ')}`;
         if (dealbreakers.length) candidateProfile += `\nRed flags/dealbreakers: ${dealbreakers.map(e => `${e.text} (${e.severity})`).join('; ')}`;
         if (localData.profileSkillTags?.length) candidateProfile += `\nSkill tags: ${localData.profileSkillTags.join(', ')}`;

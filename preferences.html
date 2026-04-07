@@ -147,12 +147,16 @@
     .rt-editable.rt-sm { font-size: 13px; min-height: 60px; }
 
     /* FAQ Q&A pairs */
-    .faq-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); margin-bottom: 8px; position: relative; }
+    .faq-pair { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); margin-bottom: 8px; position: relative; }
     .faq-pair-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-tertiary); margin-bottom: 4px; }
     .faq-pair-label.q { color: var(--ci-accent-primary); }
     .faq-pair-label.a { color: var(--ci-accent-teal); }
     .faq-pair textarea { width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); font-family: inherit; background: var(--ci-bg-raised); color: var(--ci-text-primary); outline: none; resize: vertical; min-height: 50px; line-height: 1.5; }
     .faq-pair textarea:focus { border-color: var(--ci-accent-purple); box-shadow: 0 0 0 2px var(--ci-accent-purple-soft); }
+    .faq-pair .rt-editable { font-size: 13px; min-height: 40px; }
+    .faq-pair .exp-rt-wrap { margin: 0; }
+    .faq-pair .exp-rt-wrap .rt-toolbar { padding: 2px 4px; }
+    .faq-pair .exp-rt-wrap .rt-toolbar button { padding: 3px 6px; font-size: 12px; }
     .faq-pair-delete { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer; font-size: 14px; opacity: 0; transition: opacity 0.12s; }
     .faq-pair:hover .faq-pair-delete { opacity: 1; }
     .faq-pair-delete:hover { color: var(--ci-accent-red); }
@@ -175,6 +179,31 @@
     .field-info:hover::after { opacity: 1; }
 
     /* Structured experience entries */
+    .exp-autofill-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .exp-autofill-source {
+      font-size: 11px; color: var(--ci-text-tertiary); line-height: 1.4;
+      transition: opacity 0.2s;
+    }
+    .exp-autofill-source .source-label { font-weight: 600; color: var(--ci-text-secondary); }
+    .exp-autofill-usage {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--ci-text-tertiary);
+      background: var(--ci-bg-inset); padding: 3px 8px; border-radius: 10px;
+      cursor: default;
+    }
+    .exp-autofill-btn-wrap { position: relative; display: inline-block; }
+    .exp-autofill-btn-wrap .source-tooltip {
+      display: none; position: absolute; bottom: calc(100% + 6px); left: 0;
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+      border-radius: 8px; padding: 8px 12px; box-shadow: var(--ci-shadow-md);
+      font-size: 11px; color: var(--ci-text-secondary); white-space: nowrap; z-index: 10;
+      line-height: 1.6;
+    }
+    .exp-autofill-btn-wrap .source-tooltip::after {
+      content: ''; position: absolute; top: 100%; left: 16px;
+      border: 5px solid transparent; border-top-color: var(--ci-border-default);
+    }
+    .exp-autofill-btn-wrap:hover .source-tooltip { display: block; }
     .exp-entry { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px; margin-bottom: 10px; position: relative; box-shadow: var(--ci-shadow-sm); }
     .exp-entry-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .exp-entry-company { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); flex: 1; }
@@ -187,6 +216,16 @@
     .exp-entry .field-input { font-size: 12px; padding: 6px 10px; }
     .exp-entry textarea.field-input { min-height: 50px; resize: vertical; }
     .exp-entry-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-tertiary); margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--ci-border-subtle); }
+    .exp-rt-wrap { margin-bottom: 2px; }
+    .exp-rt-wrap .rt-editable { min-height: 40px; max-height: 200px; font-size: 13px; }
+    .exp-rt-wrap .rt-toolbar { padding: 2px 4px; }
+    .exp-rt-wrap .rt-toolbar button { padding: 3px 6px; font-size: 12px; }
+    .exp-date-range { display: flex; align-items: center; gap: 6px; }
+    .exp-date-range input[type="month"] { flex: 1; font-size: 12px; font-weight: 600; }
+    input[data-key="titles"] { font-weight: 600; }
+    .exp-date-sep { color: var(--ci-text-tertiary); font-size: 13px; }
+    .exp-date-present { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ci-text-secondary); cursor: pointer; white-space: nowrap; user-select: none; }
+    .exp-date-present input { margin: 0; }
     .exp-entry-collapsed { padding: 12px 16px; cursor: pointer; }
     .exp-entry-collapsed:hover { background: var(--ci-bg-raised); }
     .exp-entry-collapsed .exp-entry-summary { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }
@@ -495,6 +534,42 @@
     .icp-autofill-btn:disabled { opacity: 0.5; cursor: default; }
     .icp-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .icp-attrs .field { margin-bottom: 0; }
+
+    /* ── ICP Picklist chips ── */
+    .icp-picklist { display: flex; flex-wrap: wrap; gap: 6px; }
+    .icp-chip {
+      font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 14px;
+      border: 1px solid var(--ci-border-subtle); background: var(--ci-bg-base);
+      color: var(--ci-text-secondary); cursor: pointer; transition: all 0.15s;
+      user-select: none; white-space: nowrap;
+    }
+    .icp-chip:hover { border-color: var(--ci-accent-primary); color: var(--ci-text-primary); }
+    .icp-chip.selected {
+      background: var(--ci-accent-primary-soft); border-color: var(--ci-accent-primary);
+      color: var(--ci-accent-primary); font-weight: 600;
+    }
+    .icp-chip-custom {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px; font-weight: 500; padding: 5px 8px 5px 12px; border-radius: 14px;
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle);
+      color: var(--ci-text-primary);
+    }
+    .icp-chip-custom .chip-remove {
+      background: none; border: none; cursor: pointer; font-size: 13px;
+      color: var(--ci-text-on-dark-muted); padding: 0; line-height: 1;
+    }
+    .icp-chip-custom .chip-remove:hover { color: #c62828; }
+    .icp-add-custom {
+      font-size: 12px; padding: 5px 10px; border-radius: 14px;
+      border: 1px dashed var(--ci-border-subtle); background: transparent;
+      color: var(--ci-text-secondary); cursor: pointer; transition: all 0.15s;
+    }
+    .icp-add-custom:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .icp-custom-input {
+      font-size: 12px; padding: 4px 10px; border-radius: 14px; width: 120px;
+      border: 1px solid var(--ci-accent-primary); background: var(--ci-bg-base);
+      color: var(--ci-text-primary); outline: none; font-family: inherit;
+    }
 
     /* ── Interview learnings ── */
     .learning-entry {
@@ -872,6 +947,8 @@
       </div>
     </div>
 
+    <div class="prefs-body">
+      <div class="prefs-col">
     <!-- ── 4. Motivators & Values (merged Principles + Motivators) ── -->
     <div class="card" id="card-principles" data-card="principles">
       <div class="card-header">
@@ -926,9 +1003,7 @@
         <div class="ai-panel" data-ai-panel="motivators" style="display:none"></div>
       </div>
     </div>
-
-    <div class="cos-section-label">How you communicate</div>
-    <div class="prefs-body">
+      </div>
       <div class="prefs-col">
     <!-- ── 5. Voice & Style ── -->
     <div class="card" id="card-voice" data-card="voice">
@@ -964,8 +1039,8 @@
       </div>
     </div>
       </div>
-      <div class="prefs-col">
-    <!-- ── 5b. FAQ / Polished Responses ── -->
+    </div><!-- close prefs-body grid -->
+    <!-- ── 5b. FAQ / Polished Responses (full width) ── -->
     <div class="card" id="card-faq" data-card="faq" style="max-width:none;">
       <div class="card-header">
         <div class="card-header-text">
@@ -988,8 +1063,6 @@
         <div class="ai-panel" data-ai-panel="faq"></div>
       </div>
     </div>
-      </div>
-    </div>
 
     </div><!-- end profile tab panel -->
 
@@ -1008,6 +1081,16 @@
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
+        <div class="exp-autofill-row">
+          <span class="exp-autofill-btn-wrap">
+            <button class="icp-autofill-btn" id="experience-coop-autofill">Let Coop fill this in</button>
+            <div class="source-tooltip" id="experience-source-tooltip">
+              Coop will extract experience from:<br>
+              <span class="source-label">Resume</span> &middot; <span class="source-label">Story</span> &middot; <span class="source-label">Profile sections</span>
+            </div>
+          </span>
+          <span class="exp-autofill-source" id="experience-autofill-meta"></span>
+        </div>
         <textarea class="field-input" id="profile-experience" style="display:none;"></textarea>
         <div id="experience-entries-list"></div>
         <button id="experience-add-btn" style="font-size:12px;font-weight:600;padding:8px 16px;border:1px dashed var(--ci-border-default);border-radius:var(--ci-radius-sm);background:none;color:var(--ci-text-tertiary);cursor:pointer;font-family:inherit;transition:all 0.12s;margin-top:8px;">+ Add company experience</button>
@@ -1024,6 +1107,16 @@
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
+        <div class="exp-autofill-row">
+          <span class="exp-autofill-btn-wrap">
+            <button class="icp-autofill-btn" id="skills-coop-generate">Let Coop fill this in</button>
+            <div class="source-tooltip">
+              Coop will generate from:<br>
+              <span class="source-label">Experience</span> &middot; <span class="source-label">Resume</span> &middot; <span class="source-label">Story</span> &middot; <span class="source-label">Profile</span>
+            </div>
+          </span>
+          <span class="exp-autofill-source" id="skills-autofill-meta"></span>
+        </div>
         <textarea class="field-input" id="profile-skills" style="display:none;"></textarea>
         <div class="rt-editor-wrap">
           <div class="rt-toolbar" data-target="profile-skills-rt">
@@ -1088,7 +1181,7 @@
         <button class="icp-autofill-btn" id="role-icp-autofill">Let Coop fill this in</button>
         <textarea class="field-input" id="role-icp-text" style="font-size:13px;" placeholder="Describe your ideal next role in your own words..."></textarea>
         <div class="icp-attrs">
-          <div class="field"><label class="field-label">Target function</label><input type="text" class="field-input" id="role-icp-function" placeholder="e.g. GTM, Sales, RevOps"></div>
+          <div class="field"><label class="field-label">Target function</label><div class="icp-picklist" id="role-icp-function" data-field="targetFunction"></div></div>
           <div class="field"><label class="field-label">Seniority</label><input type="text" class="field-input" id="role-icp-seniority" placeholder="e.g. VP, Director, IC"></div>
           <div class="field"><label class="field-label">Scope</label><input type="text" class="field-input" id="role-icp-scope" placeholder="e.g. Full P&L, Regional, Team of 10"></div>
           <div class="field"><label class="field-label">Selling motion</label><input type="text" class="field-input" id="role-icp-selling-motion" placeholder="e.g. Enterprise, PLG, Mid-market"></div>
@@ -1104,9 +1197,9 @@
         <button class="icp-autofill-btn" id="company-icp-autofill">Let Coop fill this in</button>
         <textarea class="field-input" id="company-icp-text" style="font-size:13px;" placeholder="Describe your ideal company in your own words..."></textarea>
         <div class="icp-attrs">
-          <div class="field"><label class="field-label">Stage</label><input type="text" class="field-input" id="company-icp-stage" placeholder="e.g. Series B-D, Growth"></div>
-          <div class="field"><label class="field-label">Size range</label><input type="text" class="field-input" id="company-icp-size" placeholder="e.g. 50-500 employees"></div>
-          <div class="field"><label class="field-label">Industries</label><input type="text" class="field-input" id="company-icp-industries" placeholder="e.g. SaaS, FinTech, DevTools"></div>
+          <div class="field"><label class="field-label">Stage</label><div class="icp-picklist" id="company-icp-stage" data-field="stage"></div></div>
+          <div class="field"><label class="field-label">Size range</label><div class="icp-picklist" id="company-icp-size" data-field="sizeRange"></div></div>
+          <div class="field"><label class="field-label">Industries</label><div class="icp-picklist" id="company-icp-industries" data-field="industryPreferences"></div></div>
           <div class="field"><label class="field-label">Culture markers</label><input type="text" class="field-input" id="company-icp-culture" placeholder="e.g. transparent, async-first, ownership"></div>
         </div>
       </div>

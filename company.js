@@ -1190,8 +1190,18 @@ function buildActivityTimeline(e) {
 
   if (!deduped.length) return '<div class="p-empty">No activity tracked yet. Emails, meetings, and manual logs will appear here as they\'re detected.</div>';
 
-  return deduped.map(ev => {
+  // Filter out user-removed activities
+  const removedSet = new Set((e.removedActivities || []).map(r => r));
+  const filtered = deduped.filter(ev => {
+    const key = `${ev.badgeType}-${ev.ts}-${(ev.title || '').slice(0, 30)}`;
+    return !removedSet.has(key);
+  });
+
+  if (!filtered.length) return '<div class="p-empty">No activity tracked yet. Emails, meetings, and manual logs will appear here as they\'re detected.</div>';
+
+  return filtered.map(ev => {
     const dateStr = new Date(ev.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const actKey = `${ev.badgeType}-${ev.ts}-${(ev.title || '').slice(0, 30)}`;
     return `<div class="timeline-entry timeline-${ev.badgeType}${ev.isStage ? ' timeline-stage' : ''}">
       <div class="timeline-dot-col">
         <div class="timeline-dot">${ev.icon}</div>
@@ -1201,6 +1211,7 @@ function buildActivityTimeline(e) {
         <div class="timeline-header">
           <span class="timeline-badge timeline-badge-${ev.badgeType}">${ev.badge}</span>
           <span class="timeline-date">${dateStr}</span>
+          <button class="timeline-remove-btn" data-act-key="${escapeHtml(actKey)}" title="Remove this activity">&times;</button>
         </div>
         <div class="timeline-title">${escapeHtml(ev.title)}</div>
         ${ev.subtitle ? `<div class="timeline-subtitle">${escapeHtml(ev.subtitle)}</div>` : ''}
@@ -1214,6 +1225,17 @@ function initActivityTab() {
   const container = document.getElementById('activity-timeline');
   if (!container) return;
   container.innerHTML = buildActivityTimeline(entry);
+
+  // Bind remove buttons on timeline entries
+  container.querySelectorAll('.timeline-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.actKey;
+      const removed = [...new Set([...(entry.removedActivities || []), key])];
+      saveEntry({ removedActivities: removed });
+      entry.removedActivities = removed;
+      initActivityTab();
+    });
+  });
 
   // Inject "Log activity" button + form into Activity tab
   const logSection = document.getElementById('activity-log-section');

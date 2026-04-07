@@ -258,7 +258,16 @@ function buildIdentityPrompt(cfg, { globalChat, contextType }) {
 
   const capabilities = globalChat ? capabilitiesGlobal : capabilitiesCompany;
 
-  return `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're ${tone}\n\n${capabilities}\n\nResponse style: ${style}\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.${customInstructions}`;
+  return `Your name is Coop. You are Matt's co-operator inside CompanyIntel — his AI agent for job search strategy, company research, and application prep. You're ${tone}
+
+IDENTITY RULES:
+- You are Coop, an AI assistant. Matt is the human user who talks to you.
+- NEVER speak as if you are Matt. You help Matt — you are not Matt.
+- NEVER say things like "that's why I built you" or "I created you" — Matt built CompanyIntel, you are Coop inside it.
+- Address Matt directly in second person ("you", "your"). Refer to yourself as "I" only as Coop.
+- Be opinionated and direct, but never confused about who you are.
+
+${capabilities}\n\nResponse style: ${style}\n\nFormatting capabilities: Your responses are rendered as rich HTML. You can use full markdown: **bold**, *italic*, [links](url), bullet lists, numbered lists, \`inline code\`, fenced code blocks, and images via ![alt](url). Links will be clickable. Images will render inline.${customInstructions}`;
 }
 
 // Load pipeline config
@@ -1290,15 +1299,18 @@ async function processQuickFitScore(entryId) {
   candidateSection += `Background: ${skills}`;
   const resumeText = localData.profileResume?.content || prefs.resumeText || '';
   const experienceText = localData.profileExperience || '';
-  if (resumeText) candidateSection += `\nResume/Experience:\n${resumeText.slice(0, 2000)}`;
-  if (experienceText && experienceText !== resumeText) candidateSection += `\nExperience Details:\n${experienceText.slice(0, 1500)}`;
+  if (resumeText) candidateSection += `\nResume/Experience:\n${resumeText.slice(0, 3000)}`;
+  if (experienceText && experienceText !== resumeText) candidateSection += `\nExperience Details:\n${experienceText.slice(0, 2000)}`;
+  const profileSkills = localData.profileSkills || '';
+  if (profileSkills) candidateSection += `\nSkills & Competencies:\n${profileSkills.replace(/<[^>]+>/g, ' ').slice(0, 1500)}`;
   if (skillTags.length) candidateSection += `\nSkill tags: ${skillTags.join(', ')}`;
-  if (roleICP.targetFunction || roleICP.seniority) {
-    candidateSection += `\nRole ICP: ${[roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
+  const arrJoin = v => Array.isArray(v) ? v.join(', ') : (v || '');
+  if (arrJoin(roleICP.targetFunction) || roleICP.seniority) {
+    candidateSection += `\nRole ICP: ${[arrJoin(roleICP.targetFunction), roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
     if (roleICP.text) candidateSection += ` — ${roleICP.text.slice(0, 300)}`;
   }
-  if (companyICP.stage || companyICP.sizeRange) {
-    candidateSection += `\nCompany ICP: ${[companyICP.stage, companyICP.sizeRange, (companyICP.industryPreferences || []).join('/')].filter(Boolean).join(' | ')}`;
+  if (arrJoin(companyICP.stage) || arrJoin(companyICP.sizeRange)) {
+    candidateSection += `\nCompany ICP: ${[arrJoin(companyICP.stage), arrJoin(companyICP.sizeRange), arrJoin(companyICP.industryPreferences)].filter(Boolean).join(' | ')}`;
     if (companyICP.text) candidateSection += ` — ${companyICP.text.slice(0, 300)}`;
   }
   candidateSection += `\nCompensation thresholds (IMPORTANT — use these exact numbers, do not confuse floor with strong):`;
@@ -1348,38 +1360,46 @@ SCORING RULES:
 - strongFits: Only genuinely strong alignment backed by real evidence. Empty array is fine.
 - redFlags: Only real evidence of concern — comp below floor, on-site when remote needed, poor reviews, role misalignment. Do NOT flag missing information (missing salary, missing travel info, missing equity). Compensation not disclosed is NEVER a red flag — it is simply unknown and not a factor. Empty array is fine.
 - CRITICAL: Only flag concerns the candidate has EXPLICITLY stated in their preferences, dealbreakers, or profile. Do NOT infer or extrapolate dealbreakers they haven't expressed. If the candidate hasn't said they dislike a role type (e.g. client success, account management), do not flag it as a mismatch. Stick to what they've actually written.
+- The Role ICP freeform text describes an IDEAL — it is aspirational, not a set of hard requirements. Do NOT treat ICP text as dealbreakers. The structured ICP fields (Scope, Seniority, Selling motion, Team size preference) provide nuanced context that may soften or qualify the ideal. When a structured field like Scope says "depends on the situation", respect that flexibility rather than penalizing a role for not matching the ideal description exactly.
 - "No equity mentioned" is NEVER a red flag. Only flag equity concerns if the candidate has explicitly listed equity as a dealbreaker.
 - The "Work Arrangement" field above is authoritative. If it says "Remote", the job IS remote. If it says "Not specified", scan the job description for work arrangement clues (remote, hybrid, on-site mentions) and use what you find. Similarly, if Compensation says "Not specified", scan the description for salary/compensation ranges — companies often include these in the posting body or legal compliance sections.
 - hardDQ: true ONLY for absolute verified dealbreakers (on-site or hybrid vs remote-only preference, base max below salary floor, fundamentally wrong role type that directly contradicts an explicit dealbreaker). If user prefers Remote and job is Hybrid or On-site, this IS a hard DQ — Hybrid requires in-office days which a remote-only candidate cannot do. When in doubt on other factors, do NOT flag.
 - reason: explain WHY you gave this score. Do NOT repeat job title or company name.
 - Green flag importance matters: high-importance (4-5) green flags that match should significantly boost the score. A role matching multiple importance-5 green flags should score higher even if minor red flags exist. Green flags counterbalance red flags — weigh both sides.
 
-QUALIFICATION MATCH — CANDIDATE vs JOB REQUIREMENTS ONLY:
-This section assesses ONLY whether the candidate is qualified for the role. NOT whether the role matches their preferences — that's handled separately by preferenceFit and dealbreakers.
-- Extract ALL qualifications/requirements listed in the posting (no cap — if there are 15, list all 15). Also add any implicit requirements that the JOB DEMANDS based on role level and company context (e.g. a VP Sales at Salesforce implies enterprise sales leadership at scale even if not written). Do NOT skip soft skills like communication, problem-solving, or independence — these matter to hiring managers.
-- Include both explicit requirements AND implicit ones: seniority level, team size to manage, revenue scope, industry expertise, company scale experience, technical skills.
-- For each, determine importance: "required" (must-have or clearly implied by the role level), "preferred" (nice-to-have), or "bonus" (optional).
-- Match each against the candidate's ACTUAL experience — resume, skills, accomplishments, and career trajectory. Status: "met" (clear evidence), "partial" (related but gap exists — explain the gap), "unmet" (no evidence), "unknown" (can't determine).
-- For "met" and "partial", cite specific evidence from the candidate's background in under 15 words. For "partial", also note the gap (e.g., "Managed 5-person team; role needs 50+").
-- qualificationMatch: 2-3 sentences HONEST assessment. Would a hiring manager at this company seriously consider this candidate? What's the biggest gap? What's the strongest match?
-- qualificationScore: 1-10 (1-2=severely underqualified, 3-4=significant gaps, 5-6=meets most but stretch on some, 7-8=strong match, 9-10=exceeds all/overqualified). This measures how desirable of a candidate the user would be FROM THE EMPLOYER'S PERSPECTIVE — not whether the user would like the job. This score MUST factor into the overall score at the top. A dream role where you'd never get hired should not score 8/10 overall.
+QUALIFICATION MATCH — EMPLOYER'S PERSPECTIVE ONLY:
+This section answers ONE question: "Would this employer seriously consider hiring this candidate?"
+The candidate's PREFERENCES are IRRELEVANT here. Do NOT factor in whether the candidate WANTS this role — only whether they are QUALIFIED for it. A famous singer is qualified for a local musical even if they wouldn't want to do it.
+- Extract ALL qualifications/requirements listed in the posting. Also add implicit requirements the JOB DEMANDS based on role level and company context.
+- Include: seniority level, team size, revenue scope, industry expertise, company scale, technical skills, soft skills.
+- For each, determine importance: "required", "preferred", or "bonus".
+- Match each against the candidate's ACTUAL experience — resume, skills, accomplishments, career trajectory. Status: "met" (clear evidence), "partial" (related but gap exists — explain the gap), "unmet" (no evidence), "unknown" (can't determine from available data — but BEFORE marking "unknown", thoroughly check the resume, experience entries, skills, and accomplishments. If the candidate has relevant experience, mark it "met" or "partial" with evidence, not "unknown").
+- For "met" and "partial", cite specific evidence from the candidate's background in under 15 words.
+- IMPORTANT: Read the candidate's FULL profile carefully. If their resume summary, experience entries, or skills section clearly demonstrates a competency, it is "met" — not "unknown." Only use "unknown" when there is genuinely no evidence either way.
+- qualificationMatch: 2-3 sentences HONEST assessment from the employer's viewpoint. Would a hiring manager seriously consider this candidate? Biggest gap? Strongest match?
+- qualificationScore: 1-10 FROM THE EMPLOYER'S PERSPECTIVE ONLY. This measures how hireable the candidate is for this specific role. The candidate's preferences, ICP, green flags, and red flags must NOT affect this score. A role the candidate wouldn't enjoy but is perfectly qualified for should still get qualificationScore 8-9.
 
-REALISTIC GAP ANALYSIS — THIS IS CRITICAL:
-The score MUST account for the gap between the candidate's actual level and what the role demands. Do not inflate scores based on keyword overlap alone. Evaluate these dimensions honestly:
-- SENIORITY GAP: If the role requires VP/C-suite at a Fortune 500 and the candidate has been a director/head at a startup, that's a 3-4 point gap. Managing 5 people vs managing 500 is not "partial match" — it's a different job.
-- COMPANY SCALE: A Head of Revenue at a 50-person startup is NOT comparable to the same title at a 10,000-person enterprise. If the role is at a large/public company and the candidate's experience is primarily at startups (or vice versa), acknowledge the gap.
-- SCOPE: Owning $1M ARR vs $100M ARR. Managing one product line vs a full portfolio. Regional coverage vs global. These are real gaps, not minor differences.
-- YEARS: If the role asks for 10+ years and the candidate has 5, that's a real gap even if skills overlap.
-- The score should reflect REALISTIC likelihood of getting hired, not just preference alignment. A role you'd love but would never get past the screening call should score 3-4, not 8-9.
-- If the candidate would be a stretch hire (could do the job with a ramp but would face skepticism from hiring managers), say so explicitly in qualificationMatch.
+REALISTIC GAP ANALYSIS:
+Evaluate honestly but ONLY on qualification dimensions:
+- SENIORITY GAP: Managing 5 people vs 500 is a real gap.
+- COMPANY SCALE: Startup experience vs enterprise experience — acknowledge real gaps.
+- SCOPE: $1M ARR vs $100M ARR. Regional vs global.
+- YEARS: If the role asks for 10+ years and candidate has 5, that's a real gap.
+- If the candidate would be a stretch hire, say so in qualificationMatch.
 
-SCORE BREAKDOWN:
-- Break the overall score into 5 components, each 1-10:
-  - qualificationFit: HONEST match of experience, seniority, scale, and skills against requirements. A "partial" match on 3 required qualifications = 4-5, not 7-8.
-  - preferenceFit: How many of the candidate's green flags / attracted-to items are present?
-  - dealbreakers: Impact of red flags and dealbreakers (10=no issues, 1=fatal)
-  - compFit: Compensation alignment (10=exceeds strong offer, 5=meets floor, 1=below floor, 5=unknown)
-  - roleFit: Overall role type, seniority, company stage alignment — is this a REALISTIC next step or a 2-3 level jump?
+SCORE BREAKDOWN — TWO INDEPENDENT DIMENSIONS:
+The overall score combines TWO separate assessments. These are INDEPENDENT — one does not affect the other:
+
+A) EMPLOYER FIT (Would they hire me?):
+  - qualificationFit: 1-10. HONEST match of experience, seniority, scale, and skills against job requirements. Based ONLY on the candidate's resume, experience, and skills vs what the job demands. The candidate's preferences/ICP/green flags/red flags must NOT affect this score.
+
+B) CANDIDATE FIT (Do I want this?):
+  - preferenceFit: 1-10. How many of the candidate's green flags / attracted-to items are present in this role/company?
+  - dealbreakers: 1-10. Impact of the candidate's stated dealbreakers (10=no issues, 1=fatal dealbreaker triggered)
+  - compFit: 1-10. Compensation alignment (10=exceeds strong offer, 5=meets floor, 1=below floor, 5=unknown)
+  - roleFit: 1-10. How well does this role match the candidate's PREFERENCES for role type, seniority level, and company stage? This is about what the candidate WANTS, not what they're qualified for.
+
+OVERALL SCORE: Weight both dimensions. A role where the candidate is highly qualified (qualificationFit 9) but wouldn't enjoy (preferenceFit 3) should score ~5-6. A dream role (preferenceFit 9) where they'd never get hired (qualificationFit 3) should also score ~4-5. Both dimensions matter equally.
 
 ROLE BRIEF:
 - roleSummary: 2-3 sentences on what this role actually is, what you'd own, and what success looks like. Write it for the candidate, not a recruiter.
@@ -1673,17 +1693,27 @@ async function enrichFromApollo(company, domain) {
 }
 
 // Provider: Serper + Claude (web research synthesis)
-async function enrichFromWebResearch(company, domain) {
-  console.log('[Enrich] Trying Web Research for:', company);
+async function enrichFromWebResearch(company, domain, linkedinUrl) {
+  console.log('[Enrich] Trying Web Research for:', company, domain, linkedinUrl);
   try {
     const q = `"${company}"`;
     // When no domain, add "company" or "software" to disambiguate generic names
     const qd = domain ? `"${company}" ${domain}` : `"${company}" company software`;
-    const [productResults, websiteResults, linkedinResults] = await Promise.all([
+    const searches = [
       fetchSearchResults(qd + ' what does it do product overview', 3),
       fetchSearchResults(domain ? `"${company}" ${domain} official website` : `"${company}" company official website`, 2),
-      fetchSearchResults('site:linkedin.com/company ' + q, 2),
-    ]);
+    ];
+    // If we already have a LinkedIn URL, search for it directly for better firmographic extraction
+    if (linkedinUrl) {
+      searches.push(fetchSearchResults(linkedinUrl + ' company overview employees', 2));
+    } else {
+      searches.push(fetchSearchResults('site:linkedin.com/company ' + q, 2));
+    }
+    // Also search for firmographics directly if we have a domain
+    if (domain) {
+      searches.push(fetchSearchResults(`"${company}" ${domain} employees funding founded revenue`, 2));
+    }
+    const [productResults, websiteResults, linkedinResults, firmoResults] = await Promise.all(searches);
     console.log('[Enrich] Serper results:', {
       product: productResults.length,
       website: websiteResults.length,
@@ -1696,7 +1726,7 @@ async function enrichFromWebResearch(company, domain) {
     const linkedinFirmo = parseLinkedInCompanySnippet(linkedinResults);
     console.log('[Enrich] LinkedIn firmo:', linkedinFirmo);
 
-    const snippets = [...productResults, ...websiteResults].map(r => `${r.title}: ${r.snippet}`).join('\n');
+    const snippets = [...productResults, ...websiteResults, ...(firmoResults || [])].map(r => `${r.title}: ${r.snippet}`).join('\n');
     console.log('[Enrich] Snippets for Haiku:', snippets.length, 'chars');
 
     // Lightweight Claude call just for firmographics from web snippets
@@ -1780,7 +1810,7 @@ async function runEnrichmentPipeline(company, domain, companyLinkedin) {
   for (const provider of enrichOrder) {
     const fn = ENRICHMENT_REGISTRY[provider.id];
     if (!fn) continue;
-    const result = await fn(company, derivedDomain);
+    const result = await fn(company, derivedDomain, companyLinkedin);
     if (hasEnrichmentData(result)) {
       console.log('[Enrich] Pipeline success from:', result.source);
       return result;
@@ -2836,15 +2866,16 @@ async function buildCoopProfileContext() {
 
   // Role ICP
   const roleICP = profileData.profileRoleICP || {};
-  if (roleICP.text || roleICP.targetFunction) {
-    const attrs = [roleICP.targetFunction, roleICP.seniority, roleICP.scope, roleICP.sellingMotion, roleICP.teamSizePreference].filter(Boolean);
+  const _aj = v => Array.isArray(v) ? v.join(', ') : (v || '');
+  if (roleICP.text || _aj(roleICP.targetFunction)) {
+    const attrs = [_aj(roleICP.targetFunction), roleICP.seniority, roleICP.scope, roleICP.sellingMotion, roleICP.teamSizePreference].filter(Boolean);
     parts.push(`\n[Role ICP]\n${roleICP.text || ''}${attrs.length ? '\nAttributes: ' + attrs.join(' | ') : ''}`);
   }
 
   // Company ICP
   const companyICP = profileData.profileCompanyICP || {};
-  if (companyICP.text || companyICP.stage) {
-    const attrs = [companyICP.stage, companyICP.sizeRange, (companyICP.industryPreferences || []).join(', '), (companyICP.cultureMarkers || []).join(', ')].filter(Boolean);
+  if (companyICP.text || _aj(companyICP.stage)) {
+    const attrs = [_aj(companyICP.stage), _aj(companyICP.sizeRange), _aj(companyICP.industryPreferences), _aj(companyICP.cultureMarkers)].filter(Boolean);
     parts.push(`\n[Company ICP]\n${companyICP.text || ''}${attrs.length ? '\nAttributes: ' + attrs.join(' | ') : ''}`);
   }
 
@@ -3110,8 +3141,8 @@ You have full visibility into their structured profile fields:
 - Attracted To: structured entries with text, category, severity, and keyword triggers
 - Dealbreakers: structured entries with text, category, severity (hard/soft), and keyword triggers
 - Skill Tags: array of searchable skill labels
-- Role ICP: target function, seniority, scope, selling motion, team size preference
-- Company ICP: stage, size range, industry preferences, culture markers
+- Role ICP: target function (array), seniority, scope, selling motion, team size preference
+- Company ICP: stage (array), size range (array), industry preferences (array), culture markers
 - Interview Learnings: text + source company + date
 
 When the user asks to ADD or UPDATE profile data, respond with your explanation AND a code fence containing the structured update:
@@ -3124,7 +3155,8 @@ Valid targets: attractedTo, dealbreakers, skillTags, roleICP, companyICP, learni
 Valid actions: add
 
 For skillTags, data is a string array: {"action":"add","target":"skillTags","data":["Salesforce","HubSpot"]}
-For ICP updates, data is a partial object to merge: {"action":"add","target":"roleICP","data":{"seniority":"VP","targetFunction":"GTM"}}
+For ICP updates, data is a partial object to merge: {"action":"add","target":"roleICP","data":{"seniority":"VP","targetFunction":["GTM","Sales"]}}
+Note: targetFunction, stage, sizeRange, and industryPreferences are arrays of strings.
 
 When asked "what are my dealbreakers?" or similar, read back the structured data clearly.
 Always suggest relevant keywords when adding entries — keywords enable deterministic matching during job scoring.

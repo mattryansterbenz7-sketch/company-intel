@@ -2049,8 +2049,8 @@ function checkAlreadySaved(company) {
       if (!match) return;
       // Update the detected company name to the saved entry's name
       companyNameEl.textContent = match.company;
-      // If the linked entry is an opportunity, set job context so Coop knows
-      if (match.isOpportunity && match.jobTitle) {
+      // Set job context from the saved entry so Coop and job opportunity section work
+      if (match.jobTitle) {
         currentJobTitle = match.jobTitle;
         currentJobMeta = match.jobSnapshot || null;
       }
@@ -2157,6 +2157,8 @@ function syncContactsForEntry(savedEntry) {
 
       let current = (savedEntry.knownContacts || []).map(c => ({ ...c, aliases: c.aliases ? [...c.aliases] : [] }));
       if (selfEmail) current = current.filter(c => c.email.toLowerCase() !== selfEmail);
+      // Respect user's explicitly removed contacts
+      const blocked = new Set((savedEntry.removedContacts || []).map(e => e.toLowerCase()));
 
       const existing = new Set(current.map(c => c.email.toLowerCase()));
       const baseDomain = domain ? domain.split('.')[0].toLowerCase() : '';
@@ -2173,7 +2175,7 @@ function syncContactsForEntry(savedEntry) {
         });
         if (!hasCompany) return;
         all.forEach(({ name, email }) => {
-          if (!email || (selfEmail && email === selfEmail) || existing.has(email)) return;
+          if (!email || (selfEmail && email === selfEmail) || existing.has(email) || blocked.has(email.toLowerCase())) return;
           existing.add(email);
           // Merge into existing contact if same name, otherwise add new
           const match = name && name.split(/\s+/).length >= 2
@@ -2268,7 +2270,12 @@ function triggerJobAnalysis(company, jobDescription) {
 
 function renderJobOpportunity(jobMatch, jobSnapshot) {
   const jobOpportunityEl = document.getElementById('job-opportunity');
-  if (!jobOpportunityEl || !currentJobTitle) return;
+  if (!jobOpportunityEl) return;
+  // Fall back to saved entry's job title if content script didn't detect one
+  if (!currentJobTitle && currentSavedEntry?.jobTitle) {
+    currentJobTitle = currentSavedEntry.jobTitle;
+  }
+  if (!currentJobTitle) return;
 
   function scoreToVerdict(score) {
     if (score >= 8) return { label: 'Strong Match', cls: 'high' };
@@ -3498,7 +3505,14 @@ function renderContactsSection(el, contacts) {
       msgsEl.querySelectorAll('.sp-suggestion-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const prompt = btn.dataset.suggestionPrompt;
-          if (prompt) { inputEl.value = prompt; send(); }
+          if (prompt) {
+            // Activate application mode when "Help me apply" is clicked
+            if (prompt.toLowerCase().includes('application questions')) {
+              isApplicationMode = true;
+            }
+            inputEl.value = prompt;
+            send();
+          }
         });
       });
     } else {
@@ -3528,7 +3542,13 @@ function renderContactsSection(el, contacts) {
         } else {
           bubble = escHtml(m.content);
         }
-        const copyBtn = (m.role === 'assistant' && m.content)
+        // In application mode, only show copy on actual answers (not meta/conversational messages)
+        const isAppAnswer = isApplicationMode && m.role === 'assistant' && m.content
+          && !m.content.startsWith('Paste the application')
+          && !m.content.startsWith('What\'s your call')
+          && m.content.length > 20;
+        const showCopy = m.role === 'assistant' && m.content && (!isApplicationMode || isAppAnswer);
+        const copyBtn = showCopy
           ? `<button class="sp-chat-copy" data-idx="${idx}" title="Copy to clipboard">📋</button>`
           : '';
         const saveAnswerBtn = (m.role === 'assistant' && isApplicationMode && m.content && !m.content.startsWith('Paste the application'))
@@ -3650,6 +3670,8 @@ function renderContactsSection(el, contacts) {
       jobMatch: research.jobMatch || entry.jobMatch || null,
       matchFeedback: entry.matchFeedback || null,
       jobDescription: currentJobDescription || entry.jobDescription || null,
+      roleBrief: entry.roleBrief || entry.jobMatch?.roleBrief || null,
+      jobSnapshot: entry.jobSnapshot || null,
       reviews: research.reviews || entry.reviews || [],
       leaders: research.leaders || entry.leaders || [],
       employees: research.employees || entry.employees || null,
@@ -3668,6 +3690,10 @@ function renderContactsSection(el, contacts) {
     const text = inputEl.value.trim();
     console.log('[SP Chat] Send called, text:', text?.slice(0, 50));
     if (!text) return;
+    // Detect application mode from user message
+    if (/help me (apply|answer|fill)|application (question|field)/i.test(text)) {
+      isApplicationMode = true;
+    }
     inputEl.value = '';
     inputEl.style.height = '';
     history.push({ role: 'user', content: text });

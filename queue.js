@@ -349,13 +349,13 @@ function renderCurrent() {
   });
 }
 
-function triageAction(action) {
+function triageAction(action, fromDrag) {
   if (!queue.length || currentIdx >= queue.length) return;
   const entry = queue[currentIdx];
   const card = document.getElementById('queue-card');
 
-  // Animate out
-  card?.classList.add(action === 'pass' ? 'swipe-left' : 'swipe-right');
+  // Animate out (skip if already animated by drag gesture)
+  if (!fromDrag) card?.classList.add(action === 'pass' ? 'swipe-left' : 'swipe-right');
 
   // Sound
   if (typeof CISounds !== 'undefined') {
@@ -399,6 +399,112 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowUp' && currentIdx > 0) { currentIdx--; renderCurrent(); }
   }
 });
+
+// ── Drag/swipe gesture on card ──────────────────────────────────────────────
+function initCardSwipe() {
+  const card = document.getElementById('queue-card');
+  if (!card) return;
+
+  let startX = 0, startY = 0, currentX = 0, dragging = false, scrolling = false;
+  const THRESHOLD = 120; // px to trigger action
+
+  // Create drag overlay labels
+  let overlay = card.querySelector('.swipe-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'swipe-overlay';
+    overlay.innerHTML = '<span class="swipe-label pass">PASS</span><span class="swipe-label interested">INTERESTED</span>';
+    card.style.position = 'relative';
+    card.appendChild(overlay);
+  }
+
+  function onStart(e) {
+    if (e.target.closest('button, a, input, textarea, .queue-action-btn')) return;
+    const touch = e.touches ? e.touches[0] : e;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    currentX = 0;
+    dragging = false;
+    scrolling = false;
+    card.style.transition = 'none';
+  }
+
+  function onMove(e) {
+    if (scrolling) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+
+    // If vertical movement is dominant on first significant move, it's a scroll
+    if (!dragging && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+      scrolling = true;
+      return;
+    }
+
+    if (!dragging && Math.abs(dx) > 10) {
+      dragging = true;
+    }
+
+    if (!dragging) return;
+    e.preventDefault();
+    currentX = dx;
+
+    const progress = Math.min(Math.abs(currentX) / THRESHOLD, 1);
+    const rotation = (currentX / window.innerWidth) * 12;
+    card.style.transform = `translateX(${currentX}px) rotate(${rotation}deg)`;
+
+    // Show overlay labels
+    const passLabel = overlay.querySelector('.swipe-label.pass');
+    const intLabel = overlay.querySelector('.swipe-label.interested');
+    if (currentX < 0) {
+      passLabel.style.opacity = progress;
+      intLabel.style.opacity = 0;
+    } else {
+      intLabel.style.opacity = progress;
+      passLabel.style.opacity = 0;
+    }
+  }
+
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+
+    const passLabel = overlay.querySelector('.swipe-label.pass');
+    const intLabel = overlay.querySelector('.swipe-label.interested');
+    passLabel.style.opacity = 0;
+    intLabel.style.opacity = 0;
+
+    if (Math.abs(currentX) >= THRESHOLD) {
+      // Trigger action
+      card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+      const direction = currentX < 0 ? 'pass' : 'interested';
+      card.style.transform = `translateX(${currentX < 0 ? '-120%' : '120%'}) rotate(${currentX < 0 ? '-12' : '12'}deg)`;
+      card.style.opacity = '0';
+      setTimeout(() => triageAction(direction, true), 150);
+    } else {
+      // Snap back
+      card.style.transition = 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)';
+      card.style.transform = 'translateX(0) rotate(0)';
+    }
+  }
+
+  // Mouse events
+  card.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+
+  // Touch events
+  card.addEventListener('touchstart', onStart, { passive: true });
+  card.addEventListener('touchmove', onMove, { passive: false });
+  card.addEventListener('touchend', onEnd);
+}
+
+// Re-init swipe after each card render
+const _origRenderCurrent = renderCurrent;
+renderCurrent = function() {
+  _origRenderCurrent();
+  setTimeout(initCardSwipe, 50);
+};
 
 // Listen for real-time score updates
 chrome.runtime.onMessage?.addListener((msg) => {
