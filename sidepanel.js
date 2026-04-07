@@ -130,6 +130,7 @@ let currentPrefs = null;
 let saveRating = 0;
 let _sessionSaves = [];
 let _queueStageKey = 'needs_review'; // dynamically resolved on load
+let _manualLinkId = null; // persisted manual association (survives page navigation)
 
 // Resolve the queue stage key from pipeline config or first stage
 function resolveQueueStage() {
@@ -1114,6 +1115,35 @@ searchBtn.addEventListener('click', () => {
         companyNameEl.style.animation = 'sp-company-flash 0.5s ease';
         setTimeout(() => companyNameEl.style.animation = '', 500);
       }
+      // If user manually linked a company, preserve that association
+      // unless we're on a completely different site
+      if (_manualLinkId) {
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+          const linked = (savedCompanies || []).find(c => c.id === _manualLinkId);
+          if (linked) {
+            // Check if we're still on a related page (same domain or sub-URL)
+            const linkedDomain = (linked.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').toLowerCase();
+            const currentDomain = (response.domain || '').toLowerCase();
+            const tabDomain = (tab.url || '').replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
+            const isRelated = !linkedDomain || tabDomain.includes(linkedDomain.split('.')[0]) || (response.company && companiesMatch(response.company, linked.company));
+            if (isRelated) {
+              // Keep manual association — just update URL context
+              currentUrl = tab.url || null;
+              detectedDomain = response.domain || detectedDomain;
+              if (response.jobTitle) currentJobTitle = response.jobTitle;
+              if (response.linkedinFirmo) detectedLinkedinFirmo = response.linkedinFirmo;
+              updateJobTitleBar();
+              triggerResearch(linked.company, false);
+              setTimeout(() => { searchBtn.classList.remove('refreshing'); searchBtn.disabled = false; }, 500);
+              return;
+            }
+            // Different site — clear manual link
+            _manualLinkId = null;
+          }
+        });
+        return; // async — will handle inside callback
+      }
+
       // Reset state for fresh research
       companyNameEl.textContent = response.company;
       currentJobTitle = response.jobTitle || null;
@@ -2069,6 +2099,8 @@ function checkAlreadySaved(company) {
       const entries = savedCompanies || [];
       const match = entries.find(c => c.id === id);
       if (!match) return;
+      // Persist manual association — survives page navigation
+      _manualLinkId = match.id;
       // Update the detected company name to the saved entry's name
       companyNameEl.textContent = match.company;
       // Set job context from the saved entry so Coop and job opportunity section work

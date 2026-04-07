@@ -1358,7 +1358,7 @@ ${companyContext ? `\n[Company Context from Web]\n${companyContext}` : ''}
 SCORING RULES:
 - quickTake: 2-4 most decisive signals (green for fits, red for dealbreakers). 8-15 words each. Lead with the most important.
 - strongFits: Only genuinely strong alignment backed by real evidence. Empty array is fine.
-- redFlags: Only real evidence of concern — comp below floor, on-site when remote needed, poor reviews, role misalignment. Do NOT flag missing information (missing salary, missing travel info, missing equity). Compensation not disclosed is NEVER a red flag — it is simply unknown and not a factor. Empty array is fine.
+- redFlags: Only VERIFIED concerns backed by EXPLICIT evidence in the job posting or company data. Valid red flags: comp posted below floor, on-site when remote needed, explicit dealbreaker keyword matched. INVALID red flags: "compensation not disclosed" (that is NEVER a red flag), "may not meet minimums" (speculation is not evidence), "role might require X" (uncertainty is not a flag), "no clear evidence of X" (absence of info is not a red flag). When in doubt, do NOT flag it. An empty redFlags array is PERFECTLY FINE and often correct. Prefer fewer, high-confidence flags over speculative ones.
 - CRITICAL: Only flag concerns the candidate has EXPLICITLY stated in their preferences, dealbreakers, or profile. Do NOT infer or extrapolate dealbreakers they haven't expressed. If the candidate hasn't said they dislike a role type (e.g. client success, account management), do not flag it as a mismatch. Stick to what they've actually written.
 - The Role ICP freeform text describes an IDEAL — it is aspirational, not a set of hard requirements. Do NOT treat ICP text as dealbreakers. The structured ICP fields (Scope, Seniority, Selling motion, Team size preference) provide nuanced context that may soften or qualify the ideal. When a structured field like Scope says "depends on the situation", respect that flexibility rather than penalizing a role for not matching the ideal description exactly.
 - "No equity mentioned" is NEVER a red flag. Only flag equity concerns if the candidate has explicitly listed equity as a dealbreaker.
@@ -2666,12 +2666,21 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
     chrome.identity.getAuthToken({ interactive: false }, async token => {
       void chrome.runtime.lastError;
       if (!token) { resolve({ emails: [], error: 'not_connected' }); return; }
+
+      // GUARD: Never search without a domain — unfiltered company name searches
+      // return dozens of irrelevant emails and pollute the association
+      if (!domain) {
+        console.log('[Gmail] Skipping fetch — no domain available for', companyName);
+        resolve({ emails: [] });
+        return;
+      }
+
       try {
         const parts = [];
-        const baseDomain = domain ? domain.split('.')[0].toLowerCase() : '';
+        const baseDomain = domain.split('.')[0].toLowerCase();
 
         // Primary: domain-based search (most precise)
-        if (domain) parts.push(`from:@${domain} OR to:@${domain}`);
+        parts.push(`from:@${domain} OR to:@${domain}`);
 
         // Sibling domains: any known contact email sharing the same base name
         // e.g. productgenius.io when primary domain is productgenius.ai
@@ -2684,6 +2693,7 @@ async function fetchGmailEmails(domain, companyName, linkedinSlug, knownContactE
 
         // Bootstrap: when few contacts known, also search by company name to discover
         // threads that may reveal additional team members / alternate domains
+        // ONLY add company name search when we ALSO have domain-based search (not standalone)
         const isBootstrap = (knownContactEmails || []).filter(e => {
           const d = (e.split('@')[1] || '').toLowerCase();
           return d === domain || d.split('.')[0] === baseDomain;
