@@ -5,6 +5,7 @@
 const QUEUE_STAGE_FALLBACK = 'needs_review';
 const _rawMode = new URLSearchParams(location.search).get('mode');
 const MODE = _rawMode === 'apply' ? 'apply' : _rawMode === 'dq' ? 'dq' : 'score';
+const SINGLE_ID = new URLSearchParams(location.search).get('id'); // single-entry DQ mode
 const QUEUE_CONFIG = {
   score: { title: "Coop's Scoring Queue", emptyTitle: 'Queue is clear', emptySub: 'New opportunities will appear here when saved', showCta: false, passLabel: 'Pass', interestedLabel: 'Interested' },
   apply: { title: 'Apply Queue', emptyTitle: 'All caught up', emptySub: 'Nothing left to apply to right now', showCta: true, passLabel: 'Skip', interestedLabel: 'Applied' },
@@ -78,6 +79,12 @@ function loadQueue() {
         return sb - sa;
       });
     }
+    // Single-entry mode: opened from a kanban card click
+    if (SINGLE_ID) {
+      const entry = companies.find(c => c.id === SINGLE_ID);
+      queue = entry ? [entry] : [];
+    }
+
     currentIdx = 0;
     updateCount();
     renderCurrent();
@@ -85,6 +92,10 @@ function loadQueue() {
 }
 
 function updateCount() {
+  if (SINGLE_ID) {
+    document.getElementById('queue-count').textContent = '';
+    return;
+  }
   document.getElementById('queue-count').textContent = `${queue.length} remaining`;
 }
 
@@ -517,6 +528,7 @@ function triageAction(action, fromDrag) {
 
   // Next card after animation
   setTimeout(() => {
+    if (SINGLE_ID) { window.close(); return; }
     queue.splice(currentIdx, 1);
     if (currentIdx >= queue.length) currentIdx = 0;
     updateCount();

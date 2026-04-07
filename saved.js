@@ -2363,11 +2363,20 @@ function bindKanbanEvents(board) {
     btn.addEventListener('click', () => createOpportunityFromCompany(btn.dataset.id));
   });
 
-  // Click card body → open full-screen view
+  // Click card body → open full-screen view, or tinder DQ popup for Applied+ opportunities
+  const firstTwoStages = new Set([QUEUE_STAGE, 'want_to_apply']);
   board.querySelectorAll('.kanban-card').forEach(cardEl => {
     cardEl.addEventListener('click', (e) => {
       if (e.target.closest('a, button, select, textarea, input, .card-tag, .star, .card-stars, details, summary')) return;
-      window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+      const entry = allCompanies.find(c => c.id === cardEl.dataset.id);
+      if (entry?.isOpportunity && !firstTwoStages.has(entry.jobStage || '')) {
+        const w = 520, h = 760;
+        const left = Math.round(screen.width / 2 - w / 2);
+        const top = Math.round(screen.height / 2 - h / 2);
+        window.open(chrome.runtime.getURL('queue.html') + `?mode=dq&id=${entry.id}`, '_blank', `width=${w},height=${h},left=${left},top=${top}`);
+      } else {
+        window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+      }
     });
   });
 
