@@ -460,7 +460,7 @@ function stripQuotedContent(body) {
   return out.join('\n').trim();
 }
 
-function renderEmailThreads(emails) {
+function renderEmailThreads(emails, onDelete) {
   // Group by threadId, preserving newest-first order
   const threads = new Map();
   emails.forEach(e => {
@@ -494,6 +494,7 @@ function renderEmailThreads(emails) {
     }).join('');
 
     const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${tid}`;
+    const deleteBtn = onDelete ? `<button class="email-delete-btn" data-thread="${tid}" title="Delete from this company's email inbox" style="flex-shrink:0;background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:4px 8px;">×</button>` : '';
     return `<div class="thread-item">
       <div class="thread-header" data-thread="${tid}">
         <div style="flex:1;min-width:0">
@@ -502,6 +503,7 @@ function renderEmailThreads(emails) {
         </div>
         ${msgs.length > 1 ? `<span class="thread-count">${msgs.length}</span>` : ''}
         <span class="thread-chevron">▼</span>
+        ${deleteBtn}
       </div>
       <div class="thread-messages" id="thread-msgs-${tid}">
         ${msgsHTML}

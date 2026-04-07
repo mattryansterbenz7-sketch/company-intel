@@ -2204,8 +2204,26 @@ function renderEmailsFromData(emails) {
   const listEl   = document.getElementById('act-emails-list');
   if (!statusEl || !listEl) return;
   statusEl.style.display = 'none';
-  listEl.innerHTML = renderEmailThreads(emails);
+
+  // Pass delete handler so users can remove individual emails from the cached inbox
+  const onDelete = (threadId) => {
+    const filtered = (entry.cachedEmails || []).filter(e => e.threadId !== threadId);
+    saveEntry({ cachedEmails: filtered });
+    renderEmailsFromData(filtered);
+  };
+
+  listEl.innerHTML = renderEmailThreads(emails, onDelete);
   bindThreadToggles(listEl);
+
+  // Bind delete buttons
+  listEl.querySelectorAll('.email-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tid = btn.dataset.thread;
+      if (confirm('Delete this email thread from the cached inbox?')) {
+        onDelete(tid);
+      }
+    });
+  });
 }
 
 function loadHubEmails(forceRefresh) {
