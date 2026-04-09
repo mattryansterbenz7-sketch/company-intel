@@ -1,4 +1,4 @@
-// coop.js — Coop agent identity & avatar for CompanyIntel
+// coop.js — Coop agent identity & avatar for Coop.ai
 
 const COOP = {
   name: 'Coop',
@@ -60,7 +60,7 @@ const COOP = {
   badge(size = 24) { return this.avatar(size); },
 
   headerHTML(modelLabel) {
-    return `${this.avatar(28)} <span style="font-weight:800;color:#FF7A59;">Coop</span>`;
+    return `${this.avatar(22)} <span style="font-weight:800;color:#FF7A59;">Coop</span>`;
   },
 
   emptyStateHTML(context = 'company') {

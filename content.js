@@ -1,3 +1,11 @@
+// Re-injection guard: content.js can be injected twice (once via manifest match,
+// once via chrome.scripting.executeScript from background/sidepanel). Without this
+// guard, the `let` declarations below throw "Identifier already declared" SyntaxErrors.
+if (window.__companyIntelContentLoaded) {
+  // Already loaded — skip the entire file body
+} else {
+  window.__companyIntelContentLoaded = true;
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_COMPANY') {
     detectCompanyAndJob()
@@ -281,7 +289,12 @@ async function detectLinkedIn() {
     if (titleResult) {
       const companyLinkedinUrl = extractLinkedInCompanyUrlFromJobPage();
       const linkedinFirmo = extractLinkedInCompanyFirmo();
-      return { ...titleResult, source: 'linkedin', domain: null, companyLinkedinUrl, linkedinFirmo };
+      // Build a canonical job URL so sidepanel.js doesn't save the ambient search
+      // page URL (which has whatever currentJobId is highlighted, not necessarily
+      // the job being saved).
+      const jobId = new URLSearchParams(window.location.search).get('currentJobId');
+      const canonicalJobUrl = jobId ? `https://www.linkedin.com/jobs/view/${jobId}/` : null;
+      return { ...titleResult, source: 'linkedin', domain: null, companyLinkedinUrl, linkedinFirmo, canonicalJobUrl };
     }
     // Title never matched — fall through (company-only /jobs/ page or unusual layout)
   }
@@ -1477,7 +1490,7 @@ function injectCoopButton() {
   const coopFace = typeof COOP !== 'undefined' ? COOP.avatar(18) : '';
 
   btn.innerHTML = `${coopFace}<span style="margin-left:4px">Send to Coop</span>`;
-  btn.title = 'Save to CompanyIntel + score with Coop';
+  btn.title = 'Save to Coop.ai + score with Coop';
 
   // Style to match LinkedIn's pill buttons
   Object.assign(btn.style, {
@@ -1673,6 +1686,8 @@ if (/linkedin\.com/.test(window.location.hostname)) {
   // Remove the old floating widget if present
   const oldWidget = document.getElementById('ci-widget-host');
   if (oldWidget) oldWidget.remove();
+  // Floating trigger not ready for prod — skip injection entirely
+  return;
 
   let retractTimer = null;
   let sidepanelOpen = false;
@@ -1688,11 +1703,12 @@ if (/linkedin\.com/.test(window.location.hostname)) {
 
       /* Compact trigger button — vertically draggable, width driven by JS proximity */
       .ci-sb-trigger {
+        display: none; /* hidden — set to flex in JS when ready to enable */
         position: absolute; right: 0;
         pointer-events: auto; cursor: pointer;
         transition: width 0.15s ease-out, opacity 0.2s ease-out, background 0.2s ease, box-shadow 0.2s ease;
         opacity: 0; width: 0; height: 48px; overflow: hidden;
-        display: flex; align-items: center; gap: 8px; padding: 0 12px 0 6px;
+        align-items: center; gap: 8px; padding: 0 12px 0 6px;
         background: #fff; border-radius: 24px 0 0 24px;
         box-shadow: -2px 2px 12px rgba(0,0,0,0.1);
       }
@@ -1821,3 +1837,5 @@ if (/linkedin\.com/.test(window.location.hostname)) {
     }, 400);
   });
 })();
+
+} // end re-injection guard (window.__companyIntelContentLoaded)
