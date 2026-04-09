@@ -485,6 +485,37 @@ function openScoreModal(entry) {
       </div>`;
     })()}
     <div class="score-modal-body">
+      ${(() => {
+        // Pipeline context — only when entry is in the active pipeline (past triage)
+        const stage = entry.jobStage || 'needs_review';
+        const triageStages = ['needs_review', 'want_to_apply'];
+        if (triageStages.includes(stage)) return '';
+        const nextStep = entry.nextStep || '';
+        const nextDate = entry.nextStepDate || '';
+        const notes    = entry.notes || '';
+        const act      = (typeof computeLastActivity === 'function') ? computeLastActivity(entry) : null;
+        const actStr   = act?.label ? `${new Date(act.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · ${act.label}` : '';
+        const fmtDate  = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
+        if (!nextStep && !nextDate && !notes && !actStr) return '';
+        const stageDef = customOpportunityStages.find(s => s.key === stage);
+        const stageColorVal = stageDef?.color || '#FF7A59';
+        const stageLabel = stageDef?.label || stage;
+        const row = (label, value, valueColor) => value ? `
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;font-size:12px;">
+            <span style="color:#A09A94;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:10px;min-width:88px;padding-top:2px;flex-shrink:0;">${label}</span>
+            <span style="color:${valueColor || '#33475b'};line-height:1.5;flex:1;word-wrap:break-word;">${value}</span>
+          </div>` : '';
+        return `<div style="margin-bottom:14px;padding:12px 14px;background:#fafaf8;border:1px solid #ECE7E1;border-radius:10px;border-left:3px solid ${stageColorVal};">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${stageColorVal};"></span>
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${stageColorVal};">${escHtmlGlobal(stageLabel)}</span>
+          </div>
+          ${row('Next step', nextStep ? escHtmlGlobal(nextStep) : '')}
+          ${row('Step date', fmtDate(nextDate))}
+          ${row('Last activity', actStr ? escHtmlGlobal(actStr) : '')}
+          ${row('Notes', notes ? escHtmlGlobal(notes).replace(/\n/g, '<br>') : '', '#6B6560')}
+        </div>`;
+      })()}
       ${dqHtml}
       ${summary ? `<div class="score-modal-verdict">${escHtmlGlobal(summary)}</div>` : ''}
       ${flagsHtml ? `<div class="score-modal-flags">${flagsHtml}</div>` : ''}
@@ -697,8 +728,6 @@ function openScoreModal(entry) {
         const richContext = {
           intelligence: freshEntry.intelligence?.eli5 || freshEntry.oneLiner || null,
           reviews: freshEntry.reviews || [],
-          storyTime: localData.storyTime?.profileSummary || localData.storyTime?.rawInput || null,
-          storyTimeRaw: [localData.profileStory, localData.profileExperience, localData.profileSkills].filter(Boolean).join('\n\n') || null,
           notes: freshEntry.notes || null,
           knownComp: freshEntry.baseSalaryRange || freshEntry.oteTotalComp ? `Known comp: ${freshEntry.baseSalaryRange ? 'Base ' + freshEntry.baseSalaryRange : ''} ${freshEntry.oteTotalComp ? 'OTE ' + freshEntry.oteTotalComp : ''}`.trim() : null,
           candidateProfile,
@@ -1045,6 +1074,23 @@ function load() {
     render();
     renderActivitySection();
     updateInboxBadge();
+
+    // Non-blocking: auto-backfill firmographic fields for entries with missing data.
+    // Dedupe per session — without this, any entry whose missing fields can't be filled
+    // by regex will keep re-triggering syncEntryFields → storage write → load() → infinite loop.
+    if (typeof window._syncFieldsAttempted === 'undefined') window._syncFieldsAttempted = new Set();
+    const isMissingField = v => !v || /^\s*(not specified|unknown|n\/a|none|—|–|-)\s*$/i.test(String(v));
+    const needsSync = allCompanies.filter(c =>
+      c.isOpportunity
+      && (isMissingField(c.employees) || isMissingField(c.funding))
+      && !window._syncFieldsAttempted.has(c.id)
+    );
+    if (needsSync.length) {
+      needsSync.forEach(entry => {
+        window._syncFieldsAttempted.add(entry.id);
+        chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id || entry.company });
+      });
+    }
   });
 }
 
@@ -1251,7 +1297,7 @@ function render() {
   if (statusToolbar) statusToolbar.style.display = '';
 
   if (filtered.length === 0) {
-    grid.innerHTML = `<div class="empty-state"><b>${allCompanies.length === 0 ? 'No saved companies yet' : 'No results'}</b>${allCompanies.length === 0 ? 'Open CompanyIntel on any company page and hit Save.' : 'Try a different search or filter.'}</div>`;
+    grid.innerHTML = `<div class="empty-state"><b>${allCompanies.length === 0 ? 'No saved companies yet' : 'No results'}</b>${allCompanies.length === 0 ? 'Open Coop.ai on any company page and hit Save.' : 'Try a different search or filter.'}</div>`;
     return;
   }
 
@@ -1505,6 +1551,14 @@ const CONFETTI_OPTIONS = [
   { value: 'wave',       label: '👋 Wave' },
   { value: 'eyes',       label: '👀 Eyes' },
   { value: 'hundred',    label: '💯 100' },
+  { value: 'sparkles',   label: '✨ Sparkles' },
+  { value: 'fireworks',  label: '🎆 Fireworks' },
+  { value: 'unicorn',    label: '🦄 Unicorn' },
+  { value: 'cake',       label: '🎂 Cake' },
+  { value: 'medal',      label: '🥇 Gold Medal' },
+  { value: 'rainbow',    label: '🌈 Rainbow' },
+  { value: 'bell_emoji', label: '🛎️ Bell' },
+  { value: 'cool',       label: '😎 Cool' },
 ];
 const SOUND_OPTIONS = [
   { value: 'none',       label: '— None' },
@@ -1519,6 +1573,14 @@ const SOUND_OPTIONS = [
   { value: 'coin',       label: '🪙 Coin Drop' },
   { value: 'airhorn',    label: '📯 Air Horn' },
   { value: 'sad',        label: '😢 Sad Trombone' },
+  { value: 'fanfare',    label: '🎺 Fanfare' },
+  { value: 'sparkle',    label: '✨ Sparkle Chime' },
+  { value: 'applause',   label: '👏 Applause' },
+  { value: 'arcade',     label: '🕹️ Arcade Win' },
+  { value: 'doorbell',   label: '🛎️ Doorbell' },
+  { value: 'magic',      label: '🪄 Magic Wand' },
+  { value: 'heartbeat',  label: '💓 Heartbeat' },
+  { value: 'zen',        label: '🧘 Zen Bowl' },
 ];
 
 // Smart defaults — used when a stage has no custom config set
@@ -1568,14 +1630,237 @@ function playSound(sound) {
   if (sound === 'pop') playConfettiPop();
   else if (sound === 'chaching') playChaChingSound();
   else if (sound === 'farewell') playFarewellVoice();
-  else if (sound === 'levelup') playSynth([440, 554, 659, 880], 0.08, 0.15);
-  else if (sound === 'bell') playSynth([800, 1200], 0.05, 0.3, 'sine');
+  else if (sound === 'levelup') playLevelUp();
+  else if (sound === 'bell') playBell();
   else if (sound === 'whoosh') playNoise(0.15);
-  else if (sound === 'tada') playSynth([523, 659, 784, 1047], 0.1, 0.2);
+  else if (sound === 'tada') playTada();
   else if (sound === 'drum') playDrumRoll();
   else if (sound === 'coin') playSynth([1200, 1600], 0.03, 0.12, 'square');
   else if (sound === 'airhorn') playSynth([400, 500, 400, 500], 0.12, 0.4);
   else if (sound === 'sad') playSynth([350, 330, 310, 200], 0.2, 0.5);
+  else if (sound === 'fanfare') playFanfare();
+  else if (sound === 'sparkle') playSparkleChime();
+  else if (sound === 'applause') playApplause();
+  else if (sound === 'arcade') playArcadeWin();
+  else if (sound === 'doorbell') playDoorbell();
+  else if (sound === 'magic') playMagicWand();
+  else if (sound === 'heartbeat') playHeartbeat();
+  else if (sound === 'zen') playZenBowl();
+}
+
+// ── Richer sound implementations ──────────────────────────────────────────────
+
+function _ac() { return new (window.AudioContext || window.webkitAudioContext)(); }
+
+// Triumphant ascending arpeggio with harmonic body
+function playLevelUp() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C E G C
+    notes.forEach((f, i) => {
+      const start = t + i * 0.07;
+      [1, 2].forEach((mult, j) => {
+        const o = c.createOscillator(); const g = c.createGain();
+        o.type = j === 0 ? 'triangle' : 'sine';
+        o.frequency.value = f * mult;
+        g.gain.setValueAtTime(j === 0 ? 0.18 : 0.05, start);
+        g.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+        o.connect(g); g.connect(c.destination);
+        o.start(start); o.stop(start + 0.25);
+      });
+    });
+  } catch(e) {}
+}
+
+// Warm bell with metallic harmonics + long decay
+function playBell() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const fund = 880;
+    [[1, 0.35, 1.8], [2.76, 0.18, 1.4], [5.4, 0.09, 0.9], [8.93, 0.05, 0.6]].forEach(([mult, vol, dec]) => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'sine'; o.frequency.value = fund * mult;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + dec);
+    });
+  } catch(e) {}
+}
+
+// Ta-da: short sting then triumphant chord
+function playTada() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    // Pickup note
+    const p = c.createOscillator(); const pg = c.createGain();
+    p.type = 'triangle'; p.frequency.value = 392;
+    pg.gain.setValueAtTime(0.18, t);
+    pg.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    p.connect(pg); pg.connect(c.destination); p.start(t); p.stop(t + 0.12);
+    // Chord hit
+    [523.25, 659.25, 783.99, 1046.5].forEach(f => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.15, t + 0.13);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+      o.connect(g); g.connect(c.destination);
+      o.start(t + 0.13); o.stop(t + 0.7);
+    });
+  } catch(e) {}
+}
+
+// Brass fanfare — three rising hits
+function playFanfare() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const hits = [[523.25, 0], [659.25, 0.13], [783.99, 0.26], [1046.5, 0.42]];
+    hits.forEach(([f, dt]) => {
+      [1, 2, 3].forEach((h, i) => {
+        const o = c.createOscillator(); const g = c.createGain();
+        o.type = 'sawtooth'; o.frequency.value = f * h;
+        g.gain.setValueAtTime(0.08 / h, t + dt);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dt + (dt < 0.4 ? 0.13 : 0.5));
+        o.connect(g); g.connect(c.destination);
+        o.start(t + dt); o.stop(t + dt + (dt < 0.4 ? 0.13 : 0.5));
+      });
+    });
+  } catch(e) {}
+}
+
+// Cascading high-frequency sparkles
+function playSparkleChime() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const notes = [2093, 2637, 3136, 2349, 2794, 3520];
+    notes.forEach((f, i) => {
+      const start = t + i * 0.05;
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.1, start);
+      g.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+      o.connect(g); g.connect(c.destination);
+      o.start(start); o.stop(start + 0.3);
+    });
+  } catch(e) {}
+}
+
+// Layered noise bursts → applause
+function playApplause() {
+  try {
+    const c = _ac(); const len = c.sampleRate * 1.2;
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const env = i < len * 0.15 ? i / (len * 0.15) : Math.max(0, 1 - (i - len * 0.15) / (len * 0.85));
+      const claps = Math.sin(i * 0.04) * 0.6 + Math.sin(i * 0.13) * 0.4;
+      d[i] = (Math.random() * 2 - 1) * env * (0.5 + claps * 0.5) * 0.5;
+    }
+    const s = c.createBufferSource(); s.buffer = buf;
+    const filt = c.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 1500;
+    const g = c.createGain(); g.gain.value = 0.4;
+    s.connect(filt); filt.connect(g); g.connect(c.destination); s.start();
+  } catch(e) {}
+}
+
+// 8-bit arcade victory
+function playArcadeWin() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const notes = [659.25, 783.99, 1046.5, 1318.5];
+    notes.forEach((f, i) => {
+      const start = t + i * 0.08;
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.1, start);
+      g.gain.exponentialRampToValueAtTime(0.001, start + 0.1);
+      o.connect(g); g.connect(c.destination);
+      o.start(start); o.stop(start + 0.1);
+    });
+    // Final long note
+    const tEnd = t + notes.length * 0.08;
+    const o = c.createOscillator(); const g = c.createGain();
+    o.type = 'square'; o.frequency.value = 1568;
+    g.gain.setValueAtTime(0.12, tEnd);
+    g.gain.exponentialRampToValueAtTime(0.001, tEnd + 0.35);
+    o.connect(g); g.connect(c.destination);
+    o.start(tEnd); o.stop(tEnd + 0.35);
+  } catch(e) {}
+}
+
+// Two-tone doorbell (ding-dong)
+function playDoorbell() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    [[659.25, 0], [523.25, 0.45]].forEach(([f, dt]) => {
+      [1, 2.76].forEach(mult => {
+        const o = c.createOscillator(); const g = c.createGain();
+        o.type = 'sine'; o.frequency.value = f * mult;
+        g.gain.setValueAtTime(mult === 1 ? 0.25 : 0.08, t + dt);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.9);
+        o.connect(g); g.connect(c.destination);
+        o.start(t + dt); o.stop(t + dt + 0.9);
+      });
+    });
+  } catch(e) {}
+}
+
+// Magical sweep
+function playMagicWand() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const o = c.createOscillator(); const g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(440, t);
+    o.frequency.exponentialRampToValueAtTime(2200, t + 0.4);
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + 0.5);
+    // Sparkle tail
+    [2400, 3000, 3600].forEach((f, i) => {
+      const oo = c.createOscillator(); const gg = c.createGain();
+      oo.type = 'sine'; oo.frequency.value = f;
+      gg.gain.setValueAtTime(0.06, t + 0.4 + i * 0.04);
+      gg.gain.exponentialRampToValueAtTime(0.001, t + 0.4 + i * 0.04 + 0.2);
+      oo.connect(gg); gg.connect(c.destination);
+      oo.start(t + 0.4 + i * 0.04); oo.stop(t + 0.4 + i * 0.04 + 0.2);
+    });
+  } catch(e) {}
+}
+
+// Two soft thumps
+function playHeartbeat() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    [0, 0.25].forEach(dt => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(80, t + dt);
+      o.frequency.exponentialRampToValueAtTime(40, t + dt + 0.15);
+      g.gain.setValueAtTime(0.45, t + dt);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.18);
+      o.connect(g); g.connect(c.destination);
+      o.start(t + dt); o.stop(t + dt + 0.18);
+    });
+  } catch(e) {}
+}
+
+// Singing bowl — long sustained shimmer
+function playZenBowl() {
+  try {
+    const c = _ac(); const t = c.currentTime;
+    const fund = 432;
+    [[1, 0.3, 3.5], [2.4, 0.12, 2.5], [4.1, 0.06, 1.8]].forEach(([mult, vol, dec]) => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'sine'; o.frequency.value = fund * mult;
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + dec);
+    });
+  } catch(e) {}
 }
 
 function playSynth(freqs, gap, dur, wave = 'sine') {
@@ -1740,7 +2025,40 @@ const EMOJI_MAP = {
   star: '⭐', heart: '❤️', clap: '👏', trophy: '🏆', lightning: '⚡', muscle: '💪',
   party: '🥳', champagne: '🍾', crown: '👑', gem: '💎', skull: '💀', wave: '👋',
   eyes: '👀', hundred: '💯',
+  sparkles: '✨', fireworks: '🎆', unicorn: '🦄', cake: '🎂', medal: '🥇',
+  rainbow: '🌈', bell_emoji: '🛎️', cool: '😎',
 };
+
+function showCelebrationBanner(stageLabel, emoji) {
+  try {
+    const existing = document.getElementById('ci-celebration-banner');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.id = 'ci-celebration-banner';
+    el.style.cssText = [
+      'position:fixed','left:50%','top:22%','transform:translate(-50%,-12px) scale(0.9)',
+      'background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%)',
+      'border:1px solid #fdba74','border-radius:14px','padding:14px 22px',
+      'box-shadow:0 18px 48px rgba(255,122,89,0.28),0 4px 14px rgba(0,0,0,0.08)',
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'font-size:16px','font-weight:700','color:#9a3412',
+      'z-index:99998','pointer-events:none','opacity:0',
+      'display:flex','align-items:center','gap:12px',
+      'transition:opacity 260ms ease, transform 260ms cubic-bezier(.2,1.4,.4,1)',
+    ].join(';');
+    el.innerHTML = `<span style="font-size:26px;line-height:1;">${emoji}</span><span>Moved to <span style="color:#ff7a59;">${stageLabel}</span></span>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.opacity = '1';
+      el.style.transform = 'translate(-50%, 0) scale(1)';
+    });
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transform = 'translate(-50%, -8px) scale(0.96)';
+      setTimeout(() => el.remove(), 320);
+    }, 1700);
+  } catch(e) {}
+}
 
 function fireConfetti(config) {
   const { type, sound, count } = config;
@@ -1866,13 +2184,38 @@ function createOpportunityFromCompany(companyId) {
 }
 
 // Keep saved view in sync when data changes from the sidepanel
+// Debounced storage listener — without this, any background write to
+// savedCompanies (scoring queue, calendar cache, email cache, Granola sync)
+// triggers a full load() + render() rebuilding 116+ Kanban cards from scratch.
+// Rapid-fire writes from multiple background processes could fire this 10+
+// times/second, thrashing the DOM and crashing the renderer with OOM.
+let _storageReloadTimer = null;
+let _storageReloadHits = 0;
+let _storageFirstHitAt = 0;
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.savedCompanies || changes.allTags)) {
-    load();
+    if (_storageReloadHits === 0) _storageFirstHitAt = Date.now();
+    _storageReloadHits++;
+    // Log which keys changed + a fingerprint of the new savedCompanies length
+    if (changes.savedCompanies) {
+      const oldLen = changes.savedCompanies.oldValue?.length || 0;
+      const newLen = changes.savedCompanies.newValue?.length || 0;
+      console.log(`[storage-write] savedCompanies ${oldLen}→${newLen}`);
+    }
+    clearTimeout(_storageReloadTimer);
+    _storageReloadTimer = setTimeout(() => {
+      const window = Date.now() - _storageFirstHitAt;
+      console.log(`[debounce:storage] load() fired — ${_storageReloadHits} writes in ${window}ms (${(_storageReloadHits / (window / 1000)).toFixed(1)}/s)`);
+      _storageReloadHits = 0;
+      load();
+    }, 400);
   }
 });
 
-// Real-time score updates from background.js
+// Real-time score updates from background.js — debounced render so a scoring
+// queue processing N entries doesn't trigger N full Kanban rebuilds back-to-back.
+let _scoreRenderTimer = null;
+let _scoreRenderHits = 0;
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'QUICK_FIT_COMPLETE' && msg.companyId) {
     const idx = allCompanies.findIndex(c => c.id === msg.companyId);
@@ -1884,8 +2227,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg.quickTake) updates.quickTake = msg.quickTake;
       if (msg.hardDQ) updates.hardDQ = msg.hardDQ;
       allCompanies[idx] = { ...allCompanies[idx], ...updates, _queuedForScoring: false };
-      // Re-render just the kanban if active, otherwise full render
-      render();
+      _scoreRenderHits++;
+      clearTimeout(_scoreRenderTimer);
+      _scoreRenderTimer = setTimeout(() => {
+        console.log('[debounce:score] render() fired after', _scoreRenderHits, 'coalesced QUICK_FIT_COMPLETE(s)');
+        _scoreRenderHits = 0;
+        render();
+      }, 300);
     }
     sendResponse({ ok: true });
   }
@@ -1959,21 +2307,46 @@ function renderKanban(filtered) {
 
   bindKanbanEvents(board);
 
-  // Background-fetch calendar events for any card missing them
+  // Background-fetch calendar events for any card missing them.
+  // Guarded by an in-memory Set so we never fire more than once per card per
+  // session — without this, each successful fetch triggers a storage write →
+  // re-render → re-fire for every card still in flight, creating a feedback
+  // loop that spawns hundreds of concurrent tokeninfo/calendar requests and
+  // crashes the saved.html renderer with OOM.
+  if (typeof window._calendarFetchInFlight === 'undefined') window._calendarFetchInFlight = new Set();
+  // Debounced storage flush — when many cards resolve at once, collapse N writes into 1.
+  if (typeof window._calendarFlushTimer === 'undefined') window._calendarFlushTimer = null;
+  if (typeof window._calendarFlushHits === 'undefined') window._calendarFlushHits = 0;
+  const flushCalendarWrites = () => {
+    window._calendarFlushHits++;
+    clearTimeout(window._calendarFlushTimer);
+    window._calendarFlushTimer = setTimeout(() => {
+      console.log('[debounce:calendar] storage.set fired after', window._calendarFlushHits, 'coalesced fetch(s)');
+      window._calendarFlushHits = 0;
+      chrome.storage.local.set({ savedCompanies: allCompanies });
+    }, 250);
+  };
   filtered.forEach(c => {
     if (c.cachedCalendarEvents) return;
+    if (window._calendarFetchInFlight.has(c.id)) return;
     const domain = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
     if (!domain) return;
+    window._calendarFetchInFlight.add(c.id);
     const contactEmails = (c.knownContacts || []).flatMap(k => [k.email, ...(k.aliases || [])]);
     chrome.runtime.sendMessage(
       { type: 'CALENDAR_FETCH_EVENTS', domain, companyName: c.company || '', knownContactEmails: contactEmails },
       result => {
         void chrome.runtime.lastError;
-        const events = result?.events;
-        if (!events?.length) return;
+        const events = result?.events || [];
         const idx = allCompanies.findIndex(x => x.id === c.id);
         if (idx === -1) return;
+        // Always persist the fetch result (even empty) so we don't re-fetch on
+        // the next render — key to breaking the feedback loop.
         allCompanies[idx] = { ...allCompanies[idx], cachedCalendarEvents: events };
+        if (!events.length) {
+          flushCalendarWrites();
+          return;
+        }
         if (detectScheduledStatus(allCompanies[idx])) {
           const current = allCompanies[idx].actionStatus || 'my_court';
           if (current === 'my_court' || current === 'their_court') {
@@ -1982,14 +2355,13 @@ function renderKanban(filtered) {
         } else if (allCompanies[idx].actionStatus === 'scheduled') {
           allCompanies[idx].actionStatus = defaultActionStatus(allCompanies[idx].jobStage || allCompanies[idx].status) || 'my_court';
         }
-        chrome.storage.local.set({ savedCompanies: allCompanies });
         // Auto-populate next step from upcoming calendar event
         const nextStepChanges = autoPopulateNextStep(allCompanies[idx]);
         if (nextStepChanges) {
           allCompanies[idx] = { ...allCompanies[idx], ...nextStepChanges };
-          chrome.storage.local.set({ savedCompanies: allCompanies });
-          render();
         }
+        flushCalendarWrites();
+        if (nextStepChanges) render();
       }
     );
   });
@@ -2232,7 +2604,11 @@ function bindKanbanEvents(board) {
       updateCompany(draggingId, changes);
       if (activePipeline !== 'company') {
         const confettiConfig = getConfettiConfig(newStatus);
-        if (confettiConfig) fireConfetti(confettiConfig);
+        if (confettiConfig) {
+          fireConfetti(confettiConfig);
+          const stageDef = customOpportunityStages.find(s => s.key === newStatus);
+          showCelebrationBanner(stageDef?.label || newStatus, EMOJI_MAP[confettiConfig.type] || '🎊');
+        }
       }
     }
   }
@@ -2284,7 +2660,6 @@ function bindKanbanEvents(board) {
             emails: (c.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
             meetings: (c.cachedMeetings || []).slice(0, 3),
             transcript: c.cachedMeetingTranscript || null,
-            storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
             notes: c.notes || null,
             knownComp: c.baseSalaryRange || c.oteTotalComp ? `Known comp: ${c.baseSalaryRange ? 'Base ' + c.baseSalaryRange : ''} ${c.oteTotalComp ? 'OTE ' + c.oteTotalComp : ''} ${c.equity ? 'Equity ' + c.equity : ''} (source: ${c.compSource || 'unknown'})`.trim() : null,
             matchFeedback: c.matchFeedback ? `User ${c.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${c.matchFeedback.note ? ': "' + c.matchFeedback.note + '"' : ''}` : null,
@@ -2565,7 +2940,6 @@ function bindKanbanEvents(board) {
               emails: (entry.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
               meetings: (entry.cachedMeetings || []).slice(0, 3),
               transcript: entry.cachedMeetingTranscript || null,
-              storyTime: storyTime?.profileSummary || storyTime?.rawInput || null,
               notes: entry.notes || null,
               knownComp: entry.baseSalaryRange || entry.oteTotalComp ? `Known comp: ${entry.baseSalaryRange ? 'Base ' + entry.baseSalaryRange : ''} ${entry.oteTotalComp ? 'OTE ' + entry.oteTotalComp : ''} ${entry.equity ? 'Equity ' + entry.equity : ''} (source: ${entry.compSource || 'unknown'})`.trim() : null,
               matchFeedback: entry.matchFeedback ? `User ${entry.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${entry.matchFeedback.note ? ': "' + entry.matchFeedback.note + '"' : ''}` : null,
@@ -3170,8 +3544,14 @@ function renderCelebrationEditor() {
       return `<div class="celeb-row" data-key="${s.key}">
         <span class="celeb-stage-dot" style="background:${s.color}"></span>
         <span class="celeb-stage-name">${s.label}${!isCustom ? '<span class="celeb-default-badge">default</span>' : ''}</span>
-        <select class="celeb-select" data-key="${s.key}" data-field="confetti">${confettiOpts}</select>
-        <select class="celeb-select" data-key="${s.key}" data-field="sound">${soundOpts}</select>
+        <span class="celeb-pair">
+          <select class="celeb-select" data-key="${s.key}" data-field="confetti">${confettiOpts}</select>
+          <button type="button" class="celeb-preview-btn" data-preview="confetti" data-key="${s.key}" title="Preview confetti"${confettiVal === 'none' ? ' disabled' : ''}>▶</button>
+        </span>
+        <span class="celeb-pair">
+          <select class="celeb-select" data-key="${s.key}" data-field="sound">${soundOpts}</select>
+          <button type="button" class="celeb-preview-btn" data-preview="sound" data-key="${s.key}" title="Preview sound"${soundVal === 'none' ? ' disabled' : ''}>▶</button>
+        </span>
       </div>`;
     }).join('')}
     <div style="padding:8px 4px 2px">
@@ -3185,6 +3565,23 @@ function renderCelebrationEditor() {
       if (!stageCelebrations[key]) stageCelebrations[key] = { ...getDefaultCelebration(key) };
       stageCelebrations[key][field] = sel.value;
       renderCelebrationEditor();
+    });
+  });
+
+  list.querySelectorAll('.celeb-preview-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.key;
+      const which = btn.dataset.preview;
+      const cfg = stageCelebrations[key] || getDefaultCelebration(key);
+      if (which === 'sound') {
+        playSound(cfg.sound || 'none');
+      } else if (which === 'confetti') {
+        const type = cfg.confetti || 'none';
+        if (type === 'none') return;
+        // Preview the visual silently (don't double-trigger sound)
+        fireConfetti({ type, sound: 'none', count: type === 'confetti' ? 80 : 25 });
+      }
     });
   });
 
@@ -3416,6 +3813,56 @@ function getPeriodRange(period) {
   return { start: s.getTime(), end: e.getTime(), label: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
 }
 
+function showMetricDrillDown(goalDef, range) {
+  const overlay = document.getElementById('metric-drill-overlay');
+  if (!overlay) return;
+
+  const { start, end } = range;
+  const toMs = ts => typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const inPeriod = ts => { const n = toMs(ts); return !!n && n >= start && n <= end; };
+  const opps = allCompanies.filter(c => c.isOpportunity);
+  const isSnapshot = goalDef.mode === 'snapshot';
+
+  let matched;
+  if (isSnapshot) {
+    matched = goalDef.stages.includes('*')
+      ? opps
+      : opps.filter(c => goalDef.stages.includes(c.jobStage || 'needs_review'));
+  } else {
+    matched = goalDef.stages.includes('*')
+      ? opps.filter(c => inPeriod(c.savedAt))
+      : opps.filter(c => goalDef.stages.some(sk => inPeriod(c.stageTimestamps?.[sk])));
+  }
+
+  const smap = Object.fromEntries(customOpportunityStages.map(s => [s.key, { label: s.label, color: s.color }]));
+
+  const rowsHtml = matched.length === 0
+    ? '<div class="metric-drill-empty">No entries match this metric for the selected period.</div>'
+    : matched.map(e => {
+        const stageKey = e.jobStage || 'needs_review';
+        const stage = smap[stageKey] || { label: stageKey, color: '#94a3b8' };
+        const name = e.jobTitle || e.company || 'Unnamed';
+        const sub = (e.jobTitle && e.company) ? e.company : '';
+        const url = chrome.runtime.getURL('company.html') + '?id=' + e.id;
+        return `<a class="metric-drill-row" href="${url}" target="_blank">
+          <div class="metric-drill-row-main">
+            <span class="metric-drill-name">${escHtmlGlobal(name)}</span>
+            ${sub ? `<span class="metric-drill-sub">${escHtmlGlobal(sub)}</span>` : ''}
+          </div>
+          <span class="metric-drill-stage" style="background:${stage.color}1a;color:${stage.color};border-color:${stage.color}55">${stage.label}</span>
+        </a>`;
+      }).join('');
+
+  overlay.querySelector('#metric-drill-title').textContent = goalDef.label;
+  overlay.querySelector('#metric-drill-count').textContent = `${matched.length} ${matched.length === 1 ? 'opportunity' : 'opportunities'}`;
+  overlay.querySelector('#metric-drill-list').innerHTML = rowsHtml;
+  overlay.classList.add('open');
+
+  const close = () => overlay.classList.remove('open');
+  overlay.querySelector('#metric-drill-close').onclick = close;
+  overlay.onclick = e => { if (e.target === overlay) close(); };
+}
+
 function goalRingSvg(current, goal, color) {
   const r = 22, cx = 27, sw = 5, circ = +(2 * Math.PI * r).toFixed(2);
   const pct = goal > 0 ? Math.min(1, current / goal) : 0;
@@ -3489,11 +3936,13 @@ function renderActivitySection() {
     return `
     <div class="goal-card" data-goal-key="${g.key}">
       <span class="goal-info-icon" title="${g.tooltip}${g.mode === 'snapshot' ? ' (snapshot)' : ''}">i</span>
-      ${showGoal ? `<div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>` : `<div class="goal-ring-plain" style="color:${g.color}">${g.count}</div>`}
-      <div class="goal-text">
-        <div class="goal-fraction">${g.count}${showGoal ? `<span class="goal-denom">/${g.goal}</span>` : ''}</div>
-        <div class="goal-metric-label">${g.label}</div>
-        ${showGoal ? '<div class="goal-edit-hint">click to edit goal</div>' : `<div class="goal-edit-hint" style="color:#94a3b8">${g.mode === 'snapshot' ? 'live count' : 'tracking'}</div>`}
+      <div class="goal-drill-area" data-goal-key="${g.key}" title="View entries">
+        ${showGoal ? `<div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>` : `<div class="goal-ring-plain" style="color:${g.color}">${g.count}</div>`}
+        <div class="goal-text">
+          <div class="goal-fraction">${g.count}${showGoal ? `<span class="goal-denom">/${g.goal}</span>` : ''}</div>
+          <div class="goal-metric-label">${g.label}</div>
+          ${showGoal ? '<div class="goal-edit-hint">edit goal</div>' : `<div class="goal-edit-hint" style="color:#94a3b8">${g.mode === 'snapshot' ? 'live count' : 'tracking'}</div>`}
+        </div>
       </div>
       ${showGoal ? `<div class="goal-edit-form">
         <label class="goal-edit-label">${g.label} goal</label>
@@ -3570,12 +4019,20 @@ function renderActivitySection() {
     });
   }
 
-  section.querySelectorAll('.goal-card').forEach(card => {
-    card.addEventListener('click', e => {
-      if (e.target.closest('.goal-edit-form')) return;
-      section.querySelectorAll('.goal-card').forEach(c => c.classList.remove('editing'));
-      card.classList.add('editing');
-      card.querySelector('.goal-edit-input')?.select();
+  section.querySelectorAll('.goal-drill-area').forEach(drillArea => {
+    drillArea.addEventListener('click', e => {
+      if (e.target.closest('.goal-edit-hint')) {
+        // "edit goal" hint — open edit form instead
+        e.stopPropagation();
+        const card = drillArea.closest('.goal-card');
+        section.querySelectorAll('.goal-card').forEach(c => c.classList.remove('editing'));
+        card.classList.add('editing');
+        card.querySelector('.goal-edit-input')?.select();
+        return;
+      }
+      const key = drillArea.dataset.goalKey;
+      const def = goalDefs.find(g => g.key === key);
+      if (def) showMetricDrillDown(def, range);
     });
   });
 

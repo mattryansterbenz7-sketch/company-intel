@@ -1,4 +1,4 @@
-// ── CompanyIntel Inbox ──────────────────────────────────────────────────────
+// ── Coop.ai Inbox ───────────────────────────────────────────────────────────
 
 let allCompanies = [];
 let lastViewedAt = 0;
@@ -8,7 +8,7 @@ let entryMap = {};
 let selectedCompanyId = null;
 let selectedEmailIdx = -1;
 let searchQuery = '';
-let stageFilter = 'all';
+let stageFilter = 'active';
 let directionFilter = 'all'; // all, inbound, outbound
 let gmailUserEmail = '';
 let configuredStages = []; // [{ key, label }] from opportunityStages/customStages
@@ -58,6 +58,47 @@ function parseFromName(from) {
   const match = from.match(/^"?([^"<]+)"?\s*</);
   if (match) return match[1].trim();
   return from.replace(/<[^>]+>/, '').trim() || 'Unknown';
+}
+
+// Stable color from a string — for avatar backgrounds
+const AVATAR_PALETTE = [
+  '#FF7A59','#0EA5E9','#10B981','#8B5CF6','#F59E0B','#EC4899',
+  '#14B8A6','#6366F1','#EF4444','#84CC16','#F97316','#06B6D4',
+];
+function avatarColor(seed) {
+  if (!seed) return AVATAR_PALETTE[0];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+function avatarInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+function avatarHtml(name, size) {
+  const initials = avatarInitials(name);
+  const color = avatarColor(name || '');
+  const cls = size === 'sm' ? 'thread-msg-avatar' : size === 'lg' ? 'detail-avatar' : 'email-avatar';
+  return `<div class="${cls}" style="background:${color}">${escHtml(initials)}</div>`;
+}
+
+// Date-grouping bucket for the list
+function dateGroup(ts) {
+  if (!ts) return 'Older';
+  const d = new Date(ts);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 86400000;
+  const startOfWeek = startOfToday - 6 * 86400000;
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  if (ts >= startOfToday) return 'Today';
+  if (ts >= startOfYesterday) return 'Yesterday';
+  if (ts >= startOfWeek) return 'This Week';
+  if (ts >= startOfMonth) return 'This Month';
+  return 'Older';
 }
 
 function parseFromEmail(from) {
@@ -178,7 +219,12 @@ function buildSidebar() {
   const companyLatest = {};
 
   // Respect stage filter in sidebar counts
-  const filteredForSidebar = stageFilter !== 'all' ? allEmails.filter(e => e._stage === stageFilter) : allEmails;
+  let filteredForSidebar = allEmails;
+  if (stageFilter === 'active') {
+    filteredForSidebar = allEmails.filter(e => companyMap[e._companyId]?.isOpportunity && !TERMINAL_STAGE_RE.test(e._stage || ''));
+  } else if (stageFilter !== 'all') {
+    filteredForSidebar = allEmails.filter(e => e._stage === stageFilter);
+  }
   filteredForSidebar.forEach(e => {
     companyCounts[e._companyId] = (companyCounts[e._companyId] || 0) + 1;
     if (e._unread) companyUnread[e._companyId] = (companyUnread[e._companyId] || 0) + 1;
@@ -187,13 +233,27 @@ function buildSidebar() {
     }
   });
 
-  const sortedCompanies = Object.keys(companyCounts).sort((a, b) => (companyLatest[b] || 0) - (companyLatest[a] || 0));
+  // In active mode: sort by pipeline stage order, then by latest email within each stage.
+  // Otherwise: sort by latest email date.
+  const stageOrder = {};
+  configuredStages.forEach((s, i) => { stageOrder[s.key] = i; });
+
+  const sortedCompanies = Object.keys(companyCounts).sort((a, b) => {
+    if (stageFilter === 'active') {
+      const stageA = companyMap[a]?.stage || '';
+      const stageB = companyMap[b]?.stage || '';
+      const orderA = stageOrder[stageA] ?? 999;
+      const orderB = stageOrder[stageB] ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+    }
+    return (companyLatest[b] || 0) - (companyLatest[a] || 0);
+  });
   const totalUnread = Object.values(companyUnread).reduce((a, b) => a + b, 0);
 
   let html = `<div class="sidebar-section-label">Companies</div>`;
   html += `<div class="sidebar-item sidebar-item-all ${selectedCompanyId === null ? 'active' : ''}" data-company="all">
     <span class="sidebar-item-name">All Mail</span>
-    ${totalUnread > 0 ? `<span class="sidebar-item-count unread">${totalUnread > 99 ? '99+' : totalUnread}</span>` : `<span class="sidebar-item-count">${allEmails.length}</span>`}
+    ${totalUnread > 0 ? `<span class="sidebar-item-count unread">${totalUnread > 99 ? '99+' : totalUnread}</span>` : ''}
   </div>`;
 
   sortedCompanies.forEach(id => {
@@ -207,7 +267,7 @@ function buildSidebar() {
     html += `<div class="sidebar-item ${selectedCompanyId === id ? 'active' : ''}" data-company="${id}">
       ${favHtml}
       <span class="sidebar-item-name">${escHtml(info.name)}</span>
-      ${unread > 0 ? `<span class="sidebar-item-count unread">${unread}</span>` : `<span class="sidebar-item-count">${count}</span>`}
+      ${unread > 0 ? `<span class="sidebar-item-count unread">${unread}</span>` : ''}
     </div>`;
   });
 
@@ -227,20 +287,24 @@ function buildSidebar() {
 
 // ── Email List ──────────────────────────────────────────────────────────────
 
+const TERMINAL_STAGE_RE = /rejected|dq|archive|closed.lost/i;
+
 function getFilteredEmails() {
   let emails = selectedCompanyId ? allEmails.filter(e => e._companyId === selectedCompanyId) : allEmails;
-  if (stageFilter !== 'all') {
+  if (stageFilter === 'active') {
+    emails = emails.filter(e => companyMap[e._companyId]?.isOpportunity && !TERMINAL_STAGE_RE.test(e._stage || ''));
+  } else if (stageFilter !== 'all') {
     emails = emails.filter(e => e._stage === stageFilter);
   }
   if (directionFilter === 'inbound') {
     emails = emails.filter(e => {
       const from = (e.from || '').toLowerCase();
-      return !from.includes(gmailUserEmail || 'mattsterbenz') && !from.includes('matt sterbenz');
+      return !gmailUserEmail || !from.includes(gmailUserEmail);
     });
   } else if (directionFilter === 'outbound') {
     emails = emails.filter(e => {
       const from = (e.from || '').toLowerCase();
-      return from.includes(gmailUserEmail || 'mattsterbenz') || from.includes('matt sterbenz');
+      return !!gmailUserEmail && from.includes(gmailUserEmail);
     });
   }
   if (searchQuery) {
@@ -271,43 +335,65 @@ function renderEmailList() {
   const emails = getFilteredEmails();
   const companyName = selectedCompanyId ? (companyMap[selectedCompanyId]?.name || 'Unknown') : 'All Mail';
   const stages = getStages(); // [{ key, label }]
+  const unreadCount = emails.filter(e => e._unread).length;
+
+  // Stage chip pills (replacing dropdown)
+  const stageChips = [
+    `<button class="filter-chip ${stageFilter === 'active' ? 'active' : ''}" data-stage="active">Active</button>`,
+    `<button class="filter-chip ${stageFilter === 'all' ? 'active' : ''}" data-stage="all">All</button>`,
+    ...stages.map(s => `<button class="filter-chip ${stageFilter === s.key ? 'active' : ''}" data-stage="${escHtml(s.key)}">${escHtml(s.label)}</button>`),
+  ].join('');
+  const directionChips = [
+    `<button class="filter-chip ${directionFilter === 'all' ? 'active' : ''}" data-dir="all">All Mail</button>`,
+    `<button class="filter-chip ${directionFilter === 'inbound' ? 'active' : ''}" data-dir="inbound">Inbox</button>`,
+    `<button class="filter-chip ${directionFilter === 'outbound' ? 'active' : ''}" data-dir="outbound">Sent</button>`,
+  ].join('');
 
   let html = `<div class="list-header">
-    <span class="list-header-title">${escHtml(companyName)}</span>
-    <span class="list-header-count">${emails.length} email${emails.length !== 1 ? 's' : ''}</span>
+    <div class="list-header-left">
+      <span class="list-header-title">${escHtml(companyName)}</span>
+      <span class="list-header-count">${emails.length}${unreadCount > 0 ? ` · ${unreadCount} unread` : ''}</span>
+    </div>
+    <button class="list-mark-read-btn" id="mark-all-read-btn"${unreadCount === 0 ? ' disabled' : ''}>Mark all read</button>
   </div>
   <div class="list-filters">
-    <div class="filter-row">
-      <select class="filter-select" id="stage-filter">
-        <option value="all"${stageFilter === 'all' ? ' selected' : ''}>All Stages</option>
-        ${stages.map(s => `<option value="${s.key}"${stageFilter === s.key ? ' selected' : ''}>${escHtml(s.label)}</option>`).join('')}
-      </select>
-      <select class="filter-select" id="direction-filter">
-        <option value="all"${directionFilter === 'all' ? ' selected' : ''}>All Emails</option>
-        <option value="inbound"${directionFilter === 'inbound' ? ' selected' : ''}>Inbound</option>
-        <option value="outbound"${directionFilter === 'outbound' ? ' selected' : ''}>Sent by Me</option>
-      </select>
-      <button class="filter-btn ${directionFilter === 'all' && stageFilter === 'all' ? '' : 'active'}" id="clear-filters">Clear</button>
-    </div>
+    <div class="filter-chips">${directionChips}</div>
+    <div class="filter-chips">${stageChips}</div>
   </div>`;
 
   if (!emails.length) {
-    html += `<div style="text-align:center;padding:40px;color:#A09A94;font-size:13px;">
-      ${searchQuery ? `No emails matching "${escHtml(searchQuery)}"` : 'No emails found'}
+    html += `<div style="text-align:center;padding:60px 24px;color:#A09A94;">
+      <div style="font-size:36px;opacity:0.25;margin-bottom:10px;">📭</div>
+      <div style="font-size:14px;font-weight:600;color:#6B6560;margin-bottom:4px;">${searchQuery ? 'No matches' : 'Nothing here yet'}</div>
+      <div style="font-size:12px;line-height:1.5;">${searchQuery ? `No emails matching "${escHtml(searchQuery)}"` : 'Try adjusting filters or selecting another company.'}</div>
     </div>`;
   } else {
+    let lastGroup = null;
     emails.slice(0, 300).forEach((e, i) => {
+      const grp = dateGroup(e._ts);
+      if (grp !== lastGroup) {
+        html += `<div class="date-group-header">${grp}</div>`;
+        lastGroup = grp;
+      }
       const isSelected = i === selectedEmailIdx;
       const showCompany = !selectedCompanyId;
+      const fromName = parseFromName(e.from);
+      const stageDef = configuredStages.find(s => s.key === e._stage);
+      const stagePill = (showCompany && stageDef) ? `<span class="email-stage-pill" style="background:rgba(255,122,89,0.10);color:#c2410c;">${escHtml(stageDef.label)}</span>` : '';
       html += `<div class="email-row ${isSelected ? 'selected' : ''} ${e._unread ? 'unread' : ''}" data-idx="${i}">
-        <div class="email-dot ${e._unread ? '' : 'read'}"></div>
+        ${avatarHtml(fromName)}
         <div class="email-content">
-          <div class="email-from">${escHtml(parseFromName(e.from))}</div>
+          <div class="email-row-top">
+            <span class="email-from">${escHtml(fromName)}</span>
+            <span class="email-date">${formatDate(e.date)}</span>
+          </div>
           <div class="email-subject">${escHtml(e.subject || '(no subject)')}</div>
           <div class="email-snippet">${escHtml(e.snippet || '')}</div>
-          ${showCompany ? `<span class="email-company-pill">${escHtml(e._company)}</span>` : ''}
+          ${(showCompany || stagePill) ? `<div class="email-row-bottom">
+            ${showCompany ? `<span class="email-company-pill">${escHtml(e._company)}</span>` : ''}
+            ${stagePill}
+          </div>` : ''}
         </div>
-        <div class="email-date">${formatDate(e.date)}</div>
       </div>`;
     });
   }
@@ -330,22 +416,27 @@ function renderEmailList() {
     });
   });
 
-  // Filter event listeners
-  document.getElementById('stage-filter')?.addEventListener('change', (e) => {
-    stageFilter = e.target.value;
-    selectedEmailIdx = -1;
-    renderEmailList();
-    buildSidebar();
+  // Filter chip listeners
+  listEl.querySelectorAll('.filter-chip[data-stage]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      stageFilter = chip.dataset.stage;
+      selectedEmailIdx = -1;
+      renderEmailList();
+      buildSidebar();
+    });
   });
-  document.getElementById('direction-filter')?.addEventListener('change', (e) => {
-    directionFilter = e.target.value;
-    selectedEmailIdx = -1;
-    renderEmailList();
+  listEl.querySelectorAll('.filter-chip[data-dir]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      directionFilter = chip.dataset.dir;
+      selectedEmailIdx = -1;
+      renderEmailList();
+    });
   });
-  document.getElementById('clear-filters')?.addEventListener('click', () => {
-    stageFilter = 'all';
-    directionFilter = 'all';
-    selectedEmailIdx = -1;
+
+  // Mark all visible as read
+  document.getElementById('mark-all-read-btn')?.addEventListener('click', () => {
+    const visible = getFilteredEmails();
+    visible.forEach(e => markEmailRead(e));
     renderEmailList();
     buildSidebar();
   });
@@ -377,7 +468,8 @@ function renderDetail(email) {
     detailEl.className = 'inbox-detail empty';
     detailEl.innerHTML = `<div class="detail-empty">
       <div class="detail-empty-icon">✉</div>
-      Select an email to read
+      <div class="detail-empty-title">No email selected</div>
+      <div class="detail-empty-hint">Click any email on the left, or use <kbd>J</kbd> <kbd>K</kbd> to navigate.</div>
     </div>`;
     return;
   }
@@ -397,25 +489,40 @@ function renderDetail(email) {
     ? chrome.runtime.getURL('company.html') + '?id=' + email._companyId
     : null;
 
+  const fromName = parseFromName(email.from);
+  const fromEmail = parseFromEmail(email.from);
+  const companyHref = email._companyId ? chrome.runtime.getURL('company.html') + '?id=' + email._companyId : null;
+
   let html = `<div class="detail-header">
     <div class="detail-subject">${escHtml(email.subject || '(no subject)')}</div>
-    <div class="detail-meta">
-      <div><strong>From:</strong> ${escHtml(email.from || '')}</div>
-      ${email.to ? `<div><strong>To:</strong> ${escHtml(email.to)}</div>` : ''}
-      <div><strong>Date:</strong> ${formatFullDate(email.date)}</div>
-      <div><strong>Company:</strong> ${escHtml(email._company || '')}</div>
+    <div class="detail-from-row">
+      ${avatarHtml(fromName, 'lg')}
+      <div class="detail-from-info">
+        <div class="detail-from-name">${escHtml(fromName)}</div>
+        ${fromEmail ? `<div class="detail-from-email">${escHtml(fromEmail)}</div>` : ''}
+      </div>
+    </div>
+    <div class="detail-meta-row">
+      <span class="detail-meta-date">${formatFullDate(email.date)}</span>
+      ${email._company ? (companyHref
+        ? `<a class="detail-meta-pill" href="${companyHref}" target="_blank">🏢 ${escHtml(email._company)}</a>`
+        : `<span class="detail-meta-pill">🏢 ${escHtml(email._company)}</span>`) : ''}
+      ${email.to ? `<span class="detail-meta-pill" title="To: ${escHtml(email.to)}">→ ${escHtml(parseFromName(email.to))}</span>` : ''}
     </div>
   </div>`;
 
   if (threadEmails.length > 1) {
-    html += `<div style="padding:8px 20px;font-size:11px;font-weight:600;color:#A09A94;background:#FAFAF9;border-bottom:1px solid #F0EEEB;">${threadEmails.length} messages in thread</div>`;
+    html += `<div class="thread-count-bar">${threadEmails.length} messages in thread</div>`;
     threadEmails.forEach((te, i) => {
       const isLast = i === threadEmails.length - 1;
       const body = stripQuotedContent(te.body || te.snippet || '');
+      const teName = parseFromName(te.from);
       html += `<div class="thread-msg ${isLast ? '' : 'collapsed'}">
         <div class="thread-msg-header" ${!isLast ? 'onclick="this.parentElement.classList.toggle(\'collapsed\')"' : ''}>
-          <span class="thread-msg-from">${escHtml(parseFromName(te.from))} ${!isLast ? '<span style="color:#A09A94;font-weight:400;">— click to expand</span>' : ''}</span>
+          ${avatarHtml(teName, 'sm')}
+          <span class="thread-msg-from">${escHtml(teName)}</span>
           <span class="thread-msg-date">${formatDate(te.date)}</span>
+          <span class="thread-msg-chevron">▾</span>
         </div>
         <div class="thread-msg-body">${escHtml(body)}</div>
       </div>`;
@@ -428,10 +535,41 @@ function renderDetail(email) {
   html += `<div class="detail-footer">
     <a class="detail-btn primary" href="${gmailUrl}" target="_blank">Open in Gmail ↗</a>
     ${companyUrl ? `<a class="detail-btn" href="${companyUrl}" target="_blank">View Company</a>` : ''}
+    <button class="detail-btn detail-btn-delete" id="detail-delete-btn">Delete</button>
   </div>`;
 
   detailEl.innerHTML = html;
   detailEl.scrollTop = 0;
+
+  detailEl.querySelector('#detail-delete-btn')?.addEventListener('click', () => deleteEmail(email));
+}
+
+function deleteEmail(email) {
+  const key = emailKey(email);
+  // Remove from in-memory list
+  const idx = allEmails.findIndex(e => emailKey(e) === key);
+  if (idx !== -1) allEmails.splice(idx, 1);
+  // Remove from readEmailKeys
+  readEmailKeys.delete(key);
+  // Remove from entry's cachedEmails in storage
+  const entry = entryMap[email._companyId];
+  if (entry?.cachedEmails) {
+    entry.cachedEmails = entry.cachedEmails.filter(e => emailKey(e) !== key);
+    const updated = allCompanies.map(c => c.id === entry.id ? entry : c);
+    chrome.storage.local.set({ savedCompanies: updated, readEmailKeys: [...readEmailKeys] });
+  }
+  // Advance to next or clear
+  const emails = getFilteredEmails();
+  if (emails.length > 0) {
+    const next = Math.min(selectedEmailIdx, emails.length - 1);
+    selectedEmailIdx = next;
+    renderDetail(emails[next]);
+  } else {
+    selectedEmailIdx = -1;
+    renderDetail(null);
+  }
+  renderEmailList();
+  buildSidebar();
 }
 
 function stripQuotedContent(text) {

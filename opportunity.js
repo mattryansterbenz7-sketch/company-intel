@@ -47,7 +47,15 @@ function computeLastActivity(entry) {
   const candidates = [];
 
   // A. Emails
-  const BULK_RE = /noreply|no-reply|notifications?@|mailer-daemon|newsletter|digest@|linkedin\.com|updates?@|marketing@/i;
+  const companyDomain = (entry.companyWebsite || '')
+    .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+  const extractEmailDomain = (fromStr) => {
+    if (!fromStr) return '';
+    const m = fromStr.match(/<([^>]+)>/) || [null, fromStr];
+    const addr = (m[1] || '').trim().toLowerCase();
+    const at = addr.lastIndexOf('@');
+    return at >= 0 ? addr.slice(at + 1) : '';
+  };
   const parseSender = (fromStr) => {
     if (!fromStr) return '';
     const before = fromStr.includes('<') ? fromStr.split('<')[0].trim() : fromStr.trim();
@@ -56,7 +64,11 @@ function computeLastActivity(entry) {
   };
   (entry.cachedEmails || []).forEach(thread => {
     const fromRaw = thread.from || (thread.messages?.[0]?.from) || '';
-    if (BULK_RE.test(fromRaw)) return;
+    // Only count emails from the company's own domain — filters bulk/promo senders
+    // (RepVue, LinkedIn, etc.) and keeps legitimate no-reply@company.com.
+    if (!companyDomain) return;
+    const senderDomain = extractEmailDomain(fromRaw);
+    if (!senderDomain || (senderDomain !== companyDomain && !senderDomain.endsWith('.' + companyDomain))) return;
 
     let ts = 0, senderName = '';
     if (thread.messages && thread.messages.length) {
@@ -117,6 +129,18 @@ function computeLastActivity(entry) {
     candidates.push({ timestamp: entry.appliedDate, label: 'Applied', type: 'applied' });
   }
 
+  // F. Stage transitions — entering a pipeline stage is itself activity
+  if (entry.stageTimestamps) {
+    const stageLabel = (key) => {
+      const s = (typeof stages !== 'undefined' && stages) ? stages.find(x => x.key === key) : null;
+      return s ? s.label : key;
+    };
+    Object.entries(entry.stageTimestamps).forEach(([key, ts]) => {
+      if (!ts || typeof ts !== 'number') return;
+      candidates.push({ timestamp: ts, label: truncLabel('Stage: ' + stageLabel(key)), type: 'stage' });
+    });
+  }
+
   if (!candidates.length) return { timestamp: 0, label: null };
   candidates.sort((a, b) => b.timestamp - a.timestamp);
   return candidates[0];
@@ -140,6 +164,7 @@ function parseEmailContactLocal(fromStr) {
 function mergeExtractedContacts(extracted) {
   const existing = entry.knownContacts || [];
   const existingEmails = new Set(existing.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+  const blocked = new Set((entry.removedContacts || []).map(e => e.toLowerCase()));
 
   // Get the user's own email to exclude
   const userEmail = (entry.gmailUserEmail || '').toLowerCase();
@@ -152,6 +177,7 @@ function mergeExtractedContacts(extracted) {
     const email = (contact.email || '').toLowerCase();
     if (!email || existingEmails.has(email)) continue;
     if (email === userEmail) continue;
+    if (blocked.has(email)) continue;
 
     // Skip generic/no-reply addresses
     if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
@@ -331,12 +357,12 @@ function renderHeader() {
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Career OS</a>
   `;
 
-  document.title = `${entry.company}${entry.jobTitle ? ' · ' + entry.jobTitle : ''} — CompanyIntel`;
+  document.title = `${entry.company}${entry.jobTitle ? ' · ' + entry.jobTitle : ''} — Coop.ai`;
 
   document.getElementById('hdr-title').addEventListener('blur', e => {
     const val = e.target.value.trim();
     saveEntry({ jobTitle: val });
-    document.title = `${entry.company}${val ? ' · ' + val : ''} — CompanyIntel`;
+    document.title = `${entry.company}${val ? ' · ' + val : ''} — Coop.ai`;
   });
 
   document.getElementById('hdr-status').addEventListener('change', e => {
@@ -740,8 +766,13 @@ function renderPanelBody(pid) {
       }).join('')}</ul></div>` : '';
       let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">${fitsCol}${flagsCol}</div>`;
 
-      // Qualifications checklist
-      if (quals.length) {
+      // Qualifications checklist + B1 visibility surface
+      const userCorrections = e.jobMatch?.userCorrections || null;
+      const corrCount = userCorrections ? Object.keys(userCorrections.requirements || {}).length + (userCorrections.overall ? 1 : 0) : 0;
+      const expanded = !!(window.__b1Expanded && window.__b1Expanded[e.id]);
+      const hardDQ = e.jobMatch?.hardDQ || e.hardDQ;
+      const hasHardDQ = hardDQ && hardDQ.flagged;
+      if (quals.length || hasHardDQ) {
         const metCount = quals.filter(q => q.status === 'met' && !q.dismissed).length;
         const reqCount = quals.filter(q => q.importance === 'required').length;
         const reqMetCount = quals.filter(q => q.importance === 'required' && q.status === 'met' && !q.dismissed).length;
@@ -749,22 +780,63 @@ function renderPanelBody(pid) {
         const iconColors = { met: '#00BDA5', partial: '#d97706', unmet: '#f87171', unknown: '#94a3b8' };
         const badgeColors = { required: '#f87171', preferred: '#d97706', bonus: '#94a3b8' };
         const badgeBgs = { required: 'rgba(248,113,113,0.1)', preferred: 'rgba(245,158,11,0.1)', bonus: 'rgba(148,163,184,0.1)' };
-        html += `<div style="margin-top:20px"><div class="p-label">Qualifications <span style="font-weight:400;color:#6B6560">(${metCount}/${quals.length} met${reqCount ? `, ${reqMetCount}/${reqCount} required` : ''})</span></div>`;
-        html += `<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px">`;
-        quals.forEach(q => {
-          const dimStyle = q.dismissed ? 'opacity:0.35;' : '';
-          const strikeStyle = q.dismissed ? 'text-decoration:line-through;' : '';
-          html += `<div class="qual-row" data-qual-id="${q.id}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #f0eeeb;${dimStyle}">
-            <span style="flex-shrink:0;width:18px;text-align:center;font-size:13px;font-weight:700;color:${iconColors[q.status] || '#94a3b8'};margin-top:1px">${icons[q.status] || '?'}</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:#33475b;line-height:1.4;${strikeStyle}">${q.requirement}</div>
-              ${q.evidence ? `<div style="font-size:11px;color:#7c98b6;margin-top:2px;line-height:1.4">${q.evidence}</div>` : ''}
-            </div>
-            <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:0.04em;background:${badgeBgs[q.importance] || badgeBgs.bonus};color:${badgeColors[q.importance] || badgeColors.bonus}">${q.importance}</span>
-            <button class="opp-qual-dismiss" data-qual-id="${q.id}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="${q.dismissed ? 'Restore' : 'Dismiss'}">${q.dismissed ? '↩' : '×'}</button>
+        const seeWhyLabel = expanded ? 'Hide details ▴' : 'See why ▾';
+        const pendingPill = (userCorrections?.pendingRescore && corrCount)
+          ? `<span style="font-size:10px;font-weight:700;background:#FFF1EC;color:#FF7A59;padding:2px 7px;border-radius:10px;margin-left:6px">${corrCount} pending re-score</span>`
+          : '';
+        html += `<div style="margin-top:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div class="p-label" style="margin:0">Qualifications <span style="font-weight:400;color:#6B6560">(${metCount}/${quals.length} met${reqCount ? `, ${reqMetCount}/${reqCount} required` : ''})</span>${pendingPill}</div>
+            <button class="b1-toggle" data-entry-id="${e.id}" style="background:none;border:none;color:#FF7A59;font-size:11px;font-weight:600;cursor:pointer;padding:2px 6px">${seeWhyLabel}</button>
           </div>`;
-        });
-        html += `</div></div>`;
+        // hardDQ callout (always visible when present, not gated by expand)
+        if (hasHardDQ) {
+          const reasons = (hardDQ.reasons || []).filter(Boolean);
+          html += `<div style="margin-top:8px;padding:10px 12px;background:rgba(248,113,113,0.08);border-left:3px solid #f87171;border-radius:4px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#991b1b">Hard DQ flagged</div>
+            <div style="font-size:12px;color:#33475b;margin-top:4px;line-height:1.5">${reasons.length ? reasons.map(r => `• ${r}`).join('<br>') : 'A dealbreaker was triggered.'}</div>
+            <div style="font-size:10px;color:#7c98b6;margin-top:6px;font-style:italic">When Hard DQ is flagged, the overall score is capped at 4.</div>
+          </div>`;
+        }
+        if (quals.length) {
+          html += `<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px">`;
+          quals.forEach(q => {
+            const corr = userCorrections?.requirements?.[q.id] || null;
+            const dimStyle = q.dismissed ? 'opacity:0.35;' : '';
+            const strikeStyle = q.dismissed ? 'text-decoration:line-through;' : '';
+            const corrBorder = corr ? 'border-left:3px solid #FF7A59;padding-left:8px;' : '';
+            const corrCaption = corr ? `<div style="font-size:10px;color:#FF7A59;font-weight:600;margin-top:2px">you said: ${corr.action === 'meets' ? 'I meet this' : corr.action === 'not_relevant' ? 'not relevant' : 'wrong evidence'}</div>` : '';
+            const correctionButtons = expanded && !q.dismissed ? `
+              <div class="b1-corr-row" style="margin-top:4px;display:flex;gap:8px">
+                <button class="b1-corr" data-qual-id="${q.id}" data-action="meets" style="background:none;border:none;color:#7c98b6;font-size:10px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline">I meet this</button>
+                <button class="b1-corr" data-qual-id="${q.id}" data-action="not_relevant" style="background:none;border:none;color:#7c98b6;font-size:10px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline">Not relevant</button>
+                <button class="b1-corr" data-qual-id="${q.id}" data-action="wrong_evidence" style="background:none;border:none;color:#7c98b6;font-size:10px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline">Wrong evidence</button>
+              </div>` : '';
+            html += `<div class="qual-row" data-qual-id="${q.id}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #f0eeeb;${dimStyle}${corrBorder}">
+              <span style="flex-shrink:0;width:18px;text-align:center;font-size:13px;font-weight:700;color:${iconColors[q.status] || '#94a3b8'};margin-top:1px">${icons[q.status] || '?'}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;color:#33475b;line-height:1.4;${strikeStyle}">${q.requirement}</div>
+                ${q.evidence ? `<div style="font-size:11px;color:#7c98b6;margin-top:2px;line-height:1.4">${q.evidence}</div>` : ''}
+                ${corrCaption}
+                ${correctionButtons}
+              </div>
+              <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:0.04em;background:${badgeBgs[q.importance] || badgeBgs.bonus};color:${badgeColors[q.importance] || badgeColors.bonus}">${q.importance}</span>
+              <button class="opp-qual-dismiss" data-qual-id="${q.id}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="${q.dismissed ? 'Restore' : 'Dismiss'}">${q.dismissed ? '↩' : '×'}</button>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+        // Expanded-only: overall feedback textarea + rescore button
+        if (expanded) {
+          const overallNote = userCorrections?.overall?.note || '';
+          html += `<div style="margin-top:14px;padding:12px;background:#f9f7f3;border-radius:6px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#516f90;margin-bottom:6px">This score feels wrong? Tell Coop why.</div>
+            <textarea class="b1-overall-note" data-entry-id="${e.id}" placeholder="e.g. you're underweighting my GTM leadership experience" style="width:100%;min-height:54px;padding:8px;border:1px solid #e8e5e0;border-radius:4px;font-family:inherit;font-size:12px;color:#33475b;resize:vertical">${overallNote}</textarea>
+            <button class="b1-overall-save" data-entry-id="${e.id}" style="margin-top:6px;background:none;border:1px solid #dfe3eb;color:#516f90;font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;cursor:pointer">Save feedback</button>
+          </div>
+          ${userCorrections?.pendingRescore && corrCount ? `<button class="b1-rescore" data-entry-id="${e.id}" style="margin-top:12px;width:100%;background:#FF7A59;color:#fff;border:none;padding:10px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">Re-score with corrections (${corrCount} pending)</button>` : ''}`;
+        }
+        html += `</div>`;
       }
 
       // Score breakdown
@@ -980,6 +1052,77 @@ document.addEventListener('click', e => {
       }
     });
   });
+});
+
+// B1: Qualification visibility — toggle, corrections, re-score
+window.__b1Expanded = window.__b1Expanded || {};
+
+function _b1RefreshEntryAndRender() {
+  const entryId = new URLSearchParams(window.location.search).get('id');
+  if (!entryId) return;
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const fresh = (savedCompanies || []).find(c => c.id === entryId);
+    if (fresh) entry = fresh;
+    renderPanels();
+  });
+}
+function _b1UpdateEntry(updater) {
+  const entryId = new URLSearchParams(window.location.search).get('id');
+  if (!entryId) return Promise.resolve();
+  return new Promise(resolve => {
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const companies = savedCompanies || [];
+      const idx = companies.findIndex(c => c.id === entryId);
+      if (idx === -1) { resolve(); return; }
+      const jm = companies[idx].jobMatch || {};
+      jm.userCorrections = jm.userCorrections || { requirements: {}, overall: null, pendingRescore: false };
+      updater(jm.userCorrections, companies[idx]);
+      jm.userCorrections.pendingRescore = true;
+      companies[idx].jobMatch = jm;
+      chrome.storage.local.set({ savedCompanies: companies }, () => { _b1RefreshEntryAndRender(); resolve(); });
+    });
+  });
+}
+
+document.addEventListener('click', e => {
+  const toggle = e.target.closest('.b1-toggle');
+  if (toggle) {
+    const id = toggle.dataset.entryId;
+    window.__b1Expanded[id] = !window.__b1Expanded[id];
+    renderPanels();
+    return;
+  }
+  const corr = e.target.closest('.b1-corr');
+  if (corr) {
+    const qid = corr.dataset.qualId;
+    const action = corr.dataset.action;
+    _b1UpdateEntry(uc => {
+      uc.requirements = uc.requirements || {};
+      uc.requirements[qid] = { action, note: null, correctedAt: Date.now() };
+    });
+    return;
+  }
+  const saveBtn = e.target.closest('.b1-overall-save');
+  if (saveBtn) {
+    const id = saveBtn.dataset.entryId;
+    const ta = document.querySelector(`.b1-overall-note[data-entry-id="${id}"]`);
+    const note = (ta?.value || '').trim();
+    _b1UpdateEntry(uc => {
+      uc.overall = note ? { note, correctedAt: Date.now() } : null;
+    });
+    return;
+  }
+  const rescoreBtn = e.target.closest('.b1-rescore');
+  if (rescoreBtn) {
+    const id = rescoreBtn.dataset.entryId;
+    rescoreBtn.disabled = true;
+    rescoreBtn.textContent = 'Re-scoring…';
+    chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: id }, () => {
+      void chrome.runtime.lastError;
+      _b1RefreshEntryAndRender();
+    });
+    return;
+  }
 });
 
 init();

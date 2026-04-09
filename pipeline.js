@@ -33,6 +33,8 @@ const AI_MODEL_TASKS = [
   { key: 'quickFitScoring', label: 'Fit Scoring', desc: 'Score, flags, and analysis (unified scorer)' },
   { key: 'nextStepExtraction', label: 'Next Step Extraction', desc: 'Action item detection' },
   { key: 'chat', label: 'Chat', desc: 'Conversational assistant' },
+  { key: 'coopAutofill', label: "Coop's autofills", desc: 'ICP, flags, skills, experience tagging, FAQ' },
+  { key: 'coopMemorySynthesis', label: "Coop's memory synthesis", desc: 'Context Window narrative regeneration' },
 ];
 
 const SEARCH_COUNT_META = [
@@ -208,7 +210,7 @@ function renderSearchCounts(config) {
 function renderPhotosSection(config) {
   const photos = config.photos || { sourceOrder: ['linkedin_thumbnail', 'serper_images'], maxPerCompany: 3, fetchScope: 'leaders_only', cacheTTLDays: 30 };
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">People & Photos</div>';
-  html += '<div class="pipeline-sub-desc">Control how CompanyIntel fetches and displays photos for leaders and contacts.</div>';
+  html += '<div class="pipeline-sub-desc">Control how Coop.ai fetches and displays photos for leaders and contacts.</div>';
 
   // Max leader photos stepper
   html += `<div class="pipeline-count-row" style="margin-bottom:10px">
@@ -798,4 +800,6 @@ function renderUsageDashboard(usage, alloc, integrations) {
 // ── Boot ──
 loadPipelineSettings();
 loadUsageDashboard();
-setInterval(loadUsageDashboard, 30000);
+// Refresh usage dashboard every 30s — but only when tab is visible
+// (pauses when backgrounded to avoid wasted storage reads)
+setInterval(() => { if (!document.hidden) loadUsageDashboard(); }, 30000);

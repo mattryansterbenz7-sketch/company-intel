@@ -1,5 +1,8 @@
 // company.js — full-screen company detail view with drag-between-columns panels
 
+let _cachedUserName = '';
+chrome.storage.sync.get(['prefs'], d => { _cachedUserName = (d.prefs && (d.prefs.name || d.prefs.fullName)) || ''; });
+
 let entry = null;
 let allCompanies = [];
 let allKnownTags = [];
@@ -343,7 +346,7 @@ function init() {
     // Load collapsed state
     try { collapsedPanels = JSON.parse(localStorage.getItem('ci_co_collapsed_' + id) || '{}'); } catch(e) {}
 
-    document.title = `${entry.company} — CompanyIntel`;
+    document.title = `${entry.company} — Coop.ai`;
     renderHeader();
     renderColumns();
     if (typeof initChatPanels === 'function') initChatPanels(entry);
@@ -382,15 +385,16 @@ function saveEntry(changes) {
 // Replace "microphone:" / "speaker:" with actual names in transcripts
 function resolveTranscriptSpeakers(transcript, meeting) {
   if (!transcript) return transcript;
-  // "microphone" = the user (Matt), "speaker" = the other attendee(s)
-  const userName = 'Matt'; // TODO: pull from profile
+  // "microphone" = the user, "speaker" = the other attendee(s)
+  const userName = (typeof _cachedUserName !== 'undefined' && _cachedUserName) || 'Me';
 
   // Get the other person's name from meeting attendees
   let otherName = 'Other';
   const attendees = (meeting?.attendeeNames || meeting?.attendees || '').toString();
   if (attendees) {
+    const myNameLower = userName.toLowerCase();
     const names = attendees.split(/[,;]/).map(n => n.trim()).filter(n =>
-      n && n.length > 1 && !n.toLowerCase().includes('matt')
+      n && n.length > 1 && !n.toLowerCase().includes(myNameLower)
     );
     if (names.length === 1) otherName = names[0].split(' ')[0]; // first name
     else if (names.length > 1) otherName = names.map(n => n.split(' ')[0]).join('/');
@@ -610,7 +614,7 @@ function renderHeader() {
     const val = nameInput.value.trim();
     if (val && val !== entry.company) {
       saveEntry({ company: val });
-      document.title = `${val} — CompanyIntel`;
+      document.title = `${val} — Coop.ai`;
     }
   });
   nameInput?.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
@@ -648,7 +652,7 @@ function renderHeader() {
     if (actionSel && autoAction) actionSel.value = autoAction;
     // Fire celebration if configured
     const celebCfg = _getCelebrationConfig(sel.value);
-    if (celebCfg) _fireCelebration(celebCfg);
+    if (celebCfg) _fireCelebration({ ...celebCfg, stageKey: sel.value });
   });
 
   document.getElementById('hdr-stars')?.querySelectorAll('.hdr-star').forEach(btn => {
@@ -945,9 +949,12 @@ function buildOpportunity() {
     </div>`;
   })() : '';
 
-  const jobUrlHtml = entry.jobUrl
-    ? `<div class="prop-row"><span class="prop-label">Posting</span><div class="prop-val-wrap"><a class="prop-open-link" href="${entry.jobUrl}" target="_blank">View Job ↗</a></div></div>`
-    : '';
+  const jobUrlHtml = `<div class="prop-row">
+    <span class="prop-label">Posting URL</span>
+    <div class="prop-val-wrap">
+      <input class="prop-input${entry.jobUrl ? '' : ' prop-empty'}" id="opp-job-url" type="url" value="${(entry.jobUrl || '').replace(/"/g, '&quot;')}" placeholder="https://…">
+    </div>
+  </div>`;
 
   return `${propsHtml}
     <div class="opp-divider"></div>
@@ -1317,6 +1324,86 @@ function initActivityTab() {
   }
 }
 
+// E1: Email → task auto-extraction
+const E1_EXCLUDED_STAGES = new Set(['dq', 'closed_lost', 'closed', 'rejected', 'withdrawn', 'scoring_queue', 'apply_queue']);
+function isE1Eligible(e) {
+  if (!e || !e.isOpportunity) return false;
+  const stage = (e.jobStage || e.status || '').toLowerCase();
+  return !E1_EXCLUDED_STAGES.has(stage);
+}
+
+function normalizeTaskText(s) {
+  return (s || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function tokenJaccard(a, b) {
+  const A = new Set(normalizeTaskText(a).split(' ').filter(w => w.length > 2));
+  const B = new Set(normalizeTaskText(b).split(' ').filter(w => w.length > 2));
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  A.forEach(w => { if (B.has(w)) inter++; });
+  return inter / (A.size + B.size - inter);
+}
+
+function maybeExtractEmailTasks(newEmails) {
+  if (!newEmails || !newEmails.length) return;
+  if (!isE1Eligible(entry)) return;
+  chrome.storage.local.get(['userTasks'], data => {
+    const allTasks = data.userTasks || [];
+    const companyName = entry.company;
+    const existingForCompany = allTasks.filter(t => t.company === companyName);
+    const openTexts = existingForCompany.filter(t => !t.completed).map(t => t.text);
+
+    chrome.runtime.sendMessage({
+      type: 'EXTRACT_EMAIL_TASKS',
+      entry: { company: entry.company, jobTitle: entry.jobTitle, jobStage: entry.jobStage, status: entry.status, actionStatus: entry.actionStatus },
+      emails: newEmails,
+      existingTaskTexts: openTexts
+    }, result => {
+      void chrome.runtime.lastError;
+      const proposed = result?.tasks || [];
+      if (!proposed.length) return;
+
+      chrome.storage.local.get(['userTasks'], d2 => {
+        const tasks = d2.userTasks || [];
+        const companyTasks = tasks.filter(t => t.company === companyName);
+        const existingSourceIds = new Set(companyTasks.map(t => t.sourceEmailId).filter(Boolean));
+        let added = 0;
+        proposed.forEach(p => {
+          if (p.sourceEmailId && existingSourceIds.has(p.sourceEmailId)) return;
+          const dupe = companyTasks.some(t => !t.completed && tokenJaccard(t.text, p.text) > 0.85);
+          if (dupe) return;
+          tasks.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            text: p.text,
+            company: companyName,
+            companyId: entry.id,
+            dueDate: p.dueDate || null,
+            priority: p.priority === 'low' ? 'low' : 'normal',
+            completed: false,
+            createdAt: Date.now(),
+            source: 'email',
+            sourceEmailId: p.sourceEmailId || null,
+            reviewed: false,
+            rationale: p.rationale || null
+          });
+          added++;
+        });
+        if (added) {
+          chrome.storage.local.set({ userTasks: tasks }, () => {
+            if (document.getElementById('company-tasks-container')) renderCompanyTasks();
+          });
+        }
+      });
+    });
+  });
+}
+
+function rescanAllEmailsForTasks() {
+  const cached = (entry.cachedEmails || []).slice(0, 10);
+  if (!cached.length) return;
+  maybeExtractEmailTasks(cached);
+}
+
 function initTasksTab() {
   const container = document.getElementById('company-tasks-container');
   if (!container) return;
@@ -1350,29 +1437,82 @@ function renderCompanyTasks() {
       return { text: `in ${diff}d`, cls: 'upcoming' };
     }
 
+    const unreviewedCount = companyTasks.filter(t => t.source === 'email' && !t.reviewed && !t.completed).length;
+
     container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-top:8px;">
-        <div style="font-size:13px;font-weight:700;color:#516f90;text-transform:uppercase;letter-spacing:0.06em">Tasks for ${escapeHtml(companyName)}</div>
-        <button class="mtg-add-btn" id="company-task-add-btn">+ Add Task</button>
+        <div style="font-size:13px;font-weight:700;color:#516f90;text-transform:uppercase;letter-spacing:0.06em">Tasks for ${escapeHtml(companyName)}${unreviewedCount ? ` <span style="background:#FF7A59;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">${unreviewedCount} new</span>` : ''}</div>
+        <div style="display:flex;gap:6px">
+          <button class="mtg-add-btn" id="company-task-rescan-btn" title="Re-scan most recent 10 emails for tasks" style="background:#fff;color:#516f90;border:1px solid #dfe3eb">↻ Scan emails</button>
+          <button class="mtg-add-btn" id="company-task-add-btn">+ Add Task</button>
+        </div>
       </div>
       <div id="company-task-form-wrap"></div>
       <div id="company-task-list">
         ${companyTasks.length ? companyTasks.map(t => {
           const dl = dateLabel(t.dueDate);
-          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #eaf0f6;border-radius:8px;margin-bottom:4px;background:#fff;${t.completed ? 'opacity:0.5' : ''}" data-task-id="${t.id}">
-            <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.completed ? '#5DCAA5' : '#dfe3eb'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:${t.completed ? '#fff' : 'transparent'};background:${t.completed ? '#5DCAA5' : 'transparent'};flex-shrink:0" class="ct-check">${t.completed ? '✓' : ''}</div>
+          const isAuto = t.source === 'email';
+          const unreviewed = isAuto && !t.reviewed && !t.completed;
+          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #eaf0f6;border-radius:8px;margin-bottom:4px;background:#fff;${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}${t.completed ? 'opacity:0.5;' : ''}" data-task-id="${t.id}">
+            <div style="width:18px;height:18px;margin-top:1px;border-radius:50%;border:2px solid ${t.completed ? '#5DCAA5' : '#dfe3eb'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:${t.completed ? '#fff' : 'transparent'};background:${t.completed ? '#5DCAA5' : 'transparent'};flex-shrink:0" class="ct-check">${t.completed ? '✓' : ''}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600;color:#2d3e50;${t.completed ? 'text-decoration:line-through' : ''}">${escapeHtml(t.text)}</div>
-              <div style="font-size:11px;color:#7c98b6;display:flex;gap:6px;margin-top:2px">
+              <div style="font-size:11px;color:#7c98b6;display:flex;gap:6px;margin-top:2px;flex-wrap:wrap;align-items:center">
                 <span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:${t.priority === 'high' ? '#FEE2E2' : t.priority === 'low' ? '#F0FDF4' : '#eef2f7'};color:${t.priority === 'high' ? '#991b1b' : t.priority === 'low' ? '#166534' : '#516f90'}">${t.priority}</span>
+                ${isAuto ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:#FFF1EC;color:#FF7A59">from email</span>` : ''}
                 ${t.dueDate ? `<span>${t.dueDate}</span>` : ''}
+                ${isAuto && t.sourceEmailId ? `<a href="#" class="ct-jump" data-email-id="${t.sourceEmailId}" style="color:#516f90;text-decoration:underline">view source</a>` : ''}
+                ${unreviewed ? `<a href="#" class="ct-keep" style="color:#FF7A59;font-weight:600">keep</a> · <a href="#" class="ct-dismiss" style="color:#7c98b6">dismiss</a>` : ''}
               </div>
+              ${isAuto && t.rationale ? `<div style="font-size:11px;color:#7c98b6;font-style:italic;margin-top:2px">"${escapeHtml(t.rationale)}"</div>` : ''}
             </div>
             ${dl.text ? `<span style="font-size:11px;font-weight:600;white-space:nowrap;color:${dl.cls === 'overdue' ? '#ef4444' : dl.cls === 'today' ? '#FF7A59' : '#7c98b6'}">${dl.text}</span>` : ''}
             <button class="ct-del" style="background:none;border:none;cursor:pointer;font-size:14px;color:#ccc;padding:4px" data-task-id="${t.id}">&times;</button>
           </div>`;
         }).join('') : '<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No tasks for this company yet</div>'}
       </div>`;
+
+    container.querySelector('#company-task-rescan-btn')?.addEventListener('click', () => {
+      const btn = container.querySelector('#company-task-rescan-btn');
+      btn.textContent = 'Scanning…'; btn.disabled = true;
+      rescanAllEmailsForTasks();
+      setTimeout(() => { btn.textContent = '↻ Scan emails'; btn.disabled = false; renderCompanyTasks(); }, 1500);
+    });
+
+    container.querySelectorAll('.ct-keep').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        const id = el.closest('[data-task-id]').dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => t.id === id);
+          if (t) { t.reviewed = true; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
+        });
+      });
+    });
+    container.querySelectorAll('.ct-dismiss').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        const id = el.closest('[data-task-id]').dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => t.id === id);
+          if (t) { t.reviewed = true; t.completed = true; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
+        });
+      });
+    });
+    container.querySelectorAll('.ct-jump').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        const emailId = el.dataset.emailId;
+        const emailsTab = document.querySelector('.hub-tab[data-tab="emails"]');
+        if (emailsTab) emailsTab.click();
+        setTimeout(() => {
+          const target = document.querySelector(`[data-email-id="${emailId}"]`);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 200);
+      });
+    });
 
     // Wire events
     container.querySelector('#company-task-add-btn')?.addEventListener('click', () => {
@@ -2246,11 +2386,16 @@ function loadHubEmails(forceRefresh) {
   const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
   const linkedinSlug = (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
   const knownContactEmails = (entry.knownContacts || []).map(c => c.email);
+  const priorEmailIds = new Set((entry.cachedEmails || []).map(e => e.id).filter(Boolean));
   chrome.runtime.sendMessage({ type: 'GMAIL_FETCH_EMAILS', domain, companyName: entry.company || '', linkedinSlug, knownContactEmails }, result => {
     void chrome.runtime.lastError;
     if (!document.getElementById('act-emails-status')) return; // pane unmounted
     if (result?.error === 'not_connected') { statusEl.textContent = 'Connect Gmail in Setup to see emails.'; return; }
     if (!result?.emails?.length)           { statusEl.textContent = 'No emails found for this company.'; return; }
+
+    // E1: identify genuinely new emails (since wholesale overwrite below) and trigger task extraction
+    const newEmails = result.emails.filter(e => e.id && !priorEmailIds.has(e.id));
+    maybeExtractEmailTasks(newEmails);
 
     const now = Date.now();
     const emailUpdates = { cachedEmails: result.emails, cachedEmailsAt: now };
@@ -3031,14 +3176,7 @@ function buildProperties() {
     </div>`;
   }).join('');
 
-  // Job posting link — shown only for saved opportunities that have a job URL
-  const jobLinkRow = (entry.isOpportunity && entry.jobUrl)
-    ? `<div class="prop-row prop-link-row">
-        <a class="prop-link-display" href="${entry.jobUrl}" target="_blank">📄 View Job Posting ↗</a>
-      </div>`
-    : '';
-
-  return `<div class="prop-fields" id="prop-fields">${rows}${jobLinkRow}</div>`;
+  return `<div class="prop-fields" id="prop-fields">${rows}</div>`;
 }
 
 function buildStats() {
@@ -3154,6 +3292,7 @@ function parseEmailContactLocal(fromStr) {
 function mergeExtractedContacts(extracted) {
   const existing = entry.knownContacts || [];
   const existingEmails = new Set(existing.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+  const blocked = new Set((entry.removedContacts || []).map(e => e.toLowerCase()));
 
   // Get the user's own email to exclude
   const userEmail = (entry.gmailUserEmail || gmailUserEmail || '').toLowerCase();
@@ -3166,6 +3305,7 @@ function mergeExtractedContacts(extracted) {
     const email = (contact.email || '').toLowerCase();
     if (!email || existingEmails.has(email)) continue;
     if (email === userEmail) continue;
+    if (blocked.has(email)) continue;
 
     // Skip generic/no-reply addresses
     if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
@@ -3636,6 +3776,26 @@ function loadPhotosForPanel(pid) {
 }
 
 function bindPanelBodyEvents(pid) {
+  // prop-link-edit appears in both 'properties' and 'opportunity' panels
+  // (buildOpportunity calls buildProperties internally), so bind unconditionally.
+  document.querySelectorAll('.prop-link-edit').forEach(btn => {
+    if (btn._linkEditBound) return;
+    btn._linkEditBound = true;
+    btn.addEventListener('click', () => {
+      const field = btn.dataset.field;
+      const row = btn.closest('.prop-link-row');
+      const currentVal = entry[field] || '';
+      const icon = field === 'companyWebsite' ? '🌐' : field === 'jobUrl' ? '📄' : '🔗';
+      row.innerHTML = `<span class="prop-link-icon">${icon}</span>
+        <input class="prop-input prop-link-input" data-field="${field}" value="${currentVal}" type="url" style="flex:1" placeholder="${field === 'jobUrl' ? 'https://…' : ''}">`;
+      const input = row.querySelector('input');
+      input.focus();
+      const commit = () => { saveEntry({ [field]: input.value.trim() }); renderPanel(pid); bindPanelBodyEvents(pid); };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { renderPanel(pid); bindPanelBodyEvents(pid); } });
+    });
+  });
+
   if (pid === 'contacts') {
     const body = document.getElementById('pbody-contacts');
     if (!body) return;
@@ -3810,21 +3970,6 @@ function bindPanelBodyEvents(pid) {
   }
 
   if (pid === 'properties') {
-    // Edit button for website/linkedin link rows
-    document.querySelectorAll('.prop-link-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const field = btn.dataset.field;
-        const row = btn.closest('.prop-link-row');
-        const currentVal = entry[field] || '';
-        row.innerHTML = `<span class="prop-link-icon">${field === 'companyWebsite' ? '🌐' : '🔗'}</span>
-          <input class="prop-input prop-link-input" data-field="${field}" value="${currentVal}" type="url" style="flex:1">`;
-        const input = row.querySelector('input');
-        input.focus();
-        const commit = () => { saveEntry({ [field]: input.value.trim() }); renderPanel('properties'); bindPanelBodyEvents('properties'); };
-        input.addEventListener('blur', commit);
-        input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { renderPanel('properties'); bindPanelBodyEvents('properties'); } });
-      });
-    });
 
     document.querySelectorAll('.prop-input').forEach(input => {
       input.addEventListener('blur', () => {
@@ -3887,6 +4032,16 @@ function bindPanelBodyEvents(pid) {
     if (titleInput) {
       titleInput.addEventListener('blur', () => saveEntry({ jobTitle: titleInput.value.trim() || null }));
       titleInput.addEventListener('keydown', e => { if (e.key === 'Enter') titleInput.blur(); });
+    }
+    const jobUrlInput = document.getElementById('opp-job-url');
+    if (jobUrlInput) {
+      jobUrlInput.addEventListener('blur', () => {
+        const val = jobUrlInput.value.trim() || null;
+        saveEntry({ jobUrl: val });
+        renderPanel('opportunity');
+        bindPanelBodyEvents('opportunity');
+      });
+      jobUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') jobUrlInput.blur(); });
     }
     // Edit button for linked role title — swaps link for input
     const titleEditBtn = document.getElementById('opp-title-edit-btn');
@@ -4574,15 +4729,58 @@ function _getCelebrationConfig(newStatus) {
   return cfg;
 }
 
+const _CO_EMOJI_MAP = {
+  thumbsup:'👍', money:'🤑', peace:'✌️', stopsign:'🛑', fire:'🔥', rocket:'🚀',
+  star:'⭐', heart:'❤️', clap:'👏', trophy:'🏆', lightning:'⚡', muscle:'💪',
+  party:'🥳', champagne:'🍾', crown:'👑', gem:'💎', skull:'💀', wave:'👋',
+  eyes:'👀', hundred:'💯', sparkles:'✨', fireworks:'🎆', unicorn:'🦄',
+  cake:'🎂', medal:'🥇', rainbow:'🌈', bell_emoji:'🛎️', cool:'😎',
+};
+
+function _showCelebrationBanner(stageLabel, emoji) {
+  try {
+    const existing = document.getElementById('ci-celebration-banner');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.id = 'ci-celebration-banner';
+    el.style.cssText = [
+      'position:fixed','left:50%','top:22%','transform:translate(-50%,-12px) scale(0.9)',
+      'background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%)',
+      'border:1px solid #fdba74','border-radius:14px','padding:14px 22px',
+      'box-shadow:0 18px 48px rgba(255,122,89,0.28),0 4px 14px rgba(0,0,0,0.08)',
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'font-size:16px','font-weight:700','color:#9a3412',
+      'z-index:99998','pointer-events:none','opacity:0',
+      'display:flex','align-items:center','gap:12px',
+      'transition:opacity 260ms ease, transform 260ms cubic-bezier(.2,1.4,.4,1)',
+    ].join(';');
+    el.innerHTML = `<span style="font-size:26px;line-height:1;">${emoji}</span><span>Moved to <span style="color:#ff7a59;">${stageLabel}</span></span>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translate(-50%, 0) scale(1)'; });
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transform = 'translate(-50%, -8px) scale(0.96)';
+      setTimeout(() => el.remove(), 320);
+    }, 1700);
+  } catch(e) {}
+}
+
 function _fireCelebration(config) {
   const { type, sound, count } = config;
   if (sound === 'chaching') _playChaChingSound();
   else if (sound === 'pop') _playConfettiPop();
   else if (sound === 'farewell') _playFarewellVoice();
 
+  // Banner
+  try {
+    const stageKey = config.stageKey || (typeof entry !== 'undefined' && entry?.jobStage);
+    const stageLabel = (typeof customOpportunityStages !== 'undefined' && customOpportunityStages?.find?.(s => s.key === stageKey)?.label) || stageKey || '';
+    if (stageLabel) _showCelebrationBanner(stageLabel, _CO_EMOJI_MAP[type] || '🎊');
+  } catch(e) {}
+
   const colors = ['#ff4444', '#ffbb00', '#00cc88', '#4488ff', '#cc44ff', '#ff8844', '#00ccff', '#ffcc00'];
-  const isEmoji = type === 'thumbsup' || type === 'money' || type === 'stopsign' || type === 'peace';
-  const baseEmoji = type === 'thumbsup' ? '👍' : type === 'stopsign' ? '🛑' : type === 'peace' ? '✌️' : '🤑';
+  const isEmoji = type !== 'confetti' && type in _CO_EMOJI_MAP;
+  const baseEmoji = _CO_EMOJI_MAP[type] || '🎊';
   const n = count || 30;
   const particles = [];
   for (let i = 0; i < n; i++) {

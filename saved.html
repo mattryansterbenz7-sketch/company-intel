@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="design-tokens.css">
-  <title>CompanyIntel — Saved</title>
+  <title>Coop.ai — Saved</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--ci-bg-base); color: var(--ci-text-primary); min-height: 100vh; }
@@ -252,14 +252,14 @@
     .kanban-col.collapsed .kanban-col-count { font-size: 10px; padding: 1px 5px; }
     .kanban-col.collapsed .kanban-cards { display: none; }
     .kanban-col.collapsed .kanban-col-collapse { transform: rotate(180deg); writing-mode: horizontal-tb; }
-    .kanban-col-header { padding: 10px 12px 8px; border-radius: 0; display: flex; align-items: center; gap: 6px; border: none; border-top: 3px solid; flex-shrink: 0; background: transparent; position: relative; }
+    .kanban-col-header { padding: 10px 12px 8px; border-radius: 0; display: flex; align-items: center; gap: 6px; border: none; border-top: 3px solid; flex-shrink: 0; background: transparent; position: relative; transition: background 0.18s ease, box-shadow 0.18s ease; }
     .kanban-col-title { font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--ci-text-primary); }
     .kanban-col-count { font-size: 12px; font-weight: 400; color: var(--ci-text-tertiary); background: none; padding: 0; margin-left: 2px; }
     .kanban-col-collapse { background: none; border: none; color: var(--ci-text-tertiary); font-size: 14px; cursor: pointer; padding: 2px; border-radius: 4px; line-height: 1; opacity: 0.5; transition: opacity 0.15s; margin-left: auto; }
     .kanban-col-collapse:hover { opacity: 1; }
     .kanban-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; padding: 8px 4px; border: none; background: transparent; transition: background 0.15s; border-radius: 0; }
-    .kanban-cards.drag-over { background: rgba(255,122,89,0.04) !important; border-radius: 6px; }
-    .kanban-col-header.drag-over { background: rgba(255,122,89,0.06); }
+    .kanban-cards.drag-over { background: rgba(255,122,89,0.07) !important; border-radius: 6px; box-shadow: inset 0 0 0 1.5px rgba(255,122,89,0.35); }
+    .kanban-col-header.drag-over { background: rgba(255,122,89,0.10); box-shadow: inset 0 -2px 0 rgba(255,122,89,0.4); }
     .col-color-dot {
       width: 8px; height: 8px; border-radius: 50%; cursor: pointer;
       flex-shrink: 0; transition: transform 0.1s;
@@ -370,6 +370,8 @@
     .goal-info-icon:hover { color: var(--ci-text-secondary); border-color: var(--ci-border-strong); }
     .goal-card:hover { border-color: var(--ci-border-strong); }
     .goal-card.editing { border-color: var(--ci-accent-primary); cursor: default; }
+    .goal-drill-area { display: flex; align-items: center; gap: 14px; flex: 1; cursor: pointer; min-width: 0; }
+    .goal-drill-area:hover .goal-fraction { color: var(--ci-accent-primary); }
     .goal-ring { flex-shrink: 0; }
     .goal-ring-plain { font-size: 28px; font-weight: 800; flex-shrink: 0; width: 54px; text-align: center; }
     .sc-card-goal { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -398,6 +400,25 @@
     .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--ci-transition-fast); flex-shrink: 0; }
     .stat-cards-edit-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
     .sc-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1001; align-items: center; justify-content: center; }
+
+    /* ── Metric Drill-down Modal ── */
+    .metric-drill-overlay { display: none; position: fixed; inset: 0; background: rgba(21,27,38,0.55); backdrop-filter: blur(3px); z-index: 1002; align-items: center; justify-content: center; }
+    .metric-drill-overlay.open { display: flex; }
+    .metric-drill-modal { background: var(--ci-bg-overlay); border-radius: 16px; width: 520px; max-width: 94vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--ci-shadow-lg); }
+    .metric-drill-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--ci-border-subtle); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-shrink: 0; }
+    .metric-drill-header-left { display: flex; flex-direction: column; gap: 2px; }
+    .metric-drill-title { font-size: 17px; font-weight: 800; color: var(--ci-text-primary); }
+    .metric-drill-count { font-size: 13px; color: var(--ci-text-secondary); margin-top: 2px; }
+    .metric-drill-close { background: none; border: none; font-size: 20px; color: var(--ci-text-tertiary); cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+    .metric-drill-close:hover { color: var(--ci-text-primary); }
+    .metric-drill-list { overflow-y: auto; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+    .metric-drill-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: inherit; transition: background 0.12s; cursor: pointer; }
+    .metric-drill-row:hover { background: var(--ci-bg-raised); }
+    .metric-drill-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .metric-drill-name { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .metric-drill-sub { font-size: 12px; color: var(--ci-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .metric-drill-stage { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; border: 1.5px solid; white-space: nowrap; flex-shrink: 0; }
+    .metric-drill-empty { padding: 32px; text-align: center; color: var(--ci-text-tertiary); font-size: 14px; }
     .sc-editor-modal { background: var(--ci-bg-overlay); border-radius: 16px; width: 480px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--ci-shadow-lg); }
     .sc-editor-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--ci-border-subtle); display: flex; align-items: center; justify-content: space-between; }
     .sc-editor-header h3 { font-size: 16px; font-weight: 800; color: var(--ci-text-primary); margin: 0; }
@@ -439,6 +460,11 @@
     .celeb-default-badge { font-size: 10px; font-weight: 500; color: var(--ci-text-tertiary); margin-left: 6px; font-style: italic; }
     .celeb-select { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); color: var(--ci-text-primary); font-size: 12px; padding: 5px 8px; cursor: pointer; font-family: inherit; max-width: 130px; }
     .celeb-select:focus { outline: none; border-color: var(--ci-accent-primary); }
+    .celeb-pair { display: flex; align-items: center; gap: 4px; }
+    .celeb-preview-btn { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 50%; color: var(--ci-text-secondary); font-size: 10px; cursor: pointer; padding: 0; line-height: 1; transition: background 0.12s, color 0.12s, transform 0.12s, border-color 0.12s; flex-shrink: 0; }
+    .celeb-preview-btn:hover { background: var(--ci-accent-primary); color: white; border-color: var(--ci-accent-primary); transform: scale(1.08); }
+    .celeb-preview-btn:active { transform: scale(0.94); }
+    .celeb-preview-btn:disabled { opacity: 0.3; cursor: default; transform: none; }
     .stage-editor-title { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); }
     .stage-editor-subtitle { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 3px; }
     .stage-editor-x { background: none; border: none; color: var(--ci-text-tertiary); font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
@@ -878,7 +904,7 @@
 
   <div class="header">
     <div style="display:flex;align-items:center;gap:0;">
-      <a class="logo" href="saved.html" style="text-decoration:none">Company<span>Intel</span> <span class="slash">/ Saved</span></a>
+      <a class="logo" href="saved.html" style="text-decoration:none">Coop<span>.ai</span> <span class="slash">/ Saved</span></a>
       <button class="queue-header-btn" id="queue-header-btn">
         <svg width="18" height="18" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.25)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.7)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.9)"/></g></svg>
         <span id="queue-header-label">Coop's Scoring Queue</span>
@@ -902,6 +928,19 @@
 
   <div id="activity-section" class="activity-section"></div>
   <div id="color-picker-popover"></div>
+
+  <div class="metric-drill-overlay" id="metric-drill-overlay">
+    <div class="metric-drill-modal">
+      <div class="metric-drill-header">
+        <div class="metric-drill-header-left">
+          <div class="metric-drill-title" id="metric-drill-title"></div>
+          <div class="metric-drill-count" id="metric-drill-count"></div>
+        </div>
+        <button class="metric-drill-close" id="metric-drill-close">✕</button>
+      </div>
+      <div class="metric-drill-list" id="metric-drill-list"></div>
+    </div>
+  </div>
 
   <div class="sc-editor-overlay" id="stat-card-editor-overlay">
     <div class="sc-editor-modal">

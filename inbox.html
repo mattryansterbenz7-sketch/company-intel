@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="design-tokens.css">
-  <title>CompanyIntel — Inbox</title>
+  <title>Coop.ai — Inbox</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--ci-bg-base); color: var(--ci-text-primary); height: 100vh; font-size: 14px; overflow: hidden; display: flex; flex-direction: column; }
@@ -63,97 +63,146 @@
     .sidebar-item-all { font-weight: 700; font-size: 13px; }
 
     /* Filter toolbar */
-    .list-filters { padding: 8px 16px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-default); }
-    .filter-row { display: flex; gap: 8px; align-items: center; }
-    .filter-select {
-      font-size: 12px; font-family: inherit; padding: 5px 10px; border: 1px solid var(--ci-border-default);
-      border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); color: var(--ci-text-primary); cursor: pointer; outline: none;
-      transition: border-color var(--ci-transition-fast);
+    .list-filters { padding: 10px 16px 12px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-default); display: flex; flex-direction: column; gap: 8px; }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .filter-chip {
+      font-size: 11px; font-weight: 600; padding: 4px 11px; border: 1px solid var(--ci-border-default);
+      border-radius: 999px; background: var(--ci-bg-raised); color: var(--ci-text-secondary); cursor: pointer;
+      font-family: inherit; transition: all var(--ci-transition-fast); white-space: nowrap;
     }
-    .filter-select:focus { border-color: var(--ci-accent-primary); }
-    .filter-btn {
-      font-size: 11px; font-weight: 600; padding: 5px 10px; border: 1px solid var(--ci-border-default);
-      border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit;
-      transition: all var(--ci-transition-fast); display: none;
-    }
-    .filter-btn.active { display: inline-block; color: var(--ci-accent-primary); border-color: var(--ci-accent-primary); }
-    .filter-btn:hover { background: var(--ci-accent-primary-soft); }
+    .filter-chip:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .filter-chip.active { background: var(--ci-accent-primary); color: white; border-color: var(--ci-accent-primary); }
+    .filter-chip-divider { width: 1px; background: var(--ci-border-default); margin: 2px 4px; align-self: stretch; }
 
     /* Email list */
     .inbox-list {
-      flex: 1; min-width: 320px; overflow-y: auto; background: var(--ci-bg-base);
-      border-right: 1px solid var(--ci-border-default);
+      flex: 1; min-width: 360px; max-width: 460px; overflow-y: auto; background: var(--ci-bg-base);
+      border-right: 1px solid var(--ci-border-default); display: flex; flex-direction: column;
     }
     .list-header {
       position: sticky; top: 0; z-index: 10; background: var(--ci-bg-base);
-      padding: 12px 16px; border-bottom: 1px solid var(--ci-border-default);
-      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 12px; border-bottom: 1px solid var(--ci-border-default);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
     }
-    .list-header-title { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
-    .list-header-count { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 600; }
+    .list-header-left { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
+    .list-header-title { font-size: 16px; font-weight: 800; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-header-count { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; flex-shrink: 0; }
+    .list-mark-read-btn {
+      font-size: 11px; font-weight: 600; padding: 5px 10px; border: 1px solid var(--ci-border-default);
+      background: transparent; color: var(--ci-text-tertiary); border-radius: 6px; cursor: pointer;
+      font-family: inherit; transition: all var(--ci-transition-fast); flex-shrink: 0;
+    }
+    .list-mark-read-btn:hover { color: var(--ci-accent-primary); border-color: var(--ci-accent-primary); }
+    .list-mark-read-btn:disabled { opacity: 0.35; cursor: default; }
+    .date-group-header {
+      padding: 14px 16px 6px; font-size: 10px; font-weight: 700; color: var(--ci-text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.08em; background: var(--ci-bg-base);
+      position: sticky; top: 60px; z-index: 5;
+    }
     .email-row {
-      display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px;
-      cursor: pointer; transition: all var(--ci-transition-fast); border-bottom: 1px solid var(--ci-bg-inset);
-      border-left: 3px solid transparent;
+      display: flex; align-items: flex-start; gap: 11px; padding: 11px 16px 11px 13px;
+      cursor: pointer; transition: background var(--ci-transition-fast), border-color var(--ci-transition-fast);
+      border-bottom: 1px solid var(--ci-bg-inset); border-left: 3px solid transparent;
     }
     .email-row:hover { background: var(--ci-bg-inset); }
     .email-row.selected { background: var(--ci-bg-inset); border-left-color: var(--ci-accent-primary); }
+    .email-row.unread { background: rgba(255,247,237,0.55); }
+    .email-row.unread:hover { background: rgba(255,237,213,0.7); }
     .email-row.unread .email-subject { font-weight: 700; color: var(--ci-text-primary); }
-    .email-dot {
-      width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-primary);
-      flex-shrink: 0; margin-top: 5px;
+    .email-row.unread .email-from { color: #c2410c; }
+    .email-row.unread.selected { background: rgba(255,237,213,0.85); }
+    .email-avatar {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; display: flex;
+      align-items: center; justify-content: center; color: white; font-size: 13px; font-weight: 700;
+      letter-spacing: 0.02em; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-top: 1px;
     }
-    .email-dot.read { background: transparent; }
-    .email-content { flex: 1; min-width: 0; }
-    .email-from { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .email-subject { font-size: 13px; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-    .email-snippet { font-size: 12px; color: var(--ci-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-    .email-date { font-size: 11px; color: var(--ci-text-tertiary); white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+    .email-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .email-row-top { display: flex; align-items: baseline; gap: 8px; }
+    .email-from { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+    .email-date { font-size: 11px; color: var(--ci-text-tertiary); white-space: nowrap; flex-shrink: 0; font-weight: 500; }
+    .email-subject { font-size: 13px; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-snippet { font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+    .email-row-bottom { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
     .email-company-pill {
       font-size: 10px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-inset);
-      padding: 1px 6px; border-radius: 8px; margin-top: 3px; display: inline-block;
+      padding: 2px 7px; border-radius: 8px; display: inline-block; max-width: 160px; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--ci-border-default);
     }
+    .email-stage-pill {
+      font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+      text-transform: uppercase; letter-spacing: 0.04em; display: inline-block;
+    }
+    .email-thread-count { font-size: 10px; color: var(--ci-text-tertiary); font-weight: 600; }
 
     /* Detail panel */
     .inbox-detail {
-      width: 420px; flex-shrink: 0; background: var(--ci-bg-raised); overflow-y: auto;
+      flex: 1.1; min-width: 480px; background: var(--ci-bg-raised); overflow-y: auto;
       display: flex; flex-direction: column;
     }
     .inbox-detail.empty { display: flex; align-items: center; justify-content: center; }
-    .detail-empty { text-align: center; color: var(--ci-text-tertiary); font-size: 13px; padding: 40px; }
-    .detail-empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
-    .detail-header { padding: 20px 20px 12px; border-bottom: 1px solid var(--ci-bg-inset); }
-    .detail-subject { font-size: 17px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.35; margin-bottom: 10px; }
-    .detail-meta { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.6; }
-    .detail-meta strong { color: var(--ci-text-primary); font-weight: 600; }
+    .detail-empty { text-align: center; color: var(--ci-text-tertiary); font-size: 14px; padding: 60px 40px; max-width: 360px; }
+    .detail-empty-icon { font-size: 56px; margin-bottom: 18px; opacity: 0.22; }
+    .detail-empty-title { font-size: 16px; font-weight: 700; color: var(--ci-text-secondary); margin-bottom: 6px; }
+    .detail-empty-hint { font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.5; }
+    .detail-empty-hint kbd {
+      display: inline-block; padding: 1px 6px; font-size: 10px; font-family: ui-monospace, Menlo, monospace;
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: 4px;
+      color: var(--ci-text-secondary); margin: 0 1px;
+    }
+    .detail-header { padding: 24px 28px 18px; border-bottom: 1px solid var(--ci-bg-inset); }
+    .detail-subject { font-size: 22px; font-weight: 800; color: var(--ci-text-primary); line-height: 1.3; margin-bottom: 16px; letter-spacing: -0.01em; }
+    .detail-from-row { display: flex; align-items: center; gap: 12px; }
+    .detail-avatar { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; font-weight: 700; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .detail-from-info { flex: 1; min-width: 0; }
+    .detail-from-name { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
+    .detail-from-email { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 1px; }
+    .detail-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 14px; font-size: 11px; color: var(--ci-text-tertiary); }
+    .detail-meta-pill {
+      display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px;
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); color: var(--ci-text-secondary);
+      font-weight: 600; text-decoration: none; transition: all var(--ci-transition-fast);
+    }
+    .detail-meta-pill:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .detail-meta-date { font-weight: 600; padding: 0 4px; }
     .detail-body {
-      padding: 16px 20px; font-size: 13px; line-height: 1.65; color: var(--ci-text-primary);
-      white-space: pre-wrap; word-wrap: break-word; flex: 1;
+      padding: 22px 28px 28px; font-size: 14px; line-height: 1.7; color: var(--ci-text-primary);
+      white-space: pre-wrap; word-wrap: break-word; flex: 1; max-width: 720px;
     }
     .detail-footer {
-      padding: 12px 20px; border-top: 1px solid var(--ci-bg-inset); flex-shrink: 0;
-      display: flex; gap: 8px;
+      padding: 14px 28px; border-top: 1px solid var(--ci-bg-inset); flex-shrink: 0;
+      display: flex; gap: 8px; background: var(--ci-bg-raised); position: sticky; bottom: 0;
     }
     .detail-btn {
-      font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: var(--ci-radius-sm);
+      font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px;
       border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-secondary);
       cursor: pointer; font-family: inherit; transition: all var(--ci-transition-fast); text-decoration: none;
-      display: inline-flex; align-items: center; gap: 4px;
+      display: inline-flex; align-items: center; gap: 5px;
     }
-    .detail-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .detail-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); transform: translateY(-1px); }
     .detail-btn.primary { background: var(--ci-accent-primary); color: var(--ci-text-on-dark); border-color: var(--ci-accent-primary); }
-    .detail-btn.primary:hover { background: var(--ci-accent-primary-hover); }
+    .detail-btn.primary:hover { background: var(--ci-accent-primary-hover); color: white; }
+    .detail-btn-delete { margin-left: auto; color: var(--ci-text-tertiary); border-color: var(--ci-border-subtle); }
+    .detail-btn-delete:hover { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.06); transform: none; }
 
     /* Thread messages in detail */
-    .thread-msg { padding: 14px 20px; border-bottom: 1px solid var(--ci-bg-inset); }
+    .thread-count-bar {
+      padding: 10px 28px; font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary);
+      background: var(--ci-bg-inset); border-bottom: 1px solid var(--ci-border-default);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .thread-msg { padding: 16px 28px; border-bottom: 1px solid var(--ci-bg-inset); transition: background var(--ci-transition-fast); }
     .thread-msg:last-child { border-bottom: none; }
-    .thread-msg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .thread-msg-from { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); }
-    .thread-msg-date { font-size: 11px; color: var(--ci-text-tertiary); }
-    .thread-msg-body { font-size: 13px; line-height: 1.6; color: var(--ci-text-primary); white-space: pre-wrap; word-wrap: break-word; }
+    .thread-msg-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .thread-msg-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .thread-msg-from { font-size: 12px; font-weight: 700; color: var(--ci-text-primary); flex: 1; }
+    .thread-msg-date { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 500; }
+    .thread-msg-body { font-size: 14px; line-height: 1.65; color: var(--ci-text-primary); white-space: pre-wrap; word-wrap: break-word; padding-left: 38px; max-width: 720px; }
+    .thread-msg.collapsed { background: var(--ci-bg-inset); cursor: pointer; }
+    .thread-msg.collapsed:hover { background: var(--ci-border-default); }
     .thread-msg.collapsed .thread-msg-body { display: none; }
-    .thread-msg.collapsed .thread-msg-header { cursor: pointer; opacity: 0.6; }
-    .thread-msg.collapsed .thread-msg-header:hover { opacity: 1; }
+    .thread-msg.collapsed .thread-msg-header { margin-bottom: 0; opacity: 0.7; }
+    .thread-msg-chevron { color: var(--ci-text-tertiary); font-size: 10px; transition: transform var(--ci-transition-fast); }
+    .thread-msg.collapsed .thread-msg-chevron { transform: rotate(-90deg); }
 
     /* Empty state */
     .inbox-empty { display: flex; align-items: center; justify-content: center; flex: 1; }
@@ -173,7 +222,7 @@
   <div class="inbox-header">
     <a class="hdr-back" id="back-btn">← Pipeline</a>
     <div class="hdr-divider"></div>
-    <div class="hdr-title">Company<span>Intel</span> / Inbox</div>
+    <div class="hdr-title">Coop<span>.ai</span> / Inbox</div>
     <div class="hdr-stats" id="inbox-stats"></div>
     <input class="hdr-search" id="inbox-search" type="text" placeholder="Search emails...">
   </div>
@@ -183,7 +232,8 @@
     <div class="inbox-detail empty" id="inbox-detail">
       <div class="detail-empty">
         <div class="detail-empty-icon">✉</div>
-        Select an email to read
+        <div class="detail-empty-title">No email selected</div>
+        <div class="detail-empty-hint">Click any email on the left, or use <kbd>J</kbd> <kbd>K</kbd> to navigate.</div>
       </div>
     </div>
   </div>
