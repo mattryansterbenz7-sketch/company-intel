@@ -29,7 +29,31 @@
       "Bash(sed -i '' '/data-target=\"profile-faq-rt\"/,/<\\\\/div>/{:*)",
       "Bash(sed -i '' '/data-target=\"profile-skills-rt\"/,/<\\\\/div>/{:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(awk 'NR>=736 && NR<=1042' /Users/mattsterbenz/Desktop/Coding/company-intel/sidepanel.html)",
+      "Bash(grep -rn \"attendee\" /Users/mattsterbenz/Desktop/Coding/company-intel/*.js)",
+      "Bash(grep -n \"ICP.*Match\\\\|Qualification.*Match\\\\|match.*indicator\" /Users/mattsterbenz/Desktop/Coding/company-intel/*.js)",
+      "Bash(grep -n \"ICP\\\\|icpMatch\\\\|opportunity.*card\\\\|card.*opportunity\" /Users/mattsterbenz/Desktop/Coding/company-intel/*.js -i)",
+      "Bash(grep -rn \"copy\\\\|Copy\" /Users/mattsterbenz/Desktop/Coding/company-intel/*.js -i)",
+      "Bash(git:*)",
+      "Bash(grep:*)",
+      "Bash(node:*)",
+      "Bash(ipconfig getifaddr:*)",
+      "Bash(pip3 install:*)",
+      "Bash(lsof -ti:8080)",
+      "Bash(xargs kill:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/coop.html)",
+      "Bash(cat .github/workflows/*.yml)",
+      "Bash(gh api:*)",
+      "Bash(ls:*)",
+      "Bash(qlmanage -t -s 128 -o /tmp icon.svg)",
+      "Bash(rm -f /tmp/icon.svg.png)",
+      "Bash(cp /tmp/icon.svg.png icon128.png)",
+      "Bash(rm /tmp/icon.svg.png)",
+      "Bash(qlmanage -t -s 48 -o /tmp icon.svg)",
+      "Bash(cp /tmp/icon.svg.png icon48.png)",
+      "Bash(xargs -I {} sh -c 'echo {}')",
+      "Bash(sort -k3 -n -r)"
     ]
   }
 }

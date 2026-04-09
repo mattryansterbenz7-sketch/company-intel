@@ -1,7 +1,7 @@
 {
-  "name": "company-intel",
+  "name": "coop-ai",
   "version": "1.0.0",
-  "description": "",
+  "description": "Coop.ai — AI-powered personal CRM for job searching (Chrome extension, Manifest V3)",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

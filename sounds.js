@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// CompanyIntel — Sound System
+// Coop.ai — Sound System
 // Subtle, premium audio feedback using Web Audio API synthesis
 // No external files — all sounds are generated procedurally
 // ═══════════════════════════════════════════════════════════════════════════
