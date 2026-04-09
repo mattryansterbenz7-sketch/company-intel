@@ -2585,6 +2585,17 @@ function initCoopSettings() {
       });
     }
 
+    // ── G2 tool-use flag (experimental) ──
+    const toolUseEl = document.getElementById('coop-tool-use');
+    if (toolUseEl) {
+      toolUseEl.checked = cfg.useToolUse === true;
+      toolUseEl.addEventListener('change', () => {
+        cfg.useToolUse = toolUseEl.checked;
+        chrome.storage.local.set({ coopConfig: cfg });
+        showSaveStatus();
+      });
+    }
+
     // ── Sound toggle ──
     const soundEl = document.getElementById('coop-sounds');
     if (soundEl) {
