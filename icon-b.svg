@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="22" fill="#FC636B"/>
+
+  <!-- Egg -->
+  <ellipse cx="64" cy="52" rx="20" ry="24" fill="white"/>
+
+  <!-- Nest: a thick arc bowl beneath the egg -->
+  <path d="M 20 76 Q 64 108 108 76" stroke="white" stroke-width="10" fill="none" stroke-linecap="round"/>
+
+  <!-- Nest inner texture: two thin arcs suggesting woven twigs -->
+  <path d="M 30 78 Q 64 104 98 78" stroke="rgba(252,99,107,0.35)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 38 80 Q 64 100 90 80" stroke="rgba(252,99,107,0.25)" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

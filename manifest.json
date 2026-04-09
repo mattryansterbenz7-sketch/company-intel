@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Company Intel",
+  "name": "Coop.ai",
   "version": "1.0",
-  "description": "Research companies while you browse",
+  "description": "Your job search, with context. Coop is your AI advisor with full memory across everything.",
   "permissions": [
     "activeTab",
     "tabs",
     "scripting",
     "sidePanel",
     "storage",
+    "unlimitedStorage",
     "identity"
   ],
   "oauth2": {
@@ -27,7 +28,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["coop.js", "content.js"]
+      "js": ["coop.js", "content.js", "coop-assist.js"]
     },
     {
       "matches": ["<all_urls>"],
@@ -45,7 +46,7 @@
     "128": "icon128.png"
   },
   "action": {
-    "default_title": "Company Intel",
+    "default_title": "Coop.ai",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",

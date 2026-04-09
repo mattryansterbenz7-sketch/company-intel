@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="22" fill="#FC636B"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="28" r="12" fill="white"/>
+
+  <!-- Body: shorter, rounder -->
+  <ellipse cx="64" cy="60" rx="13" ry="20" fill="white"/>
+
+  <!-- Left wing: tip angles UP-left so it reads as a wing, not a fin -->
+  <path d="M 53 54 L 8 34 L 46 68 Z" fill="white"/>
+
+  <!-- Right wing: mirrored -->
+  <path d="M 75 54 L 120 34 L 82 68 Z" fill="white"/>
+
+  <!-- Forked tail -->
+  <path d="M 57 77 L 42 110 Q 52 94 64 84 Q 76 94 86 110 L 71 77 Z" fill="white"/>
+</svg>

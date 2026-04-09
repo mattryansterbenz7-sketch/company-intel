@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Background: Asana coral, rounded square matching Chrome extension icon style -->
+  <rect width="128" height="128" rx="22" fill="#FC636B"/>
+
+  <!-- Swallow silhouette — front view, wings spread, forked tail -->
+  <!-- White on coral. Geometric, minimal — reads at 16px. -->
+
+  <!-- Body: vertical oval -->
+  <ellipse cx="64" cy="50" rx="11" ry="27" fill="white"/>
+
+  <!-- Left wing: swept-back triangle connecting to body shoulder -->
+  <path d="M 53 45 L 9 40 L 50 61 Z" fill="white"/>
+
+  <!-- Right wing: mirrored -->
+  <path d="M 75 45 L 119 40 L 78 61 Z" fill="white"/>
+
+  <!-- Forked tail: W-shape from body base -->
+  <!-- Outer edges angle out, inner edges curve up to a notch -->
+  <path d="M 57 73 L 44 108 Q 53 91 64 81 Q 75 91 84 108 L 71 73 Z" fill="white"/>
+</svg>

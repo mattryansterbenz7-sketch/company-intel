@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## What this is
 
-**CompanyIntel** — a Chrome Extension (Manifest V3) that functions as a personal CRM for job searching. It auto-detects companies from any website, enriches them with multi-source research, scores job postings against user preferences, manages a pipeline with Kanban workflow, and provides AI-powered chat with full context (emails, meetings, notes, transcripts).
+**Coop.ai** (formerly CompanyIntel) — a Chrome Extension (Manifest V3) that functions as a personal CRM for job searching. It auto-detects companies from any website, enriches them with multi-source research, scores job postings against user preferences, manages a pipeline with Kanban workflow, and provides AI-powered chat with full context (emails, meetings, notes, transcripts).
 
 Built by Matt Sterbenz as a personal tool for managing a GTM job search. All data stays local in the browser — no backend server, no infrastructure cost, no data leaving the machine.
 
@@ -31,7 +31,18 @@ A typical job search involves a painful stack of manual workflows:
 
 **Qualification guesswork** — trying to assess whether a company and role are actually a fit before investing time, based on a job description that's always an incomplete picture of the real role.
 
-CompanyIntel replaces all of this with a single surface where research happens automatically, the pipeline stays current, communication history (emails, meetings, transcripts) attaches itself to each opportunity, and an AI advisor already has the full context — your professional profile, the company data, the job details, the relationship history — so you ask the question instead of spending 20 minutes rebuilding context first.
+Coop.ai replaces all of this with a single surface where research happens automatically, the pipeline stays current, communication history (emails, meetings, transcripts) attaches itself to each opportunity, and an AI advisor already has the full context — your professional profile, the company data, the job details, the relationship history — so you ask the question instead of spending 20 minutes rebuilding context first.
+
+## Commands
+
+There is no build, test, or lint tooling. Workflow is edit → reload the extension at `chrome://extensions` → verify in the browser.
+
+## Debugging
+
+- **Service worker (`background.js`)**: `chrome://extensions` → click the "service worker" link on the Coop.ai card. Closing/reopening DevTools force-restarts the worker.
+- **Side panel**: right-click inside the panel → Inspect.
+- **Full-page views** (`saved.html`, `company.html`, `preferences.html`, etc.): regular DevTools in the tab.
+- **Content script (`content.js`)**: DevTools on the host page; look for its logs in the page console, not the worker console.
 
 ## Rules & Principles
 
@@ -84,18 +95,21 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 
 ## File structure
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `background.js` | ~1950 | Service worker. All API calls, research pipeline, chat handling, scoring, caching, fallback chain |
-| `saved.js` | ~2400 | Dashboard — Kanban/grid views, stage columns, drag-drop, filtering, stat cards, global chat |
-| `company.js` | ~2500 | Full-screen company detail — three-column layout, meetings tab, emails tab, floating chat |
-| `sidepanel.js` | ~2200 | Side panel UI — company detection, research display, save flow, inline chat, settings |
-| `content.js` | ~1400 | Runs on all pages. Detects company/job from LinkedIn, Greenhouse, Lever, Workday, Ashby, generic sites |
-| `chat.js` | ~460 | Shared AI chat panel component, used by company.js and opportunity.js |
-| `opportunity.js` | ~640 | Opportunity detail view (job-focused variant of company.js) |
-| `integrations.js` | ~410 | Integrations config page — API key CRUD, test connection, provider status |
-| `preferences.js` | ~410 | Settings page — job match prefs, Story Time profile, salary/OTE |
-| `widget.js` | ~630 | Floating button (currently disabled, replaced by content.js sidebar) |
+| File | Purpose |
+|------|---------|
+| `background.js` | Service worker. All API calls, research pipeline, chat handling, scoring, caching, fallback chain |
+| `saved.js` | Dashboard — Kanban/grid views, stage columns, drag-drop, filtering, stat cards, global chat |
+| `company.js` | Full-screen company detail — three-column layout, meetings tab, emails tab, floating chat |
+| `sidepanel.js` | Side panel UI — company detection, research display, save flow, inline chat, settings |
+| `content.js` | Runs on all pages. Detects company/job from LinkedIn, Greenhouse, Lever, Workday, Ashby, generic sites |
+| `chat.js` | Shared AI chat panel component, used by company.js and opportunity.js |
+| `opportunity.js` | Opportunity detail view (job-focused variant of company.js). `opportunity.html` is live — opened from company.js "View Opportunity" buttons |
+| `integrations.js` | Integrations config page — API key CRUD, test connection, provider status |
+| `preferences.js` | Settings page — job match prefs, Story Time profile, salary/OTE, Coop operating principles |
+| `queue.js` | Apply Queue — Tinder-style swipe triage over pipeline opportunities |
+| `coop-assist.js` | Ambient Grammarly-style writing assistant. Content script on all pages. Watches focused text fields, runs local voice heuristics + cached LLM proofread, surfaces a floating pill → suggestions + rewrite modes (In my voice / Tighten / Punchier / Warmer). Domain blocklist for banking/auth/gov |
+| `onboarding.js` / `onboardingSteps.js` | Self-serve Coop onboarding (G1 Phase 1). Static step manifest + persistent state, injected as first-message in side panel chat when an unmet step exists |
+| `widget.js` | Floating button (currently disabled, replaced by content.js sidebar) |
 
 HTML pages: `sidepanel.html`, `saved.html`, `company.html`, `opportunity.html`, `preferences.html`, `integrations.html`
 
@@ -208,38 +222,29 @@ This is a personal tool. All data stays in the browser. API keys are stored loca
 ### Why no build step
 Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No webpack, no React, no npm. Edit a file, reload the extension, see the change.
 
-## Known issues & technical debt
+## Debt & roadmap
 
-### Architecture
-- **Research cache vs entry data drift**: Research data (leaders, jobListings, intelligence) is stored in both `researchCache` and on the entry. They can drift out of sync. The fix is to have the company detail view read research fields from `researchCache` rather than the entry.
-- **LinkedIn URL not persisting**: Apollo returns `companyLinkedin` in fresh research but cache hits don't backfill missing fields on the entry.
-- **Shared functions duplicated**: `stageColor()`, `scoreToVerdict()`, `defaultActionStatus()`, `escapeHtml()` etc. are copy-pasted across files. A shared utility file would reduce drift.
-- **No test coverage**: The extension has no automated tests.
+**Architecture**
+- Research cache vs entry data drift — research fields live on both `researchCache` and the entry and can diverge. Long-term fix: company detail view reads from cache; entry holds only user data.
+- Shared functions (`stageColor`, `scoreToVerdict`, `defaultActionStatus`, `escapeHtml`) are copy-pasted across files. Extract to a common module.
+- No automated tests.
 
-### Content detection
-- **LinkedIn detection is fragile**: CSS class selectors change frequently. No wait/retry for dynamic React content. Falls back to domain name when selectors miss.
+**Content detection**
+- LinkedIn selectors change frequently and have no wait/retry for dynamic React content. Needs URL-structure signals + auth-vs-public DOM handling. Falls back to domain name today.
 
-### Data
-- **Dirty jobTitle data**: Some entries have "Undefined [title]" or "New Opportunity" as placeholder data from early saves. Needs a one-time cleanup migration.
-- **Old timestamp fields**: `appliedAt`/`introAt`/`interviewedAt` still exist on migrated entries (harmless but messy).
+**Data**
+- Dirty `jobTitle` data from early saves ("Undefined …", "New Opportunity"). Needs a one-time migration.
+- Legacy `appliedAt` / `introAt` / `interviewedAt` fields linger on migrated entries (harmless).
 
-## Things to watch out for
+**Watch out for**
+- The user's own name appears in all Granola meeting titles — matching filters names that appear in >60% of notes.
+- `saveEntry()` in company.js uses `Object.assign(entry, changes)` — mutates both in-memory and storage.
+- Content script can be injected twice — use `if (typeof x === 'undefined') var x = null;` guards.
 
-- The user's own name appears in all Granola meeting titles — the matching logic filters it out by detecting names that appear in >60% of notes
-- `saveEntry()` in company.js does `Object.assign(entry, changes)` — updates both in-memory and storage
-- Content script can be injected twice — use `if (typeof x === 'undefined') var x = null;` guards
-
-## What's left to build
-
-### High priority
-1. **LinkedIn detection reliability** — wait for React content, use URL structure as signal, handle auth vs public DOM differences
-2. **Research cache as source of truth** — company detail view should read from cache, entry stores only user data
-
-### Medium priority
-3. **Shared utility file** — extract duplicated functions into a common module
-4. **jobTitle data cleanup** — migration to strip "Undefined" prefix and null out "New Opportunity"
-
-### Nice to have
-5. **Export/import** — backup and restore pipeline data
-6. **Multi-device sync** — move more data to `chrome.storage.sync`
-7. **Analytics dashboard** — conversion rates through funnel stages, response rate tracking
+**Roadmap**
+- LinkedIn detection reliability
+- Research cache as source of truth
+- Shared utility module
+- jobTitle migration
+- Export/import backup
+- Analytics dashboard (funnel conversion, response rate)
