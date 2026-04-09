@@ -152,6 +152,92 @@
     .research-loader { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 16px; }
     .research-loader-icon { font-size: 28px; animation: joppGlow 2s ease-in-out infinite; }
     .research-loader-text { font-size: 13px; color: var(--ci-text-tertiary); font-weight: 500; text-align: center; min-height: 20px; transition: opacity 0.3s; }
+
+    /* Phase-based research loader — replaces the single-icon loader for forced refresh */
+    .research-phases-card {
+      margin: 16px;
+      padding: 18px 16px 16px;
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-md);
+      box-shadow: var(--ci-shadow-sm);
+    }
+    .research-phases-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--ci-border-subtle);
+    }
+    .research-phases-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--ci-border-strong);
+      border-top-color: var(--ci-accent-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    .research-phases-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.3; }
+    .research-phases-title .company { color: var(--ci-accent-primary); }
+    .research-phase-list { display: flex; flex-direction: column; gap: 6px; }
+    .research-phase {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--ci-radius-sm);
+      transition: background 0.3s, opacity 0.3s;
+    }
+    .research-phase .rp-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .research-phase .rp-text {
+      font-size: 12px;
+      color: var(--ci-text-secondary);
+      font-weight: 500;
+      flex: 1;
+    }
+    .research-phase.pending .rp-icon::before { content: '○'; color: var(--ci-text-tertiary); }
+    .research-phase.active { background: var(--ci-accent-primary-soft); }
+    .research-phase.active .rp-icon::before {
+      content: '';
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--ci-accent-primary);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .research-phase.active .rp-text { color: var(--ci-text-primary); font-weight: 600; }
+    .research-phase.done .rp-icon::before { content: '✓'; color: var(--ci-accent-teal); font-weight: 700; }
+    .research-phase.done .rp-text { color: var(--ci-text-tertiary); }
+    .research-elapsed {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--ci-text-tertiary);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .research-elapsed .rp-hint {
+      display: block;
+      font-size: 11px;
+      font-weight: 400;
+      font-style: italic;
+      margin-top: 4px;
+      min-height: 14px;
+      transition: opacity 0.3s;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
     .error { padding: 16px; background: #1e0f0f; border-radius: 8px; color: #fca5a5; font-size: 13px; margin: 16px; border: 1px solid #3f1515; }
     .empty { padding: 60px 16px; text-align: center; color: var(--ci-text-tertiary); font-size: 14px; line-height: 1.6; }
@@ -380,7 +466,7 @@
 
     /* Skeleton loading */
     .skeleton-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .skeleton-stat { height: 54px; background: linear-gradient(90deg, #243342 25%, #2D3E50 50%, #243342 75%); background-size: 200% 100%; border-radius: 8px; animation: shimmer 1.4s infinite; }
+    .skeleton-stat { height: 54px; background: linear-gradient(90deg, var(--ci-bg-inset) 25%, var(--ci-border-subtle) 50%, var(--ci-bg-inset) 75%); background-size: 200% 100%; border-radius: 8px; animation: shimmer 1.4s infinite; border: 1px solid var(--ci-border-subtle); }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
     /* Job snapshot */
@@ -449,7 +535,7 @@
     .sp-chat-resize-handle::after { content: ''; width: 36px; height: 3px; border-radius: 2px; background: var(--ci-border-default); transition: background 0.15s; }
     .sp-chat-resize-handle:hover::after { background: var(--ci-accent-primary); }
     .sp-chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-subtle); }
-    .sp-chat-header-title { font-size: 14px; font-weight: 700; color: var(--ci-accent-primary); flex: 1; min-width: 0; letter-spacing: -0.01em; }
+    .sp-chat-header-title { font-size: 14px; font-weight: 700; color: var(--ci-accent-primary); flex: 1; min-width: 0; letter-spacing: -0.01em; overflow: hidden; }
     /* Pipeline stats */
     .sp-pipeline-stats { display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: var(--ci-bg-inset); border-bottom: 1px solid var(--ci-border-default); cursor: pointer; overflow-x: auto; }
     .sp-pipeline-stats:hover { background: var(--ci-bg-inset); }
@@ -513,11 +599,16 @@
     .sp-screen-preview-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
     .sp-screen-preview-flash.flash { animation: captureFlash 0.25s ease-out; }
 
-    /* Contextual suggestions */
+    /* Contextual suggestions + quick prompts */
     .sp-suggestions { display: flex; flex-direction: column; gap: 8px; padding: 4px 24px 16px; }
+    .sp-suggestions + .sp-suggestions { padding-top: 0; }
     .sp-suggestion-btn { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-radius: 20px; padding: 11px 18px; font-size: 14px; font-weight: 500; color: var(--ci-text-primary); cursor: pointer; font-family: inherit; text-align: left; transition: all 0.15s; line-height: 1.3; box-shadow: var(--ci-shadow-sm); }
     .sp-suggestion-btn:hover { background: #FFFFFF; box-shadow: var(--ci-shadow-md); }
     .sp-suggestion-btn:active { transform: scale(0.98); background: var(--ci-border-default); }
+    /* Quick prompt chips — slightly distinct: coral accent border */
+    .sp-quick-prompt-btn { border-color: rgba(252,99,107,0.3); color: var(--ci-accent-primary); font-weight: 600; }
+    .sp-quick-prompt-btn:hover { border-color: var(--ci-accent-primary); background: rgba(252,99,107,0.05); box-shadow: var(--ci-shadow-md); }
+    .sp-quick-prompts-row { padding-bottom: 8px; }
     .sp-chat-messages { flex: 1; overflow-y: auto; padding: 16px 16px; display: flex; flex-direction: column; gap: 6px; min-height: 60px; max-height: 50vh; background: var(--ci-bg-base); scroll-behavior: smooth; }
     .sp-chat-empty { color: var(--ci-text-tertiary); font-size: 13px; text-align: center; padding: 0; line-height: 1.6; }
     .sp-chat-msg { display: flex; flex-direction: column; }
@@ -750,7 +841,7 @@
 <body>
   <div class="header">
     <div class="header-left">
-      <div class="logo" id="sp-logo" style="cursor:pointer" title="Open dashboard">Company<span>Intel</span></div>
+      <div class="logo" id="sp-logo" style="cursor:pointer" title="Open dashboard">Coop<span>.ai</span></div>
       <a class="sp-dashboard-btn" id="sp-dashboard-link" href="#" title="Open dashboard in new tab">
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-3M10 2h4v4M16 0L8 8"/></svg>
       </a>
@@ -878,7 +969,7 @@
   </div>
 
   <div id="settings-panel">
-    <p class="settings-intro">Your preferences power the <strong style="color:#818cf8">Job Opportunity</strong> section — when you open a job posting, CompanyIntel scores it against your background, flags strong fits and red flags, and checks if the work arrangement matches.</p>
+    <p class="settings-intro">Your preferences power the <strong style="color:#818cf8">Job Opportunity</strong> section — when you open a job posting, Coop.ai scores it against your background, flags strong fits and red flags, and checks if the work arrangement matches.</p>
 
     <!-- Job Match toggle — top of settings -->
     <div class="pref-toggle-row">
@@ -1003,6 +1094,7 @@
         </button>
         <span class="sp-chat-header-title" id="sp-chat-header-title" style="display:flex;align-items:center;gap:8px;">Coop</span>
         <button class="sp-chat-bind-btn" id="sp-chat-bind-btn" title="Bind Coop to a saved company or opportunity">📎 Bind</button>
+        <a class="sp-chat-bind-view" id="sp-chat-bind-view" href="#" style="display:none;font-size:11px;font-weight:600;color:var(--ci-accent-primary);text-decoration:none;padding:3px 6px;border:1px solid rgba(255,122,89,0.35);border-radius:6px;white-space:nowrap;" title="Open in full CRM">View →</a>
         <div class="sp-chat-header-btns">
           <button class="sp-chat-popout" id="sp-chat-popout" title="Pop out to window">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 2h5v5M14 2L8 8M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1057,6 +1149,8 @@
 
   <script src="sounds.js"></script>
   <script src="coop.js"></script>
+  <script src="onboardingSteps.js"></script>
+  <script src="onboarding.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

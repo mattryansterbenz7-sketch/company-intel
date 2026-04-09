@@ -5,6 +5,33 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.coopConfig) _coopConfig = changes.coopConfig.newValue || {};
 });
 
+// ── User name cache ─────────────────────────────────────────────────────────
+let _cachedUserName = '';
+chrome.storage.sync.get(['prefs'], d => { _cachedUserName = (d.prefs && (d.prefs.name || d.prefs.fullName)) || ''; });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes.prefs) {
+    const p = changes.prefs.newValue || {};
+    _cachedUserName = p.name || p.fullName || '';
+  }
+});
+
+// ── Coop quick prompts ──────────────────────────────────────────────────────
+const DEFAULT_QUICK_PROMPTS_SP = [
+  { id: 'cover-letter', label: 'Cover letter', prompt: 'Help me write a custom cover letter for this role. Use what you know about me and the company to make it specific and compelling.' },
+  { id: 'interview-prep', label: 'Interview prep', prompt: 'Prep me for an interview here — what should I know about the company, what questions will they likely ask, and how should I position myself?' },
+  { id: 'why-this-role', label: 'Why this role', prompt: 'Help me articulate why I\'m genuinely interested in this role in a way that\'s specific and authentic, not generic.' },
+  { id: 'draft-followup', label: 'Draft follow-up', prompt: 'Draft a follow-up message I can send after my last touch with this company. Make it brief and natural.' },
+];
+let _quickPrompts = DEFAULT_QUICK_PROMPTS_SP;
+chrome.storage.local.get(['coopQuickPrompts'], d => {
+  if (Array.isArray(d.coopQuickPrompts)) _quickPrompts = d.coopQuickPrompts;
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.coopQuickPrompts) {
+    _quickPrompts = Array.isArray(changes.coopQuickPrompts.newValue) ? changes.coopQuickPrompts.newValue : DEFAULT_QUICK_PROMPTS_SP;
+  }
+});
+
 // ── Notify content script that side panel is open/closed ────────────────────
 (async () => {
   try {
@@ -40,7 +67,8 @@ function updateHealthDot() {
   });
 }
 updateHealthDot();
-setInterval(updateHealthDot, 60000);
+// Health dot refresh every 60s — only when side panel is visible
+setInterval(() => { if (!document.hidden) updateHealthDot(); }, 60000);
 
 document.getElementById('sp-health-dot')?.addEventListener('click', () => {
   window.open(chrome.runtime.getURL('integrations.html'), '_blank');
@@ -126,6 +154,7 @@ let settingsOpen = false;
 let currentResearch = null;
 let currentSavedEntry = null; // saved entry for the current company (for knownContacts etc.)
 let currentUrl = null;
+let detectedJobUrl = null; // canonical job URL from content script (preferred over currentUrl for jobUrl)
 let currentJobTitle = null;
 let currentJobDescription = null;
 let currentJobMeta = null;
@@ -492,7 +521,7 @@ saveConfirmBtn.addEventListener('click', () => {
           isOpportunity:  true,
           jobStage:       jobStageValue,
           jobTitle:       currentJobTitle || null,
-          jobUrl:         currentUrl || null,
+          jobUrl:         detectedJobUrl || currentUrl || null,
           jobMatch:       currentResearch?.jobMatch    || null,
           jobSnapshot:    snap || null,
           jobDescription: currentJobDescription        || null,
@@ -561,7 +590,7 @@ function mergeAndSave(prev, existing, dupIdx) {
       isOpportunity:  true,
       jobStage:       jobStageValue, // Always reset to scoring queue on new save
       jobTitle:       currentJobTitle || prev.jobTitle || null,
-      jobUrl:         currentUrl || prev.jobUrl || null,
+      jobUrl:         detectedJobUrl || currentUrl || prev.jobUrl || null,
       jobMatch:       currentResearch?.jobMatch || null, // Clear old score for re-evaluation
       jobSnapshot:    currentResearch?.jobSnapshot || prev.jobSnapshot || null,
       jobDescription: currentJobDescription || prev.jobDescription || null,
@@ -607,7 +636,8 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
     if (prev.jobSnapshot?.salary) enriched.jobSnapshot.salary = prev.jobSnapshot.salary;
   }
   // Add new URL if different
-  if (currentUrl && currentUrl !== prev.jobUrl) enriched.jobUrl = currentUrl;
+  const resolvedJobUrl = detectedJobUrl || currentUrl;
+  if (resolvedJobUrl && resolvedJobUrl !== prev.jobUrl) enriched.jobUrl = resolvedJobUrl;
   // Backfill company data
   enriched.intelligence = prev.intelligence || currentResearch?.intelligence || null;
   enriched.reviews = prev.reviews?.length ? prev.reviews : (currentResearch?.reviews || null);
@@ -715,7 +745,7 @@ function showDuplicateDialog(prev, existing, dupIdx) {
       isOpportunity:  true,
       jobStage:       document.getElementById('save-status-select')?.value || 'needs_review',
       jobTitle:       currentJobTitle || null,
-      jobUrl:         currentUrl || null,
+      jobUrl:         detectedJobUrl || currentUrl || null,
       jobMatch:       currentResearch?.jobMatch || null,
       jobSnapshot:    currentResearch?.jobSnapshot || null,
       jobDescription: currentJobDescription || null,
@@ -839,6 +869,20 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
   const tabId = tabs[0]?.id;
 
   function handleInitialDetection(response) {
+    // If a queue Open-Application handoff already bound the panel, preserve it.
+    // The pending-bind IIFE (see __coopBind block) runs in parallel with this
+    // detection and may set _manualLinkId + currentSavedEntry before we get here.
+    // Without this guard we'd unconditionally overwrite the bound UI with
+    // whatever content.js detected on the new tab (often nothing, on a LinkedIn
+    // search URL), dropping the user to home state.
+    if (_manualLinkId && currentSavedEntry) {
+      currentUrl = tabs[0]?.url || currentUrl;
+      if (response && response.domain) detectedDomain = response.domain;
+      if (response && response.canonicalJobUrl) detectedJobUrl = response.canonicalJobUrl;
+      if (response && response.jobTitle && !currentJobTitle) currentJobTitle = response.jobTitle;
+      updateJobTitleBar();
+      return;
+    }
     if (chrome.runtime.lastError || !response || !response.company) {
       // Content script didn't respond — try URL-based match against saved companies
       tryShowCompanyFromUrl(currentUrl, renderHomeState);
@@ -860,6 +904,7 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     detectedDomain = response.domain || null;
     detectedCompanyLinkedin = response.companyLinkedinUrl || null;
     detectedLinkedinFirmo = response.linkedinFirmo || null;
+    detectedJobUrl = response.canonicalJobUrl || null;
     updateJobTitleBar();
     triggerResearch(response.company);
 
@@ -879,9 +924,18 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
   if (isWebPage) {
     chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
   }
-  setTimeout(() => {
-    chrome.tabs.sendMessage(tabId, { type: 'GET_COMPANY' }, handleInitialDetection);
-  }, 300);
+  // Wait for the pending-bind handoff to settle before running detection.
+  // If the Apply-Queue handoff bound an entry, we skip detection entirely so
+  // it can't overwrite the bound UI.
+  Promise.resolve(window.__coopBindReady).then(() => {
+    if (_manualLinkId && currentSavedEntry) {
+      console.log('[SP] Initial detection skipped — queue handoff already bound:', currentSavedEntry.company);
+      return;
+    }
+    setTimeout(() => {
+      chrome.tabs.sendMessage(tabId, { type: 'GET_COMPANY' }, handleInitialDetection);
+    }, 300);
+  });
 });
 
 function startJobDescriptionFlow(tabId) {
@@ -1198,6 +1252,7 @@ searchBtn.addEventListener('click', () => {
       detectedDomain = response.domain || null;
       detectedCompanyLinkedin = response.companyLinkedinUrl || null;
       detectedLinkedinFirmo = response.linkedinFirmo || null;
+      detectedJobUrl = response.canonicalJobUrl || null;
       currentResearch = null;
       currentSavedEntry = null;
       const jobOpp = document.getElementById('job-opportunity');
@@ -1692,17 +1747,8 @@ async function triggerResearch(company, forceRefresh = false) {
     return;
   }
 
-  // Phase 1: show skeleton while Apollo loads
-  contentEl.innerHTML = `
-    <div class="section">
-      <div class="section-title">Company Overview</div>
-      <div class="skeleton-grid">
-        <div class="skeleton-stat"></div><div class="skeleton-stat"></div>
-        <div class="skeleton-stat"></div><div class="skeleton-stat"></div>
-      </div>
-    </div>
-    <div class="research-loader" id="research-loader"><span class="research-loader-icon">🔍</span><span class="research-loader-text" id="research-loader-text"></span></div>`;
-  startResearchLoaderCycle(company);
+  // Phase-based loading UI — visible, informative, and slick
+  renderResearchPhases(company);
 
   chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
     loadPrefsWithMigration((prefs) => {
@@ -1751,6 +1797,9 @@ async function triggerResearch(company, forceRefresh = false) {
       { type: 'QUICK_LOOKUP', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo },
       (quick) => {
         void chrome.runtime.lastError;
+        // Advance the phase loader to "Scanning leaders & reviews" regardless of
+        // whether quick-lookup returned data — the firmographics phase is done.
+        try { window.__researchPhases?.advance(1); } catch (_) {}
         if (quick && (quick.employees || quick.funding || quick.companyWebsite)) {
           if (quick.companyWebsite) setFavicon(quick.companyWebsite);
           renderQuickData(quick);
@@ -1763,6 +1812,8 @@ async function triggerResearch(company, forceRefresh = false) {
       { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo, prefs: prefs || null },
       (response) => {
         void chrome.runtime.lastError;
+        // Close out the phase loader — research is done (success or error)
+        try { window.__researchPhases?.finish(); window.__researchPhases?.stop(); } catch (_) {}
         if (!response || response.error) {
           contentEl.innerHTML = '<div class="error">' + (response?.error || 'Something went wrong') + '</div>';
           return;
@@ -2043,9 +2094,23 @@ function checkAlreadySaved(company) {
   chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
     void chrome.runtime.lastError;
     const entries = savedCompanies || [];
-    const match = entries.find(c => companiesMatch(c.company, company));
+    // Prefer the opportunity over the bare company entry — opportunities carry richer
+    // context (jobMatch, jobDescription, stage history). Fall back to the company entry
+    // if no opportunity exists for this company name.
+    const allMatches = entries.filter(c => companiesMatch(c.company, company));
+    const oppMatch = allMatches.find(c => c.isOpportunity);
+    const match = oppMatch || allMatches[0];
     if (match) {
       currentSavedEntry = match;
+      // Auto-bind Coop to this entry so chat pulls full context (meetings, emails,
+      // transcripts) without requiring the user to click the 📎 Bind button. Manual
+      // binds always win — if the user has explicitly bound something, leave it alone.
+      try {
+        const cur = window.__coopBind?.get?.() || { id: null, auto: false };
+        if (!cur.id || cur.auto) {
+          window.__coopBind?.set?.(match.id, { auto: true });
+        }
+      } catch (e) {}
       // Fix company name if detected as "Unknown Company" but saved entry has real name
       if ((!company || company === 'Unknown Company') && match.company) {
         companyNameEl.textContent = match.company;
@@ -2522,6 +2587,89 @@ function startResearchLoaderCycle(company) {
   }, 1800);
 }
 
+// Phase-based loader for forced-refresh research flow. Replaces the single-icon
+// loader with a three-phase progress card (Firmographics → Leaders & reviews →
+// Synthesizing), elapsed time counter, and adaptive hints at 15s/45s thresholds.
+// Exposes window.__researchPhases.advance(phaseIdx) so triggerResearch callbacks
+// can nudge it forward on real events (e.g., QUICK_LOOKUP returning).
+function renderResearchPhases(company) {
+  const safeCompany = (company || 'company').replace(/</g, '&lt;');
+  contentEl.innerHTML = `
+    <div class="research-phases-card" id="research-phases-card">
+      <div class="research-phases-header">
+        <div class="research-phases-spinner"></div>
+        <div class="research-phases-title">Researching <span class="company">${safeCompany}</span></div>
+      </div>
+      <div class="research-phase-list">
+        <div class="research-phase active" data-phase="0">
+          <span class="rp-icon"></span>
+          <span class="rp-text">Fetching firmographics</span>
+        </div>
+        <div class="research-phase pending" data-phase="1">
+          <span class="rp-icon"></span>
+          <span class="rp-text">Scanning leaders & reviews</span>
+        </div>
+        <div class="research-phase pending" data-phase="2">
+          <span class="rp-icon"></span>
+          <span class="rp-text">Synthesizing company intel</span>
+        </div>
+      </div>
+      <div class="research-elapsed">
+        <span id="research-elapsed-time">0:00</span>
+        <span class="rp-hint" id="research-elapsed-hint"></span>
+      </div>
+    </div>`;
+
+  const startedAt = Date.now();
+  let currentPhase = 0;
+
+  const advance = (to) => {
+    if (to <= currentPhase) return;
+    const phaseEls = document.querySelectorAll('#research-phases-card .research-phase');
+    phaseEls.forEach((el, i) => {
+      el.classList.remove('active', 'pending', 'done');
+      if (i < to) el.classList.add('done');
+      else if (i === to) el.classList.add('active');
+      else el.classList.add('pending');
+    });
+    currentPhase = to;
+  };
+
+  const finish = () => {
+    const phaseEls = document.querySelectorAll('#research-phases-card .research-phase');
+    phaseEls.forEach(el => { el.classList.remove('active', 'pending'); el.classList.add('done'); });
+    currentPhase = 3;
+  };
+
+  // Elapsed time counter + adaptive hints
+  const timeEl = document.getElementById('research-elapsed-time');
+  const hintEl = document.getElementById('research-elapsed-hint');
+  const tick = () => {
+    if (!timeEl?.isConnected) { clearInterval(interval); return; }
+    const secs = Math.floor((Date.now() - startedAt) / 1000);
+    const mm = Math.floor(secs / 60);
+    const ss = String(secs % 60).padStart(2, '0');
+    timeEl.textContent = `${mm}:${ss}`;
+    if (hintEl) {
+      if (secs >= 45) hintEl.textContent = 'Taking longer than usual — large fallback chain is running';
+      else if (secs >= 15) hintEl.textContent = 'Still working — large companies can take up to 30s';
+      else hintEl.textContent = '';
+    }
+    // Time-based phase hints if real events don't advance us
+    if (currentPhase === 0 && secs >= 4) advance(1);
+    if (currentPhase === 1 && secs >= 12) advance(2);
+  };
+  tick();
+  const interval = setInterval(tick, 500);
+
+  // Expose advance/finish so triggerResearch can call them on real events
+  window.__researchPhases = {
+    advance,
+    finish,
+    stop: () => clearInterval(interval),
+  };
+}
+
 function startLoaderTextCycle(container) {
   const phrases = ['Researching role...', 'Analyzing fit...', 'Scoring match...', 'Checking alignment...'];
   let idx = 0;
@@ -2724,12 +2872,29 @@ function renderQuickData(data) {
   }).join('');
 
   const sourceTag = data.enrichmentSource ? `<div style="font-size:10px;color:#4a6580;margin-top:6px">Source: ${data.enrichmentSource}</div>` : '';
-  contentEl.innerHTML = `
+  const overviewHtml = `
     <div class="section">
       <div class="section-title">Company Overview</div>
       <div class="stat-grid">${statsHtml}</div>
       ${sourceTag}
-    </div>
+    </div>`;
+
+  // If the phase loader is active (forced refresh flow), inject the overview
+  // ABOVE it rather than replacing the entire content — preserves the visible
+  // progress UI while showing the freshly-arrived quick data.
+  const phaseCard = document.getElementById('research-phases-card');
+  if (phaseCard && window.__researchPhases) {
+    // Remove any prior quick-data overview we injected, then insert fresh
+    document.getElementById('sp-quick-overview')?.remove();
+    const holder = document.createElement('div');
+    holder.id = 'sp-quick-overview';
+    holder.innerHTML = overviewHtml;
+    contentEl.insertBefore(holder, phaseCard);
+    return;
+  }
+
+  contentEl.innerHTML = `
+    ${overviewHtml}
     <div class="research-loader" id="research-loader"><span class="research-loader-icon">🔍</span><span class="research-loader-text" id="research-loader-text"></span></div>`;
   startResearchLoaderCycle(companyNameEl.textContent);
 }
@@ -3084,21 +3249,111 @@ function renderContactsSection(el, contacts) {
   const bindResults = document.getElementById('sp-chat-bind-results');
 
   let _boundEntryId = null; // chat-session binding (separate from _manualLinkId which is for intel panel)
+  let _autoBindActive = false; // tracks whether the current bind was set automatically (vs user click)
+  // Expose to module scope so checkAlreadySaved (outside this IIFE) can auto-bind
+  window.__coopBind = {
+    set(id, { auto = false } = {}) {
+      _boundEntryId = id;
+      _autoBindActive = auto;
+      updateBindBtnLabel();
+    },
+    // setFromQueue: used by the pending-bind IIFE for "Open Application" handoffs.
+    // Sets _manualLinkId so the tab-change handler treats this bind as sticky and
+    // doesn't blow it away when the new tab's content script fires.
+    setFromQueue(id) {
+      _boundEntryId = id;
+      _autoBindActive = true;
+      _manualLinkId = id; // sticky — survives tab load events
+      updateBindBtnLabel();
+    },
+    get() { return { id: _boundEntryId, auto: _autoBindActive }; },
+    clearForUser() { _boundEntryId = null; _autoBindActive = false; updateBindBtnLabel(); },
+  };
+
+  // ── Pending bind handoff from Apply Queue (Open Application flow) ─────────
+  // queue.js writes { entryId, ts } to chrome.storage.session before opening
+  // the side panel on the new job tab. Read it, load the entry, and auto-bind
+  // Coop so he has full context from the first message.
+  // Exposed as a promise so the initial-detection block (line ~865) can await
+  // it before running, preventing a race where content.js detection overwrites
+  // the bound UI.
+  window.__coopBindReady = (async () => {
+    try {
+      // NOTE: the previous getSession() form short-circuited because
+      // chrome.storage.session.get(keys, cb) returns undefined synchronously,
+      // making `... || r({})` resolve the promise before the callback fired.
+      const getSession = () => new Promise(r => {
+        if (chrome.storage.session?.get) {
+          try { chrome.storage.session.get(['pendingSidePanelBind'], r); }
+          catch (_) { r({}); }
+        } else {
+          r({});
+        }
+      });
+      const getLocal   = () => new Promise(r => chrome.storage.local.get(['pendingSidePanelBind'], r));
+      let pending = null;
+      try { pending = (await getSession())?.pendingSidePanelBind; } catch (_) {}
+      if (!pending) { try { pending = (await getLocal())?.pendingSidePanelBind; } catch (_) {} }
+      if (!pending || !pending.entryId) return;
+      // Freshness guard: only honor handoffs from the last 2 minutes
+      if (pending.ts && (Date.now() - pending.ts) > 2 * 60 * 1000) {
+        try { chrome.storage.session?.remove?.(['pendingSidePanelBind']); } catch (_) {}
+        try { chrome.storage.local.remove(['pendingSidePanelBind']); } catch (_) {}
+        return;
+      }
+      // Load the entry
+      const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+      const entry = (savedCompanies || []).find(e => e.id === pending.entryId);
+      if (!entry) return;
+      applyQueueBind(entry);
+      // Clear the pending flag so a refresh doesn't re-bind
+      try { chrome.storage.session?.remove?.(['pendingSidePanelBind']); } catch (_) {}
+      try { chrome.storage.local.remove(['pendingSidePanelBind']); } catch (_) {}
+      console.log('[SP] Auto-bound to entry from Apply Queue handoff:', entry.company);
+    } catch (err) {
+      console.warn('[SP] Pending-bind handoff failed:', err.message);
+    }
+  })();
 
   function updateBindBtnLabel() {
     if (!bindBtn) return;
+    const viewLink = document.getElementById('sp-chat-bind-view');
     if (_boundEntryId && currentSavedEntry) {
       const name = currentSavedEntry.company || '';
       const job = currentSavedEntry.jobTitle ? ` · ${currentSavedEntry.jobTitle}` : '';
-      bindBtn.textContent = `📎 ${name} ×`;
+      const autoTag = _autoBindActive ? ' (auto)' : '';
+      bindBtn.textContent = `📎 ${name}${autoTag} ×`;
       bindBtn.classList.add('bound');
-      bindBtn.title = `Bound to ${name}${job} — click to unbind`;
+      bindBtn.title = _autoBindActive
+        ? `Auto-bound to ${name}${job} from the detected entry — click to unbind`
+        : `Bound to ${name}${job} — click to unbind`;
+      if (viewLink) {
+        viewLink.style.display = '';
+        // company.html is the canonical entry detail page — it handles both
+        // companies and opportunities. (opportunity.html is a separate job-focused
+        // view still reachable from company.js "View Opportunity" buttons.)
+        viewLink.href = chrome.runtime.getURL(`company.html?id=${encodeURIComponent(currentSavedEntry.id)}`);
+        viewLink.title = `Open ${name}${job} in full CRM`;
+      }
     } else {
       bindBtn.textContent = '📎 Bind';
       bindBtn.classList.remove('bound');
       bindBtn.title = 'Bind Coop to a saved company or opportunity';
+      if (viewLink) viewLink.style.display = 'none';
     }
   }
+
+  // Open view link in a new tab (chrome-extension:// pages from sidepanel need explicit handling)
+  (function initBindViewLink() {
+    const viewLink = document.getElementById('sp-chat-bind-view');
+    if (!viewLink) return;
+    viewLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (viewLink.href && viewLink.href !== '#') {
+        chrome.tabs.create({ url: viewLink.href });
+      }
+    });
+  })();
 
   function renderBindResults(query) {
     if (!bindResults) return;
@@ -3129,6 +3384,7 @@ function renderContactsSection(el, contacts) {
       // If already bound, clicking unbinds
       if (_boundEntryId) {
         _boundEntryId = null;
+        _autoBindActive = false;
         if (bindPanel) bindPanel.classList.remove('open');
         updateBindBtnLabel();
         return;
@@ -3158,6 +3414,7 @@ function renderContactsSection(el, contacts) {
         if (!match) return;
         // Bind the entry — updates currentSavedEntry so buildChatContext() picks it up
         _boundEntryId = id;
+        _autoBindActive = false; // explicit user choice
         currentSavedEntry = match;
         _manualLinkId = id;
         if (match.company) companyNameEl.textContent = match.company;
@@ -3291,47 +3548,66 @@ function renderContactsSection(el, contacts) {
   }
 
   async function startScreenShare() {
+    let stream = null;
     try {
-      _displayStream = await navigator.mediaDevices.getDisplayMedia({
+      stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: 'always' },
         audio: false,
       });
-      screenShareActive = true;
-      screenToggle.classList.add('active');
-      screenToggle.title = 'Stop sharing screen';
-
-      // Pipe stream into the live preview video element
-      const previewVideo = document.getElementById('sp-screen-preview-video');
-      if (previewVideo) {
-        previewVideo.srcObject = _displayStream;
-        previewVideo.style.display = 'block';
-        if (screenPreviewImg) screenPreviewImg.style.display = 'none';
-      }
-
-      // Also keep a hidden video for frame capture on send
-      const captureVideo = document.createElement('video');
-      captureVideo.srcObject = _displayStream;
-      captureVideo.muted = true;
-      captureVideo.play();
-      await new Promise(r => { captureVideo.onloadedmetadata = r; setTimeout(r, 1000); });
-      screenToggle._video = captureVideo;
-
-      // Show preview
-      if (screenPreview) screenPreview.classList.add('visible');
-
-      // Auto-stop when user ends share via browser UI
-      _displayStream.getVideoTracks()[0].addEventListener('ended', () => {
-        stopScreenShare();
-      });
-
-      if (typeof CISounds !== 'undefined') CISounds.shareStart();
-      console.log('[ScreenShare] Started via getDisplayMedia — live preview active');
     } catch (e) {
-      console.warn('[ScreenShare] User cancelled or error:', e.message);
+      // User cancelled the picker OR the browser rejected the call.
+      // NotAllowedError with "Permission denied by user" = user dismissal (expected, stay silent).
+      // Anything else = real failure, surface it so the user knows.
+      const isUserCancel = e.name === 'NotAllowedError' && /permission denied by user|canceled/i.test(e.message);
+      if (!isUserCancel) {
+        console.warn('[ScreenShare] getDisplayMedia failed:', e.name, e.message);
+        // Flash the button red briefly so the user sees something happened
+        screenToggle.style.color = '#ef4444';
+        screenToggle.title = `Screen share failed: ${e.message}`;
+        setTimeout(() => {
+          screenToggle.style.color = '';
+          screenToggle.title = 'Share your screen with Coop';
+        }, 2500);
+      }
       screenShareActive = false;
       screenToggle.classList.remove('active');
-      screenToggle.title = 'Share your screen with Coop';
+      return;
     }
+
+    _displayStream = stream;
+    screenShareActive = true;
+    screenToggle.classList.add('active');
+    screenToggle.title = 'Stop sharing screen';
+
+    // Show preview container first so the <video> inside is laid out in the DOM
+    if (screenPreview) screenPreview.classList.add('visible');
+
+    // Pipe stream into the live preview video element and reuse it for frame capture.
+    // Using the DOM-attached video (autoplay/muted/playsinline in HTML) is reliable;
+    // detached <video> elements often never reach HAVE_CURRENT_DATA in Chrome.
+    const previewVideo = document.getElementById('sp-screen-preview-video');
+    if (previewVideo) {
+      previewVideo.srcObject = _displayStream;
+      previewVideo.style.display = 'block';
+      if (screenPreviewImg) screenPreviewImg.style.display = 'none';
+      try { await previewVideo.play(); } catch (_) { /* autoplay may already be handled */ }
+      // Wait for the first frame to be decodable, with a hard timeout fallback.
+      await new Promise(resolve => {
+        if (previewVideo.readyState >= 2) return resolve();
+        const done = () => { previewVideo.removeEventListener('loadeddata', done); resolve(); };
+        previewVideo.addEventListener('loadeddata', done);
+        setTimeout(done, 1500);
+      });
+      screenToggle._video = previewVideo;
+    }
+
+    // Auto-stop when user ends share via browser UI (e.g. "Stop sharing" bar)
+    _displayStream.getVideoTracks()[0].addEventListener('ended', () => {
+      stopScreenShare();
+    });
+
+    if (typeof CISounds !== 'undefined') CISounds.shareStart();
+    console.log('[ScreenShare] Started — preview video readyState:', previewVideo?.readyState);
   }
 
   function stopScreenShare() {
@@ -3340,7 +3616,7 @@ function renderContactsSection(el, contacts) {
     screenToggle.title = 'Share your screen with Coop';
     latestScreenshotDataUrl = null;
     if (screenPreview) screenPreview.classList.remove('visible');
-    // Reset preview elements
+    // Reset the preview/capture video (same DOM element now)
     const previewVideo = document.getElementById('sp-screen-preview-video');
     if (previewVideo) { previewVideo.srcObject = null; previewVideo.style.display = 'none'; }
     if (screenPreviewImg) { screenPreviewImg.style.display = ''; screenPreviewImg.src = ''; }
@@ -3348,7 +3624,7 @@ function renderContactsSection(el, contacts) {
       _displayStream.getTracks().forEach(t => t.stop());
       _displayStream = null;
     }
-    if (screenToggle._video) { screenToggle._video.srcObject = null; screenToggle._video = null; }
+    screenToggle._video = null;
     if (typeof CISounds !== 'undefined') CISounds.shareStop();
     console.log('[ScreenShare] Stopped');
   }
@@ -3491,8 +3767,8 @@ function renderContactsSection(el, contacts) {
         return `LinkedIn — ${u.pathname.split('/').filter(Boolean)[0] || 'page'}`;
       }
       if (url.includes('chrome-extension://')) {
-        if (url.includes('saved')) return 'CompanyIntel — Saved';
-        return 'CompanyIntel';
+        if (url.includes('saved')) return 'Coop.ai — Saved';
+        return 'Coop.ai';
       }
       return company ? `${company} — ${host}` : host;
     } catch { return ''; }
@@ -3568,20 +3844,31 @@ function renderContactsSection(el, contacts) {
 
   function buildEmptyStateHTML() {
     const avatarHTML = typeof COOP !== 'undefined' ? COOP.avatar(48) : '';
-    let suggestionsHTML = '';
+
+    // Quick prompts row (user-configured)
+    const quickPromptsHTML = _quickPrompts.length > 0
+      ? _quickPrompts.map(p =>
+          `<button class="sp-suggestion-btn sp-quick-prompt-btn" data-suggestion-prompt="${p.prompt.replace(/"/g, '&quot;')}">${p.label}</button>`
+        ).join('')
+      : '';
+
+    // Contextual suggestions row (auto, context-aware)
+    let contextualHTML = '';
     if (_coopConfig.automations?.contextualSuggestions !== false) {
       const ctx = detectSuggestionContext();
       const suggestions = SUGGESTIONS_BY_CONTEXT[ctx] || SUGGESTIONS_BY_CONTEXT.company;
-      suggestionsHTML = suggestions.map(s =>
+      contextualHTML = suggestions.map(s =>
         `<button class="sp-suggestion-btn" data-suggestion-prompt="${s.prompt.replace(/"/g, '&quot;')}">${s.label}</button>`
       ).join('');
     }
+
     return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:32px 24px 20px;">
       <div style="margin-bottom:8px;">${avatarHTML}</div>
-      <div style="font-size:22px;font-weight:700;color:#FF7A59;line-height:1.2;">Hello, Matt</div>
+      <div style="font-size:22px;font-weight:700;color:#FF7A59;line-height:1.2;">Hello${_cachedUserName ? ', ' + _cachedUserName : ''}</div>
       <div style="font-size:20px;font-weight:600;color:#2D2D2D;line-height:1.3;">How can I help you today?</div>
     </div>
-    ${suggestionsHTML ? `<div class="sp-suggestions">${suggestionsHTML}</div>` : ''}`;
+    ${quickPromptsHTML ? `<div class="sp-suggestions sp-quick-prompts-row">${quickPromptsHTML}</div>` : ''}
+    ${contextualHTML ? `<div class="sp-suggestions">${contextualHTML}</div>` : ''}`;
   }
 
   // Restore saved chat height
@@ -3747,6 +4034,14 @@ function renderContactsSection(el, contacts) {
     html = html.replace(/\n/g, '<br>');
     html = `<p>${html}</p>`;
     html = html.replace(/<p><\/p>/g, '');
+    // Strip <p> wrappers around block elements — prevents double-margin from paragraph breaks around lists/headings
+    html = html.replace(/<p>(<(?:ul|ol|h\d)[^>]*>)/g, '$1');
+    html = html.replace(/(<\/(?:ul|ol|h\d)>)<\/p>/g, '$1');
+    html = html.replace(/<p><\/p>/g, '');
+    // Strip <br> tags between list items — \n between <li>s becomes <br> which adds unwanted spacing
+    html = html.replace(/<\/li><br>/g, '</li>');
+    html = html.replace(/<ul([^>]*)><br>/g, '<ul$1>');
+    html = html.replace(/<br><\/ul>/g, '</ul>');
 
     // Auto-link bare URLs
     html = html.replace(/(^|[^"=])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" class="sp-chat-link">$2</a>');
@@ -3831,11 +4126,62 @@ function renderContactsSection(el, contacts) {
     });
   }
 
+  // ── Onboarding injection (Phase 1) ──
+  // Renders the next unmet onboarding step as a DOM-only Coop message in the
+  // empty state. Never enters `history` — onboarding is system-origin, not a
+  // user exchange. Safe no-op if onboarding layer is absent or no step matches.
+  function injectOnboardingStep() {
+    if (!window.coopOnboarding || typeof window.coopOnboarding.getNextStep !== 'function') return;
+    window.coopOnboarding.getNextStep().then(step => {
+      if (!step) return;
+      if (history.length !== 0) return; // user has already started chatting
+      const host = document.createElement('div');
+      host.className = 'sp-chat-msg sp-chat-msg-assistant sp-onboarding-msg';
+      host.dataset.stepId = step.id;
+      const prefix = typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
+      const promptHTML = escHtml(step.prompt || '').replace(/\n/g, '<br>');
+      const actionsHTML = (step.actions || []).map((a, i) =>
+        `<button class="sp-suggestion-btn sp-onboarding-btn" data-action-idx="${i}" style="margin-right:6px;margin-top:6px;">${escHtml(a.label || '')}</button>`
+      ).join('');
+      host.innerHTML = `${prefix}<div class="sp-chat-bubble">${promptHTML}<div class="sp-onboarding-actions" style="margin-top:8px;">${actionsHTML}</div></div>`;
+      // Mount at top of empty-state container
+      const emptyEl = msgsEl.querySelector('.sp-chat-empty');
+      if (emptyEl) emptyEl.insertBefore(host, emptyEl.firstChild);
+      else msgsEl.insertBefore(host, msgsEl.firstChild);
+      host.querySelectorAll('.sp-onboarding-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.actionIdx, 10);
+          const action = (step.actions || [])[idx];
+          if (!action) return;
+          const result = window.coopOnboarding.dispatchAction(
+            action.call,
+            action.args || [],
+            { currentStepId: step.id }
+          );
+          // inline_explain: replace button row with the canned explanation
+          if (action.call === 'inline_explain' && result && result.text) {
+            const actionsWrap = host.querySelector('.sp-onboarding-actions');
+            if (actionsWrap) {
+              actionsWrap.innerHTML = `<div style="margin-top:8px;padding:10px 12px;background:rgba(255,122,89,0.08);border-left:2px solid #FF7A59;border-radius:6px;font-size:13px;line-height:1.5;color:#2D2D2D;">${escHtml(result.text)}</div>`;
+            }
+            window.coopOnboarding.markComplete(step.id);
+            return;
+          }
+          // dismiss / complete / open_page: remove the onboarding block from the DOM
+          if (action.call === 'dismiss_step' || action.call === 'complete_step' || action.call === 'open_page') {
+            host.remove();
+          }
+        });
+      });
+    }).catch(err => console.warn('[onboarding] getNextStep failed', err));
+  }
+
   function renderMessages(showThinking) {
     if (history.length === 0) {
       msgsEl.innerHTML = `<div class="sp-chat-empty">${buildEmptyStateHTML()}</div>`;
+      injectOnboardingStep();
       // Bind suggestion buttons
-      msgsEl.querySelectorAll('.sp-suggestion-btn').forEach(btn => {
+      msgsEl.querySelectorAll('.sp-suggestion-btn:not(.sp-onboarding-btn)').forEach(btn => {
         btn.addEventListener('click', () => {
           const prompt = btn.dataset.suggestionPrompt;
           if (prompt) {
@@ -3888,21 +4234,39 @@ function renderContactsSection(el, contacts) {
           ? `<button class="sp-chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern">💾 Save</button>`
           : '';
         const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-        // Token usage badge for assistant messages
+        // Token usage badge for assistant messages.
+        // CRITICAL: Anthropic returns input_tokens as ONLY the uncached delta
+        // when prompt caching is active. Full billable input is:
+        //   input + cacheCreation (billed 1.25×) + cacheRead (billed 0.10×)
+        // The previous version of this badge read only `input` and under-
+        // reported cost by 10-50× on Tier 3 chat calls.
         const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
-          const inp = m._usage.input || 0;
-          const out = m._usage.output || 0;
-          const total = inp + out;
+          const inp     = m._usage.input || 0;
+          const out     = m._usage.output || 0;
+          const cacheW  = m._usage.cacheCreation || 0;
+          const cacheR  = m._usage.cacheRead || 0;
+          const totalIn = inp + cacheW + cacheR;
+          const total   = totalIn + out;
           const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
-          // Estimate cost (rough per-token rates)
-          const isGpt = (m._model || '').startsWith('gpt');
-          const isMini = (m._model || '').includes('mini') || (m._model || '').includes('nano');
+          // Per-1k rates (dollars). OpenAI has no cache tiers.
+          // Haiku 4.5: $1/M in, $5/M out (verified against real Anthropic
+          // billing on 2026-04-08 — previous $0.80/$4.00 rates under-reported
+          // by 25%). Keep synced with MODEL_COST_PER_MTok in background.js.
+          const isGpt   = (m._model || '').startsWith('gpt');
+          const isMini  = (m._model || '').includes('mini') || (m._model || '').includes('nano');
           const isHaiku = (m._model || '').includes('haiku');
-          const inRate = isGpt ? (isMini ? 0.0004 : 0.01) : (isHaiku ? 0.0008 : 0.003);
-          const outRate = isGpt ? (isMini ? 0.0016 : 0.03) : (isHaiku ? 0.004 : 0.015);
-          const cost = (inp / 1000) * inRate + (out / 1000) * outRate;
+          const inRate  = isGpt ? (isMini ? 0.0004 : 0.01) : (isHaiku ? 0.001 : 0.003);
+          const outRate = isGpt ? (isMini ? 0.0016 : 0.03) : (isHaiku ? 0.005 : 0.015);
+          const cost =
+              (inp    / 1000) * inRate
+            + (cacheW / 1000) * inRate * 1.25
+            + (cacheR / 1000) * inRate * 0.10
+            + (out    / 1000) * outRate;
           const costStr = cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
-          return `<div class="sp-chat-usage">${modelShort} &middot; ${total.toLocaleString()} tokens (${inp.toLocaleString()} in, ${out.toLocaleString()} out) &middot; ${costStr}</div>`;
+          const cacheHint = (cacheW || cacheR)
+            ? ` &middot; <span style="color:#8a8e94;">cache +${cacheW.toLocaleString()}w/${cacheR.toLocaleString()}r</span>`
+            : '';
+          return `<div class="sp-chat-usage">${modelShort} &middot; ${total.toLocaleString()} tokens (${totalIn.toLocaleString()} in, ${out.toLocaleString()} out)${cacheHint} &middot; ${costStr}</div>`;
         })() : '';
         return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${proposalHTML}${copyBtn}${saveAnswerBtn}${usageBadge}</div>`;
       }).join('') + thinkingHTML;
@@ -3999,9 +4363,13 @@ function renderContactsSection(el, contacts) {
     const company = companyNameEl?.textContent || '';
     const entry = currentSavedEntry || {};
     const research = currentResearch || {};
+    const isManuallyBound = !!(_boundEntryId || _manualLinkId);
     return {
       todayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
       todayTimestamp: Date.now(),
+      // When the user has explicitly bound Coop to an entry, force full-context routing
+      // so meetings/emails/transcripts always flow through — never stripped by tier routing.
+      _manualBind: isManuallyBound,
       type: currentJobTitle ? 'job' : 'company',
       company,
       jobTitle: currentJobTitle || entry.jobTitle || null,
@@ -4509,18 +4877,59 @@ function _spGetDefaultCeleb(key) {
   return null;
 }
 
+const _SP_EMOJI_MAP = {
+  thumbsup:'👍', money:'🤑', peace:'✌️', stopsign:'🛑', fire:'🔥', rocket:'🚀',
+  star:'⭐', heart:'❤️', clap:'👏', trophy:'🏆', lightning:'⚡', muscle:'💪',
+  party:'🥳', champagne:'🍾', crown:'👑', gem:'💎', skull:'💀', wave:'👋',
+  eyes:'👀', hundred:'💯', sparkles:'✨', fireworks:'🎆', unicorn:'🦄',
+  cake:'🎂', medal:'🥇', rainbow:'🌈', bell_emoji:'🛎️', cool:'😎',
+};
+
+function _spShowCelebrationBanner(stageLabel, emoji) {
+  try {
+    const existing = document.getElementById('ci-celebration-banner');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.id = 'ci-celebration-banner';
+    el.style.cssText = [
+      'position:fixed','left:50%','top:18%','transform:translate(-50%,-12px) scale(0.9)',
+      'background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%)',
+      'border:1px solid #fdba74','border-radius:12px','padding:11px 16px',
+      'box-shadow:0 14px 36px rgba(255,122,89,0.28),0 4px 14px rgba(0,0,0,0.08)',
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'font-size:13px','font-weight:700','color:#9a3412',
+      'z-index:99998','pointer-events:none','opacity:0',
+      'display:flex','align-items:center','gap:10px',
+      'transition:opacity 260ms ease, transform 260ms cubic-bezier(.2,1.4,.4,1)',
+    ].join(';');
+    el.innerHTML = `<span style="font-size:20px;line-height:1;">${emoji}</span><span>Moved to <span style="color:#ff7a59;">${stageLabel}</span></span>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translate(-50%, 0) scale(1)'; });
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transform = 'translate(-50%, -8px) scale(0.96)';
+      setTimeout(() => el.remove(), 320);
+    }, 1700);
+  } catch(e) {}
+}
+
 function _spFireCelebration(stageKey) {
   const cfg = _spStageCelebrations[stageKey] || _spGetDefaultCeleb(stageKey);
   if (!cfg || cfg.type === 'none') return;
   const { type, sound, count } = cfg;
+  // Banner — uses stage label from oppStages if available
+  try {
+    const stageLabel = (typeof oppStages !== 'undefined' && oppStages?.find?.(s => s.key === stageKey)?.label) || stageKey;
+    _spShowCelebrationBanner(stageLabel, _SP_EMOJI_MAP[type] || '🎊');
+  } catch(e) {}
 
   if (sound === 'pop') { try { const c = new AudioContext(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.setValueAtTime(600, c.currentTime); o.frequency.exponentialRampToValueAtTime(1200, c.currentTime + 0.1); g.gain.setValueAtTime(0.3, c.currentTime); g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.15); o.start(); o.stop(c.currentTime + 0.15); } catch(e) {} }
   else if (sound === 'chaching') { try { const c = new AudioContext(); const t = c.currentTime; [800,1200,1600].forEach((f,i) => { const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = f; g.gain.setValueAtTime(0.2, t+i*0.12); g.gain.exponentialRampToValueAtTime(0.01, t+i*0.12+0.2); o.start(t+i*0.12); o.stop(t+i*0.12+0.2); }); } catch(e) {} }
   else if (sound === 'farewell') { try { const u = new SpeechSynthesisUtterance(['peace','adios','see ya','bye'][Math.floor(Math.random()*4)]); u.rate=1.1; u.pitch=1; u.volume=0.6; speechSynthesis.speak(u); } catch(e) {} }
 
   const colors = ['#ff4444','#ffbb00','#00cc88','#4488ff','#cc44ff','#ff8844','#00ccff','#ffcc00'];
-  const isEmoji = type === 'thumbsup' || type === 'money' || type === 'stopsign' || type === 'peace';
-  const baseEmoji = type === 'thumbsup' ? '👍' : type === 'stopsign' ? '🛑' : type === 'peace' ? '✌️' : '🤑';
+  const isEmoji = type !== 'confetti' && type in _SP_EMOJI_MAP;
+  const baseEmoji = _SP_EMOJI_MAP[type] || '🎊';
   const n = count || 30;
   const particles = [];
   for (let i = 0; i < n; i++) {
@@ -4579,7 +4988,7 @@ function buildQueueEntry() {
     isOpportunity:    true,
     jobStage:         _queueStageKey,
     jobTitle:         currentJobTitle || null,
-    jobUrl:           currentUrl || null,
+    jobUrl:           detectedJobUrl || currentUrl || null,
     jobMatch:         currentResearch?.jobMatch    || null,
     jobSnapshot:      snap || null,
     jobDescription:   currentJobDescription        || null,
@@ -4824,6 +5233,59 @@ chrome.runtime.onMessage.addListener((message) => {
     updateSessionFeedScore(message.entryId, message.score, message.reason);
   }
 });
+
+// ── Open Application → Auto-bind (event-driven) ────────────────────────────
+// The pending-bind IIFE only runs on fresh panel loads. If the panel is already
+// open, queue.js sends this direct message so we can bind immediately without
+// relying on storage polling.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== 'QUEUE_OPEN_APPLICATION' || !msg.entryId) return;
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const entry = (savedCompanies || []).find(e => e.id === msg.entryId);
+    if (!entry) return;
+    applyQueueBind(entry);
+  });
+});
+
+function applyQueueBind(entry) {
+  currentSavedEntry = entry;
+  if (window.__coopBind?.setFromQueue) {
+    window.__coopBind.setFromQueue(entry.id);
+  }
+  // Pre-populate research from saved data so triggerResearch short-circuits
+  if (entry.intelligence || entry.employees || entry.industry) {
+    currentResearch = {
+      intelligence: entry.intelligence,
+      employees: entry.employees,
+      funding: entry.funding,
+      founded: entry.founded,
+      industry: entry.industry,
+      companyWebsite: entry.companyWebsite,
+      companyLinkedin: entry.companyLinkedin,
+      reviews: entry.reviews || [],
+      leaders: entry.leaders || [],
+      jobMatch: entry.jobMatch,
+      jobSnapshot: entry.jobSnapshot,
+    };
+  }
+  // Show company UI immediately
+  const homeEl = document.getElementById('sp-home');
+  if (homeEl) homeEl.style.display = 'none';
+  const companyContentEl = document.getElementById('company-content');
+  if (companyContentEl) companyContentEl.style.display = '';
+  const companyBarEl = document.getElementById('company-bar-toggle');
+  if (companyBarEl) companyBarEl.style.display = '';
+  if (companyNameEl) companyNameEl.textContent = entry.company;
+  if (searchBtn) searchBtn.style.display = '';
+  if (entry.jobTitle) { currentJobTitle = entry.jobTitle; currentJobMeta = entry.jobSnapshot || null; }
+  updateJobTitleBar();
+  if (currentResearch) renderResults(currentResearch);
+  if (entry.jobMatch) renderJobOpportunity(entry.jobMatch, entry.jobSnapshot || null);
+  showSaveBar();
+  if (saveBtn) { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
+  showCrmLink(entry);
+  console.log('[SP] Queue bind applied for:', entry.company);
+}
 
 // "Save to AI queue" button
 document.getElementById('save-queue-btn')?.addEventListener('click', function() {
