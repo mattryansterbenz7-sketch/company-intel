@@ -3889,7 +3889,8 @@ You have access to tools that fetch context on demand. Follow these rules exactl
 6. Trivial questions (greetings, "switch to Sonnet", "what time is it") — answer directly. No tools.
 7. Call tools in PARALLEL when you need more than one in the same turn. Emit multiple tool_use blocks in one response.
 8. Tool results come back as JSON. Translate to natural language when answering — never paste JSON to the user.
-9. Hard cap: 5 tool calls per message. After that, answer with what you have and say what was missing.`,
+9. Hard cap: 5 tool calls per message. After that, answer with what you have and say what was missing.
+10. NEVER pretend to perform an action you have no tool for. If the user asks you to change a setting, switch models, send an email, update a task, modify the pipeline, or take any other action and you do NOT have a matching tool, say so plainly: "I can't do that from chat right now — use [the model picker in the chat header / the preferences page / the relevant UI]." Do NOT say "Done" or "Switched" or "Updated" for things you cannot actually do. This is critical — fake confirmations destroy the user's trust.`,
   ].join('\n');
 
   const tail = isGlobalChat
