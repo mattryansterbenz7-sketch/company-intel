@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 640" font-family="-apple-system, 'Segoe UI', Inter, sans-serif">
+  <!-- Palette -->
+  <!-- bg #FFFFFF, raised #F6F8F9, inset #EEF1F3, header #151B26 -->
+  <!-- text #0A0B0D, text-2 #6F7782, border #E0E4E8 -->
+  <!-- coral #FC636B, teal #36B37E, blue #4573D2, amber #F5A623, purple #7C6EF0 -->
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6F7782"/>
+    </marker>
+    <marker id="arrow-coral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#FC636B"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="980" height="640" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="18" font-weight="600" fill="#0A0B0D" letter-spacing="-0.3">Coop.ai — Architecture</text>
+  <text x="40" y="62" font-size="12" fill="#6F7782">Manifest V3 Chrome extension. No backend. All state in chrome.storage.local.</text>
+
+  <!-- ============ Browser boundary ============ -->
+  <rect x="32" y="92" width="600" height="516" rx="14" fill="#F6F8F9" stroke="#E0E4E8" stroke-width="1.5"/>
+  <text x="50" y="116" font-size="11" font-weight="600" fill="#8A8E94" letter-spacing="1.2">YOUR BROWSER</text>
+
+  <!-- UI Surfaces row -->
+  <text x="50" y="146" font-size="11" font-weight="600" fill="#6F7782" letter-spacing="0.8">UI SURFACES</text>
+
+  <!-- Content script -->
+  <rect x="50" y="158" width="174" height="84" rx="10" fill="#FFFFFF" stroke="#E0E4E8"/>
+  <rect x="50" y="158" width="174" height="4" rx="2" fill="#FC636B"/>
+  <text x="62" y="184" font-size="13" font-weight="600" fill="#0A0B0D">Content script</text>
+  <text x="62" y="204" font-size="11" fill="#6F7782">Detects company &amp; job</text>
+  <text x="62" y="220" font-size="11" fill="#6F7782">from any page DOM</text>
+  <text x="62" y="234" font-size="10" fill="#8A8E94">LinkedIn · Greenhouse · Lever</text>
+
+  <!-- Side panel -->
+  <rect x="240" y="158" width="174" height="84" rx="10" fill="#FFFFFF" stroke="#E0E4E8"/>
+  <rect x="240" y="158" width="174" height="4" rx="2" fill="#4573D2"/>
+  <text x="252" y="184" font-size="13" font-weight="600" fill="#0A0B0D">Side panel</text>
+  <text x="252" y="204" font-size="11" fill="#6F7782">Research, save, inline</text>
+  <text x="252" y="220" font-size="11" fill="#6F7782">chat, settings</text>
+  <text x="252" y="234" font-size="10" fill="#8A8E94">sidepanel.js</text>
+
+  <!-- Saved dashboard -->
+  <rect x="430" y="158" width="174" height="84" rx="10" fill="#FFFFFF" stroke="#E0E4E8"/>
+  <rect x="430" y="158" width="174" height="4" rx="2" fill="#36B37E"/>
+  <text x="442" y="184" font-size="13" font-weight="600" fill="#0A0B0D">Saved dashboard</text>
+  <text x="442" y="204" font-size="11" fill="#6F7782">Kanban pipeline,</text>
+  <text x="442" y="220" font-size="11" fill="#6F7782">company &amp; opportunity views</text>
+  <text x="442" y="234" font-size="10" fill="#8A8E94">saved.js · company.js</text>
+
+  <!-- Arrows down to background -->
+  <line x1="137" y1="244" x2="137" y2="294" stroke="#6F7782" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="327" y1="244" x2="327" y2="294" stroke="#6F7782" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="517" y1="244" x2="517" y2="294" stroke="#6F7782" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- chrome.runtime.sendMessage label -->
+  <text x="327" y="284" font-size="10" font-style="italic" fill="#8A8E94" text-anchor="middle">chrome.runtime.sendMessage</text>
+
+  <!-- Background service worker -->
+  <rect x="50" y="298" width="554" height="120" rx="10" fill="#151B26"/>
+  <text x="66" y="322" font-size="11" font-weight="600" fill="#A3AEBE" letter-spacing="0.8">SERVICE WORKER · background.js</text>
+  <text x="66" y="350" font-size="14" font-weight="600" fill="#F5F4F2">All side effects. All API calls.</text>
+
+  <!-- Inner pills -->
+  <g font-size="10.5" fill="#F5F4F2">
+    <rect x="66" y="364" width="118" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="125" y="379" text-anchor="middle">Research pipeline</text>
+
+    <rect x="192" y="364" width="98" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="241" y="379" text-anchor="middle">Job scoring</text>
+
+    <rect x="298" y="364" width="118" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="357" y="379" text-anchor="middle">Chat + fallback</text>
+
+    <rect x="424" y="364" width="78" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="463" y="379" text-anchor="middle">Caching</text>
+
+    <rect x="66" y="392" width="118" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="125" y="407" text-anchor="middle">Gmail / Calendar</text>
+
+    <rect x="192" y="392" width="98" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="241" y="407" text-anchor="middle">Granola</text>
+
+    <rect x="298" y="392" width="118" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="357" y="407" text-anchor="middle">Insight extraction</text>
+
+    <rect x="424" y="392" width="138" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="493" y="407" text-anchor="middle">Provider exhaustion flags</text>
+  </g>
+
+  <!-- Storage -->
+  <rect x="50" y="438" width="270" height="68" rx="10" fill="#EEF1F3" stroke="#E0E4E8"/>
+  <text x="64" y="460" font-size="11" font-weight="600" fill="#6F7782" letter-spacing="0.6">LOCAL STORAGE</text>
+  <text x="64" y="480" font-size="12" fill="#0A0B0D">chrome.storage.local</text>
+  <text x="64" y="496" font-size="10.5" fill="#6F7782">savedCompanies[] · researchCache · storyTime</text>
+
+  <rect x="334" y="438" width="270" height="68" rx="10" fill="#EEF1F3" stroke="#E0E4E8"/>
+  <text x="348" y="460" font-size="11" font-weight="600" fill="#6F7782" letter-spacing="0.6">SYNCED SETTINGS</text>
+  <text x="348" y="480" font-size="12" fill="#0A0B0D">chrome.storage.sync</text>
+  <text x="348" y="496" font-size="10.5" fill="#6F7782">prefs · resume · roles · salary floors</text>
+
+  <!-- background <-> storage arrows -->
+  <line x1="185" y1="418" x2="185" y2="438" stroke="#6F7782" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="469" y1="418" x2="469" y2="438" stroke="#6F7782" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Caption inside browser -->
+  <text x="50" y="540" font-size="11" fill="#8A8E94">All data stays on this machine. Nothing is sent to a Coop.ai server,</text>
+  <text x="50" y="555" font-size="11" fill="#8A8E94">because there is no Coop.ai server.</text>
+
+  <!-- Local files badge -->
+  <rect x="50" y="572" width="554" height="22" rx="6" fill="#FFFFFF" stroke="#E0E4E8"/>
+  <text x="62" y="587" font-size="10.5" fill="#6F7782">unpacked Chrome extension · raw HTML/JS/CSS · no build step · no dependencies</text>
+
+  <!-- ============ External APIs panel ============ -->
+  <rect x="660" y="92" width="288" height="516" rx="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="678" y="116" font-size="11" font-weight="600" fill="#8A8E94" letter-spacing="1.2">EXTERNAL APIS</text>
+  <text x="678" y="132" font-size="10" fill="#8A8E94">User-supplied keys via Integrations page</text>
+
+  <!-- API rows -->
+  <g font-family="-apple-system, sans-serif">
+    <!-- Claude -->
+    <rect x="678" y="152" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="177" r="6" fill="#FC636B"/>
+    <text x="716" y="175" font-size="13" font-weight="600" fill="#0A0B0D">Anthropic Claude</text>
+    <text x="716" y="191" font-size="10.5" fill="#6F7782">research synthesis · chat · scoring</text>
+
+    <!-- OpenAI -->
+    <rect x="678" y="210" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="235" r="6" fill="#36B37E"/>
+    <text x="716" y="233" font-size="13" font-weight="600" fill="#0A0B0D">OpenAI</text>
+    <text x="716" y="249" font-size="10.5" fill="#6F7782">default chat · fallback for Claude</text>
+
+    <!-- Apollo -->
+    <rect x="678" y="268" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="293" r="6" fill="#7C6EF0"/>
+    <text x="716" y="291" font-size="13" font-weight="600" fill="#0A0B0D">Apollo.io</text>
+    <text x="716" y="307" font-size="10.5" fill="#6F7782">firmographics · employees · funding</text>
+
+    <!-- Serper -->
+    <rect x="678" y="326" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="351" r="6" fill="#4573D2"/>
+    <text x="716" y="349" font-size="13" font-weight="600" fill="#0A0B0D">Serper</text>
+    <text x="716" y="365" font-size="10.5" fill="#6F7782">web search · reviews · leadership</text>
+
+    <!-- Gmail -->
+    <rect x="678" y="384" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="409" r="6" fill="#E8384F"/>
+    <text x="716" y="407" font-size="13" font-weight="600" fill="#0A0B0D">Gmail API</text>
+    <text x="716" y="423" font-size="10.5" fill="#6F7782">threads by company domain (OAuth)</text>
+
+    <!-- Calendar -->
+    <rect x="678" y="442" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="467" r="6" fill="#F5A623"/>
+    <text x="716" y="465" font-size="13" font-weight="600" fill="#0A0B0D">Google Calendar</text>
+    <text x="716" y="481" font-size="10.5" fill="#6F7782">meetings with company contacts</text>
+
+    <!-- Granola -->
+    <rect x="678" y="500" width="252" height="50" rx="8" fill="#F6F8F9" stroke="#E0E4E8"/>
+    <circle cx="700" cy="525" r="6" fill="#0A0B0D"/>
+    <text x="716" y="523" font-size="13" font-weight="600" fill="#0A0B0D">Granola</text>
+    <text x="716" y="539" font-size="10.5" fill="#6F7782">meeting notes &amp; transcripts</text>
+  </g>
+
+  <!-- background -> external arrow -->
+  <path d="M 604 358 C 632 358, 638 178, 670 178" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+  <path d="M 604 360 C 638 360, 638 235, 670 235" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+  <path d="M 604 362 C 640 362, 640 293, 670 293" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+  <path d="M 604 364 C 640 364, 640 351, 670 351" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+  <path d="M 604 400 C 640 400, 640 409, 670 409" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+  <path d="M 604 402 C 640 402, 640 467, 670 467" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+  <path d="M 604 404 C 638 404, 638 525, 670 525" stroke="#FC636B" stroke-width="1.5" fill="none" marker-end="url(#arrow-coral)"/>
+
+  <text x="612" y="582" font-size="10" fill="#8A8E94" font-style="italic">only on explicit user action</text>
+
+</svg>

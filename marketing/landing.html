@@ -1,0 +1,2137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coop.ai — a personal CRM for job searching</title>
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --raised:#F6F8F9;
+    --inset:#EEF1F3;
+    --header:#151B26;
+    --text:#0A0B0D;
+    --text-2:#6F7782;
+    --text-3:#8A8E94;
+    --on-dark:#F5F4F2;
+    --on-dark-muted:#A3AEBE;
+    --border:#E0E4E8;
+    --border-subtle:#EAECEF;
+    --coral:#FC636B;
+    --teal:#36B37E;
+    --blue:#4573D2;
+    --amber:#F5A623;
+    --purple:#7C6EF0;
+    --shadow-sm:0 1px 3px rgba(30,31,33,.05),0 1px 2px rgba(0,0,0,.03);
+    --shadow-md:0 4px 14px rgba(30,31,33,.07),0 1px 3px rgba(0,0,0,.03);
+    --radius:10px;
+    --radius-lg:14px;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--font);
+    color:var(--text);
+    background:var(--bg);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.55;
+    font-size:16px;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .wrap{max-width:1040px;margin:0 auto;padding:0 28px}
+  nav{
+    background:var(--header);
+    color:var(--on-dark);
+  }
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:56px}
+  .brand{font-weight:600;letter-spacing:-.01em;font-size:15px}
+  .brand .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--coral);margin-right:9px;vertical-align:middle}
+  nav a{color:var(--on-dark-muted);font-size:14px;margin-left:24px}
+  nav a:hover{color:var(--on-dark);text-decoration:none}
+
+  header.hero{padding:96px 0 72px;border-bottom:1px solid var(--border-subtle)}
+  .eyebrow{
+    display:inline-block;
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--text-3);
+    background:var(--inset);
+    border:1px solid var(--border);
+    padding:5px 11px;
+    border-radius:9999px;
+    margin-bottom:22px;
+  }
+  h1{
+    font-size:52px;
+    line-height:1.08;
+    letter-spacing:-.025em;
+    margin:0 0 18px;
+    font-weight:600;
+    max-width:780px;
+  }
+  .subhead{
+    font-size:20px;
+    color:var(--text-2);
+    max-width:680px;
+    margin:0 0 28px;
+    line-height:1.5;
+  }
+  .credibility{
+    font-size:13px;
+    color:var(--text-3);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .credibility .pip{width:6px;height:6px;border-radius:50%;background:var(--teal);display:inline-block}
+
+  section{padding:80px 0;border-bottom:1px solid var(--border-subtle)}
+  section h2{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:var(--text-3);
+    font-weight:600;
+    margin:0 0 14px;
+  }
+  section h3.lede{
+    font-size:34px;
+    line-height:1.2;
+    letter-spacing:-.02em;
+    font-weight:600;
+    margin:0 0 18px;
+    max-width:720px;
+  }
+  section p.lede{
+    font-size:17px;
+    color:var(--text-2);
+    max-width:680px;
+    margin:0 0 40px;
+  }
+
+  /* Problem section */
+  .problem-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:14px;
+  }
+  .pain{
+    background:var(--raised);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:22px 24px;
+  }
+  .pain h4{
+    margin:0 0 6px;
+    font-size:15px;
+    font-weight:600;
+    color:var(--text);
+  }
+  .pain p{
+    margin:0;
+    font-size:14px;
+    color:var(--text-2);
+    line-height:1.55;
+  }
+
+  /* Solution section */
+  .features{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:18px;
+  }
+  .feature{
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:28px 28px 30px;
+    box-shadow:var(--shadow-sm);
+  }
+  .feature .tag{
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--coral);
+    font-weight:600;
+    margin-bottom:10px;
+    display:block;
+  }
+  .feature h4{
+    margin:0 0 8px;
+    font-size:19px;
+    letter-spacing:-.01em;
+    font-weight:600;
+  }
+  .feature p{
+    margin:0;
+    color:var(--text-2);
+    font-size:14.5px;
+    line-height:1.6;
+  }
+
+  /* How it works */
+  .steps{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px;
+    counter-reset:step;
+  }
+  .step{
+    background:var(--raised);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:26px 24px;
+    position:relative;
+  }
+  .step .num{
+    font-size:12px;
+    color:var(--text-3);
+    font-weight:600;
+    letter-spacing:.05em;
+    margin-bottom:12px;
+    display:block;
+  }
+  .step h4{
+    margin:0 0 6px;
+    font-size:17px;
+    font-weight:600;
+  }
+  .step p{margin:0;color:var(--text-2);font-size:14px}
+  .arrow-row{
+    display:none;
+  }
+
+  /* Under the hood */
+  .underhood-wrap{
+    display:grid;
+    grid-template-columns:1.1fr .9fr;
+    gap:48px;
+    align-items:start;
+  }
+  .specs{
+    background:var(--header);
+    color:var(--on-dark);
+    border-radius:var(--radius-lg);
+    padding:30px 32px;
+    font-family:var(--font);
+  }
+  .specs h4{
+    margin:0 0 18px;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:var(--on-dark-muted);
+    font-weight:600;
+  }
+  .specs ul{
+    list-style:none;
+    margin:0;
+    padding:0;
+  }
+  .specs li{
+    padding:11px 0;
+    border-bottom:1px solid rgba(255,255,255,.07);
+    font-size:14px;
+    display:flex;
+    justify-content:space-between;
+    gap:18px;
+  }
+  .specs li:last-child{border-bottom:none}
+  .specs li span:first-child{color:var(--on-dark-muted)}
+  .specs li span:last-child{color:var(--on-dark);font-weight:500;text-align:right}
+
+  .underhood-prose p{
+    color:var(--text-2);
+    font-size:15px;
+    line-height:1.65;
+    margin:0 0 14px;
+  }
+  .underhood-prose strong{color:var(--text)}
+
+  .chain{
+    margin-top:22px;
+    background:var(--inset);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    font-family:'SF Mono','JetBrains Mono',monospace;
+    font-size:12.5px;
+    color:var(--text-2);
+    line-height:1.7;
+  }
+  .chain b{color:var(--text);font-weight:600}
+
+  footer{
+    padding:60px 0 80px;
+    text-align:center;
+  }
+  footer p{
+    color:var(--text-3);
+    font-size:13.5px;
+    margin:0 0 6px;
+    max-width:560px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  footer .sig{color:var(--text-2);font-weight:500;margin-top:14px}
+
+  /* ═══ Mockups ═══ */
+  .mock-wrap{margin-top:44px;display:flex;justify-content:center}
+  .mock-wrap > *{width:100%;max-width:520px}
+  .mock-grid-2{display:grid;grid-template-columns:1.05fr .95fr;gap:32px;align-items:center;margin-top:44px}
+  .mock-grid-2.reverse{grid-template-columns:.95fr 1.05fr}
+  .mock-caption{font-size:13px;color:var(--text-3);margin-top:14px;text-align:center;letter-spacing:.01em}
+  .mock-note h5{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--coral);margin:0 0 10px;font-weight:600}
+  .mock-note h3{font-size:24px;line-height:1.25;letter-spacing:-.015em;margin:0 0 12px;font-weight:600}
+  .mock-note p{color:var(--text-2);font-size:15px;line-height:1.6;margin:0}
+
+  /* -- Apply Queue phone card -- */
+  .phone{
+    width:300px;height:560px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:34px;
+    box-shadow:var(--shadow-md);
+    padding:22px 18px 18px;
+    position:relative;
+    transition:transform 380ms cubic-bezier(.2,.7,.2,1), box-shadow 380ms ease;
+    transform-style:preserve-3d;
+  }
+  .phone::before{
+    content:"";position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    width:92px;height:6px;background:var(--inset);border-radius:9999px;
+  }
+  .phone:hover{transform:translateY(-4px) rotateX(2deg);box-shadow:var(--shadow-lg,0 18px 40px rgba(30,31,33,.14))}
+  .swipe-card{
+    position:absolute;inset:36px 18px 94px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:20px 20px 18px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+    transition:transform 380ms cubic-bezier(.2,.7,.2,1), box-shadow 380ms ease;
+  }
+  .swipe-card .co-row{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .swipe-card .logo-dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#FC636B,#F5A623);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .swipe-card .co-name{font-weight:600;font-size:15px}
+  .swipe-card .co-meta{font-size:11.5px;color:var(--text-3);margin-left:auto}
+  .swipe-card h4.role{font-size:17px;margin:10px 0 4px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+  .swipe-card .role-sub{font-size:12px;color:var(--text-3);margin-bottom:14px}
+  .ring-wrap{display:flex;align-items:center;gap:12px;margin:4px 0 14px}
+  .ring{width:58px;height:58px;flex-shrink:0}
+  .ring circle{fill:none;stroke-width:6}
+  .ring .track{stroke:var(--inset)}
+  .ring .bar{stroke:var(--teal);stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;stroke-dasharray:150;stroke-dashoffset:30}
+  .ring-num{font-size:15px;font-weight:700;fill:var(--text)}
+  .ring-slash{font-size:9px;fill:var(--text-3)}
+  .ring-verdict{font-size:12px;color:var(--text-2);font-weight:500}
+  .ring-verdict b{color:var(--teal);font-weight:600;display:block;font-size:13px}
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+  .chip{font-size:11px;padding:4px 9px;border-radius:9999px;border:1px solid var(--border);background:var(--raised);color:var(--text-2);display:inline-flex;align-items:center;gap:5px}
+  .chip .pip{width:5px;height:5px;border-radius:50%}
+  .chip.good .pip{background:var(--teal)}
+  .chip.bad .pip{background:var(--coral)}
+  .chip.good{border-color:rgba(54,179,126,.3);background:rgba(54,179,126,.06);color:#1f7a52}
+  .chip.bad{border-color:rgba(252,99,107,.3);background:rgba(252,99,107,.06);color:#b7343c}
+  .swipe-btns{position:absolute;left:18px;right:18px;bottom:18px;display:flex;gap:10px}
+  .swipe-btns button{
+    flex:1;border:none;border-radius:12px;padding:13px 0;
+    font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;
+    transition:transform 160ms ease, box-shadow 160ms ease;
+  }
+  .btn-pass{background:rgba(252,99,107,.1);color:var(--coral)}
+  .btn-apply{background:var(--teal);color:#fff}
+  .phone:hover .swipe-card{transform:rotate(-.5deg)}
+  .phone .btn-pass:hover ~ .swipe-card,
+  .phone:has(.btn-pass:hover) .swipe-card{transform:rotate(-6deg) translateX(-8px)}
+  .phone:has(.btn-apply:hover) .swipe-card{transform:rotate(6deg) translateX(8px)}
+  .btn-pass:hover{background:rgba(252,99,107,.18)}
+  .btn-apply:hover{background:#2e9d6d}
+
+  /* -- Chat bubbles -- */
+  .chat-panel{
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:22px;
+    box-shadow:var(--shadow-md);
+    max-width:520px;
+  }
+  .chat-header{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--border-subtle);margin-bottom:16px}
+
+  /* ═══ Coop character ═══ */
+  .coop{display:inline-block;width:36px;height:36px;flex-shrink:0;position:relative}
+  .coop svg{width:100%;height:100%;display:block;overflow:visible}
+  .coop .coop-body{
+    transform-origin:50% 55%;
+    animation:coopBreathe 3.4s ease-in-out infinite;
+  }
+  .coop .coop-eye{
+    transform-origin:center;
+    animation:coopBlink 6.2s ease-in-out infinite;
+  }
+  .coop .coop-halo{opacity:0}
+  .coop.thinking .coop-halo{
+    opacity:1;
+    transform-origin:50% 55%;
+    animation:coopHalo 1.6s ease-out infinite;
+  }
+  @keyframes coopBreathe{
+    0%,100%{transform:scale(1)}
+    50%{transform:scale(1.035)}
+  }
+  @keyframes coopBlink{
+    0%,92%,100%{transform:scaleY(1)}
+    95%{transform:scaleY(.1)}
+  }
+  @keyframes coopHalo{
+    0%{transform:scale(1);opacity:.55}
+    100%{transform:scale(1.55);opacity:0}
+  }
+  .coop.sm{width:26px;height:26px}
+  .coop.lg{width:58px;height:58px}
+  .coop-avatar{width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .chat-title{font-size:14px;font-weight:600}
+  .chat-title small{display:block;font-size:11px;color:var(--text-3);font-weight:400;margin-top:1px}
+  .chat-model{margin-left:auto;font-size:11px;color:var(--text-3);border:1px solid var(--border);padding:3px 8px;border-radius:9999px}
+  .bubble{display:block;width:auto;height:auto;font-size:14px;line-height:1.55;border-radius:14px;padding:11px 14px;margin-bottom:10px;max-width:86%}
+  .bubble.user{background:var(--inset);color:var(--text);margin-left:auto;border-bottom-right-radius:4px}
+  .bubble.coop{background:var(--raised);border:1px solid var(--border-subtle);color:var(--text);border-bottom-left-radius:4px}
+  .bubble.coop b{color:var(--text)}
+  .bubble.coop .score-block{
+    margin-top:10px;padding:10px 12px;background:var(--bg);
+    border:1px solid var(--border);border-radius:10px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .score-block .big{font-size:22px;font-weight:700;color:var(--teal);line-height:1}
+  .score-block .big small{font-size:12px;color:var(--text-3);font-weight:500}
+  .score-block .verdict{font-size:12.5px;color:var(--text-2)}
+  .score-block .verdict b{color:var(--text);font-size:13px;display:block;margin-bottom:1px}
+
+  .typing{display:inline-flex;gap:4px;padding:10px 14px;background:var(--raised);border:1px solid var(--border-subtle);border-radius:14px;border-bottom-left-radius:4px}
+  .typing span{width:6px;height:6px;border-radius:50%;background:var(--text-3);display:inline-block;animation:typedot 1.2s infinite ease-in-out}
+  .typing span:nth-child(2){animation-delay:.18s}
+  .typing span:nth-child(3){animation-delay:.36s}
+  @keyframes typedot{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+  .source-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .spill{
+    font-size:10.5px;letter-spacing:.02em;padding:4px 9px;border-radius:9999px;
+    background:var(--bg);border:1px solid var(--border);color:var(--text-2);
+    display:inline-flex;align-items:center;gap:5px;
+    opacity:0;transform:translateY(4px);
+    animation:pillIn .5s forwards ease-out;
+  }
+  .spill::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--purple)}
+  .spill.email::before{background:var(--blue)}
+  .spill.granola::before{background:var(--teal)}
+  .spill.job::before{background:var(--amber)}
+  .spill.princ::before{background:var(--coral)}
+  .spill:nth-child(1){animation-delay:.1s}
+  .spill:nth-child(2){animation-delay:.25s}
+  .spill:nth-child(3){animation-delay:.4s}
+  .spill:nth-child(4){animation-delay:.55s}
+  @keyframes pillIn{to{opacity:1;transform:translateY(0)}}
+
+  /* -- Side panel screen-sharing -- */
+  .sidepanel-mock{
+    background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-md);width:340px;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .sp-head{background:var(--header);color:var(--on-dark);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px}
+  .sp-head .dot{width:8px;height:8px;border-radius:50%;background:var(--coral)}
+  .sp-head small{color:var(--on-dark-muted);margin-left:auto;font-size:11px}
+  .sp-body{padding:16px;background:var(--raised);flex:1}
+  .sp-qbox{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+  .sp-qlabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:6px;font-weight:600}
+  .sp-question{font-size:13px;color:var(--text);line-height:1.45}
+  .sp-abox{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;position:relative}
+  .sp-alabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--coral);margin-bottom:6px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .sp-alabel::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--coral);animation:pulseDot 1.6s infinite ease-in-out}
+  @keyframes pulseDot{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.4);opacity:1}}
+  .sp-answer{font-size:13px;color:var(--text);line-height:1.55}
+  .cursor{display:inline-block;width:2px;height:14px;background:var(--text);vertical-align:-2px;margin-left:1px;animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* -- Kanban -- */
+  .kanban{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
+    background:var(--raised);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:16px;
+    box-shadow:var(--shadow-sm);
+  }
+  .kcol{background:var(--bg);border:1px solid var(--border-subtle);border-radius:10px;padding:12px}
+  .kcol-head{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);font-weight:600;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .kcol-head .count{background:var(--inset);color:var(--text-2);padding:1px 7px;border-radius:9999px;font-size:10.5px}
+  .kcard{
+    background:var(--raised);border:1px solid var(--border);border-radius:8px;
+    padding:10px 11px;margin-bottom:8px;cursor:pointer;
+    transition:transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    position:relative;
+  }
+  .kcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-strong,#C4CAD1)}
+  .kcard .co{font-size:12.5px;font-weight:600;margin-bottom:2px}
+  .kcard .ti{font-size:11px;color:var(--text-3);line-height:1.3}
+  .kcard .hover-row{
+    margin-top:8px;display:none;align-items:center;gap:8px;
+    padding-top:8px;border-top:1px solid var(--border-subtle);
+  }
+  .kcard:hover .hover-row{display:flex}
+  .mini-ring{width:26px;height:26px}
+  .mini-ring circle{fill:none;stroke-width:4}
+  .mini-ring .t{stroke:var(--inset)}
+  .mini-ring .b{stroke:var(--teal);stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;stroke-dasharray:62.8;stroke-dashoffset:12}
+  .mini-score{font-size:10.5px;color:var(--text-2);font-weight:600}
+  .action-badge{margin-left:auto;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:9999px;background:var(--coral);color:#fff;font-weight:600}
+  .action-badge.theirs{background:var(--inset);color:var(--text-2)}
+
+  /* -- Walkthrough bubble -- */
+  .walk-anchor{position:relative}
+  .walk-bubble{
+    position:absolute;bottom:-14px;right:-14px;
+    background:var(--bg);border:1px solid var(--border);
+    border-radius:14px;padding:11px 14px 11px 42px;
+    box-shadow:var(--shadow-md);
+    font-size:12.5px;color:var(--text);max-width:240px;
+    animation:float 4s ease-in-out infinite;
+  }
+  .walk-bubble{padding-left:52px}
+  .walk-bubble .coop-badge{
+    position:absolute;left:10px;top:50%;transform:translateY(-50%);
+    width:30px;height:30px;border-radius:9999px;
+    box-shadow:0 0 0 0 rgba(252,99,107,.4);
+    animation:coopPulse 2.2s ease-out infinite;
+  }
+  .walk-bubble .coop-badge svg{width:100%;height:100%;display:block}
+  .walk-bubble b{color:var(--text);font-weight:600}
+  .walk-bubble small{display:block;font-size:11px;color:var(--text-3);margin-top:2px}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes coopPulse{
+    0%{box-shadow:0 0 0 0 rgba(252,99,107,.45)}
+    70%{box-shadow:0 0 0 10px rgba(252,99,107,0)}
+    100%{box-shadow:0 0 0 0 rgba(252,99,107,0)}
+  }
+
+  /* ═══ Hub and spokes ═══ */
+  .hub-wrap{
+    background:var(--raised);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:32px;
+    box-shadow:var(--shadow-sm);
+    display:flex;justify-content:center;
+  }
+  .hub{position:relative;width:100%;max-width:560px;height:360px}
+  .hub svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .hub .spoke{
+    stroke:var(--border);stroke-width:1.5;fill:none;
+    stroke-dasharray:400;stroke-dashoffset:400;
+    animation:drawSpoke 1.4s ease-out forwards;
+  }
+  .hub .spoke:nth-of-type(1){animation-delay:.1s}
+  .hub .spoke:nth-of-type(2){animation-delay:.2s}
+  .hub .spoke:nth-of-type(3){animation-delay:.3s}
+  .hub .spoke:nth-of-type(4){animation-delay:.4s}
+  .hub .spoke:nth-of-type(5){animation-delay:.5s}
+  .hub .spoke:nth-of-type(6){animation-delay:.6s}
+  .hub .spoke:nth-of-type(7){animation-delay:.7s}
+  @keyframes drawSpoke{to{stroke-dashoffset:0}}
+  .hub .node{
+    position:absolute;transform:translate(-50%,-50%);
+    background:var(--bg);border:1px solid var(--border);border-radius:9999px;
+    padding:7px 13px;font-size:12px;color:var(--text-2);
+    box-shadow:var(--shadow-sm);white-space:nowrap;
+    opacity:0;animation:nodeIn .5s ease-out forwards;
+  }
+  .hub .node.n1{top:10%;left:12%;animation-delay:.55s}
+  .hub .node.n2{top:6%;left:50%;animation-delay:.65s}
+  .hub .node.n3{top:14%;left:86%;animation-delay:.75s}
+  .hub .node.n4{top:55%;left:6%;animation-delay:.85s}
+  .hub .node.n5{top:58%;left:94%;animation-delay:.95s}
+  .hub .node.n6{top:92%;left:28%;animation-delay:1.05s}
+  .hub .node.n7{top:92%;left:74%;animation-delay:1.15s}
+  @keyframes nodeIn{to{opacity:1}}
+  .hub .hub-center{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  .hub .hub-center .label{font-size:11px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+
+  /* ═══ Overlay composition for side panel + job posting ═══ */
+  .share-stage{
+    position:relative;background:var(--raised);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:28px;min-height:520px;
+    box-shadow:var(--shadow-sm);overflow:hidden;
+  }
+  /* Gmail compose window behind the side panel */
+  .gmail-compose{
+    background:#fff;border:1px solid var(--border);border-radius:10px 10px 0 0;
+    max-width:560px;box-shadow:var(--shadow-md);
+    filter:grayscale(.25) opacity(.78);
+    transition:filter 300ms ease;
+  }
+  .share-stage:hover .gmail-compose{filter:grayscale(.15) opacity(.9)}
+  .gc-head{background:#404040;color:#f3f3f3;font-size:12px;font-weight:500;padding:9px 14px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:10px}
+  .gc-head .gc-dots{display:flex;gap:5px;margin-left:auto}
+  .gc-head .gc-dots i{width:10px;height:10px;border-radius:50%;background:#888;display:block;opacity:.6}
+  .gc-body{padding:14px 18px 18px}
+  .gc-field{font-size:12px;color:#5f6368;padding:8px 0;border-bottom:1px solid #e8eaed;display:flex;gap:10px}
+  .gc-field span{color:#202124}
+  .gc-subject{font-size:13px;color:#202124;padding:10px 0;border-bottom:1px solid #e8eaed;font-weight:500}
+  .gc-body-text{padding:14px 0;font-size:13px;color:#3c4043;line-height:1.65}
+  .gc-body-text .gc-line{height:9px;background:#ececec;border-radius:3px;margin-bottom:8px}
+  .gc-body-text .gc-line.w1{width:78%}
+  .gc-body-text .gc-line.w2{width:62%}
+  .gc-body-text .gc-line.w3{width:44%}
+  .gc-footer{display:flex;align-items:center;gap:10px;padding-top:10px;border-top:1px solid #e8eaed}
+  .gc-send{background:#1a73e8;color:#fff;padding:8px 18px;border-radius:4px;font-size:12.5px;font-weight:500}
+  /* Side panel overlay positioning */
+  .share-stage .sidepanel-mock{
+    position:absolute;right:28px;top:44px;width:360px;
+    box-shadow:0 24px 60px rgba(30,31,33,.18),0 2px 6px rgba(0,0,0,.06);
+  }
+  .sp-binding{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 14px;background:rgba(252,99,107,.08);
+    border-bottom:1px solid var(--border-subtle);
+    font-size:11.5px;color:var(--text-2);
+  }
+  .sp-binding b{color:var(--text);font-weight:600}
+  .sp-binding .bind-dot{width:6px;height:6px;border-radius:50%;background:var(--coral);animation:pulseDot 1.6s infinite}
+  .sp-source-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+  .sp-source{
+    font-size:10px;padding:3px 8px;border-radius:9999px;
+    background:var(--bg);border:1px solid var(--border);color:var(--text-2);
+    display:inline-flex;align-items:center;gap:5px;
+    transition:transform 200ms ease, border-color 200ms ease;
+  }
+  .sp-source:hover{transform:translateY(-1px);border-color:var(--text-3)}
+  .sp-source::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--purple)}
+  .sp-source.email::before{background:var(--blue)}
+  .sp-source.granola::before{background:var(--teal)}
+  .sp-source.principles::before{background:var(--coral)}
+  /* Typing reveal for the drafted reply */
+  .sp-draft{
+    font-size:13px;color:var(--text);line-height:1.55;
+    position:relative;
+  }
+  .sp-draft .reveal{
+    display:inline;
+    background:linear-gradient(90deg,var(--text) 50%,transparent 50%);
+    background-size:200% 100%;background-position:100% 0;
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:draftType 11s steps(60) infinite;
+  }
+  @keyframes draftType{
+    0%{background-position:100% 0}
+    45%,80%{background-position:0% 0}
+    92%,100%{background-position:0% 0}
+  }
+  .sp-send-row{
+    margin-top:12px;display:flex;gap:8px;align-items:center;
+  }
+  .sp-send{
+    background:var(--coral);color:#fff;font-weight:600;
+    font-size:12px;padding:8px 14px;border-radius:8px;
+    border:none;cursor:pointer;
+    transition:transform 160ms ease, background 160ms ease;
+  }
+  .sp-send:hover{transform:translateY(-1px);background:#e8535b}
+  .sp-send-note{font-size:10.5px;color:var(--text-3)}
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:.001ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:.001ms !important;
+    }
+    .phone:hover,.phone:hover .swipe-card,.kcard:hover{transform:none}
+  }
+
+  /* ═══ Coop avatar upgrades ═══ */
+  .coop svg .coop-brow{transform-origin:40px 25px;transition:transform 320ms ease}
+  .coop:hover svg .coop-brow{transform:translateY(-1.5px) rotate(-6deg)}
+  .coop{animation:coopTilt 13s ease-in-out infinite}
+  .coop:nth-of-type(2n){animation-delay:-4.2s}
+  .coop:nth-of-type(3n){animation-delay:-8.6s}
+  .coop:nth-of-type(5n){animation-delay:-11.1s}
+  @keyframes coopTilt{
+    0%,94%,100%{transform:rotate(0)}
+    96%{transform:rotate(2deg)}
+    98%{transform:rotate(-2deg)}
+  }
+  /* Attentive pulse ring emanating from coral accent */
+  .coop::after{
+    content:"";position:absolute;top:-8%;right:32%;
+    width:8px;height:8px;border-radius:50%;
+    border:2px solid var(--coral);opacity:0;pointer-events:none;
+    animation:coopPulse 4s ease-out infinite;
+  }
+  .coop.attentive::after{animation-duration:2s}
+  @keyframes coopPulse{
+    0%{transform:scale(.6);opacity:.7}
+    70%{transform:scale(2);opacity:0}
+    100%{transform:scale(2);opacity:0}
+  }
+  /* Entrance: used for Coop inside chat bubbles */
+  .bubble.coop .coop,.chat-header .coop,.walk-bubble .coop-badge{
+    animation:coopEnter .7s cubic-bezier(0.34,1.56,0.64,1) both,
+              coopTilt 13s ease-in-out 1s infinite;
+  }
+  @keyframes coopEnter{
+    0%{opacity:0;transform:translateY(8px) scale(.94)}
+    100%{opacity:1;transform:translateY(0) scale(1)}
+  }
+  .coop.thinking .coop-eye{transform:scale(.82)}
+  .coop.happy{animation:coopHop .6s ease-out 1}
+  .mock-wrap:hover .coop{animation:coopHop .6s ease-out 1}
+  @keyframes coopHop{
+    0%,100%{transform:translateY(0)}
+    40%{transform:translateY(-3px)}
+  }
+
+  /* ═══ Hero demo strip (filmstrip) ═══ */
+  .demo-strip{
+    margin:0 auto;max-width:1040px;padding:0 28px 56px;
+  }
+  .strip-label{
+    font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--text-3);font-weight:600;margin-bottom:12px;
+  }
+  .strip-stage{
+    position:relative;height:280px;border-radius:var(--radius-lg);
+    background:var(--raised);border:1px solid var(--border);
+    box-shadow:var(--shadow-md);overflow:hidden;
+  }
+  .strip-frame{
+    position:absolute;inset:0;padding:22px 26px;
+    opacity:0;animation:stripPlay 20s infinite;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .strip-frame h6{
+    margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--text-3);font-weight:600;
+  }
+  .strip-frame .sf-title{font-size:17px;font-weight:600;letter-spacing:-.01em;margin:2px 0 6px}
+  .strip-frame .sf-row{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--text-2)}
+  .strip-frame .sf-pill{background:var(--bg);border:1px solid var(--border);padding:4px 9px;border-radius:9999px;font-size:11px;color:var(--text-2)}
+  .strip-frame .sf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+  .strip-frame .sf-cell{background:var(--bg);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--text-2)}
+  .strip-frame .sf-cell b{display:block;color:var(--text);font-size:13px;margin-top:1px}
+  .strip-frame .sf-kan{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}
+  .strip-frame .sf-col{background:var(--bg);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 6px;min-height:140px}
+  .strip-frame .sf-col header{font-size:10px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 4px}
+  .strip-frame .sf-card{background:var(--raised);border:1px solid var(--border-subtle);border-radius:6px;padding:6px 8px;font-size:11px;margin-bottom:5px;color:var(--text)}
+  .strip-frame.sf1{animation-delay:0s}
+  .strip-frame.sf2{animation-delay:-16s}
+  .strip-frame.sf3{animation-delay:-12s}
+  .strip-frame.sf4{animation-delay:-8s}
+  .strip-frame.sf5{animation-delay:-4s}
+  @keyframes stripPlay{
+    0%,18%{opacity:1}
+    22%,100%{opacity:0}
+  }
+  .strip-bar{
+    position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--inset);
+  }
+  .strip-bar i{
+    position:absolute;top:0;bottom:0;left:0;width:20%;background:var(--coral);
+    animation:stripBar 20s linear infinite;
+  }
+  @keyframes stripBar{
+    0%{left:0}
+    100%{left:80%}
+  }
+  .strip-stage:hover .strip-frame,.strip-stage:hover .strip-bar i{animation-play-state:paused}
+
+  /* ═══ Watch it work (recording) ═══ */
+  .watch{background:var(--raised)}
+  .watch .stage{
+    position:relative;height:420px;border-radius:var(--radius-lg);
+    background:var(--bg);border:1px solid var(--border);box-shadow:var(--shadow-md);
+    overflow:hidden;margin-top:30px;
+  }
+  .watch .linkedin-bg{
+    position:absolute;inset:0;padding:24px 28px;
+    display:flex;flex-direction:column;gap:10px;
+    background:linear-gradient(180deg,#F3F2EF 0%,#F3F2EF 100%);
+  }
+  .watch .lk-head{height:14px;width:180px;background:#0A66C2;border-radius:4px;opacity:.85}
+  .watch .lk-line{height:10px;background:#D6D9DC;border-radius:4px}
+  .watch .lk-line.w1{width:62%}
+  .watch .lk-line.w2{width:48%}
+  .watch .lk-line.w3{width:72%}
+  .watch .lk-line.w4{width:40%}
+  .watch .sp{
+    position:absolute;top:0;right:0;bottom:0;width:360px;
+    background:var(--bg);border-left:1px solid var(--border);
+    padding:22px 22px;transform:translateX(100%);
+    animation:watchPanel 12s ease-in-out infinite;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .watch .sp .sp-label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);font-weight:600}
+  .watch .sp .co-name{font-size:22px;font-weight:600;letter-spacing:-.02em;opacity:0;animation:watchName 12s ease-out infinite}
+  .watch .sp .spinner{
+    width:16px;height:16px;border-radius:50%;
+    border:2px solid var(--inset);border-top-color:var(--coral);
+    opacity:0;animation:watchSpinShow 12s linear infinite;
+  }
+  @keyframes watchSpinShow{
+    0%,12%{opacity:0;transform:rotate(0)}
+    14%,22%{opacity:1;transform:rotate(360deg)}
+    24%,100%{opacity:0}
+  }
+  .watch .sp .w-field{
+    font-size:12px;color:var(--text-2);opacity:0;
+    display:flex;justify-content:space-between;
+    padding:6px 10px;background:var(--raised);border-radius:6px;
+    border:1px solid var(--border-subtle);
+  }
+  .watch .sp .w-field b{color:var(--text);font-size:12.5px}
+  .watch .sp .w-field:nth-of-type(1){animation:watchField 12s ease-out infinite;animation-delay:0s}
+  .watch .sp .w-field:nth-of-type(2){animation:watchField 12s ease-out infinite;animation-delay:.3s}
+  .watch .sp .w-field:nth-of-type(3){animation:watchField 12s ease-out infinite;animation-delay:.6s}
+  .watch .sp .w-field:nth-of-type(4){animation:watchField 12s ease-out infinite;animation-delay:.9s}
+  @keyframes watchField{
+    0%,22%{opacity:0;transform:translateY(4px)}
+    28%,70%{opacity:1;transform:translateY(0)}
+    75%,100%{opacity:0}
+  }
+  .watch .sp .w-chip{
+    align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.03em;
+    color:var(--teal);background:rgba(54,179,126,.12);
+    border:1px solid rgba(54,179,126,.3);padding:4px 10px;border-radius:9999px;
+    opacity:0;animation:watchChip 12s ease-out infinite;
+  }
+  @keyframes watchChip{
+    0%,32%{opacity:0;transform:scale(.9)}
+    36%,44%{opacity:1;transform:scale(1)}
+    48%,100%{opacity:0}
+  }
+  .watch .sp .ring-slot{
+    display:flex;align-items:center;gap:12px;padding:10px 12px;
+    background:var(--raised);border:1px solid var(--border-subtle);border-radius:10px;
+    opacity:0;animation:watchRing 12s ease-out infinite;
+  }
+  .watch .sp .ring-slot svg{width:44px;height:44px}
+  .watch .sp .ring-slot b{display:block;font-size:13px;color:var(--text)}
+  .watch .sp .ring-slot small{font-size:11px;color:var(--text-3)}
+  .watch .sp .ring-slot circle.bar2{
+    fill:none;stroke:var(--teal);stroke-width:5;stroke-linecap:round;
+    transform:rotate(-90deg);transform-origin:center;
+    stroke-dasharray:126;stroke-dashoffset:126;
+    animation:watchRingFill 12s ease-out infinite;
+  }
+  .watch .sp .ring-slot circle.track2{fill:none;stroke:var(--inset);stroke-width:5}
+  @keyframes watchRingFill{
+    0%,40%{stroke-dashoffset:126}
+    52%,70%{stroke-dashoffset:25}
+    75%,100%{stroke-dashoffset:126}
+  }
+  @keyframes watchRing{
+    0%,40%{opacity:0}
+    46%,70%{opacity:1}
+    75%,100%{opacity:0}
+  }
+  @keyframes watchPanel{
+    0%{transform:translateX(100%)}
+    6%,80%{transform:translateX(0)}
+    86%,100%{transform:translateX(100%)}
+  }
+  @keyframes watchName{
+    0%,8%{opacity:0;transform:translateY(4px)}
+    12%,78%{opacity:1;transform:translateY(0)}
+    84%,100%{opacity:0}
+  }
+  .watch .kan-drop{
+    position:absolute;left:28px;bottom:80px;width:200px;
+    background:var(--bg);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;box-shadow:var(--shadow-sm);
+    opacity:0;transform:translateY(-20px) scale(.95);
+    animation:watchDrop 12s ease-out infinite;
+  }
+  .watch .kan-drop header{font-size:10px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+  .watch .kan-drop b{font-size:13px;color:var(--text)}
+  .watch .kan-drop small{display:block;font-size:11px;color:var(--text-2);margin-top:2px}
+  @keyframes watchDrop{
+    0%,58%{opacity:0;transform:translateY(-20px) scale(.95)}
+    64%,78%{opacity:1;transform:translateY(0) scale(1)}
+    84%,100%{opacity:0;transform:translateY(0) scale(1)}
+  }
+  .watch .coop-say{
+    position:absolute;left:28px;bottom:28px;right:390px;display:flex;align-items:flex-end;gap:10px;
+    opacity:0;animation:watchSay 12s ease-out infinite;
+  }
+  .watch .coop-say .bubble{
+    background:var(--bg);border:1px solid var(--border);
+    padding:10px 14px;border-radius:14px;border-bottom-right-radius:4px;
+    font-size:13px;color:var(--text);box-shadow:var(--shadow-sm);max-width:260px;
+  }
+  .watch .coop-say .coop{width:34px;height:34px}
+  @keyframes watchSay{
+    0%,72%{opacity:0;transform:translateY(6px)}
+    78%,92%{opacity:1;transform:translateY(0)}
+    96%,100%{opacity:0}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .coop,.coop::after,.strip-frame,.strip-bar i,
+    .watch .sp,.watch .sp .co-name,.watch .sp .spinner,
+    .watch .sp .w-field,.watch .sp .w-chip,.watch .sp .ring-slot,
+    .watch .sp .ring-slot circle.bar2,.watch .kan-drop,.watch .coop-say{
+      animation:none !important;
+    }
+    .watch .sp{transform:translateX(0)}
+    .watch .sp .co-name,.watch .sp .w-field,.watch .sp .w-chip,
+    .watch .sp .ring-slot,.watch .kan-drop,.watch .coop-say{opacity:1;transform:none}
+    .strip-frame.sf1{opacity:1}
+  }
+
+  /* ═══ Full kanban mockup ═══ */
+  .big-kanban{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+    background:var(--raised);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:18px;
+    box-shadow:var(--shadow-sm);
+    opacity:0;animation:fadeUp .7s ease-out .1s forwards;
+  }
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .bk-col{background:var(--bg);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 10px;min-height:260px}
+  .bk-head{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);font-weight:600;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px}
+  .bk-head .count{background:var(--inset);color:var(--text-2);padding:1px 7px;border-radius:9999px;font-size:10px}
+  .bk-head .stage-dot{width:7px;height:7px;border-radius:50%;margin-right:5px;display:inline-block;vertical-align:middle}
+  .bk-card{
+    background:var(--raised);border:1px solid var(--border);border-radius:8px;
+    padding:10px 11px;margin-bottom:8px;cursor:pointer;position:relative;
+    opacity:0;transform:translateY(-10px);
+    animation:cardDrop .6s cubic-bezier(.2,.8,.2,1) forwards;
+    transition:transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  }
+  .bk-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--text-3)}
+  @keyframes cardDrop{
+    0%{opacity:0;transform:translateY(-12px)}
+    60%{opacity:1;transform:translateY(2px)}
+    100%{opacity:1;transform:translateY(0)}
+  }
+  .bk-col:nth-child(1) .bk-card:nth-child(2){animation-delay:.2s}
+  .bk-col:nth-child(1) .bk-card:nth-child(3){animation-delay:.3s}
+  .bk-col:nth-child(1) .bk-card:nth-child(4){animation-delay:.4s}
+  .bk-col:nth-child(2) .bk-card:nth-child(2){animation-delay:.3s}
+  .bk-col:nth-child(2) .bk-card:nth-child(3){animation-delay:.4s}
+  .bk-col:nth-child(2) .bk-card:nth-child(4){animation-delay:.5s}
+  .bk-col:nth-child(3) .bk-card:nth-child(2){animation-delay:.4s}
+  .bk-col:nth-child(3) .bk-card:nth-child(3){animation-delay:.5s}
+  .bk-col:nth-child(4) .bk-card:nth-child(2){animation-delay:.5s}
+  .bk-col:nth-child(4) .bk-card:nth-child(3){animation-delay:.6s}
+  .bk-card .co{font-size:12.5px;font-weight:600;margin-bottom:2px}
+  .bk-card .ti{font-size:11px;color:var(--text-3);line-height:1.3}
+  .bk-card .meta{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-subtle)}
+  .bk-card .score{font-size:10.5px;color:var(--text-2);font-weight:600}
+  .bk-card .abadge{margin-left:auto;font-size:9px;text-transform:uppercase;letter-spacing:.04em;padding:2px 6px;border-radius:9999px;background:var(--coral);color:#fff;font-weight:600}
+  .bk-card .abadge.t{background:var(--inset);color:var(--text-2)}
+  .bk-card.pulse{animation:cardDrop .6s cubic-bezier(.2,.8,.2,1) forwards, pulseCard 2.8s ease-in-out 1s infinite}
+  @keyframes pulseCard{
+    0%,100%{box-shadow:0 0 0 0 rgba(69,115,210,0)}
+    50%{box-shadow:0 0 0 4px rgba(69,115,210,.12)}
+  }
+  .bk-coop-whisper{
+    position:absolute;left:50%;top:-8px;transform:translate(-50%,-100%) scale(.92);
+    background:var(--bg);border:1px solid var(--border);border-radius:12px;
+    padding:7px 11px 7px 32px;font-size:11px;color:var(--text);
+    white-space:nowrap;box-shadow:var(--shadow-md);
+    opacity:0;pointer-events:none;
+    transition:opacity 220ms ease, transform 240ms cubic-bezier(.34,1.56,.64,1);
+  }
+  .bk-coop-whisper::before{
+    content:"";position:absolute;left:8px;top:50%;transform:translateY(-50%);
+    width:18px;height:18px;border-radius:50%;
+    background:radial-gradient(circle at 38% 38%,#2A3349,#121824);
+  }
+  .bk-card:hover .bk-coop-whisper{opacity:1;transform:translate(-50%,-100%) scale(1)}
+
+  /* ═══ Apply Queue loop ═══ */
+  .queue-stage{
+    position:relative;height:620px;background:var(--raised);
+    border:1px solid var(--border);border-radius:var(--radius-lg);
+    padding:32px 20px;box-shadow:var(--shadow-sm);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  .q-counter{
+    position:absolute;top:20px;left:0;right:0;text-align:center;
+    font-size:12px;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;font-weight:600;
+  }
+  .q-counter b{color:var(--text);font-weight:700}
+  .q-phone{
+    width:300px;height:540px;
+    background:var(--bg);border:1px solid var(--border);border-radius:34px;
+    box-shadow:var(--shadow-md);padding:22px 18px 18px;
+    position:relative;
+  }
+  .q-phone::before{
+    content:"";position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    width:92px;height:6px;background:var(--inset);border-radius:9999px;
+  }
+  .q-card{
+    position:absolute;inset:36px 18px 18px;
+    background:var(--bg);border:1px solid var(--border);
+    border-radius:18px;padding:20px;box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+  }
+  .q-card .logo{width:34px;height:34px;border-radius:9px;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+  .q-card .co{font-size:15px;font-weight:600}
+  .q-card .role{font-size:14px;color:var(--text-2);margin-top:3px}
+  .q-card .meta{font-size:11px;color:var(--text-3);margin-top:4px}
+  .q-card .score-row{display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px;background:var(--raised);border-radius:10px}
+  .q-card .score-big{font-size:22px;font-weight:700;color:var(--teal);line-height:1}
+  .q-card .score-big small{font-size:10px;color:var(--text-3);font-weight:500}
+  .q-card .score-text{font-size:12px;color:var(--text-2)}
+  .q-card .score-text b{display:block;color:var(--text);font-size:12.5px}
+  .q-card .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}
+  .q-card .tags span{font-size:10px;padding:3px 8px;border-radius:9999px;background:var(--inset);color:var(--text-2)}
+  .q-btns{position:absolute;left:18px;right:18px;bottom:18px;display:flex;gap:8px}
+  .q-btns button{flex:1;border:none;border-radius:10px;padding:12px 0;font-weight:600;font-size:13px;font-family:inherit}
+  .q-btns .pass{background:rgba(252,99,107,.1);color:var(--coral)}
+  .q-btns .apply{background:var(--teal);color:#fff}
+  /* Swipe animation: 3 cards cycle in an 18s loop */
+  .q-card.c1{animation:queueCard 18s infinite}
+  .q-card.c2{animation:queueCard 18s infinite;animation-delay:-12s}
+  .q-card.c3{animation:queueCard 18s infinite;animation-delay:-6s}
+  @keyframes queueCard{
+    0%{transform:translateY(40px) rotate(0);opacity:0}
+    4%,28%{transform:translateY(0) rotate(0);opacity:1}
+    33%{transform:translateX(340px) rotate(14deg);opacity:0}
+    33.1%,100%{transform:translateY(40px) rotate(0);opacity:0}
+  }
+  .q-confetti{position:absolute;inset:0;pointer-events:none}
+  .q-confetti i{
+    position:absolute;width:6px;height:6px;border-radius:50%;
+    background:var(--coral);opacity:0;
+    animation:confettiPop 18s infinite;
+  }
+  .q-confetti i:nth-child(1){top:40%;right:20%;background:var(--coral);animation-delay:0s}
+  .q-confetti i:nth-child(2){top:30%;right:28%;background:var(--amber);animation-delay:.1s}
+  .q-confetti i:nth-child(3){top:50%;right:15%;background:var(--teal);animation-delay:.2s}
+  .q-confetti i:nth-child(4){top:35%;right:22%;background:var(--purple);animation-delay:.15s}
+  .q-confetti i:nth-child(5){top:45%;right:30%;background:var(--coral);animation-delay:.25s}
+  @keyframes confettiPop{
+    0%,30%{opacity:0;transform:translate(0,0) scale(.5)}
+    32%{opacity:1;transform:translate(0,0) scale(1)}
+    38%{opacity:0;transform:translate(40px,-20px) scale(.8)}
+    100%{opacity:0}
+  }
+
+  /* ═══ Pipeline data flow ═══ */
+  .flow-stage{
+    position:relative;background:var(--raised);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:36px 28px 28px;box-shadow:var(--shadow-sm);
+    min-height:440px;
+  }
+  .flow-query{
+    display:flex;align-items:center;gap:10px;justify-content:center;
+    font-size:15px;color:var(--text-2);margin-bottom:26px;
+  }
+  .flow-query b{color:var(--text);font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .flow-row{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
+    margin-bottom:26px;position:relative;
+  }
+  .flow-node{
+    background:var(--bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;text-align:center;position:relative;
+    box-shadow:var(--shadow-sm);
+    opacity:.45;transform:scale(.98);
+    animation:flowNode 10s ease-in-out infinite;
+  }
+  .flow-node:nth-child(1){animation-delay:.2s}
+  .flow-node:nth-child(2){animation-delay:1.2s}
+  .flow-node:nth-child(3){animation-delay:2.2s}
+  @keyframes flowNode{
+    0%,15%{opacity:.4;transform:scale(.98);box-shadow:var(--shadow-sm)}
+    20%,40%{opacity:1;transform:scale(1.02);box-shadow:0 6px 20px rgba(252,99,107,.18)}
+    50%,100%{opacity:.6;transform:scale(1);box-shadow:var(--shadow-sm)}
+  }
+  .flow-node .provider{font-size:11px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+  .flow-node .what{font-size:13px;color:var(--text);font-weight:500}
+  .flow-arrow{
+    position:absolute;top:50%;width:14px;height:2px;background:var(--border);
+    transform:translateY(-50%);
+  }
+  .flow-arrow.a1{left:33.33%;margin-left:-7px}
+  .flow-arrow.a2{left:66.66%;margin-left:-7px}
+  .flow-arrow i{
+    position:absolute;inset:0;background:var(--coral);
+    transform-origin:left;transform:scaleX(0);
+    animation:flowLine 10s ease-in-out infinite;
+  }
+  .flow-arrow.a1 i{animation-delay:.9s}
+  .flow-arrow.a2 i{animation-delay:1.9s}
+  @keyframes flowLine{
+    0%,8%{transform:scaleX(0)}
+    14%,40%{transform:scaleX(1)}
+    50%,100%{transform:scaleX(0)}
+  }
+  .flow-result{
+    background:var(--bg);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+    opacity:0;transform:translateY(8px);
+    animation:flowResult 10s ease-in-out infinite;
+  }
+  @keyframes flowResult{
+    0%,40%{opacity:0;transform:translateY(8px)}
+    50%,85%{opacity:1;transform:translateY(0)}
+    95%,100%{opacity:0;transform:translateY(8px)}
+  }
+  .flow-result .fr-cell{font-size:11px;color:var(--text-3);letter-spacing:.02em}
+  .flow-result .fr-cell b{display:block;color:var(--text);font-size:13.5px;font-weight:600;margin-top:2px}
+  .flow-cost{
+    position:absolute;bottom:18px;right:22px;font-size:11px;
+    font-family:'SF Mono','JetBrains Mono',monospace;color:var(--text-3);
+  }
+  .flow-cost b{color:var(--teal);font-weight:600}
+
+  /* ═══ Company detail 3-col preview ═══ */
+  .detail-preview{
+    background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-md);overflow:hidden;
+  }
+  .dp-head{background:var(--header);color:var(--on-dark);padding:14px 20px;display:flex;align-items:center;gap:12px}
+  .dp-head .dp-logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#FC636B,#F5A623);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .dp-head .dp-name{font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .dp-head .dp-name small{display:block;font-size:11px;color:var(--on-dark-muted);font-weight:400;margin-top:2px}
+  .dp-head .dp-stage{margin-left:auto;font-size:11px;padding:4px 11px;border-radius:9999px;background:rgba(165,212,107,.15);color:#a5d46b;border:1px solid rgba(165,212,107,.3)}
+  .dp-cols{display:grid;grid-template-columns:.9fr 1.1fr .9fr;gap:0;min-height:360px}
+  .dp-col{padding:18px 18px 22px;border-right:1px solid var(--border-subtle)}
+  .dp-col:last-child{border-right:none}
+  .dp-col h5{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);font-weight:600;margin:0 0 10px}
+  .dp-col h5:not(:first-child){margin-top:18px}
+  .dp-kv{font-size:12px;color:var(--text-2);display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--border-subtle)}
+  .dp-kv b{color:var(--text);font-weight:600}
+  .dp-score{display:flex;align-items:center;gap:14px;padding:12px;background:var(--raised);border-radius:10px;border:1px solid var(--border-subtle)}
+  .dp-score .big{font-size:28px;font-weight:700;color:var(--teal);line-height:1}
+  .dp-score .big small{font-size:12px;color:var(--text-3);font-weight:500}
+  .dp-score .txt{font-size:12px;color:var(--text-2);line-height:1.5}
+  .dp-score .txt b{display:block;color:var(--text);font-size:13px;margin-bottom:2px}
+  .dp-list{list-style:none;margin:0;padding:0}
+  .dp-list li{font-size:12px;color:var(--text-2);padding:5px 0;line-height:1.4}
+  .dp-list li b{color:var(--text);font-weight:600;display:block;font-size:12.5px}
+  .dp-chat-msg{font-size:12px;color:var(--text);line-height:1.55;padding:10px 12px;background:var(--raised);border:1px solid var(--border-subtle);border-radius:10px;border-bottom-left-radius:3px;margin-bottom:8px}
+  .dp-chat-msg.user{background:var(--inset);border-bottom-right-radius:3px;border-bottom-left-radius:10px;margin-left:18px}
+  @media (max-width:760px){
+    .dp-cols{grid-template-columns:1fr}
+    .dp-col{border-right:none;border-bottom:1px solid var(--border-subtle)}
+    .big-kanban{grid-template-columns:repeat(2,1fr)}
+    .flow-row{grid-template-columns:1fr}
+    .flow-arrow{display:none}
+    .flow-result{grid-template-columns:repeat(2,1fr)}
+    .share-stage{min-height:unset;padding:18px}
+    .share-stage .sidepanel-mock{position:static;width:100%;margin-top:18px}
+    .gmail-compose{max-width:100%}
+  }
+
+  /* ═══ Coop Assist — ambient writing ═══ */
+  .assist-stage{
+    position:relative;margin-top:30px;display:grid;
+    grid-template-columns:1.25fr 1fr;gap:28px;align-items:start;
+  }
+  .assist-gmail{
+    background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-md);overflow:hidden;position:relative;
+  }
+  .assist-gmail .ag-head{
+    background:var(--inset);border-bottom:1px solid var(--border-subtle);
+    padding:10px 14px;font-size:12px;color:var(--text-2);display:flex;align-items:center;justify-content:space-between;
+  }
+  .assist-gmail .ag-head i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--border);margin-left:4px}
+  .assist-gmail .ag-body{padding:16px 18px 60px;min-height:220px;position:relative}
+  .assist-gmail .ag-to{font-size:12px;color:var(--text-3);border-bottom:1px solid var(--border-subtle);padding:6px 0;margin-bottom:6px}
+  .assist-gmail .ag-to b{color:var(--text);font-weight:500}
+  .assist-gmail .ag-subj{font-size:13px;color:var(--text);font-weight:500;border-bottom:1px solid var(--border-subtle);padding:8px 0;margin-bottom:12px}
+  .assist-gmail .ag-text{
+    font-size:14px;line-height:1.65;color:var(--text);white-space:pre-wrap;
+  }
+  .assist-gmail .ag-flag{
+    border-bottom:1.5px dotted var(--coral);
+    opacity:0;animation:aFlagIn 11s ease-out infinite;
+  }
+  .assist-gmail .ag-flag.f1{animation-delay:.4s}
+  .assist-gmail .ag-flag.f2{animation-delay:1.0s}
+  .assist-gmail .ag-flag.f3{animation-delay:1.6s}
+  @keyframes aFlagIn{
+    0%,4%{opacity:0}
+    8%,80%{opacity:1}
+    86%,100%{opacity:0}
+  }
+
+  /* Floating pill */
+  .assist-pill{
+    position:absolute;right:18px;bottom:22px;
+    display:flex;align-items:center;gap:6px;
+    background:linear-gradient(135deg,#ffffff 0%,#fff7ed 100%);
+    border:1px solid #fdba74;border-radius:9999px;
+    padding:6px 12px 6px 10px;font-size:12px;font-weight:700;color:#9a3412;
+    box-shadow:0 6px 20px rgba(255,122,89,.22),0 2px 6px rgba(0,0,0,.08);
+    opacity:0;transform:scale(.85) translateY(4px);
+    animation:aPill 11s ease-out infinite;
+  }
+  .assist-pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--coral);box-shadow:0 0 0 3px rgba(252,99,107,.18)}
+  @keyframes aPill{
+    0%,18%{opacity:0;transform:scale(.85) translateY(4px)}
+    24%,78%{opacity:1;transform:scale(1) translateY(0)}
+    84%,100%{opacity:0;transform:scale(.85) translateY(4px)}
+  }
+
+  /* Suggestion panel */
+  .assist-panel{
+    background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-md);overflow:hidden;
+    opacity:0;transform:scale(.96) translateY(6px);
+    animation:aPanel 11s ease-out infinite;
+  }
+  @keyframes aPanel{
+    0%,30%{opacity:0;transform:scale(.96) translateY(6px)}
+    38%,80%{opacity:1;transform:scale(1) translateY(0)}
+    86%,100%{opacity:0;transform:scale(.96) translateY(6px)}
+  }
+  .assist-panel .ap-head{
+    padding:11px 14px;background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%);
+    border-bottom:1px solid #fdba74;font-size:12px;font-weight:700;color:#9a3412;
+    display:flex;align-items:center;gap:8px;
+  }
+  .assist-panel .ap-head .dot{width:8px;height:8px;border-radius:50%;background:var(--coral)}
+  .assist-panel .ap-sugg{
+    display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border-subtle);
+  }
+  .assist-panel .ap-sugg .sev{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+  .assist-panel .ap-sugg .sev.med{background:#ea580c}
+  .assist-panel .ap-sugg .sev.low{background:#a09a94}
+  .assist-panel .ap-sugg p{margin:0;font-size:12px;line-height:1.5;color:var(--text)}
+  .assist-panel .ap-sugg .acts{display:flex;gap:6px;margin-top:7px}
+  .assist-panel .ap-sugg .apply{
+    font-size:11px;font-weight:700;padding:4px 10px;border:none;border-radius:6px;
+    background:var(--coral);color:#fff;cursor:default;
+  }
+  .assist-panel .ap-sugg .dismiss{
+    font-size:11px;font-weight:600;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+    background:transparent;color:var(--text-2);cursor:default;
+  }
+  .assist-panel .ap-rewrite{
+    padding:10px 14px;background:var(--raised);
+  }
+  .assist-panel .ap-rewrite .rl{
+    font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;
+  }
+  .assist-panel .ap-rewrite .rw-row{display:flex;flex-wrap:wrap;gap:5px}
+  .assist-panel .ap-rewrite button{
+    font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;
+    background:var(--bg);cursor:default;font-family:inherit;
+  }
+  .assist-panel .ap-rewrite button.primary{border:1px solid #fdba74;color:#9a3412}
+  .assist-panel .ap-rewrite button.ghost{border:1px solid var(--border);color:var(--text)}
+
+  .assist-diff{
+    margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  }
+  .assist-diff .ad-card{
+    background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px 16px;font-size:13px;line-height:1.55;color:var(--text);
+  }
+  .assist-diff .ad-card .ad-label{
+    display:block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--text-3);margin-bottom:6px;
+  }
+  .assist-diff .ad-card.after{border-color:#fdba74;background:#fffaf5}
+  .assist-diff .ad-card.after .ad-label{color:#9a3412}
+
+  @media (max-width:760px){
+    .assist-stage{grid-template-columns:1fr}
+    .assist-diff{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .assist-gmail .ag-flag,.assist-pill,.assist-panel{
+      animation:none !important;opacity:1 !important;transform:none !important;
+    }
+  }
+
+  html{scroll-behavior:smooth}
+
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    .big-kanban,.bk-card,.q-card,.q-confetti i,.flow-node,.flow-arrow i,.flow-result,.sp-draft .reveal{
+      animation:none !important;opacity:1 !important;transform:none !important;
+    }
+    .sp-draft .reveal{color:var(--text);background:none;-webkit-background-clip:unset;background-clip:unset}
+    .q-card.c2,.q-card.c3{display:none}
+  }
+
+  @media (max-width:760px){
+    .mock-grid-2,.mock-grid-2.reverse{grid-template-columns:1fr}
+    .kanban{grid-template-columns:1fr}
+    .phone{width:100%;max-width:320px;margin:0 auto}
+    h1{font-size:36px}
+    section h3.lede{font-size:26px}
+    .problem-grid,.features,.steps,.underhood-wrap{grid-template-columns:1fr}
+    section{padding:56px 0}
+    header.hero{padding:64px 0 48px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Reusable Coop character. Referenced via <svg><use href="#coop-mark"/></svg> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="coop-mark" viewBox="0 0 64 64">
+      <!-- Warm gradient for the body -->
+      <defs>
+        <radialGradient id="coop-fill" cx="38%" cy="38%" r="75%">
+          <stop offset="0%" stop-color="#2A3349"/>
+          <stop offset="55%" stop-color="#1A2133"/>
+          <stop offset="100%" stop-color="#121824"/>
+        </radialGradient>
+      </defs>
+      <!-- Halo (only shown when .thinking) -->
+      <ellipse class="coop-halo" cx="32" cy="36" rx="26" ry="24" fill="none" stroke="#FC636B" stroke-width="2" opacity=".5"/>
+      <g class="coop-body">
+        <!-- Asymmetric pebble body: slightly taller on the right, rounder on bottom-left -->
+        <path d="M18 10
+                 C 9 12, 6 22, 7 32
+                 C 8 44, 13 55, 26 57
+                 C 38 59, 50 56, 55 46
+                 C 60 35, 58 20, 50 13
+                 C 42 6, 28 7, 18 10 Z"
+              fill="url(#coop-fill)" stroke="#2A3142" stroke-width="1"/>
+        <!-- Tiny antenna tuft on top (single line, minimal) -->
+        <path d="M34 8 Q35 4 38 3" stroke="#FC636B" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+        <circle cx="38" cy="2.8" r="1.4" fill="#FC636B"/>
+        <!-- Soft cheek blush on the left side (warmth) -->
+        <ellipse cx="17" cy="38" rx="5" ry="3.2" fill="#FC636B" opacity=".18"/>
+        <!-- Eyes: rounded, asymmetric tilt — right eye a hair higher -->
+        <circle class="coop-eye" cx="25" cy="32" r="3.2" fill="#F5F4F2"/>
+        <circle class="coop-eye" cx="40" cy="30.5" r="3.2" fill="#F5F4F2"/>
+        <!-- Tiny catch-light highlights in the eyes -->
+        <circle cx="26" cy="31" r=".9" fill="#1A2133" opacity=".6"/>
+        <circle cx="41" cy="29.5" r=".9" fill="#1A2133" opacity=".6"/>
+        <!-- Curious eyebrow hint over the right eye -->
+        <path class="coop-brow" d="M36 25 Q40 23 44 25" stroke="#F5F4F2" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".55"/>
+        <!-- Gentle curve smile, slightly off-center -->
+        <path d="M23 41 Q33 47 41 41" stroke="#F5F4F2" stroke-width="2" stroke-linecap="round" fill="none" opacity=".88"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<nav>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>Coop.ai</div>
+    <div>
+      <a href="#problem">Problem</a>
+      <a href="#solution">Solution</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#flow">Research</a>
+      <a href="#underhood">Under the hood</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Chrome extension, personal tool</span>
+    <h1>A personal CRM for the job search you're actually running.</h1>
+    <p class="subhead">Coop.ai auto-detects companies from any webpage, researches them, scores the fit, and tracks every opportunity through a Kanban pipeline — with an AI advisor that lives in the side panel, in the Kanban, and ambient in any field where you actually type.</p>
+    <div class="credibility"><span class="pip"></span>Built by one person. Runs entirely in your browser. No backend, no account, no data leaving the machine.</div>
+
+    <div class="mock-grid-2" style="margin-top:56px">
+      <div class="mock-note">
+        <h5>Apply Queue</h5>
+        <h3>Swipe through opportunities like a reading list.</h3>
+        <p>Every saved job lands in a personal queue, pre-scored against your preferences and annotated with the two or three things that actually matter. Pass or apply in one tap. The rest of the pipeline moves itself.</p>
+      </div>
+      <div class="mock-wrap" style="margin-top:0">
+        <div class="phone" aria-label="Apply Queue mockup">
+          <div class="swipe-card">
+            <div class="co-row">
+              <div class="logo-dot">D</div>
+              <div class="co-name">Databricks</div>
+              <div class="co-meta">7k employees</div>
+            </div>
+            <h4 class="role">Staff Product Marketing Manager</h4>
+            <div class="role-sub">San Francisco · Hybrid · $210k–$260k base</div>
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
+                <circle class="track" cx="32" cy="32" r="26"/>
+                <circle class="bar" cx="32" cy="32" r="26" stroke-dasharray="163" stroke-dashoffset="33"/>
+                <text class="ring-num" x="32" y="36" text-anchor="middle">8</text>
+                <text class="ring-slash" x="32" y="46" text-anchor="middle">/ 10</text>
+              </svg>
+              <div class="ring-verdict"><b>Strong fit</b>PLG motion, platform story matches your lane.</div>
+            </div>
+            <div class="chip-row">
+              <span class="chip good"><span class="pip"></span>PLG experience</span>
+              <span class="chip good"><span class="pip"></span>Salary above floor</span>
+              <span class="chip bad"><span class="pip"></span>Enterprise-heavy</span>
+            </div>
+          </div>
+          <div class="swipe-btns">
+            <button class="btn-pass">Pass</button>
+            <button class="btn-apply">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ Hero demo strip ═══ -->
+<div class="demo-strip" aria-label="Product filmstrip">
+  <div class="strip-label">A quick tour — five surfaces, auto-playing</div>
+  <!-- sf4 now shows Coop Assist (ambient writing) instead of company detail, which has its own section below -->
+
+  <div class="strip-stage">
+    <div class="strip-frame sf1">
+      <h6>1 · Side panel detects</h6>
+      <div class="sf-title">Databricks</div>
+      <div class="sf-row"><span class="sf-pill">linkedin.com/company/databricks</span><span class="sf-pill">auto-detected</span></div>
+      <div class="sf-row" style="margin-top:6px;color:var(--text-3)">Side panel appears. One click to research.</div>
+    </div>
+    <div class="strip-frame sf2">
+      <h6>2 · Research fills in</h6>
+      <div class="sf-title">Firmographics &amp; signals</div>
+      <div class="sf-grid">
+        <div class="sf-cell">Employees<b>7,100</b></div>
+        <div class="sf-cell">Funding<b>Series I</b></div>
+        <div class="sf-cell">Industry<b>Data / AI</b></div>
+        <div class="sf-cell">HQ<b>San Francisco</b></div>
+      </div>
+      <div class="sf-row" style="margin-top:8px"><span class="sf-pill">Leaders · 6</span><span class="sf-pill">Reviews · 4.2</span><span class="sf-pill">Jobs · 142</span></div>
+    </div>
+    <div class="strip-frame sf3">
+      <h6>3 · Saved dashboard</h6>
+      <div class="sf-title">Pipeline — Kanban</div>
+      <div class="sf-kan">
+        <div class="sf-col"><header>Interested</header>
+          <div class="sf-card">Linear</div>
+          <div class="sf-card">Vercel</div>
+        </div>
+        <div class="sf-col"><header>Applied</header>
+          <div class="sf-card">Databricks</div>
+          <div class="sf-card">Stripe</div>
+        </div>
+        <div class="sf-col"><header>Intro</header>
+          <div class="sf-card">Ramp</div>
+        </div>
+        <div class="sf-col"><header>Interview</header>
+          <div class="sf-card">Notion</div>
+        </div>
+      </div>
+    </div>
+    <div class="strip-frame sf4">
+      <h6>4 · Coop Assist — ambient</h6>
+      <div class="sf-title">Writing a reply in Gmail</div>
+      <div class="sf-row" style="color:var(--text-2);font-size:12px;line-height:1.5;max-width:520px">
+        Hi Priya, I <span style="border-bottom:1.5px dotted var(--coral)">hope this finds you well</span>. I wanted to <span style="border-bottom:1.5px dotted var(--coral)">circle back</span> on the Staff PMM role and <span style="border-bottom:1.5px dotted var(--coral)">leverage</span> our last call to keep things moving!
+      </div>
+      <div class="sf-row" style="margin-top:6px"><span class="sf-pill" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;font-weight:700">Coop · 3 ideas</span><span class="sf-pill">local heuristics</span><span class="sf-pill">voice profile</span></div>
+      <div class="sf-cell" style="margin-top:4px">Rewrite<b>In my voice · Tighten · Punchier · Warmer</b></div>
+    </div>
+    <div class="strip-frame sf5">
+      <h6>5 · Coop chat</h6>
+      <div class="sf-title" style="display:flex;align-items:center;gap:10px">
+        <svg class="coop attentive" style="width:28px;height:28px"><use href="#coop-mark"/></svg>
+        Ask Coop
+      </div>
+      <div class="sf-row" style="margin-top:4px"><span class="sf-pill">email · 4</span><span class="sf-pill">granola · 2</span><span class="sf-pill">job · 1</span><span class="sf-pill">principles · 3</span></div>
+      <div class="sf-cell" style="margin-top:6px">Coop<b>Strong fit. Their data platform story lines up with your PLG lane. Lead with the Notion case study.</b></div>
+    </div>
+    <div class="strip-bar"><i></i></div>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="wrap">
+    <h2>The problem</h2>
+    <h3 class="lede">A job search is a stack of manual workflows that don't talk to each other.</h3>
+    <p class="lede">Every active opportunity ends up scattered across half a dozen tools. The pipeline stops being current the moment things start moving, and the AI you'd ask for help has to be re-briefed on your life every single time.</p>
+
+    <div class="problem-grid">
+      <div class="pain">
+        <h4>Manual research, every time</h4>
+        <p>A new company means opening tabs across LinkedIn, Glassdoor, and the company site, trying to piece together what they do and whether they're worth pursuing. Repeat for every opportunity.</p>
+      </div>
+      <div class="pain">
+        <h4>Spreadsheets that go stale</h4>
+        <p>An Excel sheet with stages, next steps, and key players works as a snapshot and breaks down the moment things start moving. Impossible to keep current across dozens of active opportunities.</p>
+      </div>
+      <div class="pain">
+        <h4>Bookmark tools with no context</h4>
+        <p>Extensions that save job postings to apply to later, but with no research, no relationship history, and no pipeline management attached.</p>
+      </div>
+      <div class="pain">
+        <h4>ChatGPT with no memory</h4>
+        <p>Pasting Granola transcripts, screenshotting email threads, re-explaining your background — just to ask "what should I say next." The AI never has the full picture and you rebuild context every conversation.</p>
+      </div>
+      <div class="pain">
+        <h4>Free-form application questions</h4>
+        <p>Every application asks "why are you interested in this role." Answering well means synthesizing your story, the company, and why the role connects them — hours of work per application with no leverage.</p>
+      </div>
+      <div class="pain">
+        <h4>Qualification guesswork</h4>
+        <p>Trying to assess whether a company and role are a fit before investing time, based on a job description that's always an incomplete picture of the actual role.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="solution">
+  <div class="wrap">
+    <h2>The solution</h2>
+    <h3 class="lede">One surface where research, pipeline, and context live together.</h3>
+    <p class="lede">Visit a company page and the work happens automatically. Save it and it joins a pipeline that stays current. Ask Coop a question and it already knows the company, the role, your background, and the email and meeting history.</p>
+
+    <div class="features">
+      <div class="feature">
+        <span class="tag">Instant research</span>
+        <h4>Full company profile, no manual entry</h4>
+        <p>Auto-detects the company from any LinkedIn, Greenhouse, Lever, Workday, Ashby, or generic site. Pulls firmographics from Apollo, leadership and reviews from web search, and synthesizes a structured profile with Claude. Cached for 24 hours so you don't burn calls re-researching.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Pipeline management</span>
+        <h4>Kanban that stays current</h4>
+        <p>Saved companies and opportunities live as one record in a single pipeline. Drag through customizable stages, filter by stage or owner, track who the ball is on with my-court / their-court. Stage timestamps record themselves.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Coop, the advisor</span>
+        <h4>An AI that already has the context</h4>
+        <p>Coop chats with the full picture: your professional profile, the company research, the job description, fit scoring, plus every email thread, calendar event, and Granola meeting transcript tied to that company. You ask the question instead of spending twenty minutes rebuilding context.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Job fit scoring</span>
+        <h4>1–10 scoring against your real preferences</h4>
+        <p>Scores any job description against your roles, salary floors, work arrangement, and resume — modified by your own excitement rating so the verdict reflects how you actually feel, not just what the JD says.</p>
+      </div>
+    </div>
+
+    <!-- Coop chat: scoring an opportunity -->
+    <div class="mock-grid-2 reverse" style="margin-top:64px">
+      <div class="mock-wrap" style="margin-top:0">
+        <div class="chat-panel" aria-label="Coop chat scoring example">
+          <div class="chat-header">
+            <span class="coop-avatar"><svg class="coop sm"><use href="#coop-mark"/></svg></span>
+            <div class="chat-title">Coop<small>Databricks · Staff PMM</small></div>
+            <span class="chat-model">GPT-4.1 mini</span>
+          </div>
+          <div class="source-pills">
+            <span class="spill princ">operating principles</span>
+            <span class="spill job">job posting</span>
+            <span class="spill">coop memory</span>
+          </div>
+          <div class="bubble user">how's this Databricks role actually look for me?</div>
+          <div class="bubble coop">
+            Honest read: it's a real one. The platform narrative lines up with the PLG-to-enterprise work you led at your last two companies, and the scope is genuinely staff-level — they want someone owning the lakehouse positioning story end to end.
+            <div class="score-block">
+              <div class="big">8<small>/10</small></div>
+              <div class="verdict"><b>Strong fit</b>Strong on PLG motion, weak on enterprise cycles.</div>
+            </div>
+            The one thing I'd flag: the JD leans heavily on enterprise field enablement, which you told me wasn't the part of PMM you wanted more of. Worth asking about in the intro.
+          </div>
+          <span class="typing" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+      </div>
+      <div class="mock-note">
+        <h5>Context-aware scoring</h5>
+        <h3>Coop doesn't just read the JD. He remembers what you said last week.</h3>
+        <p>Every score is cited back to your operating principles, the posting itself, and anything Coop has learned about your preferences over time. You can argue with a verdict and it will update — not just the answer, but what it remembers about what you care about.</p>
+      </div>
+    </div>
+
+    <!-- Coop chat: cross-context comparison -->
+    <div class="mock-grid-2" style="margin-top:56px">
+      <div class="mock-note">
+        <h5>Full context, cited</h5>
+        <h3>Comparing opportunities across everything you've ever said about them.</h3>
+        <p>Ask Coop to compare two roles and he pulls from your email threads, meeting transcripts, the job postings, and his own memory of past conversations — with sources pinned above the answer so you always know what he's drawing on.</p>
+      </div>
+      <div class="mock-wrap" style="margin-top:0">
+        <div class="chat-panel" aria-label="Coop chat cross-context comparison">
+          <div class="chat-header">
+            <span class="coop-avatar"><svg class="coop sm thinking"><use href="#coop-mark"/></svg></span>
+            <div class="chat-title">Coop<small>Pipeline advisor</small></div>
+            <span class="chat-model">Claude Sonnet</span>
+          </div>
+          <div class="source-pills">
+            <span class="spill email">email thread</span>
+            <span class="spill granola">Granola transcript</span>
+            <span class="spill job">job posting</span>
+            <span class="spill">coop memory</span>
+          </div>
+          <div class="bubble user">Vercel vs Linear — which one should I push harder on this week?</div>
+          <div class="bubble coop">
+            Push Linear. Two reasons: your call with Isaiah on the 4th flagged real concerns about Vercel's PMM scope being "more enablement than positioning," and the follow-up thread with their recruiter went quiet after you asked about the lakehouse angle.
+            <br><br>
+            Linear is the opposite signal — Karri's transcript has her explicitly saying they need someone to own narrative, and the JD matches what you told me you wanted in February. Fit score 9 vs 7.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ Side panel drafting a Gmail reply ═══ -->
+<section id="draft">
+  <div class="wrap">
+    <h2>In the flow</h2>
+    <h3 class="lede">Coop drafts your reply with every email, meeting, and conversation you've ever had about this company.</h3>
+    <p class="lede">Open the side panel on a Gmail compose window. Coop binds to the opportunity it's related to, pulls the sources, and writes the first draft while you read.</p>
+
+    <div class="share-stage" style="margin-top:30px">
+      <div class="gmail-compose" aria-hidden="true">
+        <div class="gc-head">New message<div class="gc-dots"><i></i><i></i><i></i></div></div>
+        <div class="gc-body">
+          <div class="gc-field">To<span>Priya Natarajan &lt;priya@databricks.com&gt;</span></div>
+          <div class="gc-field">From<span>me</span></div>
+          <div class="gc-subject">Re: Following up on Staff PMM — availability next week</div>
+          <div class="gc-body-text">
+            <div class="gc-line w1"></div>
+            <div class="gc-line w2"></div>
+            <div class="gc-line w3"></div>
+            <div class="gc-line w1"></div>
+            <div class="gc-line w2"></div>
+          </div>
+          <div class="gc-footer"><span class="gc-send">Send</span></div>
+        </div>
+      </div>
+
+      <div class="sidepanel-mock" aria-label="Coop side panel drafting a reply">
+        <div class="sp-head"><span class="dot"></span>Coop.ai<small>drafting</small></div>
+        <div class="sp-binding"><span class="bind-dot"></span>Attached to: <b>Databricks · Staff PMM</b></div>
+        <div class="sp-body">
+          <div class="sp-source-row">
+            <span class="sp-source email">gmail thread · 6 messages</span>
+            <span class="sp-source granola">granola · call 4/2</span>
+            <span class="sp-source principles">operating principles</span>
+            <span class="sp-source">coop memory</span>
+          </div>
+          <div class="sp-abox">
+            <div class="sp-alabel">Coop is drafting</div>
+            <div class="sp-draft">
+              <span class="reveal">Priya — Tuesday afternoon works well. Happy to dig into the lakehouse positioning thread from our last call; I've been thinking about how the PLG motion you described could scale the enterprise story without losing the developer posture.</span><span class="cursor"></span>
+            </div>
+            <div class="sp-send-row">
+              <button class="sp-send" type="button">Send to draft</button>
+              <span class="sp-send-note">Opens in Gmail, ready to edit</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mock-caption">The draft types itself while Coop keeps the sources visible.</div>
+  </div>
+</section>
+
+<!-- ═══ Coop Assist — ambient writing ═══ -->
+<section id="assist">
+  <div class="wrap">
+    <h2>Ambient by default</h2>
+    <h3 class="lede">Coop writes with you everywhere you type.</h3>
+    <p class="lede">He already knows the company, the thread, and the way you actually sound. So he stopped waiting in the side panel. A content script runs quietly on every page — with a blocklist for banking, auth, health, and anything sensitive — and watches the field you're focused on. Gmail, LinkedIn, job applications, Slack in the browser, Notion. Anywhere you actually write.</p>
+
+    <div class="assist-stage">
+      <div class="assist-gmail" aria-label="Gmail compose with Coop Assist">
+        <div class="ag-head">New message<span><i></i><i></i><i></i></span></div>
+        <div class="ag-body">
+          <div class="ag-to">To <b>Priya Natarajan &lt;priya@databricks.com&gt;</b></div>
+          <div class="ag-subj">Re: Staff PMM — next steps</div>
+          <div class="ag-text">Hi Priya, I <span class="ag-flag f1">hope this finds you well</span>. I wanted to <span class="ag-flag f2">circle back</span> on the Staff PMM role and <span class="ag-flag f3">leverage</span> our last call to keep things moving.</div>
+          <div class="assist-pill"><span>Coop · 3 ideas</span></div>
+        </div>
+      </div>
+
+      <div class="assist-panel" aria-label="Coop Assist suggestion panel">
+        <div class="ap-head"><span class="dot"></span>Coop · 3 ideas</div>
+        <div class="ap-sugg">
+          <span class="sev med"></span>
+          <div>
+            <p>"hope this finds you well" — not your voice. Open with something specific instead.</p>
+            <div class="acts"><button class="apply">Apply</button><button class="dismiss">Dismiss</button></div>
+          </div>
+        </div>
+        <div class="ap-sugg">
+          <span class="sev med"></span>
+          <div>
+            <p>"circle back" — on your anti-phrase list. Try naming the thing directly.</p>
+            <div class="acts"><button class="apply">Apply</button><button class="dismiss">Dismiss</button></div>
+          </div>
+        </div>
+        <div class="ap-sugg">
+          <span class="sev low"></span>
+          <div>
+            <p>"leverage" — soft flag. Usually "use" does the job.</p>
+            <div class="acts"><button class="apply">Apply</button><button class="dismiss">Dismiss</button></div>
+          </div>
+        </div>
+        <div class="ap-rewrite">
+          <div class="rl">Rewrite</div>
+          <div class="rw-row">
+            <button class="primary">In my voice</button>
+            <button class="ghost">Tighten</button>
+            <button class="ghost">Punchier</button>
+            <button class="ghost">Warmer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="assist-diff">
+      <div class="ad-card"><span class="ad-label">Before</span>Hi Priya, I hope this finds you well. I wanted to circle back on the Staff PMM role and leverage our last call to keep things moving.</div>
+      <div class="ad-card after"><span class="ad-label">After — In my voice</span>Priya — following up on the Staff PMM thread. The lakehouse positioning angle from our last call is the part I keep coming back to. Tuesday afternoon works if you want to dig in.<br><br>—Matt</div>
+    </div>
+    <div class="mock-caption">Local heuristics run instantly against your voice profile. Proofread suggestions arrive on idle, cached. The rewrite button sends the field to Coop with your voice profile in the prompt.</div>
+  </div>
+</section>
+
+<!-- ═══ Watch it work (scripted CSS recording) ═══ -->
+<section class="watch" id="watch">
+  <div class="wrap">
+    <h2>Watch it work</h2>
+    <h3 class="lede">One minute in Coop.ai.</h3>
+    <p class="lede">No video, no screen recorder — this is the actual UI, choreographed. Every ~12 seconds the loop repeats.</p>
+    <div class="stage">
+      <div class="linkedin-bg" aria-hidden="true">
+        <div class="lk-head"></div>
+        <div class="lk-line w1"></div>
+        <div class="lk-line w2"></div>
+        <div class="lk-line w3"></div>
+        <div class="lk-line w4"></div>
+        <div class="lk-line w1"></div>
+        <div class="lk-line w2"></div>
+      </div>
+      <aside class="sp">
+        <div class="sp-label">Detected company</div>
+        <div class="co-name">Databricks</div>
+        <div class="spinner"></div>
+        <div class="w-field"><span>Employees</span><b>7,100</b></div>
+        <div class="w-field"><span>Funding</span><b>Series I</b></div>
+        <div class="w-field"><span>Industry</span><b>Data / AI</b></div>
+        <div class="w-field"><span>HQ</span><b>San Francisco</b></div>
+        <span class="w-chip">Research complete</span>
+        <div class="ring-slot">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <circle class="track2" cx="24" cy="24" r="20"/>
+            <circle class="bar2" cx="24" cy="24" r="20"/>
+          </svg>
+          <div><b>Fit score · 8 / 10</b><small>Strong match — PLG motion</small></div>
+        </div>
+      </aside>
+      <div class="kan-drop">
+        <header>I Want to Apply</header>
+        <b>Databricks</b>
+        <small>Staff PMM · Score 8</small>
+      </div>
+      <div class="coop-say">
+        <div class="bubble">Nice — this one fits your Operating Principles.</div>
+        <svg class="coop attentive"><use href="#coop-mark"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <h3 class="lede">Detect, research, pipeline.</h3>
+    <p class="lede">Three steps. The first two happen on a single click each. The third is where the work actually pays off.</p>
+
+    <div class="steps">
+      <div class="step">
+        <span class="num">STEP 01</span>
+        <h4>Detect</h4>
+        <p>The content script reads the page — LinkedIn profile, ATS posting, company site — and identifies the company and (when present) the job posting. Open the side panel and you see what was detected.</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 02</span>
+        <h4>Research</h4>
+        <p>Click research and the pipeline runs: Apollo for firmographics, Serper for reviews and leadership and product, Claude to synthesize a clean structured profile. Job descriptions get scored against your preferences.</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 03</span>
+        <h4>Pipeline</h4>
+        <p>Save it and it joins the Kanban. Gmail and Calendar attach relevant threads and meetings by company domain. Granola attaches meeting transcripts by participant. Coop is one click away with all of it loaded.</p>
+      </div>
+    </div>
+
+    <!-- Kanban preview + walkthrough bubble -->
+    <div class="walk-anchor" style="margin-top:52px">
+      <div class="kanban" aria-label="Kanban preview">
+        <div class="kcol">
+          <div class="kcol-head">I Want to Apply <span class="count">3</span></div>
+          <div class="kcard">
+            <div class="co">Databricks</div>
+            <div class="ti">Staff PMM</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="12"/></svg>
+              <span class="mini-score">8/10</span>
+              <span class="action-badge">My court</span>
+            </div>
+          </div>
+          <div class="kcard">
+            <div class="co">Figma</div>
+            <div class="ti">Head of Product Marketing</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="19"/></svg>
+              <span class="mini-score">7/10</span>
+              <span class="action-badge">My court</span>
+            </div>
+          </div>
+          <div class="kcard">
+            <div class="co">Notion</div>
+            <div class="ti">PMM Lead, Platform</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="9"/></svg>
+              <span class="mini-score">9/10</span>
+              <span class="action-badge">My court</span>
+            </div>
+          </div>
+        </div>
+        <div class="kcol">
+          <div class="kcol-head">Applied <span class="count">2</span></div>
+          <div class="kcard">
+            <div class="co">Vercel</div>
+            <div class="ti">Director, Product Marketing</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="19"/></svg>
+              <span class="mini-score">7/10</span>
+              <span class="action-badge theirs">Their court</span>
+            </div>
+          </div>
+          <div class="kcard">
+            <div class="co">Stripe</div>
+            <div class="ti">PMM, Platform &amp; APIs</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="15"/></svg>
+              <span class="mini-score">8/10</span>
+              <span class="action-badge theirs">Their court</span>
+            </div>
+          </div>
+        </div>
+        <div class="kcol">
+          <div class="kcol-head">Conversations in Progress <span class="count">2</span></div>
+          <div class="kcard">
+            <div class="co">Linear</div>
+            <div class="ti">Product Marketing Lead</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="6"/></svg>
+              <span class="mini-score">9/10</span>
+              <span class="action-badge">My court</span>
+            </div>
+          </div>
+          <div class="kcard">
+            <div class="co">Databricks</div>
+            <div class="ti">Staff PMM</div>
+            <div class="hover-row">
+              <svg class="mini-ring" viewBox="0 0 26 26"><circle class="t" cx="13" cy="13" r="10"/><circle class="b" cx="13" cy="13" r="10" stroke-dasharray="62.8" stroke-dashoffset="12"/></svg>
+              <span class="mini-score">8/10</span>
+              <span class="action-badge theirs">Their court</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="walk-bubble">
+        <span class="coop-badge"><svg><use href="#coop-mark"/></svg></span>
+        <b>Want me to walk you through this?</b>
+        <small>I can summarize every stage in 30 seconds.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Coop: comparing across everything -->
+<section id="context">
+  <div class="wrap">
+    <h2>Full context</h2>
+    <h3 class="lede">Coop has the whole picture in one place.</h3>
+    <p class="lede">Every signal from every tool in your job search — email threads, meeting transcripts, calendar events, company research, your operating principles — is attached to the right opportunity and ready the moment you ask.</p>
+
+    <div class="hub-wrap">
+      <div class="hub" aria-label="Coop context sources diagram">
+        <svg viewBox="0 0 560 360" preserveAspectRatio="xMidYMid meet">
+          <!-- spokes from center (280, 180) to each node -->
+          <line class="spoke" x1="280" y1="180" x2="67" y2="36"/>
+          <line class="spoke" x1="280" y1="180" x2="280" y2="22"/>
+          <line class="spoke" x1="280" y1="180" x2="482" y2="50"/>
+          <line class="spoke" x1="280" y1="180" x2="34"  y2="198"/>
+          <line class="spoke" x1="280" y1="180" x2="526" y2="209"/>
+          <line class="spoke" x1="280" y1="180" x2="157" y2="331"/>
+          <line class="spoke" x1="280" y1="180" x2="414" y2="331"/>
+        </svg>
+        <div class="hub-center">
+          <svg class="coop lg thinking"><use href="#coop-mark"/></svg>
+          <div class="label">Coop</div>
+        </div>
+        <div class="node n1">Gmail threads</div>
+        <div class="node n2">Granola transcripts</div>
+        <div class="node n3">Calendar events</div>
+        <div class="node n4">Operating Principles</div>
+        <div class="node n5">Coop Memory</div>
+        <div class="node n6">LinkedIn posts</div>
+        <div class="node n7">Saved opportunities</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Full Kanban (B) ═══ -->
+<section id="pipeline">
+  <div class="wrap">
+    <h2>Pipeline in motion</h2>
+    <h3 class="lede">The Kanban is a living picture of every opportunity you're running.</h3>
+    <p class="lede">Four columns from the real pipeline. Cards remember their fit score, their action state, and the moment they landed in each stage. Hover anything — Coop has something to say.</p>
+
+    <div class="big-kanban" aria-label="Kanban with four stages">
+      <div class="bk-col">
+        <div class="bk-head"><span><span class="stage-dot" style="background:#22d3ee"></span>I Want to Apply</span><span class="count">4</span></div>
+        <div class="bk-card"><div class="co">Linear</div><div class="ti">Product Marketing Lead</div><div class="meta"><span class="score">9/10</span><span class="abadge">My court</span></div>
+          <div class="bk-coop-whisper">Want me to research this again?</div></div>
+        <div class="bk-card"><div class="co">Figma</div><div class="ti">Head of Product Marketing</div><div class="meta"><span class="score">7/10</span><span class="abadge">My court</span></div></div>
+        <div class="bk-card"><div class="co">Notion</div><div class="ti">PMM Lead, Platform</div><div class="meta"><span class="score">8/10</span><span class="abadge">My court</span></div></div>
+        <div class="bk-card"><div class="co">Ramp</div><div class="ti">Senior PMM</div><div class="meta"><span class="score">7/10</span><span class="abadge">My court</span></div></div>
+      </div>
+      <div class="bk-col">
+        <div class="bk-head"><span><span class="stage-dot" style="background:#60a5fa"></span>Applied</span><span class="count">3</span></div>
+        <div class="bk-card pulse"><div class="co">Databricks</div><div class="ti">Staff PMM</div><div class="meta"><span class="score">8/10</span><span class="abadge t">Their court</span></div>
+          <div class="bk-coop-whisper">New email from Priya — want a summary?</div></div>
+        <div class="bk-card"><div class="co">Vercel</div><div class="ti">Director, Product Marketing</div><div class="meta"><span class="score">7/10</span><span class="abadge t">Their court</span></div></div>
+        <div class="bk-card"><div class="co">Stripe</div><div class="ti">PMM, Platform &amp; APIs</div><div class="meta"><span class="score">8/10</span><span class="abadge t">Their court</span></div></div>
+      </div>
+      <div class="bk-col">
+        <div class="bk-head"><span><span class="stage-dot" style="background:#fb923c"></span>Conversations in Progress</span><span class="count">3</span></div>
+        <div class="bk-card"><div class="co">Linear</div><div class="ti">Product Marketing Lead</div><div class="meta"><span class="score">9/10</span><span class="abadge">My court</span></div></div>
+        <div class="bk-card"><div class="co">Plaid</div><div class="ti">PMM, Developer Platform</div><div class="meta"><span class="score">8/10</span><span class="abadge t">Their court</span></div></div>
+        <div class="bk-card"><div class="co">Retool</div><div class="ti">PMM Lead</div><div class="meta"><span class="score">7/10</span><span class="abadge">My court</span></div></div>
+      </div>
+      <div class="bk-col">
+        <div class="bk-head"><span><span class="stage-dot" style="background:#a3e635"></span>Offer Stage</span><span class="count">1</span></div>
+        <div class="bk-card"><div class="co">Anthropic</div><div class="ti">Product Marketing, Claude</div><div class="meta"><span class="score">9/10</span><span class="abadge">My court</span></div>
+          <div class="bk-coop-whisper">Counter the base, the equity is already at their ceiling.</div></div>
+      </div>
+    </div>
+    <div class="mock-caption">Real stages. Cards slide in as the board loads; the one in Applied just got a new touch.</div>
+  </div>
+</section>
+
+<!-- ═══ Apply Queue loop (C) ═══ -->
+<section id="queue">
+  <div class="wrap">
+    <h2>Apply Queue</h2>
+    <h3 class="lede">Triage the next twelve opportunities without thinking about it.</h3>
+    <p class="lede">Every saved role queues up pre-scored. Swipe through them like a reading list — pass or apply, one tap each, pipeline moves itself.</p>
+
+    <div class="queue-stage" aria-label="Apply queue swipe loop">
+      <div class="q-counter">Queue: <b>12 left</b></div>
+      <div class="q-phone">
+        <div class="q-card c1">
+          <div class="logo" style="background:linear-gradient(135deg,#FC636B,#F5A623)">D</div>
+          <div class="co">Databricks</div>
+          <div class="role">Staff Product Marketing Manager</div>
+          <div class="meta">San Francisco · Hybrid · $210k–$260k</div>
+          <div class="score-row">
+            <div class="score-big">8<small>/10</small></div>
+            <div class="score-text"><b>Strong fit</b>PLG motion maps to your lane.</div>
+          </div>
+          <div class="tags"><span>PLG experience</span><span>Above floor</span><span>Enterprise-heavy</span></div>
+          <div class="q-btns"><button class="pass">Pass</button><button class="apply">Apply</button></div>
+        </div>
+        <div class="q-card c2">
+          <div class="logo" style="background:linear-gradient(135deg,#7C6EF0,#4573D2)">L</div>
+          <div class="co">Linear</div>
+          <div class="role">Product Marketing Lead</div>
+          <div class="meta">Remote · $200k–$240k</div>
+          <div class="score-row">
+            <div class="score-big">9<small>/10</small></div>
+            <div class="score-text"><b>Exceptional fit</b>Narrative-first PMM, remote-first team.</div>
+          </div>
+          <div class="tags"><span>Narrative PMM</span><span>Remote</span><span>Small team</span></div>
+          <div class="q-btns"><button class="pass">Pass</button><button class="apply">Apply</button></div>
+        </div>
+        <div class="q-card c3">
+          <div class="logo" style="background:linear-gradient(135deg,#36B37E,#4573D2)">V</div>
+          <div class="co">Vercel</div>
+          <div class="role">Director, Product Marketing</div>
+          <div class="meta">SF / Remote · $230k–$280k</div>
+          <div class="score-row">
+            <div class="score-big" style="color:var(--amber)">7<small>/10</small></div>
+            <div class="score-text"><b>Decent fit</b>Scope reads more enablement than positioning.</div>
+          </div>
+          <div class="tags"><span>Developer brand</span><span>Above floor</span><span>Leadership role</span></div>
+          <div class="q-btns"><button class="pass">Pass</button><button class="apply">Apply</button></div>
+        </div>
+        <div class="q-confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <div class="mock-caption">Loop of three cards — in real life it's as many as you've saved.</div>
+  </div>
+</section>
+
+<!-- ═══ Research pipeline flow (D) ═══ -->
+<section id="flow">
+  <div class="wrap">
+    <h2>Research pipeline</h2>
+    <h3 class="lede">One click. Three providers. One clean profile.</h3>
+    <p class="lede">Every research click runs an API chain — Apollo for firmographics, Serper for the public web, Claude to synthesize the noise into something structured. Results cache for 24 hours so you don't pay twice.</p>
+
+    <div class="flow-stage" aria-label="Data pipeline animation">
+      <div class="flow-query"><span>Researching</span><b>Databricks</b></div>
+      <div class="flow-row">
+        <div class="flow-node"><div class="provider">Apollo</div><div class="what">Firmographics, leaders</div></div>
+        <div class="flow-node"><div class="provider">Serper</div><div class="what">Reviews, jobs, product</div></div>
+        <div class="flow-node"><div class="provider">Claude Haiku</div><div class="what">Synthesis</div></div>
+        <div class="flow-arrow a1"><i></i></div>
+        <div class="flow-arrow a2"><i></i></div>
+      </div>
+      <div class="flow-result">
+        <div class="fr-cell">Employees<b>7,100</b></div>
+        <div class="fr-cell">Funding<b>Series I · $3.5B</b></div>
+        <div class="fr-cell">Leaders<b>6 identified</b></div>
+        <div class="fr-cell">Recent news<b>Q1 earnings beat</b></div>
+      </div>
+      <div class="flow-cost">cost: <b>$0.03</b> · cached 24h</div>
+    </div>
+    <div class="mock-caption">Every research click is one API chain. Coop caches results for 24 hours so you don't pay twice.</div>
+  </div>
+</section>
+
+<!-- ═══ Company detail 3-col (E) ═══ -->
+<section id="detail">
+  <div class="wrap">
+    <h2>Company detail</h2>
+    <h3 class="lede">Everything Coop knows about one opportunity, on one page.</h3>
+    <p class="lede">Overview and firmographics on the left. Fit analysis and intel in the middle. Coop on the right, already loaded with the email and meeting history.</p>
+
+    <div class="detail-preview" aria-label="Full-screen company detail preview">
+      <div class="dp-head">
+        <div class="dp-logo">D</div>
+        <div class="dp-name">Databricks<small>Staff Product Marketing Manager</small></div>
+        <div class="dp-stage">Applied · Their court</div>
+      </div>
+      <div class="dp-cols">
+        <div class="dp-col">
+          <h5>Overview</h5>
+          <div class="dp-kv"><span>Employees</span><b>7,100</b></div>
+          <div class="dp-kv"><span>Funding</span><b>Series I</b></div>
+          <div class="dp-kv"><span>HQ</span><b>San Francisco</b></div>
+          <div class="dp-kv"><span>Industry</span><b>Data / AI</b></div>
+          <h5>Leaders</h5>
+          <ul class="dp-list">
+            <li><b>Ali Ghodsi</b>CEO &amp; co-founder</li>
+            <li><b>Priya Natarajan</b>VP Product Marketing</li>
+            <li><b>Reynold Xin</b>Chief Architect</li>
+          </ul>
+        </div>
+        <div class="dp-col">
+          <h5>Job match analysis</h5>
+          <div class="dp-score">
+            <div class="big">8<small>/10</small></div>
+            <div class="txt"><b>Strong fit</b>PLG motion and platform narrative match your lane. One flag on enterprise-cycle weight.</div>
+          </div>
+          <h5>Company intel</h5>
+          <ul class="dp-list">
+            <li><b>Platform bet</b>Lakehouse positioning is the main 2026 story — your PLG-to-enterprise playbook lines up here.</li>
+            <li><b>Recent hire</b>New VP of PMM in January, still staffing her org.</li>
+            <li><b>Culture signal</b>Glassdoor trends show leadership churn in GTM through 2025.</li>
+          </ul>
+        </div>
+        <div class="dp-col">
+          <h5>Coop</h5>
+          <div class="dp-chat-msg user">What should I lead with in the intro call?</div>
+          <div class="dp-chat-msg">Lead with the Notion case study — Priya's LinkedIn posts have been explicitly about narrative-first PMM, and your Notion rollout is the closest parallel in your portfolio. Skip the PLG metrics deck, she's already sold on that part.</div>
+          <div class="dp-chat-msg user">Sources?</div>
+          <div class="dp-chat-msg">Gmail thread (6), LinkedIn posts (4/1, 4/3), operating principles, Granola call 4/2.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Pipeline advisor (F) ═══ -->
+<section id="advisor">
+  <div class="wrap">
+    <h2>Pipeline advisor</h2>
+    <h3 class="lede">Ask Coop about the whole pipeline at once.</h3>
+    <p class="lede">Outside any individual opportunity, Coop can reason across all of them — which ones are moving, which have gone quiet, which ones you should push this week.</p>
+
+    <div class="mock-wrap" style="justify-content:center">
+      <div class="chat-panel" aria-label="Pipeline advisor example" style="max-width:600px">
+        <div class="chat-header">
+          <span class="coop-avatar"><svg class="coop sm thinking"><use href="#coop-mark"/></svg></span>
+          <div class="chat-title">Coop<small>Pipeline advisor · all opportunities</small></div>
+          <span class="chat-model">Claude Sonnet</span>
+        </div>
+        <div class="source-pills">
+          <span class="spill email">14 email threads</span>
+          <span class="spill granola">8 transcripts</span>
+          <span class="spill">pipeline state</span>
+          <span class="spill princ">operating principles</span>
+        </div>
+        <div class="bubble user">Which of my opportunities has the best momentum right now?</div>
+        <div class="bubble coop">
+          Three in order:
+          <div class="score-block" style="flex-direction:column;align-items:flex-start;gap:8px">
+            <div style="display:flex;gap:12px;align-items:center;width:100%"><b style="color:var(--teal);font-size:13px">1. Linear</b><span style="font-size:12px;color:var(--text-2)">Karri replied in under 2 hours, moved you to the working session stage. Fit 9.</span></div>
+            <div style="display:flex;gap:12px;align-items:center;width:100%"><b style="color:var(--blue);font-size:13px">2. Databricks</b><span style="font-size:12px;color:var(--text-2)">Priya's note today references the specific case study you pitched. Fit 8.</span></div>
+            <div style="display:flex;gap:12px;align-items:center;width:100%"><b style="color:var(--amber);font-size:13px">3. Anthropic</b><span style="font-size:12px;color:var(--text-2)">Offer on the table but comp is below floor — still worth pressing. Fit 9.</span></div>
+          </div>
+          Vercel went quiet eight days ago after you asked about scope. I'd let that one cool unless you want me to draft a bump.
+        </div>
+        <span class="typing" aria-hidden="true"><span></span><span></span><span></span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="underhood">
+  <div class="wrap">
+    <h2>Under the hood</h2>
+    <h3 class="lede">Local-first, no backend, no build step.</h3>
+
+    <div class="underhood-wrap">
+      <div class="underhood-prose">
+        <p>Coop.ai is a <strong>Manifest V3 Chrome extension</strong>. There is no server. There is no account. There is no build pipeline. All data lives in <strong>chrome.storage.local</strong> on your machine. API keys are stored locally and entered once through the in-extension Integrations page.</p>
+        <p>A service worker mediates every external call. The UI surfaces — content script, side panel, saved dashboard, company detail view, opportunity detail view — communicate with it through message passing. All side effects route through one place, which keeps the surface area small enough that one person can hold the whole thing in their head.</p>
+        <p>Chat is fault-tolerant by design. The model fallback chain cycles providers automatically when one fails:</p>
+        <div class="chain">
+          <b>GPT-4.1 mini</b> &nbsp;&rarr;&nbsp; <b>Claude Haiku</b> &nbsp;&rarr;&nbsp; <b>Claude Sonnet</b> &nbsp;&rarr;&nbsp; <b>GPT-4.1</b>
+        </div>
+      </div>
+
+      <div class="specs">
+        <h4>Stack</h4>
+        <ul>
+          <li><span>Platform</span><span>Chrome MV3</span></li>
+          <li><span>Backend</span><span>None</span></li>
+          <li><span>Storage</span><span>chrome.storage.local</span></li>
+          <li><span>Build step</span><span>None</span></li>
+          <li><span>Research</span><span>Apollo + Serper</span></li>
+          <li><span>LLMs</span><span>Claude + OpenAI</span></li>
+          <li><span>Email</span><span>Gmail OAuth</span></li>
+          <li><span>Meetings</span><span>Calendar + Granola</span></li>
+          <li><span>Auth</span><span>chrome.identity</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Coop.ai isn't a product. It's a personal tool I built for my own job search and decided to show off.</p>
+    <p>No waitlist, no signup, no roadmap to please.</p>
+    <p class="sig">— Matt Sterbenz</p>
+  </div>
+</footer>
+
+</body>
+</html>

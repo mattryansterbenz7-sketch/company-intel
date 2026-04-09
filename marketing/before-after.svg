@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" font-family="-apple-system, 'Segoe UI', Inter, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8A8E94"/>
+    </marker>
+    <marker id="arr-coral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#FC636B"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="560" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="40" y="44" font-size="18" font-weight="600" fill="#0A0B0D" letter-spacing="-0.3">The job-search stack, before and after</text>
+  <text x="40" y="64" font-size="12" fill="#6F7782">Six tools that don't talk to each other, replaced by one surface that does.</text>
+
+  <!-- ============ BEFORE (left) ============ -->
+  <text x="60" y="106" font-size="11" font-weight="600" fill="#8A8E94" letter-spacing="1.2">BEFORE</text>
+  <rect x="40" y="116" width="430" height="404" rx="14" fill="#F6F8F9" stroke="#E0E4E8" stroke-width="1.5"/>
+
+  <!-- "You" node center-bottom -->
+  <circle cx="255" cy="460" r="34" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5"/>
+  <text x="255" y="458" font-size="12" font-weight="600" fill="#0A0B0D" text-anchor="middle">You</text>
+  <text x="255" y="473" font-size="9" fill="#8A8E94" text-anchor="middle">context juggler</text>
+
+  <!-- Six scattered tools -->
+  <g font-size="12" font-weight="600" fill="#0A0B0D">
+    <!-- Excel -->
+    <rect x="68" y="148" width="118" height="56" rx="8" fill="#FFFFFF" stroke="#E0E4E8"/>
+    <text x="127" y="174" text-anchor="middle">Excel</text>
+    <text x="127" y="190" font-size="10" font-weight="400" fill="#6F7782" text-anchor="middle">stale pipeline</text>
+
+    <!-- Teal -->
+    <rect x="200" y="138" width="118" height="56" rx="8" fill="#FFFFFF" stroke="#E0E4E8"/>
+    <text x="259" y="164" text-anchor="middle">Teal</text>
+    <text x="259" y="180" font-size="10" font-weight="400" fill="#6F7782" text-anchor="middle">bookmarks, no context</text>
+
+    <!-- ChatGPT -->
+    <rect x="332" y="148" width="118" height="56" rx="8" fill="#FFFFFF" stroke="#E0E4E8"/>
+    <text x="391" y="174" text-anchor="middle">ChatGPT</text>
+    <text x="391" y="190" font-size="10" font-weight="400" fill="#6F7782" text-anchor="middle">no memory</text>
+
+    <!-- Granola -->
+    <rect x="68" y="240" width="118" height="56" rx="8" fill="#FFFFFF" stroke="#E0E4E8"/>
+    <text x="127" y="266" text-anchor="middle">Granola</text>
+    <text x="127" y="282" font-size="10" font-weight="400" fill="#6F7782" text-anchor="middle">transcripts elsewhere</text>
+
+    <!-- Gmail -->
+    <rect x="200" y="250" width="118" height="56" rx="8" fill="#FFFFFF" stroke="#E0E4E8"/>
+    <text x="259" y="276" text-anchor="middle">Gmail</text>
+    <text x="259" y="292" font-size="10" font-weight="400" fill="#6F7782" text-anchor="middle">threads to dig up</text>
+
+    <!-- Glassdoor -->
+    <rect x="332" y="240" width="118" height="56" rx="8" fill="#FFFFFF" stroke="#E0E4E8"/>
+    <text x="391" y="266" text-anchor="middle">Glassdoor</text>
+    <text x="391" y="282" font-size="10" font-weight="400" fill="#6F7782" text-anchor="middle">manual research</text>
+  </g>
+
+  <!-- Tangled arrows from "You" to each tool (deliberately criss-crossing) -->
+  <g stroke="#8A8E94" stroke-width="1.2" fill="none">
+    <path d="M255 426 C 200 360, 100 280, 127 204" marker-end="url(#arr)"/>
+    <path d="M255 426 C 270 380, 240 240, 259 194" marker-end="url(#arr)"/>
+    <path d="M255 426 C 310 360, 420 290, 391 204" marker-end="url(#arr)"/>
+    <path d="M255 426 C 180 400, 100 360, 127 296" marker-end="url(#arr)"/>
+    <path d="M255 426 C 255 380, 255 340, 259 306" marker-end="url(#arr)"/>
+    <path d="M255 426 C 330 400, 410 360, 391 296" marker-end="url(#arr)"/>
+  </g>
+
+  <text x="255" y="510" font-size="11" fill="#6F7782" text-anchor="middle" font-style="italic">Re-explain context to each tool, every time.</text>
+
+  <!-- ============ Arrow between ============ -->
+  <g>
+    <line x1="490" y1="318" x2="540" y2="318" stroke="#FC636B" stroke-width="2" marker-end="url(#arr-coral)"/>
+  </g>
+
+  <!-- ============ AFTER (right) ============ -->
+  <text x="580" y="106" font-size="11" font-weight="600" fill="#8A8E94" letter-spacing="1.2">AFTER</text>
+  <rect x="560" y="116" width="380" height="404" rx="14" fill="#F6F8F9" stroke="#E0E4E8" stroke-width="1.5"/>
+
+  <!-- One unified box -->
+  <rect x="600" y="172" width="300" height="232" rx="14" fill="#151B26"/>
+  <rect x="600" y="172" width="300" height="6" rx="3" fill="#FC636B"/>
+
+  <text x="750" y="208" font-size="11" font-weight="600" fill="#A3AEBE" text-anchor="middle" letter-spacing="1">CHROME EXTENSION</text>
+  <text x="750" y="238" font-size="20" font-weight="600" fill="#F5F4F2" text-anchor="middle" letter-spacing="-0.3">Coop.ai</text>
+  <text x="750" y="258" font-size="11" fill="#A3AEBE" text-anchor="middle">one surface, full context</text>
+
+  <!-- Inner pills -->
+  <g font-size="10.5" fill="#F5F4F2">
+    <rect x="618" y="282" width="120" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="678" y="297" text-anchor="middle">Auto research</text>
+
+    <rect x="746" y="282" width="138" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="815" y="297" text-anchor="middle">Kanban pipeline</text>
+
+    <rect x="618" y="312" width="120" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="678" y="327" text-anchor="middle">Fit scoring</text>
+
+    <rect x="746" y="312" width="138" height="22" rx="11" fill="#1F2A3C" stroke="#2A3650"/>
+    <text x="815" y="327" text-anchor="middle">Email + meetings</text>
+
+    <rect x="678" y="342" width="144" height="26" rx="13" fill="#FC636B"/>
+    <text x="750" y="359" text-anchor="middle" font-weight="600" fill="#FFFFFF">Coop, with full context</text>
+  </g>
+
+  <!-- "You" node bottom -->
+  <circle cx="750" cy="460" r="34" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5"/>
+  <text x="750" y="458" font-size="12" font-weight="600" fill="#0A0B0D" text-anchor="middle">You</text>
+  <text x="750" y="473" font-size="9" fill="#8A8E94" text-anchor="middle">ask the question</text>
+
+  <!-- Single clean arrow -->
+  <line x1="750" y1="426" x2="750" y2="406" stroke="#36B37E" stroke-width="2" marker-end="url(#arr)"/>
+
+  <text x="750" y="510" font-size="11" fill="#6F7782" text-anchor="middle" font-style="italic">Context is already there. You just ask.</text>
+
+</svg>
