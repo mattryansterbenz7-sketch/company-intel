@@ -1,10 +1,50 @@
 // preferences.js — Career OS preferences editor
 
+// ── Coop thinking animation ───────────────────────────────────────────────────
+let _coopThinkingCount = 0;
+function setCoopThinking(active, label = 'Working on it') {
+  const svg     = document.querySelector('.coop-bar svg');
+  const roleEl  = document.querySelector('.coop-bar-role');
+  if (!svg || !roleEl) return;
+  _coopThinkingCount = Math.max(0, _coopThinkingCount + (active ? 1 : -1));
+  if (_coopThinkingCount > 0) {
+    svg.classList.add('coop-thinking');
+    roleEl.innerHTML = `${label}<span class="coop-thinking-dots"><span></span><span></span><span></span></span>`;
+  } else {
+    svg.classList.remove('coop-thinking');
+    roleEl.textContent = 'Your co-operator';
+  }
+}
+
 // ── Coop model config (loaded once at startup) ───────────────────────────────
 let _coopModels = {};
 chrome.storage.local.get(['pipelineConfig'], d => {
   if (d.pipelineConfig?.aiModels) _coopModels = d.pipelineConfig.aiModels;
 });
+
+// ── API cost badge ────────────────────────────────────────────────────────────
+function refreshCostBadge() {
+  chrome.runtime.sendMessage({ type: 'GET_API_USAGE' }, usage => {
+    void chrome.runtime.lastError;
+    if (!usage) return;
+    const today = new Date().toISOString().slice(0, 10);
+    let total = 0;
+    for (const provider of ['anthropic', 'openai']) {
+      const pd = usage[provider];
+      if (!pd?.dailyHistory) continue;
+      const day = pd.dailyHistory.find(d => d.date === today);
+      if (day?.estimatedCost) total += day.estimatedCost;
+    }
+    const badge = document.getElementById('api-cost-badge');
+    if (!badge) return;
+    if (total > 0) {
+      badge.textContent = `~$${total.toFixed(3)} today`;
+      badge.style.display = '';
+      badge.style.color = total > 1 ? 'var(--ci-accent-red)' : total > 0.25 ? '#854F0B' : 'var(--ci-text-tertiary)';
+    }
+  });
+}
+refreshCostBadge();
 
 // ── Storage helpers ──────────────────────────────────────────────────────────
 
@@ -43,6 +83,7 @@ function saveSyncPrefs(showConfirm = true) {
   chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
     void chrome.runtime.lastError;
     const prefs = Object.assign({}, existing || {}, {
+      name:              document.getElementById('pref-name')?.value.trim() || existing?.name || '',
       jobMatchEnabled:   document.getElementById('pref-job-match-toggle').checked,
       linkedinUrl:       document.getElementById('link-linkedin').value.trim(),
       workArrangement:   [...document.querySelectorAll('input[name="work-arr"]:checked')].map(el => el.value),
@@ -314,6 +355,7 @@ function initCoopSummarize() {
       const content = ta.value.trim();
       if (!content) { btn.textContent = 'Nothing to summarize — add content first'; setTimeout(() => btn.textContent = 'Have Coop summarize', 2500); return; }
       btn.disabled = true;
+      setCoopThinking(true, 'Summarizing');
       btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is summarizing...';
       try {
         const result = await new Promise((resolve, reject) => {
@@ -336,6 +378,7 @@ function initCoopSummarize() {
       } catch (err) {
         console.error('[CoopSummarize] Error:', err);
       }
+      setCoopThinking(false);
       btn.disabled = false;
       btn.textContent = 'Have Coop summarize';
     });
@@ -794,7 +837,27 @@ function saveStages() {
 
 // ── Structured profile migration ─────────────────────────────────────────────
 
-const STRUCTURED_CATEGORIES = ['role_type', 'industry', 'culture', 'product', 'team_structure', 'comp', 'location', 'other'];
+const STRUCTURED_CATEGORIES = [
+  { key: 'culture',        label: 'Culture & Values',   color: '#7c3aed',
+    tip: 'Coop scans Glassdoor reviews, leadership bio language, and JD culture signals ("ownership", "grit", "hustle", "process-heavy") for these flags.' },
+  { key: 'role_type',      label: 'Role & Scope',        color: '#2563eb',
+    tip: 'Coop reads job titles, reporting lines, decision-making authority language, and scope descriptors in the JD (e.g. "player-coach", "IC", "full P&L").' },
+  { key: 'comp',           label: 'Compensation',        color: '#059669',
+    tip: 'Coop cross-checks posted salary ranges, equity language, and benefits against your floors. Keywords trigger automatic flags even when salary is inferred.' },
+  { key: 'product',        label: 'Product & Market',    color: '#d97706',
+    tip: 'Coop checks the company\'s product category, market segment, and value prop — useful for filtering commodity products or undifferentiated markets.' },
+  { key: 'industry',       label: 'Industry',            color: '#0d9488',
+    tip: 'Matched against company research tags (industry/vertical from Apollo or web research). "HR Tech" flags a company categorized in that vertical.' },
+  { key: 'team_structure', label: 'Team & Leadership',   color: '#9333ea',
+    tip: 'Coop looks at team size signals, management layers, reporting structure language, and leadership patterns (founder-led, PE-backed, committee-driven, etc.).' },
+  { key: 'location',       label: 'Location & Travel',   color: '#6b7280',
+    tip: 'Cross-checked against your work arrangement preference and max travel. Flags on-site-only roles when you want remote, or heavy travel requirements.' },
+  { key: 'other',          label: 'Other',               color: '#94a3b8',
+    tip: 'Anything that doesn\'t fit a standard category. Coop still scans for keywords — just no category-specific scoring logic applied.' },
+];
+// Lookup helpers
+const CAT_BY_KEY = Object.fromEntries(STRUCTURED_CATEGORIES.map(c => [c.key, c]));
+function getCatMeta(key) { return CAT_BY_KEY[key] || { key, label: key.replace(/_/g,' '), color: '#94a3b8', tip: '' }; }
 
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -907,38 +970,68 @@ function renderStructuredList(containerId, storageKey, entries, opts = {}) {
     return;
   }
 
-  // Sort by severity descending (highest priority first)
-  const sorted = [...entries].sort((a, b) => {
-    const sevA = typeof a.severity === 'number' ? a.severity : (a.severity === 'hard' ? 4 : 2);
-    const sevB = typeof b.severity === 'number' ? b.severity : (b.severity === 'hard' ? 4 : 2);
-    return sevB - sevA;
-  });
-
   const isGreen = storageKey === 'profileAttractedTo';
-  listEl.innerHTML = sorted.map(entry => {
-    const sev = typeof entry.severity === 'number' ? entry.severity : (entry.severity === 'hard' ? 4 : 2);
-    const greenColors = ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'];
-    const redColors = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-    const greenLabels = ['Nice Perk','Good Signal','Strong Draw','Huge Benefit','Dream Factor'];
-    const redLabels = ['Minor','Preference','Notable','Dealbreaker','Hard Stop'];
-    const colors = isGreen ? greenColors : redColors;
-    const labels = isGreen ? greenLabels : redLabels;
-    return `
-    <div class="structured-entry" data-id="${entry.id}">
-      <div class="entry-content">
-        <div class="entry-badges">
-          <span class="entry-category-badge">${escHtml(entry.category || 'other')}</span>
-          <span class="entry-severity-badge" style="background:${colors[sev-1]};color:#fff;font-size:9px;padding:2px 7px;border-radius:4px;font-weight:700;">${sev} · ${labels[sev-1]}</span>
+  const greenColors = ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'];
+  const redColors   = ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
+  const greenLabels = ['Nice perk','Good signal','Strong draw','Huge benefit','Dream factor'];
+  const redLabels   = ['Minor','Preference','Notable','Serious concern','Disqualifier'];
+  const sevColors = isGreen ? greenColors : redColors;
+  const sevLabels = isGreen ? greenLabels : redLabels;
+
+  // Group by category, sort each group by severity desc
+  const groups = {};
+  entries.forEach(e => {
+    const k = e.category || 'other';
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(e);
+  });
+  Object.values(groups).forEach(arr => arr.sort((a, b) => {
+    const sa = typeof a.severity === 'number' ? a.severity : 2;
+    const sb = typeof b.severity === 'number' ? b.severity : 2;
+    return sb - sa;
+  }));
+
+  // Render in canonical category order, unknown cats appended at end
+  const catOrder = STRUCTURED_CATEGORIES.map(c => c.key);
+  const orderedKeys = [...catOrder.filter(k => groups[k]), ...Object.keys(groups).filter(k => !catOrder.includes(k))];
+
+  listEl.innerHTML = orderedKeys.map(catKey => {
+    const meta = getCatMeta(catKey);
+    const groupEntries = groups[catKey];
+    const maxSev = Math.max(...groupEntries.map(e => typeof e.severity === 'number' ? e.severity : 2));
+
+    const entriesHtml = groupEntries.map(entry => {
+      const sev = typeof entry.severity === 'number' ? entry.severity : 2;
+      const sevDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${sevColors[sev-1]};flex-shrink:0;" title="Priority ${sev} — ${sevLabels[sev-1]}"></span>`;
+      return `
+      <div class="structured-entry" data-id="${entry.id}">
+        <div class="entry-content">
+          <div style="display:flex;align-items:flex-start;gap:7px;">
+            ${sevDot}
+            <div style="flex:1;min-width:0;">
+              <div class="entry-text" style="margin:0;">${escHtml(entry.text)}</div>
+              ${entry.keywords?.length ? `<div class="entry-keywords" style="margin-top:4px;">${entry.keywords.map(k => `<span class="keyword-pill">${escHtml(k)}</span>`).join('')}</div>` : ''}
+            </div>
+          </div>
+          <div style="font-size:10px;color:${sevColors[sev-1]};font-weight:700;margin-top:3px;padding-left:15px;">${sevLabels[sev-1]}</div>
         </div>
-        <div class="entry-text">${escHtml(entry.text)}</div>
-        ${entry.keywords?.length ? `<div class="entry-keywords">${entry.keywords.map(k => `<span class="keyword-pill">${escHtml(k)}</span>`).join('')}</div>` : ''}
+        <div class="entry-actions">
+          <button class="entry-edit-btn" title="Edit">&#9998;</button>
+          <button class="entry-delete-btn" title="Delete">&times;</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="flag-category-group" data-cat="${catKey}">
+      <div class="flag-category-header" title="${escHtml(meta.tip)}">
+        <span class="flag-cat-dot" style="background:${meta.color}"></span>
+        <span class="flag-cat-label" style="color:${meta.color}">${meta.label}</span>
+        <span class="flag-cat-count">${groupEntries.length}</span>
+        <span class="flag-cat-tip-icon" title="${escHtml(meta.tip)}">?</span>
       </div>
-      <div class="entry-actions">
-        <button class="entry-edit-btn" title="Edit">&#9998;</button>
-        <button class="entry-delete-btn" title="Delete">&times;</button>
-      </div>
-    </div>
-  `;
+      ${entriesHtml}
+    </div>`;
   }).join('');
 
   // Wire up delete buttons
@@ -985,18 +1078,18 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
   }
 
   const catOptions = STRUCTURED_CATEGORIES.map(c =>
-    `<option value="${c}" ${editEntry?.category === c ? 'selected' : ''}>${c.replace(/_/g, ' ')}</option>`
+    `<option value="${c.key}" ${editEntry?.category === c.key ? 'selected' : ''}>${c.label}</option>`
   ).join('');
 
   formWrap.innerHTML = `
     <div class="entry-form">
       <textarea class="field-input entry-form-text" placeholder="Describe this signal..." rows="2">${escHtml(editEntry?.text || '')}</textarea>
-      <div class="entry-form-row">
-        <select class="field-input entry-form-category">${catOptions}</select>
+      <div class="entry-form-row" style="flex-wrap:wrap;gap:6px;">
+        <select class="field-input entry-form-category" style="flex:1;min-width:140px;">${catOptions}</select>
         ${opts.showSeverity ? (() => {
           const isGreenForm = storageKey === 'profileAttractedTo';
           const sevColors = isGreenForm ? ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'] : ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-          const sevLabels = isGreenForm ? ['nice perk','good signal','strong draw','huge benefit','dream factor'] : ['minor','preference','notable','dealbreaker','hard stop'];
+          const sevLabels = isGreenForm ? ['nice perk','good signal','strong draw','huge benefit','dream factor'] : ['minor','preference','notable','serious concern','disqualifier'];
           const current = editEntry?.severity ?? 2;
           const numSev = typeof current === 'number' ? current : (current === 'hard' ? 4 : 2);
           return `
@@ -1023,20 +1116,31 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
       <div class="entry-form-row">
         <input type="text" class="field-input entry-form-keywords" placeholder="Keywords (comma-separated, e.g. grit, hustle)" value="${escHtml((editEntry?.keywords || []).join(', '))}">
       </div>
+      <label style="font-size:11px;color:var(--ci-text-secondary);display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0;">
+        <input type="checkbox" class="entry-unknown-neutral" ${editEntry?.unknownNeutral !== false ? 'checked' : ''}>
+        If not confirmed in job data = neutral <span style="color:var(--ci-text-tertiary)">(no score impact, Coop won't mention it)</span>
+      </label>
       <div class="entry-form-actions">
         <button class="entry-form-save">${editEntry ? 'Update' : 'Add'}</button>
         <button class="entry-form-cancel">Cancel</button>
       </div>
     </div>`;
 
-  // Show/hide comp threshold when category changes
+  // Category hint line — show what Coop scans for the selected category
   const catSelect = formWrap.querySelector('.entry-form-category');
   const compRow = formWrap.querySelector('.comp-threshold-row');
-  if (catSelect && compRow) {
-    catSelect.addEventListener('change', () => {
-      compRow.style.display = (storageKey === 'profileDealbreakers' && catSelect.value === 'comp') ? 'flex' : 'none';
-    });
-  }
+
+  const catHint = document.createElement('div');
+  catHint.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);line-height:1.4;margin-top:2px;padding:0 2px;';
+  catSelect?.parentNode.insertAdjacentElement('afterend', catHint);
+
+  const updateCatHint = () => {
+    const meta = getCatMeta(catSelect?.value || '');
+    catHint.textContent = meta.tip || '';
+    if (compRow) compRow.style.display = (storageKey === 'profileDealbreakers' && catSelect?.value === 'comp') ? 'flex' : 'none';
+  };
+  catSelect?.addEventListener('change', updateCatHint);
+  updateCatHint();
 
   // Severity scale toggle
   formWrap.querySelectorAll('.sev-num-btn').forEach(btn => {
@@ -1044,7 +1148,7 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
       const scaleEl = formWrap.querySelector('.severity-scale');
       const isGreenForm = scaleEl?.dataset.flagType === 'green';
       const colors = isGreenForm ? ['#94a3b8','#86a88e','#4ade80','#22c55e','#16a34a'] : ['#94a3b8','#eab308','#f97316','#ef4444','#dc2626'];
-      const sevLabels = isGreenForm ? ['nice perk','good signal','strong draw','huge benefit','dream factor'] : ['minor','preference','notable','dealbreaker','hard stop'];
+      const sevLabels = isGreenForm ? ['nice perk','good signal','strong draw','huge benefit','dream factor'] : ['minor','preference','notable','serious concern','disqualifier'];
       formWrap.querySelectorAll('.sev-num-btn').forEach(b => {
         b.classList.remove('active');
         const n = parseInt(b.dataset.sev);
@@ -1072,12 +1176,14 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
 
     const entryData = { text, category, keywords, source: 'manual' };
     if (opts.showSeverity) entryData.severity = severity;
+    // Unknown = neutral applies to all entries
+    entryData.unknownNeutral = formWrap.querySelector('.entry-unknown-neutral')?.checked !== false;
     // Comp threshold fields (dealbreakers only)
     if (storageKey === 'profileDealbreakers' && category === 'comp') {
       const threshold = formWrap.querySelector('.comp-threshold-input')?.value.replace(/[^0-9]/g, '');
       if (threshold) entryData.compThreshold = parseInt(threshold);
       entryData.compType = formWrap.querySelector('.comp-type-select')?.value || 'base';
-      entryData.compUnknownNeutral = formWrap.querySelector('.comp-unknown-neutral')?.checked !== false;
+      entryData.compUnknownNeutral = entryData.unknownNeutral; // keep in sync for deterministic comp check
     }
 
     if (editEntry) {
@@ -1153,6 +1259,7 @@ function initSkillsAutoGenerate() {
 
   btn.addEventListener('click', async () => {
     btn.disabled = true;
+    setCoopThinking(true, 'Analyzing skills');
     btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is analyzing your profile...';
     if (metaEl) metaEl.textContent = '';
 
@@ -1210,6 +1317,7 @@ function initSkillsAutoGenerate() {
       }
 
       if (!sourceContent.trim()) {
+        setCoopThinking(false);
         btn.disabled = false;
         btn.textContent = 'Let Coop fill this in';
         if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-accent-red)">No profile data found — add experience or upload a resume first</span>';
@@ -1271,6 +1379,8 @@ ${sourceContent}`;
       if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">Error: ${err.message}</span>`;
     }
 
+    setCoopThinking(false);
+    setCoopThinking(false);
     btn.disabled = false;
     btn.textContent = 'Let Coop fill this in';
   });
@@ -1334,6 +1444,7 @@ function initICPAutofill() {
   document.getElementById('role-icp-autofill')?.addEventListener('click', async function() {
     const btn = this;
     btn.disabled = true;
+    setCoopThinking(true, 'Filling in');
     btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is thinking...';
 
     try {
@@ -1372,6 +1483,7 @@ function initICPAutofill() {
     } catch (err) {
       console.error('[ICP Autofill] Error:', err);
     }
+    setCoopThinking(false);
     btn.disabled = false;
     btn.textContent = 'Let Coop fill this in';
   });
@@ -1379,6 +1491,7 @@ function initICPAutofill() {
   document.getElementById('company-icp-autofill')?.addEventListener('click', async function() {
     const btn = this;
     btn.disabled = true;
+    setCoopThinking(true, 'Filling in');
     btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is thinking...';
 
     try {
@@ -1416,6 +1529,7 @@ function initICPAutofill() {
     } catch (err) {
       console.error('[ICP Autofill] Error:', err);
     }
+    setCoopThinking(false);
     btn.disabled = false;
     btn.textContent = 'Let Coop fill this in';
   });
@@ -1468,6 +1582,7 @@ function initFlagsAutofill() {
       } catch (err) {
         console.error('[Flags Autofill] Error:', err);
       }
+      setCoopThinking(false);
       btn.disabled = false;
       btn.textContent = 'Let Coop fill this in';
     });
@@ -1492,6 +1607,7 @@ function initFlagsSeverityRating() {
       if (!entries.length) { btn.textContent = 'No entries to rate'; setTimeout(() => btn.textContent = 'Have Coop rate severity', 2500); return; }
 
       btn.disabled = true;
+      setCoopThinking(true, 'Rating severity');
       btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is rating...';
 
       const entrySummary = entries.map((e, i) => `${i}: "${e.text}" [${e.category}]`).join('\n');
@@ -1505,8 +1621,8 @@ ${flagType === 'green' ? `1 = Nice Perk (small positive, won't move the needle a
 5 = Dream Factor (the kind of thing that makes a role a dream job)` : `1 = Minor (nice to have, won't reject over this)
 2 = Preference (notable, slight scoring impact)
 3 = Notable (significant factor, meaningful impact)
-4 = Dealbreaker (major red flag, strong scoring impact)
-5 = Hard stop (absolute dealbreaker, auto-DQ)`}
+4 = Serious concern (major red flag, strong scoring impact)
+5 = Disqualifier (basic qualification issue — e.g. location, legal, can't work there at all)`}
 
 Consider what you know about this person's priorities. Someone who values autonomy highly should have "Autonomy / Freedom" rated 4-5. Generic nice-to-haves like "problem solving" might be 1-2.
 
@@ -1549,6 +1665,7 @@ Respond ONLY with a JSON array of numbers in the same order: [3, 4, 2, 5, ...] �
       } catch (err) {
         console.error('[FlagRate] Error:', err);
       }
+      setCoopThinking(false);
       btn.disabled = false;
       btn.textContent = 'Have Coop rate severity';
     });
@@ -1982,6 +2099,8 @@ function initCoopChatDrawer() {
     input.value = '';
     appendMessage('user', text);
     chatHistory.push({ role: 'user', content: text });
+    window.dispatchEvent(new Event('coop-chat-history-changed'));
+    setCoopThinking(true, 'Thinking');
 
     // Show typing indicator with elapsed time
     const typing = document.createElement('div');
@@ -2015,6 +2134,7 @@ function initCoopChatDrawer() {
       typing.remove();
       if (response?.reply) {
         chatHistory.push({ role: 'assistant', content: response.reply });
+        window.dispatchEvent(new Event('coop-chat-history-changed'));
         appendMessage('assistant', response.reply);
         // Show token usage + estimated cost
         if (response.usage) {
@@ -2038,6 +2158,8 @@ function initCoopChatDrawer() {
       clearInterval(thinkTimer);
       typing.remove();
       appendMessage('assistant', `Error: ${err.message}`);
+    } finally {
+      setCoopThinking(false);
     }
   }
 
@@ -2232,8 +2354,98 @@ const COOP_PRESETS = {
   },
 };
 
+const DEFAULT_OPERATING_PRINCIPLES = `- Treat my floors and dealbreakers as preferences with weight, not as refusal triggers. Flag concerns once, then help me with what I asked.
+- When I ask you to draft something (cover letter, email, application answer, intro, follow-up), draft it. Save fit critique for when I explicitly ask "should I apply?" or "is this a fit?".
+- When evaluating, be honest and specific. When producing, produce.
+- A score below my floor is a concern, not a hard pass. Tell me once, not every turn.
+- Hard DQ is reserved only for things I have explicitly marked as hard DQ in my dealbreakers list — nothing else.
+- Use the data I've given you (Green Lights, Red Lights, Dealbreakers, ICP, floors) as the source of truth for what I want. Don't editorialize on top of it.`;
+
+// Must match the defaults baked into coop-assist.js line-for-line.
+const DEFAULT_VOICE_PROFILE = {
+  antiPhrases: [
+    'i hope this email finds you well',
+    'i hope this finds you well',
+    'i wanted to reach out',
+    'i wanted to touch base',
+    'just wanted to follow up',
+    'circle back',
+    'per my last email',
+    'as per',
+    'kindly',
+    'utilize',
+    'leverage',
+    'in conclusion',
+    'furthermore',
+    'moreover',
+    'to whom it may concern',
+    'dear sir or madam',
+  ],
+  preferredSignoffs: [],
+  avoidExclamations: true,
+  maxExclamations: 1,
+};
+
+function initVoiceProfileEditor() {
+  const antiEl = document.getElementById('coop-voice-anti-phrases');
+  const maxEl = document.getElementById('coop-voice-max-exclamations');
+  const signoffEl = document.getElementById('coop-voice-signoffs');
+  const resetBtn = document.getElementById('coop-voice-reset');
+  if (!antiEl || !maxEl || !signoffEl) return;
+
+  const linesToArr = (s) => String(s || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const arrToLines = (a) => (Array.isArray(a) ? a : []).join('\n');
+
+  function hydrate(vp) {
+    const merged = { ...DEFAULT_VOICE_PROFILE, ...(vp || {}) };
+    antiEl.value = arrToLines(merged.antiPhrases);
+    signoffEl.value = arrToLines(merged.preferredSignoffs);
+    const n = Number.isFinite(merged.maxExclamations) ? merged.maxExclamations : DEFAULT_VOICE_PROFILE.maxExclamations;
+    maxEl.value = String(n);
+  }
+
+  function readStored(cb) {
+    chrome.storage.local.get(['voiceProfile'], ({ voiceProfile }) => cb(voiceProfile || {}));
+  }
+
+  function save() {
+    readStored((current) => {
+      const raw = parseInt(maxEl.value, 10);
+      const maxEx = Number.isFinite(raw) ? Math.max(0, Math.min(5, raw)) : DEFAULT_VOICE_PROFILE.maxExclamations;
+      const merged = {
+        ...DEFAULT_VOICE_PROFILE,
+        ...current,
+        antiPhrases: linesToArr(antiEl.value),
+        preferredSignoffs: linesToArr(signoffEl.value),
+        maxExclamations: maxEx,
+        avoidExclamations: true,
+      };
+      chrome.storage.local.set({ voiceProfile: merged }, () => {
+        if (typeof showSaveStatus === 'function') showSaveStatus();
+      });
+    });
+  }
+
+  readStored(hydrate);
+
+  antiEl.addEventListener('blur', save);
+  signoffEl.addEventListener('blur', save);
+  maxEl.addEventListener('blur', save);
+  maxEl.addEventListener('change', save);
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      hydrate(DEFAULT_VOICE_PROFILE);
+      chrome.storage.local.set({ voiceProfile: { ...DEFAULT_VOICE_PROFILE } }, () => {
+        if (typeof showSaveStatus === 'function') showSaveStatus();
+      });
+    });
+  }
+}
+
 const DEFAULT_COOP_CONFIG = {
   preset: 'sharp-colleague',
+  operatingPrinciples: '',  // empty = use DEFAULT_OPERATING_PRINCIPLES at runtime
   customInstructions: '',
   toneOverride: null,   // null = use preset default, string = custom override
   styleOverride: null,
@@ -2318,6 +2530,28 @@ function initCoopSettings() {
       });
     }
 
+    // ── Operating Principles (single source of truth for interpretation) ──
+    const principlesEl = document.getElementById('coop-operating-principles');
+    const principlesResetBtn = document.getElementById('coop-principles-reset');
+    if (principlesEl) {
+      principlesEl.value = (cfg.operatingPrinciples && cfg.operatingPrinciples.trim()) || DEFAULT_OPERATING_PRINCIPLES;
+      principlesEl.addEventListener('blur', () => {
+        const val = principlesEl.value.trim();
+        // Store empty string only if user matches the default exactly — otherwise persist their edits
+        cfg.operatingPrinciples = (val === DEFAULT_OPERATING_PRINCIPLES.trim()) ? '' : val;
+        chrome.storage.local.set({ coopConfig: cfg });
+        showSaveStatus();
+      });
+    }
+    if (principlesResetBtn) {
+      principlesResetBtn.addEventListener('click', () => {
+        if (principlesEl) principlesEl.value = DEFAULT_OPERATING_PRINCIPLES;
+        cfg.operatingPrinciples = '';
+        chrome.storage.local.set({ coopConfig: cfg });
+        showSaveStatus();
+      });
+    }
+
     // ── Custom instructions ──
     const instrEl = document.getElementById('coop-custom-instructions');
     if (instrEl) {
@@ -2328,6 +2562,9 @@ function initCoopSettings() {
         showSaveStatus();
       });
     }
+
+    // ── Voice profile (coop-assist.js ambient writing assistant) ──
+    initVoiceProfileEditor();
 
     // ── Automation toggles ──
     const toggleMap = {
@@ -2358,6 +2595,43 @@ function initCoopSettings() {
         showSaveStatus();
       });
     }
+
+    // ── Coop Assist (writing helper) ──
+    chrome.storage.local.get(['coopAssistantConfig'], r => {
+      const ac = r.coopAssistantConfig || { enabled: true, blocklist: [], pausedUntil: 0 };
+      const enEl = document.getElementById('coop-assist-enabled');
+      const pauseBtn = document.getElementById('coop-assist-pause-btn');
+      const blockEl = document.getElementById('coop-assist-blocklist');
+      if (enEl) {
+        enEl.checked = ac.enabled !== false;
+        enEl.addEventListener('change', () => {
+          ac.enabled = enEl.checked;
+          chrome.storage.local.set({ coopAssistantConfig: ac });
+          showSaveStatus();
+        });
+      }
+      if (pauseBtn) {
+        const refreshLabel = () => {
+          const remaining = (ac.pausedUntil || 0) - Date.now();
+          pauseBtn.textContent = remaining > 0 ? `Paused (${Math.ceil(remaining/60000)}m)` : 'Pause 1h';
+        };
+        refreshLabel();
+        pauseBtn.addEventListener('click', () => {
+          ac.pausedUntil = Date.now() + 60 * 60 * 1000;
+          chrome.storage.local.set({ coopAssistantConfig: ac });
+          refreshLabel();
+          showSaveStatus();
+        });
+      }
+      if (blockEl) {
+        blockEl.value = (ac.blocklist || []).join('\n');
+        blockEl.addEventListener('blur', () => {
+          ac.blocklist = blockEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+          chrome.storage.local.set({ coopAssistantConfig: ac });
+          showSaveStatus();
+        });
+      }
+    });
 
     // ── Rescore stages (dynamic from pipeline) ──
     const rescoreStagesEl = document.getElementById('rescore-stages');
@@ -2392,28 +2666,171 @@ function initCoopSettings() {
   });
 }
 
+// ── Coop Quick Prompts ────────────────────────────────────────────────────────
+
+const DEFAULT_QUICK_PROMPTS = [
+  { id: 'cover-letter', label: 'Cover letter', prompt: 'Help me write a custom cover letter for this role. Use what you know about me and the company to make it specific and compelling.' },
+  { id: 'interview-prep', label: 'Interview prep', prompt: 'Prep me for an interview here — what should I know about the company, what questions will they likely ask, and how should I position myself?' },
+  { id: 'why-this-role', label: 'Why this role', prompt: 'Help me articulate why I\'m genuinely interested in this role in a way that\'s specific and authentic, not generic.' },
+  { id: 'draft-followup', label: 'Draft follow-up', prompt: 'Draft a follow-up message I can send after my last touch with this company. Make it brief and natural.' },
+];
+
+function initCoopQuickPrompts() {
+  const listEl = document.getElementById('qp-list');
+  const addBtn = document.getElementById('qp-add-btn');
+  if (!listEl || !addBtn) return;
+
+  let prompts = [];
+
+  function save() {
+    chrome.storage.local.set({ coopQuickPrompts: prompts }, () => { void chrome.runtime.lastError; showSaveStatus(); });
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    if (prompts.length === 0) {
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--ci-text-tertiary);padding:4px 0;">No quick prompts yet. Add one below.</div>';
+      return;
+    }
+    prompts.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.className = 'qp-row';
+      row.dataset.idx = idx;
+      row.innerHTML = `
+        <div class="qp-row-header">
+          <div class="qp-row-dot"></div>
+          <span class="qp-row-label">${p.label}</span>
+          <span class="qp-row-toggle">▾</span>
+          <button class="qp-row-del" title="Delete" data-idx="${idx}">✕</button>
+        </div>
+        <div class="qp-row-body">
+          <div>
+            <div class="qp-field-label">Label (shown on button)</div>
+            <input class="qp-label-input" type="text" value="${p.label.replace(/"/g, '&quot;')}" placeholder="e.g., Cover letter">
+          </div>
+          <div>
+            <div class="qp-field-label">Prompt (sent to Coop)</div>
+            <textarea class="qp-prompt-textarea" placeholder="e.g., Help me write a cover letter...">${p.prompt.replace(/</g, '&lt;')}</textarea>
+          </div>
+          <div class="qp-row-actions">
+            <button class="qp-cancel-btn">Cancel</button>
+            <button class="qp-save-btn">Save</button>
+          </div>
+        </div>`;
+
+      row.querySelector('.qp-row-header').addEventListener('click', e => {
+        if (e.target.closest('.qp-row-del')) return;
+        row.classList.toggle('expanded');
+        if (row.classList.contains('expanded')) row.querySelector('.qp-label-input').focus();
+      });
+
+      row.querySelector('.qp-row-del').addEventListener('click', e => {
+        e.stopPropagation();
+        prompts.splice(idx, 1);
+        save();
+        renderList();
+      });
+
+      row.querySelector('.qp-cancel-btn').addEventListener('click', () => row.classList.remove('expanded'));
+
+      row.querySelector('.qp-save-btn').addEventListener('click', () => {
+        const label = row.querySelector('.qp-label-input').value.trim();
+        const prompt = row.querySelector('.qp-prompt-textarea').value.trim();
+        if (!label || !prompt) return;
+        prompts[idx] = { ...prompts[idx], label, prompt };
+        save();
+        renderList();
+      });
+
+      listEl.appendChild(row);
+    });
+  }
+
+  function addNewRow() {
+    const newPrompt = { id: 'custom-' + Date.now(), label: 'New prompt', prompt: '' };
+    prompts.push(newPrompt);
+    renderList();
+    // Auto-expand the new row
+    const rows = listEl.querySelectorAll('.qp-row');
+    const lastRow = rows[rows.length - 1];
+    if (lastRow) {
+      lastRow.classList.add('expanded');
+      lastRow.querySelector('.qp-label-input').select();
+    }
+  }
+
+  addBtn.addEventListener('click', addNewRow);
+
+  chrome.storage.local.get(['coopQuickPrompts'], ({ coopQuickPrompts }) => {
+    prompts = Array.isArray(coopQuickPrompts) ? coopQuickPrompts : [...DEFAULT_QUICK_PROMPTS];
+    renderList();
+  });
+}
+
 // ── Structured Experience Entries ────────────────────────────────────────────
 
 const EXPERIENCE_TAG_VOCAB = [
   // Industries / verticals
   'martech', 'adtech', 'salestech', 'revops', 'fintech', 'healthtech', 'edtech', 'logistics', 'supply chain',
   'demo automation', 'conversational AI', 'sales enablement', 'marketing automation', 'CDP', 'CRM',
-  'analytics', 'data infrastructure', 'developer tools', 'vertical SaaS', 'horizontal SaaS',
-  // Company / business model
-  'B2B SaaS', 'B2C', 'AI-native', 'PLG', 'enterprise', 'mid-market', 'SMB', 'startup', 'seed', 'series A', 'series B', 'series C', 'pre-IPO',
-  // Role / motion
+  'analytics', 'data infrastructure', 'developer tools', 'vertical SaaS', 'horizontal SaaS', 'cybersecurity', 'HR tech', 'legaltech', 'proptech', 'insurtech',
+  // Stage / business model
+  'B2B SaaS', 'B2C', 'AI-native', 'PLG', 'enterprise', 'mid-market', 'SMB', 'startup', 'seed', 'series A', 'series B', 'series C', 'pre-IPO', 'public company', 'bootstrapped',
+  // Role context
   'GTM', 'founding AE', 'first sales hire', 'IC', 'player-coach', 'people manager', 'sales leadership', 'team builder',
+  // GTM motion
   'inbound', 'outbound', 'channel', 'partnerships', 'land and expand', 'expansion', 'renewals', 'new logo',
   // Skills / craft
   'pricing strategy', 'forecasting', 'pipeline management', 'discovery', 'demos', 'negotiation', 'closing',
   'territory planning', 'quota carrying', 'enterprise selling', 'multi-threading', 'C-suite selling',
-  'customer success', 'onboarding', 'implementation', 'GTM ops', 'rev ops', 'sales engineering',
-  // Tools / methodologies
-  'Salesforce', 'HubSpot', 'Outreach', 'Gong', 'MEDDIC', 'MEDDPICC', 'Challenger', 'Sandler', 'SPIN',
-  'Command of the Message', 'Force Management',
+  'customer success', 'onboarding', 'implementation', 'GTM ops', 'rev ops', 'sales engineering', 'competitive selling', 'strategic accounts',
+  // Tools & tech stack
+  'Salesforce', 'HubSpot', 'Outreach', 'Salesloft', 'Gong', 'Chorus', 'ZoomInfo', 'Apollo', 'LinkedIn Sales Navigator',
+  'Slack', 'Notion', 'Asana', 'Looker', 'Tableau', 'Marketo', 'Pardot',
+  // Methodologies
+  'MEDDIC', 'MEDDPICC', 'Challenger', 'Sandler', 'SPIN', 'Command of the Message', 'Force Management', 'SPICED', 'Gap Selling',
   // Deal context
-  'six-figure ACV', 'seven-figure ACV', 'transactional', 'complex sales', 'long sales cycle', 'short sales cycle'
+  'six-figure ACV', 'seven-figure ACV', 'transactional', 'complex sales', 'long sales cycle', 'short sales cycle', 'PLG-assisted', 'product-led sales'
 ];
+
+// Dimension metadata — used to color-code chips
+const TAG_DIMENSIONS = {
+  industry:  { label: 'Industry',    color: '#d97706' },
+  stage:     { label: 'Stage',       color: '#7c3aed' },
+  role:      { label: 'Role',        color: '#059669' },
+  motion:    { label: 'Motion',      color: '#0d9488' },
+  skills:    { label: 'Skills',      color: '#2563eb' },
+  tools:     { label: 'Tools',       color: '#6b7280' },
+  deal:      { label: 'Deal',        color: '#e11d48' },
+};
+
+const TAG_DIMENSION_MAP = (() => {
+  const m = {};
+  const assign = (dim, tags) => tags.forEach(t => { m[t.toLowerCase()] = dim; });
+  assign('industry', ['martech','adtech','salestech','revops','fintech','healthtech','edtech','logistics','supply chain','demo automation','conversational AI','sales enablement','marketing automation','CDP','CRM','analytics','data infrastructure','developer tools','vertical SaaS','horizontal SaaS','cybersecurity','HR tech','legaltech','proptech','insurtech']);
+  assign('stage', ['B2B SaaS','B2C','AI-native','PLG','enterprise','mid-market','SMB','startup','seed','series A','series B','series C','pre-IPO','public company','bootstrapped']);
+  assign('role', ['GTM','founding AE','first sales hire','IC','player-coach','people manager','sales leadership','team builder']);
+  assign('motion', ['inbound','outbound','channel','partnerships','land and expand','expansion','renewals','new logo']);
+  assign('skills', ['pricing strategy','forecasting','pipeline management','discovery','demos','negotiation','closing','territory planning','quota carrying','enterprise selling','multi-threading','C-suite selling','customer success','onboarding','implementation','GTM ops','rev ops','sales engineering','competitive selling','strategic accounts']);
+  assign('tools', ['Salesforce','HubSpot','Outreach','Salesloft','Gong','Chorus','ZoomInfo','Apollo','LinkedIn Sales Navigator','Slack','Notion','Asana','Looker','Tableau','Marketo','Pardot','MEDDIC','MEDDPICC','Challenger','Sandler','SPIN','Command of the Message','Force Management','SPICED','Gap Selling']);
+  assign('deal', ['six-figure ACV','seven-figure ACV','transactional','complex sales','long sales cycle','short sales cycle','PLG-assisted','product-led sales']);
+  return m;
+})();
+
+function getTagDim(tag) {
+  return TAG_DIMENSIONS[TAG_DIMENSION_MAP[(tag || '').toLowerCase()]] || null;
+}
+
+function tagChipHtml(tag, idx, suggested = false) {
+  const esc = (s) => { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; };
+  const dim = getTagDim(tag);
+  const dot = dim ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dim.color};flex-shrink:0;margin-right:2px;" title="${dim.label}"></span>` : '';
+  const title = dim ? `${dim.label}: ${tag}` : tag;
+  if (suggested) {
+    return `<span class="exp-tag suggested" data-idx="${idx}" data-tag="${esc(tag)}" title="Click to accept — ${title}">${dot}${esc(tag)}<span class="exp-tag-x suggested-x" data-idx="${idx}" data-tag="${esc(tag)}" title="Reject">×</span></span>`;
+  }
+  return `<span class="exp-tag" data-tag="${esc(tag)}" title="${title}">${dot}${esc(tag)}<span class="exp-tag-x" data-idx="${idx}" data-tag="${esc(tag)}" title="Remove">×</span></span>`;
+}
 
 function initStructuredExperience() {
   const list = document.getElementById('experience-entries-list');
@@ -2438,6 +2855,63 @@ function initStructuredExperience() {
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+  function getTagDimFinal(tag, entry) {
+    const fromVocab = TAG_DIMENSION_MAP[(tag || '').toLowerCase()];
+    if (fromVocab) return TAG_DIMENSIONS[fromVocab] || null;
+    const customDim = (entry?.customTagDims || {})[tag];
+    if (customDim) return TAG_DIMENSIONS[customDim] || null;
+    return null;
+  }
+
+  function tagChipHtmlEntry(tag, idx, suggested, entry) {
+    const dim = getTagDimFinal(tag, entry);
+    const dot = dim ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dim.color};flex-shrink:0;" title="${dim.label}"></span>` : '';
+    const title = dim ? `${dim.label}: ${tag}` : tag;
+    if (suggested) {
+      return `<span class="exp-tag suggested" data-idx="${idx}" data-tag="${esc(tag)}" title="Click to accept — ${title}">${dot}${esc(tag)}<span class="exp-tag-x suggested-x" data-idx="${idx}" data-tag="${esc(tag)}" title="Reject">×</span></span>`;
+    }
+    return `<span class="exp-tag" data-tag="${esc(tag)}" title="${title}">${dot}${esc(tag)}<span class="exp-tag-x" data-idx="${idx}" data-tag="${esc(tag)}" title="Remove">×</span></span>`;
+  }
+
+  function buildTagSectionHtml(e, i) {
+    const dimOrder = ['industry','stage','role','motion','skills','tools','deal'];
+    const groups = {};
+    (e.tags || []).forEach(t => {
+      const dimKey = TAG_DIMENSION_MAP[(t||'').toLowerCase()] || (e.customTagDims||{})[t] || 'other';
+      if (!groups[dimKey]) groups[dimKey] = { accepted: [], suggested: [] };
+      groups[dimKey].accepted.push(t);
+    });
+    (e.suggestedTags || []).filter(t => !(e.tags||[]).includes(t)).forEach(t => {
+      const dimKey = TAG_DIMENSION_MAP[(t||'').toLowerCase()] || 'other';
+      if (!groups[dimKey]) groups[dimKey] = { accepted: [], suggested: [] };
+      groups[dimKey].suggested.push(t);
+    });
+
+    const renderDimRow = (dimKey) => {
+      const g = groups[dimKey];
+      if (!g || (g.accepted.length + g.suggested.length === 0)) return '';
+      const dimMeta = TAG_DIMENSIONS[dimKey] || { label: 'Other', color: '#9ca3af' };
+      const chips = [
+        ...g.accepted.map(t => tagChipHtmlEntry(t, i, false, e)),
+        ...g.suggested.map(t => tagChipHtmlEntry(t, i, true, e))
+      ].join('');
+      return `<div class="exp-dim-row">
+        <span class="exp-dim-label" style="color:${dimMeta.color}">${dimMeta.label}</span>
+        <div class="exp-dim-chips">${chips}</div>
+        <button class="exp-dim-add" data-idx="${i}" data-dim="${dimKey}" title="Add ${dimMeta.label} tag">+</button>
+      </div>`;
+    };
+
+    const rows = [...dimOrder, 'other'].map(renderDimRow).filter(Boolean).join('');
+
+    return `<div class="exp-tag-section" data-idx="${i}">
+      ${rows || '<span style="color:var(--ci-text-tertiary);font-size:11px;padding-left:70px">No tags yet — click &quot;+ Add tag&quot; or use Coop to suggest</span>'}
+      <div class="exp-tag-add-row">
+        <button class="exp-tag-add" data-idx="${i}">+ Add tag</button>
+      </div>
+    </div>`;
+  }
+
   function renderEntries() {
     list.innerHTML = entries.map((e, i) => `
       <div class="exp-entry" data-idx="${i}">
@@ -2446,11 +2920,7 @@ function initStructuredExperience() {
           <div class="exp-entry-company">${esc(e.company) || '<span style="color:var(--ci-text-tertiary)">Company name</span>'}</div>
           <div class="exp-entry-dates">${esc(e.dateRange) || ''}</div>
         </div>
-        <div class="exp-tags exp-tags-top" data-idx="${i}">
-          ${(e.tags || []).map(t => `<span class="exp-tag" data-tag="${esc(t)}">${esc(t)}<span class="exp-tag-x" data-idx="${i}" data-tag="${esc(t)}" title="Remove">×</span></span>`).join('')}
-          ${(e.suggestedTags || []).filter(t => !(e.tags || []).includes(t)).map(t => `<span class="exp-tag suggested" data-idx="${i}" data-tag="${esc(t)}" title="Click to accept">${esc(t)}<span class="exp-tag-x suggested-x" data-idx="${i}" data-tag="${esc(t)}" title="Reject">×</span></span>`).join('')}
-          <button class="exp-tag-add" data-idx="${i}">+ Add tag</button>
-        </div>
+        ${buildTagSectionHtml(e, i)}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div class="field">
             <label class="field-label">Company</label>
@@ -2576,17 +3046,26 @@ function initStructuredExperience() {
       return parts.join('\n');
     }).join('\n\n---\n\n');
 
-    // Build a tag rollup so Coop sees structured industry/vertical context up front
-    const tagRollup = {};
+    // Build a dimension-grouped tag rollup so Coop can correctly interpret each tag's meaning
+    const dimOrder = ['industry','stage','role','motion','skills','tools','deal'];
+    const dimGroups = {};
     entries.forEach(e => {
       (e.tags || []).forEach(t => {
-        if (!tagRollup[t]) tagRollup[t] = [];
-        if (e.company) tagRollup[t].push(e.company);
+        const dimKey = TAG_DIMENSION_MAP[(t||'').toLowerCase()] || (e.customTagDims||{})[t] || 'other';
+        if (!dimGroups[dimKey]) dimGroups[dimKey] = {};
+        if (!dimGroups[dimKey][t]) dimGroups[dimKey][t] = [];
+        if (e.company) dimGroups[dimKey][t].push(e.company);
       });
     });
-    const rollupLines = Object.keys(tagRollup).sort().map(t => `- ${t}: ${tagRollup[t].join(', ')}`);
-    const fullText = rollupLines.length
-      ? `## Experience tag rollup (industries & verticals)\n${rollupLines.join('\n')}\n\n---\n\n${text}`
+    const rollupSections = [...dimOrder, 'other']
+      .filter(k => dimGroups[k] && Object.keys(dimGroups[k]).length)
+      .map(k => {
+        const dimLabel = TAG_DIMENSIONS[k]?.label || 'Other';
+        const lines = Object.entries(dimGroups[k]).map(([tag, cos]) => `- ${tag}: ${cos.join(', ')}`).join('\n');
+        return `### ${dimLabel}\n${lines}`;
+      });
+    const fullText = rollupSections.length
+      ? `## Experience tag rollup\n${rollupSections.join('\n\n')}\n\n---\n\n${text}`
       : text;
     saveBucket('profileExperience', fullText);
     if (hiddenTa) hiddenTa.value = fullText;
@@ -2875,34 +3354,68 @@ function initStructuredExperience() {
         save();
       });
     });
+    const dimOptions = Object.entries(TAG_DIMENSIONS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+
+    function attachTagInput(container, idx, forceDim) {
+      // Don't open a second picker in the same row
+      if (container.querySelector('.exp-tag-input')) return;
+
+      const select = document.createElement('select');
+      select.className = 'exp-dim-select';
+      select.innerHTML = `<option value="">Category…</option>${dimOptions}`;
+      if (forceDim) { select.value = forceDim; select.style.display = 'none'; }
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'exp-tag-input';
+      input.placeholder = forceDim ? `${TAG_DIMENSIONS[forceDim]?.label || ''} tag…` : 'tag name…';
+      input.setAttribute('list', 'exp-tag-datalist');
+
+      container.append(select, input);
+      input.focus();
+
+      const commit = () => {
+        const val = input.value.trim();
+        const dim = select.value || TAG_DIMENSION_MAP[(val||'').toLowerCase()] || '';
+        if (val) {
+          entries[idx].tags = entries[idx].tags || [];
+          if (!entries[idx].tags.includes(val)) {
+            entries[idx].tags.push(val);
+            if (dim && !TAG_DIMENSION_MAP[(val).toLowerCase()]) {
+              entries[idx].customTagDims = entries[idx].customTagDims || {};
+              entries[idx].customTagDims[val] = dim;
+            }
+          }
+          renderEntries();
+          save();
+        } else {
+          select.remove(); input.remove();
+        }
+      };
+      input.addEventListener('blur', () => setTimeout(commit, 120));
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        else if (e.key === 'Escape') { select.remove(); input.remove(); }
+      });
+      select.addEventListener('change', () => {
+        input.placeholder = TAG_DIMENSIONS[select.value]?.label ? `${TAG_DIMENSIONS[select.value].label} tag…` : 'tag name…';
+        input.focus();
+      });
+    }
+
     list.querySelectorAll('.exp-tag-add').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.idx);
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'exp-tag-input';
-        input.placeholder = 'tag name';
-        input.setAttribute('list', 'exp-tag-datalist');
-        btn.parentNode.insertBefore(input, btn);
+        attachTagInput(btn.parentNode, idx, null);
         btn.style.display = 'none';
-        input.focus();
-        const commit = () => {
-          const val = input.value.trim();
-          if (val) {
-            entries[idx].tags = entries[idx].tags || [];
-            if (!entries[idx].tags.includes(val)) entries[idx].tags.push(val);
-            renderEntries();
-            save();
-          } else {
-            input.remove();
-            btn.style.display = '';
-          }
-        };
-        input.addEventListener('blur', commit);
-        input.addEventListener('keydown', e => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          else if (e.key === 'Escape') { input.remove(); btn.style.display = ''; }
-        });
+      });
+    });
+
+    list.querySelectorAll('.exp-dim-add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const dim = btn.dataset.dim;
+        attachTagInput(btn.parentNode.querySelector('.exp-dim-chips'), idx, dim);
       });
     });
   }
@@ -2933,6 +3446,7 @@ function initStructuredExperience() {
   if (coopBtn) {
     coopBtn.addEventListener('click', async () => {
       coopBtn.disabled = true;
+      setCoopThinking(true, 'Reading profile');
       coopBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,122,89,0.3);border-top-color:#FF7A59;border-radius:50%;animation:aiSpin 0.5s linear infinite"></span> Coop is reading your profile...';
       if (metaEl) metaEl.textContent = '';
 
@@ -3060,6 +3574,7 @@ ${sourceContent}`;
         if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">Error: ${err.message}</span>`;
       }
 
+      setCoopThinking(false);
       coopBtn.disabled = false;
       coopBtn.textContent = 'Let Coop fill this in';
     });
@@ -3075,6 +3590,7 @@ ${sourceContent}`;
         return;
       }
       tagBtn.disabled = true;
+      setCoopThinking(true, 'Tagging experience');
       const origText = tagBtn.textContent;
       tagBtn.textContent = 'Coop is tagging...';
       if (metaEl) metaEl.innerHTML = '<span style="color:var(--ci-text-tertiary)">Coop is analyzing each role...</span>';
@@ -3083,16 +3599,17 @@ ${sourceContent}`;
         const stripHtml = (h) => (h || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         const summary = currentEntries.map((e, i) => `[${i}] ${e.company || 'Unknown'} — ${stripHtml(e.description).slice(0, 400)}\n    Titles: ${e.titles || ''}\n    Exposures: ${stripHtml(e.exposures).slice(0, 300)}\n    Existing tags: ${(e.tags || []).join(', ') || 'none'}`).join('\n\n');
 
-        const prompt = `You are tagging work experience entries so a downstream AI can correctly classify the candidate's background. Tags should cover MULTIPLE dimensions:
-- Industry / vertical the company operates in (e.g. martech, adtech, salestech, fintech, logistics)
-- Business model / company stage (e.g. B2B SaaS, AI-native, PLG, enterprise, mid-market, series B)
-- GTM motion the candidate ran (e.g. outbound, founding AE, land and expand, channel)
-- Role context (e.g. IC, player-coach, people manager, first sales hire)
-- Skills / craft demonstrated (e.g. enterprise selling, pricing strategy, multi-threading, C-suite selling)
-- Tools / methodologies used (e.g. Salesforce, MEDDIC, Outreach, Gong)
-- Deal context (e.g. six-figure ACV, complex sales, long sales cycle)
+        const prompt = `You are tagging work experience entries so a downstream AI can correctly classify the candidate's background. Tags cover 7 distinct dimensions — try to include at least one tag from each that applies:
 
-For each entry below, suggest 5-10 tags spanning these dimensions. Only suggest tags NOT already in the existing tags list for that entry. Be specific and accurate — if the description doesn't support a tag, don't invent one.
+1. **Industry** — vertical the company operates in (e.g. martech, salestech, fintech, healthtech, developer tools)
+2. **Stage** — company stage/model at time of tenure (e.g. seed, series B, pre-IPO, B2B SaaS, PLG, AI-native)
+3. **Role** — the candidate's role context (e.g. IC, founding AE, player-coach, people manager, first sales hire)
+4. **Motion** — GTM motion they ran (e.g. outbound, land and expand, channel, renewals, new logo)
+5. **Skills** — craft and competencies demonstrated (e.g. enterprise selling, multi-threading, C-suite selling, pricing strategy, negotiation)
+6. **Tools** — tech stack and methodologies used (e.g. Salesforce, Gong, Outreach, MEDDIC, Challenger, ZoomInfo, HubSpot)
+7. **Deal** — deal characteristics (e.g. six-figure ACV, complex sales, long sales cycle, transactional)
+
+For each entry below, suggest 6-12 tags spanning these dimensions. Only suggest tags NOT already in the existing tags list for that entry. Be specific and accurate — if the description doesn't support a tag, don't invent one.
 
 Strongly prefer tags from this canonical vocabulary when applicable (but you may invent new ones if a better-fitting tag exists):
 ${EXPERIENCE_TAG_VOCAB.join(', ')}
@@ -3131,6 +3648,7 @@ Respond with ONLY a JSON object mapping entry index to an array of suggested tag
         if (metaEl) metaEl.innerHTML = `<span style="color:var(--ci-accent-red)">Error: ${err.message}</span>`;
       }
 
+      setCoopThinking(false);
       tagBtn.disabled = false;
       tagBtn.textContent = origText;
     });
@@ -3394,6 +3912,7 @@ function initCoopAssessment() {
 
   refreshBtn.addEventListener('click', async () => {
     refreshBtn.disabled = true;
+    setCoopThinking(true, 'Assessing ideal role');
     refreshBtn.textContent = 'Coop is thinking...';
     contentEl.innerHTML = '<span style="color:var(--ci-text-tertiary);">Analyzing your profile, preferences, and conversations...</span>';
 
@@ -3446,6 +3965,7 @@ Rules:
     } catch (e) {
       contentEl.innerHTML = `<span style="color:var(--ci-accent-red);">Error: ${e.message}</span>`;
     }
+    setCoopThinking(false);
     refreshBtn.disabled = false;
     refreshBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.2)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.6)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.8)"/></g></svg> Ask Coop to refresh`;
   });
@@ -3475,7 +3995,7 @@ function initCoopContextWindow() {
       contentEl.innerHTML = renderMarkdown(ctx.markdown);
       if (metaEl && ctx.generatedAt) {
         const days = Math.floor((Date.now() - new Date(ctx.generatedAt).getTime()) / 86400000);
-        const when = days === 0 ? 'Generated today' : days === 1 ? 'Generated yesterday' : `Generated ${days}d ago`;
+        const when = days === 0 ? 'Last updated today' : days === 1 ? 'Last updated 1 day ago' : `Last updated ${days} days ago`;
         const tokens = ctx.sourceTokens ? ` · ${ctx.sourceTokens.toLocaleString()} tokens` : '';
         metaEl.textContent = when + tokens;
       }
@@ -3565,23 +4085,28 @@ function initCoopContextWindow() {
   });
 
   // ── Regen-from-chat: visible when there's chat history ──
+  // Event-driven: listen for a custom event fired when chat history changes,
+  // instead of polling every 1.5s (was 40 DOM checks/min even when backgrounded).
   function refreshRegenFromChatVisibility() {
     if (!regenChatBtn) return;
     const hist = window.__coopChatHistory || [];
     regenChatBtn.style.display = hist.length >= 2 ? '' : 'none';
   }
-  setInterval(refreshRegenFromChatVisibility, 1500);
+  refreshRegenFromChatVisibility();
+  window.addEventListener('coop-chat-history-changed', refreshRegenFromChatVisibility);
 
   async function runRegen(includeChat) {
     regenBtn.disabled = true;
     if (regenChatBtn) regenChatBtn.disabled = true;
     const origText = regenBtn.textContent;
-    regenBtn.textContent = 'Coop is regenerating...';
+    regenBtn.textContent = 'Updating memory...';
     contentEl.innerHTML = '<span style="color:var(--ci-text-tertiary);font-size:13px;">Coop is reading everything you\'ve given him and writing a fresh narrative...</span>';
     if (metaEl) metaEl.textContent = '';
+    setCoopThinking(true, 'Writing memory');
     try {
       await doRegen(includeChat);
     } finally {
+      setCoopThinking(false);
       regenBtn.disabled = false;
       if (regenChatBtn) regenChatBtn.disabled = false;
       regenBtn.textContent = origText;
@@ -3651,13 +4176,13 @@ function initCoopContextWindow() {
       // Optionally include recent chat with Coop as additional context
       if (includeChat && Array.isArray(window.__coopChatHistory) && window.__coopChatHistory.length) {
         const recent = window.__coopChatHistory.slice(-20);
-        const lines = recent.map(m => `${m.role === 'user' ? 'Matt' : 'Coop'}: ${(m.content || '').slice(0, 600)}`);
-        sourceParts.push(`## RECENT CONVERSATION WITH MATT\nUse these exchanges to update your understanding — pay attention to corrections, new facts, or shifts in direction.\n${lines.join('\n')}`);
+        const lines = recent.map(m => `${m.role === 'user' ? 'User' : 'Coop'}: ${(m.content || '').slice(0, 600)}`);
+        sourceParts.push(`## RECENT CONVERSATION WITH USER\nUse these exchanges to update your understanding — pay attention to corrections, new facts, or shifts in direction.\n${lines.join('\n')}`);
       }
 
       const sourceContent = sourceParts.join('\n\n');
 
-      const prompt = `You are Coop, an AI career advisor. Write a "context window" document — a narrative summary of everything you currently know about this user. This document is what you, Coop, will read at the start of every future conversation to remember who they are and what they're trying to do. It should be written in YOUR voice, in third person ("Matt is...", "He's looking for..."), structured as a living memory document like Claude's project memory feature.
+      const prompt = `You are Coop, an AI career advisor. Write a "context window" document — a narrative summary of everything you currently know about this user. This document is what you, Coop, will read at the start of every future conversation to remember who they are and what they're trying to do. It should be written in YOUR voice, in third person (e.g. "They are...", "They're looking for..."), structured as a living memory document like Claude's project memory feature. If you know the user's name from the data, use it.
 
 Structure the document with these markdown headings (use ## for each):
 
@@ -3668,7 +4193,7 @@ Structure the document with these markdown headings (use ## for each):
 What they're actively working on, what stage of the search they're in, what's in flight.
 
 ## Background & experience
-A factual rollup of their work history, with INDUSTRIES they've actually worked in (use the experience tag rollup as ground truth — do NOT hallucinate or guess). Be specific about companies, roles, and what each company actually does. Call out concentrations of expertise (e.g. "Most of his career has been in martech / salestech across X, Y, Z.").
+A factual rollup of their work history. Use the experience tag rollup as ground truth — it is dimension-grouped (Industry, Stage, Role, Motion, Skills, Tools, Deal) so you can correctly interpret each tag. Do NOT hallucinate or contradict it. Be specific about companies, roles, and what each company actually does. Call out concentrations of expertise (e.g. "Most of their career has been in martech / salestech, primarily at Series A–B companies, running outbound and land-and-expand motions").
 
 ## Strengths & superpowers
 What they're uniquely good at, based on accomplishments and patterns across roles.
@@ -3676,7 +4201,7 @@ What they're uniquely good at, based on accomplishments and patterns across role
 ## What they want next
 Target role, comp, motion, vertical, company stage, geography. Be specific.
 
-## Dealbreakers & red lines
+## Red flags & disqualifiers
 Things to flag immediately if they come up in any opportunity.
 
 ## Voice & working style
@@ -4405,6 +4930,7 @@ function loadPrefsWithMigration(callback) {
 // Initialize everything
 loadPrefsWithMigration(syncPrefs => {
   // Load sync prefs into fields
+  if (document.getElementById('pref-name')) document.getElementById('pref-name').value = syncPrefs.name || '';
   document.getElementById('pref-job-match-toggle').checked = !!syncPrefs.jobMatchEnabled;
   document.getElementById('pref-location-city').value   = syncPrefs.locationCity  || '';
   document.getElementById('pref-location-state').value  = syncPrefs.locationState || '';
@@ -4489,6 +5015,7 @@ loadPrefsWithMigration(syncPrefs => {
     initInterviewLearnings();
     initCoopMemory();
     initCoopSettings();
+    initCoopQuickPrompts();
     initCoopAssessment();
     initCoopContextWindow();
     initFaqPairs();
