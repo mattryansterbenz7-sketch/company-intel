@@ -5,10 +5,10 @@
 
 :root {
   /* ── Surfaces (layered depth) ── */
-  --ci-bg-base:          #FFFFFF;       /* Page body — pure white */
-  --ci-bg-raised:        #F6F8F9;       /* Cards, panels — cool light gray so they read against white */
+  --ci-bg-base:          #F0F2F5;       /* Page body — warm light gray, cards pop against this */
+  --ci-bg-raised:        #FFFFFF;       /* Cards, panels — pure white for clear contrast */
   --ci-bg-overlay:       #FFFFFF;       /* Modals, dropdowns */
-  --ci-bg-inset:         #EEF1F3;       /* Inputs, inset areas — cool light gray */
+  --ci-bg-inset:         #EBEDF0;       /* Inputs, inset areas — slightly darker than base */
   --ci-bg-header:        #151B26;       /* Top nav — Asana deep navy */
   --ci-bg-header-hover:  #1F2A3C;       /* Header interactive — slightly lighter navy */
   --ci-bg-sidebar:       #EEF1F3;       /* Settings sidebar nav — matches inset */
@@ -39,10 +39,10 @@
   --ci-accent-purple:        #7C6EF0;   /* Electric purple — Asana's signature, used for focus */
   --ci-accent-purple-soft:   rgba(124, 110, 240, 0.08);
 
-  /* ── Shadows (slightly warmer tint) ── */
-  --ci-shadow-sm:   0 1px 3px rgba(30, 31, 33, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
-  --ci-shadow-md:   0 4px 14px rgba(30, 31, 33, 0.07), 0 1px 3px rgba(0, 0, 0, 0.03);
-  --ci-shadow-lg:   0 10px 32px rgba(30, 31, 33, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
+  /* ── Shadows (visible depth on gray bg) ── */
+  --ci-shadow-sm:   0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ci-shadow-md:   0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  --ci-shadow-lg:   0 10px 36px rgba(30, 31, 33, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
 
   /* ── Radii ── */
   --ci-radius-sm:   6px;
@@ -102,3 +102,83 @@ body {
 a { transition: color var(--ci-transition-fast); }
 button, [role="button"] { transition: background var(--ci-transition-fast), color var(--ci-transition-fast), border-color var(--ci-transition-fast), box-shadow var(--ci-transition-fast); }
 input, textarea, select { transition: border-color var(--ci-transition-fast), background var(--ci-transition-fast), box-shadow var(--ci-transition-fast); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Coop Thinking Animation — shared across all pages
+   Usage: insert .coop-thinking-overlay inside a position:relative container
+   ═══════════════════════════════════════════════════════════════════════════ */
+.coop-thinking-overlay {
+  position: absolute; inset: 0; z-index: 20;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: var(--ci-radius-lg);
+  box-shadow: inset 0 0 60px rgba(252,99,107,0.03);
+  animation: thinkFadeIn 0.35s ease;
+}
+.coop-thinking-overlay.inline {
+  position: relative; inset: auto;
+  background: var(--ci-bg-inset); backdrop-filter: none;
+  padding: 24px 16px; border-radius: var(--ci-radius-md);
+  border: 1px solid var(--ci-border-subtle);
+}
+@keyframes thinkFadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* Face container — holds face + orbit ring */
+.coop-thinking-face-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+.coop-thinking-face { border-radius: 50%; animation: thinkPulse 1.8s ease-in-out infinite; position: relative; z-index: 2; }
+@keyframes thinkPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 14px rgba(252,99,107,0.35)); }
+}
+/* Orbit ring — spinning dots around the face */
+.coop-thinking-orbit {
+  position: absolute; inset: -12px; border-radius: 50%;
+  animation: thinkOrbit 3s linear infinite;
+  z-index: 1;
+}
+.coop-thinking-orbit::before, .coop-thinking-orbit::after {
+  content: ''; position: absolute; border-radius: 50%;
+}
+.coop-thinking-orbit::before {
+  width: 5px; height: 5px; background: var(--ci-accent-primary); top: 0; left: 50%;
+  transform: translateX(-50%); box-shadow: 0 0 6px rgba(252,99,107,0.5);
+}
+.coop-thinking-orbit::after {
+  width: 4px; height: 4px; background: var(--ci-accent-amber); bottom: 4px; right: 4px;
+  box-shadow: 0 0 5px rgba(245,166,35,0.4);
+}
+@keyframes thinkOrbit { to { transform: rotate(360deg); } }
+
+/* Bouncing dots */
+.coop-thinking-dots { display: flex; gap: 6px; margin-top: 12px; }
+.coop-thinking-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary);
+  animation: thinkBounce 1.2s ease-in-out infinite;
+}
+.coop-thinking-dots span:nth-child(2) { animation-delay: 0.15s; background: var(--ci-accent-amber); }
+.coop-thinking-dots span:nth-child(3) { animation-delay: 0.3s; background: var(--ci-accent-teal); }
+@keyframes thinkBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* Labels */
+.coop-thinking-label { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); letter-spacing: 0.02em; }
+.coop-thinking-sub { font-size: 10px; color: var(--ci-text-tertiary); margin-top: 2px; }
+
+/* Progress bar with gradient shimmer */
+.coop-thinking-bar { width: 120px; height: 3px; background: var(--ci-bg-inset); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+.coop-thinking-bar-fill {
+  height: 100%; width: 40%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--ci-accent-primary), var(--ci-accent-amber), var(--ci-accent-teal), var(--ci-accent-primary));
+  background-size: 300% 100%;
+  animation: thinkBarSlide 2s ease-in-out infinite, thinkBarShimmer 2s linear infinite;
+}
+@keyframes thinkBarSlide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(250%); }
+  100% { transform: translateX(-100%); }
+}
+@keyframes thinkBarShimmer {
+  0% { background-position: 0% 0; }
+  100% { background-position: 300% 0; }
+}

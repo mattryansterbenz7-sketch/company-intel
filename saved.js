@@ -1,7 +1,38 @@
+function escapeHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 const QUEUE_STAGE = 'needs_review';
 const DISMISS_STAGE = 'rejected';
 const DISMISS_TAG = "Didn't apply";
-const SCORE_THRESHOLDS = { green: 7, amber: 4 };
+const SCORE_THRESHOLDS = { green: 7, amber: 5 };
+
+// Chrome extensions don't support window.confirm() — it silently fails inside
+// extension pages, meaning anything gated behind confirm() never fires. This
+// helper uses the native <dialog> element to render a non-blocking modal with
+// the same ergonomic shape: `if (await ciConfirm('Delete X?')) { ... }`.
+function ciConfirm(message, { confirmLabel = 'Delete', cancelLabel = 'Cancel', danger = true } = {}) {
+  return new Promise(resolve => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'ci-confirm-dialog';
+    dlg.style.cssText = 'border:1px solid var(--ci-border-default,#dfe3eb);border-radius:10px;padding:0;max-width:360px;background:var(--ci-bg-surface,#fff);color:var(--ci-text-primary,#1c2b3a);font:14px/1.4 -apple-system,system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,0.15);';
+    const btnDanger = 'background:#dc2626;color:#fff;border:none;';
+    const btnPrimary = 'background:#2563eb;color:#fff;border:none;';
+    dlg.innerHTML = `
+      <div style="padding:18px 20px 4px 20px;font-weight:600;">${String(message).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
+      <div style="padding:12px 20px 18px 20px;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" data-action="cancel" style="padding:7px 14px;border-radius:6px;border:1px solid var(--ci-border-default,#dfe3eb);background:transparent;color:inherit;cursor:pointer;font-size:13px;">${cancelLabel}</button>
+        <button type="button" data-action="confirm" style="padding:7px 14px;border-radius:6px;${danger ? btnDanger : btnPrimary};cursor:pointer;font-size:13px;font-weight:600;">${confirmLabel}</button>
+      </div>`;
+    document.body.appendChild(dlg);
+    const cleanup = (result) => { try { dlg.close(); } catch(_){} dlg.remove(); resolve(result); };
+    dlg.querySelector('[data-action=confirm]').addEventListener('click', () => cleanup(true));
+    dlg.querySelector('[data-action=cancel]').addEventListener('click', () => cleanup(false));
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); cleanup(false); }); // ESC
+    try { dlg.showModal(); } catch(_) { dlg.setAttribute('open', ''); }
+    dlg.querySelector('[data-action=confirm]').focus();
+  });
+}
 
 let allCompanies = [];
 let allKnownTags = [];
@@ -11,6 +42,136 @@ let activeStatus = 'all';
 let activeTag = null;
 let activeActionFilter = 'all'; // 'all' | 'my_court' | 'their_court'
 let viewMode = localStorage.getItem('ci_viewMode') || 'kanban';
+let tblSortCol = 'savedAt';
+let tblSortDir = 'desc'; // 'asc' | 'desc'
+let tblFilters = {}; // { [colKey]: string[] } — included values; empty = no filter
+
+// ── Table view column registry ──────────────────────────────────────────────
+const TABLE_COLUMNS = [
+  {
+    key: 'company', label: 'Company', defaultOn: true, locked: true, sortable: true, defaultSortDir: 'asc',
+    sortVal: c => (c.company || '').toLowerCase(),
+    renderCell: c => {
+      const isJob = !!c.isOpportunity;
+      const fav = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+      const favHtml = fav ? `<img class="tbl-favicon" src="https://www.google.com/s2/favicons?domain=${fav}&sz=64" alt="" onerror="this.style.display='none'">` : '';
+      return `<div class="tbl-company">${favHtml}<div><a class="tbl-name" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${escapeHtml(c.company)}</a><div style="margin-top:1px;"><span class="tbl-type-badge ${isJob ? 'opp' : 'co'}">${isJob ? 'Opp' : 'Co'}</span></div></div></div>`;
+    }
+  },
+  {
+    key: 'jobTitle', label: 'Role', defaultOn: true, sortable: true, defaultSortDir: 'asc',
+    sortVal: c => (c.jobTitle || '').toLowerCase(),
+    renderCell: c => c.isOpportunity && c.jobTitle
+      ? (c.jobUrl ? `<a class="tbl-job-link" href="${escapeHtml(c.jobUrl)}" target="_blank">${escapeHtml(c.jobTitle)}</a>` : `<span style="font-size:12px;color:var(--ci-text-secondary)">${escapeHtml(c.jobTitle)}</span>`)
+      : '<span class="tbl-muted">—</span>'
+  },
+  {
+    key: 'stage', label: 'Stage', defaultOn: true, sortable: true, filterable: true, defaultSortDir: 'asc',
+    sortVal: c => c.isOpportunity ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist'),
+    filterVal: c => { const key = c.isOpportunity ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist'); const all = [...customOpportunityStages, ...customCompanyStages]; return all.find(s => s.key === key)?.label || key; },
+    renderCell: c => {
+      const isJob = !!c.isOpportunity;
+      const stageField = isJob ? 'jobStage' : 'status';
+      const status = isJob ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist');
+      const statusColor = stageColor(status);
+      const opts = Object.entries(stageMap()).map(([v, l]) => `<option value="${v}" ${status === v ? 'selected' : ''}>${l}</option>`).join('');
+      return `<div class="tbl-stage"><span class="tbl-stage-dot" style="background:${statusColor}"></span><select class="status-select" data-id="${c.id}" data-status="${status}" data-stage-field="${stageField}" style="border:none;background:none;font-size:12px;font-weight:500;color:var(--ci-text-primary);cursor:pointer;padding:0;font-family:inherit;max-width:160px;">${opts}</select></div>`;
+    }
+  },
+  {
+    key: 'score', label: 'Fit', defaultOn: true, sortable: true, filterable: true, defaultSortDir: 'desc',
+    sortVal: c => c.jobMatch?.score || c.jobMatchScore || 0,
+    filterVal: c => { const s = c.jobMatch?.score || c.jobMatchScore; if (!s) return 'Unscored'; if (s >= 9) return '9-10 · Strong'; if (s >= 7) return '7-8 · Good'; if (s >= 5) return '5-6 · Mixed'; return '1-4 · Poor'; },
+    renderCell: c => {
+      if (!c.isOpportunity) return '<span class="tbl-muted">—</span>';
+      const score = c.jobMatch?.score || c.jobMatchScore;
+      if (!score) return '<span class="tbl-muted">—</span>';
+      const v = scoreToVerdict(score);
+      return `<span class="tbl-score ${v.cls}">${score}/10</span>`;
+    }
+  },
+  {
+    key: 'rating', label: 'Rating', defaultOn: true, sortable: true, filterable: true, defaultSortDir: 'desc',
+    sortVal: c => c.rating || 0,
+    filterVal: c => c.rating ? `${c.rating} ★` : 'Not rated',
+    renderCell: c => `<div class="tbl-stars">${[1,2,3,4,5].map(i => `<span class="tbl-star ${(c.rating||0) >= i ? 'filled' : ''}" data-id="${c.id}" data-val="${i}">★</span>`).join('')}</div>`
+  },
+  {
+    key: 'actionStatus', label: 'Action On', defaultOn: true, sortable: true, filterable: true, defaultSortDir: 'asc',
+    sortVal: c => c.actionStatus || '',
+    filterVal: c => c.actionStatus === 'my_court' ? 'My Court' : c.actionStatus === 'their_court' ? 'Their Court' : c.actionStatus === 'scheduled' ? 'Scheduled' : 'None',
+    renderCell: c => c.actionStatus === 'their_court' ? `<span class="tbl-action their-court">Their Court</span>` : c.actionStatus === 'my_court' ? `<span class="tbl-action my-court">My Court</span>` : '<span class="tbl-muted">—</span>'
+  },
+  {
+    key: 'employees', label: 'Employees', defaultOn: true, sortable: true, defaultSortDir: 'desc',
+    sortVal: c => parseInt((c.employees || '0').replace(/\D.*/, '')) || 0,
+    renderCell: c => `<span class="tbl-muted">${c.employees || '—'}</span>`
+  },
+  {
+    key: 'savedAt', label: 'Saved', defaultOn: true, sortable: true, defaultSortDir: 'desc',
+    sortVal: c => c.savedAt || 0,
+    renderCell: c => `<span class="tbl-muted">${c.savedAt ? new Date(c.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>`
+  },
+  {
+    key: 'industry', label: 'Industry', defaultOn: false, sortable: true, filterable: true, defaultSortDir: 'asc',
+    sortVal: c => (c.industry || c.intelligence?.industry || '').toLowerCase(),
+    filterVal: c => c.industry || c.intelligence?.industry || 'Unknown',
+    renderCell: c => { const v = c.industry || c.intelligence?.industry || ''; return v ? `<span class="tbl-muted">${escapeHtml(v)}</span>` : '<span class="tbl-muted">—</span>'; }
+  },
+  {
+    key: 'funding', label: 'Funding', defaultOn: false, sortable: false,
+    sortVal: c => c.funding || '',
+    renderCell: c => c.funding ? `<span class="tbl-muted">${escapeHtml(c.funding)}</span>` : '<span class="tbl-muted">—</span>'
+  },
+  {
+    key: 'workArrangement', label: 'Arrangement', defaultOn: false, sortable: true, filterable: true, defaultSortDir: 'asc',
+    sortVal: c => (c.workArrangement || c.jobSnapshot?.workArrangement || '').toLowerCase(),
+    filterVal: c => c.workArrangement || c.jobSnapshot?.workArrangement || 'Unknown',
+    renderCell: c => { const v = c.workArrangement || c.jobSnapshot?.workArrangement || ''; return v ? `<span class="tbl-muted">${escapeHtml(v)}</span>` : '<span class="tbl-muted">—</span>'; }
+  },
+  {
+    key: 'location', label: 'Location', defaultOn: false, sortable: true, defaultSortDir: 'asc',
+    sortVal: c => (c.location || '').toLowerCase(),
+    renderCell: c => c.location ? `<span class="tbl-muted">${escapeHtml(c.location)}</span>` : '<span class="tbl-muted">—</span>'
+  },
+  {
+    key: 'salary', label: 'Comp', defaultOn: false, sortable: false,
+    sortVal: c => c.baseSalaryRange || c.oteTotalComp || '',
+    renderCell: c => { const v = c.baseSalaryRange || c.oteTotalComp || ''; return v ? `<span class="tbl-muted" style="font-size:11px;">${escapeHtml(v)}</span>` : '<span class="tbl-muted">—</span>'; }
+  },
+  {
+    key: 'nextStep', label: 'Next Step', defaultOn: false, sortable: true, defaultSortDir: 'asc',
+    sortVal: c => c.nextStepDate || '',
+    renderCell: c => {
+      if (!c.nextStepDate && !c.nextStep) return '<span class="tbl-muted">—</span>';
+      const dateStr = c.nextStepDate ? new Date(c.nextStepDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      const isPast = c.nextStepDate && new Date(c.nextStepDate) < new Date();
+      return `<div style="font-size:11px;">${dateStr ? `<div style="font-weight:600;color:${isPast ? 'var(--ci-accent-red)' : 'var(--ci-text-primary)'}">${escapeHtml(dateStr)}</div>` : ''}${c.nextStep ? `<div class="tbl-muted" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.nextStep)}">${escapeHtml(c.nextStep)}</div>` : ''}</div>`;
+    }
+  },
+  {
+    key: 'appliedAt', label: 'Applied', defaultOn: false, sortable: true, defaultSortDir: 'desc',
+    sortVal: c => c.stageTimestamps?.applied || c.appliedAt || 0,
+    renderCell: c => { const ts = c.stageTimestamps?.applied || c.appliedAt; return ts ? `<span class="tbl-muted">${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : '<span class="tbl-muted">—</span>'; }
+  },
+  {
+    key: 'lastActivity', label: 'Last Activity', defaultOn: false, sortable: true, defaultSortDir: 'desc',
+    sortVal: c => { const eTs = c.cachedEmails?.[0]?.date ? new Date(c.cachedEmails[0].date).getTime() : 0; const mTs = c.cachedMeetings?.[0]?.date ? new Date(c.cachedMeetings[0].date).getTime() : 0; return Math.max(eTs, mTs, 0); },
+    renderCell: c => { const eTs = c.cachedEmails?.[0]?.date ? new Date(c.cachedEmails[0].date).getTime() : 0; const mTs = c.cachedMeetings?.[0]?.date ? new Date(c.cachedMeetings[0].date).getTime() : 0; const ts = Math.max(eTs, mTs, 0); return ts ? `<span class="tbl-muted">${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : '<span class="tbl-muted">—</span>'; }
+  },
+  {
+    key: 'tags', label: 'Tags', defaultOn: false, sortable: false, filterable: true,
+    sortVal: c => (c.tags || []).join(','),
+    filterVal: c => c.tags || [], // returns array for multi-value matching
+    renderCell: c => { const tags = c.tags || []; if (!tags.length) return '<span class="tbl-muted">—</span>'; return tags.slice(0, 3).map(t => { const cl = tagColor(t); return `<span style="font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid ${cl.border};color:${cl.color};background:${cl.bg}">${escapeHtml(t)}</span>`; }).join(' ') + (tags.length > 3 ? `<span class="tbl-muted"> +${tags.length - 3}</span>` : ''); }
+  },
+];
+
+function getActiveCols() {
+  try { const s = JSON.parse(localStorage.getItem('ci_tblCols') || 'null'); if (Array.isArray(s) && s.length) return s; } catch(e) {}
+  return TABLE_COLUMNS.filter(c => c.defaultOn).map(c => c.key);
+}
+function setActiveCols(keys) { localStorage.setItem('ci_tblCols', JSON.stringify(keys)); }
 
 const DEFAULT_OPPORTUNITY_STAGES = [
   { key: 'needs_review',    label: "Coop's AI Scoring Queue",           color: '#64748b' },
@@ -207,6 +368,35 @@ function defaultActionStatus(stageKey) {
   return null; // don't change for stages we don't recognize
 }
 
+function autoNextStepForStage(stageKey) {
+  const map = {
+    'needs_review':    'Coop → Review job score and decide whether to pursue',
+    'want_to_apply':   'Coop → Prepare and submit application',
+    'applied':         'Coop → Awaiting response from company',
+    'intro_requested': 'Coop → Waiting for intro to be made',
+    'conversations':   'Coop → Awaiting next steps from recruiter',
+    'offer_stage':     'Coop → Review and respond to offer',
+    'accepted':        'Coop → Complete onboarding steps',
+  };
+  return map[stageKey] || null;
+}
+
+// Apply auto actionStatus + auto nextStep when a stage change occurs.
+// Only overwrites nextStep if it's blank or was previously auto-set by Coop.
+function applyAutoStage(entry, stageKey, changes) {
+  const autoAction = defaultActionStatus(stageKey);
+  if (!autoAction) return;
+  changes.actionStatus = autoAction;
+  const autoStep = autoNextStepForStage(stageKey);
+  if (autoStep) {
+    const existing = entry?.nextStep || '';
+    if (!existing || existing.startsWith('Coop → ')) {
+      changes.nextStep = autoStep;
+      changes.nextStepSource = 'coop-auto';
+    }
+  }
+}
+
 function currentStages() {
   return activePipeline === 'company' ? customCompanyStages : customOpportunityStages;
 }
@@ -269,9 +459,9 @@ function renderCompactCard(c) {
   // Score display
   let scoreHtml;
   if (score != null) {
-    scoreHtml = `<span class="compact-score-num ${tier}">${score}</span><span class="compact-score-den">/10</span>${compactDQHtml}`;
+    scoreHtml = `<span class="compact-score-num ${tier}" title="Coop's Score">${score}</span><span class="compact-score-den">/10</span>${compactDQHtml}`;
   } else if (isScoring) {
-    scoreHtml = '<span class="compact-spinner"></span>';
+    scoreHtml = '<svg class="compact-spinner" width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/></svg>';
   } else {
     scoreHtml = '<span class="compact-queue-dot"></span>';
   }
@@ -532,8 +722,8 @@ function openScoreModal(entry) {
       ${entry.jobMatchScoredAt ? `<div style="text-align:center;font-size:11px;color:#A09A94;margin-top:4px;">Scored ${new Date(entry.jobMatchScoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>` : ''}
     </div>
     <div class="score-modal-actions">
-      <button class="score-modal-dismiss" id="score-modal-dismiss-btn">Pass</button>
-      <button class="score-modal-apply" id="score-modal-apply-btn"${(entry.jobStage || 'needs_review') === 'want_to_apply' ? ' style="background:#1D9E75"' : ''}>${(entry.jobStage || 'needs_review') === 'want_to_apply' ? 'I Applied' : 'Interested'}</button>
+      <button class="score-modal-dismiss" id="score-modal-dismiss-btn">${(() => { const s = customOpportunityStages.find(s => s.key === DISMISS_STAGE); return s ? s.label : 'Pass'; })()}</button>
+      <button class="score-modal-apply" id="score-modal-apply-btn">${(() => { const curS = entry.jobStage || 'needs_review'; const stages = customOpportunityStages; const idx = stages.findIndex(s => s.key === curS); const next = idx >= 0 && idx + 1 < stages.length ? stages[idx + 1] : null; return next ? next.label : 'Advance'; })()}</button>
     </div>
   `;
 
@@ -770,9 +960,14 @@ function initSwipeGesture(entry) {
   const passLabel = document.getElementById('swipe-pass');
   const applyLabel = document.getElementById('swipe-apply');
   if (!modal) return;
-  // Set swipe label based on current stage
+  // Set swipe labels based on current stage → next stage / rejected
   const curStage = entry.jobStage || 'needs_review';
-  if (applyLabel) applyLabel.textContent = curStage === 'want_to_apply' ? 'I APPLIED' : 'INTERESTED';
+  const stages = customOpportunityStages;
+  const curIdx = stages.findIndex(s => s.key === curStage);
+  const nextStage = curIdx >= 0 && curIdx + 1 < stages.length ? stages[curIdx + 1] : null;
+  const rejectedStage = stages.find(s => s.key === DISMISS_STAGE);
+  if (applyLabel) applyLabel.textContent = nextStage ? nextStage.label : 'Advance';
+  if (passLabel) passLabel.textContent = rejectedStage ? rejectedStage.label : 'Pass';
 
   const THRESHOLD = 120; // px to trigger action
   let startX = 0, currentX = 0, dragging = false;
@@ -812,26 +1007,47 @@ function initSwipeGesture(entry) {
     modal.classList.remove('swiping');
 
     if (currentX < -THRESHOLD) {
-      // Swipe left → Pass
+      // Swipe left → Reject/DQ
       modal.classList.add('snapping');
       modal.style.transform = 'translateX(-150%) rotate(-15deg)';
       modal.style.opacity = '0';
       setTimeout(() => {
         resetModal();
         overlay.classList.remove('open');
+        // Try existing button first (queue stages); otherwise apply directly
         const btn = document.querySelector(`.compact-dismiss-btn[data-id="${entry.id}"]`);
-        if (btn) btn.click();
+        if (btn) {
+          btn.click();
+        } else {
+          const existingTags = entry.tags || [];
+          const tags = existingTags.includes(DISMISS_TAG) ? existingTags : [...existingTags, DISMISS_TAG];
+          const changes = { jobStage: DISMISS_STAGE, tags, ...stageEnterTimestamp(entry, DISMISS_STAGE) };
+          applyAutoStage(entry, DISMISS_STAGE, changes);
+          updateCompany(entry.id, changes);
+        }
       }, 300);
     } else if (currentX > THRESHOLD) {
-      // Swipe right → Apply
+      // Swipe right → Advance to next stage
       modal.classList.add('snapping');
       modal.style.transform = 'translateX(150%) rotate(15deg)';
       modal.style.opacity = '0';
       setTimeout(() => {
         resetModal();
         overlay.classList.remove('open');
+        // Try existing button first (queue stages); otherwise apply directly
         const btn = document.querySelector(`.compact-apply-btn[data-id="${entry.id}"]`);
-        if (btn) btn.click();
+        if (btn) {
+          btn.click();
+        } else {
+          const stageList = customOpportunityStages;
+          const curIdx2 = stageList.findIndex(s => s.key === curStage);
+          const nextStageKey = curIdx2 >= 0 && curIdx2 + 1 < stageList.length ? stageList[curIdx2 + 1].key : null;
+          if (nextStageKey) {
+            const changes = { jobStage: nextStageKey, ...stageEnterTimestamp(entry, nextStageKey) };
+            applyAutoStage(entry, nextStageKey, changes);
+            updateCompany(entry.id, changes);
+          }
+        }
       }, 300);
     } else {
       // Snap back
@@ -881,10 +1097,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function scoreToVerdict(score) {
-  if (score >= 8) return { label: 'Strong Match', cls: 'high' };
-  if (score >= 6) return { label: 'Good Match', cls: 'mid' };
-  if (score >= 4) return { label: 'Mixed Signals', cls: 'mixed' };
-  return { label: 'Likely Not a Fit', cls: 'low' };
+  if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
+  if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
+  if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
+  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
+  return                   { label: 'Weak match',     cls: 'low' };
 }
 
 // Excitement Score modifier: user's gut feeling adjusts the AI score slightly
@@ -1301,172 +1518,86 @@ function render() {
     return;
   }
 
-  grid.innerHTML = filtered.map(c => {
-    const stars = [1,2,3,4,5].map(i =>
-      `<span class="star ${(c.rating||0) >= i ? 'filled' : ''}" data-id="${c.id}" data-val="${i}">★</span>`
-    ).join('');
+  // Apply column filters (Table view only)
+  Object.entries(tblFilters).forEach(([colKey, vals]) => {
+    if (!vals?.length) return;
+    const colDef = TABLE_COLUMNS.find(c => c.key === colKey);
+    if (!colDef?.filterVal) return;
+    const valSet = new Set(vals);
+    filtered = filtered.filter(c => {
+      const fv = colDef.filterVal(c);
+      if (Array.isArray(fv)) return fv.some(v => valSet.has(v));
+      return valSet.has(fv);
+    });
+  });
 
-    const statBits = [
-      c.employees ? `👥 ${c.employees}` : null,
-      c.funding ? `💰 ${c.funding}` : null,
-      c.founded ? `📅 ${c.founded}` : null
-    ].filter(Boolean);
+  // Sort using the column registry's sortVal function
+  const sortColDef = TABLE_COLUMNS.find(c => c.key === tblSortCol);
+  if (sortColDef?.sortable !== false) {
+    filtered.sort((a, b) => {
+      const av = sortColDef ? sortColDef.sortVal(a) : 0;
+      const bv = sortColDef ? sortColDef.sortVal(b) : 0;
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+      return tblSortDir === 'asc' ? cmp : -cmp;
+    });
+  }
 
-    const isJob = !!c.isOpportunity;
-    const stageField = activePipeline === 'opportunity' ? 'jobStage' : 'status';
-    const status = activePipeline === 'opportunity' ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist');
-    const arrClass = c.workArrangement === 'Remote' ? 'remote' : c.workArrangement === 'Hybrid' ? 'hybrid' : c.workArrangement === 'On-site' ? 'onsite' : '';
-    const statusOptions = Object.entries(stageMap()).map(([val, label]) =>
-      `<option value="${val}" ${status === val ? 'selected' : ''}>${label}</option>`
-    ).join('');
-    const faviconDomain = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
-    const faviconHtml = faviconDomain
-      ? `<img class="card-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" onerror="this.style.display='none'">`
-      : '';
+  const activeCols = getActiveCols();
+  const cols = TABLE_COLUMNS.filter(c => activeCols.includes(c.key));
+
+  const thHtml = cols.map(col => {
+    const isSortActive = tblSortCol === col.key;
+    const hasFilter = (tblFilters[col.key] || []).length > 0;
+    const sortCls = !col.sortable && !col.filterable ? 'no-sort' : isSortActive ? (tblSortDir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+    const filterCls = hasFilter ? ' col-filtered' : '';
+    const filterDot = hasFilter ? `<span class="th-filter-dot"></span>` : '';
+    const filterIcon = col.filterable && !isSortActive ? `<span class="th-filter-icon">▾</span>` : '';
+    return `<th class="${sortCls}${filterCls}" data-col="${col.key}">${col.label}${filterDot}${filterIcon}</th>`;
+  }).join('') + `<th class="no-sort" style="width:32px;"></th>`;
+
+  const rowsHtml = filtered.map(c => {
+    const status = c.isOpportunity ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist');
     const statusColor = stageColor(status);
-    return `
-      <div class="card" id="card-${c.id}" data-id="${c.id}" data-type="company" style="border-left: 3px solid ${statusColor}; cursor:pointer">
-        <div class="card-header">
-          <div style="min-width:0">
-            <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
-              ${faviconHtml}
-              <span class="card-type ${isJob ? 'job' : 'company'}">${isJob ? 'Opportunity' : 'Company'}</span>
-              <a class="card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}</a>
-            </div>
-            ${isJob && c.jobTitle ? `<div class="card-job" style="font-size:13px;font-weight:500;margin-bottom:2px">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : `<span style="color:#cbd5e1">${c.jobTitle}</span>`}</div>` : ''}
-            ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
-              const compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary;
-              const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
-              return `<div class="card-job-chips">
-                ${compText ? `<span class="job-chip salary ${compLabel.toLowerCase()}">💰 ${compLabel}: ${compText}</span>` : ''}
-                ${c.equity ? `<span class="job-chip equity">📈 ${c.equity}</span>` : ''}
-                ${c.workArrangement ? `<span class="job-chip ${arrClass}">${c.workArrangement === 'Remote' ? '🌐' : c.workArrangement === 'Hybrid' ? '🏠' : '🏢'} ${c.workArrangement}${c.location ? ' · ' + c.location : ''}</span>` : ''}
-              </div>`;
-            })() : ''}
-            ${isJob && c.jobMatch?.score ? (() => {
-              const v = scoreToVerdict(c.jobMatch.score);
-              return `<div class="card-job-overview">
-                ${c.jobMatch.jobSummary && (!c.jobTitle || !c.jobMatch.jobSummary.toLowerCase().startsWith(c.jobTitle.toLowerCase())) ? `<div class="card-job-summary">${c.jobMatch.jobSummary}</div>` : ''}
-                <div class="card-verdict-row">
-                  <span class="card-verdict-badge ${v.cls}">${v.label}</span>
-                  <span class="card-verdict-text">${c.jobMatch.verdict || ''}</span>
-                </div>
-              </div>`;
-            })() : isJob && c.jobMatchScore ? `<div class="card-job-match">Role match: <b>${c.jobMatchScore}/10</b>${c.jobMatchVerdict ? ` — ${c.jobMatchVerdict}` : ''}</div>` : ''}
-          </div>
-          <button class="card-delete" data-id="${c.id}" title="Remove">✕</button>
-        </div>
-        <select class="status-select" data-id="${c.id}" data-status="${status}" data-stage-field="${stageField}">${statusOptions}</select>
-        ${c.category ? `<span class="card-category">${c.category}</span>` : ''}
-        ${c.oneLiner ? `<div class="card-oneliner">${c.oneLiner}</div>` : ''}
-        ${statBits.length > 0 ? `<div class="card-stats">${statBits.map(s => `<span class="card-stat">${s}</span>`).join('')}</div>` : ''}
-        <div class="card-tags" id="tags-${c.id}">
-          ${(c.tags || []).map(tag => {
-            const cl = tagColor(tag);
-            return `<span class="card-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}" data-tag="${tag}" data-id="${c.id}">${tag}<span class="tag-remove" data-tag="${tag}" data-id="${c.id}">✕</span></span>`;
-          }).join('')}
-          <div class="tag-inline-wrap" id="tag-add-wrap-${c.id}">
-            <button class="tag-add-btn" data-id="${c.id}">+ tag</button>
-          </div>
-        </div>
-        <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>
-        <textarea class="card-notes" data-id="${c.id}" placeholder="Add notes...">${c.notes || ''}</textarea>
-        ${(c.intelligence || c.jobMatch) ? `
-        <details class="card-analysis">
-          <summary>Full Analysis</summary>
-          <div class="analysis-body">
-            ${c.jobMatch?.strongFits?.length ? `<div><div class="analysis-section-label">Green Flags</div><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="fit" title="${ev.replace(/"/g,'&quot;')}"><span>🟢</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div>` : ''}
-            ${c.jobMatch?.redFlags?.length ? `<div><div class="analysis-section-label">Red Flags</div><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="flag" title="${ev.replace(/"/g,'&quot;')}"><span>🔴</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div>` : ''}
-            ${c.intelligence?.eli5 ? `<div><div class="analysis-section-label">Simple Explanation</div><div class="analysis-section-body">${c.intelligence.eli5}</div></div>` : ''}
-            ${c.intelligence?.whosBuyingIt ? `<div><div class="analysis-section-label">Who Buys It</div><div class="analysis-section-body">${c.intelligence.whosBuyingIt}</div></div>` : ''}
-            ${c.intelligence?.howItWorks ? `<div><div class="analysis-section-label">How It Works</div><div class="analysis-section-body">${c.intelligence.howItWorks}</div></div>` : ''}
-            ${c.reviews?.length ? `<div><div class="analysis-section-label">Employee Reviews</div>${c.reviews.slice(0,3).map(r => `<div class="analysis-review">"${r.snippet}"<div class="analysis-review-src">${r.source || ''}</div></div>`).join('')}</div>` : ''}
-          </div>
-        </details>` : ''}
-        <div class="card-footer">
-          <span class="card-date">${new Date(c.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-          <div class="card-links">
-            ${!isJob ? `<button class="add-opp-btn" data-id="${c.id}">+ Pipeline</button>` : ''}
-            ${c.jobUrl ? `<a class="card-link" href="${c.jobUrl}" target="_blank">↗ Job</a>` : c.url ? `<a class="card-link" href="${c.url}" target="_blank">↗ Page</a>` : ''}
-            ${c.companyLinkedin ? `<a class="card-link card-link-li" href="${c.companyLinkedin}" target="_blank">LinkedIn</a>` : `<a class="card-link card-link-li" href="https://www.linkedin.com/company/${encodeURIComponent(c.company.toLowerCase().replace(/\s+/g, '-'))}" target="_blank">LinkedIn</a>`}
-            ${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}
-          </div>
-        </div>
-      </div>`;
+    const cells = cols.map(col => `<td>${col.renderCell(c)}</td>`).join('');
+    return `<tr data-id="${c.id}" style="border-left:3px solid ${statusColor};">${cells}<td><button class="tbl-delete" data-id="${c.id}" title="Remove">✕</button></td></tr>`;
   }).join('');
 
-  // Tag remove
-  grid.querySelectorAll('.tag-remove').forEach(el => {
-    el.addEventListener('click', (e) => {
+  grid.innerHTML = `<div class="tbl-wrap" style="position:relative;"><table class="tbl">
+    <thead><tr>${thHtml}</tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+
+  // Sort / filter on header click
+  grid.querySelectorAll('thead th[data-col]').forEach(th => {
+    th.addEventListener('click', (e) => {
       e.stopPropagation();
-      const id = el.dataset.id;
-      const tag = el.dataset.tag;
-      const entry = allCompanies.find(c => c.id === id);
-      if (!entry) return;
-      updateCompany(id, { tags: (entry.tags || []).filter(t => t !== tag) });
-      updateTagsToolbar();
+      const col = th.dataset.col;
+      const colDef = TABLE_COLUMNS.find(c => c.key === col);
+      if (colDef?.filterable) {
+        openColFilterPicker(th, col, colDef);
+      } else if (col && colDef?.sortable !== false) {
+        if (tblSortCol === col) {
+          tblSortDir = tblSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          tblSortCol = col;
+          tblSortDir = colDef?.defaultSortDir || 'asc';
+        }
+        render();
+      }
     });
   });
 
-  // Tag color edit (click tag text, not ✕)
-  grid.querySelectorAll('.card-tag').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.tag-remove')) return;
-      e.stopPropagation();
-      const tag = el.dataset.tag;
-      const currIdx = customTagColors[tag] !== undefined ? customTagColors[tag] : tagColorIndex(tag);
-      showColorPicker(el, TAG_PALETTE.map(p => p.border), currIdx, (idx) => saveTagColor(tag, idx));
-    });
-  });
-
-  // Tag add button — show inline input
-  grid.querySelectorAll('.tag-add-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      const wrap = document.getElementById(`tag-add-wrap-${id}`);
-      wrap.innerHTML = `<input class="tag-inline-input" id="tag-input-${id}" placeholder="tag name" autocomplete="off"><div class="tag-suggestions-inline" id="tag-sugg-${id}" style="display:none"></div>`;
-      const input = document.getElementById(`tag-input-${id}`);
-      const sugg = document.getElementById(`tag-sugg-${id}`);
-      input.focus();
-
-      input.addEventListener('input', () => {
-        const val = input.value.trim().toLowerCase();
-        const entry = allCompanies.find(c => c.id === id);
-        const existing = entry?.tags || [];
-        if (!val) { sugg.style.display = 'none'; return; }
-        const matches = allKnownTags.filter(t => t.toLowerCase().includes(val) && !existing.includes(t));
-        if (matches.length === 0) { sugg.style.display = 'none'; return; }
-        sugg.innerHTML = matches.slice(0, 5).map(t => `<div class="tag-suggestion-inline" data-tag="${t}">${t}</div>`).join('');
-        sugg.style.display = 'block';
-        sugg.querySelectorAll('.tag-suggestion-inline').forEach(s => {
-          s.addEventListener('mousedown', (e) => { e.preventDefault(); commitTag(id, s.dataset.tag); });
-        });
-      });
-
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); const val = input.value.trim(); if (val) commitTag(id, val); }
-        if (e.key === 'Escape') { render(); }
-      });
-      input.addEventListener('blur', () => setTimeout(() => { if (document.getElementById(`tag-input-${id}`)) render(); }, 200));
-    });
-  });
+  // Columns picker — bound once on load, not here
 
   // Star click
-  grid.querySelectorAll('.star').forEach(star => {
+  grid.querySelectorAll('.tbl-star').forEach(star => {
     star.addEventListener('click', (e) => {
       e.stopPropagation();
       updateCompany(star.dataset.id, { rating: parseInt(star.dataset.val) });
     });
   });
 
-  // Notes save on blur
-  grid.querySelectorAll('.card-notes').forEach(ta => {
-    ta.addEventListener('blur', () => {
-      updateCompany(ta.dataset.id, { notes: ta.value });
-    });
-  });
-
-  // Status change — update color immediately, then persist
+  // Stage select change
   grid.querySelectorAll('.status-select').forEach(sel => {
     sel.addEventListener('change', () => {
       sel.dataset.status = sel.value;
@@ -1478,31 +1609,27 @@ function render() {
         ...(entry ? stageEnterTimestamp(entry, sel.value) : { stageTimestamps: { [sel.value]: now } }),
         ...(entry ? backfillClearTimestamps(entry, sel.value) : {}),
       };
-      const autoAction = defaultActionStatus(sel.value);
-      if (autoAction) changes.actionStatus = autoAction;
+      applyAutoStage(entry, sel.value, changes);
       updateCompany(sel.dataset.id, changes);
     });
   });
 
   // Delete
-  grid.querySelectorAll('.card-delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm(`Remove ${btn.dataset.id ? allCompanies.find(c=>c.id===btn.dataset.id)?.company : 'this company'}?`)) {
+  grid.querySelectorAll('.tbl-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const name = allCompanies.find(c => c.id === btn.dataset.id)?.company || 'this entry';
+      if (await ciConfirm(`Remove ${name}?`, { confirmLabel: 'Remove' })) {
         deleteCompany(btn.dataset.id);
       }
     });
   });
 
-  // Add opportunity from company card
-  grid.querySelectorAll('.add-opp-btn').forEach(btn => {
-    btn.addEventListener('click', () => createOpportunityFromCompany(btn.dataset.id));
-  });
-
-  // Click company card body → open full-screen company view
-  grid.querySelectorAll('.card[data-type="company"]').forEach(cardEl => {
-    cardEl.addEventListener('click', (e) => {
-      if (e.target.closest('a, button, select, textarea, input, .card-tag, .star, .card-stars, details, summary')) return;
-      window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+  // Row click → open company page
+  grid.querySelectorAll('tbody tr').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('a, button, select, input')) return;
+      window.open(chrome.runtime.getURL('company.html') + '?id=' + row.dataset.id, '_blank');
     });
   });
 }
@@ -2192,7 +2319,118 @@ function createOpportunityFromCompany(companyId) {
 let _storageReloadTimer = null;
 let _storageReloadHits = 0;
 let _storageFirstHitAt = 0;
+// ── Cost pill ────────────────────────────────────────────────────────────────
+function updateCostPill() {
+  chrome.storage.local.get('apiUsage', d => {
+    const usage = d.apiUsage || {};
+    const el = document.getElementById('cost-today');
+    if (!el) return;
+    const cost = usage.costToday || 0;
+    el.textContent = cost < 0.01 ? '$' + cost.toFixed(4) : '$' + cost.toFixed(2);
+  });
+}
+updateCostPill();
+
+// Cost breakdown modal
+document.getElementById('cost-pill')?.addEventListener('click', () => {
+  chrome.storage.local.get('apiUsage', d => {
+    const usage = d.apiUsage || {};
+    const log = (usage.callLog || []).filter(c => c.ts > Date.now() - 86400000);
+    const totalCost = usage.costToday || 0;
+    const providers = ['anthropic', 'openai', 'apollo', 'serper', 'granola'];
+    const providerNames = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI (GPT)', apollo: 'Apollo', serper: 'Serper', granola: 'Granola' };
+    const providerColors = { anthropic: '#D97706', openai: '#10A37F', apollo: '#6366F1', serper: '#3B82F6', granola: '#8B5CF6' };
+    const fmtCost = c => c < 0.01 ? '$' + c.toFixed(4) : '$' + c.toFixed(2);
+    const fmtTok = t => t > 999 ? (t / 1000).toFixed(1) + 'k' : String(t);
+
+    // Aggregate by provider — prefer pd.costToday (accurate) over callLog sum
+    const costByProv = {};
+    providers.forEach(p => { const pd = usage[p]; if (pd?.costToday) costByProv[p] = pd.costToday; });
+    // Fallback: sum from callLog for providers without pd.costToday (historical entries)
+    log.forEach(c => { if (!costByProv[c.provider]) costByProv[c.provider] = 0; if (!usage[c.provider]?.costToday) costByProv[c.provider] += (c.cost || 0); });
+
+    let provRows = '';
+    providers.forEach(p => {
+      const pd = usage[p];
+      if (!pd || !pd.requestsToday) return;
+      const cost = costByProv[p] || 0;
+      const pct = totalCost > 0 ? Math.round(cost / totalCost * 100) : 0;
+      provRows += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ci-border-subtle);">
+        <span style="width:8px;height:8px;border-radius:50%;background:${providerColors[p]};flex-shrink:0"></span>
+        <span style="flex:1;font-size:12px;font-weight:600">${providerNames[p]}</span>
+        <span style="font-size:11px;color:var(--ci-text-tertiary)">${pd.requestsToday} calls</span>
+        ${pd.tokensToday?.input ? `<span style="font-size:10px;color:var(--ci-text-tertiary);font-family:var(--ci-font-mono)">${fmtTok(pd.tokensToday.input)} in / ${fmtTok(pd.tokensToday.output)} out</span>` : ''}
+        <span style="font-size:12px;font-weight:700;min-width:50px;text-align:right">${fmtCost(cost)}</span>
+        ${pct > 0 ? `<span style="font-size:9px;color:var(--ci-text-tertiary);width:28px;text-align:right">${pct}%</span>` : '<span style="width:28px"></span>'}
+      </div>`;
+    });
+
+    // Aggregate by model
+    const byModel = {};
+    log.forEach(c => {
+      const m = c.model || c.provider;
+      if (!byModel[m]) byModel[m] = { calls: 0, input: 0, output: 0, cost: 0 };
+      byModel[m].calls++;
+      byModel[m].input += c.input || 0;
+      byModel[m].output += c.output || 0;
+      byModel[m].cost += c.cost || 0;
+    });
+    let modelRows = '';
+    Object.entries(byModel).sort((a, b) => b[1].cost - a[1].cost).forEach(([model, m]) => {
+      const short = model.replace(/^claude-/, '').replace(/^gpt-/, '');
+      modelRows += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+        <span style="flex:1;font-size:11px;font-family:var(--ci-font-mono)">${short}</span>
+        <span style="font-size:10px;color:var(--ci-text-tertiary)">${m.calls}x</span>
+        <span style="font-size:10px;color:var(--ci-text-tertiary);font-family:var(--ci-font-mono)">${fmtTok(m.input)} / ${fmtTok(m.output)}</span>
+        <span style="font-size:11px;font-weight:700;min-width:50px;text-align:right">${fmtCost(m.cost)}</span>
+      </div>`;
+    });
+
+    // Recent calls (last 20)
+    let recentRows = '';
+    log.slice(-20).reverse().forEach(c => {
+      const short = (c.model || '').replace(/^claude-/, '').replace(/^gpt-/, '');
+      const ago = Math.round((Date.now() - c.ts) / 60000);
+      const agoStr = ago < 1 ? 'now' : ago < 60 ? `${ago}m` : `${Math.round(ago / 60)}h`;
+      recentRows += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10px;color:var(--ci-text-secondary);">
+        <span style="width:24px;color:var(--ci-text-tertiary);text-align:right;flex-shrink:0">${agoStr}</span>
+        <span style="flex:1;font-family:var(--ci-font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${short}</span>
+        <span style="color:var(--ci-text-tertiary)">${c.input || c.output ? fmtTok(c.input) + '/' + fmtTok(c.output) : '—'}</span>
+        <span style="font-weight:600;min-width:40px;text-align:right">${c.cost > 0 ? fmtCost(c.cost) : '—'}</span>
+      </div>`;
+    });
+
+    // Remove if already open
+    const existing = document.getElementById('cost-modal-overlay');
+    if (existing) { existing.remove(); return; }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'cost-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(3px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:14px;box-shadow:var(--ci-shadow-lg);width:480px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;animation:thinkFadeIn 0.2s ease;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--ci-border-subtle);display:flex;align-items:center;gap:12px;">
+        <span style="font-size:15px;font-weight:700;flex:1">Today's API Costs</span>
+        <span style="font-size:18px;font-weight:800;color:var(--ci-accent-primary)">${fmtCost(totalCost)}</span>
+        <button id="cost-modal-close" style="background:none;border:none;font-size:20px;color:var(--ci-text-tertiary);cursor:pointer;padding:0 4px;line-height:1">&times;</button>
+      </div>
+      <div style="overflow-y:auto;padding:12px 20px;">
+        <div style="margin-bottom:16px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ci-text-tertiary);margin-bottom:6px">By Provider</div>
+          ${provRows || '<div style="font-size:12px;color:var(--ci-text-tertiary);padding:8px 0">No API calls today</div>'}
+        </div>
+        ${modelRows ? `<div style="margin-bottom:16px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ci-text-tertiary);margin-bottom:6px">By Model</div>${modelRows}</div>` : ''}
+        ${recentRows ? `<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ci-text-tertiary);margin-bottom:6px">Recent Calls</div>${recentRows}</div>` : ''}
+      </div>
+      <div style="padding:10px 20px;border-top:1px solid var(--ci-border-subtle);font-size:10px;color:var(--ci-text-tertiary);text-align:center">${log.length} API calls today &middot; Resets at midnight</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('cost-modal-close')?.addEventListener('click', () => overlay.remove());
+  });
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.apiUsage) updateCostPill();
   if (area === 'local' && (changes.savedCompanies || changes.allTags)) {
     if (_storageReloadHits === 0) _storageFirstHitAt = Date.now();
     _storageReloadHits++;
@@ -2427,7 +2665,7 @@ function renderKanbanCard(c) {
       <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => {
         const { final, mod } = applyExcitementModifier(c.jobMatch.score, c.rating);
         const v = scoreToVerdict(final);
-        const scoreColor = final >= 7 ? '#00897b' : final >= 4 ? '#d97706' : '#e5483b';
+        const scoreColor = final >= 7 ? '#00897b' : final >= 5 ? '#d97706' : '#e5483b';
         const modText = mod > 0 ? `<span class="card-score-mod up">+${mod}</span>` : mod < 0 ? `<span class="card-score-mod down">${mod}</span>` : '';
         const agoText = c.jobMatchScoredAt ? (() => {
           const d = Math.round((Date.now() - c.jobMatchScoredAt) / 86400000);
@@ -2436,7 +2674,7 @@ function renderKanbanCard(c) {
         const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
         const entryScore = c.jobMatch?.score ?? c.quickFitScore ?? null;
         const hardDQHtml = hardDQ?.flagged && entryScore != null && entryScore <= 3 ? '<span class="hard-dq-badge">\u{1F6AB} Hard DQ</span>' : '';
-        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
+        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}" title="Coop's Score">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
       ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
         let compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || '';
@@ -2598,8 +2836,7 @@ function bindKanbanEvents(board) {
         ...stageEnterTimestamp(entry, newStatus),
         ...backfillClearTimestamps(entry, newStatus),
       };
-      const autoAction = defaultActionStatus(newStatus);
-      if (autoAction) changes.actionStatus = autoAction;
+      applyAutoStage(entry, newStatus, changes);
       if (newStatus === 'applied' && !entry.appliedDate) changes.appliedDate = Date.now();
       updateCompany(draggingId, changes);
       if (activePipeline !== 'company') {
@@ -2637,8 +2874,9 @@ function bindKanbanEvents(board) {
   });
 
   board.querySelectorAll('.card-delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm(`Remove ${allCompanies.find(c => c.id === btn.dataset.id)?.company || 'this entry'}?`)) {
+    btn.addEventListener('click', async () => {
+      const name = allCompanies.find(c => c.id === btn.dataset.id)?.company || 'this entry';
+      if (await ciConfirm(`Remove ${name}?`, { confirmLabel: 'Remove' })) {
         deleteCompany(btn.dataset.id);
       }
     });
@@ -2923,8 +3161,7 @@ function bindKanbanEvents(board) {
         ...stageEnterTimestamp(entry, nextStage),
       };
       if (nextStage === 'applied') changes.appliedDate = now;
-      const autoAction = defaultActionStatus(nextStage);
-      if (autoAction) changes.actionStatus = autoAction;
+      applyAutoStage(entry, nextStage, changes);
       updateCompany(id, changes);
       // Trigger RESEARCH_COMPANY if no intelligence data
       if (!entry.intelligence) {
@@ -3194,16 +3431,14 @@ function bindKanbanEvents(board) {
               if (direction > 0) {
                 const ts = { ...(entry.stageTimestamps || {}) }; ts[interestedKey] = now;
                 const changes = { jobStage: interestedKey, stageTimestamps: ts };
-                const autoAction = defaultActionStatus(interestedKey);
-                if (autoAction) changes.actionStatus = autoAction;
+                applyAutoStage(entry, interestedKey, changes);
                 updateCompany(entryId, changes);
               } else {
                 const ts = { ...(entry.stageTimestamps || {}) }; ts[DISMISS_STAGE] = now;
                 const tags = [...new Set([...(entry.tags || []), DISMISS_TAG])];
                 if (!allKnownTags.includes(DISMISS_TAG)) { allKnownTags.push(DISMISS_TAG); chrome.storage.local.set({ allTags: allKnownTags }); }
                 const changes = { jobStage: DISMISS_STAGE, stageTimestamps: ts, tags };
-                const autoAction = defaultActionStatus(DISMISS_STAGE);
-                if (autoAction) changes.actionStatus = autoAction;
+                applyAutoStage(entry, DISMISS_STAGE, changes);
                 updateCompany(entryId, changes);
               }
             }, 300);
@@ -3231,8 +3466,25 @@ function setViewMode(mode) {
   viewMode = mode;
   localStorage.setItem('ci_viewMode', mode);
   document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
-  const btnId = mode === 'kanban' ? 'view-kanban-btn' : mode === 'tasks' ? 'view-tasks-btn' : 'view-grid-btn';
+  const btnId = mode === 'kanban' ? 'view-kanban-btn' : 'view-grid-btn';
   document.getElementById(btnId)?.classList.add('active');
+
+  // Highlight the header Tasks button when in tasks mode
+  const headerTasksBtn = document.getElementById('header-tasks-link');
+  if (headerTasksBtn) {
+    if (mode === 'tasks') {
+      headerTasksBtn.style.color = 'var(--ci-text-on-dark)';
+      headerTasksBtn.style.background = 'rgba(255,255,255,0.18)';
+      headerTasksBtn.style.borderColor = 'rgba(255,255,255,0.3)';
+    } else {
+      headerTasksBtn.style.color = '';
+      headerTasksBtn.style.background = '';
+      headerTasksBtn.style.borderColor = '';
+    }
+  }
+
+  const colsBtn = document.getElementById('tbl-cols-btn');
+  if (colsBtn) colsBtn.style.display = mode === 'grid' ? '' : 'none';
 
   const grid = document.getElementById('grid');
   const kanban = document.getElementById('kanban-board');
@@ -3240,6 +3492,8 @@ function setViewMode(mode) {
   // Show/hide toolbars for CRM views vs tasks
   document.querySelectorAll('.toolbar').forEach(t => t.style.display = mode === 'tasks' ? 'none' : '');
   document.getElementById('activity-section').style.display = mode === 'tasks' ? 'none' : '';
+  const ph = document.getElementById('pipeline-header');
+  if (ph) ph.style.display = mode === 'tasks' ? 'none' : '';
 
   if (mode === 'tasks') {
     grid.style.display = 'none';
@@ -3253,15 +3507,176 @@ function setViewMode(mode) {
 }
 document.getElementById('view-grid-btn').addEventListener('click', () => setViewMode('grid'));
 document.getElementById('view-kanban-btn').addEventListener('click', () => setViewMode('kanban'));
-document.getElementById('view-tasks-btn').addEventListener('click', () => setViewMode('tasks'));
-document.getElementById('header-tasks-link')?.addEventListener('click', e => { e.preventDefault(); setViewMode('tasks'); });
+document.getElementById('header-tasks-link')?.addEventListener('click', e => { e.preventDefault(); setViewMode(viewMode === 'tasks' ? 'grid' : 'tasks'); });
+
+// Column picker — permanent handler on the toolbar button
+document.getElementById('tbl-cols-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const existing = document.getElementById('tbl-cols-picker');
+  if (existing) { existing.remove(); render(); return; }
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const picker = document.createElement('div');
+  picker.id = 'tbl-cols-picker';
+  picker.style.top = (rect.bottom + 6) + 'px';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 316) + 'px';
+  const active = getActiveCols();
+  const defaults = TABLE_COLUMNS.filter(c => c.defaultOn).map(c => c.key);
+  picker.innerHTML = `
+    <div class="tcp-header">
+      <span class="tcp-title">Columns</span>
+      <button class="tcp-reset" id="tcp-reset-btn">Reset to defaults</button>
+    </div>
+    <div class="tcp-grid">
+      ${TABLE_COLUMNS.map(col => `
+        <label class="tcp-item${col.locked ? ' tcp-locked' : ''}">
+          <input type="checkbox" data-col-key="${col.key}" ${active.includes(col.key) ? 'checked' : ''} ${col.locked ? 'disabled' : ''}>
+          <span class="tcp-item-label">${col.label}</span>
+        </label>
+      `).join('')}
+    </div>`;
+  document.body.appendChild(picker);
+  let dirty = false;
+  picker.querySelector('#tcp-reset-btn')?.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    setActiveCols(defaults);
+    picker.remove();
+    document.removeEventListener('click', closeHandler);
+    render();
+  });
+  picker.querySelectorAll('input[data-col-key]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = [...picker.querySelectorAll('input[data-col-key]:checked')].map(el => el.dataset.colKey);
+      setActiveCols(TABLE_COLUMNS.filter(c => checked.includes(c.key)).map(c => c.key));
+      dirty = true;
+    });
+  });
+  const closeHandler = (ev) => {
+    if (!picker.contains(ev.target) && ev.target !== btn) {
+      picker.remove();
+      document.removeEventListener('click', closeHandler);
+      if (dirty) render();
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+});
+
+// ── Column filter picker ────────────────────────────────────────────────────
+function openColFilterPicker(th, colKey, colDef) {
+  const existingId = 'tcf-picker';
+  const existing = document.getElementById(existingId);
+  // If same column picker is already open, close it
+  if (existing) { existing.remove(); document.removeEventListener('click', existing._closeHandler); return; }
+
+  const rect = th.getBoundingClientRect();
+  const picker = document.createElement('div');
+  picker.id = existingId;
+
+  // Collect unique values with counts from allCompanies
+  const valueCounts = new Map();
+  allCompanies.forEach(c => {
+    const fv = colDef.filterVal(c);
+    if (Array.isArray(fv)) {
+      fv.forEach(v => { if (v) valueCounts.set(v, (valueCounts.get(v) || 0) + 1); });
+    } else if (fv) {
+      valueCounts.set(fv, (valueCounts.get(fv) || 0) + 1);
+    }
+  });
+
+  const activeFilters = new Set(tblFilters[colKey] || []);
+  // Sort: active filters first, then by count desc
+  const sortedVals = [...valueCounts.entries()].sort((a, b) => {
+    const aActive = activeFilters.has(a[0]) ? 1 : 0;
+    const bActive = activeFilters.has(b[0]) ? 1 : 0;
+    if (aActive !== bActive) return bActive - aActive;
+    return b[1] - a[1];
+  });
+
+  const isSortAsc = tblSortCol === colKey && tblSortDir === 'asc';
+  const isSortDesc = tblSortCol === colKey && tblSortDir === 'desc';
+
+  picker.innerHTML = `
+    <div class="tcf-header">
+      <span class="tcf-title">${colDef.label}</span>
+      <button class="tcf-close-btn">✕</button>
+    </div>
+    <div class="tcf-sort-row">
+      <button class="tcf-sort-btn${isSortAsc ? ' active' : ''}" data-dir="asc">↑ A → Z</button>
+      <button class="tcf-sort-btn${isSortDesc ? ' active' : ''}" data-dir="desc">↓ Z → A</button>
+    </div>
+    <div class="tcf-divider"></div>
+    <div class="tcf-filter-head">
+      <span class="tcf-filter-label">Filter</span>
+      ${activeFilters.size ? `<button class="tcf-clear-btn">Clear filter</button>` : ''}
+    </div>
+    <div class="tcf-options">
+      ${sortedVals.map(([val, count]) => `
+        <label class="tcf-option">
+          <input type="checkbox" data-fval="${escapeHtml(val)}" ${activeFilters.has(val) ? 'checked' : ''}>
+          <span class="tcf-option-label">${escapeHtml(val)}</span>
+          <span class="tcf-option-count">${count}</span>
+        </label>`).join('')}
+      ${sortedVals.length === 0 ? '<div style="padding:10px 14px;font-size:12px;color:var(--ci-text-tertiary)">No data</div>' : ''}
+    </div>`;
+
+  picker.style.top = (rect.bottom + 4) + 'px';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 236) + 'px';
+  document.body.appendChild(picker);
+
+  picker.querySelector('.tcf-close-btn')?.addEventListener('click', () => {
+    picker.remove();
+    document.removeEventListener('click', closeHandler);
+  });
+
+  picker.querySelectorAll('.tcf-sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tblSortCol = colKey;
+      tblSortDir = btn.dataset.dir;
+      picker.remove();
+      document.removeEventListener('click', closeHandler);
+      render();
+    });
+  });
+
+  picker.querySelector('.tcf-clear-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    delete tblFilters[colKey];
+    picker.remove();
+    document.removeEventListener('click', closeHandler);
+    render();
+  });
+
+  picker.querySelectorAll('input[data-fval]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = [...picker.querySelectorAll('input[data-fval]:checked')].map(el => el.dataset.fval);
+      if (checked.length) tblFilters[colKey] = checked;
+      else delete tblFilters[colKey];
+      render();
+    });
+  });
+
+  const closeHandler = (ev) => {
+    if (!picker.contains(ev.target) && !th.contains(ev.target)) {
+      picker.remove();
+      document.removeEventListener('click', closeHandler);
+    }
+  };
+  picker._closeHandler = closeHandler;
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
 // Restore toggle state on load
 if (viewMode === 'kanban') {
   document.getElementById('view-kanban-btn').classList.add('active');
   document.getElementById('view-grid-btn').classList.remove('active');
+  const cb = document.getElementById('tbl-cols-btn'); if (cb) cb.style.display = 'none';
 } else if (viewMode === 'tasks') {
-  document.getElementById('view-tasks-btn').classList.add('active');
   document.getElementById('view-grid-btn').classList.remove('active');
+  const htl = document.getElementById('header-tasks-link');
+  if (htl) { htl.style.color = 'var(--ci-text-on-dark)'; htl.style.background = 'rgba(255,255,255,0.18)'; htl.style.borderColor = 'rgba(255,255,255,0.3)'; }
+  const cb = document.getElementById('tbl-cols-btn'); if (cb) cb.style.display = 'none';
+} else {
+  // grid (default) — show columns button
+  const cb = document.getElementById('tbl-cols-btn'); if (cb) cb.style.display = '';
 }
 
 // ── Tasks ──────────────────────────────────────────────────────────────────
@@ -3394,6 +3809,16 @@ function renderTasksView() {
         const name = el.dataset.company;
         const entry = allCompanies.find(c => c.company === name);
         if (entry) window.open(`company.html?id=${entry.id}`, '_blank');
+      });
+    });
+    container.querySelectorAll('.task-text').forEach(el => {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => {
+        const id = el.closest('.task-item').dataset.taskId;
+        loadTasks(tasks => {
+          const t = tasks.find(t => t.id === id);
+          if (t) showTaskForm(t);
+        });
       });
     });
   });
@@ -3663,8 +4088,100 @@ document.getElementById('apply-header-btn')?.addEventListener('click', () => {
   window.open(chrome.runtime.getURL('queue.html?mode=apply'), '_blank');
 });
 
-// Search
-document.getElementById('search').addEventListener('input', render);
+// Search with autocomplete dropdown
+(function initSearchAutocomplete() {
+  const searchInput = document.getElementById('search');
+  const dropdown = document.getElementById('search-dropdown');
+  let activeIndex = -1;
+
+  function getMatches(query) {
+    if (!query) return [];
+    const q = query.toLowerCase();
+    return allCompanies
+      .filter(c =>
+        c.company.toLowerCase().includes(q) ||
+        (c.jobTitle || '').toLowerCase().includes(q) ||
+        (c.notes || '').toLowerCase().includes(q) ||
+        (c.category || '').toLowerCase().includes(q) ||
+        (c.oneLiner || '').toLowerCase().includes(q) ||
+        (c.tags || []).some(t => t.toLowerCase().includes(q))
+      )
+      .slice(0, 8);
+  }
+
+  function renderDropdown(matches) {
+    if (!matches.length) {
+      dropdown.classList.remove('visible');
+      dropdown.innerHTML = '';
+      return;
+    }
+    dropdown.innerHTML = matches.map((c, i) => {
+      const detail = c.isOpportunity && c.jobTitle ? escHtmlGlobal(c.jobTitle) : (c.oneLiner ? escHtmlGlobal(c.oneLiner) : '');
+      return `<div class="search-dropdown-item${i === activeIndex ? ' active' : ''}" data-id="${c.id}">
+        <span class="search-dropdown-company">${escHtmlGlobal(c.company)}</span>
+        ${detail ? `<span class="search-dropdown-detail">${detail}</span>` : ''}
+      </div>`;
+    }).join('');
+    dropdown.classList.add('visible');
+  }
+
+  searchInput.addEventListener('input', () => {
+    activeIndex = -1;
+    const q = searchInput.value.trim();
+    renderDropdown(getMatches(q));
+    render();
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      dropdown.classList.remove('visible');
+      activeIndex = -1;
+      return;
+    }
+    const matches = getMatches(searchInput.value.trim());
+    if (!matches.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, matches.length - 1);
+      renderDropdown(matches);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, -1);
+      renderDropdown(matches);
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      const match = matches[activeIndex];
+      if (match) {
+        window.open(chrome.runtime.getURL('company.html') + '?id=' + match.id, '_blank');
+        dropdown.classList.remove('visible');
+        activeIndex = -1;
+      }
+    }
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    const item = e.target.closest('.search-dropdown-item');
+    if (item) {
+      const id = item.dataset.id;
+      window.open(chrome.runtime.getURL('company.html') + '?id=' + id, '_blank');
+      dropdown.classList.remove('visible');
+      activeIndex = -1;
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-wrapper')) {
+      dropdown.classList.remove('visible');
+      activeIndex = -1;
+    }
+  });
+
+  // Re-show dropdown on focus if there's a query
+  searchInput.addEventListener('focus', () => {
+    const q = searchInput.value.trim();
+    if (q) renderDropdown(getMatches(q));
+  });
+})();
 
 // Pipeline buttons
 function updatePipelineUI() {

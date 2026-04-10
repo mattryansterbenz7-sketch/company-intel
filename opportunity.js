@@ -1,6 +1,19 @@
 const params = new URLSearchParams(window.location.search);
 const entryId = params.get('id');
 let entry = null;
+
+// Local escapeHtml — opportunity.js references escapeHtml() in a few render
+// paths (notes, email threads) but didn't define it, relying on chat.js load
+// order. Defining it here avoids ReferenceErrors when chat.js isn't loaded
+// yet or the load order changes.
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 let allTags = [];
 let stages = [];
 
@@ -232,10 +245,11 @@ function tagColor(tag) {
 }
 
 function scoreToVerdict(score) {
-  if (score >= 8) return { label: 'Strong Match',      cls: 'high'  };
-  if (score >= 6) return { label: 'Good Match',        cls: 'mid'   };
-  if (score >= 4) return { label: 'Mixed Signals',     cls: 'mixed' };
-  return              { label: 'Likely Not a Fit',  cls: 'low'   };
+  if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
+  if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
+  if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
+  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
+  return                   { label: 'Weak match',     cls: 'low' };
 }
 
 function stageColor(key) {
@@ -643,7 +657,18 @@ function renderRightSidebar() {
         photos.forEach((url, i) => {
           if (!url || !leaders[i]) return;
           const avatarEl = document.getElementById(`lavatar-${encodeURIComponent(leaders[i].name)}`);
-          if (avatarEl) avatarEl.innerHTML = `<img src="${url}" alt="${leaders[i].name}" onerror="this.parentElement.textContent='${leaders[i].name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}'">`;
+          if (avatarEl) {
+            // Inline onerror handlers break on names with apostrophes (O'Neill)
+            // and are an XSS vector if the name ever contains a quote. Build
+            // the <img> via DOM + event listener instead.
+            const initials = leaders[i].name.split(' ').map(n => n[0] || '').join('').slice(0, 2).toUpperCase();
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = leaders[i].name;
+            img.addEventListener('error', () => { avatarEl.textContent = initials; });
+            avatarEl.innerHTML = '';
+            avatarEl.appendChild(img);
+          }
         });
       }
     );

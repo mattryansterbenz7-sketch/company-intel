@@ -374,9 +374,11 @@
     /* Score breakdown bars */
     details.flags-breakdown summary { color: var(--ci-text-secondary); }
     details.flags-breakdown summary::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ci-text-secondary); margin-right: 8px; flex-shrink: 0; }
-    .breakdown-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .breakdown-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; position: relative; }
     .breakdown-row:last-child { margin-bottom: 0; }
     .breakdown-label { font-size: 11px; color: var(--ci-text-secondary); width: 110px; flex-shrink: 0; font-weight: 500; }
+    .breakdown-tooltip { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--ci-bg-overlay, #fff); border: 1px solid var(--ci-border-default); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 6px 10px; font-size: 11px; line-height: 1.5; color: var(--ci-text-secondary); z-index: 50; pointer-events: none; }
+    .breakdown-row:hover .breakdown-tooltip { display: block; }
     .breakdown-bar { flex: 1; height: 6px; background: var(--ci-border-default); border-radius: 3px; overflow: hidden; }
     .breakdown-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
     .breakdown-val { font-size: 11px; font-weight: 700; width: 20px; text-align: right; flex-shrink: 0; }

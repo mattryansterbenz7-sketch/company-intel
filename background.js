@@ -486,11 +486,13 @@ async function trackApiCall(provider, response, model) {
 
     // Reset daily counters if new day
     if (usage.lastDayReset !== today) {
+      usage.costToday = 0;
       for (const key of Object.keys(usage)) {
-        if (key === 'lastDayReset') continue;
+        if (key === 'lastDayReset' || key === 'costToday') continue;
         const p = usage[key];
         if (p?.requestsToday !== undefined) {
           p.requestsToday = 0;
+          p.costToday = 0;
           if (p.tokensToday) p.tokensToday = { input: 0, output: 0 };
         }
       }
@@ -528,7 +530,7 @@ async function trackApiCall(provider, response, model) {
     // on Tier 3 chat calls where the system prompt is cached.
     if (provider === 'anthropic' || provider === 'openai') {
       try {
-        const data = await response.clone().json();
+        const data = await response.json();
         const inputTokens  = data.usage?.input_tokens || data.usage?.prompt_tokens || 0;
         const outputTokens = data.usage?.output_tokens || data.usage?.completion_tokens || 0;
         const cacheCreation = data.usage?.cache_creation_input_tokens || 0;
@@ -543,15 +545,26 @@ async function trackApiCall(provider, response, model) {
         // Cache-aware cost
         const callCost = estimateCallCost(model || '', inputTokens, outputTokens, cacheCreation, cacheRead);
         dayEntry.estimatedCost = (dayEntry.estimatedCost || 0) + callCost;
-        if (!usage.costToday) usage.costToday = 0;
+        if (typeof usage.costToday !== 'number') usage.costToday = 0;
         usage.costToday += callCost;
-        if (usage.lastDayReset !== today) usage.costToday = callCost;
+        if (typeof pd.costToday !== 'number') pd.costToday = 0;
+        pd.costToday += callCost;
         const cacheNote = (cacheCreation || cacheRead)
           ? ` (cache: write=${cacheCreation} read=${cacheRead})`
           : '';
         console.log(`[Cost] ${model || provider} — in:${inputTokens} out:${outputTokens}${cacheNote} → $${callCost.toFixed(4)} (today: $${usage.costToday.toFixed(4)})`);
-      } catch {}
+        // Per-call log for cost breakdown UI (AI calls only)
+        if (!usage.callLog) usage.callLog = [];
+        usage.callLog.push({ ts: Date.now(), provider, model: model || provider, input: totalIn, output: outputTokens, cost: callCost });
+        // Keep only today's entries, max 500
+        usage.callLog = usage.callLog.filter(c => c.ts > Date.now() - 86400000).slice(-500);
+      } catch (costErr) {
+        console.error('[Cost] Failed to track cost:', costErr.message);
+      }
     }
+
+    // Non-AI providers (Granola/Apollo/Serper) have $0 cost — don't add to callLog
+    // (request counts are already tracked in per-provider pd.requestsToday above)
 
     // Anthropic rate limit headers
     if (provider === 'anthropic') {
@@ -564,7 +577,7 @@ async function trackApiCall(provider, response, model) {
     }
 
     await saveApiUsage(usage);
-  } catch {}
+  } catch (outerErr) { console.error('[Cost] trackApiCall outer error:', outerErr.message); }
 }
 
 const CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 14 days — company data doesn't change daily
@@ -665,7 +678,7 @@ async function claudeApiCall(body, maxRetries = 3) {
       },
       body: JSON.stringify(body)
     });
-    trackApiCall('anthropic', res, body.model); // non-blocking, no await needed
+    trackApiCall('anthropic', res.clone(), body.model); // clone before body is consumed
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
       console.warn(`[Claude] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -701,7 +714,7 @@ async function openAiChatCall({ model, system, messages, max_tokens }, maxRetrie
       },
       body: JSON.stringify({ model, messages: oaiMessages, max_tokens })
     });
-    trackApiCall('openai', res, model); // non-blocking, no await needed
+    trackApiCall('openai', res.clone(), model); // clone before body is consumed
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[OpenAI] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -1240,6 +1253,173 @@ OUTPUT: Return ONLY the rewritten text. No preamble, no explanation, no quotes a
     return true;
   }
 
+  // ── Dev Mock Scoring (no API call) ──────────────────────────────────────────
+  if (message.type === 'DEV_MOCK_SCORE') {
+    (async () => {
+      try {
+        const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+        const entries = savedCompanies || [];
+        const idx = entries.findIndex(e => e.id === message.entryId);
+        if (idx === -1) { sendResponse({ error: 'Entry not found' }); return; }
+
+        // Load user's actual flags to build realistic fixture
+        const localData = await new Promise(r => chrome.storage.local.get([
+          'profileAttractedTo', 'profileDealbreakers', 'scoringWeights'
+        ], r));
+        const attractedTo = localData.profileAttractedTo || [];
+        const dealbreakers = localData.profileDealbreakers || [];
+        const weights = localData.scoringWeights || { qualificationFit: 20, roleFit: 20, cultureFit: 25, companyFit: 20, compFit: 15 };
+
+        // Fire ~40% of green flags and ~20% of red flags randomly
+        const fireRandom = (arr, pct) => arr.filter(() => Math.random() < pct);
+        const firedGreens = fireRandom(attractedTo, 0.4);
+        const firedReds = fireRandom(dealbreakers, 0.2);
+
+        const DIMS_MOCK = ['roleFit', 'cultureFit', 'companyFit', 'compFit'];
+        const BASELINE_M = 5.0;
+        const SEV_MUL = 0.5;
+        const mockFlagMap = {};
+        [...attractedTo, ...dealbreakers].forEach(f => { mockFlagMap[f.id] = f; });
+
+        const mockEvidenceTemplates = [
+          kws => `JD states: "${kws.length ? kws[0] : 'relevant qualifier'}" mentioned in role requirements`,
+          kws => `Job posting: "You will ${kws.length ? kws[0] : 'work in this capacity'}..." — aligns with this criterion`,
+          kws => `From posting: role description references ${kws.length ? '"' + kws.join('", "') + '"' : 'matching signals'}`,
+          kws => `Glassdoor reviews mention ${kws.length ? kws[0] : 'this characteristic'} as part of the culture`,
+          kws => `Company careers page highlights ${kws.length ? '"' + kws[0] + '"' : 'matching values'} in their team description`,
+        ];
+        function mockEvidence(f) {
+          const kws = f.keywords || [];
+          const tmpl = mockEvidenceTemplates[Math.floor(Math.random() * mockEvidenceTemplates.length)];
+          return `[Mock] ${tmpl(kws)}`;
+        }
+
+        function mockCalcDim(dim, greens, reds) {
+          let s = BASELINE_M;
+          const adj = [];
+          greens.forEach(f => {
+            if ((f.dimension || 'roleFit') !== dim) return;
+            const d = (f.severity || 2) * SEV_MUL;
+            s += d;
+            adj.push({ type: 'green', id: f.id, text: f.text, sev: f.severity || 2, delta: +d, evidence: mockEvidence(f) });
+          });
+          reds.forEach(f => {
+            if ((f.dimension || 'roleFit') !== dim) return;
+            const d = (f.severity || 2) * SEV_MUL;
+            s -= d;
+            adj.push({ type: 'red', id: f.id, text: f.text, sev: f.severity || 2, delta: -d, evidence: mockEvidence(f) });
+          });
+          return { raw: s, score: Math.round(Math.max(1, Math.min(10, s))), adjustments: adj };
+        }
+
+        const roleDim = mockCalcDim('roleFit', firedGreens, firedReds);
+        const cultureDim = mockCalcDim('cultureFit', firedGreens, firedReds);
+        const companyDim = mockCalcDim('companyFit', firedGreens, firedReds);
+        const compFlagDim = mockCalcDim('compFit', firedGreens, firedReds);
+
+        // Mock comp assessment
+        const compOptions = ['above_strong', 'above_floor', 'at_floor', 'below_floor', 'unknown'];
+        const mockCompAssess = {
+          baseDisclosed: Math.random() > 0.3,
+          baseAmount: 170000,
+          oteDisclosed: Math.random() > 0.5,
+          oteAmount: 280000,
+          baseVsFloor: compOptions[Math.floor(Math.random() * compOptions.length)],
+          oteVsFloor: compOptions[Math.floor(Math.random() * compOptions.length)]
+        };
+        const baseMap = { 'above_strong': 2.5, 'above_floor': 1.5, 'at_floor': 0, 'below_floor': -2.5, 'unknown': 0 };
+        const oteMap = { 'above_strong': 2.0, 'above_floor': 1.0, 'at_floor': 0, 'below_floor': -2.0, 'unknown': 0 };
+        const compAdj = [];
+        const bD = baseMap[mockCompAssess.baseVsFloor] ?? 0;
+        const oD = oteMap[mockCompAssess.oteVsFloor] ?? 0;
+        if (bD) compAdj.push({ type: bD > 0 ? 'green' : 'red', label: 'Base salary vs target', delta: bD });
+        if (oD) compAdj.push({ type: oD > 0 ? 'green' : 'red', label: 'OTE vs target', delta: oD });
+        compAdj.push(...compFlagDim.adjustments);
+        const compRaw = BASELINE_M + bD + oD + (compFlagDim.raw - BASELINE_M);
+        const compScore = Math.round(Math.max(1, Math.min(10, compRaw)));
+
+        const qualScore = Math.floor(Math.random() * 4) + 5; // 5-8
+        const breakdown = {
+          qualificationFit: qualScore,
+          roleFit: roleDim.score,
+          cultureFit: cultureDim.score,
+          companyFit: companyDim.score,
+          compFit: compScore
+        };
+        const rawOverall = (qualScore * weights.qualificationFit + roleDim.score * weights.roleFit +
+          cultureDim.score * weights.cultureFit + companyDim.score * weights.companyFit +
+          compScore * weights.compFit) / 100;
+        const overall = Math.round(rawOverall);
+
+        const flagsFired = {
+          roleFit: { green: roleDim.adjustments.filter(a => a.type === 'green'), red: roleDim.adjustments.filter(a => a.type === 'red') },
+          cultureFit: { green: cultureDim.adjustments.filter(a => a.type === 'green'), red: cultureDim.adjustments.filter(a => a.type === 'red') },
+          companyFit: { green: companyDim.adjustments.filter(a => a.type === 'green'), red: companyDim.adjustments.filter(a => a.type === 'red') },
+          compFit: { green: compAdj.filter(a => a.type === 'green'), red: compAdj.filter(a => a.type === 'red') }
+        };
+
+        const firedIds = new Set([...firedGreens.map(f => f.id), ...firedReds.map(f => f.id)]);
+        const neutralFlags = {};
+        DIMS_MOCK.forEach(dim => {
+          neutralFlags[dim] = {
+            green: attractedTo.filter(f => (f.dimension || 'roleFit') === dim && !firedIds.has(f.id) && f.unknownNeutral),
+            red: dealbreakers.filter(f => (f.dimension || 'roleFit') === dim && !firedIds.has(f.id) && f.unknownNeutral)
+          };
+        });
+
+        const mockQuals = [
+          { id: 'q0', requirement: '5+ years SaaS sales experience', status: 'met', evidence: '[Mock] 8 years enterprise SaaS', importance: 'required', sources: ['resume'] },
+          { id: 'q1', requirement: 'Enterprise account management', status: 'met', evidence: '[Mock] Led Fortune 500 accounts', importance: 'required', sources: ['resume'] },
+          { id: 'q2', requirement: 'CRM expertise (Salesforce)', status: 'partial', evidence: '[Mock] HubSpot experience, not Salesforce', importance: 'preferred', sources: ['resume'] },
+          { id: 'q3', requirement: 'Industry vertical knowledge', status: 'unknown', evidence: null, importance: 'preferred', sources: [] }
+        ];
+
+        const existing = entries[idx].jobMatch || {};
+        entries[idx].jobMatch = {
+          ...existing,
+          score: overall,
+          breakdown,
+          flagsFired,
+          neutralFlags,
+          qualifications: mockQuals,
+          quickTake: [{ type: 'green', text: '[Mock] Strong culture alignment signals' }, { type: 'red', text: '[Mock] Unclear growth trajectory' }],
+          coopTake: '[Mock] Solid role fit with some comp uncertainty. Good enough to explore.',
+          scoreRationale: `qual ${qualScore}×${weights.qualificationFit}% + role ${roleDim.score}×${weights.roleFit}% + culture ${cultureDim.score}×${weights.cultureFit}% + company ${companyDim.score}×${weights.companyFit}% + comp ${compScore}×${weights.compFit}% = ${rawOverall.toFixed(2)} → ${overall}/10`,
+          compAssessment: mockCompAssess,
+          dimensionRationale: {
+            roleFit: '[Mock] Role aligns well with GTM leadership background',
+            cultureFit: '[Mock] Fast-paced startup culture matches preferences',
+            companyFit: '[Mock] Series B stage fits target company profile',
+            compFit: '[Mock] Comp appears competitive but OTE structure unclear'
+          },
+          roleBrief: {
+            roleSummary: '[Mock] VP Sales owning enterprise revenue, 10-person team, $20M ARR target.',
+            whyInteresting: '[Mock] High ownership, direct CEO report, equity upside at Series B.',
+            concerns: '[Mock] Unclear if comp is truly competitive at this stage.',
+            compSummary: mockCompAssess.baseDisclosed ? '$170K base' : 'Not disclosed',
+            qualificationMatch: '3 of 4 requirements met',
+            qualificationScore: qualScore
+          },
+          hardDQ: { flagged: false, reasons: [] },
+          lastUpdatedAt: existing.lastUpdatedAt || null,
+          mockScoredAt: Date.now(),
+          lastScoringUsage: { model: 'dev-mock', input: 0, output: 0, cost: 0 }
+        };
+        entries[idx].quickFitScore = overall;
+        entries[idx].quickFitReason = entries[idx].jobMatch.coopTake;
+        entries[idx].quickTake = entries[idx].jobMatch.quickTake;
+
+        await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));
+        console.log('[DevMock] Wrote mock score for', entries[idx].company, '— score:', overall);
+        sendResponse({ ok: true });
+      } catch (err) {
+        console.error('[DevMock] Error:', err);
+        sendResponse({ error: err.message });
+      }
+    })();
+    return true;
+  }
+
   // ── Quick Fit Scoring Handlers ──────────────────────────────────────────────
   if (message.type === 'QUICK_FIT_SCORE') {
     processQuickFitScore(message.entryId).then(sendResponse).catch(err => {
@@ -1418,13 +1598,21 @@ async function processQuickFitScore(entryId) {
       'profileGreenLights', 'profileRedLights', 'profileSkills',
       'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
       'profileRoleICP', 'profileCompanyICP',
-      'profileResume', 'profileExperience'
+      'profileResume', 'profileExperience', 'profileExperienceEntries',
+      'scoringWeights'
     ], resolve)
   );
   const syncData = await new Promise(resolve =>
     chrome.storage.sync.get(['prefs'], resolve)
   );
   const prefs = syncData.prefs || {};
+  const weights = localData.scoringWeights || {
+    qualificationFit: 20,
+    roleFit: 20,
+    cultureFit: 25,
+    companyFit: 20,
+    compFit: 15
+  };
 
   // Structured data with legacy fallback
   const attractedTo = localData.profileAttractedTo || [];
@@ -1435,6 +1623,60 @@ async function processQuickFitScore(entryId) {
   const greenLights = attractedTo.length ? attractedTo.map(e => e.text).join('\n') : (localData.profileGreenLights || 'Not specified');
   const redLights = dealbreakers.length ? dealbreakers.map(e => e.text).join('\n') : (localData.profileRedLights || 'Not specified');
   const skills = localData.profileSkills || 'Not specified';
+
+  // ── PRD1: Build structured flag reference map for deterministic scoring ──
+  const DIMS = ['roleFit', 'cultureFit', 'companyFit', 'compFit'];
+  const BASELINE = 5.0;
+  const SEV_MULTIPLIER = 0.5;
+
+  const flagMap = {};
+  [...attractedTo, ...dealbreakers].forEach(f => {
+    flagMap[f.id] = f;
+  });
+
+  function buildFlagList(flags) {
+    return (flags || []).map(f =>
+      `  [id:${f.id}] [sev:${f.severity || 2}] [dim:${f.dimension || 'roleFit'}] [unknown_neutral:${f.unknownNeutral ? 'yes' : 'no'}] ${f.text}${f.keywords?.length ? ` (keywords: ${f.keywords.join(', ')})` : ''}`
+    ).join('\n');
+  }
+
+  const greenFlagList = buildFlagList(attractedTo);
+  const redFlagList = buildFlagList(dealbreakers);
+
+  // If no job description stored but we have a job URL, try to fetch it
+  if (!entry.jobDescription && entry.jobUrl) {
+    try {
+      console.log('[Scoring] No jobDescription stored — fetching from jobUrl:', entry.jobUrl);
+      const res = await fetch(entry.jobUrl, { headers: { 'Accept': 'text/html' } });
+      if (res.ok) {
+        const html = await res.text();
+        // Strip HTML tags, scripts, styles — extract visible text
+        const text = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&#\d+;/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (text.length > 100) {
+          entry.jobDescription = text.slice(0, 8000);
+          // Persist so we don't re-fetch next time
+          const idx = entries.findIndex(e => e.id === entryId);
+          if (idx !== -1) {
+            entries[idx].jobDescription = entry.jobDescription;
+            await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));
+          }
+          console.log(`[Scoring] Fetched ${text.length} chars of job description from URL`);
+        }
+      }
+    } catch (fetchErr) {
+      console.warn('[Scoring] Failed to fetch job URL:', fetchErr.message);
+    }
+  }
 
   const jobDesc = (entry.jobDescription || '').slice(0, 3000);
   const jobDescLower = jobDesc.toLowerCase();
@@ -1501,6 +1743,28 @@ async function processQuickFitScore(entryId) {
     }
   }
 
+  // ── PRD1: Hard DQ check (deterministic, runs before LLM) ──
+  function checkHardDQ(jobSnapshot, prefs) {
+    const reasons = [];
+    // Work arrangement Hard DQ
+    const jobArr = jobSnapshot?.workArrangement || '';
+    const userPref = Array.isArray(prefs.workArrangement) ? prefs.workArrangement : [prefs.workArrangement].filter(Boolean);
+    if (userPref.length === 1 && userPref[0].toLowerCase() === 'remote') {
+      if (/on.?site|in.?office|in.?person/i.test(jobArr) && !/remote/i.test(jobArr)) {
+        reasons.push('Role requires on-site — you are Remote only');
+      }
+    }
+    // Comp Hard DQ — only if base salary is explicitly stated AND clearly below floor
+    const salaryFloorNum = parseFloat(prefs.salaryFloor || 0);
+    const extractedBase = jobSnapshot?.baseSalaryMin || jobSnapshot?.baseSalaryMax;
+    if (salaryFloorNum && extractedBase && extractedBase < salaryFloorNum * 0.85) {
+      reasons.push(`Base salary $${extractedBase.toLocaleString()} is clearly below your $${salaryFloorNum.toLocaleString()} floor`);
+    }
+    return { isHardDQ: reasons.length > 0, reasons };
+  }
+
+  const hardDQResult = checkHardDQ(entry.jobSnapshot || {}, prefs);
+
   // ── Build structured candidate preferences for prompt ──
   let candidateSection = '[Candidate Preferences]\n';
   if (attractedTo.length) {
@@ -1532,6 +1796,18 @@ async function processQuickFitScore(entryId) {
   const profileSkills = localData.profileSkills || '';
   if (profileSkills) candidateSection += `\nSkills & Competencies:\n${profileSkills.replace(/<[^>]+>/g, ' ').slice(0, 1500)}`;
   if (skillTags.length) candidateSection += `\nSkill tags: ${skillTags.join(', ')}`;
+
+  // Structured experience entries — tagged skills/tools per role (authoritative evidence)
+  const expEntries = localData.profileExperienceEntries || [];
+  if (expEntries.length) {
+    candidateSection += '\nStructured experience (treat tagged skills as confirmed proficiency):';
+    expEntries.forEach(e => {
+      if (!e.company && !(e.tags || []).length) return;
+      const tags = (e.tags || []).join(', ');
+      candidateSection += `\n- ${e.company || 'Unknown'}${e.titles ? ` (${e.titles})` : ''}${e.dateRange ? ` [${e.dateRange}]` : ''}${tags ? `: ${tags}` : ''}`;
+    });
+  }
+
   const arrJoin = v => Array.isArray(v) ? v.join(', ') : (v || '');
   if (arrJoin(roleICP.targetFunction) || roleICP.seniority) {
     candidateSection += `\nRole ICP: ${[arrJoin(roleICP.targetFunction), roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
@@ -1598,105 +1874,124 @@ async function processQuickFitScore(entryId) {
     keywordContext += `\n\nIMPORTANT: Hard dealbreaker keywords detected — these MUST be reflected in scoring.`;
   }
 
-  const prompt = `You are a job fit screener and role analyst. Based on the candidate's preferences, the job posting, and what's known about the company, produce a unified fit score AND role brief.
+  const salaryFloor = prefs.salaryFloor || 'not set';
+  const salaryStrong = prefs.salaryStrong || 'not set';
+
+  // ── PRD1: New deterministic scoring prompt ──
+  // The LLM's only job is to detect which configured flag IDs fired and return
+  // evidence snippets. All scoring math happens in JavaScript after the response.
+  const prompt = `You are Coop, an AI career advisor. Analyze this job posting against the candidate's configured preferences.
 ${coopInterp.principlesBlock()}
 
-${candidateSection}${keywordContext}
+YOUR ONLY SCORING JOB:
+- Detect which flag IDs from the lists below have evidence in this posting
+- Return the exact quote or paraphrase from the posting that caused each flag to fire
+- Do NOT invent flags that aren't in the lists
+- Do NOT assign numeric scores — the scoring math is handled by code
 
-[Job Posting]
+JOB POSTING:
 Company: ${entry.company || 'Unknown'}
 Title: ${entry.jobTitle || 'Unknown'}
+Employees: ${entry.employees || 'Not specified'}
+Funding: ${entry.funding || 'Not specified'}
+Industry: ${entry.industry || 'Not specified'}
+${entry.intelligence?.overview ? `Company Overview: ${entry.intelligence.overview}` : ''}
+${entry.intelligence?.product ? `Product: ${entry.intelligence.product}` : ''}
+${entry.intelligence?.targetCustomers ? `Target Customers: ${entry.intelligence.targetCustomers}` : ''}
+${entry.intelligence?.competitors ? `Competitors: ${entry.intelligence.competitors}` : ''}
 Compensation: ${entry.baseSalaryRange || entry.oteTotalComp || entry.jobSnapshot?.salary || entry.salary || 'Not specified'}
 Work Arrangement: ${entry.jobSnapshot?.workArrangement || entry.workArrangement || 'Not specified'}
 Location: ${entry.jobSnapshot?.location || 'Not specified'}
 Description (first 3000 chars): ${jobDesc}
 ${companyContext ? `\n[Company Context from Web]\n${companyContext}` : ''}
 
-SCORING RULES:
-- quickTake: 2-4 most decisive signals (green for fits, red for dealbreakers). 8-15 words each. Lead with the most important.
-- strongFits: Only genuinely strong alignment backed by real evidence. Empty array is fine.
+CANDIDATE BACKGROUND:
+${candidateSection}${keywordContext}
 
-RED FLAG SOURCES — STRICT. You may ONLY put something in redFlags if it meets one of these two criteria:
-  A) A configured "Red flags" entry from the list above is triggered by explicit, present evidence in the job posting or company data. Each red flag MUST populate the "configuredEntry" field with the exact text of the dealbreaker that fired, AND MUST populate the "evidence" field with a verbatim quote from the source. If a configured entry is marked [neutral-if-absent] and there is no positive evidence of it in the posting, skip it entirely — silence does not trigger it.
-  B) Compensation is explicitly stated in the posting AND the disclosed number is below the candidate's configured BASE FLOOR or OTE FLOOR. "Strong" / "strong offer" / "target" thresholds are aspirations, NOT floors — being below the "strong" number is NEVER a red flag, only mention it in the reasoning. For salary ranges, only flag if the TOP of the range is below the FLOOR. For undisclosed OTE — not a red flag.
+CONFIGURED GREEN FLAGS (attractions):
+${greenFlagList || '(none configured)'}
 
-NEVER put these in redFlags:
-  - Unmet "Attracted To" items. Unmet green flags lower the preference score; they do NOT appear in redFlags.
-  - ICP or role scope concerns not explicitly listed in the configured Red flags list. Role scope concerns ("lacks P&L ownership", "too junior", "not strategic enough") are NOT red flags unless explicitly configured.
-  - Anything not disclosed or mentioned (missing OTE, equity not mentioned, travel not mentioned, reporting structure not mentioned).
-  - Speculation or inference ("likely below", "suggests misalignment", "silence implies").
-  - Role type concerns (account management, client success, etc.) unless explicitly in the Red flags list.
-  - Compensation below the "strong" / "strong offer" target. Only below-FLOOR is valid.
-  - LOCATION concerns based on the company's HQ, headquarters, or office locations. Location for red flag purposes comes ONLY from the job posting's "Work Arrangement" and "Location" fields above — NEVER from [Company Context from Web]. If the job posting says Remote, the job is remote — the company HQ being anywhere in the world is irrelevant. Do not invent on-site/hybrid concerns from company context.
+CONFIGURED RED FLAGS (dealbreakers/concerns):
+${redFlagList || '(none configured)'}
 
-An empty redFlags array is CORRECT and expected when no configured dealbreaker is clearly triggered.
+COMPENSATION TARGETS:
+Base floor: $${salaryFloor} | Strong: $${salaryStrong}
+OTE floor: $${prefs.oteFloor || 'not set'} | Strong: $${prefs.oteStrong || 'not set'}
+Extracted base from posting: ${entry.baseSalaryRange || entry.jobSnapshot?.baseSalaryRange || 'not found'}
+Extracted OTE from posting: ${entry.oteTotalComp || entry.jobSnapshot?.oteTotalComp || 'not found'}
 
-- hardDQ: true ONLY when a severity-5 configured dealbreaker is clearly triggered. Do not invent.
-- reason: explain WHY you gave this score. Do NOT repeat job title or company name.
-- Green flag importance matters: high-importance (4-5) green flags that match should significantly boost the score. A role matching multiple importance-5 green flags should score higher even if minor red flags exist. Green flags counterbalance red flags — weigh both sides.
-- The "Work Arrangement" and "Location" fields above are authoritative for where/how the job is performed. Company HQ from research is NOT the job location. If "Work Arrangement: Remote", the job IS remote — do not flag it as on-site based on anything in [Company Context from Web].
-
-QUALIFICATION MATCH — EMPLOYER'S PERSPECTIVE ONLY:
-This section answers ONE question: "Would this employer seriously consider hiring this candidate?"
-The candidate's PREFERENCES are IRRELEVANT here. Do NOT factor in whether the candidate WANTS this role — only whether they are QUALIFIED for it. A famous singer is qualified for a local musical even if they wouldn't want to do it.
-- Extract ALL qualifications/requirements listed in the posting. Also add implicit requirements the JOB DEMANDS based on role level and company context.
+QUALIFICATION REQUIREMENTS (from job posting):
+Extract the key requirements from the posting and assess whether the candidate meets each one based on their resume and background.
+- Extract ALL qualifications/requirements listed in the posting plus implicit requirements based on role level and company context.
 - Include: seniority level, team size, revenue scope, industry expertise, company scale, technical skills, soft skills.
 - For each, determine importance: "required", "preferred", or "bonus".
-- Match each against the candidate's ACTUAL experience — resume, skills, accomplishments, career trajectory. Status: "met" (clear evidence), "partial" (related but gap exists — explain the gap), "unmet" (no evidence), "unknown" (can't determine from available data — but BEFORE marking "unknown", thoroughly check the resume, experience entries, skills, and accomplishments. If the candidate has relevant experience, mark it "met" or "partial" with evidence, not "unknown").
-- For "met" and "partial", cite specific evidence from the candidate's background in under 15 words.
-- IMPORTANT: Read the candidate's FULL profile carefully. If their resume summary, experience entries, or skills section clearly demonstrates a competency, it is "met" — not "unknown." Only use "unknown" when there is genuinely no evidence either way.
-- qualificationMatch: 2-3 sentences HONEST assessment purely from the employer's viewpoint: experience match, seniority fit, skill gaps. FORBIDDEN words/phrases: "preferences", "desires", "wants", "mismatching candidate's", "doesn't align with candidate", "compensation mismatch". Only allowed content: skills, experience, seniority, industry background, and whether a hiring manager would seriously consider this person.
-- qualificationScore: 1-10 FROM THE EMPLOYER'S PERSPECTIVE ONLY. This measures how hireable the candidate is for this specific role. The candidate's preferences, ICP, green flags, red flags, salary floor, and work arrangement preferences must NOT affect this score. A role the candidate wouldn't enjoy but is perfectly qualified for should still get qualificationScore 8-9.
+- Status: "met" (clear evidence), "partial" (related but gap exists), "unmet" (no evidence), "unknown" (genuinely can't determine).
+- For "met" and "partial", cite specific evidence from the candidate's background.
+- Read the candidate's FULL profile carefully before marking "unknown".
+- qualificationScore: 1-10 FROM THE EMPLOYER'S PERSPECTIVE ONLY. Would a hiring manager seriously consider this candidate? Preferences are irrelevant here.
+- sources: for each qualification, indicate where the evidence was found: "resume", "email", "meeting", or combinations.
 
-REALISTIC GAP ANALYSIS:
-Evaluate honestly but ONLY on qualification dimensions:
-- SENIORITY GAP: Managing 5 people vs 500 is a real gap.
-- COMPANY SCALE: Startup experience vs enterprise experience — acknowledge real gaps.
-- SCOPE: $1M ARR vs $100M ARR. Regional vs global.
-- YEARS: If the role asks for 10+ years and candidate has 5, that's a real gap.
-- If the candidate would be a stretch hire, say so in qualificationMatch.
+RULES:
+- Green/red flags represent what the CANDIDATE wants or wants to avoid. A flag fires when the JOB POSTING or COMPANY CONTEXT provides evidence that the role/company has that quality.
+- Evidence must come from the job posting or company context — NEVER from the candidate's background. Wrong: "Candidate has experience closing deals." Right: "JD: 'Own full-cycle enterprise sales, $50K+ ACV deals.'"
+- Silence alone is never a firing condition, but contextual signals ARE valid (e.g., a 30-person Series A company strongly implies autonomy/ownership even if not stated)
+- unknownNeutral flags: if genuinely no signal exists in the posting or company context, mark as "not_found" — do NOT fire them
+- For comp flags: ONLY fire a comp flag if the SPECIFIC number it references is explicitly stated in the posting. If a flag says "OTE below $200k" but OTE is not disclosed, do NOT fire it — absence of data is not evidence. If a flag says "base below $90k" but the listed base is $120K+, do NOT fire it — read the actual numbers. Comp flags must be evaluated against the actual disclosed figures, not inferred or guessed.
+- Return ONLY the flag IDs that fired — do not reference flags that didn't fire
+- Each evidence string should quote or paraphrase the specific part of the JD or company context that triggered the flag
+- The "Work Arrangement" and "Location" fields above are authoritative. Company HQ from research is NOT the job location.
+- LOCATION concerns come ONLY from the job posting's fields — NEVER from [Company Context from Web].
 
-SCORE BREAKDOWN — TWO INDEPENDENT DIMENSIONS:
-The overall score combines TWO separate assessments. These are INDEPENDENT — one does not affect the other:
-
-A) EMPLOYER FIT (Would they hire me?):
-  - qualificationFit: 1-10. HONEST match of experience, seniority, scale, and skills against job requirements. Based ONLY on the candidate's resume, experience, and skills vs what the job demands. The candidate's preferences/ICP/green flags/red flags must NOT affect this score.
-
-B) CANDIDATE FIT (Do I want this?):
-  - preferenceFit: 1-10. How many of the candidate's green flags / attracted-to items are present in this role/company?
-  - dealbreakers: 1-10. Impact of the candidate's stated dealbreakers (10=no issues, 1=fatal dealbreaker triggered)
-  - compFit: 1-10. Compensation alignment (10=exceeds strong offer, 5=meets floor, 1=below floor, 5=unknown)
-  - roleFit: 1-10. How well does this role match the candidate's PREFERENCES for role type, seniority level, and company stage? This is about what the candidate WANTS, not what they're qualified for.
-
-OVERALL SCORE: Weight both dimensions equally. Use these anchor points — do NOT default to 5 or 6 as a "safe middle":
-- 10: exceptional on both axes. Rare. Dream role at a dream company where candidate is clearly hireable.
-- 9: strong fit both ways, minor gaps only. Pursue aggressively.
-- 8: solid fit. Strong on one axis, good on the other. Normal "worth pursuing" result.
-- 7: genuinely viable. Some real mismatches but the core is right. Most "above-average" opportunities land here.
-- 6: mixed signal with meaningful gaps but still worth considering. Not a throwaway number — a 6 means "legitimate opportunity with caveats."
-- 5: borderline. Some clear positives and clear negatives that cancel out.
-- 4: more negatives than positives. Usually pass unless comp or brand is compelling.
-- 1-3: poor fit. Clear mismatch on qualification, preference, or both.
-
-CRITICAL: Do not anchor on 5-6 as a default. If a role is genuinely a match — candidate is qualified AND it lines up with their stated preferences — the score should be 7 or above. 6 and below should be reserved for roles with real, identifiable gaps. Don't dilute good fits toward the middle out of caution.
+QUALIFICATIONS:
+- Only include skill/experience/domain qualifications — NOT compensation, benefits, or salary. Comp is handled separately in compAssessment.
 
 ROLE BRIEF:
-- roleSummary: 2-3 sentences on what this role actually is, what you'd own, and what success looks like. Write it for the candidate, not a recruiter.
-- whyInteresting: 1-2 sentences on why this specific role at this specific company could be compelling for THIS candidate given their background. Be honest — if it's not interesting, say so.
-- concerns: 1-2 sentences on legitimate open questions or risks worth investigating before applying. Not missing data — real strategic concerns.
-- compSummary: one line summarizing known comp (base, OTE, equity) or "Not disclosed" if truly nothing.
+- roleSummary: 2-3 sentences on what this role actually is, what you'd own, and what success looks like.
+- whyInteresting: 1-2 sentences on why this role could be compelling for this candidate. Be honest.
+- concerns: 1-2 sentences on legitimate open questions or risks.
+- compSummary: one line summarizing known comp or "Not disclosed".
 
 COMPANY VERIFICATION:
-- detectedCompany: The actual company name this job is for, as stated in the job description. Extract from the posting text, not from the Company field above (which may be wrong).
-- detectedTitle: The actual clean job title from the posting, without trailing numbers or artifacts.
+- detectedCompany: The actual company name from the job description.
+- detectedTitle: The actual clean job title from the posting.
 
-Respond in JSON only:
-{"score": number 1-10, "reason": "one sentence", "quickTake": [{"type": "green/red", "text": "signal"}], "strongFits": [], "redFlags": [], "hardDQ": {"flagged": boolean, "reasons": []}, "qualifications": [{"requirement": "string", "status": "met/partial/unmet/unknown", "evidence": "string or null", "importance": "required/preferred/bonus"}], "scoreBreakdown": {"qualificationFit": number, "preferenceFit": number, "dealbreakers": number, "compFit": number, "roleFit": number}, "roleBrief": {"roleSummary": "", "whyInteresting": "", "concerns": "", "compSummary": "", "qualificationMatch": "", "qualificationScore": number 1-10}, "detectedCompany": "string", "detectedTitle": "string"}`;
+Return ONLY valid JSON, no markdown:
+{
+  "firedGreenFlags": [
+    {"id": "<flag id>", "evidence": "<exact quote or close paraphrase from the posting>"}
+  ],
+  "firedRedFlags": [
+    {"id": "<flag id>", "evidence": "<exact quote or close paraphrase from the posting>"}
+  ],
+  "qualifications": [
+    {"requirement": "<requirement text>", "status": "met|partial|unmet|unknown", "evidence": "<what supports this>", "importance": "required|preferred|bonus", "sources": ["resume"]}
+  ],
+  "qualificationScore": "<1-10, employer lens only>",
+  "dimensionRationale": {
+    "roleFit": "<1 sentence explaining the role fit signal>",
+    "cultureFit": "<1 sentence>",
+    "companyFit": "<1 sentence>",
+    "compFit": "<1 sentence>"
+  },
+  "coopTake": "<1 decisive sentence about overall fit — not a job summary, a verdict>",
+  "compAssessment": {
+    "baseDisclosed": true|false,
+    "baseAmount": 150000,
+    "oteDisclosed": true|false,
+    "oteAmount": 250000,
+    "baseVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown",
+    "oteVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown"
+  },
+  "quickTake": [{"type": "green|red", "text": "<8-15 word signal>"}],
+  "roleBrief": {"roleSummary": "", "whyInteresting": "", "concerns": "", "compSummary": "", "qualificationMatch": "", "qualificationScore": 5},
+  "detectedCompany": "string",
+  "detectedTitle": "string"
+}`;
 
   const quickFitModel = getModelForTask('quickFitScoring');
   const { reply, error, usedModel: scoringModel, usage: scoringUsage } = await chatWithFallback({
     model: quickFitModel,
-    system: 'You are a precise job-fit scoring and role analysis assistant. Respond with valid JSON only.',
+    system: 'You are Coop, a precise career advisor. Analyze job postings against configured preferences. Return ONLY valid JSON — no markdown, no commentary.',
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 3500,
     tag: 'QuickFit'
@@ -1704,18 +1999,61 @@ Respond in JSON only:
 
   if (error) throw new Error(error);
 
-  // Parse response
+  // ── PRD1: Parse LLM response, then calculate all scores deterministically ──
   let score = null;
   let reason = 'Could not parse response';
   let quickTake = [];
   let strongFits = [];
   let redFlags = [];
-  let hardDQ = { flagged: false, reasons: [] };
   let roleBrief = null;
   let qualifications = [];
   let scoreBreakdown = null;
+  let flagsFired = {};
+  let neutralFlags = {};
+  let coopTake = '';
+  let scoreRationale = '';
+  let compAssessment = {};
+  let dimensionRationale = {};
   let detectedCompany = null;
   let detectedTitle = null;
+
+  // Deterministic sub-score calculator
+  function calcDimScore(dim, firedGreens, firedReds) {
+    let dimScore = BASELINE;
+    const adjustments = [];
+    firedGreens.forEach(f => {
+      const flag = flagMap[f.id];
+      if (!flag || (flag.dimension || 'roleFit') !== dim) return;
+      const delta = (flag.severity || 2) * SEV_MULTIPLIER;
+      dimScore += delta;
+      adjustments.push({ type: 'green', id: f.id, text: flag.text, sev: flag.severity || 2, delta: +delta, evidence: f.evidence });
+    });
+    firedReds.forEach(f => {
+      const flag = flagMap[f.id];
+      if (!flag || (flag.dimension || 'roleFit') !== dim) return;
+      const delta = (flag.severity || 2) * SEV_MULTIPLIER;
+      dimScore -= delta;
+      adjustments.push({ type: 'red', id: f.id, text: flag.text, sev: flag.severity || 2, delta: -delta, evidence: f.evidence });
+    });
+    const clamped = Math.max(1, Math.min(10, dimScore));
+    return { raw: dimScore, score: Math.round(clamped), adjustments };
+  }
+
+  // Comp score — deterministic from compAssessment
+  function calcCompScore(ca) {
+    let dimScore = BASELINE;
+    const adjustments = [];
+    const baseMap = { 'above_strong': +2.5, 'above_floor': +1.5, 'at_floor': 0, 'below_floor': -2.5, 'unknown': 0 };
+    const oteMap = { 'above_strong': +2.0, 'above_floor': +1.0, 'at_floor': 0, 'below_floor': -2.0, 'unknown': 0 };
+    const baseDelta = baseMap[ca.baseVsFloor] ?? 0;
+    const oteDelta = oteMap[ca.oteVsFloor] ?? 0;
+    if (baseDelta !== 0) adjustments.push({ type: baseDelta > 0 ? 'green' : 'red', label: 'Base salary vs target', delta: baseDelta });
+    if (oteDelta !== 0) adjustments.push({ type: oteDelta > 0 ? 'green' : 'red', label: 'OTE vs target', delta: oteDelta });
+    dimScore += baseDelta + oteDelta;
+    const clamped = Math.max(1, Math.min(10, dimScore));
+    return { raw: dimScore, score: Math.round(clamped), adjustments };
+  }
+
   try {
     // Strip markdown code fences if present, then balanced-brace extract
     const cleaned = String(reply || '').replace(/```(?:json)?/gi, '').trim();
@@ -1735,52 +2073,25 @@ Respond in JSON only:
     }
     if (jsonStr) {
       const parsed = JSON.parse(jsonStr);
-      score = Number(parsed.score);
-      reason = parsed.reason || 'No reason provided';
-      quickTake = parsed.quickTake || [];
-      // Normalize: support both legacy strings and new {text, source, evidence, configuredEntry} objects
-      const normalizeFlag = f => typeof f === 'string'
-        ? { text: f, source: null, evidence: null, configuredEntry: null }
-        : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null, configuredEntry: f?.configuredEntry || null };
-      strongFits = (parsed.strongFits || []).map(normalizeFlag).filter(f => f.text);
-      redFlags = (parsed.redFlags || []).map(normalizeFlag).filter(f => f.text);
 
-      // ── Red flag validation: enforce the "configured source required" rule ──
-      // The prompt says every red flag MUST cite a configured entry or be a below-floor comp fact.
-      // Drop anything that can't trace back. This is what makes the "How is this configured?" story work.
-      const configuredDealbreakerTexts = dealbreakers.map(d => (d.text || '').toLowerCase().trim()).filter(Boolean);
-      const baseFloorNum = Number(String(prefs.salaryFloor || '').replace(/[^0-9]/g, '')) || null;
-      const oteFloorNum = Number(String(prefs.oteFloor || '').replace(/[^0-9]/g, '')) || null;
-      const before = redFlags.length;
-      const dropped = [];
-      redFlags = redFlags.filter(f => {
-        // Rule A: cites a real configured dealbreaker by text (case-insensitive substring match, either direction)
-        const entry = (f.configuredEntry || '').toLowerCase().trim();
-        if (entry && configuredDealbreakerTexts.some(t => t.includes(entry) || entry.includes(t))) {
-          return true;
-        }
-        // Rule B: compensation flag with evidence showing an actual below-FLOOR number (not "strong")
-        const textLower = (f.text || '').toLowerCase();
-        const evidenceLower = (f.evidence || '').toLowerCase();
-        const looksLikeComp = /salary|comp|base pay|ote|\$\d/.test(textLower);
-        if (looksLikeComp && (baseFloorNum || oteFloorNum)) {
-          // Require evidence to mention a concrete dollar figure AND the flag text to reference the floor, not the strong target
-          const mentionsStrong = /strong|target|aspiration|preferred\s+(range|base)/.test(textLower);
-          if (mentionsStrong) { dropped.push({ reason: 'comp-below-strong-not-floor', flag: f }); return false; }
-          const numsInEvidence = (evidenceLower.match(/\$?([\d,]+)k?/g) || []).map(s => parseInt(s.replace(/[^0-9]/g, ''), 10)).filter(n => n >= 10);
-          const hasConcreteNum = numsInEvidence.length > 0 && f.evidence;
-          if (hasConcreteNum) return true;
-          dropped.push({ reason: 'comp-no-concrete-evidence', flag: f });
-          return false;
-        }
-        dropped.push({ reason: 'no-configured-entry-match', flag: f });
-        return false;
-      });
-      if (dropped.length) {
-        console.warn(`[QuickFit] Dropped ${dropped.length} of ${before} red flags (no configured source):`, dropped.map(d => `[${d.reason}] ${d.flag.text}`));
-      }
-      hardDQ = parsed.hardDQ || { flagged: false, reasons: [] };
+      // Extract LLM outputs (flag detections only — no scores)
+      const firedGreens = parsed.firedGreenFlags || [];
+      const firedReds = parsed.firedRedFlags || [];
+      quickTake = parsed.quickTake || [];
+      coopTake = parsed.coopTake || '';
+      compAssessment = parsed.compAssessment || {};
+      dimensionRationale = parsed.dimensionRationale || {};
       roleBrief = parsed.roleBrief || null;
+
+      // Validate fired flags — only keep flags that exist in our flagMap
+      const validGreens = firedGreens.filter(f => flagMap[f.id]);
+      const validReds = firedReds.filter(f => flagMap[f.id]);
+      const droppedGreens = firedGreens.length - validGreens.length;
+      const droppedReds = firedReds.length - validReds.length;
+      if (droppedGreens || droppedReds) {
+        console.warn(`[QuickFit] Dropped ${droppedGreens} green + ${droppedReds} red flags with unknown IDs`);
+      }
+
       // Structured qualification line items
       if (parsed.qualifications) {
         qualifications = parsed.qualifications.map((q, i) => ({
@@ -1789,33 +2100,103 @@ Respond in JSON only:
           status: q.status || 'unknown',
           evidence: q.evidence || null,
           importance: q.importance || 'required',
+          sources: q.sources || [],
           dismissed: false
         }));
       }
-      // Score breakdown components
-      if (parsed.scoreBreakdown) {
-        scoreBreakdown = {
-          qualificationFit: parsed.scoreBreakdown.qualificationFit || 5,
-          preferenceFit: parsed.scoreBreakdown.preferenceFit || 5,
-          dealbreakers: parsed.scoreBreakdown.dealbreakers || 5,
-          compFit: parsed.scoreBreakdown.compFit || 5,
-          roleFit: parsed.scoreBreakdown.roleFit || 5
-        };
+      // Deterministic qualification score from met/partial/unmet items
+      // (ignore LLM's qualificationScore — it's a black box)
+      const compKeywords = /\b(salary|salaries|comp(ensation)?|pay|ote|base\s*pay|incentive|bonus|equity|stock|commission)\b/i;
+      const scorableQuals = qualifications.filter(q => q.status !== 'unknown' && !compKeywords.test(q.requirement));
+      let qualScore;
+      if (scorableQuals.length === 0) {
+        qualScore = 5; // baseline — no evidence either way
+      } else {
+        const credits = scorableQuals.reduce((sum, q) => {
+          if (q.status === 'met') return sum + 1;
+          if (q.status === 'partial') return sum + 0.5;
+          return sum; // unmet = 0
+        }, 0);
+        qualScore = Math.round(Math.max(1, Math.min(10, 10 * credits / scorableQuals.length)));
       }
+      console.log(`[QuickFit] Qual score: ${qualScore}/10 (${scorableQuals.length} items, ${scorableQuals.filter(q=>q.status==='met').length} met, ${scorableQuals.filter(q=>q.status==='partial').length} partial, ${scorableQuals.filter(q=>q.status==='unmet').length} unmet)`);
+
+      // ── PRD1: Deterministic sub-score calculation ──
+      // Debug: log fired flags and their dimensions for scoring traceability
+      console.log('[QuickFit] Fired flags:', { greens: validGreens.length, reds: validReds.length });
+      validGreens.forEach(f => {
+        const flag = flagMap[f.id];
+        console.log(`[QuickFit]   GREEN id=${f.id} dim=${flag?.dimension || '(none→roleFit)'} text="${(flag?.text || '').slice(0, 60)}"`);
+      });
+      validReds.forEach(f => {
+        const flag = flagMap[f.id];
+        console.log(`[QuickFit]   RED   id=${f.id} dim=${flag?.dimension || '(none→roleFit)'} text="${(flag?.text || '').slice(0, 60)}"`);
+      });
+
+      const roleDim    = calcDimScore('roleFit',    validGreens, validReds);
+      const cultureDim = calcDimScore('cultureFit', validGreens, validReds);
+      const companyDim = calcDimScore('companyFit', validGreens, validReds);
+      const compDim    = calcCompScore(compAssessment);
+
+      // Also fold comp-dimension user flags into compDim adjustments
+      const compFlagResult = calcDimScore('compFit', validGreens, validReds);
+      if (compFlagResult.adjustments.length) {
+        compDim.adjustments.push(...compFlagResult.adjustments);
+        compDim.raw += compFlagResult.raw - BASELINE;
+        compDim.score = Math.round(Math.max(1, Math.min(10, compDim.raw)));
+      }
+
+      scoreBreakdown = {
+        qualificationFit: qualScore,
+        roleFit:          roleDim.score,
+        cultureFit:       cultureDim.score,
+        companyFit:       companyDim.score,
+        compFit:          compDim.score
+      };
+
+      // Overall weighted score
+      const rawOverall =
+        (qualScore       * weights.qualificationFit +
+         roleDim.score   * weights.roleFit +
+         cultureDim.score * weights.cultureFit +
+         companyDim.score * weights.companyFit +
+         compDim.score   * weights.compFit) / 100;
+      score = Math.round(rawOverall);
+
+      scoreRationale = `${qualScore}×${weights.qualificationFit} + ${roleDim.score}×${weights.roleFit} + ${cultureDim.score}×${weights.cultureFit} + ${companyDim.score}×${weights.companyFit} + ${compDim.score}×${weights.compFit} = ${(rawOverall * 100).toFixed(0)}/100 → ${score}`;
+      reason = coopTake || 'Scored';
+
+      // ── PRD1: Build flagsFired with full adjustment objects ──
+      flagsFired = {
+        roleFit:    { green: roleDim.adjustments.filter(a => a.type === 'green'), red: roleDim.adjustments.filter(a => a.type === 'red') },
+        cultureFit: { green: cultureDim.adjustments.filter(a => a.type === 'green'), red: cultureDim.adjustments.filter(a => a.type === 'red') },
+        companyFit: { green: companyDim.adjustments.filter(a => a.type === 'green'), red: companyDim.adjustments.filter(a => a.type === 'red') },
+        compFit:    { green: compDim.adjustments.filter(a => a.type === 'green'), red: compDim.adjustments.filter(a => a.type === 'red') }
+      };
+
+      // Build neutral (not-found) flags for display
+      const firedIds = new Set([...validGreens.map(f => f.id), ...validReds.map(f => f.id)]);
+      DIMS.forEach(dim => {
+        const dimGreens = attractedTo.filter(f => (f.dimension || 'roleFit') === dim);
+        const dimReds = dealbreakers.filter(f => (f.dimension || 'roleFit') === dim);
+        neutralFlags[dim] = {
+          green: dimGreens.filter(f => !firedIds.has(f.id) && f.unknownNeutral),
+          red: dimReds.filter(f => !firedIds.has(f.id) && f.unknownNeutral)
+        };
+      });
+
+      // Build legacy strongFits/redFlags from fired flags for backward compat
+      strongFits = validGreens.map(f => flagMap[f.id]?.text).filter(Boolean).map(t => ({ text: t }));
+      redFlags = validReds.map(f => flagMap[f.id]?.text).filter(Boolean).map(t => ({ text: t }));
+
       // Company/title verification
       if (parsed.detectedCompany) detectedCompany = parsed.detectedCompany;
       if (parsed.detectedTitle) detectedTitle = parsed.detectedTitle;
     }
   } catch (parseErr) {
     console.warn('[QuickFit] Failed to parse response. Length:', (reply || '').length, 'Tail:', String(reply || '').slice(-200));
-    // Don't throw — fall through and save with existing score + updated timestamp
-    // so the poll detects completion and the card re-renders showing the attempt.
     reason = 'Scoring response could not be parsed — try again';
   }
-
-  // F1: post-processor score caps and overrides removed. The model decides
-  // the score from the rubric + the candidate's operating principles. No
-  // silent rewrites. See prds/F1-coop-opinions-from-settings.md.
 
   // Save result to the entry
   const freshData = await new Promise(resolve =>
@@ -1827,7 +2208,7 @@ Respond in JSON only:
     freshEntries[idx].quickFitScore = score;
     freshEntries[idx].quickFitReason = reason;
     freshEntries[idx].quickTake = quickTake;
-    freshEntries[idx].hardDQ = hardDQ;
+    freshEntries[idx].hardDQ = hardDQResult.isHardDQ ? { flagged: true, reasons: hardDQResult.reasons } : { flagged: false, reasons: [] };
     freshEntries[idx].quickFitScoredAt = Date.now();
     // Auto-correct company name if AI detected a mismatch
     if (detectedCompany && detectedCompany !== freshEntries[idx].company) {
@@ -1886,6 +2267,15 @@ Respond in JSON only:
       roleBrief: roleBrief || existing.roleBrief || null,
       qualifications: qualifications.length ? qualifications : existing.qualifications || [],
       scoreBreakdown: scoreBreakdown || existing.scoreBreakdown || null,
+      flagsFired: Object.keys(flagsFired).length ? flagsFired : existing.flagsFired || {},
+      neutralFlags: Object.keys(neutralFlags).length ? neutralFlags : existing.neutralFlags || {},
+      dimensionRationale: Object.keys(dimensionRationale).length ? dimensionRationale : existing.dimensionRationale || {},
+      coopTake: coopTake || existing.coopTake || '',
+      compAssessment: Object.keys(compAssessment).length ? compAssessment : existing.compAssessment || {},
+      scoreRationale: scoreRationale || existing.scoreRationale || '',
+      scoringWeightsSnapshot: scoreBreakdown ? { ...weights } : existing.scoringWeightsSnapshot || null,
+      hardDQ: hardDQResult.isHardDQ,
+      hardDQReasons: hardDQResult.reasons,
       dismissedFlags: existing.dismissedFlags || [],
       dismissedFlagsWithReasons: existing.dismissedFlagsWithReasons || [],
       userCorrections: nextCorrections,
@@ -1902,16 +2292,17 @@ Respond in JSON only:
   syncEntryFields(entryId).catch(e => console.warn('[SyncFields] Post-score sync failed:', e));
 
   // Broadcast completion to all extension views
+  const hardDQBroadcast = { flagged: hardDQResult.isHardDQ, reasons: hardDQResult.reasons };
   chrome.runtime.sendMessage({
     type: 'QUICK_FIT_COMPLETE',
     entryId,
     quickFitScore: score,
     quickFitReason: reason,
     quickTake,
-    hardDQ
+    hardDQ: hardDQBroadcast
   }).catch(() => {}); // ignore if no listeners
 
-  return { quickFitScore: score, quickFitReason: reason, quickTake, hardDQ };
+  return { quickFitScore: score, quickFitReason: reason, quickTake, hardDQ: hardDQBroadcast };
 }
 
 async function processQueue() {
@@ -2644,7 +3035,7 @@ async function fetchApolloData(domain, companyName) {
       'x-api-key': APOLLO_KEY
     }
   });
-  trackApiCall('apollo', res); // non-blocking, no await needed
+  trackApiCall('apollo', res.clone()); // non-blocking, no await needed
   if (res.status === 429 || res.status === 402 || res.status === 403) {
     console.warn('[Apollo] Credits exhausted (HTTP', res.status, ')');
     _apolloExhausted = true;
@@ -2676,7 +3067,7 @@ async function fetchLeaderPhoto(name, company) {
         headers: { 'Content-Type': 'application/json', 'X-API-KEY': SERPER_KEY },
         body: JSON.stringify({ q: name + ' ' + company, num: 1 })
       });
-      trackApiCall('serper', res); // non-blocking, no await needed
+      trackApiCall('serper', res.clone()); // non-blocking, no await needed
       if (res.status === 429 || res.status === 402 || res.status === 403) {
         console.warn('[Serper] Credits exhausted (HTTP', res.status, ') — photo fetch');
         _serperExhausted = true;
@@ -2712,7 +3103,7 @@ async function fetchSerperResults(query, num = 5) {
     },
     body: JSON.stringify({ q: query, num })
   });
-  trackApiCall('serper', res); // non-blocking, no await needed
+  trackApiCall('serper', res.clone()); // non-blocking, no await needed
   if (res.status === 429 || res.status === 402 || res.status === 403) {
     console.warn('[Serper] Credits exhausted (HTTP', res.status, ')');
     _serperExhausted = true;
@@ -3768,7 +4159,7 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
 
 async function _tool_get_profile_section({ section }) {
   const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
-  const keys = ['profileStory', 'profileExperience', 'profilePrinciples', 'profileMotivators',
+  const keys = ['profileStory', 'profileExperience', 'profileExperienceEntries', 'profilePrinciples', 'profileMotivators',
     'profileVoice', 'profileSkills', 'storyTime', 'profileAttractedTo', 'profileDealbreakers',
     'profileSkillTags', 'profileRoleICP', 'profileCompanyICP', 'profileInterviewLearnings'];
   const d = await new Promise(r => chrome.storage.local.get(keys, r));
@@ -3777,8 +4168,19 @@ async function _tool_get_profile_section({ section }) {
       const s = d.profileStory || d.storyTime?.profileSummary || d.storyTime?.rawInput || '';
       return { section, content: s.slice(0, 16000) };
     }
-    case 'experience':
-      return { section, content: (d.profileExperience || '').slice(0, 12000) };
+    case 'experience': {
+      let text = (d.profileExperience || '').slice(0, 12000);
+      const entries = d.profileExperienceEntries || [];
+      if (entries.length) {
+        text += '\n\nStructured experience (tagged skills are confirmed proficiency):';
+        entries.forEach(e => {
+          if (!e.company && !(e.tags || []).length) return;
+          const tags = (e.tags || []).join(', ');
+          text += `\n- ${e.company || 'Unknown'}${e.titles ? ` (${e.titles})` : ''}${e.dateRange ? ` [${e.dateRange}]` : ''}${tags ? `: ${tags}` : ''}`;
+        });
+      }
+      return { section, content: text };
+    }
     case 'dealbreakers':
       return { section, content: d.profileDealbreakers || [] };
     case 'attracted_to':
@@ -3871,7 +4273,12 @@ async function _runCoopTool(name, input, ctx) {
   }
 }
 
-// Slim system prompt — ~3k tokens. Base (stable, cached) + tail (volatile bind state).
+// Slim system prompt — base (stable, cached) + tail (volatile bind state).
+// NOTE ON SIZE: Haiku's prompt-cache minimum is ~2048 tokens. The cached prefix
+// for breakpoint 1 is (tools + base). COOP_TOOLS ≈ 700 tokens; base MUST be
+// large enough that tools+base comfortably exceeds 2048 or neither breakpoint
+// writes a cache. The padding in the TOOL PATTERNS / GROUNDING / RESPONSE
+// DISCIPLINE sections below is deliberate — do not trim without remeasuring.
 function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr }) {
   const principles = coopInterp.principlesBlock();
   const base = [
@@ -3890,7 +4297,47 @@ You have access to tools that fetch context on demand. Follow these rules exactl
 7. Call tools in PARALLEL when you need more than one in the same turn. Emit multiple tool_use blocks in one response.
 8. Tool results come back as JSON. Translate to natural language when answering — never paste JSON to the user.
 9. Hard cap: 5 tool calls per message. After that, answer with what you have and say what was missing.
-10. NEVER pretend to perform an action you have no tool for. If the user asks you to change a setting, switch models, send an email, update a task, modify the pipeline, or take any other action and you do NOT have a matching tool, say so plainly: "I can't do that from chat right now — use [the model picker in the chat header / the preferences page / the relevant UI]." Do NOT say "Done" or "Switched" or "Updated" for things you cannot actually do. This is critical — fake confirmations destroy the user's trust.`,
+10. NEVER pretend to perform an action you have no tool for. If the user asks you to change a setting, switch models, send an email, update a task, modify the pipeline, or take any other action and you do NOT have a matching tool, say so plainly: "I can't do that from chat right now — use [the model picker in the chat header / the preferences page / the relevant UI]." Do NOT say "Done" or "Switched" or "Updated" for things you cannot actually do. This is critical — fake confirmations destroy the user's trust.
+
+=== TOOL USAGE PATTERNS (examples) ===
+These are reference patterns. Match the user's question to the closest pattern, then call the indicated tool(s).
+
+- "What did Sarah say about equity?" → get_communications(keywords: ["equity", "comp", "compensation", "options", "rsu"])
+- "What was discussed in our last call?" → get_communications(types: ["meetings"], limit: 3)
+- "Did they ever email me back?" → get_communications(types: ["emails"], limit: 10)
+- "Should I apply to this?" → get_company_context + get_profile_section(section: "dealbreakers") IN PARALLEL
+- "Is this a fit?" → get_company_context + get_profile_section(section: "preferences") IN PARALLEL
+- "Draft a cover letter for this" → get_company_context + get_profile_section(section: "story") + get_profile_section(section: "experience") IN PARALLEL
+- "Draft a reply to this email" → get_communications(types: ["emails"], limit: 5) — use the thread context
+- "What's my background in X?" → get_profile_section(section: "experience")
+- "What are my dealbreakers?" → get_profile_section(section: "dealbreakers")
+- "What should I focus on this week?" → get_pipeline_overview(filter: "needs_action")
+- "Who's in my pipeline right now?" → get_pipeline_overview(filter: "active")
+- "Compare Acme and Globex" → get_company_context for BOTH IN PARALLEL
+- "Remember when I said I didn't want to manage people?" → search_memory(query: "manage people")
+- "What did I learn from my last interview?" → get_profile_section(section: "learnings")
+
+=== ANTI-PATTERNS (do not do these) ===
+- Do NOT ask the user to paste transcript content you can fetch with get_communications.
+- Do NOT fetch 'story' profile section for questions that aren't about the user's narrative/background.
+- Do NOT call get_pipeline_overview for a single-company question.
+- Do NOT call get_company_context repeatedly in the same turn for the same company.
+- Do NOT call the same tool twice with identical arguments in one message.
+- Do NOT refuse to answer because a tool returned an error — explain what was missing and answer what you can with what you have.
+- Do NOT prefix answers with "Based on the tool results..." or "Let me check..." — just answer naturally.
+- Do NOT dump raw JSON field names into the reply. Translate to plain language.
+
+=== GROUNDING RULES ===
+- If a claim about the company, a meeting, an email, or a person can only be answered by fetching context, call the tool. Do not guess from the company name or user's prior messages alone.
+- If after calling tools you still don't have the answer, say so explicitly: "I don't see that in your emails/transcripts/profile." Never fabricate quotes, dates, names, or numbers.
+- Quoted lines from transcripts/emails must come verbatim from tool results. If you can't find an exact quote, paraphrase and note it's a paraphrase.
+- If the user asks a follow-up that refers to "they" or "it" or "that", resolve the reference from earlier in THIS conversation first. Only re-fetch if the referent is ambiguous or the prior context is thin.
+
+=== RESPONSE DISCIPLINE ===
+- Match the length rules in your identity block: default 1-3 sentences; go longer only for drafts, comparisons, lists, or when the user explicitly asks for depth.
+- Lead with the answer. No preamble. No "Great question." No recap of what the user said. No trailing summary of what you just did.
+- When drafting (cover letters, emails, replies, intros, follow-ups): produce the draft first, then a one-line note on any assumption you made. Do NOT lecture on fit unless explicitly asked.
+- When evaluating: be specific and honest. Point to the exact signal (a transcript line, a dealbreaker, a firmographic). Vague advice is worse than no advice.`,
   ].join('\n');
 
   const tail = isGlobalChat
@@ -3910,6 +4357,17 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
 
   const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr });
   const toolCtx = { boundCompany, boundEntryId };
+
+  // G2.1 diagnostic: one-shot fingerprint so we can confirm base is (a) above
+  // Haiku's ~2048-token cache minimum and (b) byte-identical across steps.
+  // A deterministic hash lets us detect any surprise drift without logging the
+  // whole prompt. Remove once cache is consistently hitting in production.
+  const _fp = (s) => {
+    let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return (h >>> 0).toString(16);
+  };
+  const _approxTokens = (s) => Math.round(s.length / 4);
+  console.log(`[Coop][ToolUse] prompt base len=${system.base.length} ~tok=${_approxTokens(system.base)} fp=${_fp(system.base)} | tail len=${system.tail.length} ~tok=${_approxTokens(system.tail)} fp=${_fp(system.tail)}`);
 
   let conversation = messages.slice();
   const totalUsage = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
@@ -5685,8 +6143,9 @@ async function extractNextSteps(notes, calendarEvents, transcripts, emailContext
 
   try {
     const result = await aiCall('nextStepExtraction', {
-      system: `Today is ${today}. Extract the single most immediate next action and its date from the context. Return ONLY JSON:
+      system: `Today is ${today}. You are extracting the next job-search action for a specific company opportunity. Extract the single most immediate next action and its date from the context. Return ONLY JSON:
 {"nextStep":"brief action or null","nextStepDate":"YYYY-MM-DD or null","source":"calendar | transcript | notes | email | null","evidence":"short quote or phrase from the source that justifies this next step"}
+IMPORTANT: Only extract actions directly related to this job opportunity (interviews, follow-ups, applications, recruiter calls, decision deadlines). Ignore personal events like birthdays, holidays, or anything unrelated to this job search. If no relevant next step exists, return null for all fields.
 Dates like "Thursday" should be resolved to absolute dates relative to today. The "source" field MUST be the input bucket the answer came from.`,
       messages: [{ role: 'user', content: contextParts.join('\n\n') }],
       max_tokens: 220
@@ -5858,14 +6317,14 @@ async function granolaFetch(path) {
   const res = await fetch('https://public-api.granola.ai' + path, {
     headers: { 'Authorization': 'Bearer ' + GRANOLA_KEY }
   });
-  trackApiCall('granola', res); // non-blocking, no await needed
+  trackApiCall('granola', res.clone()); // non-blocking, no await needed
   if (res.status === 429) {
     // Rate limited — wait and retry once
     await new Promise(r => setTimeout(r, 2000));
     const retry = await fetch('https://public-api.granola.ai' + path, {
       headers: { 'Authorization': 'Bearer ' + GRANOLA_KEY }
     });
-    trackApiCall('granola', retry);
+    trackApiCall('granola', retry.clone());
     if (!retry.ok) return null;
     return retry.json();
   }

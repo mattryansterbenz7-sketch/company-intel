@@ -108,6 +108,35 @@
     h3.sub { font-size: 15px; font-weight: 700; color: var(--ci-text-primary); margin: 24px 0 10px; }
     p.body { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.7; margin-bottom: 12px; }
 
+    /* Search */
+    .doc-search { padding: 0 10px 14px; }
+    .doc-search input {
+      width: 100%; padding: 8px 12px; font-size: 12px; border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); color: var(--ci-text-primary);
+      font-family: inherit; outline: none; transition: border-color 0.15s;
+    }
+    .doc-search input:focus { border-color: var(--ci-accent-primary); }
+    .doc-search input::placeholder { color: var(--ci-text-tertiary); }
+    .doc-section.search-hidden { display: none; }
+    .doc-nav a.search-hidden { display: none; }
+
+    /* Screenshot placeholder */
+    .doc-screenshot {
+      background: var(--ci-bg-inset); border: 1px dashed var(--ci-border-default); border-radius: var(--ci-radius-md);
+      padding: 24px; text-align: center; margin: 16px 0; color: var(--ci-text-tertiary); font-size: 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 120px; justify-content: center;
+    }
+    .doc-screenshot-icon { font-size: 28px; opacity: 0.4; }
+    .doc-screenshot img {
+      max-width: 100%; border-radius: var(--ci-radius-sm); border: 1px solid var(--ci-border-default);
+      box-shadow: var(--ci-shadow-sm);
+    }
+
+    /* Keyboard shortcut */
+    .kbd { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); color: var(--ci-text-secondary);
+      font-family: var(--ci-font-mono); line-height: 1.4; }
+
     /* ── Shared Settings Sidebar ── */
     .settings-layout { display: flex; min-height: 100vh; }
     .settings-sidebar {
@@ -150,11 +179,18 @@
   <nav class="doc-nav">
     <div class="doc-nav-inner">
       <div class="doc-nav-title">Documentation</div>
+      <div class="doc-search"><input type="text" id="doc-search" placeholder="Search docs..." autocomplete="off"></div>
       <a href="#overview" class="active">Overview</a>
       <a href="#sidepanel">Sidepanel & Coop</a>
       <a href="#company-view">Company View</a>
-      <a href="#opportunity">Opportunity Pipeline</a>
+      <a href="#opportunity">Opportunity Pipeline & Table View</a>
       <a href="#apply-queue">Apply Queue & Active Review</a>
+      <a href="#scoring-system">How Scoring Works</a>
+      <a href="#score-breakdown">Score Breakdown</a>
+      <a href="#qualifications">Qualification Matching</a>
+      <a href="#cost-tracking">Cost Tracking</a>
+      <a href="#coop-thinking">Coop Thinking Animation</a>
+      <div class="doc-nav-divider"></div>
       <a href="#emails">Emails & Tasks</a>
       <a href="#meetings">Meetings</a>
       <a href="#contacts">Known Contacts</a>
@@ -162,9 +198,6 @@
       <a href="#coop-memory">Coop Memory</a>
       <a href="#operating-principles">Operating Principles</a>
       <a href="#screen-share">Screen Share</a>
-      <a href="#qualifications">Qualification Matching</a>
-      <a href="#score-breakdown">Score Breakdown</a>
-      <a href="#scoring-system">How Scoring Works</a>
       <a href="#inbox">Inbox</a>
       <a href="#celebrations">Celebrations</a>
       <div class="doc-nav-divider"></div>
@@ -194,7 +227,7 @@
         </div>
         <div class="feature-card">
           <div class="feature-card-title">Unified Pipeline</div>
-          <p>Companies and opportunities live in a single <code>savedCompanies[]</code> store. Tag any company as an opportunity to track it through your customizable Kanban stages.</p>
+          <p>Companies and opportunities live in a single <code>savedCompanies[]</code> store. Tag any company as an opportunity to track it through your customizable Kanban or Table pipeline view. Tasks (action items from emails) live in the header nav alongside the pipeline.</p>
         </div>
         <div class="feature-card">
           <div class="feature-card-title">Activity Auto-Wire</div>
@@ -228,6 +261,11 @@
       <span class="doc-section-anchor" id="sidepanel"></span>
       <div class="doc-section-title">Sidepanel & Coop</div>
       <p class="doc-section-lead">The sidepanel is your research-on-demand surface and your home for Coop chat. It detects what company or job posting you're on, surfaces any saved data instantly from cache, and waits for you to click before spending API credits.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">🔍</div>
+        Sidepanel detecting a company and showing cached research with Coop chat below
+      </div>
 
       <h3 class="sub">How research works</h3>
       <div class="steps">
@@ -288,6 +326,11 @@
       <div class="doc-section-title">Company View</div>
       <p class="doc-section-lead">The full-screen company view (<code>company.html</code>) is your CRM record for a company. It has three columns — a left properties sidebar, a main tabbed content area, and a right context sidebar.</p>
 
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">🏢</div>
+        Three-column company view — properties, hub tabs (Intel/Notes/Emails/Meetings), and context sidebar
+      </div>
+
       <div class="ui-diagram">
         <div class="ui-diagram-header">Layout — company.html</div>
         <div class="ui-diagram-row">
@@ -341,6 +384,11 @@
       <div class="doc-section-title">Opportunity Pipeline</div>
       <p class="doc-section-lead">Any saved company can be tagged as an Opportunity. Opportunities appear in their own Kanban pipeline in the Saved view, tracked separately from your general company research.</p>
 
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">📋</div>
+        Kanban pipeline with opportunity cards showing scores, action status, and stage columns
+      </div>
+
       <h3 class="sub">Architecture</h3>
       <p class="body">Opportunities are not separate records — they are companies with <code>isOpportunity: true</code> set. This means a company record and its opportunity share a single entry, eliminating the sync issues that come with duplicated data.</p>
       <p class="body">Opportunity-specific fields are stored directly on the company entry:</p>
@@ -376,6 +424,42 @@
 
       <h3 class="sub">Stat card drill-down</h3>
       <p class="body">The metric cards on the saved dashboard (counts by stage, action-on, etc.) are clickable. Click any card to open a drill-down modal listing the specific opportunities behind the number, with quick links into each entry.</p>
+
+      <h3 class="sub">Table view</h3>
+      <p class="body">Switch to the <strong>☰ Table</strong> view from the header to see all opportunities in a sortable database table.</p>
+      <div class="info-block">
+        <ul>
+          <li><strong>Sort by any column</strong> — click any column header to sort ascending or descending. Click again to toggle direction. An arrow indicator shows the active sort.</li>
+          <li><strong>Column picker (⊞)</strong> — click the ⊞ button in the table header to open a column selector. Toggle any of 16 available columns on or off. Active columns persist per session via <code>localStorage</code>.</li>
+          <li><strong>Available columns</strong> — Company, Stage, Score, Stars, Action On, Next Step, Next Step Date, Industry, Employees, Funding, Applied Date, Last Activity, Tags, Saved Date, Role, Job URL.</li>
+          <li><strong>Inline stage editing</strong> — change the pipeline stage directly from a dropdown in the table row without opening the full entry.</li>
+          <li><strong>Inline star rating</strong> — click any star in the row to update the rating in place.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Tasks (header nav)</h3>
+      <p class="body">The <strong>✓ Tasks</strong> link in the top header bar opens your extracted email tasks across all pipeline companies. Tasks is a top-level destination, not a view variant — it replaces the pipeline content area while active, and the "Opportunity Pipeline" heading is hidden when Tasks is open.</p>
+
+      <h3 class="sub">Swipe gesture — stage-aware labels</h3>
+      <p class="body">When you click any Kanban card to open it in the compact tinder-style view and swipe it left or right, the labels and behavior are now context-aware for every stage — not just the Apply Queue:</p>
+      <div class="info-block">
+        <ul>
+          <li><strong>Swipe right</strong> — advances to the <em>next</em> stage (green label shows the actual next stage name). Updates the entry in storage immediately.</li>
+          <li><strong>Swipe left</strong> — moves to the rejected/DQ'd stage (red label shows the actual rejected stage name).</li>
+          <li>In the AI Scoring Queue specifically: swipe right = "Interested", left = "Pass" (as before).</li>
+          <li>In Apply Queue mode: swipe right = "Apply", left = "Pass" (as before).</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Action On auto-set + Coop next steps</h3>
+      <p class="body">When Coop automatically changes the <strong>Action On</strong> field due to a stage transition, it also writes a <strong>Next Step</strong> to describe what should happen next. These auto-generated next steps are prefixed with <code>Coop → </code> so you always know the source.</p>
+      <div class="info-block">
+        <ul>
+          <li>Auto next steps only write if the Next Step field is blank, or if it was previously written by Coop (starts with <code>Coop → </code>). Manual next steps are never overwritten.</li>
+          <li>The <code>nextStepSource: 'coop-auto'</code> field is stored on the entry to distinguish Coop-generated steps from user-entered ones.</li>
+          <li>Stage-to-step examples: <em>Applied → "Coop → Follow up if no response in 5-7 days"</em>, <em>Offer Stage → "Coop → Review offer details and respond within 48-72 hours"</em>.</li>
+        </ul>
+      </div>
     </div>
 
     <!-- Apply Queue -->
@@ -385,6 +469,11 @@
       <span class="pill pill-green">New</span>
 
       <p class="body">The Apply Queue is a Tinder-style swipe surface for quickly triaging unscored opportunities. The same page in DQ mode (<code>queue.html?mode=dq</code>) becomes <strong>Active Review</strong>, which lets you re-evaluate opportunities already at Applied or beyond.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">🃏</div>
+        Apply Queue card with score breakdown, qualification lines, and swipe buttons
+      </div>
 
       <h3 class="sub">Apply Queue (default)</h3>
       <div class="info-block">
@@ -404,6 +493,11 @@
       <span class="doc-section-anchor" id="emails"></span>
       <div class="doc-section-title">Emails & Tasks</div>
       <p class="doc-section-lead">The Emails tab in the company view shows Gmail threads related to the company, lazy-loaded the first time you click the tab. Each fetch piggybacks task extraction so action items surface automatically.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">📧</div>
+        Email threads grouped by company with task extraction badges
+      </div>
 
       <h3 class="sub">How emails are fetched</h3>
       <div class="steps">
@@ -476,6 +570,11 @@
       <span class="doc-section-anchor" id="meetings"></span>
       <div class="doc-section-title">Meetings</div>
       <p class="doc-section-lead">The Meetings tab shows notes from Granola, an AI meeting notes tool. Notes are fetched by searching Granola's MCP API for the company name.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">🗓️</div>
+        Meetings tab with Granola transcripts matched by company name and contacts
+      </div>
 
       <h3 class="sub">How meeting notes are fetched</h3>
       <div class="steps">
@@ -561,6 +660,11 @@
       <span class="doc-section-anchor" id="ai-chat"></span>
       <div class="doc-section-title">Coop (AI Chat)</div>
       <p class="doc-section-lead">Coop is the AI advisor baked into every surface of the extension &mdash; the sidepanel, company view, opportunity view, the saved dashboard (as Pipeline Advisor), and the Apply Queue. He's pre-loaded with your profile, your operating principles, the bound entry's full context, and any relevant memories from past sessions.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">💬</div>
+        Coop chat panel bound to an opportunity with model badge and context header
+      </div>
 
       <h3 class="sub">What's in the system prompt</h3>
       <div class="info-block">
@@ -715,6 +819,11 @@
 
       <p class="body">When Coop scores a job, he now extracts up to 10 specific qualifications from the posting and matches each one against your resume, skills, and experience.</p>
 
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">✅</div>
+        Qualification drawer auto-expanded showing met/partial/unmet items with evidence
+      </div>
+
       <h3 class="sub">How it works</h3>
       <p class="body">Each qualification is classified as:</p>
       <div class="info-block">
@@ -757,19 +866,19 @@
       <div class="doc-section-title">Score Breakdown</div>
       <span class="pill pill-green">New</span>
 
-      <p class="body">Every job match score now includes a visual breakdown showing what drove the number. Five components are scored 1-10:</p>
+      <p class="body">Every job match score includes a visual breakdown showing the five weighted dimensions. Each is scored 1-10 and displayed as a colored horizontal bar — green (7+), amber (4-6), red (1-3):</p>
 
       <div class="info-block">
         <ul style="font-size:13px;color:#516f90;line-height:1.8;">
-          <li><strong>Qualifications</strong> — how well your background matches stated requirements</li>
-          <li><strong>Green Flags</strong> — how many of your attracted-to signals are present</li>
-          <li><strong>Red Flag Impact</strong> — severity of dealbreakers found (10 = no issues)</li>
-          <li><strong>Compensation</strong> — alignment with your salary/OTE thresholds</li>
-          <li><strong>Role & Co. Fit</strong> — overall role type, seniority, company stage alignment</li>
+          <li><strong>Qualification (20%)</strong> — deterministic from met/partial/unmet requirement counts</li>
+          <li><strong>Role Fit (20%)</strong> — flag-based: role type, seniority, scope alignment</li>
+          <li><strong>Culture Fit (25%)</strong> — flag-based: leadership style, remote culture, growth signals</li>
+          <li><strong>Company Fit (20%)</strong> — firmographic signals: stage, industry, product-market fit</li>
+          <li><strong>Comp Fit (15%)</strong> — base/OTE vs your floor and strong-offer thresholds</li>
         </ul>
       </div>
 
-      <p class="body">Each component displays as a colored horizontal bar — green (7+), amber (4-6), red (1-3). Find it in the collapsible <strong>"Score Breakdown"</strong> section in the sidepanel and opportunity detail page.</p>
+      <p class="body">The weighted math row at the bottom of queue cards shows the exact formula: <code>Q×20 + R×20 + Cu×25 + Co×20 + Comp×15 = X/100 → 1-10</code>. Find the breakdown in the collapsible <strong>"Score Breakdown"</strong> section in the sidepanel, opportunity detail page, and Apply Queue cards.</p>
 
       <h3 class="sub">Flag curation</h3>
       <p class="body">Individual red flags can be dismissed in the score modal (Kanban card view). Click <strong>&#x00D7;</strong> on any red flag to mark it as wrong/overblown. Dismissed flags are excluded from re-scoring — Coop learns from your feedback.</p>
@@ -782,27 +891,34 @@
     <div class="doc-section">
       <span class="doc-section-anchor" id="scoring-system"></span>
       <div class="doc-section-title">How Scoring Works</div>
-      <span class="pill pill-green">New</span>
+      <span class="pill pill-green">Updated</span>
 
-      <p class="body">Coop's scoring system evaluates every opportunity from two angles: <strong>how much you'd want it</strong> (preference fit) and <strong>how likely you'd get it</strong> (qualification fit). The overall score blends both — a dream role you'd never land doesn't score 9/10.</p>
+      <p class="body">Coop uses a <strong>deterministic 5-dimension scoring model</strong>. The LLM detects which flags fired and extracts evidence; all scoring math happens in JavaScript — no black-box LLM scores.</p>
 
-      <h3 class="sub">The overall score (1-10)</h3>
-      <p class="body">A weighted blend of five components. Qualification fit heavily influences the cap — if you're a 3/10 on qualifications, the overall score won't exceed 4-5 even with perfect preference alignment. This prevents wasting time on unrealistic opportunities.</p>
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">📐</div>
+        Queue card showing the 5-dimension score breakdown with weighted math row
+      </div>
 
-      <h3 class="sub">Calibration anchors</h3>
-      <p class="body">Coop is explicitly told to use the full 1-10 range with anchor descriptions for each band. Importantly: <strong>7+ is reserved for genuine fits</strong>, not handed out as a pessimistic middle default. Mediocre matches land at 4-6, not 7. This stops the old behavior of every score landing in the same vague "okay" zone.</p>
-      <p class="body">The anchors and any rule overrides live in your <a href="#operating-principles">Operating Principles</a> &mdash; edit them there if you want to change how Coop calibrates.</p>
-
-      <h3 class="sub">Score components</h3>
+      <h3 class="sub">The five dimensions</h3>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Qualification Fit (1-10)</strong> — Employer's perspective: how desirable a candidate are you? Factors in seniority gap, company scale experience, years of experience, scope, and specific skill matches. A Head of Revenue at a 50-person startup is not comparable to the same title at Salesforce.</li>
-          <li><strong>Preference Fit (1-10)</strong> — Your green flags and attracted-to items. High-importance (4-5) matches boost this significantly.</li>
-          <li><strong>Dealbreakers (1-10)</strong> — Impact of red flags. 10 = no issues. Each triggered dealbreaker drops this. Hard dealbreakers (severity 4-5) can trigger Hard DQ.</li>
-          <li><strong>Compensation (1-10)</strong> — Base and OTE compared to your floor and strong-offer thresholds. 10 = exceeds strong offer. 5 = meets floor. 1 = below floor. If undisclosed, defaults to 5 (neutral).</li>
-          <li><strong>Role Fit (1-10)</strong> — Is this a realistic next step or a 2-3 level jump? Considers role type, seniority progression, company stage alignment.</li>
+          <li><strong>Qualification (20%)</strong> — Deterministic from met/partial/unmet counts. Formula: <code>10 &times; credits / total</code> where met=1, partial=0.5, unmet=0. Comp-related qualifications are filtered out. The qualification drawer auto-expands so you always see what was matched.</li>
+          <li><strong>Role Fit (20%)</strong> — Starts at 5.0 baseline, adjusted by green/red flag deltas. Each flag has a severity (1-5) and contributes <code>&pm;severity &times; 0.5</code>. Clamped to 1-10.</li>
+          <li><strong>Culture Fit (25%)</strong> — Same flag-based formula. Detects signals like leadership style, remote culture, growth mindset from the posting and company context.</li>
+          <li><strong>Company Fit (20%)</strong> — Uses firmographic data (employees, funding, industry, product) when available. Enrichment auto-fetches from company website/LinkedIn if not stored.</li>
+          <li><strong>Comp Fit (15%)</strong> — Base and OTE compared against your floor and strong-offer thresholds. Flag-based adjustments for above/below signals.</li>
         </ul>
       </div>
+
+      <h3 class="sub">The overall score</h3>
+      <p class="body">Weighted sum: <code>Q&times;20 + R&times;20 + Cu&times;25 + Co&times;20 + Comp&times;15 = X/100 &rarr; 1-10</code>. The math row at the bottom of every queue card shows the exact formula so you can verify the number.</p>
+
+      <h3 class="sub">Job description auto-fetch</h3>
+      <p class="body">If a job description isn't stored when scoring runs but a job URL exists, Coop automatically fetches the page, strips HTML to plain text, and persists it. This means opportunities saved from LinkedIn company pages (without visiting the actual posting) will still get full qualification extraction on first score.</p>
+
+      <h3 class="sub">Firmographic enrichment in scoring</h3>
+      <p class="body">The scoring prompt now receives structured company data — employees, funding, industry, product overview, target customers, and competitors — when available on the entry. Previously only unstructured web snippets were passed, leading to "no company data" even when research had been completed.</p>
 
       <h3 class="sub">Qualification matching</h3>
       <p class="body">Coop extracts <strong>all</strong> qualifications from the job posting — including implicit ones based on role level and company. Each is rated:</p>
@@ -831,7 +947,86 @@
       <p class="body">A Hard DQ flags roles with absolute verified dealbreakers — on-site when you require remote, base salary max below your floor, or fundamentally wrong role type. These show a red warning banner on the queue card.</p>
 
       <h3 class="sub">Auto-rescore</h3>
-      <p class="body">When enabled (Coop Settings), profile changes trigger automatic rescoring. You control which pipeline stages get rescored — by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on.</p>
+      <p class="body">When enabled, profile changes trigger automatic rescoring. You control which pipeline stages get rescored — by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on. The toggle and stage selection live in <strong>Data Pipeline &amp; Usage</strong> (not Career OS).</p>
+    </div>
+
+    <!-- Cost Tracking -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="cost-tracking"></span>
+      <div class="doc-section-title">Cost Tracking</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">Coop tracks every paid API call — Claude, OpenAI, Apollo, Serper, and Granola — so you always know what your research and scoring are costing.</p>
+
+      <h3 class="sub">The cost pill</h3>
+      <p class="body">A persistent pill in the pipeline header shows your running session cost (e.g. <strong>$0.42</strong>). Click it to open the full <strong>Cost Breakdown</strong> modal.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">📊</div>
+        Cost pill in the pipeline header — click for full breakdown
+      </div>
+
+      <h3 class="sub">Cost breakdown modal</h3>
+      <p class="body">The modal shows three views of your spending:</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>By Provider</strong> — color-coded bars for Claude, OpenAI, Apollo, Serper, Granola. Each shows request count, token usage, cost, and percentage of total spend.</li>
+          <li><strong>By Model</strong> — sorted by cost descending. See which model (Haiku, GPT-4.1 mini, Sonnet, etc.) is driving spend.</li>
+          <li><strong>Recent Calls</strong> — last 20 API calls with relative time, model name, token counts, and per-call cost.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">What gets tracked</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>AI calls</strong> — every <code>claudeApiCall()</code> and <code>openAiChatCall()</code> logs provider, model, input/output tokens, and computed cost</li>
+          <li><strong>Non-AI calls</strong> — Apollo, Serper, and Granola requests are logged as request-only entries (no token counts)</li>
+          <li><strong>Retention</strong> — call log entries expire after 24 hours and cap at 200 entries</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">💡</span>
+        <span>All cost tracking is local. No usage data is sent to any server. The cost pill updates in real-time as you use the extension.</span>
+      </div>
+    </div>
+
+    <!-- Coop Thinking Animation -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="coop-thinking"></span>
+      <div class="doc-section-title">Coop Thinking Animation</div>
+      <span class="pill pill-green">New</span>
+
+      <p class="body">When Coop is working — scoring, researching, generating a brief — a branded thinking animation replaces generic spinners across the entire platform.</p>
+
+      <div class="doc-screenshot">
+        <div class="doc-screenshot-icon">🤔</div>
+        Coop thinking animation with orbit ring, thought bubbles, and gradient progress bar
+      </div>
+
+      <h3 class="sub">Animation elements</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Thinking face</strong> — Coop's SVG avatar with a thinking expression (eyes up, hand on chin) and animated floating thought bubbles</li>
+          <li><strong>Orbit ring</strong> — two dots (coral + amber) rotate around the face via CSS pseudo-elements on a 3-second loop</li>
+          <li><strong>Bouncing dots</strong> — three dots (coral, amber, teal) bounce in sequence below the face</li>
+          <li><strong>Gradient progress bar</strong> — a shimmer bar cycles through coral → amber → teal with a sliding + shimmer animation</li>
+          <li><strong>Labels</strong> — contextual text like "Scoring..." or "Researching..." with an optional subtitle</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Where it appears</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Apply Queue</strong> — full overlay on the score card during rescore</li>
+          <li><strong>Company view</strong> — overlay on the fit section during scoring, inline in the refresh toast and role brief button</li>
+          <li><strong>Sidepanel</strong> — replaces the research spinner during company research</li>
+          <li><strong>Pipeline dashboard</strong> — compact face replaces the spinner in stat card loading</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">CSS architecture</h3>
+      <p class="body">All animation CSS lives in <code>design-tokens.css</code> as shared classes (<code>.coop-thinking-overlay</code>, <code>.coop-thinking-face-wrap</code>, <code>.coop-thinking-orbit</code>, etc.). The <code>.inline</code> modifier switches from absolute overlay to relative flow positioning. The SVG is generated by <code>COOP_THINKING_SVG(size)</code> in each JS file.</p>
     </div>
 
     <!-- Inbox -->
@@ -996,9 +1191,11 @@
           <li><code>stageCelebrations</code> &mdash; per-stage confetti and sound overrides</li>
           <li><code>prefs</code> &mdash; your profile and job preferences, used for scoring (<code>chrome.storage.sync</code>, syncs across devices)</li>
           <li>API keys &mdash; stored in <code>chrome.storage.local</code> via the Integrations page (not synced)</li>
+          <li><code>coopConfig</code> &mdash; pipeline configuration: enrichment order, AI model assignments per task, auto-rescore settings, scoring preferences (<code>chrome.storage.local</code>)</li>
           <li><code>gmailConnected</code> &mdash; flag for Gmail connection state</li>
           <li><code>granolaToken</code> &mdash; Granola REST API key</li>
           <li><code>ci_co_layout_[id]</code> / <code>ci_co_collapsed_[id]</code> &mdash; per-company panel layout in <code>localStorage</code></li>
+          <li><code>ci_tblCols</code> &mdash; active Table view column set, persisted in <code>localStorage</code></li>
         </ul>
       </div>
 

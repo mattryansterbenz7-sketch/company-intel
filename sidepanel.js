@@ -179,6 +179,34 @@ function defaultActionStatus(stageKey) {
   if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
   return null;
 }
+
+function autoNextStepForStage(stageKey) {
+  const map = {
+    'needs_review':    'Coop → Review job score and decide whether to pursue',
+    'want_to_apply':   'Coop → Prepare and submit application',
+    'applied':         'Coop → Awaiting response from company',
+    'intro_requested': 'Coop → Waiting for intro to be made',
+    'conversations':   'Coop → Awaiting next steps from recruiter',
+    'offer_stage':     'Coop → Review and respond to offer',
+    'accepted':        'Coop → Complete onboarding steps',
+  };
+  return map[stageKey] || null;
+}
+
+function applyAutoStage(entry, stageKey, changes) {
+  const autoAction = defaultActionStatus(stageKey);
+  if (!autoAction) return;
+  changes.actionStatus = autoAction;
+  const autoStep = autoNextStepForStage(stageKey);
+  if (autoStep) {
+    const existing = entry?.nextStep || '';
+    if (!existing || existing.startsWith('Coop → ')) {
+      changes.nextStep = autoStep;
+      changes.nextStepSource = 'coop-auto';
+    }
+  }
+}
+
 let currentTabId = null;
 
 // Load prefs from sync, falling back to local (migration path for pre-sync installs).
@@ -285,6 +313,7 @@ loadPrefsWithMigration((prefs) => {
 // Open full saved view
 function openDashboard() {
   window.open(chrome.runtime.getURL('saved.html'), '_blank');
+  window.close();
 }
 savedBtn?.addEventListener('click', openDashboard);
 document.getElementById('sp-logo')?.addEventListener('click', openDashboard);
@@ -1342,6 +1371,7 @@ function renderHomeState() {
 
     document.getElementById('sp-home-queue-link')?.addEventListener('click', () => {
       window.open(chrome.runtime.getURL('queue.html'), '_blank');
+      window.close();
     });
 
     // Next Steps — company-specific next steps with dates (not completable)
@@ -1391,7 +1421,7 @@ function renderHomeState() {
         </div>
       `;
       document.querySelectorAll('#sp-home-actions .sp-home-action-item').forEach(el => {
-        el.addEventListener('click', () => window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'));
+        el.addEventListener('click', () => { window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'); window.close(); });
       });
     } else {
       document.getElementById('sp-home-actions').innerHTML = '';
@@ -1401,12 +1431,15 @@ function renderHomeState() {
     chrome.storage.local.get(['userTasks'], taskData => {
       const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
       const tasks = (taskData.userTasks || [])
-        .filter(t => !t.completed && t.dueDate)
+        .filter(t => !t.completed)
         .map(t => {
-          const daysUntil = Math.round((new Date(t.dueDate + 'T12:00:00') - new Date()) / 86400000);
+          const daysUntil = t.dueDate ? Math.round((new Date(t.dueDate + 'T12:00:00') - new Date()) / 86400000) : null;
           return { ...t, daysUntil };
         })
         .sort((a, b) => {
+          if (a.daysUntil === null && b.daysUntil === null) return priVal(a.priority) - priVal(b.priority);
+          if (a.daysUntil === null) return 1;
+          if (b.daysUntil === null) return -1;
           if (a.daysUntil !== b.daysUntil) return a.daysUntil - b.daysUntil;
           return priVal(a.priority) - priVal(b.priority);
         })
@@ -1420,10 +1453,10 @@ function renderHomeState() {
       // Apply filters
       const filtered = tasks.filter(t => {
         if (taskPriFilter !== 'all' && (t.priority || 'normal') !== taskPriFilter) return false;
-        if (taskDateFilter === 'overdue' && t.daysUntil >= 0) return false;
-        if (taskDateFilter === 'today' && t.daysUntil !== 0) return false;
-        if (taskDateFilter === 'upcoming' && t.daysUntil <= 0) return false;
-        return true;
+        if (taskDateFilter === 'overdue') return t.daysUntil !== null && t.daysUntil < 0;
+        if (taskDateFilter === 'today') return t.daysUntil === 0;
+        if (taskDateFilter === 'upcoming') return t.daysUntil !== null && t.daysUntil > 0;
+        return true; // 'all' — include tasks with and without dates
       });
 
       const priColors = { low: { bg: '#DBEAFE', color: '#1D4ED8' }, normal: { bg: '#FEF3C7', color: '#92400E' }, high: { bg: '#FEE2E2', color: '#991B1B' } };
@@ -1447,31 +1480,35 @@ function renderHomeState() {
             </div>
             <div class="sp-home-card">
               ${filtered.length ? filtered.map(t => {
-                const dateClass = t.daysUntil < 0 ? 'overdue' : t.daysUntil === 0 ? 'today' : 'upcoming';
-                const dateLabel = t.daysUntil < 0 ? `${Math.abs(t.daysUntil)}d overdue` : t.daysUntil === 0 ? 'Today' : t.daysUntil === 1 ? 'Tomorrow' : `in ${t.daysUntil}d`;
+                const dateClass = t.daysUntil === null ? '' : t.daysUntil < 0 ? 'overdue' : t.daysUntil === 0 ? 'today' : 'upcoming';
+                const dateLabel = t.daysUntil === null ? 'No date' : t.daysUntil < 0 ? `${Math.abs(t.daysUntil)}d overdue` : t.daysUntil === 0 ? 'Today' : t.daysUntil === 1 ? 'Tomorrow' : `in ${t.daysUntil}d`;
                 const pri = t.priority || 'normal';
                 const pc = priColors[pri] || priColors.normal;
                 return `<div class="sp-home-action-item" style="display:flex;align-items:center;gap:8px;" data-task-id="${t.id}">
                   <div class="sp-task-check" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:50%;border:2px solid #dfe3eb;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" title="Complete task"></div>
-                  <div style="flex:1;min-width:0;" class="sp-task-click" data-task-id="${t.id}" data-company-id="${t.companyId || ''}">
+                  <div style="flex:1;min-width:0;cursor:pointer;padding:2px 4px;border-radius:4px;transition:background 0.15s;" class="sp-task-click" data-task-id="${t.id}" data-task-text="${(t.text||'').replace(/"/g,'&quot;')}" data-task-company="${(t.company||'').replace(/"/g,'&quot;')}" data-task-date="${t.dueDate||''}" data-task-pri="${t.priority||'normal'}" title="Click to edit">
                     <div class="sp-home-action-company">${t.company || 'Task'}</div>
                     <div class="sp-home-action-step">${(t.text || '').slice(0, 50)}</div>
                   </div>
-                  <button class="sp-task-pri-toggle" data-task-id="${t.id}" data-pri="${pri}" title="Click to change priority" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;cursor:pointer;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;font-family:inherit;">${pri}</button>
-                  <span class="sp-task-date-edit ${dateClass}" data-task-id="${t.id}" data-date="${t.dueDate || ''}" title="Click to change date" style="cursor:pointer;flex-shrink:0;">${dateLabel}</span>
+                  <span class="sp-task-pri-badge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;">${pri}</span>
+                  <span class="sp-task-date-edit ${dateClass}" data-task-id="${t.id}" data-date="${t.dueDate || ''}" title="Click to change date" style="cursor:pointer;flex-shrink:0;${t.daysUntil===null?'color:#A09A94;font-size:10px;':''}">${dateLabel}</span>
                 </div>`;
               }).join('') : `<div style="color:#A09A94;font-size:12px;padding:8px 0;">${tasks.length ? 'No tasks match filter' : 'No tasks yet'}</div>`}
             </div>
             <div id="sp-task-add-form" style="display:none;margin-top:8px;">
               <div class="sp-home-card" style="display:flex;flex-direction:column;gap:8px;padding:12px;">
+                <input type="hidden" id="sp-quick-task-edit-id">
                 <input type="text" id="sp-quick-task-input" placeholder="What needs to be done?" style="font-size:13px;padding:8px 10px;border:1px solid #E8E5E0;border-radius:6px;font-family:inherit;outline:none;">
-                <div style="display:flex;gap:8px;align-items:center;">
-                  <div id="sp-quick-task-pri" style="display:flex;gap:0;border:1px solid #E8E5E0;border-radius:6px;overflow:hidden;">
-                    <button type="button" data-pri="low" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;font-family:inherit;background:#fff;color:#6B6560;">Low</button>
-                    <button type="button" data-pri="normal" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;border-left:1px solid #E8E5E0;border-right:1px solid #E8E5E0;cursor:pointer;font-family:inherit;background:#FEF3C7;color:#92400E;">Normal</button>
-                    <button type="button" data-pri="high" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;font-family:inherit;background:#fff;color:#6B6560;">High</button>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:10px;font-weight:600;color:#6B6560;white-space:nowrap;">Priority:</span>
+                    <div id="sp-quick-task-pri" style="display:flex;gap:0;border:1px solid #E8E5E0;border-radius:6px;overflow:hidden;">
+                      <button type="button" data-pri="low" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;font-family:inherit;background:#fff;color:#6B6560;">Low</button>
+                      <button type="button" data-pri="normal" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;border-left:1px solid #E8E5E0;border-right:1px solid #E8E5E0;cursor:pointer;font-family:inherit;background:#FEF3C7;color:#92400E;">Normal</button>
+                      <button type="button" data-pri="high" style="font-size:9px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;font-family:inherit;background:#fff;color:#6B6560;">High</button>
+                    </div>
                   </div>
-                  <input type="date" id="sp-quick-task-date" style="font-size:11px;padding:5px 8px;border:1px solid #E8E5E0;border-radius:6px;font-family:inherit;color:#6B6560;outline:none;flex:1;">
+                  <input type="date" id="sp-quick-task-date" style="font-size:11px;padding:5px 8px;border:1px solid #E8E5E0;border-radius:6px;font-family:inherit;color:#6B6560;outline:none;flex:1;min-width:130px;">
                 </div>
                 <div style="display:flex;gap:8px;">
                   <button id="sp-quick-task-add" style="flex:1;font-size:12px;font-weight:700;color:#fff;background:#FF7A59;border:none;border-radius:6px;padding:8px;cursor:pointer;font-family:inherit;">Add Task</button>
@@ -1494,39 +1531,60 @@ function renderHomeState() {
         });
 
         // "+ New" button shows the add form
-        tasksEl.querySelector('#sp-task-new-btn')?.addEventListener('click', () => {
-          const form = tasksEl.querySelector('#sp-task-add-form');
-          if (form) {
-            form.style.display = 'block';
-            form.querySelector('#sp-quick-task-input')?.focus();
-          }
-        });
+        tasksEl.querySelector('#sp-task-new-btn')?.addEventListener('click', () => showTaskAddForm(null));
         // Cancel hides it
         tasksEl.querySelector('#sp-quick-task-cancel')?.addEventListener('click', () => {
           const form = tasksEl.querySelector('#sp-task-add-form');
           if (form) form.style.display = 'none';
         });
 
-        // Quick-add task handler
+        // Quick-add / quick-edit task handler
         const quickInput = tasksEl.querySelector('#sp-quick-task-input');
         const quickDate = tasksEl.querySelector('#sp-quick-task-date');
         const quickBtn = tasksEl.querySelector('#sp-quick-task-add');
         const quickPriGroup = tasksEl.querySelector('#sp-quick-task-pri');
+        const quickEditId = tasksEl.querySelector('#sp-quick-task-edit-id');
         let quickPriority = 'normal';
-        if (quickDate) quickDate.value = new Date().toISOString().slice(0, 10);
+
+        const setQuickPriority = (pri) => {
+          quickPriority = pri;
+          if (quickPriGroup) {
+            quickPriGroup.querySelectorAll('button').forEach(b => {
+              const isActive = b.dataset.pri === quickPriority;
+              const c = priColors[b.dataset.pri];
+              b.style.background = isActive ? c.bg : '#fff';
+              b.style.color = isActive ? c.color : '#6B6560';
+            });
+          }
+        };
+
         if (quickPriGroup) {
           quickPriGroup.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
-              quickPriority = btn.dataset.pri;
-              quickPriGroup.querySelectorAll('button').forEach(b => {
-                const isActive = b.dataset.pri === quickPriority;
-                const c = priColors[b.dataset.pri];
-                b.style.background = isActive ? c.bg : '#fff';
-                b.style.color = isActive ? c.color : '#6B6560';
-              });
-            });
+            btn.addEventListener('click', () => setQuickPriority(btn.dataset.pri));
           });
         }
+
+        const showTaskAddForm = (editData) => {
+          const form = tasksEl.querySelector('#sp-task-add-form');
+          if (!form) return;
+          if (editData) {
+            quickEditId.value = editData.id;
+            quickInput.value = editData.text || '';
+            quickDate.value = editData.dueDate || '';
+            setQuickPriority(editData.priority || 'normal');
+            quickBtn.textContent = 'Update Task';
+          } else {
+            quickEditId.value = '';
+            quickInput.value = '';
+            quickDate.value = new Date().toISOString().slice(0, 10);
+            setQuickPriority('normal');
+            quickBtn.textContent = 'Add Task';
+          }
+          form.style.display = 'block';
+          form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          quickInput.focus();
+        };
+
         const addQuickTask = () => {
           const text = quickInput?.value?.trim();
           if (!text) {
@@ -1537,20 +1595,23 @@ function renderHomeState() {
             }
             return;
           }
-          const dueDate = quickDate?.value || new Date().toISOString().slice(0, 10);
-          const newTask = {
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            text,
-            dueDate,
-            priority: quickPriority,
-            completed: false,
-            createdAt: Date.now(),
-          };
+          const dueDate = quickDate?.value || null;
+          const editId = quickEditId?.value;
           chrome.storage.local.get(['userTasks'], d => {
             const all = d.userTasks || [];
-            all.push(newTask);
+            if (editId) {
+              const t = all.find(t => t.id === editId);
+              if (t) Object.assign(t, { text, dueDate, priority: quickPriority });
+            } else {
+              all.push({
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                text, dueDate, priority: quickPriority,
+                completed: false, createdAt: Date.now(),
+              });
+            }
             chrome.storage.local.set({ userTasks: all }, () => {
-              quickInput.value = '';
+              const form = tasksEl.querySelector('#sp-task-add-form');
+              if (form) form.style.display = 'none';
               showPipelineStats();
             });
           });
@@ -1587,24 +1648,7 @@ function renderHomeState() {
           });
         });
 
-        // Click date to edit
-        // Click priority badge to cycle: low → normal → high → low
-        tasksEl.querySelectorAll('.sp-task-pri-toggle').forEach(el => {
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const taskId = el.dataset.taskId;
-            const cycle = { low: 'normal', normal: 'high', high: 'low' };
-            const newPri = cycle[el.dataset.pri] || 'normal';
-            chrome.storage.local.get(['userTasks'], d => {
-              const allTasks = d.userTasks || [];
-              const task = allTasks.find(t => t.id === taskId);
-              if (task) {
-                task.priority = newPri;
-                chrome.storage.local.set({ userTasks: allTasks }, () => showPipelineStats());
-              }
-            });
-          });
-        });
+        // Priority badge is display-only — edit via clicking task text to open inline form
 
         // Click date to edit
         tasksEl.querySelectorAll('.sp-task-date-edit').forEach(el => {
@@ -1639,16 +1683,116 @@ function renderHomeState() {
           });
         });
 
-        // Click task text to open company
+        // Hover effects on task text (edit affordance)
         tasksEl.querySelectorAll('.sp-task-click').forEach(el => {
-          el.style.cursor = 'pointer';
+          el.addEventListener('mouseenter', () => { el.style.background = 'rgba(0,0,0,0.04)'; });
+          el.addEventListener('mouseleave', () => { el.style.background = ''; });
+        });
+
+        // Hover effects on task rows
+        tasksEl.querySelectorAll('.sp-home-action-item').forEach(row => {
+          row.style.transition = 'background 0.15s';
+          row.style.borderRadius = '6px';
+          row.addEventListener('mouseenter', () => { row.style.background = '#F7F5F2'; });
+          row.addEventListener('mouseleave', () => { row.style.background = row.classList.contains('sp-editing') ? '#F7F5F2' : ''; });
+        });
+
+        // Hover on date label only (it's still inline-editable)
+        tasksEl.querySelectorAll('.sp-task-date-edit').forEach(el => {
+          el.style.transition = 'opacity 0.15s';
+          el.addEventListener('mouseenter', () => { el.style.opacity = '0.65'; });
+          el.addEventListener('mouseleave', () => { el.style.opacity = ''; });
+        });
+
+        // Click task text → open inline edit form directly below the row
+        tasksEl.querySelectorAll('.sp-task-click').forEach(el => {
           el.addEventListener('click', () => {
-            const companyId = el.dataset.companyId;
-            if (companyId) {
-              window.open(chrome.runtime.getURL('company.html?id=' + companyId), '_blank');
-            } else {
-              window.open(chrome.runtime.getURL('saved.html'), '_blank');
+            const taskRow = el.closest('.sp-home-action-item');
+            const taskId = el.dataset.taskId;
+
+            // Close any open edit — immediately, no race
+            const existing = tasksEl.querySelector('.sp-task-inline-edit');
+            if (existing) {
+              const wasThis = existing.dataset.forTask === taskId;
+              existing.remove();
+              tasksEl.querySelectorAll('.sp-home-action-item').forEach(r => r.classList.remove('sp-editing'));
+              if (wasThis) return; // toggle off
             }
+
+            taskRow.classList.add('sp-editing');
+            let editPri = el.dataset.taskPri || 'normal';
+
+            const renderPriBtns = (container, currentPri) => {
+              const defs = [
+                { p: 'low',    label: 'Low',    bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' },
+                { p: 'normal', label: 'Normal', bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+                { p: 'high',   label: 'High',   bg: '#FEE2E2', color: '#991B1B', border: '#FCA5A5' },
+              ];
+              container.innerHTML = '';
+              defs.forEach(({ p, label, bg, color, border }) => {
+                const active = p === currentPri;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.dataset.pri = p;
+                btn.textContent = label;
+                btn.style.cssText = `flex:1;font-size:12px;font-weight:700;padding:8px 0;border-radius:7px;cursor:pointer;font-family:inherit;transition:all 0.12s;border:2px solid ${active ? border : '#E0DDD8'};background:${active ? bg : '#fff'};color:${active ? color : '#9A9590'};`;
+                btn.addEventListener('click', () => {
+                  editPri = p;
+                  renderPriBtns(container, editPri);
+                });
+                container.appendChild(btn);
+              });
+            };
+
+            const editDiv = document.createElement('div');
+            editDiv.className = 'sp-task-inline-edit';
+            editDiv.dataset.forTask = taskId;
+            editDiv.style.cssText = 'padding:12px;background:#F2F0ED;border-top:1px solid #E0DDD8;border-bottom:1px solid #E0DDD8;display:flex;flex-direction:column;gap:10px;max-height:0;overflow:hidden;opacity:0;transition:max-height 0.2s ease,opacity 0.15s ease;';
+            editDiv.innerHTML = `
+              <input class="sp-inline-text" type="text" value="${(el.dataset.taskText||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;outline:none;width:100%;box-sizing:border-box;background:#fff;">
+              <div>
+                <div style="font-size:10px;font-weight:700;color:#9A9590;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Priority</div>
+                <div class="sp-inline-pri" style="display:flex;gap:6px;"></div>
+              </div>
+              <div>
+                <div style="font-size:10px;font-weight:700;color:#9A9590;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Due date</div>
+                <input class="sp-inline-date" type="date" value="${el.dataset.taskDate||''}" style="font-size:12px;padding:7px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;color:#3D3935;outline:none;width:100%;box-sizing:border-box;background:#fff;">
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="sp-inline-save" style="flex:1;font-size:12px;font-weight:700;color:#fff;background:#FF7A59;border:none;border-radius:7px;padding:9px;cursor:pointer;font-family:inherit;">Update</button>
+                <button class="sp-inline-cancel" style="font-size:12px;font-weight:600;color:#6B6560;background:#E0DDD8;border:none;border-radius:7px;padding:9px 16px;cursor:pointer;font-family:inherit;">Cancel</button>
+              </div>`;
+
+            taskRow.insertAdjacentElement('afterend', editDiv);
+            renderPriBtns(editDiv.querySelector('.sp-inline-pri'), editPri);
+            requestAnimationFrame(() => { editDiv.style.maxHeight = '400px'; editDiv.style.opacity = '1'; });
+            editDiv.querySelector('.sp-inline-text')?.focus();
+
+            const closeEdit = () => {
+              taskRow.classList.remove('sp-editing');
+              editDiv.style.maxHeight = '0';
+              editDiv.style.opacity = '0';
+              setTimeout(() => editDiv.remove(), 180);
+            };
+
+            const saveEdit = () => {
+              const text = editDiv.querySelector('.sp-inline-text')?.value?.trim();
+              if (!text) return;
+              const dueDate = editDiv.querySelector('.sp-inline-date')?.value || null;
+              chrome.storage.local.get(['userTasks'], d => {
+                const all = d.userTasks || [];
+                const t = all.find(t => t.id === taskId);
+                if (t) Object.assign(t, { text, dueDate, priority: editPri });
+                chrome.storage.local.set({ userTasks: all }, () => showPipelineStats());
+              });
+            };
+
+            editDiv.querySelector('.sp-inline-save')?.addEventListener('click', saveEdit);
+            editDiv.querySelector('.sp-inline-cancel')?.addEventListener('click', closeEdit);
+            editDiv.querySelector('.sp-inline-text')?.addEventListener('keydown', e => {
+              if (e.key === 'Enter') saveEdit();
+              if (e.key === 'Escape') closeEdit();
+            });
           });
         });
       }
@@ -1677,7 +1821,7 @@ function renderHomeState() {
         </div>
       `).join('');
       resultsEl.querySelectorAll('.sp-home-search-result').forEach(el => {
-        el.addEventListener('click', () => window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'));
+        el.addEventListener('click', () => { window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'); window.close(); });
       });
     });
   });
@@ -1725,9 +1869,24 @@ async function triggerResearch(company, forceRefresh = false) {
           industry: detectedLinkedinFirmo.industry,
         });
       }
-      // Always show the research button
+      // Always show the research button. If nothing has rendered content into
+      // contentEl yet (no cached result, no saved-entry research, no
+      // LinkedIn firmographics), replace the default "Navigate to..." empty
+      // state with a clean placeholder so the button doesn't sit below stale
+      // empty-state text. See backlog #7.
       const loader = document.getElementById('research-loader');
       if (loader) loader.remove();
+      const staleEmpty = contentEl.querySelector(':scope > .empty');
+      const hasRenderedContent = contentEl.querySelector('.section, .stat-grid, .one-liner');
+      if (staleEmpty && !hasRenderedContent) {
+        const placeholder = cached
+          ? '' // cached render handles its own content
+          : `<div class="empty" style="padding:24px 16px;text-align:center;color:#7c98b6;">
+              <div style="font-size:13px;margin-bottom:4px;">No research yet for <strong>${company}</strong></div>
+              <div style="font-size:11px;opacity:0.75;">Click below to fetch firmographics, leadership, reviews, and open roles.</div>
+            </div>`;
+        contentEl.innerHTML = placeholder;
+      }
       const existingBtn = document.getElementById('sp-research-btn');
       if (!existingBtn) {
         const btn = document.createElement('button');
@@ -1737,7 +1896,7 @@ async function triggerResearch(company, forceRefresh = false) {
         btn.innerHTML = cached ? '↻ Refresh research' : '&#128270; Research this company';
         btn.addEventListener('click', () => {
           btn.disabled = true;
-          btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">&#128270; Researching...<span class="sp-research-spin">&#8635;</span></span>';
+          btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px"><svg width="16" height="16" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;animation:spin 1.5s ease-in-out infinite"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/></svg> Researching...</span>';
           btn.style.opacity = '0.7';
           triggerResearch(company, true);
         });
@@ -1837,6 +1996,9 @@ async function triggerResearch(company, forceRefresh = false) {
             if (response.jobListings?.length)  { entries[idx].jobListings  = response.jobListings;  changed = true; }
             if (response.leaders?.length)      { entries[idx].leaders      = response.leaders;      changed = true; }
             if (response.intelligence)         { entries[idx].intelligence = response.intelligence; changed = true; }
+            if (!entries[idx].employees && response.employees) { entries[idx].employees = response.employees; changed = true; }
+            if (!entries[idx].funding && response.funding)     { entries[idx].funding   = response.funding;   changed = true; }
+            if (!entries[idx].industry && response.industry)   { entries[idx].industry  = response.industry;  changed = true; }
             if (changed) chrome.storage.local.set({ savedCompanies: entries }, () => void chrome.runtime.lastError);
           }
         });
@@ -2002,15 +2164,13 @@ function renderOppFields(savedEntry) {
         const ts = { ...(savedEntry.stageTimestamps || {}) };
         if (!ts[oppSelect.value]) ts[oppSelect.value] = Date.now();
         const stageChanges = { jobStage: oppSelect.value, stageTimestamps: ts };
-        // Auto-set Action On based on stage
-        const autoAction = defaultActionStatus(oppSelect.value);
-        if (autoAction) stageChanges.actionStatus = autoAction;
+        applyAutoStage(savedEntry, oppSelect.value, stageChanges);
         // Auto-seed applied date
         if (oppSelect.value === 'applied' && !savedEntry.appliedDate) stageChanges.appliedDate = Date.now();
         updateEntry(stageChanges);
         // Update Action On dropdown if visible
         const actionSel = el.querySelector('#sp-action-status');
-        if (actionSel && autoAction) actionSel.value = autoAction;
+        if (actionSel && stageChanges.actionStatus) actionSel.value = stageChanges.actionStatus;
         oppSelect.style.animation = 'sp-stage-flash 0.4s ease';
         setTimeout(() => oppSelect.style.animation = '', 400);
         // Update the header stage text
@@ -2128,8 +2288,15 @@ function checkAlreadySaved(company) {
       }
       showCrmLink(match);
 
-      // Use saved research data instead of re-fetching from API
-      if (match.intelligence || match.employees || match.industry) {
+      // Use saved research data instead of re-fetching from API.
+      // Gate is intentionally loose: any of these fields is enough to render
+      // something more useful than the default "Navigate to..." empty state.
+      // Previously we only rendered on intelligence/employees/industry which
+      // left the empty text visible on entries saved from LinkedIn with only
+      // website + leaders populated — see backlog #7.
+      if (match.intelligence || match.employees || match.industry || match.companyWebsite ||
+          (match.leaders && match.leaders.length) || (match.reviews && match.reviews.length) ||
+          (match.jobListings && match.jobListings.length) || match.companyLinkedin) {
         const savedResearch = {
           intelligence: match.intelligence,
           employees: match.employees,
@@ -2471,10 +2638,11 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
   if (!currentJobTitle) return;
 
   function scoreToVerdict(score) {
-    if (score >= 8) return { label: 'Strong Match', cls: 'high' };
-    if (score >= 6) return { label: 'Good Match', cls: 'mid' };
-    if (score >= 4) return { label: 'Mixed Signals', cls: 'mixed' };
-    return { label: 'Likely Not a Fit', cls: 'low' };
+    if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
+    if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
+    if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
+    if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
+    return                   { label: 'Weak match',     cls: 'low' };
   }
 
   // LinkedIn chips are authoritative for work arrangement — AI snapshot can misinterpret territory mentions as "On-site"
@@ -2547,7 +2715,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
           const noteActive = fb?.type === 'note' ? ' active note' : '';
           return `
           <div class="verdict-row" style="margin-top:12px">
-            ${jobMatch.score ? `<span style="font-size:18px;font-weight:800;color:${jobMatch.score >= 7 ? '#00BDA5' : jobMatch.score >= 4 ? '#d97706' : '#f87171'};margin-right:4px">${jobMatch.score}<span style="font-size:12px;opacity:0.6">/10</span></span>` : ''}
+            ${jobMatch.score ? `<span style="font-size:18px;font-weight:800;color:${jobMatch.score >= 7 ? '#00BDA5' : jobMatch.score >= 5 ? '#d97706' : '#f87171'};margin-right:4px"><span style="display:block;font-size:9px;font-weight:600;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.5px;line-height:1;">Coop's Score</span>${jobMatch.score}<span style="font-size:12px;opacity:0.6">/10</span></span>` : ''}
             <span class="verdict-badge ${v.cls}">${v.label}</span>
             <span class="verdict-thumbs">
               <button class="thumb-btn${upActive}" data-dir="up" title="Agree with assessment">👍</button>
@@ -2594,10 +2762,11 @@ function startResearchLoaderCycle(company) {
 // can nudge it forward on real events (e.g., QUICK_LOOKUP returning).
 function renderResearchPhases(company) {
   const safeCompany = (company || 'company').replace(/</g, '&lt;');
+  const _thinkSvg = `<svg class="coop-thinking-face" width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="ct28"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#ct28)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/><circle cx="43" cy="40" r="0.8" fill="white"/><ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/><circle cx="61" cy="40" r="0.8" fill="white"/><path d="M36 35Q41 31 47 34" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/><path d="M53 34Q59 31 64 35" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/><path d="M45 58Q48 60 51 59" fill="none" stroke="#8B6B4A" stroke-width="1.8" stroke-linecap="round"/><path d="M58 68Q55 63 52 62Q50 61 48 63L47 66Q48 68 50 69Q53 70 56 69Z" fill="#E5BF9A" stroke="#D4A878" stroke-width="0.5"/><circle cx="76" cy="28" r="6" fill="rgba(255,255,255,0.7)" stroke="#ccc" stroke-width="0.5"><animate attributeName="cy" values="28;24;28" dur="2s" repeatCount="indefinite"/></circle><circle cx="71" cy="37" r="3.5" fill="rgba(255,255,255,0.5)" stroke="#ddd" stroke-width="0.4"><animate attributeName="cy" values="37;34;37" dur="2.3s" repeatCount="indefinite"/></circle><circle cx="67" cy="42" r="2" fill="rgba(255,255,255,0.4)" stroke="#ddd" stroke-width="0.3"><animate attributeName="cy" values="42;40;42" dur="1.8s" repeatCount="indefinite"/></circle></g></svg>`;
   contentEl.innerHTML = `
     <div class="research-phases-card" id="research-phases-card">
       <div class="research-phases-header">
-        <div class="research-phases-spinner"></div>
+        ${_thinkSvg}
         <div class="research-phases-title">Researching <span class="company">${safeCompany}</span></div>
       </div>
       <div class="research-phase-list">
@@ -2973,21 +3142,32 @@ function renderQualifications(qualifications) {
 
 function renderScoreBreakdown(breakdown) {
   if (!breakdown) return '';
+  const DIM_COLORS = { qualificationFit: '#378ADD', roleFit: '#3B6D11', cultureFit: '#7F77DD', companyFit: '#BA7517', compFit: '#0F6E56' };
   const components = [
-    { key: 'qualificationFit', label: 'Qualifications' },
-    { key: 'preferenceFit', label: 'Green Flags' },
-    { key: 'dealbreakers', label: 'Red Flag Impact' },
-    { key: 'compFit', label: 'Compensation' },
-    { key: 'roleFit', label: 'Role & Co. Fit' }
+    { key: 'qualificationFit', label: 'Qualification Fit', tip: "Would they hire you? Matches your experience, seniority, and skills against job requirements. Your preferences don't affect this score." },
+    { key: 'roleFit', label: 'Role Fit', tip: "How well does the day-to-day work match what you're looking for? Green flags, role ICP, selling motion, autonomy, scope." },
+    { key: 'cultureFit', label: 'Culture Fit', tip: "Culture markers, team dynamics, company values, work style, growth environment." },
+    { key: 'companyFit', label: 'Company Fit', tip: "Company stage, size, industry, market position, and trajectory vs your ICP." },
+    { key: 'compFit', label: 'Comp Fit', tip: "Comp alignment against your salary/OTE floors and strong targets. 5 = meets floor or not disclosed." }
   ];
+  // Backward compat: fall back to old keys if new ones missing
+  const get = (key) => {
+    if (breakdown[key] !== undefined) return breakdown[key];
+    if (key === 'roleFit' && breakdown.preferenceFit !== undefined) return breakdown.preferenceFit;
+    if (key === 'cultureFit' && breakdown.dealbreakers !== undefined) return breakdown.dealbreakers;
+    if (key === 'companyFit' && breakdown.roleFit !== undefined) return breakdown.roleFit;
+    return 5;
+  };
   return components.map(c => {
-    const val = breakdown[c.key] || 5;
+    const val = get(c.key);
     const pct = val * 10;
-    const color = val >= 7 ? '#00BDA5' : val >= 4 ? '#d97706' : '#f87171';
-    return `<div class="breakdown-row">
-      <span class="breakdown-label">${c.label}</span>
-      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%;background:${color}"></div></div>
-      <span class="breakdown-val" style="color:${color}">${val}</span>
+    const barColor = val >= 7 ? '#00BDA5' : val >= 5 ? '#d97706' : '#f87171';
+    const dotColor = DIM_COLORS[c.key] || barColor;
+    return `<div class="breakdown-row" style="position:relative;cursor:help;">
+      <span class="breakdown-label"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};margin-right:5px;vertical-align:middle;"></span>${c.label} <span style="opacity:0.4;font-size:10px;">ⓘ</span></span>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <span class="breakdown-val" style="color:${barColor}">${val}</span>
+      <div class="breakdown-tooltip">${c.tip}</div>
     </div>`;
   }).join('');
 }
@@ -3061,10 +3241,11 @@ function renderResults(data) {
   ` : '<div style="color:#555;font-size:13px">No product data available</div>';
 
   function scoreToVerdict(score) {
-    if (score >= 8) return { label: 'Strong Match', cls: 'high' };
-    if (score >= 6) return { label: 'Good Match', cls: 'mid' };
-    if (score >= 4) return { label: 'Mixed Signals', cls: 'mixed' };
-    return { label: 'Likely Not a Fit', cls: 'low' };
+    if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
+    if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
+    if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
+    if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
+    return                   { label: 'Weak match',     cls: 'low' };
   }
 
   // Company fit intentionally omitted — only job-level fit (via ANALYZE_JOB) is shown
@@ -4981,7 +5162,7 @@ function buildQueueEntry() {
     tags.push('linkedin easy apply');
   }
 
-  return {
+  const entry = {
     id:               Date.now().toString(36) + Math.random().toString(36).substr(2),
     type:             'company',
     company,
@@ -5023,6 +5204,7 @@ function buildQueueEntry() {
   }
 
   return entry;
+
 }
 
 function queueSaveEntry(callback) {

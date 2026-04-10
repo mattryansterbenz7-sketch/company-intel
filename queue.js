@@ -6,6 +6,7 @@ const QUEUE_STAGE_FALLBACK = 'needs_review';
 const _rawMode = new URLSearchParams(location.search).get('mode');
 const MODE = _rawMode === 'apply' ? 'apply' : _rawMode === 'dq' ? 'dq' : 'score';
 const SINGLE_ID = new URLSearchParams(location.search).get('id'); // single-entry DQ mode
+const DEV_MOCK = new URLSearchParams(location.search).get('mock') === '1'; // ?mock=1 → skip API, use fixture data
 const QUEUE_CONFIG = {
   score: { title: "Coop's Scoring Queue", emptyTitle: 'Queue is clear', emptySub: 'New opportunities will appear here when saved', showCta: false, passLabel: 'Pass', interestedLabel: 'Interested' },
   apply: { title: 'Apply Queue', emptyTitle: 'All caught up', emptySub: 'Nothing left to apply to right now', showCta: true, passLabel: 'Skip', interestedLabel: 'Applied' },
@@ -22,9 +23,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const titleEl = document.querySelector('.header-title');
   if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/><path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/></g></svg><span>${CFG.title}</span>`;
   document.title = 'Coop.ai — ' + CFG.title;
+  if (DEV_MOCK) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:#FFF3CD;color:#856404;text-align:center;padding:4px 8px;font-size:12px;font-weight:600;border-bottom:1px solid #FFEEBA;';
+    banner.textContent = '🔧 Mock Mode — Rescore uses fixture data (no API calls)';
+    document.body.prepend(banner);
+  }
 });
 
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function scoreToVerdict(score) {
+  if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
+  if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
+  if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
+  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
+  return              { label: 'Weak match',     cls: 'low' };
+}
 
 // Back button
 document.getElementById('back-btn').addEventListener('click', e => {
@@ -32,6 +46,29 @@ document.getElementById('back-btn').addEventListener('click', e => {
   window.open(chrome.runtime.getURL('saved.html'), '_blank');
   window.close();
 });
+
+// Mock mode button — opens same queue with ?mock=1
+const mockBtn = document.getElementById('btn-mock-mode');
+if (mockBtn) {
+  if (DEV_MOCK) {
+    mockBtn.textContent = '⚠ Mock Active — Exit';
+    mockBtn.style.background = '#FFC107';
+    mockBtn.style.color = '#333';
+    mockBtn.style.borderColor = '#D4A017';
+    mockBtn.title = 'Mock mode is ON — scores use fixture data. Click to exit.';
+    mockBtn.addEventListener('click', () => {
+      const url = new URL(location.href);
+      url.searchParams.delete('mock');
+      location.href = url.toString();
+    });
+  } else {
+    mockBtn.addEventListener('click', () => {
+      const url = new URL(location.href);
+      url.searchParams.set('mock', '1');
+      location.href = url.toString();
+    });
+  }
+}
 
 // Load queue entries
 function loadQueue() {
@@ -96,7 +133,8 @@ function updateCount() {
     document.getElementById('queue-count').textContent = '';
     return;
   }
-  document.getElementById('queue-count').textContent = `${queue.length} remaining`;
+  const remaining = Math.max(0, queue.length - currentIdx);
+  document.getElementById('queue-count').textContent = `${remaining} remaining`;
 }
 
 function renderCurrent() {
@@ -139,6 +177,7 @@ function renderCurrent() {
     return;
   }
 
+  try {
   const c = queue[currentIdx];
   const jm = c.jobMatch || {};
   const score = jm.score ?? '?';
@@ -164,8 +203,9 @@ function renderCurrent() {
   const isKnown = v => v && !/^\s*(not specified|unknown|n\/a|none|—|–|-)\s*$/i.test(String(v));
   const factVal = (v) => `<span class="qc-fact-val">${escHtml(String(v))}</span>`;
   const fact = (label, v) => isKnown(v) ? `<div class="qc-fact-row"><span class="qc-fact-label">${label}</span>${factVal(v)}</div>` : '';
-  const baseSalary = c.jobSnapshot?.salary || c.baseSalaryRange || '';
-  const totalComp = c.jobSnapshot?.oteTotalComp || c.oteTotalComp || '';
+  const _normSal = s => s ? s.replace(/\/yr/gi, '').replace(/\/year/gi, '').replace(/\s+/g, ' ').trim() : s;
+  const baseSalary = _normSal(c.jobSnapshot?.salary || c.baseSalaryRange || '');
+  const totalComp = _normSal(c.jobSnapshot?.oteTotalComp || c.oteTotalComp || '');
   // Pull employees/funding from all possible locations the research pipeline may have stored them
   const employees = c.employees || c.headcount || c.intelligence?.employees || c.firmographics?.employees || '';
   const funding = c.funding || c.totalFunding || c.intelligence?.funding || c.firmographics?.totalFunding || '';
@@ -192,8 +232,10 @@ function renderCurrent() {
   const favHtml = favDomain ? `<img class="qc-company-favicon" src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" onerror="this.style.display='none'">` : '';
 
   // Score timestamp with hours/minutes
-  const scoredAt = jm.lastUpdatedAt ? (() => {
-    const mins = Math.floor((Date.now() - jm.lastUpdatedAt) / 60000);
+  const isMockScore = jm.lastScoringUsage?.model === 'dev-mock';
+  function formatScoredAt(ts) {
+    if (!ts) return '';
+    const mins = Math.floor((Date.now() - ts) / 60000);
     if (mins < 1) return 'Scored just now';
     if (mins < 60) return `Scored ${mins}m ago`;
     const hrs = Math.floor(mins / 60);
@@ -201,8 +243,11 @@ function renderCurrent() {
     const days = Math.floor(hrs / 24);
     if (days === 1) return 'Scored yesterday';
     if (days < 7) return `Scored ${days}d ago`;
-    return `Scored ${new Date(jm.lastUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-  })() : '';
+    return `Scored ${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  }
+  const scoredAt = isMockScore
+    ? 'Mock score' + (jm.lastUpdatedAt ? ` · Last real: ${formatScoredAt(jm.lastUpdatedAt)}` : ' · Never scored live')
+    : formatScoredAt(jm.lastUpdatedAt);
 
   // Flags HTML — with dismiss buttons + config links
   const dismissedFlags = jm.dismissedFlags || [];
@@ -255,44 +300,194 @@ function renderCurrent() {
     return `<div class="qc-flag${isDismissed ? ' dismissed' : ''}" data-flag="${escHtml(f.text)}"><div class="qc-flag-row"><span class="qc-flag-dot" style="color:#E8384F">●</span> <span${isDismissed ? ' style="text-decoration:line-through"' : ''}>${escHtml(f.text)}</span>${flagInfoBtn(f)}${configIcon(flagConfigLink(f.text))}<button class="qc-flag-dismiss" data-flag="${escHtml(f.text)}" data-type="red" title="${isDismissed ? 'Restore' : 'Dismiss'}">${isDismissed ? '↩' : '×'}</button></div>${flagDetailPanel(f)}</div>`;
   }).join('');
 
-  // Breakdown bars
-  const barColor = v => v >= 7 ? '#36B37E' : v >= 5 ? '#F5A623' : '#E8384F';
-  const BAR_TIPS = {
-    Qualification: 'Employer perspective: would this company seriously consider hiring you? Based ONLY on whether you meet their stated qualifications — your preferences are NOT factored in here.',
-    Preferences: 'Candidate perspective: how well does this role align with the role types, scope, seniority, selling motion, and team size you said you want?',
-    Dealbreakers: 'How well the role avoids your hard dealbreakers (work arrangement, role types you don\'t want, explicit dislikes). 10 = no dealbreakers triggered.',
-    Compensation: 'Match against your salary floor / OTE floor / strong-comp targets. 10 = posted comp meets or exceeds your strong target.',
-    'Role Fit': 'Day-to-day overlap between the role\'s actual responsibilities and the kind of work you said you do best.',
-  };
-  const bars = [
-    { label: 'Qualification', val: breakdown.qualificationFit },
-    { label: 'Preferences', val: breakdown.preferenceFit },
-    { label: 'Dealbreakers', val: breakdown.dealbreakers },
-    { label: 'Compensation', val: breakdown.compFit },
-    { label: 'Role Fit', val: breakdown.roleFit },
-  ].filter(b => b.val != null);
-  const barsHtml = bars.length ? `
-    <div class="qc-section-label">Score Breakdown</div>
-    <div class="qc-breakdown">
-      ${bars.map(b => `
-        <div class="qc-bar-row" title="${(BAR_TIPS[b.label] || '').replace(/"/g, '&quot;')}" style="cursor:help;">
-          <div class="qc-bar-label">${b.label} <span style="opacity:0.4;font-size:10px;">ⓘ</span></div>
-          <div class="qc-bar-track"><div class="qc-bar-fill" style="width:${b.val * 10}%;background:${barColor(b.val)}"></div></div>
-          <div class="qc-bar-val" style="color:${barColor(b.val)}">${b.val}</div>
-        </div>
-      `).join('')}
+  // Format detection: new schema has roleFit + cultureFit, old has preferenceFit + dealbreakers
+  const isNewFormat = breakdown.roleFit !== undefined && breakdown.cultureFit !== undefined;
+  const flagsFired = jm.flagsFired || {};
+  const neutralFlags = jm.neutralFlags || {};
+  const dimRationale = jm.dimensionRationale || {};
+  const compAssess = jm.compAssessment || {};
+  const qualifications = jm.qualifications || [];
+
+  // Coop's take — new field or fall back to old summary
+  const coopTakeText = jm.coopTake || summary;
+  const coopTakeHtml = coopTakeText ? `
+    <div class="queue-coop-take">
+      <span class="queue-coop-label">Coop's take</span>
+      <span class="queue-coop-text">${escHtml(coopTakeText)}</span>
     </div>` : '';
 
-  // Qualification
-  const qualTier = qualScore >= 7 ? 'high' : qualScore >= 5 ? 'mid' : 'low';
-  const qualHtml = qualMatch ? `
-    <div class="qc-qual">
-      <div class="qc-qual-header">
-        <div class="qc-section-label">Qualification Match</div>
-        <div class="qc-qual-score ${qualTier}">${qualScore}/10</div>
-      </div>
-      <div class="qc-qual-text">${escHtml(qualMatch)}</div>
-    </div>` : '';
+  // Verdict pill
+  const _verdict = scoreToVerdict(score);
+  const verdictPillHtml = `<span class="queue-verdict-pill ${_verdict.cls}">${_verdict.label}</span>`;
+
+  // 5-dim breakdown
+  const DIM_DEFS = [
+    { key: 'qualificationFit', label: 'Qualification', dot: 'qual' },
+    { key: 'roleFit',          label: 'Role fit',      dot: 'role' },
+    { key: 'cultureFit',       label: 'Culture fit',   dot: 'culture' },
+    { key: 'companyFit',       label: 'Company fit',   dot: 'company' },
+    { key: 'compFit',          label: 'Comp fit',      dot: 'comp' },
+  ];
+  const DIM_LABELS = { qualificationFit: 'Qualification', roleFit: 'Role fit', cultureFit: 'Culture fit', companyFit: 'Company fit', compFit: 'Comp fit' };
+  // Map old format keys to new display slots
+  const displayBreakdown = isNewFormat ? breakdown : {
+    qualificationFit: breakdown.qualificationFit,
+    roleFit:          breakdown.preferenceFit,
+    cultureFit:       breakdown.dealbreakers,
+    companyFit:       undefined,
+    compFit:          breakdown.compFit,
+  };
+  const dimTier = v => v >= 7 ? 'high' : v >= 5 ? 'mid' : 'low';
+  const prefsUrl = chrome.runtime.getURL('preferences.html');
+
+  // Helper: build flag card HTML
+  function buildFlagCard(adj, color, dimKey) {
+    const sign = color === 'green' ? '+' : color === 'red' ? '−' : '·';
+    const flagText = adj.text || adj.label || '';
+    const delta = adj.delta ?? 0;
+    const impactStr = delta > 0 ? `+${delta.toFixed(1)}` : delta < 0 ? `${delta.toFixed(1)}` : '';
+    const impactCls = delta > 0 ? 'pos' : delta < 0 ? 'neg' : '';
+    const settingsHref = adj.id ? `${prefsUrl}?dim=${dimKey}&flagId=${adj.id}` : `${prefsUrl}?dim=${dimKey}`;
+    return `
+      <div class="queue-flag-card ${color}" data-flag-id="${adj.id || ''}">
+        <div class="queue-flag-card-row">
+          <span class="queue-flag-sign">${sign}</span>
+          <span class="queue-flag-text">${escHtml(flagText)}</span>
+          ${adj.sev ? `<span class="queue-flag-sev-pill">s${adj.sev}</span>` : ''}
+          ${impactStr ? `<span class="queue-flag-impact ${impactCls}">${impactStr}</span>` : ''}
+          <a class="queue-flag-settings-link" href="${settingsHref}" target="_blank" title="${escHtml(DIM_LABELS[dimKey] || dimKey)} settings">↗</a>
+          <button class="queue-flag-dismiss-btn" data-flag-text="${escHtml(flagText)}" data-flag-type="${color}" title="Dismiss">✕</button>
+        </div>
+        ${adj.evidence ? `<div class="queue-flag-evidence">${escHtml(adj.evidence)}</div>` : ''}
+      </div>`;
+  }
+
+  // Helper: render flag list with collapse when >3
+  function buildFlagList(flags, color, dimKey) {
+    if (!flags.length) return '<div style="font-size:11px;color:var(--ci-text-tertiary);font-style:italic;">None fired</div>';
+    const LIMIT = 3;
+    const visible = flags.slice(0, LIMIT).map(a => buildFlagCard(a, color, dimKey)).join('');
+    if (flags.length <= LIMIT) return visible;
+    const hidden = flags.slice(LIMIT).map(a => buildFlagCard(a, color, dimKey)).join('');
+    return `${visible}<div class="queue-flags-overflow" style="display:none;">${hidden}</div><button class="queue-flags-more-btn" data-expanded="0">+${flags.length - LIMIT} more</button>`;
+  }
+
+
+  // Helper: build qualification card
+  function buildQualCard(q) {
+    const statusIcons = { met: '✓', partial: '~', unmet: '✕', unknown: '?' };
+    const cls = q.status || 'unknown';
+    const sources = q.sources || [];
+    const evidenceText = q.evidence ? escHtml(q.evidence) : '';
+    return `
+      <div class="queue-qual-card ${cls}">
+        <span class="queue-qual-icon ${cls}">${statusIcons[cls] || '?'}</span>
+        <span class="queue-qual-title">${escHtml(q.requirement)}</span>
+        ${evidenceText ? `<span class="queue-qual-evidence">${evidenceText}</span>` : ''}
+        ${sources.length ? `<span class="queue-qual-sources">${sources.map(s => `<span class="queue-qual-source-tag">${escHtml(s)}</span>`).join('')}</span>` : ''}
+        ${(cls === 'partial' || cls === 'unmet') ? `<button class="queue-qual-correct-btn" data-qual-id="${q.id}" data-qual-req="${escHtml(q.requirement)}">Add to experience ↗</button>` : ''}
+      </div>`;
+  }
+
+  // Build dimension rows
+  const weights = jm.scoringWeightsSnapshot || {};
+  const dimRows = DIM_DEFS.map(dim => {
+    const val = displayBreakdown[dim.key];
+    if (val == null) return '';
+    const tier = dimTier(val);
+    const fired = isNewFormat ? (flagsFired[dim.key] || {}) : {};
+    const allGreens = fired.green || [];
+    const allReds   = fired.red   || [];
+    // Neutral flags (unfired, unknownNeutral) are NOT shown — absence of evidence is neutral, not a flag
+
+    const w = weights[dim.key] || 0;
+    const hasFlags = allGreens.length || allReds.length;
+    const isQual = dim.key === 'qualificationFit';
+    const isComp = dim.key === 'compFit';
+    // Determine if this dimension has content worth expanding
+    const hasContent = isNewFormat && (hasFlags || isQual || isComp);
+
+    // Build expanded drawer content — only for dimensions with actual content
+    let drawerHtml = '';
+    let inlineNote = ''; // small note shown in the bar row itself for empty dimensions
+    if (isNewFormat && hasContent) {
+      const contribution = (val * w / 100).toFixed(2);
+
+      if (isQual) {
+        const _compRx = /\b(salary|salaries|comp(ensation)?|pay\b|ote\b|base\s*pay|incentive|bonus|equity|stock|commission)/i;
+        const skillQuals = qualifications.filter(q => !_compRx.test(q.requirement) && !q.dismissed);
+        const metQuals = skillQuals.filter(q => q.status === 'met');
+        const otherQuals = skillQuals.filter(q => q.status !== 'met' && q.status !== 'unknown');
+        const metCount = metQuals.length, partialCount = otherQuals.filter(q => q.status === 'partial').length, unmetCount = otherQuals.filter(q => q.status === 'unmet').length;
+        const totalQ = metCount + partialCount + unmetCount;
+        // Compact inline items — one line each, no card wrapper
+        const qualLine = q => {
+          const icon = q.status === 'met' ? '✓' : q.status === 'partial' ? '~' : '✕';
+          const cls = q.status;
+          return `<div class="queue-qual-line ${cls}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${(q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''}</div>`;
+        };
+        const QLIMIT = 4;
+        const allQuals = [...metQuals, ...otherQuals];
+        const visible = allQuals.slice(0, QLIMIT).map(qualLine).join('');
+        const overflow = allQuals.length > QLIMIT
+          ? `<div class="queue-flags-overflow" style="display:none;">${allQuals.slice(QLIMIT).map(qualLine).join('')}</div><button class="queue-flags-more-btn" data-expanded="0">+${allQuals.length - QLIMIT} more</button>`
+          : '';
+        drawerHtml = `<div class="queue-dim-drawer"><div class="queue-math-row"><span>${totalQ ? `${metCount} met · ${partialCount} partial · ${unmetCount} unmet` : 'No requirements identified'} → ${val}/10</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}</div>`;
+      } else if (isComp) {
+        const verdictCls = v => v?.includes('above') ? 'above' : v === 'at_floor' ? 'at' : v === 'below_floor' ? 'below' : 'unknown';
+        const verdictLabel = { above_strong: 'Above target', above_floor: 'Above floor', at_floor: 'At floor', below_floor: 'Below floor' };
+        const allAdj = allGreens.concat(allReds);
+        const mathParts = ['5.0'];
+        allAdj.forEach(a => { const d = a.delta ?? 0; mathParts.push(`${d > 0 ? '+' : ''}${d.toFixed(1)}`); });
+        const mathStr = mathParts.length > 1 ? `${mathParts.join(' ')} = ${val}` : `${val}`;
+        const baseDisplay = compAssess.baseAmount ? '$' + compAssess.baseAmount.toLocaleString() : (baseSalary || null);
+        const oteDisplay = compAssess.oteAmount ? '$' + compAssess.oteAmount.toLocaleString() : (totalComp || null);
+        const showBase = baseDisplay && compAssess.baseVsFloor !== 'unknown';
+        const showOte = oteDisplay && compAssess.oteVsFloor !== 'unknown';
+        // Inline comp summary instead of big cards
+        const compParts = [];
+        if (showBase) compParts.push(`Base: ${baseDisplay} <span class="queue-comp-inline-verdict ${verdictCls(compAssess.baseVsFloor)}">${verdictLabel[compAssess.baseVsFloor] || ''}</span>`);
+        if (showOte) compParts.push(`OTE: ${oteDisplay} <span class="queue-comp-inline-verdict ${verdictCls(compAssess.oteVsFloor)}">${verdictLabel[compAssess.oteVsFloor] || ''}</span>`);
+        drawerHtml = `<div class="queue-dim-drawer"><div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${compParts.length ? `<div class="queue-comp-inline">${compParts.join('<span class="queue-comp-sep">·</span>')}</div>` : ''}${hasFlags ? `<div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>` : ''}</div>`;
+      } else {
+        // Standard dimension with flags
+        const allAdj = allGreens.concat(allReds);
+        const mathParts = ['5.0'];
+        allAdj.forEach(a => { const d = a.delta ?? 0; mathParts.push(`${d > 0 ? '+' : ''}${d.toFixed(1)}`); });
+        const rawScore = allAdj.reduce((s, a) => s + a.delta, 5.0);
+        const mathStr = `${mathParts.join(' ')} = ${rawScore.toFixed(1)} → ${val}`;
+        drawerHtml = `<div class="queue-dim-drawer"><div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>${dimRationale[dim.key] ? `<div class="queue-drawer-note">${escHtml(dimRationale[dim.key])}</div>` : ''}</div>`;
+      }
+    } else if (isNewFormat && !hasContent) {
+      // Empty dimension — no drawer, just inline rationale
+      inlineNote = dimRationale[dim.key] ? `<span class="queue-dim-inline-note">${escHtml(dimRationale[dim.key])}</span>` : '<span class="queue-dim-inline-note">No signals</span>';
+    }
+
+    // Auto-expand qualification so items are always visible
+    const autoOpen = isQual && hasContent;
+
+    return `
+      <div class="queue-dim-row${hasContent ? '' : ' no-drawer'}${autoOpen ? ' open' : ''}" data-dim="${dim.key}">
+        <div class="queue-dim-bar-row">
+          <span class="queue-dim-dot ${dim.dot}"></span>
+          <span class="queue-dim-name">${dim.label}</span>
+          <div class="queue-bar-track"><div class="queue-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
+          <span class="queue-dim-score ${tier}">${val}</span>
+          ${hasContent ? '<span class="queue-dim-chevron">›</span>' : ''}
+        </div>${inlineNote ? `<div class="queue-dim-note-row">${inlineNote}</div>` : ''}${drawerHtml}
+      </div>`;
+  }).join('');
+
+  // Total formula row
+  const totalFormulaHtml = jm.scoreRationale ? `<div class="queue-total-formula">${escHtml(jm.scoreRationale)}</div>` : '';
+
+  const barsHtml = dimRows.trim() ? `
+    <div class="qc-breakdown-label">Score breakdown — click to expand</div>
+    <div class="qc-breakdown">${dimRows}</div>${totalFormulaHtml}` : '';
+
+  // Remove old separate qualification and rationale sections — they're now inside the drawer
+  const rationaleHtml = '';
+  const qualHtml = '';
 
   // Hard DQ badge
   const dqHtml = jm.hardDQ?.flagged ? `<div style="margin-bottom:12px;padding:8px 12px;background:rgba(232,56,79,0.08);border:1px solid rgba(232,56,79,0.2);border-radius:6px;font-size:12px;font-weight:700;color:#E8384F;">⚠ Hard Disqualification: ${escHtml((jm.hardDQ.reasons || []).join(', '))}</div>` : '';
@@ -317,9 +512,12 @@ function renderCurrent() {
       <button class="queue-side-nav next" id="btn-next" ${currentIdx >= queue.length - 1 ? 'disabled' : ''} title="Next (↓)" aria-label="Next card">›</button>
     <div class="queue-card" id="queue-card">
       <div class="qc-header">
-        <div class="qc-score ${tier}">
-          <div class="qc-score-num">${score}</div>
-          <div class="qc-score-den">/10</div>
+        <div class="qc-score-wrap">
+          <div class="qc-score ${tier}">
+            <div class="qc-score-num">${score}</div>
+            <div class="qc-score-den">/10</div>
+          </div>
+          <span class="qc-score-label">Coop's Score</span>
         </div>
         <div class="qc-info">
           <a class="qc-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank" style="text-decoration:none;color:inherit;">${favHtml} ${escHtml(c.company)}</a>
@@ -343,14 +541,16 @@ function renderCurrent() {
       ${ctaHtml}
       <div class="qc-body">
         ${dqHtml}
-        ${summary ? `<div class="qc-summary">${escHtml(summary)}</div>` : ''}
-        ${(strongFits.length || redFlags.length) ? `
+        ${verdictPillHtml}
+        ${coopTakeHtml}
+        ${barsHtml}
+        ${rationaleHtml}
+        ${qualHtml}
+        ${(!isNewFormat && (strongFits.length || redFlags.length)) ? `
           <div class="qc-flags">
             ${strongFits.length ? `<div class="qc-flag-col"><div class="qc-flag-heading green">Green Flags</div>${greenHtml}</div>` : ''}
             ${redFlags.length ? `<div class="qc-flag-col"><div class="qc-flag-heading red">Red Flags</div>${redHtml}</div>` : ''}
           </div>` : ''}
-        ${qualHtml}
-        ${barsHtml}
       </div>
       <div class="qc-more" id="qc-more" data-id="${c.id}">View full details →</div>
       <div class="queue-nav">
@@ -372,16 +572,54 @@ function renderCurrent() {
   document.getElementById('btn-rescore')?.addEventListener('click', () => {
     const btn = document.getElementById('btn-rescore');
     const card = document.getElementById('queue-card');
-    btn.innerHTML = '<span class="rescore-spinner"></span> Rescoring...';
+    btn.innerHTML = DEV_MOCK ? '<span class="rescore-spinner"></span> Mock scoring...' : '<span class="rescore-spinner"></span> Rescoring...';
     btn.disabled = true;
-    // Add loading overlay to card
-    if (card) card.style.opacity = '0.6';
+    // Coop thinking overlay
+    const shell = card?.closest('.queue-card-shell');
+    if (shell) {
+      shell.style.position = 'relative';
+      const overlay = document.createElement('div');
+      overlay.className = 'coop-thinking-overlay';
+      overlay.id = 'coop-thinking';
+      overlay.innerHTML = `
+        <div class="coop-thinking-face-wrap">
+          <div class="coop-thinking-orbit"></div>
+          <svg class="coop-thinking-face" width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+            <clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath>
+            <g clip-path="url(#ct)">
+              <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+              <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+              <path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/>
+              <path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/>
+              <ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/>
+              <circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/>
+              <circle cx="43" cy="40" r="0.8" fill="white"/>
+              <ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/>
+              <circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/>
+              <circle cx="61" cy="40" r="0.8" fill="white"/>
+              <path d="M36 35Q41 31 47 34" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M53 34Q59 31 64 35" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M45 58Q48 60 51 59" fill="none" stroke="#8B6B4A" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M58 68Q55 63 52 62Q50 61 48 63L47 66Q48 68 50 69Q53 70 56 69Z" fill="#E5BF9A" stroke="#D4A878" stroke-width="0.5"/>
+              <circle cx="76" cy="28" r="6" fill="rgba(255,255,255,0.7)" stroke="#ccc" stroke-width="0.5"><animate attributeName="cy" values="28;24;28" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/></circle>
+              <circle cx="71" cy="37" r="3.5" fill="rgba(255,255,255,0.5)" stroke="#ddd" stroke-width="0.4"><animate attributeName="cy" values="37;34;37" dur="2.3s" repeatCount="indefinite"/></circle>
+              <circle cx="67" cy="42" r="2" fill="rgba(255,255,255,0.4)" stroke="#ddd" stroke-width="0.3"><animate attributeName="cy" values="42;40;42" dur="1.8s" repeatCount="indefinite"/></circle>
+            </g>
+          </svg>
+        </div>
+        <div class="coop-thinking-dots"><span></span><span></span><span></span></div>
+        <div class="coop-thinking-label">Coop is thinking...</div>
+        <div class="coop-thinking-sub">Analyzing job fit & scoring</div>
+        <div class="coop-thinking-bar"><div class="coop-thinking-bar-fill"></div></div>`;
+      shell.appendChild(overlay);
+    }
     const startTime = Date.now();
-    chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: c.id }, (response) => {
+    chrome.runtime.sendMessage({ type: DEV_MOCK ? 'DEV_MOCK_SCORE' : 'QUICK_FIT_SCORE', entryId: c.id }, (response) => {
       void chrome.runtime.lastError;
       if (response?.error) {
         clearInterval(pollInterval);
-        if (card) card.style.opacity = '1';
+        document.getElementById('coop-thinking')?.remove();
         btn.innerHTML = '⚠ Rescore failed';
         btn.disabled = false;
         console.error('[Queue] Rescore error:', response.error);
@@ -396,16 +634,18 @@ function renderCurrent() {
           clearInterval(pollInterval);
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           const u = updated.jobMatch?.lastScoringUsage;
-          const costStr = u ? ` · ${(u.input + u.output).toLocaleString()} tokens · ~$${u.cost.toFixed(4)}` : '';
-          btn.innerHTML = `✓ ${elapsed}s${costStr}`;
-          if (card) card.style.opacity = '1';
+          const costStr = u ? ` · ${(u.input + u.output).toLocaleString()} tokens · ~$${u.cost?.toFixed(4) || '?'}` : '';
+          const modelStr = u?.model ? ` · ${u.model.replace(/^claude-/, '').replace(/^gpt-/, '')}` : '';
+          btn.innerHTML = `✓ ${elapsed}s${modelStr}${costStr}`;
+          btn.title = u ? `Model: ${u.model || '?'}\nInput: ${u.input} tokens\nOutput: ${u.output} tokens\nCost: ~$${u.cost?.toFixed(4) || '?'}` : '';
+          document.getElementById('coop-thinking')?.remove();
           queue[currentIdx] = updated;
-          setTimeout(() => renderCurrent(), 1800);
+          setTimeout(() => renderCurrent(), 3000);
         }
       });
     }, 1500);
     // Timeout after 30s
-    setTimeout(() => { clearInterval(pollInterval); btn.innerHTML = '↻ Rescore'; btn.disabled = false; if (card) card.style.opacity = '1'; }, 30000);
+    setTimeout(() => { clearInterval(pollInterval); btn.innerHTML = '↻ Rescore'; btn.disabled = false; document.getElementById('coop-thinking')?.remove(); }, 30000);
   });
   document.getElementById('qc-apply-cta')?.addEventListener('click', (e) => {
     if (!c.jobUrl) return;
@@ -436,6 +676,64 @@ function renderCurrent() {
 
   document.getElementById('qc-more').addEventListener('click', () => {
     window.open(chrome.runtime.getURL('company.html') + '?id=' + c.id, '_blank');
+  });
+
+  // Dimension row expand/collapse
+  document.querySelectorAll('.queue-dim-bar-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const dimRow = row.closest('.queue-dim-row');
+      if (!dimRow || !dimRow.querySelector('.queue-dim-drawer')) return;
+      dimRow.classList.toggle('open');
+    });
+  });
+
+  // Qualification correction buttons
+  document.querySelectorAll('.queue-qual-correct-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const reqText = btn.dataset.qualReq || '';
+      // Deep-link to Experience section with the qualification as a suggested tag to add
+      const expUrl = `${prefsUrl}?section=experience&addTag=${encodeURIComponent(reqText)}`;
+      window.open(expUrl, '_blank');
+    });
+  });
+
+  // Drawer flag dismiss buttons
+  document.querySelectorAll('.queue-flag-dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const flagText = btn.dataset.flagText;
+      const flagType = btn.dataset.flagType;
+      if (!flagText) return;
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const companies = savedCompanies || [];
+        const idx = companies.findIndex(x => x.id === c.id);
+        if (idx === -1) return;
+        const jm = companies[idx].jobMatch || {};
+        jm.dismissedFlags = [...(jm.dismissedFlags || []), flagText];
+        jm.dismissedFlagsWithReasons = [...(jm.dismissedFlagsWithReasons || []), { flag: flagText, type: flagType, date: new Date().toISOString().slice(0, 10) }];
+        companies[idx].jobMatch = jm;
+        _suppressStorageReload = true;
+        chrome.storage.local.set({ savedCompanies: companies });
+        queue[currentIdx].jobMatch = jm;
+        const card = btn.closest('.queue-flag-card');
+        if (card) { card.style.opacity = '0.3'; card.style.textDecoration = 'line-through'; }
+      });
+    });
+  });
+
+  // "+N more" flag expanders
+  document.querySelectorAll('.queue-flags-more-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const overflow = btn.previousElementSibling;
+      if (!overflow) return;
+      const expanded = btn.dataset.expanded === '1';
+      overflow.style.display = expanded ? 'none' : 'block';
+      btn.dataset.expanded = expanded ? '0' : '1';
+      const count = overflow.querySelectorAll('.queue-flag-card, .queue-qual-line').length;
+      btn.textContent = expanded ? `+${count} more` : 'Show fewer';
+    });
   });
 
   // Inline facts editing
@@ -531,6 +829,7 @@ function renderCurrent() {
           jm.dismissedFlags = dismissed.filter(f => f !== flagText);
           jm.dismissedFlagsWithReasons = withReasons.filter(f => f.flag !== flagText);
           companies[idx].jobMatch = jm;
+          _suppressStorageReload = true;
           chrome.storage.local.set({ savedCompanies: companies });
           // Update local queue data
           queue[currentIdx].jobMatch = jm;
@@ -558,6 +857,7 @@ function renderCurrent() {
               jm.dismissedFlags = [...dismissed, flagText];
               jm.dismissedFlagsWithReasons = [...withReasons, { flag: flagText, reason: reason || null, type: flagType, date: new Date().toISOString().slice(0, 10) }];
               companies[idx].jobMatch = jm;
+              _suppressStorageReload = true;
               chrome.storage.local.set({ savedCompanies: companies });
               queue[currentIdx].jobMatch = jm;
               if (reason) {
@@ -580,6 +880,11 @@ function renderCurrent() {
       });
     });
   });
+  } catch(e) {
+    console.error('[Queue] renderCurrent error:', e);
+    main.innerHTML = `<div class="queue-empty"><div class="queue-empty-icon">⚠</div><div class="queue-empty-title">Could not render this card</div><div class="queue-empty-sub">${e.message || 'Unknown error'}</div></div>`;
+    updateCount();
+  }
 }
 
 function triageAction(action, fromDrag) {
@@ -785,8 +1090,10 @@ chrome.runtime.onMessage?.addListener((msg) => {
 });
 
 // Auto-refresh when savedCompanies changes (e.g. new save from sidepanel)
+let _suppressStorageReload = false;
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.savedCompanies) {
+    if (_suppressStorageReload) { _suppressStorageReload = false; return; }
     loadQueue();
   }
 });

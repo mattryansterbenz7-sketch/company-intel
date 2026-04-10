@@ -917,6 +917,118 @@
 
     .header { background: var(--ci-bg-header); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a2c3a; }
     .header .logo { font-size: 18px; font-weight: 700; color: var(--ci-text-on-dark); letter-spacing: -0.01em; text-decoration: none; }
+    /* ── ICP & Scoring section ── */
+    .scoring-weights-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-md); padding: 16px 20px 12px; margin-bottom: 10px; }
+    .scoring-weights-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .scoring-weights-title { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); }
+    .scoring-weights-total { margin-left: auto; font-size: 13px; color: var(--ci-text-secondary); }
+    .scoring-weights-total span { font-weight: 700; }
+    .scoring-weights-total span.valid { color: var(--ci-accent-teal); }
+    .scoring-weights-total span.invalid { color: var(--ci-accent-red); }
+    .scoring-sliders-row { display: flex; gap: 4px; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+    .scoring-slider-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+    .scoring-slider-label { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.2; }
+    .scoring-slider-pct { font-size: 18px; font-weight: 700; color: var(--ci-text-primary); }
+    .scoring-slider-wrap { height: 120px; display: flex; align-items: center; justify-content: center; }
+    .scoring-slider-wrap input[type=range] { -webkit-appearance: slider-vertical; width: 32px; height: 110px; cursor: pointer; accent-color: var(--ci-accent-primary); }
+    .scoring-slider-sub { font-size: 10px; color: var(--ci-text-tertiary); text-align: center; line-height: 1.2; }
+    .scoring-autobalance-note { font-size: 11px; color: var(--ci-text-tertiary); background: var(--ci-bg-inset); border-radius: 6px; padding: 6px 10px; line-height: 1.4; }
+    .scoring-weights-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+    /* Dimension rows */
+    .icp-dim-row { border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); margin-bottom: 8px; overflow: hidden; }
+    .icp-dim-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #fff; cursor: pointer; user-select: none; border-bottom: 0.5px solid var(--ci-border-subtle); }
+    .icp-dim-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .icp-dim-title { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); flex: 1; }
+    .icp-dim-auto-note { font-size: 11px; color: var(--ci-text-tertiary); font-style: italic; }
+    .icp-flag-counts { display: flex; gap: 6px; align-items: center; }
+    .icp-count-pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 10px; }
+    .icp-count-pill.green { background: rgba(0,189,165,0.18); color: #00BDA5; }
+    .icp-count-pill.red { background: rgba(232,56,79,0.18); color: #E8384F; }
+    .icp-dim-weight-pill { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); min-width: 36px; text-align: right; }
+    .icp-dim-chevron { font-size: 16px; color: var(--ci-text-tertiary); transition: transform 0.2s; margin-left: 4px; }
+    .icp-dim-chevron.open { transform: rotate(90deg); }
+
+    /* Dimension body */
+    .icp-dim-body { display: none; background: var(--ci-bg-inset); }
+    .icp-dim-body.open { display: block; }
+    .icp-dim-weight-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--ci-border-subtle); background: var(--ci-bg-raised); }
+    .icp-dim-weight-row label { font-size: 12px; color: var(--ci-text-secondary); min-width: 90px; }
+    .icp-dim-weight-row input[type=range] { flex: 1; cursor: pointer; }
+    .icp-dim-weight-row input[type=range].dim-slider-qualificationFit { accent-color: #378ADD; }
+    .icp-dim-weight-row input[type=range].dim-slider-roleFit { accent-color: #3B6D11; }
+    .icp-dim-weight-row input[type=range].dim-slider-cultureFit { accent-color: #7F77DD; }
+    .icp-dim-weight-row input[type=range].dim-slider-companyFit { accent-color: #BA7517; }
+    .icp-dim-weight-row input[type=range].dim-slider-compFit { accent-color: #0F6E56; }
+    .icp-dim-weight-val { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); min-width: 36px; text-align: right; }
+    .icp-qual-note { padding: 16px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.5; }
+
+    /* Flags two-col layout */
+    .icp-flags-cols { display: grid; grid-template-columns: 1fr 1fr; }
+    .icp-flags-col { padding: 12px 14px; }
+    .icp-flags-col:first-child { border-right: 1px solid var(--ci-border-subtle); }
+    .icp-col-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .icp-col-label::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .icp-col-label.green { color: #3B6D11; }
+    .icp-col-label.green::before { background: #3B6D11; }
+    .icp-col-label.red { color: #c0392b; }
+    .icp-col-label.red::before { background: #c0392b; }
+
+    /* Flag cards */
+    .icp-flag-card { position: relative; border: 1px solid var(--ci-border-subtle); border-radius: 8px; padding: 10px 42px 10px 12px; margin-bottom: 8px; background: var(--ci-bg-raised); }
+    .icp-flag-card.green { border-left: 3px solid rgba(59,109,17,0.4); }
+    .icp-flag-card.red { border-left: 3px solid rgba(192,57,43,0.4); }
+    .icp-flag-card:hover { background: var(--ci-bg-inset); }
+    .icp-flag-card:hover .icp-flag-actions { opacity: 1; }
+    .icp-flag-text { font-size: 13px; font-weight: 500; color: var(--ci-text-primary); line-height: 1.4; margin-bottom: 6px; }
+    .icp-flag-keywords { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+    .icp-kw { font-size: 11px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: 10px; padding: 2px 8px; color: var(--ci-text-secondary); }
+    .icp-flag-sev { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+    .icp-flag-actions { position: absolute; bottom: 6px; right: 6px; opacity: 0; transition: opacity 0.15s; display: flex; gap: 4px; }
+    .icp-flag-action-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--ci-text-tertiary); padding: 2px 4px; border-radius: 4px; font-family: inherit; }
+    .icp-flag-action-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .icp-flag-action-btn.del:hover { color: var(--ci-accent-red); }
+
+    /* Deep-link flag highlight */
+    .flag-highlight { animation: flagPulse 0.4s ease 0s 3 alternate; }
+    @keyframes flagPulse {
+      from { box-shadow: 0 0 0 0px rgba(55, 138, 221, 0); }
+      to   { box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.4); }
+    }
+
+    /* Inline add/edit form */
+    .icp-inline-form { border: 1.5px dashed var(--ci-border-default); border-radius: 8px; padding: 12px; margin-bottom: 8px; background: var(--ci-bg-raised); }
+    .icp-inline-form.green { border-color: rgba(59,109,17,0.5); }
+    .icp-inline-form.red { border-color: rgba(192,57,43,0.5); }
+    .icp-inline-form-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+    .icp-inline-form.green .icp-inline-form-title { color: #3B6D11; }
+    .icp-inline-form.red .icp-inline-form-title { color: #c0392b; }
+    .icp-inline-form textarea { width: 100%; box-sizing: border-box; font-size: 13px; border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 8px 10px; font-family: inherit; color: var(--ci-text-primary); background: var(--ci-bg-base); resize: vertical; min-height: 60px; margin-bottom: 8px; }
+    .icp-inline-form textarea:focus { outline: none; border-color: var(--ci-accent-primary); }
+    .icp-kw-input-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; border: 1px solid var(--ci-border-default); border-radius: 6px; background: var(--ci-bg-base); margin-bottom: 8px; cursor: text; }
+    .icp-kw-pill { font-size: 11px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: 10px; padding: 2px 6px 2px 8px; color: var(--ci-text-secondary); display: flex; align-items: center; gap: 3px; }
+    .icp-kw-pill-x { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--ci-text-tertiary); padding: 0; line-height: 1; }
+    .icp-kw-pill-x:hover { color: #c0392b; }
+    .icp-kw-text-input { border: none; outline: none; font-size: 12px; font-family: inherit; background: transparent; color: var(--ci-text-primary); min-width: 80px; flex: 1; }
+    .icp-kw-placeholder { font-size: 12px; color: var(--ci-text-tertiary); }
+    .icp-sev-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .icp-sev-row label { font-size: 12px; color: var(--ci-text-secondary); }
+    .icp-sev-select { font-size: 12px; font-family: inherit; border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 5px 8px; background: var(--ci-bg-base); color: var(--ci-text-primary); cursor: pointer; }
+    .icp-form-btns { display: flex; gap: 8px; }
+    .icp-form-save { font-size: 13px; font-weight: 600; padding: 7px 20px; border-radius: 8px; border: none; background: var(--ci-bg-header); color: #fff; cursor: pointer; font-family: inherit; }
+    .icp-form-save:hover { opacity: 0.88; }
+    .icp-form-cancel { font-size: 13px; font-weight: 500; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--ci-border-default); background: transparent; color: var(--ci-text-secondary); cursor: pointer; font-family: inherit; }
+    .icp-form-cancel:hover { background: var(--ci-bg-inset); }
+
+    /* Add flag button */
+    .icp-add-flag-btn { width: 100%; padding: 8px; border: 1px solid var(--ci-border-subtle); border-radius: 8px; background: transparent; color: var(--ci-text-tertiary); font-size: 13px; font-family: inherit; cursor: pointer; transition: all 0.15s; margin-top: 2px; }
+    .icp-add-flag-btn:hover { border-color: var(--ci-border-default); color: var(--ci-text-secondary); background: var(--ci-bg-inset); }
+
+    /* Severity legend */
+    .icp-sev-legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--ci-border-subtle); background: var(--ci-bg-raised); }
+    .icp-sev-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ci-text-secondary); }
+    .icp-sev-legend-dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0; }
+
     .header .logo span { color: var(--ci-accent-primary); }
     .header .logo .slash { font-weight: 400; color: var(--ci-text-tertiary); font-size: 14px; }
     .header-nav { display: flex; align-items: center; gap: 6px; }
@@ -1466,39 +1578,36 @@
 
 
 
-    <!-- Green & Red Flags -->
-    <div class="grid-2" style="margin-bottom:10px;">
-      <div class="light-card green">
-        <div class="light-header">
-          <div class="light-dot green"></div>
-          <div class="light-title">Green flags</div>
+    <!-- ICP & Scoring (replaces separate Green / Red flags cards) -->
+    <div id="icp-scoring-section">
+      <!-- Scoring weights card -->
+      <div class="scoring-weights-card">
+        <div class="scoring-weights-top">
+          <span class="scoring-weights-title">Scoring weights</span>
+          <button class="icp-autofill-btn" id="icp-reset-weights" style="margin-bottom:0;padding:4px 12px;font-size:11px;">Reset</button>
+          <span class="scoring-weights-total">Total: <span id="icp-weight-total" class="valid">100%</span></span>
         </div>
-        <div class="light-subtitle">What attracts you — keywords enable automatic matching</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button class="icp-autofill-btn" id="green-flags-autofill">Let Coop fill this in</button>
-          <button class="icp-autofill-btn" id="green-flags-rate" style="background:rgba(93,202,165,0.06);border-color:rgba(93,202,165,0.25);color:#1D9E75;">Have Coop rate severity</button>
-        </div>
-        <div id="attracted-to-entries"></div>
-        <textarea class="field-input" id="profile-green-lights" style="display:none;"></textarea>
-        <div class="ai-toggle" data-ai="greenLights" style="display:none"></div>
-        <div class="ai-panel" data-ai-panel="greenLights" style="display:none"></div>
+        <div class="scoring-sliders-row" id="icp-sliders-row"><!-- rendered by JS --></div>
+        <div class="scoring-autobalance-note">Weights auto-balance across other dimensions when you move a slider — total always stays at 100%</div>
       </div>
-      <div class="light-card red" id="red-flags">
-        <div class="light-header">
-          <div class="light-dot red"></div>
-          <div class="light-title">Red flags</div>
-        </div>
-        <div class="light-subtitle">Dealbreakers — the <strong>ONLY</strong> source of red flags on job cards. If a flag shows up and it's not backed by an entry here, it's a bug. Salary below your <em>base floor</em> is the one exception (strong/aspiration salary is never a red flag).</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button class="icp-autofill-btn" id="red-flags-autofill">Let Coop fill this in</button>
-          <button class="icp-autofill-btn" id="red-flags-rate" style="background:rgba(226,75,74,0.06);border-color:rgba(226,75,74,0.25);color:#E24B4A;">Have Coop rate severity</button>
-        </div>
-        <div id="dealbreaker-entries"></div>
-        <textarea class="field-input" id="profile-red-lights" style="display:none;"></textarea>
-        <div class="ai-toggle" data-ai="redLights" style="display:none"></div>
-        <div class="ai-panel" data-ai-panel="redLights" style="display:none"></div>
-      </div>
+
+      <!-- Dimension rows (rendered by JS) -->
+      <div id="icp-dim-qualificationFit" class="icp-dim-row"></div>
+      <div id="icp-dim-roleFit" class="icp-dim-row"></div>
+      <div id="icp-dim-cultureFit" class="icp-dim-row"></div>
+      <div id="icp-dim-companyFit" class="icp-dim-row"></div>
+      <div id="icp-dim-compFit" class="icp-dim-row"></div>
     </div>
+
+    <!-- Hidden legacy containers (backward-compat for autofill functions) -->
+    <div id="attracted-to-entries" style="display:none;"></div>
+    <div id="dealbreaker-entries" style="display:none;"></div>
+    <textarea class="field-input" id="profile-green-lights" style="display:none;"></textarea>
+    <textarea class="field-input" id="profile-red-lights" style="display:none;"></textarea>
+    <div class="ai-toggle" data-ai="greenLights" style="display:none"></div>
+    <div class="ai-panel" data-ai-panel="greenLights" style="display:none"></div>
+    <div class="ai-toggle" data-ai="redLights" style="display:none"></div>
+    <div class="ai-panel" data-ai-panel="redLights" style="display:none"></div>
 
     </div><!-- end ICP tab panel -->
 
@@ -1681,16 +1790,6 @@
             <span class="toggle-desc">Coop extracts insights from every chat to build your profile over time</span>
           </div>
           <label class="toggle-switch"><input type="checkbox" id="coop-auto-insights" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Auto-rescore on profile changes</span>
-            <span class="toggle-desc">When you update preferences, only re-score opportunities in these stages:</span>
-            <div id="rescore-stages" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
-              <!-- Populated dynamically from pipeline stages -->
-            </div>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-rescore" checked><span class="toggle-track"></span></label>
         </div>
         <div class="toggle-row">
           <div class="toggle-info">

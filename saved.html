@@ -36,10 +36,21 @@
 
     /* ── Toolbars ── */
     .toolbar { padding: 12px 32px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); }
-    .search-input { flex: 1; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-primary); font-size: 13px; padding: 8px 14px; font-family: inherit; }
+    .search-wrapper { position: relative; flex: 1; }
+    .search-input { width: 100%; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-primary); font-size: 13px; padding: 8px 14px; font-family: inherit; box-sizing: border-box; }
     .search-input:focus { outline: none; border-color: var(--ci-accent-primary); background: var(--ci-bg-raised); }
     .search-input::placeholder { color: var(--ci-text-tertiary); }
+    .search-dropdown { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: var(--ci-bg-overlay); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: var(--ci-shadow-lg); max-height: 320px; overflow-y: auto; z-index: 100; display: none; }
+    .search-dropdown.visible { display: block; }
+    .search-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--ci-text-primary); }
+    .search-dropdown-item:hover, .search-dropdown-item.active { background: var(--ci-bg-inset); }
+    .search-dropdown-item:first-child { border-radius: 8px 8px 0 0; }
+    .search-dropdown-item:last-child { border-radius: 0 0 8px 8px; }
+    .search-dropdown-item:only-child { border-radius: 8px; }
+    .search-dropdown-company { font-weight: 500; }
+    .search-dropdown-detail { color: var(--ci-text-tertiary); font-size: 12px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 
+    .toolbar-search { border-top: none; border-bottom: none; padding-top: 8px; padding-bottom: 8px; }
     .toolbar-type  { padding-top: 10px; padding-bottom: 10px; border-top: none; }
     .toolbar-stars { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow: visible; flex-wrap: nowrap; }
     .toolbar-status { padding-top: 10px; padding-bottom: 10px; border-top: none; overflow-x: auto; flex-wrap: nowrap; }
@@ -113,7 +124,87 @@
     .funnel-stage:hover { transform: translateY(-2px); }
     .gc-action-btn:active { transform: scale(0.94); }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; padding: 20px 32px; }
+    .grid { padding: 20px 32px; }
+
+    /* ── Table view ── */
+    .tbl-wrap { overflow-x: auto; }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tbl thead th { position: sticky; top: 0; background: var(--ci-bg-raised); border-bottom: 2px solid var(--ci-border-default); padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--ci-text-secondary); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; cursor: pointer; user-select: none; }
+    .tbl thead th:hover { color: var(--ci-text-primary); }
+    .tbl thead th.sort-asc::after { content: ' ↑'; color: var(--ci-accent-primary); }
+    .tbl thead th.sort-desc::after { content: ' ↓'; color: var(--ci-accent-primary); }
+    .tbl thead th.no-sort { cursor: default; }
+    .tbl tbody tr { border-bottom: 1px solid var(--ci-border-subtle); cursor: pointer; transition: background 0.1s; }
+    .tbl tbody tr:hover { background: var(--ci-bg-inset); }
+    .tbl tbody td { padding: 10px 12px; vertical-align: middle; }
+    .tbl-company { display: flex; align-items: center; gap: 8px; }
+    .tbl-favicon { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; object-fit: contain; }
+    .tbl-name { font-weight: 600; color: var(--ci-text-primary); text-decoration: none; }
+    .tbl-name:hover { color: var(--ci-accent-blue); }
+    .tbl-type-badge { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 2px 6px; white-space: nowrap; }
+    .tbl-type-badge.opp { background: var(--ci-accent-primary-soft); color: var(--ci-accent-primary); }
+    .tbl-type-badge.co { background: rgba(99,102,241,0.1); color: #6366f1; }
+    .tbl-stage { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .tbl-stage-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .tbl-score { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
+    .tbl-score.strong-fit { background: #dcfce7; color: #16a34a; }
+    .tbl-score.good-fit { background: #dbeafe; color: #2563eb; }
+    .tbl-score.mixed { background: #fef9c3; color: #ca8a04; }
+    .tbl-score.poor-fit { background: #fee2e2; color: #dc2626; }
+    .tbl-stars { display: flex; gap: 1px; }
+    .tbl-star { font-size: 13px; color: var(--ci-border-strong); cursor: pointer; line-height: 1; transition: color 0.1s; }
+    .tbl-star.filled { color: #f59e0b; }
+    .tbl-star:hover { color: #f59e0b; }
+    .tbl-action { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+    .tbl-action.my-court { background: rgba(29,158,117,0.12); color: #1D9E75; }
+    .tbl-action.their-court { background: rgba(99,102,241,0.1); color: #6366f1; }
+    .tbl-muted { color: var(--ci-text-tertiary); font-size: 12px; }
+    .tbl-delete { background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+    .tbl tbody tr:hover .tbl-delete { opacity: 1; }
+    .tbl-delete:hover { color: var(--ci-accent-red); }
+    /* Column picker popover */
+    #tbl-cols-picker { position: fixed; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08); padding: 0; z-index: 9999; width: 308px; overflow: hidden; }
+    #tbl-cols-picker .tcp-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 10px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
+    #tbl-cols-picker .tcp-title { font-size: 11px; font-weight: 800; color: #111827; text-transform: uppercase; letter-spacing: 0.08em; }
+    #tbl-cols-picker .tcp-reset { background: none; border: none; font-size: 12px; color: var(--ci-accent-primary); cursor: pointer; font-family: inherit; padding: 0; font-weight: 600; }
+    #tbl-cols-picker .tcp-reset:hover { text-decoration: underline; }
+    #tbl-cols-picker .tcp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; padding: 8px 8px 10px; }
+    #tbl-cols-picker .tcp-item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 6px; cursor: pointer; user-select: none; transition: background 0.1s; }
+    #tbl-cols-picker .tcp-item:hover:not(.tcp-locked) { background: #f3f4f6; }
+    #tbl-cols-picker .tcp-item.tcp-locked { opacity: 0.4; cursor: default; }
+    #tbl-cols-picker .tcp-item input[type=checkbox] { width: 15px; height: 15px; margin: 0; flex-shrink: 0; accent-color: var(--ci-accent-primary); cursor: pointer; }
+    #tbl-cols-picker .tcp-item.tcp-locked input { cursor: default; }
+    #tbl-cols-picker .tcp-item-label { font-size: 13px; font-weight: 500; color: #111827; line-height: 1.2; }
+
+    /* Column filter picker */
+    #tcf-picker { position: fixed; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06); z-index: 9999; width: 232px; overflow: hidden; }
+    #tcf-picker .tcf-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 8px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
+    #tcf-picker .tcf-title { font-size: 11px; font-weight: 800; color: #111827; text-transform: uppercase; letter-spacing: 0.08em; }
+    #tcf-picker .tcf-close-btn { background: none; border: none; font-size: 12px; color: #6b7280; cursor: pointer; padding: 0 2px; line-height: 1; }
+    #tcf-picker .tcf-close-btn:hover { color: #111827; }
+    #tcf-picker .tcf-sort-row { display: flex; gap: 6px; padding: 8px 10px 6px; }
+    #tcf-picker .tcf-sort-btn { flex: 1; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; font-weight: 600; color: #374151; cursor: pointer; padding: 5px 0; font-family: inherit; transition: all 0.1s; }
+    #tcf-picker .tcf-sort-btn:hover { background: #e5e7eb; }
+    #tcf-picker .tcf-sort-btn.active { background: var(--ci-accent-primary); border-color: var(--ci-accent-primary); color: #fff; }
+    #tcf-picker .tcf-divider { height: 1px; background: #e5e7eb; margin: 0 10px; }
+    #tcf-picker .tcf-filter-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; }
+    #tcf-picker .tcf-filter-label { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; }
+    #tcf-picker .tcf-clear-btn { background: none; border: none; font-size: 11px; color: var(--ci-accent-primary); font-weight: 600; cursor: pointer; font-family: inherit; padding: 0; }
+    #tcf-picker .tcf-clear-btn:hover { text-decoration: underline; }
+    #tcf-picker .tcf-options { max-height: 220px; overflow-y: auto; padding: 2px 6px 8px; }
+    #tcf-picker .tcf-option { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 6px; cursor: pointer; user-select: none; transition: background 0.1s; }
+    #tcf-picker .tcf-option:hover { background: #f3f4f6; }
+    #tcf-picker .tcf-option input[type=checkbox] { width: 14px; height: 14px; margin: 0; flex-shrink: 0; accent-color: var(--ci-accent-primary); cursor: pointer; }
+    #tcf-picker .tcf-option-label { flex: 1; font-size: 13px; font-weight: 500; color: #111827; }
+    #tcf-picker .tcf-option-count { font-size: 11px; color: #9ca3af; font-weight: 600; }
+
+    /* Table filter indicator */
+    .th-filter-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--ci-accent-primary); margin-left: 5px; vertical-align: middle; }
+    .th-filter-icon { font-size: 9px; color: var(--ci-text-tertiary); margin-left: 3px; opacity: 0; transition: opacity 0.1s; }
+    .tbl thead th:hover .th-filter-icon { opacity: 1; }
+    .tbl thead th.col-filtered { color: var(--ci-accent-primary); }
+    .tbl-job-link { color: var(--ci-accent-blue); text-decoration: none; font-size: 12px; }
+    .tbl-job-link:hover { text-decoration: underline; }
 
     /* ── Cards ── */
     .card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px; display: flex; flex-direction: column; gap: 11px; transition: box-shadow 0.15s, border-color 0.15s; box-shadow: var(--ci-shadow-sm); }
@@ -598,8 +689,8 @@
     .compact-card.scoring { opacity: 0.5; }
     .compact-card.queued { opacity: 0.35; }
     .compact-spinner {
-      width: 16px; height: 16px; border: 2px solid rgba(29,158,117,0.2);
-      border-top-color: #1D9E75; border-radius: 50%; animation: spin 0.6s linear infinite;
+      width: 20px; height: 20px; border-radius: 50%;
+      animation: thinkPulse 1.8s ease-in-out infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .compact-queue-dot { width: 8px; height: 8px; background: var(--ci-border-default); border-radius: 50%; }
@@ -917,7 +1008,9 @@
       </button>
     </div>
     <div class="header-right">
+      <span class="stat-pill" id="cost-pill" title="Click for cost breakdown" style="cursor:pointer;">Today: <b id="cost-today">$0.00</b></span>
       <a class="prefs-link" id="inbox-link" style="cursor:pointer;position:relative;">Inbox<span id="inbox-badge" style="display:none;position:absolute;top:-6px;right:-10px;background:#FF7A59;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span></a>
+      <button class="prefs-link" id="header-tasks-link" style="border:none;font-family:inherit;cursor:pointer;">✓ Tasks</button>
       <a class="prefs-link" href="preferences.html" target="_blank">Career OS</a>
       <a class="prefs-link" href="integrations.html" target="_blank">Integrations</a>
       <a class="prefs-link" href="pipeline.html" target="_blank">Data Pipeline &amp; Usage</a>
@@ -982,9 +1075,6 @@
       </div>
     </div>
   </div>
-  <div class="toolbar">
-    <input class="search-input" id="search" placeholder="Search companies, notes, categories...">
-  </div>
   <div class="toolbar toolbar-type">
     <span class="filter-label">Pipeline:</span>
     <button class="pipeline-btn active" id="pipeline-all-btn">All Saved</button>
@@ -993,15 +1083,21 @@
     <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
       <span class="filter-label">View:</span>
       <div class="view-toggle">
-        <button class="view-toggle-btn active" id="view-grid-btn">⊞ Grid</button>
+        <button class="view-toggle-btn active" id="view-grid-btn">☰ Table</button>
         <button class="view-toggle-btn" id="view-kanban-btn">⬛ Kanban</button>
-        <button class="view-toggle-btn" id="view-tasks-btn">✓ Tasks</button>
       </div>
+      <button class="pipeline-btn" id="tbl-cols-btn" style="display:none">⊞ Columns</button>
       <button class="stage-add-btn" id="edit-stages-btn">⚙ Edit Stages</button>
     </span>
   </div>
   <div class="pipeline-header" id="pipeline-header" style="display:none">
     <span class="pipeline-header-text" id="pipeline-header-text"></span>
+  </div>
+  <div class="toolbar toolbar-search">
+    <div class="search-wrapper">
+      <input class="search-input" id="search" placeholder="Search companies, notes, categories...">
+      <div class="search-dropdown" id="search-dropdown"></div>
+    </div>
   </div>
   <div class="toolbar toolbar-stars">
     <span class="filter-label">Excitement:</span>
@@ -1037,7 +1133,7 @@
     <span class="filter-label">Tags:</span>
   </div>
 
-  <div class="grid" id="grid"></div>
+  <div id="grid" style="padding:20px 32px;"></div>
   <div class="kanban-board" id="kanban-board"></div>
   <div id="tasks-view" style="display:none"></div>
 

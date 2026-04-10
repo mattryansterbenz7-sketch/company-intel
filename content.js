@@ -1577,7 +1577,7 @@ function injectCoopButton() {
         isOpportunity: true,
         jobStage: 'needs_review',
         jobTitle,
-        jobUrl: window.location.href,
+        jobUrl: detected?.canonicalJobUrl || window.location.href,
         jobDescription,
         jobSnapshot: snap,
         baseSalaryRange: snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,

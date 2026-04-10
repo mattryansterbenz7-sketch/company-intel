@@ -434,7 +434,10 @@ async function loadPipelineSettings() {
     renderSearchCounts(config) +
     renderScoringSection(config) +
     renderPhotosSection(config) +
-    renderPipelineOverview(config, keyStatus);
+    renderPipelineOverview(config, keyStatus) +
+    '<div id="auto-rescore-section"></div>';
+
+  loadAutoRescoreSection();
 
   // ── Toggle switches (enrichment) ──
   body.querySelectorAll('[data-enrichment-toggle]').forEach(input => {
@@ -793,6 +796,80 @@ function renderUsageDashboard(usage, alloc, integrations) {
       };
       input.addEventListener('blur', save);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') { save(); input.blur(); } });
+    });
+  });
+}
+
+// ── Auto-rescore section ──
+function loadAutoRescoreSection() {
+  chrome.storage.local.get(['coopConfig', 'savedCompanies'], data => {
+    const DEFAULT_AUTOMATIONS = { insightExtraction: true, autoRescore: true, autoFetchUrls: true, applicationModeDetection: true, contextualSuggestions: true };
+    const cfg = { automations: { ...DEFAULT_AUTOMATIONS, ...(data.coopConfig?.automations || {}) }, rescoreStages: data.coopConfig?.rescoreStages || [], ...data.coopConfig };
+
+    // Derive stages from saved opportunities
+    const savedCompanies = data.savedCompanies || [];
+    const stageKeys = [...new Set(savedCompanies.filter(c => c.isOpportunity).map(c => c.jobStage).filter(Boolean))];
+
+    // Fall back to default opportunity stages if none found
+    const DEFAULT_STAGES = [
+      { key: 'needs_review', label: "Coop's AI Scoring Queue" },
+      { key: 'want_to_apply', label: 'I Want to Apply' },
+      { key: 'applied', label: 'Applied' },
+      { key: 'intro_requested', label: 'Intro Requested' },
+      { key: 'conversations', label: 'Conversations in Progress' },
+      { key: 'offer_stage', label: 'Offer Stage' },
+      { key: 'accepted', label: 'Accepted' },
+      { key: 'rejected', label: "Rejected / DQ'd" },
+    ];
+
+    chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
+      const stages = stageData.opportunityStages || stageData.customStages || DEFAULT_STAGES;
+      const selected = cfg.rescoreStages?.length ? cfg.rescoreStages : stages.filter(s => ['conversations', 'intro_requested', 'offer_stage'].includes(s.key)).map(s => s.key);
+
+      const enabled = cfg.automations.autoRescore !== false;
+      const container = document.getElementById('auto-rescore-section');
+      if (!container) return;
+
+      container.innerHTML = `
+        <div class="pipeline-subsection">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <div>
+              <div class="pipeline-sub-title">Auto-rescore on profile changes</div>
+              <div class="pipeline-sub-desc">When you update Career OS preferences, only re-score opportunities in these stages:</div>
+            </div>
+            <label class="pipeline-toggle" style="flex-shrink:0;margin-left:16px;">
+              <input type="checkbox" id="auto-rescore-toggle" ${enabled ? 'checked' : ''}>
+              <span class="pipeline-toggle-track"></span>
+            </label>
+          </div>
+          <div id="rescore-stage-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;${!enabled ? 'opacity:0.4;pointer-events:none;' : ''}">
+            ${stages.map(s => `
+              <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-raised);">
+                <input type="checkbox" class="rescore-stage-cb" value="${s.key}" ${selected.includes(s.key) ? 'checked' : ''} style="margin:0;"> ${s.label}
+              </label>`).join('')}
+          </div>
+        </div>`;
+
+      const toggle = container.querySelector('#auto-rescore-toggle');
+      const stageList = container.querySelector('#rescore-stage-list');
+
+      function saveCoopConfig() {
+        cfg.rescoreStages = [...container.querySelectorAll('.rescore-stage-cb:checked')].map(el => el.value);
+        chrome.storage.local.set({ coopConfig: cfg });
+        const toast = document.getElementById('pipeline-save-toast');
+        if (toast) { toast.style.opacity = '1'; setTimeout(() => toast.style.opacity = '0', 1800); }
+      }
+
+      toggle.addEventListener('change', () => {
+        cfg.automations.autoRescore = toggle.checked;
+        stageList.style.opacity = toggle.checked ? '1' : '0.4';
+        stageList.style.pointerEvents = toggle.checked ? '' : 'none';
+        saveCoopConfig();
+      });
+
+      container.querySelectorAll('.rescore-stage-cb').forEach(cb => {
+        cb.addEventListener('change', saveCoopConfig);
+      });
     });
   });
 }

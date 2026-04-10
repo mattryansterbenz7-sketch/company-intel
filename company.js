@@ -1,5 +1,38 @@
 // company.js — full-screen company detail view with drag-between-columns panels
 
+// Shared Coop thinking SVG (thinking expression: eyes up, hand on chin, animated thought bubbles)
+const COOP_THINKING_SVG = (size = 56) => `<svg class="coop-thinking-face" width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="ct${size}"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#ct${size})"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/><circle cx="43" cy="40" r="0.8" fill="white"/><ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/><circle cx="61" cy="40" r="0.8" fill="white"/><path d="M36 35Q41 31 47 34" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/><path d="M53 34Q59 31 64 35" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/><path d="M45 58Q48 60 51 59" fill="none" stroke="#8B6B4A" stroke-width="1.8" stroke-linecap="round"/><path d="M58 68Q55 63 52 62Q50 61 48 63L47 66Q48 68 50 69Q53 70 56 69Z" fill="#E5BF9A" stroke="#D4A878" stroke-width="0.5"/><circle cx="76" cy="28" r="6" fill="rgba(255,255,255,0.7)" stroke="#ccc" stroke-width="0.5"><animate attributeName="cy" values="28;24;28" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/></circle><circle cx="71" cy="37" r="3.5" fill="rgba(255,255,255,0.5)" stroke="#ddd" stroke-width="0.4"><animate attributeName="cy" values="37;34;37" dur="2.3s" repeatCount="indefinite"/></circle><circle cx="67" cy="42" r="2" fill="rgba(255,255,255,0.4)" stroke="#ddd" stroke-width="0.3"><animate attributeName="cy" values="42;40;42" dur="1.8s" repeatCount="indefinite"/></circle></g></svg>`;
+
+function coopThinkingHTML(label = 'Coop is thinking...', sub = '') {
+  return `<div class="coop-thinking-face-wrap"><div class="coop-thinking-orbit"></div>${COOP_THINKING_SVG(56)}</div><div class="coop-thinking-dots"><span></span><span></span><span></span></div><div class="coop-thinking-label">${label}</div>${sub ? `<div class="coop-thinking-sub">${sub}</div>` : ''}<div class="coop-thinking-bar"><div class="coop-thinking-bar-fill"></div></div>`;
+}
+
+// window.confirm() is unavailable in Chrome extension pages — any logic gated
+// behind it silently never fires. Use this <dialog>-based replacement with the
+// same shape: `if (await ciConfirm('Delete X?')) { ... }`.
+function ciConfirm(message, { confirmLabel = 'Delete', cancelLabel = 'Cancel', danger = true } = {}) {
+  return new Promise(resolve => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'ci-confirm-dialog';
+    dlg.style.cssText = 'border:1px solid var(--ci-border-default,#dfe3eb);border-radius:10px;padding:0;max-width:360px;background:var(--ci-bg-surface,#fff);color:var(--ci-text-primary,#1c2b3a);font:14px/1.4 -apple-system,system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,0.15);';
+    const btnDanger = 'background:#dc2626;color:#fff;border:none;';
+    const btnPrimary = 'background:#2563eb;color:#fff;border:none;';
+    dlg.innerHTML = `
+      <div style="padding:18px 20px 4px 20px;font-weight:600;">${String(message).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
+      <div style="padding:12px 20px 18px 20px;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" data-action="cancel" style="padding:7px 14px;border-radius:6px;border:1px solid var(--ci-border-default,#dfe3eb);background:transparent;color:inherit;cursor:pointer;font-size:13px;">${cancelLabel}</button>
+        <button type="button" data-action="confirm" style="padding:7px 14px;border-radius:6px;${danger ? btnDanger : btnPrimary};cursor:pointer;font-size:13px;font-weight:600;">${confirmLabel}</button>
+      </div>`;
+    document.body.appendChild(dlg);
+    const cleanup = (result) => { try { dlg.close(); } catch(_){} dlg.remove(); resolve(result); };
+    dlg.querySelector('[data-action=confirm]').addEventListener('click', () => cleanup(true));
+    dlg.querySelector('[data-action=cancel]').addEventListener('click', () => cleanup(false));
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); cleanup(false); });
+    try { dlg.showModal(); } catch(_) { dlg.setAttribute('open', ''); }
+    dlg.querySelector('[data-action=confirm]').focus();
+  });
+}
+
 let _cachedUserName = '';
 chrome.storage.sync.get(['prefs'], d => { _cachedUserName = (d.prefs && (d.prefs.name || d.prefs.fullName)) || ''; });
 
@@ -19,6 +52,33 @@ function defaultActionStatus(stageKey) {
   if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
   if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
   return null;
+}
+
+function autoNextStepForStage(stageKey) {
+  const map = {
+    'needs_review':    'Coop → Review job score and decide whether to pursue',
+    'want_to_apply':   'Coop → Prepare and submit application',
+    'applied':         'Coop → Awaiting response from company',
+    'intro_requested': 'Coop → Waiting for intro to be made',
+    'conversations':   'Coop → Awaiting next steps from recruiter',
+    'offer_stage':     'Coop → Review and respond to offer',
+    'accepted':        'Coop → Complete onboarding steps',
+  };
+  return map[stageKey] || null;
+}
+
+function applyAutoStage(entry, stageKey, changes) {
+  const autoAction = defaultActionStatus(stageKey);
+  if (!autoAction) return;
+  changes.actionStatus = autoAction;
+  const autoStep = autoNextStepForStage(stageKey);
+  if (autoStep) {
+    const existing = entry?.nextStep || '';
+    if (!existing || existing.startsWith('Coop → ')) {
+      changes.nextStep = autoStep;
+      changes.nextStepSource = 'coop-auto';
+    }
+  }
 }
 
 function parseLocalDate(d) {
@@ -639,9 +699,7 @@ function renderHeader() {
       if (sIdx > toIdx && ts[s.key]) delete ts[s.key];
     }
     const stageChanges = { jobStage: sel.value, stageTimestamps: ts };
-    // Auto-set Action On based on stage
-    const autoAction = defaultActionStatus(sel.value);
-    if (autoAction) stageChanges.actionStatus = autoAction;
+    applyAutoStage(entry, sel.value, stageChanges);
     // Auto-seed applied date
     if (sel.value === 'applied' && !entry.appliedDate) {
       stageChanges.appliedDate = Date.now();
@@ -679,7 +737,7 @@ function renderHeader() {
     const toast = document.createElement('div');
     toast.id = 'refresh-toast';
     toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2d3e50;color:#e2e8f0;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;';
-    toast.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.3);border-top-color:#FF7A59;border-radius:50%;animation:spin 0.6s linear infinite"></span> <span id="refresh-status">Starting refresh...</span>';
+    toast.innerHTML = `${COOP_THINKING_SVG(20)} <span id="refresh-status">Starting refresh...</span>`;
     document.body.appendChild(toast);
     const setStatus = t => { const s = document.getElementById('refresh-status'); if (s) s.textContent = t; };
 
@@ -808,10 +866,11 @@ function addToOpportunityPipeline() {
 function createOpportunity() { addToOpportunityPipeline(); } // backward compat
 
 function scoreToVerdict(score) {
-  if (score >= 8) return { label: 'Strong Match',     cls: 'high',  color: '#059669' };
-  if (score >= 6) return { label: 'Good Match',       cls: 'mid',   color: '#2563eb' };
-  if (score >= 4) return { label: 'Mixed Signals',    cls: 'mixed', color: '#d97706' };
-  return                 { label: 'Likely Not a Fit', cls: 'low',   color: '#dc2626' };
+  if (score >= 8)   return { label: 'Strong match',   cls: 'high',     color: '#059669' };
+  if (score >= 6.5) return { label: 'Good match',     cls: 'mid',      color: '#2563eb' };
+  if (score >= 5)   return { label: 'Possible match', cls: 'possible', color: '#7c3aed' };
+  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed',    color: '#d97706' };
+  return                   { label: 'Weak match',     cls: 'low',      color: '#dc2626' };
 }
 
 function generateFieldSuggestions(e) {
@@ -829,16 +888,19 @@ function generateFieldSuggestions(e) {
     suggest('jobTitle', e.jobMatch.jobTitle, 'Job match analysis', 'high');
   }
 
+  // Normalize salary strings: "$90K/yr - $130K/yr" → "$90K - $130K"
+  const normSalary = s => s ? s.replace(/\/yr/gi, '').replace(/\/year/gi, '').replace(/\s+/g, ' ').trim() : s;
+
   // 2. Base Salary — from stored fields or job match
   if (!e.baseSalaryRange) {
     const sal = e.jobMatch?.salary?.base || e.jobSnapshot?.salary || e.jobMatch?.baseSalaryRange;
-    if (sal) suggest('baseSalaryRange', sal, e.jobMatch?.salary?.base ? 'AI scoring' : 'Job posting', 'high');
+    if (sal) suggest('baseSalaryRange', normSalary(sal), e.jobMatch?.salary?.base ? 'AI scoring' : 'Job posting', 'high');
   }
 
   // 3. OTE — from stored fields or job match
   if (!e.oteTotalComp) {
     const ote = e.jobMatch?.salary?.ote || e.jobSnapshot?.oteTotalComp || e.jobMatch?.oteTotalComp;
-    if (ote) suggest('oteTotalComp', ote, 'AI scoring', 'high');
+    if (ote) suggest('oteTotalComp', normSalary(ote), 'AI scoring', 'high');
   }
 
   // 4. Equity — from job match or snapshot
@@ -890,6 +952,23 @@ function buildOpportunity() {
   if (entry.isOpportunity && !entry.jobTitle && entry.jobMatch?.jobTitle) {
     entry.jobTitle = entry.jobMatch.jobTitle;
     saveEntry({ jobTitle: entry.jobTitle });
+  }
+
+  // Auto-fill comp fields from suggestions (show pill for provenance but pre-populate the input)
+  if (entry.isOpportunity) {
+    const normSal = s => s ? s.replace(/\/yr/gi, '').replace(/\/year/gi, '').replace(/\s+/g, ' ').trim() : s;
+    if (!entry.baseSalaryRange) {
+      const sal = entry.jobMatch?.salary?.base || entry.jobSnapshot?.salary || entry.jobMatch?.baseSalaryRange;
+      if (sal) { entry.baseSalaryRange = normSal(sal); saveEntry({ baseSalaryRange: entry.baseSalaryRange }); }
+    }
+    if (!entry.oteTotalComp) {
+      const ote = entry.jobMatch?.salary?.ote || entry.jobSnapshot?.oteTotalComp || entry.jobMatch?.oteTotalComp;
+      if (ote) { entry.oteTotalComp = normSal(ote); saveEntry({ oteTotalComp: entry.oteTotalComp }); }
+    }
+    if (!entry.equity) {
+      const eq = entry.jobMatch?.equity || entry.jobSnapshot?.equity;
+      if (eq) { entry.equity = eq; saveEntry({ equity: entry.equity }); }
+    }
   }
 
   // Fix duplicate/concatenated titles (data cleanup)
@@ -1020,7 +1099,7 @@ function buildOpportunity() {
     <div class="prop-row${!entry.nextStep && suggestions.nextStep ? ' has-suggestion' : ''}">
       <span class="prop-label">Next Step</span>
       <div class="prop-val-wrap" style="display:flex;align-items:center;gap:6px;">
-        <input class="prop-input ${!entry.nextStep ? 'prop-empty' : ''}" id="opp-next-step-input" value="${(entry.nextStep || '').replace(/"/g,'&quot;')}" placeholder="e.g. Send proposal…" style="flex:1;">
+        <input class="prop-input ${!entry.nextStep ? 'prop-empty' : ''}" id="opp-next-step-input" value="${(entry.nextStep || '').replace(/"/g,'&quot;')}" placeholder="Next step…" style="flex:1;">
         ${entry.nextStep ? (() => {
           const nsSrc = entry.nextStepSource;
           const nsEv = entry.nextStepEvidence;
@@ -1841,7 +1920,7 @@ function initIntelTab() {
 
 function generateRoleBrief() {
   const btn = document.getElementById('rb-refresh-btn') || document.getElementById('rb-generate-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:6px"></span>Generating...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = `${COOP_THINKING_SVG(16)} Generating...`; }
 
   chrome.runtime.sendMessage({
     type: 'GENERATE_ROLE_BRIEF',
@@ -1958,6 +2037,7 @@ function buildFitSection() {
   const reason     = jm.verdict || entry.quickFitReason || '';
   const v          = score ? scoreToVerdict(score) : null;
 
+  const coopTake = jm.coopTake || '';
   let html = `<div class="hub-section-label">Job Fit Analysis</div>`;
 
   if (score) {
@@ -1966,7 +2046,7 @@ function buildFitSection() {
     const noteA = fb?.type === 'note' ? ' active note' : '';
     const downA = fb?.type === 'down' ? ' active down' : '';
     html += `<div class="fit-score-row">
-      <span class="fit-score">${score}<span class="fit-score-denom">/10</span></span>
+      <span class="fit-score"><span class="fit-score-label">Coop's Score</span>${score}<span class="fit-score-denom">/10</span></span>
       <span class="fit-verdict" style="color:${v.color}">${v.label}</span>
       <span class="verdict-thumbs">
         <button class="thumb-btn${upA}" data-dir="up" title="Agree">👍</button>
@@ -1975,7 +2055,9 @@ function buildFitSection() {
       </span>
     </div>
     <div id="co-thumb-form" style="display:none"></div>`;
-    if (reason) {
+    if (coopTake) {
+      html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5;border-left:3px solid #d97706;padding-left:10px;font-style:italic;">${escapeHtml(coopTake)}</div>`;
+    } else if (reason) {
       html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5">${escapeHtml(reason)}</div>`;
     }
   }
@@ -1994,21 +2076,56 @@ function buildFitSection() {
     html += `<div class="p-empty" style="text-align:left;margin:8px 0">No fit analysis yet. Click "Run fit analysis" above — or save a job posting to automatically generate one.</div>`;
   }
 
-  // Green flags / Red flags
-  html += `<div class="fit-flags-grid">
-    <div class="fit-flags-col fit-flags-green">
-      <div class="fit-flags-header">✓ Green Flags</div>
-      ${strongFits.length
-        ? strongFits.map(f => `<div class="fit-flag" title="${_flagTipHtml(f)}" style="cursor:help;">${escapeHtml(f.text)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></div>`).join('')
-        : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
-    </div>
-    <div class="fit-flags-col fit-flags-red">
-      <div class="fit-flags-header">⚠ Red Flags</div>
-      ${redFlags.length
-        ? redFlags.map(f => `<div class="fit-flag" title="${_flagTipHtml(f)}" style="cursor:help;">${escapeHtml(f.text)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></div>`).join('')
-        : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
-    </div>
-  </div>`;
+  // New format: dimension breakdown with flagsFired
+  const flagsFired = jm.flagsFired || {};
+  const isNewFormat = jm.scoreBreakdown?.roleFit !== undefined;
+
+  if (isNewFormat && score) {
+    const breakdown = jm.scoreBreakdown || {};
+    const DIM_DEFS = [
+      { key: 'qualificationFit', label: 'Qualification' },
+      { key: 'roleFit', label: 'Role fit' },
+      { key: 'cultureFit', label: 'Culture fit' },
+      { key: 'companyFit', label: 'Company fit' },
+      { key: 'compFit', label: 'Comp fit' },
+    ];
+    const dimTier = v => v >= 7 ? 'high' : v >= 5 ? 'mid' : 'low';
+    html += `<div class="fit-dims">`;
+    DIM_DEFS.forEach(dim => {
+      const val = breakdown[dim.key];
+      if (val == null) return;
+      const tier = dimTier(val);
+      const fired = flagsFired[dim.key] || {};
+      const greens = (fired.green || []);
+      const reds = (fired.red || []);
+      const flagChips = [...greens.map(f => `<span class="fit-dim-chip green">+ ${escapeHtml(f.text || f.label || '')}</span>`), ...reds.map(f => `<span class="fit-dim-chip red">- ${escapeHtml(f.text || f.label || '')}${f.evidence ? `<span class="fit-dim-chip-ev">${escapeHtml(f.evidence)}</span>` : ''}</span>`)];
+      html += `<div class="fit-dim-row">
+        <span class="fit-dim-label">${dim.label}</span>
+        <div class="fit-dim-bar"><div class="fit-dim-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
+        <span class="fit-dim-val ${tier}">${val}</span>
+      </div>`;
+      if (flagChips.length) {
+        html += `<div class="fit-dim-chips">${flagChips.join('')}</div>`;
+      }
+    });
+    html += `</div>`;
+  } else {
+    // Legacy format: flat green/red flags
+    html += `<div class="fit-flags-grid">
+      <div class="fit-flags-col fit-flags-green">
+        <div class="fit-flags-header">✓ Green Flags</div>
+        ${strongFits.length
+          ? strongFits.map(f => `<div class="fit-flag" title="${_flagTipHtml(f)}" style="cursor:help;">${escapeHtml(f.text)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></div>`).join('')
+          : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
+      </div>
+      <div class="fit-flags-col fit-flags-red">
+        <div class="fit-flags-header">⚠ Red Flags</div>
+        ${redFlags.length
+          ? redFlags.map(f => `<div class="fit-flag" title="${_flagTipHtml(f)}" style="cursor:help;">${escapeHtml(f.text)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></div>`).join('')
+          : `<div class="fit-flag-none">${score ? 'None identified' : 'Run analysis to generate'}</div>`}
+      </div>
+    </div>`;
+  }
 
   return html;
 }
@@ -2118,10 +2235,21 @@ function bindHubTabs() {
     const btn = e.target;
     btn.disabled = true;
     btn.textContent = '↻ Scoring…';
+    // Show Coop thinking overlay on fit section
+    const fitBlock = document.getElementById('hub-fit-block');
+    if (fitBlock) {
+      fitBlock.style.position = 'relative';
+      const overlay = document.createElement('div');
+      overlay.className = 'coop-thinking-overlay';
+      overlay.id = 'coop-thinking-fit';
+      overlay.innerHTML = coopThinkingHTML('Coop is scoring...', 'Analyzing job fit & qualifications');
+      fitBlock.appendChild(overlay);
+    }
     chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
       void chrome.runtime.lastError;
       btn.disabled = false;
       btn.textContent = '↻ Refresh analysis';
+      document.getElementById('coop-thinking-fit')?.remove();
       if (result && !result.error) {
         // Reload entry from storage to pick up the updated jobMatch
         chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
@@ -2131,7 +2259,6 @@ function bindHubTabs() {
             const idx = allCompanies.findIndex(c => c.id === entry.id);
             if (idx !== -1) allCompanies[idx] = entry;
           }
-          const fitBlock = document.getElementById('hub-fit-block');
           if (fitBlock) fitBlock.innerHTML = buildFitSection();
         });
       }
@@ -2357,9 +2484,9 @@ function renderEmailsFromData(emails) {
 
   // Bind delete buttons
   listEl.querySelectorAll('.email-delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const tid = btn.dataset.thread;
-      if (confirm('Delete this email thread from the cached inbox?')) {
+      if (await ciConfirm('Delete this email thread from the cached inbox?', { confirmLabel: 'Delete' })) {
         onDelete(tid);
       }
     });
@@ -3727,7 +3854,10 @@ function loadPhotosForPanel(pid) {
         const el = document.getElementById(`lavatar-${entry.id}-${encodeURIComponent(l.name||'')}`);
         if (!el) return;
         const initials = (l.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-        el.innerHTML = `<img src="${photoUrl}" alt="${initials}" onerror="this.parentElement.textContent='${initials}'">`;
+        const img = document.createElement('img');
+        img.src = photoUrl; img.alt = initials;
+        img.addEventListener('error', () => { el.textContent = initials; });
+        el.innerHTML = ''; el.appendChild(img);
       });
       });
     });
@@ -3749,29 +3879,16 @@ function loadPhotosForPanel(pid) {
             if (!photos[i]) return;
             const el = document.getElementById('cavatar-' + encodeURIComponent(c.email));
             if (!el) return;
-            el.innerHTML = `<img src="${photos[i]}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent='${(c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}'">`;
+            const _initials = (c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+            const _img = document.createElement('img');
+            _img.src = photos[i]; _img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
+            _img.addEventListener('error', () => { el.textContent = _initials; });
+            el.innerHTML = ''; el.appendChild(_img);
           });
         }
       );
     });
     return;
-    const contacts = (entry.knownContacts || []).filter(c => c.name);
-    if (!contacts.length) return;
-    chrome.runtime.sendMessage(
-      { type: 'GET_LEADER_PHOTOS', leaders: contacts.map(c => ({ name: c.name })), company: entry.company || '' },
-      photos => {
-        void chrome.runtime.lastError;
-        if (!photos) return;
-        contacts.forEach((c, i) => {
-          const photoUrl = photos[i];
-          if (!photoUrl) return;
-          const el = document.getElementById(`cavatar-${encodeURIComponent(c.email)}`);
-          if (!el) return;
-          const initials = c.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
-          el.innerHTML = `<img src="${photoUrl}" alt="${initials}" onerror="this.parentElement.textContent='${initials}'">`;
-        });
-      }
-    );
   }
 }
 

@@ -1,5 +1,22 @@
 // preferences.js — Career OS preferences editor
 
+// Lightweight toast — replaces window.alert() which is unavailable in Chrome
+// extension pages. Inject on first use, auto-dismiss after 3.5s.
+function prefsToast(msg, { kind = 'info' } = {}) {
+  let host = document.getElementById('prefs-toast');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'prefs-toast';
+    host.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1c2b3a;color:#fff;padding:10px 18px;border-radius:8px;font:13px/1.4 -apple-system,system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.25);z-index:10000;opacity:0;transition:opacity 180ms ease;pointer-events:none;max-width:420px;';
+    document.body.appendChild(host);
+  }
+  host.textContent = msg;
+  host.style.background = kind === 'error' ? '#b91c1c' : '#1c2b3a';
+  host.style.opacity = '1';
+  clearTimeout(host._t);
+  host._t = setTimeout(() => { host.style.opacity = '0'; }, 3500);
+}
+
 // ── Coop thinking animation ───────────────────────────────────────────────────
 let _coopThinkingCount = 0;
 function setCoopThinking(active, label = 'Working on it') {
@@ -861,11 +878,446 @@ function getCatMeta(key) { return CAT_BY_KEY[key] || { key, label: key.replace(/
 
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+const DEFAULT_SCORING_WEIGHTS = {
+  qualificationFit: 20,
+  roleFit: 20,
+  cultureFit: 25,
+  companyFit: 20,
+  compFit: 15
+};
+
+const CATEGORY_TO_DIMENSION = {
+  role:     'roleFit',
+  culture:  'cultureFit',
+  company:  'companyFit',
+  comp:     'compFit',
+  team:     'cultureFit',
+  industry: 'companyFit',
+  product:  'companyFit',
+  other:    'roleFit',
+};
+
+function migrateFlagDimensions(flags) {
+  let dirty = false;
+  const migrated = (flags || []).map(f => {
+    if (!f.dimension) {
+      dirty = true;
+      return { ...f, dimension: CATEGORY_TO_DIMENSION[f.category] || 'roleFit' };
+    }
+    return f;
+  });
+  return { migrated, dirty };
+}
+
+// ── ICP & Scoring Section ────────────────────────────────────────────────────
+
+const ICP_DIMENSIONS = [
+  { key: 'qualificationFit', label: 'Qualification fit', color: '#378ADD', subtitle: 'Employer lens', noFlags: true },
+  { key: 'roleFit',          label: 'Role fit',          color: '#3B6D11', subtitle: 'Day-to-day work' },
+  { key: 'cultureFit',       label: 'Culture fit',       color: '#7F77DD', subtitle: 'Values & environment' },
+  { key: 'companyFit',       label: 'Company fit',       color: '#BA7517', subtitle: 'Stage & product' },
+  { key: 'compFit',          label: 'Comp fit',          color: '#0F6E56', subtitle: 'Base, OTE & equity' },
+];
+
+const SEV_GREEN_LABELS = ['Mild signal', 'Preference', 'Green factor', 'Dream factor', 'Hard qualifier'];
+const SEV_GREEN_COLORS = ['#94a3b8', '#86a88e', '#4ade80', '#22c55e', '#16a34a'];
+const SEV_RED_LABELS   = ['Mild signal', 'Preference', 'Notable', 'Serious concern', 'Hard disqualifier'];
+const SEV_RED_COLORS   = ['#94a3b8', '#eab308', '#f97316', '#ef4444', '#dc2626'];
+
+let _icpWeights = { ...DEFAULT_SCORING_WEIGHTS };
+let _icpGreens  = [];
+let _icpReds    = [];
+
+function initICPScoring() {
+  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'scoringWeights'], data => {
+    _icpGreens = data.profileAttractedTo || [];
+    _icpReds   = data.profileDealbreakers || [];
+
+    // Validate loaded weights — must have all required keys and sum to 100
+    const loaded = data.scoringWeights;
+    const requiredKeys = Object.keys(DEFAULT_SCORING_WEIGHTS);
+    const isValid = loaded &&
+      requiredKeys.every(k => typeof loaded[k] === 'number') &&
+      requiredKeys.reduce((s, k) => s + loaded[k], 0) === 100;
+    if (isValid) {
+      _icpWeights = { ...loaded };
+    } else {
+      _icpWeights = { ...DEFAULT_SCORING_WEIGHTS };
+      chrome.storage.local.set({ scoringWeights: _icpWeights });
+    }
+
+    renderICPSliders();
+    ICP_DIMENSIONS.forEach(dim => renderICPDimRow(dim));
+    document.getElementById('icp-reset-weights')?.addEventListener('click', () => {
+      _icpWeights = { ...DEFAULT_SCORING_WEIGHTS };
+      renderICPSliders();
+      ICP_DIMENSIONS.forEach(dim => updateDimWeightPill(dim.key));
+      saveICPWeights();
+    });
+
+    // Signal that ICP flag cards are now in the DOM
+    document.dispatchEvent(new Event('icp-scoring-ready'));
+  });
+}
+
+function renderICPSliders() {
+  const row = document.getElementById('icp-sliders-row');
+  if (!row) return;
+  row.innerHTML = ICP_DIMENSIONS.map(dim => `
+    <div class="scoring-slider-col">
+      <div class="scoring-slider-label" style="color:${dim.color}">${dim.label.replace(' ', '<br>')}</div>
+      <div class="scoring-slider-pct" id="slider-pct-${dim.key}">${_icpWeights[dim.key]}%</div>
+      <div class="scoring-slider-wrap">
+        <input type="range" min="0" max="50" step="1" value="${_icpWeights[dim.key]}"
+               id="slider-${dim.key}" data-dim="${dim.key}" style="accent-color:${dim.color}">
+      </div>
+      <div class="scoring-slider-sub" style="color:${dim.color}">${dim.subtitle}</div>
+    </div>`).join('');
+
+  ICP_DIMENSIONS.forEach(dim => {
+    document.getElementById(`slider-${dim.key}`)?.addEventListener('input', e => {
+      const newVal = parseInt(e.target.value);
+      autoBalanceICPWeights(dim.key, newVal);
+    });
+  });
+  updateWeightTotal();
+}
+
+function autoBalanceICPWeights(changedKey, newVal) {
+  const others = ICP_DIMENSIONS.map(d => d.key).filter(k => k !== changedKey);
+  const oldVal = _icpWeights[changedKey];
+  const delta = newVal - oldVal;
+  const otherSum = others.reduce((s, k) => s + _icpWeights[k], 0);
+
+  _icpWeights[changedKey] = newVal;
+
+  if (otherSum > 0 && delta !== 0) {
+    let remaining = -delta;
+    others.forEach((k, i) => {
+      if (i === others.length - 1) {
+        _icpWeights[k] = Math.max(0, 100 - ICP_DIMENSIONS.map(d => d.key).filter(j => j !== k).reduce((s, j) => s + _icpWeights[j], 0));
+      } else {
+        const share = Math.round((_icpWeights[k] / otherSum) * -delta);
+        _icpWeights[k] = Math.max(0, _icpWeights[k] + share);
+        remaining -= share;
+      }
+    });
+  }
+
+  // Sync all slider visuals
+  ICP_DIMENSIONS.forEach(dim => {
+    const slider = document.getElementById(`slider-${dim.key}`);
+    if (slider) slider.value = _icpWeights[dim.key];
+    const pct = document.getElementById(`slider-pct-${dim.key}`);
+    if (pct) pct.textContent = `${_icpWeights[dim.key]}%`;
+    updateDimWeightPill(dim.key);
+  });
+  updateWeightTotal();
+  saveICPWeights();
+}
+
+function updateWeightTotal() {
+  const total = Object.values(_icpWeights).reduce((s, v) => s + v, 0);
+  const el = document.getElementById('icp-weight-total');
+  if (!el) return;
+  el.textContent = `${total}%`;
+  el.className = total === 100 ? 'valid' : 'invalid';
+}
+
+function updateDimWeightPill(key) {
+  const pill = document.getElementById(`dim-weight-pill-${key}`);
+  if (pill) pill.textContent = `${_icpWeights[key]}%`;
+}
+
+function saveICPWeights() {
+  chrome.storage.local.set({ scoringWeights: _icpWeights }, () => showSaveStatus());
+}
+
+function renderICPDimRow(dim) {
+  const el = document.getElementById(`icp-dim-${dim.key}`);
+  if (!el) return;
+  const greens = _icpGreens.filter(f => (f.dimension || 'roleFit') === dim.key);
+  const reds   = _icpReds.filter(f => (f.dimension || 'roleFit') === dim.key);
+
+  const countsHtml = dim.noFlags ? `<span class="icp-dim-auto-note">auto-scored from resume</span>` : `
+    <div class="icp-flag-counts">
+      <span class="icp-count-pill green">${greens.length} green</span>
+      <span class="icp-count-pill red">${reds.length} red</span>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="icp-dim-header" data-dim="${dim.key}">
+      <span class="icp-dim-dot" style="background:${dim.color}"></span>
+      <span class="icp-dim-title">${dim.label}</span>
+      ${countsHtml}
+      <span class="icp-dim-weight-pill" id="dim-weight-pill-${dim.key}">${_icpWeights[dim.key]}%</span>
+      <span class="icp-dim-chevron" id="dim-chev-${dim.key}">›</span>
+    </div>
+    <div class="icp-dim-body" id="dim-body-${dim.key}">
+      ${renderICPDimBody(dim, greens, reds)}
+    </div>`;
+
+  el.querySelector('.icp-dim-header').addEventListener('click', () => toggleICPDim(dim.key));
+  bindICPDimEvents(dim, el);
+}
+
+function renderICPDimBody(dim, greens, reds) {
+  const qualNote = dim.noFlags ? `<div class="icp-qual-note">Qualification fit is calculated from your resume and experience — not flags. It answers "would they hire me?" based on seniority, skills, and stated requirements in the job posting.</div>` : '';
+
+  const flagCols = dim.noFlags ? '' : `
+    <div class="icp-flags-cols">
+      <div class="icp-flags-col" id="col-green-${dim.key}">
+        <div class="icp-col-label green">Green flags</div>
+        ${greens.map(f => renderICPFlagCard(f, 'green')).join('')}
+        <button class="icp-add-flag-btn" data-dim="${dim.key}" data-type="green">+ Add green flag</button>
+      </div>
+      <div class="icp-flags-col" id="col-red-${dim.key}">
+        <div class="icp-col-label red">Red flags</div>
+        ${reds.map(f => renderICPFlagCard(f, 'red')).join('')}
+        <button class="icp-add-flag-btn" data-dim="${dim.key}" data-type="red">+ Add red flag</button>
+      </div>
+    </div>
+    <div class="icp-sev-legend">
+      <span style="font-size:11px;color:var(--ci-text-tertiary);font-weight:600;margin-right:4px;">Severity:</span>
+      ${[5,4,3,2,1].map(n => `
+        <span class="icp-sev-legend-item">
+          <span class="icp-sev-legend-dot" style="background:${SEV_RED_COLORS[n-1]}">${n}</span>
+          ${n === 5 ? 'Hard disqualifier' : n === 4 ? 'Serious concern / Dream factor' : n === 3 ? 'Notable' : n === 2 ? 'Preference' : 'Mild signal'}
+        </span>`).join('')}
+    </div>`;
+
+  return `
+    <div class="icp-dim-weight-row">
+      <label>Scoring weight</label>
+      <input type="range" min="0" max="50" step="1" value="${_icpWeights[dim.key]}"
+             id="body-slider-${dim.key}" data-dim="${dim.key}" class="dim-slider-${dim.key}">
+      <span class="icp-dim-weight-val" id="body-slider-val-${dim.key}">${_icpWeights[dim.key]}%</span>
+    </div>
+    ${qualNote}${flagCols}`;
+}
+
+function renderICPFlagCard(flag, type) {
+  const sev = typeof flag.severity === 'number' ? flag.severity : (flag.severity === 'hard' ? 4 : 2);
+  const colors = type === 'green' ? SEV_GREEN_COLORS : SEV_RED_COLORS;
+  const kws = (flag.keywords || []).map(k => `<span class="icp-kw">${escHtml(k)}</span>`).join('');
+  return `
+    <div class="icp-flag-card ${type}" data-id="${flag.id}">
+      <div class="icp-flag-text">${escHtml(flag.text)}</div>
+      ${kws ? `<div class="icp-flag-keywords">${kws}</div>` : ''}
+      <span class="icp-flag-sev" style="background:${colors[sev-1]}">${sev}</span>
+      <div class="icp-flag-actions">
+        <button class="icp-flag-action-btn edit" data-id="${flag.id}">Edit</button>
+        <button class="icp-flag-action-btn del" data-id="${flag.id}">✕</button>
+      </div>
+    </div>`;
+}
+
+function bindICPDimEvents(dim, el) {
+  if (dim.noFlags) {
+    // Wire the body weight slider only
+    el.querySelector(`#body-slider-${dim.key}`)?.addEventListener('input', e => {
+      autoBalanceICPWeights(dim.key, parseInt(e.target.value));
+      const val = document.getElementById(`body-slider-val-${dim.key}`);
+      if (val) val.textContent = `${_icpWeights[dim.key]}%`;
+    });
+    return;
+  }
+
+  // Body weight slider
+  el.querySelector(`#body-slider-${dim.key}`)?.addEventListener('input', e => {
+    autoBalanceICPWeights(dim.key, parseInt(e.target.value));
+    const val = document.getElementById(`body-slider-val-${dim.key}`);
+    if (val) val.textContent = `${_icpWeights[dim.key]}%`;
+  });
+
+  // Add flag buttons
+  el.querySelectorAll('.icp-add-flag-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      showICPInlineForm(dim, type, null, btn);
+    });
+  });
+
+  // Edit / delete on flag cards
+  el.addEventListener('click', e => {
+    const editBtn = e.target.closest('.icp-flag-action-btn.edit');
+    const delBtn  = e.target.closest('.icp-flag-action-btn.del');
+    if (editBtn) {
+      const id = editBtn.dataset.id;
+      const flag = [..._icpGreens, ..._icpReds].find(f => f.id === id);
+      const type = _icpGreens.find(f => f.id === id) ? 'green' : 'red';
+      if (flag) showICPInlineForm(dim, type, flag, editBtn.closest('.icp-flag-card'));
+    }
+    if (delBtn) {
+      const id = delBtn.dataset.id;
+      deleteICPFlag(dim.key, id);
+    }
+  });
+}
+
+function showICPInlineForm(dim, type, editFlag, anchorEl) {
+  // Remove any open form
+  document.querySelectorAll('.icp-inline-form').forEach(f => f.remove());
+  // Re-show any hidden flag being edited
+  document.querySelectorAll('.icp-flag-card[data-hidden]').forEach(c => { c.style.display = ''; delete c.dataset.hidden; });
+
+  const sev = editFlag ? (typeof editFlag.severity === 'number' ? editFlag.severity : 2) : (type === 'green' ? 3 : 3);
+  const colors = type === 'green' ? SEV_GREEN_COLORS : SEV_RED_COLORS;
+  const labels = type === 'green' ? SEV_GREEN_LABELS : SEV_RED_LABELS;
+  const keywords = editFlag?.keywords || [];
+  const formTitle = editFlag ? `Edit ${type} flag` : `New ${type} flag`;
+
+  const form = document.createElement('div');
+  form.className = `icp-inline-form ${type}`;
+  form.innerHTML = `
+    <div class="icp-inline-form-title">${formTitle.toUpperCase()}</div>
+    <textarea placeholder="Describe what ${type === 'green' ? 'attracts you' : 'concerns you'} — Coop will match this against job postings" rows="3">${escHtml(editFlag?.text || '')}</textarea>
+    <div class="icp-kw-input-row" id="icp-kw-row-${dim.key}">
+      ${keywords.map(k => `<span class="icp-kw-pill">${escHtml(k)}<button class="icp-kw-pill-x" data-kw="${escHtml(k)}">×</button></span>`).join('')}
+      ${keywords.length === 0 ? `<span class="icp-kw-placeholder">+ keyword</span>` : ''}
+      <input class="icp-kw-text-input" type="text" placeholder="${keywords.length > 0 ? '+ keyword' : ''}" id="icp-kw-input-${dim.key}">
+    </div>
+    <div class="icp-sev-row">
+      <label>Severity</label>
+      <select class="icp-sev-select" id="icp-sev-select-${dim.key}">
+        ${[1,2,3,4,5].map(n => `<option value="${n}" ${sev === n ? 'selected' : ''}>${n} — ${labels[n-1]}</option>`).join('')}
+      </select>
+    </div>
+    <div class="icp-form-btns">
+      <button class="icp-form-cancel">Cancel</button>
+      <button class="icp-form-save">Save flag</button>
+    </div>`;
+
+  // Hide the card being edited
+  if (editFlag) {
+    const card = document.querySelector(`.icp-flag-card[data-id="${editFlag.id}"]`);
+    if (card) { card.style.display = 'none'; card.dataset.hidden = '1'; card.insertAdjacentElement('afterend', form); }
+    else { anchorEl.insertAdjacentElement('beforebegin', form); }
+  } else {
+    // Insert before the add button
+    anchorEl.insertAdjacentElement('beforebegin', form);
+  }
+
+  // Keyword input logic
+  let currentKeywords = [...keywords];
+  const kwRow = form.querySelector('.icp-kw-input-row');
+  const kwInput = form.querySelector('.icp-kw-text-input');
+  const kwPlaceholder = form.querySelector('.icp-kw-placeholder');
+
+  function renderKwPills() {
+    kwRow.innerHTML = '';
+    currentKeywords.forEach(k => {
+      const pill = document.createElement('span');
+      pill.className = 'icp-kw-pill';
+      pill.innerHTML = `${escHtml(k)}<button class="icp-kw-pill-x" type="button">×</button>`;
+      pill.querySelector('.icp-kw-pill-x').addEventListener('click', () => {
+        currentKeywords = currentKeywords.filter(kw => kw !== k);
+        renderKwPills();
+      });
+      kwRow.appendChild(pill);
+    });
+    kwRow.appendChild(kwInput);
+    kwInput.focus();
+  }
+
+  kwRow.addEventListener('click', () => kwInput.focus());
+  kwInput.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ',') && kwInput.value.trim()) {
+      e.preventDefault();
+      const kw = kwInput.value.trim().replace(/,$/, '');
+      if (kw && !currentKeywords.includes(kw)) currentKeywords.push(kw);
+      kwInput.value = '';
+      renderKwPills();
+    }
+    if (e.key === 'Backspace' && !kwInput.value && currentKeywords.length) {
+      currentKeywords.pop();
+      renderKwPills();
+    }
+  });
+
+  form.querySelector('.icp-form-cancel').addEventListener('click', () => {
+    form.remove();
+    document.querySelectorAll('.icp-flag-card[data-hidden]').forEach(c => { c.style.display = ''; delete c.dataset.hidden; });
+  });
+
+  form.querySelector('.icp-form-save').addEventListener('click', () => {
+    const text = form.querySelector('textarea').value.trim();
+    if (!text) return;
+    const severity = parseInt(form.querySelector('.icp-sev-select').value);
+
+    // Add trailing keywords from input box if any
+    const rawKw = kwInput.value.trim().replace(/,$/, '');
+    if (rawKw && !currentKeywords.includes(rawKw)) currentKeywords.push(rawKw);
+
+    if (editFlag) {
+      updateICPFlag(type, editFlag.id, { text, severity, keywords: currentKeywords, dimension: dim.key });
+    } else {
+      addICPFlag(type, { text, severity, keywords: currentKeywords, dimension: dim.key });
+    }
+    form.remove();
+  });
+}
+
+function addICPFlag(type, fields) {
+  const storageKey = type === 'green' ? 'profileAttractedTo' : 'profileDealbreakers';
+  const arr = type === 'green' ? _icpGreens : _icpReds;
+  const newFlag = { id: generateId(), category: 'other', source: 'manual', createdAt: Date.now(), ...fields };
+  arr.push(newFlag);
+  chrome.storage.local.set({ [storageKey]: arr }, () => {
+    showSaveStatus();
+    const dim = ICP_DIMENSIONS.find(d => d.key === fields.dimension);
+    if (dim) renderICPDimRow(dim);
+  });
+}
+
+function updateICPFlag(type, id, fields) {
+  const storageKey = type === 'green' ? 'profileAttractedTo' : 'profileDealbreakers';
+  const arr = type === 'green' ? _icpGreens : _icpReds;
+  const idx = arr.findIndex(f => f.id === id);
+  if (idx !== -1) arr[idx] = { ...arr[idx], ...fields };
+  chrome.storage.local.set({ [storageKey]: arr }, () => {
+    showSaveStatus();
+    const dim = ICP_DIMENSIONS.find(d => d.key === fields.dimension);
+    if (dim) renderICPDimRow(dim);
+  });
+}
+
+function deleteICPFlag(dimKey, id) {
+  const inGreens = _icpGreens.find(f => f.id === id);
+  if (inGreens) {
+    _icpGreens = _icpGreens.filter(f => f.id !== id);
+    chrome.storage.local.set({ profileAttractedTo: _icpGreens }, () => showSaveStatus());
+  } else {
+    _icpReds = _icpReds.filter(f => f.id !== id);
+    chrome.storage.local.set({ profileDealbreakers: _icpReds }, () => showSaveStatus());
+  }
+  const dim = ICP_DIMENSIONS.find(d => d.key === dimKey);
+  if (dim) renderICPDimRow(dim);
+}
+
+function toggleICPDim(key) {
+  const body = document.getElementById(`dim-body-${key}`);
+  const chev = document.getElementById(`dim-chev-${key}`);
+  if (!body) return;
+  const isOpen = body.classList.toggle('open');
+  if (chev) chev.classList.toggle('open', isOpen);
+}
+
+// Called after autofill writes to storage — refreshes the visible ICP sections
+function refreshICPScoring() {
+  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers'], data => {
+    _icpGreens = data.profileAttractedTo  || [];
+    _icpReds   = data.profileDealbreakers || [];
+    ICP_DIMENSIONS.forEach(dim => renderICPDimRow(dim));
+  });
+}
+
 function migrateToStructured(callback) {
   chrome.storage.local.get([
     'profileGreenLights', 'profileRedLights',
     'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
     'profileRoleICP', 'profileCompanyICP', 'profileInterviewLearnings',
+    'scoringWeights',
     '_migratedStructuredV1'
   ], data => {
     void chrome.runtime.lastError;
@@ -904,6 +1356,17 @@ function migrateToStructured(callback) {
     if (!data.profileRoleICP) migrations.profileRoleICP = { text: '', targetFunction: [], seniority: '', scope: '', sellingMotion: '', teamSizePreference: '' };
     if (!data.profileCompanyICP) migrations.profileCompanyICP = { text: '', stage: [], sizeRange: [], industryPreferences: [], cultureMarkers: [] };
     if (!data.profileInterviewLearnings) migrations.profileInterviewLearnings = [];
+
+    // Init scoringWeights if missing
+    if (!data.scoringWeights) migrations.scoringWeights = DEFAULT_SCORING_WEIGHTS;
+
+    // Add dimension field to existing flags
+    const { migrated: migratedGreens, dirty: greensDirty } =
+      migrateFlagDimensions(migrations.profileAttractedTo || data.profileAttractedTo);
+    const { migrated: migratedReds, dirty: redsDirty } =
+      migrateFlagDimensions(migrations.profileDealbreakers || data.profileDealbreakers);
+    if (greensDirty) migrations.profileAttractedTo = migratedGreens;
+    if (redsDirty)   migrations.profileDealbreakers = migratedReds;
 
     migrations._migratedStructuredV1 = true;
 
@@ -1574,6 +2037,7 @@ function initFlagsAutofill() {
                 chrome.storage.local.set({ [storageKey]: merged }, () => {
                   showSaveStatus();
                   renderStructuredList(containerId, storageKey, merged, opts);
+                  refreshICPScoring();
                 });
               });
             }
@@ -2569,7 +3033,6 @@ function initCoopSettings() {
     // ── Automation toggles ──
     const toggleMap = {
       'coop-auto-insights': 'insightExtraction',
-      'coop-auto-rescore': 'autoRescore',
       'coop-auto-urls': 'autoFetchUrls',
       'coop-auto-appmode': 'applicationModeDetection',
       'coop-auto-suggestions': 'contextualSuggestions',
@@ -2644,36 +3107,6 @@ function initCoopSettings() {
       }
     });
 
-    // ── Rescore stages (dynamic from pipeline) ──
-    const rescoreStagesEl = document.getElementById('rescore-stages');
-    if (rescoreStagesEl) {
-      chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
-        const defaultStages = [
-          { key: 'needs_review', label: "Scoring Queue" },
-          { key: 'want_to_apply', label: "Interested" },
-          { key: 'applied', label: "Applied" },
-          { key: 'interviewing', label: "Interviewing" },
-          { key: 'phone_screen', label: "Phone Screen" },
-          { key: 'interview', label: "Interview" },
-          { key: 'final_round', label: "Final Round" },
-          { key: 'offer', label: "Offer" },
-        ];
-        const stages = stageData.opportunityStages || stageData.customStages || defaultStages;
-        const selected = cfg.rescoreStages || ['needs_review', 'want_to_apply'];
-        rescoreStagesEl.innerHTML = stages.map(s => `
-          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-raised);">
-            <input type="checkbox" class="rescore-stage-cb" value="${s.key}" ${selected.includes(s.key) ? 'checked' : ''} style="margin:0;"> ${s.label}
-          </label>
-        `).join('');
-        rescoreStagesEl.querySelectorAll('.rescore-stage-cb').forEach(cb => {
-          cb.addEventListener('change', () => {
-            cfg.rescoreStages = [...document.querySelectorAll('.rescore-stage-cb:checked')].map(el => el.value);
-            chrome.storage.local.set({ coopConfig: cfg });
-            showSaveStatus();
-          });
-        });
-      });
-    }
   });
 }
 
@@ -3854,7 +4287,7 @@ function initCoopAssessment() {
         }, () => {
           if (chrome.runtime.lastError) {
             console.error('[CoopAssessment] save edits failed:', chrome.runtime.lastError);
-            alert('Save failed: ' + chrome.runtime.lastError.message);
+            prefsToast('Save failed: ' + chrome.runtime.lastError.message, { kind: 'error' });
             return;
           }
           contentEl.innerHTML = html;
@@ -4085,7 +4518,7 @@ function initCoopContextWindow() {
         }, () => {
           if (chrome.runtime.lastError) {
             console.error('[CoopContextWindow] save edits failed:', chrome.runtime.lastError);
-            alert('Save failed: ' + chrome.runtime.lastError.message);
+            prefsToast('Save failed: ' + chrome.runtime.lastError.message, { kind: 'error' });
             return;
           }
           renderSavedContext();
@@ -4481,7 +4914,7 @@ function openMemoryEditor(entry) {
     const name = modal.querySelector('#me-name').value.trim();
     const description = modal.querySelector('#me-desc').value.trim();
     const body = modal.querySelector('#me-body').value.trim();
-    if (!name || !body) { alert('Name and Body are required'); return; }
+    if (!name || !body) { prefsToast('Name and Body are required', { kind: 'error' }); return; }
     chrome.storage.local.get(['coopMemory'], d => {
       const m = d.coopMemory && Array.isArray(d.coopMemory.entries) ? d.coopMemory : { entries: [] };
       const idx = m.entries.findIndex(x => x.id === e.id);
@@ -5016,8 +5449,7 @@ loadPrefsWithMigration(syncPrefs => {
 
   // Init structured profile (v2)
   migrateToStructured(structData => {
-    initStructuredSection('attracted-to-entries', 'profileAttractedTo', { showSeverity: true });
-    initStructuredSection('dealbreaker-entries', 'profileDealbreakers', { showSeverity: true });
+    initICPScoring();
     initSkillTags();
     initSkillsAutoGenerate();
     initICPFields();
@@ -5031,6 +5463,84 @@ loadPrefsWithMigration(syncPrefs => {
     initCoopContextWindow();
     initFaqPairs();
     initStructuredExperience();
+
+    // Deep-link handler
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetSection = urlParams.get('section');
+    const addTag = urlParams.get('addTag');
+    const targetDim = urlParams.get('dim');
+    const targetFlagId = urlParams.get('flagId');
+
+    if (targetSection === 'experience') {
+      // Switch to the Experience tab
+      document.querySelectorAll('.cos-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'fit'));
+      document.querySelectorAll('.cos-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === 'fit'));
+
+      // Expand the Experience card and scroll to it
+      const expCard = document.getElementById('experience-entries-list')?.closest('.cos-collapsible');
+      if (expCard) {
+        expCard.classList.add('open');
+        setTimeout(() => {
+          expCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (addTag) {
+            const banner = document.createElement('div');
+            banner.style.cssText = 'margin:8px 0 12px;padding:10px 14px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;font-size:13px;color:#5D4037;display:flex;align-items:center;gap:8px;';
+            banner.innerHTML = `<span style="font-size:16px;">🏷️</span> <span>Tag <strong>${addTag.replace(/</g, '&lt;')}</strong> on the experience entry where you used this skill, then rescore.</span>`;
+            const list = document.getElementById('experience-entries-list');
+            if (list) list.parentNode.insertBefore(banner, list);
+          }
+        }, 150);
+      }
+    }
+
+    // ICP deep-link: ?dim=roleFit or ?dim=roleFit&flagId=abc123
+    if (targetDim) {
+      const applyDimDeepLink = () => {
+        // Switch to the ICP & Preferences tab
+        document.querySelectorAll('.cos-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'icp'));
+        document.querySelectorAll('.cos-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === 'icp'));
+
+        // Expand parent collapsible if ICP section is inside one
+        const icpCollapsible = document.getElementById('icp-scoring-section')?.closest('.cos-collapsible');
+        if (icpCollapsible) icpCollapsible.classList.add('open');
+
+        // Expand the target dimension
+        const dimBody = document.getElementById('dim-body-' + targetDim);
+        const dimChev = document.getElementById('dim-chev-' + targetDim);
+        if (dimBody && !dimBody.classList.contains('open')) {
+          dimBody.classList.add('open');
+          if (dimChev) dimChev.classList.add('open');
+        }
+
+        setTimeout(() => {
+          if (targetFlagId) {
+            // Scroll to and highlight the specific flag card
+            const flagEl = document.querySelector(`.icp-flag-card[data-id="${targetFlagId}"]`);
+            console.log('[DeepLink] looking for flagId:', targetFlagId, 'found:', !!flagEl,
+              'all flag cards:', document.querySelectorAll('.icp-flag-card').length,
+              'all ids:', [...document.querySelectorAll('.icp-flag-card')].map(c => c.dataset.id));
+            if (flagEl) {
+              flagEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              flagEl.classList.add('flag-highlight');
+              const editBtn = flagEl.querySelector('.icp-flag-action-btn.edit');
+              if (editBtn) setTimeout(() => editBtn.click(), 400);
+              setTimeout(() => flagEl.classList.remove('flag-highlight'), 2500);
+            }
+          } else {
+            const dimEl = document.getElementById('icp-dim-' + targetDim);
+            if (dimEl) dimEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      };
+
+      // Flag cards are rendered async inside initICPScoring's storage callback.
+      // Wait for that to complete before trying to find flag elements.
+      if (targetFlagId && !document.querySelector(`.icp-flag-card[data-id="${targetFlagId}"]`)) {
+        document.addEventListener('icp-scoring-ready', applyDimDeepLink, { once: true });
+      } else {
+        applyDimDeepLink();
+      }
+    }
   });
   initCoopChatDrawer();
 });
