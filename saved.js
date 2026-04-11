@@ -839,58 +839,27 @@ function openScoreModal(entry) {
     btn.disabled = true;
     console.log('[Scorecard] Re-scoring', freshEntry.company, freshEntry.jobTitle);
 
-    chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-      if (!prefs || (!prefs.jobMatchEnabled && !prefs.roles && !prefs.workArrangement?.length)) {
-        btn.textContent = 'Set up job preferences in Career OS first';
-        btn.style.color = '#A09A94';
-        btn.disabled = false;
-        return;
+    chrome.runtime.sendMessage(
+      { type: 'QUICK_FIT_SCORE', entryId: freshEntry.id },
+      result => {
+        void chrome.runtime.lastError;
+        console.log('[Scorecard] Re-score result:', result);
+        if (result?.quickFitScore != null) {
+          // processQuickFitScore persists + broadcasts — reload from storage for fresh state
+          chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+            allCompanies = savedCompanies || allCompanies;
+            render();
+            overlay.classList.remove('open');
+            const updated = allCompanies.find(x => x.id === freshEntry.id);
+            if (updated) setTimeout(() => openScoreModal(updated), 150);
+          });
+        } else {
+          console.warn('[Scorecard] Re-score failed:', result);
+          btn.textContent = 'Re-score failed — check console';
+          btn.disabled = false;
+        }
       }
-      chrome.storage.local.get(['storyTime', 'profileStory', 'profileExperience', 'profileSkills', 'profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'], (localData) => {
-        const roleICP = localData.profileRoleICP || {};
-        const companyICP = localData.profileCompanyICP || {};
-        const attractedTo = localData.profileAttractedTo || [];
-        const dealbreakers = localData.profileDealbreakers || [];
-        let candidateProfile = '';
-        const _aj = v => Array.isArray(v) ? v.join(', ') : (v || '');
-        if (roleICP.text || _aj(roleICP.targetFunction)) candidateProfile += `\nRole ICP: ${roleICP.text || ''} ${[_aj(roleICP.targetFunction), roleICP.seniority, roleICP.scope, roleICP.sellingMotion].filter(Boolean).join(' | ')}`;
-        if (companyICP.text || _aj(companyICP.stage)) candidateProfile += `\nCompany ICP: ${companyICP.text || ''} ${[_aj(companyICP.stage), _aj(companyICP.sizeRange), _aj(companyICP.industryPreferences)].filter(Boolean).join(' | ')}`;
-        if (attractedTo.length) candidateProfile += `\nGreen flags: ${attractedTo.map(e => e.text).join('; ')}`;
-        if (dealbreakers.length) candidateProfile += `\nRed flags/dealbreakers: ${dealbreakers.map(e => `${e.text} (${e.severity})`).join('; ')}`;
-        if (localData.profileSkillTags?.length) candidateProfile += `\nSkill tags: ${localData.profileSkillTags.join(', ')}`;
-        const richContext = {
-          intelligence: freshEntry.intelligence?.eli5 || freshEntry.oneLiner || null,
-          reviews: freshEntry.reviews || [],
-          notes: freshEntry.notes || null,
-          knownComp: freshEntry.baseSalaryRange || freshEntry.oteTotalComp ? `Known comp: ${freshEntry.baseSalaryRange ? 'Base ' + freshEntry.baseSalaryRange : ''} ${freshEntry.oteTotalComp ? 'OTE ' + freshEntry.oteTotalComp : ''}`.trim() : null,
-          candidateProfile,
-        };
-        chrome.runtime.sendMessage(
-          { type: 'ANALYZE_JOB', company: freshEntry.company, jobTitle: freshEntry.jobTitle, jobDescription: freshEntry.jobDescription, prefs, richContext },
-          result => {
-            void chrome.runtime.lastError;
-            console.log('[Scorecard] Re-score result:', result);
-            if (result?.jobMatch) {
-              const idx = allCompanies.findIndex(x => x.id === freshEntry.id);
-              if (idx !== -1) {
-                allCompanies[idx].jobMatch = result.jobMatch;
-                allCompanies[idx].jobMatchScoredAt = Date.now();
-                if (result.jobSnapshot) allCompanies[idx].jobSnapshot = result.jobSnapshot;
-                chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
-                  render();
-                  overlay.classList.remove('open');
-                  setTimeout(() => openScoreModal(allCompanies[idx]), 150);
-                });
-              }
-            } else {
-              console.warn('[Scorecard] Re-score failed:', result);
-              btn.textContent = 'Re-score failed — check console';
-              btn.disabled = false;
-            }
-          }
-        );
-      });
-    });
+    );
   });
 
   // ── Swipe gesture ──
@@ -2833,47 +2802,14 @@ function bindKanbanEvents(board) {
       if (!c || !c.jobDescription) return;
       btn.disabled = true;
       btn.textContent = 'Scoring\u2026';
-      chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-        chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
-          const richContext = {
-            intelligence: c.intelligence?.eli5 || c.oneLiner || null,
-            reviews: c.reviews || [],
-            emails: (c.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
-            meetings: (c.cachedMeetings || []).slice(0, 3),
-            transcript: c.cachedMeetingTranscript || null,
-            notes: c.notes || null,
-            knownComp: c.baseSalaryRange || c.oteTotalComp ? `Known comp: ${c.baseSalaryRange ? 'Base ' + c.baseSalaryRange : ''} ${c.oteTotalComp ? 'OTE ' + c.oteTotalComp : ''} ${c.equity ? 'Equity ' + c.equity : ''} (source: ${c.compSource || 'unknown'})`.trim() : null,
-            matchFeedback: c.matchFeedback ? `User ${c.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${c.matchFeedback.note ? ': "' + c.matchFeedback.note + '"' : ''}` : null,
-          };
-          chrome.runtime.sendMessage(
-            { type: 'ANALYZE_JOB', company: c.company, jobTitle: c.jobTitle, jobDescription: c.jobDescription, prefs: prefs || {}, richContext },
-            result => {
-              void chrome.runtime.lastError;
-              if (!result?.jobMatch) { btn.disabled = false; btn.textContent = 'Score match'; return; }
-              const idx = allCompanies.findIndex(x => x.id === id);
-              if (idx === -1) return;
-              allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
-              if (result.jobSnapshot) {
-                allCompanies[idx].jobSnapshot = result.jobSnapshot;
-                const s = result.jobSnapshot;
-                if (!allCompanies[idx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
-                  allCompanies[idx].baseSalaryRange = s.baseSalaryRange || s.salary;
-                  allCompanies[idx].compSource = allCompanies[idx].compSource || 'Job posting';
-                  allCompanies[idx].compAutoExtracted = true;
-                }
-                if (!allCompanies[idx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
-                  allCompanies[idx].oteTotalComp = s.oteTotalComp || s.salary;
-                }
-                if (!allCompanies[idx].equity && s.equity) allCompanies[idx].equity = s.equity;
-              }
-              chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
-                void chrome.runtime.lastError;
-                render();
-              });
-            }
-          );
-        });
-      });
+      chrome.runtime.sendMessage(
+        { type: 'QUICK_FIT_SCORE', entryId: id },
+        result => {
+          void chrome.runtime.lastError;
+          if (result?.error) { btn.disabled = false; btn.textContent = 'Score match'; return; }
+          // processQuickFitScore persists + broadcasts QUICK_FIT_COMPLETE → listener handles render
+        }
+      );
     });
   });
 
@@ -3110,46 +3046,13 @@ function bindKanbanEvents(board) {
       if (!entry.intelligence) {
         chrome.runtime.sendMessage({ type: 'RESEARCH_COMPANY', companyId: id, company: entry.company, website: entry.companyWebsite || '' }, () => void chrome.runtime.lastError);
       }
-      // Trigger ANALYZE_JOB for deep scoring
+      // Re-score on stage transition — processQuickFitScore loads all context from the entry
       if (entry.jobDescription) {
-        chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-          chrome.storage.local.get(['storyTime'], ({ storyTime }) => {
-            const richContext = {
-              intelligence: entry.intelligence?.eli5 || entry.oneLiner || null,
-              reviews: entry.reviews || [],
-              emails: (entry.cachedEmails || []).slice(0, 5).map(e => ({ date: e.date, subject: e.subject, from: e.from })),
-              meetings: (entry.cachedMeetings || []).slice(0, 3),
-              transcript: entry.cachedMeetingTranscript || null,
-              notes: entry.notes || null,
-              knownComp: entry.baseSalaryRange || entry.oteTotalComp ? `Known comp: ${entry.baseSalaryRange ? 'Base ' + entry.baseSalaryRange : ''} ${entry.oteTotalComp ? 'OTE ' + entry.oteTotalComp : ''} ${entry.equity ? 'Equity ' + entry.equity : ''} (source: ${entry.compSource || 'unknown'})`.trim() : null,
-              matchFeedback: entry.matchFeedback ? `User ${entry.matchFeedback.type === 'up' ? 'agreed with' : 'disagreed with'} previous match assessment${entry.matchFeedback.note ? ': "' + entry.matchFeedback.note + '"' : ''}` : null,
-            };
-            chrome.runtime.sendMessage(
-              { type: 'ANALYZE_JOB', company: entry.company, jobTitle: entry.jobTitle, jobDescription: entry.jobDescription, prefs: prefs || {}, richContext },
-              result => {
-                void chrome.runtime.lastError;
-                if (!result?.jobMatch) return;
-                const idx = allCompanies.findIndex(x => x.id === id);
-                if (idx === -1) return;
-                allCompanies[idx] = { ...allCompanies[idx], jobMatch: result.jobMatch, jobMatchScoredAt: Date.now() };
-                if (result.jobSnapshot) {
-                  allCompanies[idx].jobSnapshot = result.jobSnapshot;
-                  const s = result.jobSnapshot;
-                  if (!allCompanies[idx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
-                    allCompanies[idx].baseSalaryRange = s.baseSalaryRange || s.salary;
-                    allCompanies[idx].compSource = allCompanies[idx].compSource || 'Job posting';
-                    allCompanies[idx].compAutoExtracted = true;
-                  }
-                  if (!allCompanies[idx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
-                    allCompanies[idx].oteTotalComp = s.oteTotalComp || s.salary;
-                  }
-                  if (!allCompanies[idx].equity && s.equity) allCompanies[idx].equity = s.equity;
-                }
-                chrome.storage.local.set({ savedCompanies: allCompanies }, () => { void chrome.runtime.lastError; render(); });
-              }
-            );
-          });
-        });
+        chrome.runtime.sendMessage(
+          { type: 'QUICK_FIT_SCORE', entryId: id },
+          result => { void chrome.runtime.lastError; }
+          // processQuickFitScore persists + broadcasts QUICK_FIT_COMPLETE → listener handles render
+        );
       }
     });
   });

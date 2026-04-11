@@ -7,7 +7,7 @@ import { gmailAuth, gmailRevoke, fetchGmailEmails, detectRejectionEmailBg } from
 import { fetchCalendarEvents } from './calendar.js';
 import { buildGranolaIndex, searchGranolaNotes } from './granola.js';
 import { researchCompany, quickLookup } from './research.js';
-import { interpretProfileSection, processQuickFitScore, processQueue, computeStructuralMatches, analyzeJob, handleDevMockScore } from './scoring.js';
+import { interpretProfileSection, processQuickFitScore, processQueue, computeStructuralMatches, handleDevMockScore } from './scoring.js';
 import { consolidateProfile } from './memory.js';
 import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
@@ -302,10 +302,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'RESEARCH_COMPANY') {
     researchCompany(message.company, message.domain, message.prefs, message.companyLinkedin, message.linkedinFirmo).then(sendResponse);
-    return true;
-  }
-  if (message.type === 'ANALYZE_JOB') {
-    analyzeJob(message.company, message.jobTitle, message.jobDescription, message.prefs, message.richContext).then(sendResponse);
     return true;
   }
   if (message.type === 'GET_LEADER_PHOTOS') {

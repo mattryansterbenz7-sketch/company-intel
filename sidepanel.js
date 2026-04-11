@@ -71,7 +71,7 @@ updateHealthDot();
 setInterval(() => { if (!document.hidden) updateHealthDot(); }, 60000);
 
 document.getElementById('sp-health-dot')?.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('integrations.html'), '_blank');
+  coopNavigate(chrome.runtime.getURL('integrations.html'), true);
 });
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -174,38 +174,7 @@ function resolveQueueStage() {
 resolveQueueStage();
 
 // Auto-set "Action On" based on stage
-function defaultActionStatus(stageKey) {
-  if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
-  if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
-  return null;
-}
-
-function autoNextStepForStage(stageKey) {
-  const map = {
-    'needs_review':    'Coop → Review job score and decide whether to pursue',
-    'want_to_apply':   'Coop → Prepare and submit application',
-    'applied':         'Coop → Awaiting response from company',
-    'intro_requested': 'Coop → Waiting for intro to be made',
-    'conversations':   'Coop → Awaiting next steps from recruiter',
-    'offer_stage':     'Coop → Review and respond to offer',
-    'accepted':        'Coop → Complete onboarding steps',
-  };
-  return map[stageKey] || null;
-}
-
-function applyAutoStage(entry, stageKey, changes) {
-  const autoAction = defaultActionStatus(stageKey);
-  if (!autoAction) return;
-  changes.actionStatus = autoAction;
-  const autoStep = autoNextStepForStage(stageKey);
-  if (autoStep) {
-    const existing = entry?.nextStep || '';
-    if (!existing || existing.startsWith('Coop → ')) {
-      changes.nextStep = autoStep;
-      changes.nextStepSource = 'coop-auto';
-    }
-  }
-}
+// defaultActionStatus, autoNextStepForStage, applyAutoStage — provided by ui-utils.js
 
 let currentTabId = null;
 
@@ -312,8 +281,7 @@ loadPrefsWithMigration((prefs) => {
 
 // Open full saved view
 function openDashboard() {
-  window.open(chrome.runtime.getURL('saved.html'), '_blank');
-  window.close();
+  coopNavigate(chrome.runtime.getURL('saved.html'), true);
 }
 savedBtn?.addEventListener('click', openDashboard);
 document.getElementById('sp-logo')?.addEventListener('click', openDashboard);
@@ -486,108 +454,32 @@ saveConfirmBtn.addEventListener('click', () => {
   if (saveConfirmBtn.classList.contains('saved')) return;
   const company = companyNameEl.textContent;
   const isJobSave = saveMode === 'job';
-  const jobStageValue = isJobSave ? (document.getElementById('save-status-select')?.value || 'needs_review') : null;
 
-  const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
-  const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
-
-  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+  chrome.runtime.sendMessage({
+    type: 'SAVE_OPPORTUNITY',
+    company,
+    jobTitle: isJobSave ? (currentJobTitle || null) : null,
+    jobUrl: isJobSave ? (detectedJobUrl || currentUrl || null) : null,
+    jobDescription: isJobSave ? (currentJobDescription || null) : null,
+    jobMeta: isJobSave ? (currentJobMeta || currentResearch?.jobSnapshot || null) : null,
+    linkedinFirmo: detectedLinkedinFirmo || null,
+    source: 'sidepanel',
+  }, (resp) => {
     void chrome.runtime.lastError;
-    const existing = savedCompanies || [];
-
-    const dupIdx = existing.findIndex(c => companiesMatch(c.company, company));
-
-    if (dupIdx !== -1) {
-      const prev = existing[dupIdx];
-
-      // Smart duplicate detection for job saves
-      if (isJobSave && prev.isOpportunity && prev.jobTitle && currentJobTitle) {
-        if (titlesAreSimilar(prev.jobTitle, currentJobTitle)) {
-          // Same role — silently enrich existing opportunity
-          enrichExistingOpportunity(prev, existing, dupIdx);
-          return;
-        } else {
-          // Different role — ask the user
-          showDuplicateDialog(prev, existing, dupIdx);
-          return;
-        }
-      }
-
-      // Non-job save or no existing opportunity — merge as before
-      mergeAndSave(prev, existing, dupIdx);
+    if (!resp || resp.error) {
+      console.error('[SP] Save error:', resp?.error);
       return;
     }
 
-    // Auto-tag Easy Apply jobs
-    if (isJobSave && currentJobMeta?.easyApply && !currentSaveTags.includes('linkedin easy apply')) {
-      currentSaveTags.push('linkedin easy apply');
+    const entry = resp.entry;
+    saveConfirmBtn.textContent = '✓ Saved'; saveConfirmBtn.classList.add('saved');
+    if (isJobSave) { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
+    else           { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
+    showCrmLink(entry);
+
+    if (resp.isDuplicate) {
+      showToast(`Updated existing opportunity at ${entry.company}`);
     }
-
-    // New record (always type:'company')
-    const entry = {
-      id:             Date.now().toString(36) + Math.random().toString(36).substr(2),
-      type:           'company',
-      company,
-      savedAt:        Date.now(),
-      notes:          saveNotes.value.trim(),
-      rating:         saveRating || null,
-      tags:           [...currentSaveTags],
-      url:            isJobSave ? null : (currentUrl || null),
-      oneLiner:       currentResearch?.intelligence?.oneLiner || null,
-      category:       currentResearch?.intelligence?.category || null,
-      employees:      currentResearch?.employees || null,
-      funding:        currentResearch?.funding   || null,
-      founded:        currentResearch?.founded   || null,
-      companyWebsite,
-      companyLinkedin,
-      intelligence:   currentResearch?.intelligence || null,
-      reviews:        currentResearch?.reviews      || null,
-      leaders:        currentResearch?.leaders      || null,
-      status:         isJobSave ? 'co_watchlist' : 'co_watchlist',
-      ...(isJobSave ? (() => {
-        const snap = currentResearch?.jobSnapshot;
-        return {
-          isOpportunity:  true,
-          jobStage:       jobStageValue,
-          jobTitle:       currentJobTitle || null,
-          jobUrl:         detectedJobUrl || currentUrl || null,
-          jobMatch:       currentResearch?.jobMatch    || null,
-          jobSnapshot:    snap || null,
-          jobDescription: currentJobDescription        || null,
-          baseSalaryRange:  snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,
-          oteTotalComp:     snap?.oteTotalComp || (snap?.salaryType === 'ote' ? snap?.salary : null) || null,
-          equity:           snap?.equity || null,
-          compSource:       snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp ? 'Job posting' : null,
-          compAutoExtracted: !!(snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp),
-        };
-      })() : {}),
-    };
-
-    // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
-    if (detectedLinkedinFirmo) {
-      entry.linkedinFirmo = detectedLinkedinFirmo;
-      if (!entry.employees && detectedLinkedinFirmo.employees) entry.employees = detectedLinkedinFirmo.employees;
-      if (!entry.industry && detectedLinkedinFirmo.industry) entry.industry = detectedLinkedinFirmo.industry;
-    }
-
-    // Persist any new tags
-    const newTags = currentSaveTags.filter(t => !allKnownTags.includes(t));
-    if (newTags.length > 0) {
-      allKnownTags = [...allKnownTags, ...newTags];
-      chrome.storage.local.set({ allTags: allKnownTags });
-    }
-
-    chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, () => {
-      void chrome.runtime.lastError;
-      saveConfirmBtn.textContent = '✓ Saved'; saveConfirmBtn.classList.add('saved');
-      if (isJobSave) { saveJobBtn.textContent = '✓ Saved'; saveJobBtn.classList.add('saved'); }
-      else           { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
-      showCrmLink(entry);
-      // Auto-queue scoring for new job saves
-      if (isJobSave) {
-        chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
-      }
-    });
   });
 });
 
@@ -711,6 +603,10 @@ function backfillEntryFromResearch(savedEntry, research) {
   if (!savedEntry.employees && research.employees) updates.employees = research.employees;
   if (!savedEntry.industry && research.industry) updates.industry = research.industry;
   if (!savedEntry.funding && research.funding) updates.funding = research.funding;
+  // Backfill intelligence + reviews — used by scorer for culture/company fit
+  if (!savedEntry.intelligence && research.intelligence) updates.intelligence = research.intelligence;
+  if ((!savedEntry.reviews || !savedEntry.reviews.length) && research.reviews?.length) updates.reviews = research.reviews;
+  if (!savedEntry.leaders?.length && research.leaders?.length) updates.leaders = research.leaders;
   if (Object.keys(updates).length === 0) return;
   // Update in storage
   chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
@@ -876,8 +772,7 @@ function showPipelineStats() {
 
     // Click to open dashboard
     el.onclick = () => {
-      window.open(chrome.runtime.getURL('saved.html'), '_blank');
-      window.close();
+      coopNavigate(chrome.runtime.getURL('saved.html'), true);
     };
   });
 }
@@ -989,6 +884,22 @@ function startJobDescriptionFlow(tabId) {
     // Store description for use in save + chat context
     if (descResponse.jobDescription) {
       currentJobDescription = descResponse.jobDescription;
+
+      // Backfill: if entry was already saved without JD, patch storage
+      if (currentSavedEntry && !currentSavedEntry.jobDescription) {
+        currentSavedEntry.jobDescription = descResponse.jobDescription;
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+          void chrome.runtime.lastError;
+          const es = savedCompanies || [];
+          const idx = es.findIndex(e => e.id === currentSavedEntry.id);
+          if (idx !== -1 && !es[idx].jobDescription) {
+            es[idx].jobDescription = descResponse.jobDescription;
+            chrome.storage.local.set({ savedCompanies: es });
+            console.log('[SP] Late-backfilled JD on', currentSavedEntry.company);
+          }
+        });
+      }
+
       // If already saved with a job match score, use it — don't re-score
       if (currentSavedEntry?.jobMatch) {
         console.log('[SP] Using saved job match — skipping re-score');
@@ -996,7 +907,7 @@ function startJobDescriptionFlow(tabId) {
         return;
       }
       // Never auto-trigger job analysis — only runs via explicit research or save+research
-      console.log('[SP] Skipping auto ANALYZE_JOB — user must click Research');
+      console.log('[SP] Skipping auto scoring — user must click Research');
       return;
     }
   });
@@ -1004,7 +915,7 @@ function startJobDescriptionFlow(tabId) {
 
 // Open Setup page in a new tab
 settingsBtn.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('preferences.html'), '_blank');
+  coopNavigate(chrome.runtime.getURL('preferences.html'), true);
 });
 
 // Job match toggle
@@ -1370,8 +1281,7 @@ function renderHomeState() {
     ` : '';
 
     document.getElementById('sp-home-queue-link')?.addEventListener('click', () => {
-      window.open(chrome.runtime.getURL('queue.html'), '_blank');
-      window.close();
+      coopNavigate(chrome.runtime.getURL('queue.html'), true);
     });
 
     // Next Steps — company-specific next steps with dates (not completable)
@@ -1421,7 +1331,7 @@ function renderHomeState() {
         </div>
       `;
       document.querySelectorAll('#sp-home-actions .sp-home-action-item').forEach(el => {
-        el.addEventListener('click', () => { window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'); window.close(); });
+        el.addEventListener('click', () => { coopNavigate(chrome.runtime.getURL('company.html?id=' + el.dataset.id), true); });
       });
     } else {
       document.getElementById('sp-home-actions').innerHTML = '';
@@ -1490,7 +1400,7 @@ function renderHomeState() {
                     <div class="sp-home-action-company">${t.company || 'Task'}</div>
                     <div class="sp-home-action-step">${(t.text || '').slice(0, 50)}</div>
                   </div>
-                  <span class="sp-task-pri-badge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;">${pri}</span>
+                  <span class="sp-task-pri-badge" data-task-id="${t.id}" data-pri="${pri}" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;cursor:pointer;" title="Click to change priority">${pri}</span>
                   <span class="sp-task-date-edit ${dateClass}" data-task-id="${t.id}" data-date="${t.dueDate || ''}" title="Click to change date" style="cursor:pointer;flex-shrink:0;${t.daysUntil===null?'color:#A09A94;font-size:10px;':''}">${dateLabel}</span>
                 </div>`;
               }).join('') : `<div style="color:#A09A94;font-size:12px;padding:8px 0;">${tasks.length ? 'No tasks match filter' : 'No tasks yet'}</div>`}
@@ -1683,6 +1593,75 @@ function renderHomeState() {
           });
         });
 
+        // Click priority badge → show small inline picker (Low / Normal / High)
+        const PRI_DEFS = [
+          { p: 'low',    label: 'Low',    bg: '#DBEAFE', color: '#1D4ED8' },
+          { p: 'normal', label: 'Normal', bg: '#FEF3C7', color: '#92400E' },
+          { p: 'high',   label: 'High',   bg: '#FEE2E2', color: '#991B1B' },
+        ];
+        tasksEl.querySelectorAll('.sp-task-pri-badge').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Close any existing picker
+            tasksEl.querySelectorAll('.sp-pri-picker').forEach(p => p.remove());
+
+            const taskId = el.dataset.taskId;
+            const currentPri = el.dataset.pri || 'normal';
+
+            const picker = document.createElement('div');
+            picker.className = 'sp-pri-picker';
+            picker.style.cssText = 'display:flex;gap:5px;padding:5px;background:#fff;border:1px solid #E0DDD8;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);position:absolute;z-index:999;margin-top:4px;';
+
+            PRI_DEFS.forEach(({ p, label, bg, color }) => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.textContent = label;
+              const isActive = p === currentPri;
+              btn.style.cssText = `font-size:10px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${isActive ? color : '#E0DDD8'};background:${isActive ? bg : '#fff'};color:${isActive ? color : '#9A9590'};`;
+              btn.addEventListener('click', (e2) => {
+                e2.stopPropagation();
+                picker.remove();
+                // Update badge in-place
+                const pc = PRI_DEFS.find(d => d.p === p);
+                el.dataset.pri = p;
+                el.textContent = p;
+                el.style.background = pc.bg;
+                el.style.color = pc.color;
+                el.style.borderColor = pc.color + '22';
+                // Keep sp-task-click in sync
+                const taskClick = el.closest('.sp-home-action-item')?.querySelector('.sp-task-click');
+                if (taskClick) taskClick.dataset.taskPri = p;
+                // Persist
+                chrome.storage.local.get(['userTasks'], d => {
+                  const allTasks = d.userTasks || [];
+                  const task = allTasks.find(t => t.id === taskId);
+                  if (task) { task.priority = p; chrome.storage.local.set({ userTasks: allTasks }); }
+                });
+              });
+              picker.appendChild(btn);
+            });
+
+            // Position below the badge, anchored to viewport so it doesn't clip
+            document.body.appendChild(picker);
+            const rect = el.getBoundingClientRect();
+            picker.style.position = 'fixed';
+            // Align right edge of picker with right edge of badge, flip left if it would overflow
+            const pickerW = 180;
+            const left = Math.min(rect.right - pickerW, window.innerWidth - pickerW - 8);
+            picker.style.left = Math.max(8, left) + 'px';
+            picker.style.top = (rect.bottom + 4) + 'px';
+
+            // Dismiss on outside click
+            const dismiss = (e2) => {
+              if (!picker.contains(e2.target) && e2.target !== el) {
+                picker.remove();
+                document.removeEventListener('click', dismiss);
+              }
+            };
+            setTimeout(() => document.addEventListener('click', dismiss), 0);
+          });
+        });
+
         // Hover effects on task text (edit affordance)
         tasksEl.querySelectorAll('.sp-task-click').forEach(el => {
           el.addEventListener('mouseenter', () => { el.style.background = 'rgba(0,0,0,0.04)'; });
@@ -1821,7 +1800,7 @@ function renderHomeState() {
         </div>
       `).join('');
       resultsEl.querySelectorAll('.sp-home-search-result').forEach(el => {
-        el.addEventListener('click', () => { window.open(chrome.runtime.getURL('company.html?id=' + el.dataset.id), '_blank'); window.close(); });
+        el.addEventListener('click', () => { coopNavigate(chrome.runtime.getURL('company.html?id=' + el.dataset.id), true); });
       });
     });
   });
@@ -1858,8 +1837,7 @@ async function triggerResearch(company, forceRefresh = false) {
     chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
       const cacheKey = company.toLowerCase().replace(/[,;:!?.]+$/, '').trim();
       const cached = researchCache?.[cacheKey];
-      const CACHE_TTL = 24 * 60 * 60 * 1000;
-      if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      if (cached) {
         currentResearch = cached.data;
         renderResults(cached.data);
       } else if (detectedLinkedinFirmo) {
@@ -1921,11 +1899,10 @@ async function triggerResearch(company, forceRefresh = false) {
       chrome.storage.local.set({ researchCache: pruned });
     }
 
-    // If we have a fresh cached result, render immediately — skip all API calls
+    // If we have a cached result, render immediately — skip all API calls
     const cacheKey = company.toLowerCase();
     const cached = researchCache?.[cacheKey];
-    const CACHE_TTL = 24 * 60 * 60 * 1000;
-    if (!forceRefresh && cached && Date.now() - cached.ts < CACHE_TTL) {
+    if (!forceRefresh && cached) {
       currentResearch = cached.data;
       renderResults(cached.data);
       if (cached.data.leaders?.length > 0) {
@@ -2611,22 +2588,7 @@ function renderJobSnapshot(snap) {
   inlineEl.innerHTML = bits.join('');
 }
 
-function triggerJobAnalysis(company, jobDescription) {
-  const prefs = currentPrefs; // snapshot at call time
-  chrome.runtime.sendMessage(
-    { type: 'ANALYZE_JOB', company, jobTitle: currentJobTitle, jobDescription, prefs },
-    (data) => {
-      void chrome.runtime.lastError;
-      if (!data) return;
-      if (currentResearch) {
-        currentResearch.jobMatch = data.jobMatch || null;
-        if (data.jobSnapshot) currentResearch.jobSnapshot = data.jobSnapshot;
-      }
-      if (data.jobSnapshot) renderJobSnapshot(data.jobSnapshot);
-      renderJobOpportunity(data.jobMatch || null, data.jobSnapshot || null);
-    }
-  );
-}
+// triggerJobAnalysis removed — all scoring now goes through QUICK_FIT_SCORE (processQuickFitScore)
 
 function renderJobOpportunity(jobMatch, jobSnapshot) {
   const jobOpportunityEl = document.getElementById('job-opportunity');
@@ -2637,13 +2599,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
   }
   if (!currentJobTitle) return;
 
-  function scoreToVerdict(score) {
-    if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
-    if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
-    if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
-    if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
-    return                   { label: 'Weak match',     cls: 'low' };
-  }
+  // scoreToVerdict — provided by ui-utils.js
 
   // LinkedIn chips are authoritative for work arrangement — AI snapshot can misinterpret territory mentions as "On-site"
   const jobArr = currentJobMeta?.workArrangement || jobSnapshot?.workArrangement;
@@ -3095,20 +3051,7 @@ function renderBullets(items, type) {
 }
 
 // Bold the key signal phrase in a flag bullet — typically the first clause
-function boldKeyPhrase(text) {
-  // Split on common connecting words — bold the part before them
-  const splitRe = /\s+(matches|signals|aligns|mirrors|fits|exceeds|suggests|indicates|required|doesn't|limits|conflicts|may feel|verify|confirm|typical)\b/i;
-  const m = text.match(splitRe);
-  if (m) {
-    const idx = text.indexOf(m[0]);
-    return `<strong>${text.slice(0, idx)}</strong>${text.slice(idx)}`;
-  }
-  // Fallback: split on semicolon or em dash — bold the first part
-  const dashSplit = text.match(/^(.+?)\s*[;—–]\s*(.+)$/);
-  if (dashSplit) return `<strong>${dashSplit[1]}</strong> — ${dashSplit[2]}`;
-  // No split point found — just return as-is
-  return text;
-}
+// boldKeyPhrase — provided by ui-utils.js
 
 function renderQualifications(qualifications) {
   if (!qualifications?.length) return '';
@@ -3197,7 +3140,7 @@ function renderResults(data) {
     }
   }
 
-  // Job snapshot badges — use DOM meta (jobSnapshot comes via ANALYZE_JOB separately)
+  // Job snapshot badges — use DOM meta (jobSnapshot comes via QUICK_FIT_SCORE)
   renderJobSnapshot(currentJobMeta || null);
 
   // Company favicon
@@ -3240,15 +3183,9 @@ function renderResults(data) {
     ${intel.howItWorks ? `<details><summary>How it works</summary><div class="detail-body">${intel.howItWorks}</div></details>` : ''}
   ` : '<div style="color:#555;font-size:13px">No product data available</div>';
 
-  function scoreToVerdict(score) {
-    if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
-    if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
-    if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
-    if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
-    return                   { label: 'Weak match',     cls: 'low' };
-  }
+  // scoreToVerdict — provided by ui-utils.js
 
-  // Company fit intentionally omitted — only job-level fit (via ANALYZE_JOB) is shown
+  // Company fit intentionally omitted — only job-level fit (via QUICK_FIT_SCORE) is shown
 
   // Job opportunity rendered independently by triggerJobAnalysis/renderJobOpportunity
 
@@ -4168,9 +4105,7 @@ function renderContactsSection(el, contacts) {
     });
   }
 
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
-  }
+  // escHtml — provided by ui-utils.js
 
   function renderMd(text) {
     let html = String(text)
@@ -5152,87 +5087,31 @@ function _spFireCelebration(stageKey) {
 
 // ── Queue Save Buttons ──────────────────────────────────────────────────────
 
-function buildQueueEntry() {
-  const company = companyNameEl.textContent;
-  const companyWebsite = currentResearch?.companyWebsite || (detectedDomain && !/linkedin\.com/i.test(detectedDomain) ? `https://${detectedDomain}` : null);
-  const companyLinkedin = currentResearch?.companyLinkedin || detectedCompanyLinkedin || (/linkedin\.com\/company\//i.test(currentUrl || '') ? currentUrl : null);
-  const snap = currentResearch?.jobSnapshot || currentJobMeta;
-  const tags = ['Job Posted'];
-  if (currentJobMeta?.easyApply && !tags.includes('linkedin easy apply')) {
-    tags.push('linkedin easy apply');
-  }
-
-  const entry = {
-    id:               Date.now().toString(36) + Math.random().toString(36).substr(2),
-    type:             'company',
-    company,
-    savedAt:          Date.now(),
-    notes:            '',
-    rating:           null,
-    tags,
-    url:              null,
-    oneLiner:         currentResearch?.intelligence?.oneLiner || null,
-    category:         currentResearch?.intelligence?.category || null,
-    employees:        currentResearch?.employees || null,
-    funding:          currentResearch?.funding   || null,
-    founded:          currentResearch?.founded   || null,
-    companyWebsite,
-    companyLinkedin,
-    intelligence:     currentResearch?.intelligence || null,
-    reviews:          currentResearch?.reviews      || null,
-    leaders:          currentResearch?.leaders      || null,
-    status:           'co_watchlist',
-    isOpportunity:    true,
-    jobStage:         _queueStageKey,
-    jobTitle:         currentJobTitle || null,
-    jobUrl:           detectedJobUrl || currentUrl || null,
-    jobMatch:         currentResearch?.jobMatch    || null,
-    jobSnapshot:      snap || null,
-    jobDescription:   currentJobDescription        || null,
-    baseSalaryRange:  snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,
-    oteTotalComp:     snap?.oteTotalComp || (snap?.salaryType === 'ote' ? snap?.salary : null) || null,
-    equity:           snap?.equity || null,
-    compSource:       snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp ? 'Job posting' : null,
-    compAutoExtracted: !!(snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp),
-  };
-
-  // Backfill from LinkedIn firmographics (free DOM scraping — never overwrites)
-  if (detectedLinkedinFirmo) {
-    entry.linkedinFirmo = detectedLinkedinFirmo;
-    if (!entry.employees && detectedLinkedinFirmo.employees) entry.employees = detectedLinkedinFirmo.employees;
-    if (!entry.industry && detectedLinkedinFirmo.industry) entry.industry = detectedLinkedinFirmo.industry;
-  }
-
-  return entry;
-
-}
-
-function queueSaveEntry(callback) {
+function queueSaveEntry(callback, { triggerResearch = false } = {}) {
   const company = companyNameEl.textContent;
 
-  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-    void chrome.runtime.lastError;
-    const existing = savedCompanies || [];
+  // Re-request JD from content script before saving (handles race where JD wasn't ready yet)
+  const saveWithJD = (jd) => {
+    if (jd && !currentJobDescription) currentJobDescription = jd;
 
-    // Duplicate check
-    const dupIdx = existing.findIndex(c => companiesMatch(c.company, company));
-    if (dupIdx !== -1) {
-      const prev = existing[dupIdx];
-      if (prev.isOpportunity && prev.jobTitle && currentJobTitle && titlesAreSimilar(prev.jobTitle, currentJobTitle)) {
-        // Same role — silently enrich
-        enrichExistingOpportunity(prev, existing, dupIdx);
-        showToast(`Updated existing opportunity at ${prev.company}`);
-        callback(prev);
+    chrome.runtime.sendMessage({
+      type: 'SAVE_OPPORTUNITY',
+      company,
+      jobTitle: currentJobTitle || null,
+      jobUrl: detectedJobUrl || currentUrl || null,
+      jobDescription: currentJobDescription || null,
+      jobMeta: currentJobMeta || (currentResearch?.jobSnapshot ? { ...currentResearch.jobSnapshot } : null),
+      linkedinFirmo: detectedLinkedinFirmo || null,
+      source: 'sidepanel',
+      triggerResearch,
+    }, (resp) => {
+      void chrome.runtime.lastError;
+      if (!resp || resp.error) {
+        console.error('[SP] SAVE_OPPORTUNITY error:', resp?.error);
         return;
       }
-      // Different role or company-only save — create new entry alongside
-    }
 
-    const entry = buildQueueEntry();
-
-    // Persist
-    chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, () => {
-      void chrome.runtime.lastError;
+      const entry = resp.entry;
 
       // Mark UI as saved
       saveJobBtn.textContent = '✓ Saved';
@@ -5240,8 +5119,9 @@ function queueSaveEntry(callback) {
       saveBtn.textContent = '✓ Saved';
       saveBtn.classList.add('saved');
 
-      // Queue quick fit scoring
-      chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
+      if (resp.isDuplicate) {
+        showToast(`Updated existing opportunity at ${entry.company}`);
+      }
 
       // Compute structural matches
       loadPrefsWithMigration((prefs) => {
@@ -5250,7 +5130,6 @@ function queueSaveEntry(callback) {
           (matches) => {
             void chrome.runtime.lastError;
             if (matches) {
-              // Save structural matches back onto entry
               chrome.storage.local.get(['savedCompanies'], ({ savedCompanies: latest }) => {
                 const entries = latest || [];
                 const idx = entries.findIndex(c => c.id === entry.id);
@@ -5277,7 +5156,20 @@ function queueSaveEntry(callback) {
       showCrmLink(entry);
       callback(entry);
     });
-  });
+  };
+
+  // Try to get JD from content script if we don't have it yet
+  if (!currentJobDescription && currentJobTitle) {
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (!tab?.id) { saveWithJD(null); return; }
+      chrome.tabs.sendMessage(tab.id, { type: 'GET_JOB_DESCRIPTION' }, (resp) => {
+        void chrome.runtime.lastError;
+        saveWithJD(resp?.jobDescription || null);
+      });
+    });
+  } else {
+    saveWithJD(null);
+  }
 }
 
 function renderQueueConfirmation(entry) {
@@ -5485,17 +5377,17 @@ function applyQueueBind(entry) {
   console.log('[SP] Queue bind applied for:', entry.company);
 }
 
-// "Save to AI queue" button
+// "Send to Coop" button
 document.getElementById('save-queue-btn')?.addEventListener('click', function() {
   if (this.disabled) return;
   this.disabled = true;
-  this.textContent = 'Saving...';
+  this.textContent = 'Sending...';
   queueSaveEntry((entry) => {
     renderQueueConfirmation(entry);
   });
 });
 
-// "Save + research now" button
+// "Send to Coop + Research" button
 document.getElementById('save-research-btn')?.addEventListener('click', function() {
   if (this.disabled) return;
   this.disabled = true;
@@ -5510,7 +5402,8 @@ document.getElementById('save-research-btn')?.addEventListener('click', function
     const queuePanel = document.getElementById('queue-save-panel');
     if (queuePanel) queuePanel.style.display = 'none';
 
-    // Trigger full research
+    // Full research triggered by SAVE_OPPORTUNITY handler (triggerResearch: true)
+    // But we also need to render results when they come back, so poll for research completion
     const company = companyNameEl.textContent;
     const enrichDomain = (detectedDomain && !/linkedin\.com/i.test(detectedDomain)) ? detectedDomain : null;
     chrome.runtime.sendMessage(
@@ -5522,11 +5415,11 @@ document.getElementById('save-research-btn')?.addEventListener('click', function
         renderResults(response);
         backfillEntryFromResearch(currentSavedEntry, response);
 
-        // Now trigger job analysis with the research context
-        if (currentJobDescription) {
-          triggerJobAnalysis(company, currentJobDescription);
+        // Re-score via the deterministic scorer now that research data is available
+        if (entry.id) {
+          chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
         }
       }
     );
-  });
+  }, { triggerResearch: false }); // research triggered explicitly above via RESEARCH_COMPANY
 });

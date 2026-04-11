@@ -129,7 +129,6 @@ All communication uses `chrome.runtime.sendMessage`. The service worker (`backgr
 |------|---------|
 | `QUICK_LOOKUP` | Fast enrichment (employees, funding, industry) |
 | `RESEARCH_COMPANY` | Full research pipeline (Apollo → Serper → Claude synthesis) |
-| `ANALYZE_JOB` | Score job match 1-10 with fit analysis |
 | `CHAT_MESSAGE` | Company-scoped AI chat with full context |
 | `GLOBAL_CHAT_MESSAGE` | Pipeline-wide AI chat (saved.js "Pipeline Advisor") |
 | `GMAIL_FETCH_EMAILS` | Fetch email threads by company domain |
@@ -137,7 +136,7 @@ All communication uses `chrome.runtime.sendMessage`. The service worker (`backgr
 | `GRANOLA_SEARCH` | Search Granola meeting notes by company/contact |
 | `GET_COMPANY` | Content script → detect company from current page DOM |
 | `GET_JOB_DESCRIPTION` | Content script → extract job posting text |
-| `QUICK_FIT_SCORE` | Unified scoring — flags, qualifications, role brief, conversation insights |
+| `QUICK_FIT_SCORE` | Unified scoring — flags, qualifications, role brief, job snapshot, conversation insights |
 | `EXTRACT_NEXT_STEPS` | AI-generated next steps from meeting data |
 
 ### Research pipeline

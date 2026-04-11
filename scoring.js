@@ -360,6 +360,16 @@ Return ONLY valid JSON (no markdown fences):
     "compSummary": "<compensation summary from posting and/or conversations, or 'Not disclosed'>",
     "qualificationMatch": "<X of Y requirements met>"
   },
+  "jobSnapshot": {
+    "salary": "<base salary range as written in the posting, e.g. '$125,000' or '$133,500 - $200,500' — null if not mentioned>",
+    "salaryType": "<'base' if base pay, 'ote' if OTE/total comp only, null if no salary>",
+    "baseSalaryRange": "<base salary range ONLY if explicitly stated as base, e.g. '$130,000 - $160,000' — null if not separated from OTE>",
+    "oteTotalComp": "<OTE or total comp if stated, e.g. '$200,000 - $250,000 OTE' — null if not mentioned>",
+    "equity": "<equity/stock info if mentioned — null if not>",
+    "workArrangement": "<Remote/Hybrid/On-site or null>",
+    "location": "<city/state if hybrid or on-site, null if remote>",
+    "employmentType": "<Full-time/Part-time/Contract or null>"
+  },
   "hardDQ": {"flagged": false, "reasons": []}${hasInteractionContext ? ',\n  "conversationInsights": "<2-4 sentence analysis of what emails/meetings reveal — cite specifics>"' : ''}
 }`;
 
@@ -523,6 +533,9 @@ Return ONLY valid JSON (no markdown fences):
   delete jobMatch.strongFits;
   delete jobMatch.redFlags;
 
+  // Extract jobSnapshot from AI response (structured posting metadata)
+  const jobSnapshot = parsed.jobSnapshot || null;
+
   // Persist to storage
   const updateData = await new Promise(resolve =>
     chrome.storage.local.get(['savedCompanies'], resolve)
@@ -531,6 +544,20 @@ Return ONLY valid JSON (no markdown fences):
   const updateIdx = updateEntries.findIndex(e => e.id === entryId);
   if (updateIdx !== -1) {
     updateEntries[updateIdx].jobMatch = jobMatch;
+    if (jobSnapshot) {
+      updateEntries[updateIdx].jobSnapshot = jobSnapshot;
+      // Auto-extract comp fields to top-level entry (if not already set)
+      const s = jobSnapshot;
+      if (!updateEntries[updateIdx].baseSalaryRange && (s.baseSalaryRange || (s.salaryType === 'base' && s.salary))) {
+        updateEntries[updateIdx].baseSalaryRange = s.baseSalaryRange || s.salary;
+        updateEntries[updateIdx].compSource = updateEntries[updateIdx].compSource || 'Job posting';
+        updateEntries[updateIdx].compAutoExtracted = true;
+      }
+      if (!updateEntries[updateIdx].oteTotalComp && (s.oteTotalComp || (s.salaryType === 'ote' && s.salary))) {
+        updateEntries[updateIdx].oteTotalComp = s.oteTotalComp || s.salary;
+      }
+      if (!updateEntries[updateIdx].equity && s.equity) updateEntries[updateIdx].equity = s.equity;
+    }
     // Backward-compat surface fields (Kanban cards, sidepanel score pills)
     updateEntries[updateIdx].quickFitScore = overall;
     updateEntries[updateIdx].quickFitReason = parsed.coopTake || '';
@@ -553,10 +580,11 @@ Return ONLY valid JSON (no markdown fences):
     quickFitReason: parsed.coopTake || '',
     quickTake: parsed.quickTake || [],
     hardDQ,
+    jobSnapshot,
     scoredAt: Date.now(),
   }).catch(() => {});
 
-  return { quickFitScore: overall, quickFitReason: parsed.coopTake || '', quickTake: parsed.quickTake || [], hardDQ };
+  return { quickFitScore: overall, quickFitReason: parsed.coopTake || '', quickTake: parsed.quickTake || [], hardDQ, jobSnapshot };
 }
 
 export async function processQueue() {
@@ -639,194 +667,6 @@ export function computeStructuralMatches(entry, prefs) {
   return result;
 }
 
-// ── Analyze Job (full scoring) ──────────────────────────────────────────────
-
-export async function analyzeJob(company, jobTitle, jobDescription, prefs, richContext) {
-  if (!prefs) return null;
-  const hasJobPrefs = prefs.jobMatchEnabled || prefs.jobMatchBackground || prefs.roles ||
-    prefs.avoid || prefs.workArrangement?.length > 0 || prefs.salaryFloor || prefs.salaryStrong ||
-    prefs.resumeText;
-  if (!hasJobPrefs) return null;
-
-  const locationContext = prefs.workArrangement?.length ? prefs.workArrangement.join(', ') : null;
-
-  const salaryFloor = prefs.salaryFloor || prefs.minSalary || null;
-  const salaryStrong = prefs.salaryStrong || null;
-
-  // Load structured dealbreakers for red flag validation (same as quickFit)
-  const dealbreakersData = await new Promise(resolve =>
-    chrome.storage.local.get(['profileDealbreakers'], resolve)
-  );
-  const analyzeJobDealbreakers = dealbreakersData.profileDealbreakers || [];
-
-  // Build rich context section from available data
-  const rc = richContext || {};
-  let richSection = '';
-  if (rc.intelligence) richSection += `\nCompany Intelligence: ${rc.intelligence}\n`;
-  if (rc.reviews?.length) richSection += `\nEmployee Reviews:\n${rc.reviews.slice(0, 4).map(r => `- ${r.rating ? r.rating + '★ ' : ''}"${r.snippet}" (${r.source || ''})`).join('\n')}\n`;
-  if (rc.emails?.length) richSection += `\nRecent Email Context (${rc.emails.length} emails):\n${rc.emails.slice(0, 5).map(e => `- [${e.date}] "${e.subject}" from ${e.from}`).join('\n')}\n`;
-  if (rc.meetings?.length) richSection += `\nMeeting Context (${rc.meetings.length} meetings):\n${rc.meetings.slice(0, 3).map(m => `- ${m.title || 'Meeting'} (${m.date || ''}) — ${(m.transcript || '').slice(0, 500)}`).join('\n')}\n`;
-  if (rc.transcript) richSection += `\nMeeting Transcript (summary):\n${rc.transcript.slice(0, 1500)}\n`;
-  if (rc.storyTime) richSection += `\nUser Background (for QUALIFICATION assessment only — do NOT use this to generate red flags; red flags come only from the structured 'Red flags' list in Candidate Preferences):\n${rc.storyTime.slice(0, 3000)}\n`;
-  // For high-stakes scoring, also include raw Story Time if available and different from summary
-  if (rc.storyTimeRaw && rc.storyTimeRaw !== rc.storyTime) {
-    richSection += `\nDetailed Background (for QUALIFICATION assessment only — do NOT use this to generate red flags):\n${rc.storyTimeRaw.slice(0, 4000)}\n`;
-  }
-  if (rc.notes) richSection += `\nUser Notes on This Company:\n${rc.notes}\n`;
-  if (rc.knownComp) richSection += `\n${rc.knownComp}\n`;
-  if (rc.contextDocuments?.length) {
-    richSection += `\nUploaded Documents:\n${rc.contextDocuments.map(d =>
-      `--- ${d.filename} ---\n${d.extractedText.slice(0, 1500)}`
-    ).join('\n\n')}\n`;
-  }
-  if (rc.candidateProfile) richSection += `\nCandidate Career OS Profile:${rc.candidateProfile}\n`;
-  if (rc.matchFeedback) richSection += `\nPrevious assessment feedback: ${rc.matchFeedback}\n`;
-  if (rc.dismissedFlags?.length) {
-    const withReasons = rc.dismissedFlagsWithReasons || [];
-    const lines = rc.dismissedFlags.map(f => {
-      const r = withReasons.find(x => x.flag === f);
-      return r?.reason ? `- "${f}" — USER SAYS: ${r.reason}` : `- "${f}"`;
-    });
-    richSection += `\nUser dismissed these flags as wrong/overblown (do NOT repeat them, and learn from the reasons given):\n${lines.join('\n')}\n`;
-  }
-
-  const prompt = `Analyze this job posting for a job seeker. Return ONLY a JSON object, no markdown.
-${coopInterp.principlesBlock()}
-
-Company: ${company}
-Job Title: ${jobTitle}
-${jobDescription
-  ? `Job Description:\n${jobDescription}`
-  : `(Full description unavailable — analyze from job title and company context only.)`}
-${richSection}
-${prefs.resumeText ? `Candidate Resume / LinkedIn Profile:\n${prefs.resumeText}\n` : ''}
-User Profile:
-- Additional background notes: ${prefs.jobMatchBackground || 'none'}
-- Target roles: ${prefs.roles || 'not specified'}
-- Things to avoid: ${prefs.avoid || 'not specified'}
-- Actual location: ${prefs.userLocation || 'not specified'}
-- Work arrangement preference: ${locationContext || 'not specified'}
-- Max travel willing to do: ${prefs.maxTravel || 'not specified'}
-- BASE salary floor: ${salaryFloor || 'not set'}
-- BASE salary strong: ${salaryStrong || 'not set'}
-- OTE floor: ${prefs.oteFloor || 'not set'}
-- OTE strong: ${prefs.oteStrong || 'not set'}
-${prefs.roleLoved ? `- A role they loved: ${prefs.roleLoved}` : ''}
-${prefs.roleHated ? `- A role that was a bad fit: ${prefs.roleHated}` : ''}
-
-Analysis rules:
-1. Work arrangement: compare the candidate's stated preference against the job's arrangement. Note any mismatch as a factor in the score. Weight it according to the candidate's operating principles — do not auto-cap or auto-DQ on this dimension unless their dealbreakers explicitly mark it as hard.
-2. RED FLAG SOURCES — STRICT. You may ONLY put something in redFlags if it meets one of these two criteria:
-  A) A configured "Red lights / dealbreakers" entry from the candidate profile is triggered by explicit, present evidence in the posting. Each red flag MUST populate the "configuredEntry" field with the exact text of the dealbreaker that fired, AND the "evidence" field with a verbatim quote from the source.
-  B) Compensation is explicitly stated AND the disclosed number is below the candidate's BASE FLOOR or OTE FLOOR. "Strong" thresholds are aspirations, NOT floors — being below the "strong" number is NEVER a red flag. For ranges, only flag if the TOP is below the FLOOR. Undisclosed OTE → neutral, not a flag.
-  NEVER flag: unmet green flags / Attracted To items (unmet desired qualities lower preference score only), missing information (OTE not disclosed, equity not mentioned, travel not mentioned), speculation ("likely below", "silence suggests"), role type concerns not in the configured dealbreaker list, ICP mismatches not in dealbreakers, ROLE SCOPE concerns (lacks P&L ownership, too junior, not strategic enough) unless explicitly in the dealbreaker list, LOCATION concerns based on company HQ or office locations — the job's work arrangement and location come ONLY from the job posting's stated fields, never from company research. Empty redFlags is expected and correct when no configured dealbreaker fires.
-3. Only flag things explicitly stated or directly evidenced in the posting. Do NOT flag the absence of information.
-4. Travel: if the posting explicitly mentions travel requirements, compare against max travel preference and flag only if it clearly exceeds it.
-5. Bridge the language gap: the user describes themselves in personal terms; job postings use corporate language. Map them — e.g. "I love autonomy and building from scratch" → look for early-stage, greenfield, founder-led signals. "Manage and grow existing accounts" → retention focus, not new business ownership.
-6. Read between the lines on culture, scope, and autonomy — but only from what the posting actually implies, not from what it omits.
-7. Use loved/hated role examples as calibration for concrete signals you find in the posting.
-8. Salary: extract the BASE salary or base salary range if stated anywhere in the posting (including legal/compliance disclosure sections at the bottom). If multiple figures are given (e.g., base + OTE/commission), extract the base salary only and set salaryType to "base". If only total/OTE compensation is mentioned, extract that and set salaryType to "ote". If no number is mentioned anywhere, use null for both.
-9. Do NOT flag missing salary information as a red flag or mention it in redFlags at all. Compensation not disclosed is NEVER a negative signal — it is simply unknown and not a factor. Do not speculate that undisclosed comp is "likely below" any threshold. Never write "OTE likely below X" or "compensation likely insufficient" — if it's not disclosed, it's neutral, full stop.
-10. Compensation evaluation — compare disclosed pay against the candidate's thresholds:
-  - If BASE salary is a single number and is below the candidate's BASE floor → MAJOR red flag with specific numbers (e.g., "Base $80K is below your $150K base floor"). Drop score by 2+ points.
-  - If BASE salary is a RANGE (e.g., $96K–$120K): only flag if the TOP of the range is below the floor. If the range straddles the floor (low end is under, high end is at or above), this is NOT a red flag — the role may pay within acceptable range. Do not flag based on the low end of a range alone.
-  - If only OTE/total comp is disclosed as a specific number and is below the candidate's OTE floor → red flag. If OTE is undisclosed, do NOT speculate — treat as neutral.
-  - If OTE is disclosed but no base is separated, do NOT compare OTE against the BASE floor — they are different numbers. A $200K OTE does not mean $200K base.
-  - Clearly label extracted compensation as "Base" or "OTE" in the jobSnapshot fields. Never leave ambiguous.
-11. OTE (On-Target Earnings) ranges without explicit base salary separation are COMPLETELY NORMAL for sales roles — do NOT flag this as a red flag. "Wide OTE range" is not a red flag. "Base not separated from OTE" is not a red flag. Only flag compensation as a red flag if the OTE or base is clearly below the candidate's salary floor.
-12. Do NOT flag missing travel information as a red flag. Most job postings don't mention travel requirements — this is normal and not a negative signal. Only flag travel as a red flag if travel is explicitly required AND it exceeds the user's max travel preference.
-13. For workArrangement in jobSnapshot: if the LinkedIn posting explicitly says "Remote" in its chips/tags, set workArrangement to "Remote" even if the job description mentions a specific geography or territory (e.g., "Southeast region"). Territory assignments do NOT mean on-site — they define sales coverage area, not work location.
-
-Quick Take: Include 2-4 of the most decisive signals as quickTake bullets (green for strong fits, red for dealbreakers). Lead with the single most important signal. Keep each to 8-15 words max.
-
-Hard DQ: Set hardDQ.flagged to true ONLY when a dealbreaker the candidate has EXPLICITLY marked as hard/severity-5 in their structured dealbreakers list is clearly triggered. Do not invent hard DQs from floors or work-arrangement mismatches unless the candidate marked them hard. When in doubt, set false.
-
-{
-  "jobMatch": {
-    "jobSummary": "<2-3 sentences on core responsibilities and what success looks like in this role>",
-    "score": <1-10 fit score using these anchors (do NOT default to 5-6 as a safe middle): 10=exceptional both axes, 9=strong both ways minor gaps, 8=solid fit worth pursuing, 7=genuinely viable with some mismatches (most "above-average" opportunities land here), 6=mixed but legitimate with caveats, 5=borderline positives and negatives cancel out, 4=more negatives than positives, 1-3=poor fit. If the candidate is qualified AND the role lines up with their preferences, the score should be 7+. Reserve 6 and below for real, identifiable gaps. Still weight qualification heavily — a severely underqualified candidate (qualificationScore 3-4) caps overall around 4-5 regardless of preference match.>,
-    "verdict": "<one direct, honest sentence — should they apply and why. If they're underqualified, say so clearly.>",
-    "strongFits": [{"text": "<concrete signal, 8-14 words>", "source": "<job_posting | company_data | preferences | candidate_profile>", "evidence": "<short verbatim quote or phrase from the source — REQUIRED>", "configuredEntry": "<exact text of the configured 'Attracted To' entry this matched, or null if from job posting/company data>"}],
-    "redFlags": [{"text": "<concrete signal, 8-14 words>", "source": "<job_posting | company_data | preferences | dealbreaker_keyword>", "evidence": "<short verbatim quote or phrase from the source proving this concern — REQUIRED. If you cannot quote evidence, do NOT include this red flag>", "configuredEntry": "<exact text of the configured Red flags/dealbreaker entry that triggered this — REQUIRED for every red flag. This is how the user verifies which of their configured rules fired.>"}],
-    "quickTake": [{"type": "green or red", "text": "8-15 word bullet summarizing a key signal"}],
-    "hardDQ": {"flagged": true/false, "reasons": ["short reason string"]}
-  },
-  "jobSnapshot": {
-    "salary": "<base salary range as written in the posting, e.g. '$125,000' or '$133,500 - $200,500' — null only if truly not mentioned>",
-    "salaryType": "<'base' if this is base pay, 'ote' if this is OTE/total comp only, null if no salary>",
-    "baseSalaryRange": "<base salary range ONLY if explicitly stated as base/salary, e.g. '$130,000 - $160,000' — null if not separated from OTE>",
-    "oteTotalComp": "<OTE or total compensation if stated, e.g. '$200,000 - $250,000 OTE' — null if not mentioned>",
-    "equity": "<equity/stock info if mentioned, e.g. '0.05% - 0.10%' or '$50K RSUs over 4 years' — null if not mentioned>",
-    "workArrangement": "<Remote/Hybrid/On-site or null>",
-    "location": "<city/state if hybrid or on-site, null if remote>",
-    "employmentType": "<Full-time/Part-time/Contract or null>"
-  }
-}`;
-
-  try {
-    const aiResult = await aiCall('jobMatchScoring', {
-      system: 'You are a JSON-only analyst. Respond with valid JSON only.',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1100
-    });
-    // ── Shared red flag validator ──
-    const validateRedFlagsOn = (jm) => {
-      if (!jm || !Array.isArray(jm.redFlags)) return;
-      const configuredTexts = analyzeJobDealbreakers.map(d => (d.text || '').toLowerCase().trim()).filter(Boolean);
-      const baseFloorNum = Number(String(salaryFloor || '').replace(/[^0-9]/g, '')) || null;
-      const oteFloorNum = Number(String(prefs.oteFloor || '').replace(/[^0-9]/g, '')) || null;
-      const before = jm.redFlags.length;
-      const dropped = [];
-      jm.redFlags = jm.redFlags.map(f => typeof f === 'string'
-        ? { text: f, source: null, evidence: null, configuredEntry: null }
-        : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null, configuredEntry: f?.configuredEntry || null }
-      ).filter(f => {
-        if (!f.text) return false;
-        const entry = (f.configuredEntry || '').toLowerCase().trim();
-        if (entry && configuredTexts.some(t => t.includes(entry) || entry.includes(t))) return true;
-        const textLower = (f.text || '').toLowerCase();
-        const evidenceLower = (f.evidence || '').toLowerCase();
-        const looksLikeComp = /salary|comp|base pay|ote|\$\d/.test(textLower);
-        if (looksLikeComp && (baseFloorNum || oteFloorNum)) {
-          const mentionsStrong = /strong|target|aspiration|preferred\s+(range|base)/.test(textLower);
-          if (mentionsStrong) { dropped.push({ reason: 'comp-below-strong-not-floor', flag: f }); return false; }
-          const numsInEvidence = (evidenceLower.match(/\$?([\d,]+)k?/g) || []).map(s => parseInt(s.replace(/[^0-9]/g, ''), 10)).filter(n => n >= 10);
-          if (numsInEvidence.length > 0 && f.evidence) return true;
-          dropped.push({ reason: 'comp-no-concrete-evidence', flag: f });
-          return false;
-        }
-        dropped.push({ reason: 'no-configured-entry-match', flag: f });
-        return false;
-      });
-      if (dropped.length) {
-        console.warn(`[AnalyzeJob] Dropped ${dropped.length} of ${before} red flags (no configured source):`, dropped.map(d => `[${d.reason}] ${d.flag.text}`));
-      }
-    };
-
-    if (!aiResult.ok) {
-      // Fallback through all models
-      const fallback = await chatWithFallback({
-        model: getModelForTask('jobMatchScoring'), system: 'You are a JSON-only analyst. Respond with valid JSON only.',
-        messages: [{ role: 'user', content: prompt }], max_tokens: 1100, tag: 'AnalyzeJob'
-      });
-      if (!fallback.error) {
-        const fbResult = JSON.parse(fallback.reply.replace(/```json|```/g, '').trim());
-        validateRedFlagsOn(fbResult?.jobMatch);
-        return fbResult;
-      }
-      return null;
-    }
-    const result = JSON.parse(aiResult.text.replace(/```json|```/g, '').trim());
-    validateRedFlagsOn(result?.jobMatch);
-    // Log when Hard DQ contradicts score — but don't force-cap, the DQ might be wrong
-    if (result?.jobMatch?.hardDQ?.flagged && result.jobMatch.score > 4) {
-      console.warn(`[AnalyzeJob] Hard DQ flagged but score is ${result.jobMatch.score} — AI may have misidentified the DQ`);
-    }
-    return result;
-  } catch (err) {
-    return null;
-  }
-}
 
 // ── Dev Mock Scoring (no API call) ───────────────────────────────────────────
 export async function handleDevMockScore(entryId) {

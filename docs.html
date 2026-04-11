@@ -1278,8 +1278,8 @@
       <h3 class="sub">Auto-rescore</h3>
       <p class="body">When enabled, profile changes trigger automatic rescoring. You control which pipeline stages get rescored &mdash; by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on. The toggle and stage selection live in <strong>Data Pipeline &amp; Usage</strong>.</p>
 
-      <h3 class="sub">Two-layer scoring model</h3>
-      <p class="body">Scoring runs in two layers. <strong>Layer 1</strong> runs at save time using the job description and web research. <strong>Layer 2</strong> runs automatically once you have real interaction data &mdash; emails or meeting transcripts &mdash; and layers those signals on top.</p>
+      <h3 class="sub">Unified scoring model</h3>
+      <p class="body">All scoring goes through a <strong>single path</strong> (<code>processQuickFitScore</code> via <code>QUICK_FIT_SCORE</code>). One AI call evaluates the job description, company context, your profile, and any interaction data (emails, meetings, notes) in a single pass. The same call produces the score, role brief, conversation insights, job snapshot (salary, work arrangement, equity), and qualification breakdown. No competing functions, no conflicting writes.</p>
 
       <!-- Two-layer scoring diagram -->
       <div style="margin:20px 0;">
@@ -1360,8 +1360,8 @@
           <li><strong>Scoring runs at save and on stage transitions.</strong> When you move an opportunity to a new pipeline stage, Coop re-scores with all accumulated context. Data from emails and meetings accumulates silently &mdash; the score catches up on the next stage change.</li>
           <li><strong>Manual Rescore always works.</strong> The "Refresh analysis" button fires a rescore using everything available, regardless of stage.</li>
           <li><strong>Rejected entries never auto-rescore.</strong> Moving to rejected skips the rescore trigger.</li>
-          <li><strong>Produces role brief + conversation insights.</strong> The same call that scores also generates a structured role summary and, when interaction data exists, a "From Conversations" narrative citing specifics from emails and meetings.</li>
-          <li><strong>Cost:</strong> ~$0.015&ndash;0.025 per score (one Haiku call). No additional calls for deep fit or role brief summary.</li>
+          <li><strong>Produces role brief + conversation insights + job snapshot.</strong> The same call that scores also generates a structured role summary, extracts structured posting metadata (salary, work arrangement, equity, location), and when interaction data exists, a "From Conversations" narrative citing specifics from emails and meetings.</li>
+          <li><strong>Cost:</strong> ~$0.003&ndash;0.007 per score (one Haiku call). Scout adds ~$0.004 first time if no full research exists (cached indefinitely after).</li>
         </ul>
       </div>
     </div>
