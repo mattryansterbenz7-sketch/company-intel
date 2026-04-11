@@ -53,7 +53,10 @@
       "Bash(qlmanage -t -s 48 -o /tmp icon.svg)",
       "Bash(cp /tmp/icon.svg.png icon48.png)",
       "Bash(xargs -I {} sh -c 'echo {}')",
-      "Bash(sort -k3 -n -r)"
+      "Bash(sort -k3 -n -r)",
+      "Bash(awk 'NR==801,/^[0-9]+:\\\\{.*\"type\":\"user\".*PRD/ {if \\(/^[0-9]+:\\\\{.*\"type\":\"user\".*PRD/ && NR>801\\) exit; print}' /Users/mattsterbenz/.claude/projects/-Users-mattsterbenz-Desktop-Coding-company-intel/1151b891-0f56-4a25-b129-4b775d02f92f.jsonl)",
+      "Bash(awk:*)",
+      "Bash(find:*)"
     ]
   }
 }
