@@ -10,7 +10,7 @@ The scoring system had three independent issues that compounded into one outcome
 
 ### Issue 1: Two scoring paths, incompatible data shapes
 
-Two scoring functions produced different data under different field names. `processQuickFitScore` wrote to `entry.quickFitDimensions` (6 dims); `analyzeJob` wrote to `entry.jobMatch` (flat, no dimension breakdown). The queue UI expected `entry.jobMatch.scoreBreakdown` — a field neither function produced. Result: dimension breakdown bars were always empty after a real score.
+Two scoring functions produced different data under different field names. `scoreOpportunity` wrote to `entry.quickFitDimensions` (6 dims); `analyzeJob` wrote to `entry.jobMatch` (flat, no dimension breakdown). The queue UI expected `entry.jobMatch.scoreBreakdown` — a field neither function produced. Result: dimension breakdown bars were always empty after a real score.
 
 ### Issue 2: Dimension model mismatch
 
@@ -101,7 +101,7 @@ This makes every score explainable: "Role Fit is 7.5 because +1.5 (greenfield ow
 
 ### Storage: single path
 
-After scoring, `processQuickFitScore` writes everything to `entry.jobMatch`:
+After scoring, `scoreOpportunity` writes everything to `entry.jobMatch`:
 
 ```js
 entry.jobMatch = {
@@ -140,17 +140,17 @@ Also stored on the entry: `jobSnapshot` (salary, workArrangement, equity, locati
 
 ### Single scoring function
 
-`analyzeJob` was fully removed. All scoring goes through `processQuickFitScore` via the `QUICK_FIT_SCORE` message. It loads all context directly from the saved entry (JD, firmographics, emails, meetings, notes, contacts) — no separate "quick" vs "full" context modes. One function, one path, no competing writes.
+`analyzeJob` was fully removed. All scoring goes through `scoreOpportunity` via the `SCORE_OPPORTUNITY` message. It loads all context directly from the saved entry (JD, firmographics, emails, meetings, notes, contacts) — no separate "quick" vs "full" context modes. One function, one path, no competing writes.
 
 ---
 
 ## What shipped
 
-1. Deterministic 5-dimension scoring in `processQuickFitScore` — AI returns fired flags + evidence, code computes scores
+1. Deterministic 5-dimension scoring in `scoreOpportunity` — AI returns fired flags + evidence, code computes scores
 2. All results stored on `entry.jobMatch` with `scoreBreakdown`
-3. `analyzeJob` removed entirely — all callers (saved.js rescore, score-match, stage-transition) migrated to `QUICK_FIT_SCORE`
-4. `ANALYZE_JOB` message handler removed from background.js
-5. `jobSnapshot` extraction (salary, arrangement, equity) folded into `processQuickFitScore`
+3. `analyzeJob` removed entirely — all callers (saved.js rescore, score-match, stage-transition) migrated to `SCORE_OPPORTUNITY`
+4. `ANALYZE_JOB (removed)` message handler removed from background.js
+5. `jobSnapshot` extraction (salary, arrangement, equity) folded into `scoreOpportunity`
 6. Comp auto-extraction from jobSnapshot to top-level entry fields
 7. Queue UI reads unified `entry.jobMatch.scoreBreakdown` — breakdown bars, flag drawers, math rows all work
 
@@ -160,10 +160,10 @@ Also stored on the entry: `jobSnapshot` (salary, workArrangement, equity, locati
 
 | File | Changes |
 |------|---------|
-| `scoring.js` | Deterministic scoring in `processQuickFitScore`, `analyzeJob` deleted, jobSnapshot extraction added |
-| `background.js` | `ANALYZE_JOB` handler removed, `analyzeJob` import removed |
-| `saved.js` | All 3 `ANALYZE_JOB` callers migrated to `QUICK_FIT_SCORE`, dead richContext construction removed |
+| `scoring.js` | Deterministic scoring in `scoreOpportunity`, `analyzeJob` deleted, jobSnapshot extraction added |
+| `background.js` | `ANALYZE_JOB (removed)` handler removed, `analyzeJob` import removed |
+| `saved.js` | All 3 `ANALYZE_JOB` callers migrated to `SCORE_OPPORTUNITY`, auto-rescore on stage transitions removed, dead richContext removed |
 | `sidepanel.js` | Dead `triggerJobAnalysis` removed, stale comments updated |
 | `queue.js` | Reads unified `entry.jobMatch.scoreBreakdown` |
 | `docs.html` | Scoring docs updated to reflect unified model |
-| `CLAUDE.md` | `ANALYZE_JOB` removed from IPC table |
+| `CLAUDE.md` | `ANALYZE_JOB (removed)` removed from IPC table |

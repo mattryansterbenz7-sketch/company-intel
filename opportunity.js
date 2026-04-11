@@ -1136,7 +1136,7 @@ document.addEventListener('click', e => {
     const id = rescoreBtn.dataset.entryId;
     rescoreBtn.disabled = true;
     rescoreBtn.textContent = 'Re-scoring…';
-    chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: id }, () => {
+    chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: id }, () => {
       void chrome.runtime.lastError;
       _b1RefreshEntryAndRender();
     });

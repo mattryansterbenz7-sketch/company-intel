@@ -38,7 +38,7 @@ chrome.storage.sync.get(['prefs'], d => { _cachedUserName = (d.prefs && (d.prefs
 
 let entry = null;
 let allCompanies = [];
-// _deepFitInFlight removed — deep fit unified into processQuickFitScore
+// _deepFitInFlight removed — deep fit unified into scoreOpportunity
 let allKnownTags = [];
 let customCompanyStages = [];
 let customOpportunityStages = [];
@@ -516,7 +516,7 @@ function maybeRescore(reason) {
   if (stage === 'rejected') return;
 
   console.log('[Rescore] Triggering unified score for', entry.company, '— reason:', reason);
-  chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+  chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, result => {
     void chrome.runtime.lastError;
     if (result && !result.error) {
       chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
@@ -1940,7 +1940,7 @@ function bindRoleBriefEvents() {
 }
 
 // maybeRefreshDeepFitAnalysis / maybeRunDeepFit — REMOVED
-// Deep fit analysis has been unified into processQuickFitScore (scoring.js).
+// Deep fit analysis has been unified into scoreOpportunity (scoring.js).
 // Emails, meetings, transcripts, and notes are now included in the single scoring call.
 // Rescoring happens on stage transitions and manual Rescore — not on data arrival.
 
@@ -2169,7 +2169,7 @@ function bindHubTabs() {
       overlay.innerHTML = coopThinkingHTML('Coop is scoring...', 'Analyzing job fit & qualifications');
       fitBlock.appendChild(overlay);
     }
-    chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+    chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, result => {
       void chrome.runtime.lastError;
       document.getElementById('coop-thinking-fit')?.remove();
       if (result && !result.error) {

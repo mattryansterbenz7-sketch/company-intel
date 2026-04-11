@@ -532,7 +532,7 @@ function mergeAndSave(prev, existing, dupIdx) {
     showCrmLink(merged);
     // Auto-queue scoring for job saves
     if (merged.isOpportunity) {
-      chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: merged.id });
+      chrome.runtime.sendMessage({ type: 'QUEUE_SCORE', entryId: merged.id });
     }
   });
 }
@@ -591,7 +591,7 @@ function enrichExistingOpportunity(prev, existing, dupIdx) {
     showToast(`Updated existing opportunity at ${prev.company} with new details.`);
     showCrmLink(enriched);
     // Auto-queue scoring
-    chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: enriched.id });
+    chrome.runtime.sendMessage({ type: 'QUEUE_SCORE', entryId: enriched.id });
   });
 }
 
@@ -2588,7 +2588,7 @@ function renderJobSnapshot(snap) {
   inlineEl.innerHTML = bits.join('');
 }
 
-// triggerJobAnalysis removed — all scoring now goes through QUICK_FIT_SCORE (processQuickFitScore)
+// triggerJobAnalysis removed — all scoring now goes through SCORE_OPPORTUNITY (scoreOpportunity)
 
 function renderJobOpportunity(jobMatch, jobSnapshot) {
   const jobOpportunityEl = document.getElementById('job-opportunity');
@@ -3140,7 +3140,7 @@ function renderResults(data) {
     }
   }
 
-  // Job snapshot badges — use DOM meta (jobSnapshot comes via QUICK_FIT_SCORE)
+  // Job snapshot badges — use DOM meta (jobSnapshot comes via SCORE_OPPORTUNITY)
   renderJobSnapshot(currentJobMeta || null);
 
   // Company favicon
@@ -3185,7 +3185,7 @@ function renderResults(data) {
 
   // scoreToVerdict — provided by ui-utils.js
 
-  // Company fit intentionally omitted — only job-level fit (via QUICK_FIT_SCORE) is shown
+  // Company fit intentionally omitted — only job-level fit (via SCORE_OPPORTUNITY) is shown
 
   // Job opportunity rendered independently by triggerJobAnalysis/renderJobOpportunity
 
@@ -5317,9 +5317,9 @@ function updateSessionFeedScore(entryId, score, reason) {
   }
 }
 
-// Listen for QUICK_FIT_COMPLETE messages
+// Listen for SCORE_COMPLETE messages
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === 'QUICK_FIT_COMPLETE' && message.entryId) {
+  if (message.type === 'SCORE_COMPLETE' && message.entryId) {
     updateSessionFeedScore(message.entryId, message.score, message.reason);
   }
 });
@@ -5417,7 +5417,7 @@ document.getElementById('save-research-btn')?.addEventListener('click', function
 
         // Re-score via the deterministic scorer now that research data is available
         if (entry.id) {
-          chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
+          chrome.runtime.sendMessage({ type: 'QUEUE_SCORE', entryId: entry.id });
         }
       }
     );

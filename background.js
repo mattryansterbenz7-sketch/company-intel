@@ -7,7 +7,7 @@ import { gmailAuth, gmailRevoke, fetchGmailEmails, detectRejectionEmailBg } from
 import { fetchCalendarEvents } from './calendar.js';
 import { buildGranolaIndex, searchGranolaNotes } from './granola.js';
 import { researchCompany, quickLookup } from './research.js';
-import { interpretProfileSection, processQuickFitScore, processQueue, computeStructuralMatches, handleDevMockScore } from './scoring.js';
+import { interpretProfileSection, scoreOpportunity, processQueue, computeStructuralMatches, handleDevMockScore } from './scoring.js';
 import { consolidateProfile } from './memory.js';
 import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
@@ -143,32 +143,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
     state._apolloExhausted = false;
     state._serperExhausted = false;
   }
-
-  // Auto-rescore active opportunities when Career OS profile changes
-  const profileKeys = ['profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'];
-  const changedProfileKeys = profileKeys.filter(k => changes[k]);
-  if (area === 'local' && changedProfileKeys.length && state.coopConfig.automations?.autoRescore !== false) {
-    const rescoreStages = state.coopConfig.rescoreStages || ['needs_review', 'want_to_apply'];
-    console.log('[AutoRescore] Profile changed:', changedProfileKeys, '— rescoring stages:', rescoreStages);
-    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-      const active = (savedCompanies || []).filter(c =>
-        c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
-      );
-      if (!active.length) return;
-      console.log(`[AutoRescore] Rescoring ${active.length} active opportunities`);
-      let i = 0;
-      const processBatch = () => {
-        const batch = active.slice(i, i + 2);
-        if (!batch.length) return;
-        batch.forEach(entry => {
-          chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
-        });
-        i += 2;
-        if (i < active.length) setTimeout(processBatch, 2000);
-      };
-      processBatch();
-    });
-  }
 });
 
 // Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
@@ -191,34 +165,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes.prefs) {
     const p = changes.prefs.newValue || {};
     state.cachedUserName = p.name || p.fullName || '';
-  }
-  // Auto-rescore active opportunities when salary/work prefs change
-  if (area === 'sync' && changes.prefs && state.coopConfig.automations?.autoRescore !== false) {
-    const oldPrefs = changes.prefs.oldValue || {};
-    const newPrefs = changes.prefs.newValue || {};
-    const salaryChanged = oldPrefs.salaryFloor !== newPrefs.salaryFloor || oldPrefs.salaryStrong !== newPrefs.salaryStrong ||
-      oldPrefs.oteFloor !== newPrefs.oteFloor || oldPrefs.oteStrong !== newPrefs.oteStrong;
-    const workChanged = JSON.stringify(oldPrefs.workArrangement) !== JSON.stringify(newPrefs.workArrangement);
-    if (salaryChanged || workChanged) {
-      const rescoreStages = state.coopConfig.rescoreStages || ['needs_review', 'want_to_apply'];
-      console.log('[AutoRescore] Salary/work prefs changed — rescoring stages:', rescoreStages);
-      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-        const active = (savedCompanies || []).filter(c =>
-          c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
-        );
-        let i = 0;
-        const processBatch = () => {
-          const batch = active.slice(i, i + 2);
-          if (!batch.length) return;
-          batch.forEach(entry => {
-            chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
-          });
-          i += 2;
-          if (i < active.length) setTimeout(processBatch, 2000);
-        };
-        processBatch();
-      });
-    }
   }
 });
 
@@ -456,7 +402,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     generateRoleBrief(message).then(sendResponse);
     return true;
   }
-  // DEEP_FIT_ANALYSIS removed — unified into processQuickFitScore (scoring.js)
+  // DEEP_FIT_ANALYSIS removed — unified into scoreOpportunity (scoring.js)
   if (message.type === 'EXTRACT_NEXT_STEPS') {
     extractNextSteps(message.notes, message.calendarEvents, message.transcripts, message.emailContext).then(sendResponse);
     return true;
@@ -557,14 +503,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // ── Quick Fit Scoring Handlers ──────────────────────────────────────────────
-  if (message.type === 'QUICK_FIT_SCORE') {
-    processQuickFitScore(message.entryId).then(sendResponse).catch(err => {
-      console.error('[QuickFit] QUICK_FIT_SCORE error:', err.message);
+  if (message.type === 'SCORE_OPPORTUNITY') {
+    scoreOpportunity(message.entryId).then(sendResponse).catch(err => {
+      console.error('[QuickFit] SCORE_OPPORTUNITY error:', err.message);
       sendResponse({ error: err.message });
     });
     return true;
   }
-  if (message.type === 'QUEUE_QUICK_FIT') {
+  if (message.type === 'QUEUE_SCORE') {
     state._scoringQueue.push(message.entryId);
     if (QUEUE_AUTO_PROCESS) processQueue();
     sendResponse({ queued: true });

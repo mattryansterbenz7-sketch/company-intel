@@ -224,10 +224,10 @@ Then write the full role brief below.`;
 }
 
 // ── Deep Fit Analysis — REMOVED ──────────────────────────────────────────────
-// deepFitAnalysis() has been unified into processQuickFitScore() in scoring.js.
+// deepFitAnalysis() has been unified into scoreOpportunity() in scoring.js.
 // Scoring now includes emails, meetings, transcripts, and notes in a single call,
 // producing conversationInsights (replaces the deep fit narrative) alongside the
-// deterministic score. See scoring.js processQuickFitScore() for the unified path.
+// deterministic score. See scoring.js scoreOpportunity() for the unified path.
 
 // ── Next Step Extraction ─────────────────────────────────────────────────────
 

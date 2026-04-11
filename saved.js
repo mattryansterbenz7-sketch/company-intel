@@ -840,12 +840,12 @@ function openScoreModal(entry) {
     console.log('[Scorecard] Re-scoring', freshEntry.company, freshEntry.jobTitle);
 
     chrome.runtime.sendMessage(
-      { type: 'QUICK_FIT_SCORE', entryId: freshEntry.id },
+      { type: 'SCORE_OPPORTUNITY', entryId: freshEntry.id },
       result => {
         void chrome.runtime.lastError;
         console.log('[Scorecard] Re-score result:', result);
         if (result?.quickFitScore != null) {
-          // processQuickFitScore persists + broadcasts — reload from storage for fresh state
+          // scoreOpportunity persists + broadcasts — reload from storage for fresh state
           chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
             allCompanies = savedCompanies || allCompanies;
             render();
@@ -1515,10 +1515,6 @@ function render() {
       };
       applyAutoStage(entry, sel.value, changes);
       updateCompany(sel.dataset.id, changes);
-      // Auto-rescore on stage transition — unified scoring picks up all accumulated context
-      if (entry?.isOpportunity && sel.value !== 'rejected') {
-        chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: sel.dataset.id }, () => void chrome.runtime.lastError);
-      }
     });
   });
 
@@ -2363,7 +2359,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 let _scoreRenderTimer = null;
 let _scoreRenderHits = 0;
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === 'QUICK_FIT_COMPLETE' && msg.companyId) {
+  if (msg.type === 'SCORE_COMPLETE' && msg.companyId) {
     const idx = allCompanies.findIndex(c => c.id === msg.companyId);
     if (idx !== -1) {
       const updates = {};
@@ -2376,7 +2372,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       _scoreRenderHits++;
       clearTimeout(_scoreRenderTimer);
       _scoreRenderTimer = setTimeout(() => {
-        console.log('[debounce:score] render() fired after', _scoreRenderHits, 'coalesced QUICK_FIT_COMPLETE(s)');
+        console.log('[debounce:score] render() fired after', _scoreRenderHits, 'coalesced SCORE_COMPLETE(s)');
         _scoreRenderHits = 0;
         render();
       }, 300);
@@ -2747,10 +2743,6 @@ function bindKanbanEvents(board) {
       applyAutoStage(entry, newStatus, changes);
       if (newStatus === 'applied' && !entry.appliedDate) changes.appliedDate = Date.now();
       updateCompany(draggingId, changes);
-      // Auto-rescore on stage transition
-      if (entry.isOpportunity && newStatus !== 'rejected') {
-        chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: draggingId }, () => void chrome.runtime.lastError);
-      }
       if (activePipeline !== 'company') {
         const confettiConfig = getConfettiConfig(newStatus);
         if (confettiConfig) {
@@ -2803,11 +2795,11 @@ function bindKanbanEvents(board) {
       btn.disabled = true;
       btn.textContent = 'Scoring\u2026';
       chrome.runtime.sendMessage(
-        { type: 'QUICK_FIT_SCORE', entryId: id },
+        { type: 'SCORE_OPPORTUNITY', entryId: id },
         result => {
           void chrome.runtime.lastError;
           if (result?.error) { btn.disabled = false; btn.textContent = 'Score match'; return; }
-          // processQuickFitScore persists + broadcasts QUICK_FIT_COMPLETE → listener handles render
+          // scoreOpportunity persists + broadcasts SCORE_COMPLETE → listener handles render
         }
       );
     });
@@ -2903,7 +2895,7 @@ function bindKanbanEvents(board) {
         });
         await Promise.all(batch.map(entry =>
           new Promise(resolve => {
-            chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
+            chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, result => {
               void chrome.runtime.lastError;
               const cardEl = document.getElementById('kcard-' + entry.id) || document.querySelector(`.compact-card[data-id="${entry.id}"]`);
               if (result && !result.error) {
@@ -3042,18 +3034,6 @@ function bindKanbanEvents(board) {
       if (nextStage === 'applied') changes.appliedDate = now;
       applyAutoStage(entry, nextStage, changes);
       updateCompany(id, changes);
-      // Trigger RESEARCH_COMPANY if no intelligence data
-      if (!entry.intelligence) {
-        chrome.runtime.sendMessage({ type: 'RESEARCH_COMPANY', companyId: id, company: entry.company, website: entry.companyWebsite || '' }, () => void chrome.runtime.lastError);
-      }
-      // Re-score on stage transition — processQuickFitScore loads all context from the entry
-      if (entry.jobDescription) {
-        chrome.runtime.sendMessage(
-          { type: 'QUICK_FIT_SCORE', entryId: id },
-          result => { void chrome.runtime.lastError; }
-          // processQuickFitScore persists + broadcasts QUICK_FIT_COMPLETE → listener handles render
-        );
-      }
     });
   });
 

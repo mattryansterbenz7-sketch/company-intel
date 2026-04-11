@@ -132,7 +132,7 @@ const BASELINE = 5.0;
 const BASE_COMP_MAP = { above_strong: 2.5, above_floor: 1.5, at_floor: 0, below_floor: -2.5, unknown: 0 };
 const OTE_COMP_MAP = { above_strong: 2.0, above_floor: 1.0, at_floor: 0, below_floor: -2.0, unknown: 0 };
 
-export async function processQuickFitScore(entryId) {
+export async function scoreOpportunity(entryId) {
   // Load entry from storage
   const { savedCompanies } = await new Promise(resolve =>
     chrome.storage.local.get(['savedCompanies'], resolve)
@@ -314,7 +314,7 @@ ${flagsRef}
 
 YOUR TASK:
 1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting, company data, or interaction context. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. No evidence either way = does not fire. Return only flags that fire.
-2. QUALIFICATIONS: Extract 3-8 key requirements from the job description. For each, assess against the candidate: met, partial, unmet, or unknown.
+2. QUALIFICATIONS: Extract all key requirements from the job description. For each, assess against the candidate: met, partial, unmet, or unknown.
 3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
 5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text.
@@ -572,7 +572,7 @@ Return ONLY valid JSON (no markdown fences):
 
   // Broadcast — field aliases for saved.js listener (expects companyId, score, scoredAt)
   chrome.runtime.sendMessage({
-    type: 'QUICK_FIT_COMPLETE',
+    type: 'SCORE_COMPLETE',
     entryId,
     companyId: entryId,
     score: overall,
@@ -601,13 +601,13 @@ export async function processQueue() {
         console.log('[QuickFit] Skipping rejected entry:', checkEntry.company);
         continue;
       }
-      await processQuickFitScore(entryId);
+      await scoreOpportunity(entryId);
     } catch (err) {
       console.error('[QuickFit] Error scoring', entryId, err.message);
       // Retry once after 5 seconds
       await new Promise(r => setTimeout(r, 5000));
       try {
-        await processQuickFitScore(entryId);
+        await scoreOpportunity(entryId);
       } catch (retryErr) {
         console.error('[QuickFit] Retry failed for', entryId);
         // Mark as failed
@@ -626,7 +626,7 @@ export async function processQueue() {
         }
         // Broadcast failure so UI can update
         chrome.runtime.sendMessage({
-          type: 'QUICK_FIT_COMPLETE',
+          type: 'SCORE_COMPLETE',
           entryId,
           companyId: entryId,
           score: null,

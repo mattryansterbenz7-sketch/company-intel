@@ -1275,11 +1275,11 @@
         </ul>
       </div>
 
-      <h3 class="sub">Auto-rescore</h3>
-      <p class="body">When enabled, profile changes trigger automatic rescoring. You control which pipeline stages get rescored &mdash; by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on. The toggle and stage selection live in <strong>Data Pipeline &amp; Usage</strong>.</p>
+      <h3 class="sub">Scoring triggers</h3>
+      <p class="body">Scoring runs <strong>once on save</strong> (automatic) and <strong>on manual re-score</strong> (scorecard button, score match button, or batch re-score). Stage transitions, profile changes, and preference changes do <em>not</em> trigger automatic rescoring &mdash; the score shows when it was last updated so you can decide when a re-score is worth the credits.</p>
 
       <h3 class="sub">Unified scoring model</h3>
-      <p class="body">All scoring goes through a <strong>single path</strong> (<code>processQuickFitScore</code> via <code>QUICK_FIT_SCORE</code>). One AI call evaluates the job description, company context, your profile, and any interaction data (emails, meetings, notes) in a single pass. The same call produces the score, role brief, conversation insights, job snapshot (salary, work arrangement, equity), and qualification breakdown. No competing functions, no conflicting writes.</p>
+      <p class="body">All scoring goes through a <strong>single path</strong> (<code>scoreOpportunity</code> via <code>SCORE_OPPORTUNITY</code>). One AI call evaluates the job description, company context, your profile, and any interaction data (emails, meetings, notes) in a single pass. The same call produces the score, role brief, conversation insights, job snapshot (salary, work arrangement, equity), and qualification breakdown. No competing functions, no conflicting writes.</p>
 
       <!-- Two-layer scoring diagram -->
       <div style="margin:20px 0;">

@@ -122,7 +122,7 @@ linkedinSalaryEstimate string | null   "$120K–$180K/yr (LinkedIn estimated)"
 
 ### Scoring integration
 
-New fields passed into `processQuickFitScore` jobParts:
+New fields passed into `scoreOpportunity` jobParts:
 - Firmographics block: employees, industry, HQ, founded, seniority, job function
 - Skills block: `Required Skills: Salesforce, CRM, B2B SaaS`
 - Posting context: applicant count, reposted flag, posted date

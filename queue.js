@@ -160,7 +160,7 @@ function renderCurrent() {
           btn.textContent = 'Reset ' + count + ' to queue';
           // Trigger scoring for reset entries
           recent.forEach(function(e) {
-            if (!e.jobMatch) chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: e.id });
+            if (!e.jobMatch) chrome.runtime.sendMessage({ type: 'QUEUE_SCORE', entryId: e.id });
           });
           setTimeout(loadQueue, 1000);
         });
@@ -638,7 +638,7 @@ function renderCurrent() {
       shell.appendChild(overlay);
     }
     const startTime = Date.now();
-    chrome.runtime.sendMessage({ type: DEV_MOCK ? 'DEV_MOCK_SCORE' : 'QUICK_FIT_SCORE', entryId: c.id }, (response) => {
+    chrome.runtime.sendMessage({ type: DEV_MOCK ? 'DEV_MOCK_SCORE' : 'SCORE_OPPORTUNITY', entryId: c.id }, (response) => {
       void chrome.runtime.lastError;
       if (response?.error) {
         clearInterval(pollInterval);
@@ -965,10 +965,6 @@ function triageAction(action, fromDrag) {
       companies[idx].actionStatus = 'my_court';
     }
     chrome.storage.local.set({ savedCompanies: companies });
-    // Auto-rescore on stage transition — unified scoring picks up all accumulated context
-    if (newStage !== 'rejected') {
-      chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
-    }
   });
 
   // Next card after animation
@@ -1111,7 +1107,7 @@ renderCurrent = function() {
 
 // Listen for real-time score updates
 chrome.runtime.onMessage?.addListener((msg) => {
-  if (msg.type === 'SCORE_UPDATED' || msg.type === 'QUICK_FIT_DONE' || msg.type === 'QUICK_FIT_COMPLETE') {
+  if (msg.type === 'SCORE_COMPLETE') {
     loadQueue(); // refresh
   }
 });

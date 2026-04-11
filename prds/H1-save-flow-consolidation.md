@@ -89,7 +89,7 @@ saveOpportunityEntry({ company, jobTitle, jobUrl, jobDescription, jobMeta, linke
 2. If duplicate opportunity exists: enrich it with any new fields, return existing entry
 3. Build entry object (single canonical shape, all fields)
 4. Save to `chrome.storage.local` (prepend to `savedCompanies` array)
-5. Queue `QUEUE_QUICK_FIT` for scoring
+5. Queue `QUEUE_SCORE` for scoring
 6. Return entry
 
 **JD defense layers** (from most to least preferred):
@@ -194,7 +194,7 @@ This one-line fix restores JD capture for every "Send to Coop" save from LinkedI
 ## What this does NOT change
 
 - **Research pipeline** — unchanged. "Research" button still independent.
-- **Scoring logic** — unchanged. `processQuickFitScore` still works the same.
+- **Scoring logic** — unchanged. `scoreOpportunity` still works the same.
 - **Data model** — unchanged. Same `savedCompanies` array, same entry shape.
 - **Chat/Coop** — unchanged. Auto-bind behavior stays the same.
 - **Kanban/grid views** — unchanged. Cards still read the same fields.
