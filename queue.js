@@ -31,20 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-function scoreToVerdict(score) {
-  if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
-  if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
-  if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
-  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
-  return              { label: 'Weak match',     cls: 'low' };
-}
+// escHtml, scoreToVerdict — provided by ui-utils.js
 
 // Back button
 document.getElementById('back-btn').addEventListener('click', e => {
   e.preventDefault();
-  window.open(chrome.runtime.getURL('saved.html'), '_blank');
-  window.close();
+  coopNavigate(chrome.runtime.getURL('saved.html'));
 });
 
 // Mock mode button — opens same queue with ?mock=1
@@ -555,6 +547,9 @@ function renderCurrent() {
       <div class="qc-more" id="qc-more" data-id="${c.id}">View full details →</div>
       <div class="queue-nav">
         <span class="queue-nav-pos">${currentIdx + 1} / ${queue.length}</span>
+        ${c.jobUrl && /linkedin\.com\/jobs\/view\//i.test(c.jobUrl)
+          ? `<button class="queue-rescrape-btn" id="btn-rescrape" title="Re-fetch LinkedIn data (firmographics, skills, recruiter) then rescore">↺ Refresh data</button>`
+          : ''}
         <button class="queue-rescore-btn" id="btn-rescore" title="Re-score with latest preferences">↻ Rescore</button>
       </div>
       <div class="queue-actions">
@@ -569,6 +564,26 @@ function renderCurrent() {
   document.getElementById('btn-interested').addEventListener('click', () => triageAction('interested'));
   document.getElementById('btn-prev')?.addEventListener('click', () => { if (currentIdx > 0) { currentIdx--; renderCurrent(); } });
   document.getElementById('btn-next')?.addEventListener('click', () => { if (currentIdx < queue.length - 1) { currentIdx++; renderCurrent(); } });
+
+  document.getElementById('btn-rescrape')?.addEventListener('click', () => {
+    const btn = document.getElementById('btn-rescrape');
+    btn.disabled = true;
+    btn.textContent = '↺ Opening tab…';
+    chrome.runtime.sendMessage({ type: 'RESCRAPE_LINKEDIN_JOB', entryId: c.id }, resp => {
+      void chrome.runtime.lastError;
+      if (resp?.error) {
+        btn.disabled = false;
+        btn.textContent = '↺ Refresh data';
+        btn.title = 'Error: ' + resp.error;
+        btn.style.color = '#ef4444';
+        return;
+      }
+      // Reload card data then trigger rescore
+      btn.textContent = '↺ Refreshed — rescoring…';
+      document.getElementById('btn-rescore')?.click();
+    });
+  });
+
   document.getElementById('btn-rescore')?.addEventListener('click', () => {
     const btn = document.getElementById('btn-rescore');
     const card = document.getElementById('queue-card');
@@ -589,22 +604,30 @@ function renderCurrent() {
             <clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath>
             <g clip-path="url(#ct)">
               <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+              <path d="M38 85 L50 91 L62 85" fill="none" stroke="#2D4050" stroke-width="1"/>
               <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
               <path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/>
               <path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/>
+              <path d="M31 34Q31 18 50 14Q69 18 69 34Q68 22 50 17Q32 22 31 34Z" fill="#8B6B4A"/>
+              <!-- Eyes looking up-left (thinking) -->
               <ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/>
-              <circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/>
-              <circle cx="43" cy="40" r="0.8" fill="white"/>
+              <circle cx="40" cy="41" r="2.8" fill="#4A8DB8"/>
+              <circle cx="39" cy="40.5" r="1" fill="#2B6A8E"/>
+              <circle cx="41" cy="40" r="0.9" fill="white" opacity="0.8"/>
               <ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/>
-              <circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/>
-              <circle cx="61" cy="40" r="0.8" fill="white"/>
-              <path d="M36 35Q41 31 47 34" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M53 34Q59 31 64 35" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M45 58Q48 60 51 59" fill="none" stroke="#8B6B4A" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M58 68Q55 63 52 62Q50 61 48 63L47 66Q48 68 50 69Q53 70 56 69Z" fill="#E5BF9A" stroke="#D4A878" stroke-width="0.5"/>
-              <circle cx="76" cy="28" r="6" fill="rgba(255,255,255,0.7)" stroke="#ccc" stroke-width="0.5"><animate attributeName="cy" values="28;24;28" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/></circle>
-              <circle cx="71" cy="37" r="3.5" fill="rgba(255,255,255,0.5)" stroke="#ddd" stroke-width="0.4"><animate attributeName="cy" values="37;34;37" dur="2.3s" repeatCount="indefinite"/></circle>
-              <circle cx="67" cy="42" r="2" fill="rgba(255,255,255,0.4)" stroke="#ddd" stroke-width="0.3"><animate attributeName="cy" values="42;40;42" dur="1.8s" repeatCount="indefinite"/></circle>
+              <circle cx="58" cy="41" r="2.8" fill="#4A8DB8"/>
+              <circle cx="57" cy="40.5" r="1" fill="#2B6A8E"/>
+              <circle cx="59" cy="40" r="0.9" fill="white" opacity="0.8"/>
+              <!-- Eyebrows: one raised (thinking asymmetry) -->
+              <path d="M35 36Q41 33 47 35" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M53 34.5Q59 31 64 34" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
+              <!-- Thoughtful closed mouth -->
+              <path d="M44 59Q50 62 56 59" fill="none" stroke="#8B6B4A" stroke-width="1.2" stroke-linecap="round"/>
+              <!-- Arm from right shoulder up to chin -->
+              <path d="M65 84Q72 76 69 68Q67 63 62 62" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.6"/>
+              <path d="M65 84Q68 80 69 76" fill="none" stroke="#2D4050" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+              <!-- Hand on chin -->
+              <path d="M48 66Q50 62 56 61Q62 62 63 66Q62 69 58 70Q52 71 49 68Z" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.6"/>
             </g>
           </svg>
         </div>
@@ -675,7 +698,7 @@ function renderCurrent() {
   });
 
   document.getElementById('qc-more').addEventListener('click', () => {
-    window.open(chrome.runtime.getURL('company.html') + '?id=' + c.id, '_blank');
+    coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + c.id);
   });
 
   // Dimension row expand/collapse
@@ -942,6 +965,10 @@ function triageAction(action, fromDrag) {
       companies[idx].actionStatus = 'my_court';
     }
     chrome.storage.local.set({ savedCompanies: companies });
+    // Auto-rescore on stage transition — unified scoring picks up all accumulated context
+    if (newStage !== 'rejected') {
+      chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
+    }
   });
 
   // Next card after animation

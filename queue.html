@@ -366,6 +366,13 @@
       cursor: pointer; font-family: inherit; transition: all 0.15s;
     }
     .queue-rescore-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .queue-rescrape-btn {
+      background: none; border: 1px solid var(--ci-border-default); color: var(--ci-text-tertiary);
+      font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: var(--ci-radius-sm);
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+    }
+    .queue-rescrape-btn:hover:not(:disabled) { border-color: #0ea5e9; color: #0ea5e9; }
+    .queue-rescrape-btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .rescore-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--ci-border-default); border-top-color: var(--ci-accent-primary); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -437,7 +444,9 @@
 
   <div class="queue-main" id="queue-main"></div>
 
+  <script src="ui-utils.js"></script>
   <script src="sounds.js"></script>
+  <script src="navigate.js"></script>
   <script src="queue.js"></script>
 </body>
 </html>

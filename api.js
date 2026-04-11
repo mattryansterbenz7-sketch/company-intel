@@ -137,12 +137,11 @@ export function getModelForTask(taskId) {
     coopAutofill: 'claude-haiku-4-5-20251001',
     coopMemorySynthesis: 'claude-sonnet-4-6',
     jobMatchScoring: 'claude-haiku-4-5-20251001',
-    deepFitAnalysis: 'claude-haiku-4-5-20251001',
     roleBrief: 'claude-haiku-4-5-20251001',
     profileConsolidate: 'claude-haiku-4-5-20251001',
   };
   const fitModel = models.quickFitScoring;
-  if (fitModel && ['jobMatchScoring', 'deepFitAnalysis', 'roleBrief', 'profileConsolidate'].includes(taskId) && !models[taskId]) {
+  if (fitModel && ['jobMatchScoring', 'roleBrief', 'profileConsolidate'].includes(taskId) && !models[taskId]) {
     return fitModel;
   }
   return models[taskId] || defaults[taskId] || 'claude-haiku-4-5-20251001';

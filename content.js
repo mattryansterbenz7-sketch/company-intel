@@ -48,6 +48,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'EXTRACT_LINKEDIN_JOB') {
+    if (!/linkedin\.com\/jobs\/view\//i.test(window.location.href)) {
+      sendResponse({ error: 'Not a LinkedIn job page' });
+      return true;
+    }
+    extractLinkedInJobPosting()
+      .then(data => sendResponse(data))
+      .catch(err => sendResponse({ error: err.message }));
+    return true;
+  }
+
   return true;
 });
 
@@ -1440,44 +1451,484 @@ function extractDomain() {
 if (typeof _ciSidebarToggle === 'undefined') var _ciSidebarToggle = null;
 function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
 
-// ── "Send to Coop" Button — injected on LinkedIn job pages ───────────────────
+// ── "Send to Coop" Button — injected on any detected job page ──────────────
 
 let _scoopInjected = false;
 let _scoopObserver = null;
+let _scoopIsFloating = false;
 
-function injectCoopButton() {
-  if (_scoopInjected) return;
-  if (!/linkedin\.com\/jobs\//.test(window.location.href)) return;
+function _findActionBar() {
+  const url = window.location.href;
 
-  // Find the button container (where Apply, Save, LoopCV buttons live)
-  const containers = [
-    '.jobs-apply-button--top-card',              // New layout
-    '.jobs-s-apply',                              // Older layout
-    '.job-details-jobs-unified-top-card__container .mt2', // Unified card
-    '.jobs-unified-top-card__content--two-pane .mt2',
-    '.jobs-details-top-card__action-container',   // Details page layout
-    '.job-details-jobs-unified-top-card__primary-description-container + div', // Alt unified
-  ];
-  let actionBar = null;
-  for (const sel of containers) {
-    actionBar = document.querySelector(sel);
-    if (actionBar) break;
-  }
-  // Fallback: find the parent of the Apply button (button OR link)
-  if (!actionBar) {
+  // ── LinkedIn ──
+  if (/linkedin\.com\/jobs\//.test(url)) {
+    const liContainers = [
+      '.jobs-apply-button--top-card',
+      '.jobs-s-apply',
+      '.job-details-jobs-unified-top-card__container .mt2',
+      '.jobs-unified-top-card__content--two-pane .mt2',
+      '.jobs-details-top-card__action-container',
+      '.job-details-jobs-unified-top-card__primary-description-container + div',
+    ];
+    for (const sel of liContainers) {
+      const el = document.querySelector(sel);
+      if (el) return { container: el, mode: 'inline' };
+    }
     const applyEl = document.querySelector(
-      'button[aria-label*="Apply"], a[aria-label*="Apply"], button.jobs-apply-button, .jobs-apply-button--top-card button, a.jobs-apply-button, [data-job-id] button[aria-label*="apply" i], [data-job-id] a[aria-label*="apply" i]'
+      'button[aria-label*="Apply"], a[aria-label*="Apply"], button.jobs-apply-button, .jobs-apply-button--top-card button, a.jobs-apply-button'
     );
-    if (applyEl) actionBar = applyEl.parentElement;
+    if (applyEl?.parentElement) return { container: applyEl.parentElement, mode: 'inline' };
+    const saveEl = document.querySelector('button[aria-label*="Save"], button[aria-label*="Saved"]');
+    if (saveEl?.parentElement) return { container: saveEl.parentElement, mode: 'inline' };
+    return null;
   }
-  // Last resort: find any Save/Saved button and use its parent
-  if (!actionBar) {
-    const saveEl = document.querySelector(
-      'button[aria-label*="Save"], button[aria-label*="Saved"]'
-    );
-    if (saveEl) actionBar = saveEl.parentElement;
+
+  // ── Greenhouse ──
+  if (/greenhouse\.io/.test(url)) {
+    const gh = document.querySelector('#app_body h1, .app-title, h1');
+    if (gh?.parentElement) return { container: gh.parentElement, mode: 'inline' };
+    return null;
   }
-  if (!actionBar) return;
+
+  // ── Lever ──
+  if (/lever\.co/.test(url)) {
+    const lv = document.querySelector('.posting-headline') || document.querySelector('.posting-apply');
+    if (lv) return { container: lv, mode: 'inline' };
+    return null;
+  }
+
+  // ── Workday ──
+  if (/myworkdayjobs\.com|workday\.com/.test(url)) {
+    const wd = document.querySelector('[data-automation-id="jobPostingTitle"]')
+      || document.querySelector('[data-automation-id="heading"]');
+    if (wd?.parentElement) return { container: wd.parentElement, mode: 'inline' };
+    return null;
+  }
+
+  // ── Ashby ──
+  if (/ashbyhq\.com/.test(url)) {
+    const ash = document.querySelector('h1');
+    if (ash?.parentElement) return { container: ash.parentElement, mode: 'inline' };
+    return null;
+  }
+
+  // ── Rippling ──
+  if (/ats\.rippling\.com/.test(url)) {
+    const rip = document.querySelector('h1');
+    if (rip?.parentElement) return { container: rip.parentElement, mode: 'inline' };
+    return null;
+  }
+
+  // ── Workable ──
+  if (/workable\.com/.test(url)) {
+    const wk = document.querySelector('h1');
+    if (wk?.parentElement) return { container: wk.parentElement, mode: 'inline' };
+    return null;
+  }
+
+  // ── Work at a Startup (YC) ──
+  if (/workatastartup\.com/.test(url)) {
+    const yc = document.querySelector('h1');
+    if (yc?.parentElement) return { container: yc.parentElement, mode: 'inline' };
+    return null;
+  }
+
+  // ── Generic: floating pill (only used when job detected) ──
+  return { container: document.body, mode: 'floating' };
+}
+
+// ─── J1: LinkedIn job posting data capture ────────────────────────────────────
+
+function stripHtmlTags(html) {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|li|h\d|tr|td|th|blockquote|pre)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function resolveRelativeDate(text) {
+  if (!text) return null;
+  const now = new Date();
+  const t = text.toLowerCase().trim();
+  const numMatch = t.match(/(\d+)\s*(hour|day|week|month)/);
+  if (numMatch) {
+    const n = parseInt(numMatch[1], 10);
+    const unit = numMatch[2];
+    let ms = 0;
+    if (unit === 'hour')  ms = n * 3600000;
+    else if (unit === 'day')   ms = n * 86400000;
+    else if (unit === 'week')  ms = n * 7 * 86400000;
+    else if (unit === 'month') ms = n * 30 * 86400000;
+    return new Date(now - ms).toISOString().slice(0, 10);
+  }
+  if (/today|just now/i.test(t)) return now.toISOString().slice(0, 10);
+  if (/yesterday/i.test(t)) return new Date(now - 86400000).toISOString().slice(0, 10);
+  return null;
+}
+
+function formatEmploymentType(ldType) {
+  const map = { FULL_TIME: 'Full-time', PART_TIME: 'Part-time', CONTRACTOR: 'Contract', INTERN: 'Internship', TEMPORARY: 'Temporary' };
+  return map[String(ldType).toUpperCase()] || ldType;
+}
+
+function extractLinkedInJobJsonLd() {
+  const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of scripts) {
+    try {
+      const raw = JSON.parse(script.textContent || '');
+      const entries = Array.isArray(raw) ? raw : [raw];
+      const ld = entries.find(d => d?.['@type'] === 'JobPosting');
+      if (!ld) continue;
+
+      const result = {};
+      if (ld.title) result.jobTitle = ld.title;
+      if (ld.description) result.jobDescription = stripHtmlTags(ld.description);
+      if (ld.datePosted) result.postedDate = String(ld.datePosted).slice(0, 10);
+      if (ld.employmentType) result.employmentType = formatEmploymentType(ld.employmentType);
+      if (ld.jobLocationType === 'TELECOMMUTE') result.workArrangement = 'Remote';
+      if (ld.occupationalCategory) result.jobFunction = ld.occupationalCategory;
+      if (Array.isArray(ld.skills) && ld.skills.length) result.jobSkillsLd = ld.skills.slice(0, 20);
+
+      // Job location
+      const loc = Array.isArray(ld.jobLocation) ? ld.jobLocation[0] : ld.jobLocation;
+      if (loc?.address) {
+        const addr = loc.address;
+        const parts = [addr.addressLocality, addr.addressRegion, addr.addressCountry].filter(Boolean);
+        if (parts.length) result.hqLocation = parts.join(', ');
+      }
+
+      // Hiring org
+      const org = ld.hiringOrganization;
+      if (org?.name) result.company = org.name;
+      if (org?.sameAs) result.companyLinkedin = org.sameAs;
+
+      // Salary
+      const sal = ld.baseSalary;
+      if (sal?.value?.minValue && sal?.value?.maxValue) {
+        const v = sal.value;
+        const unit = (v.unitText || '').toUpperCase();
+        const unitLabel = unit === 'YEAR' ? '/yr' : unit === 'MONTH' ? '/mo' : unit === 'HOUR' ? '/hr' : '';
+        result.disclosedSalary = `$${Number(v.minValue).toLocaleString()}–$${Number(v.maxValue).toLocaleString()}${unitLabel}`;
+      }
+
+      return result;
+    } catch {}
+  }
+  return null;
+}
+
+function extractLinkedInJobPageFirmo() {
+  const result = { employees: null, industry: null, hqLocation: null, founded: null, companyWebsite: null, companyLinkedin: null };
+
+  // Find the "About the company" section on LinkedIn job pages
+  let section = null;
+  const sectionSelectors = [
+    '.jobs-company__box',
+    '[class*="jobs-company"]',
+    'section[aria-label*="company" i]',
+    'section[aria-label*="Company" i]',
+  ];
+  for (const sel of sectionSelectors) {
+    const el = document.querySelector(sel);
+    if (el) { section = el; break; }
+  }
+  // Fallback: find by heading text
+  if (!section) {
+    for (const h of document.querySelectorAll('h2, h3, h4, span')) {
+      if (/about\s+(the\s+)?company/i.test(h.textContent?.trim())) {
+        section = h.closest('[class*="artdeco-card"], [class*="jobs-company"], section') || h.parentElement?.parentElement;
+        break;
+      }
+    }
+  }
+
+  if (section) {
+    // Text fragments from list items and labeled spans
+    section.querySelectorAll('li, dd, span[class*="t-14"], span[class*="t-16"], span[class*="text-body"]').forEach(el => {
+      const text = el.textContent?.trim();
+      if (!text || text.length > 100) return;
+
+      // Delegate to existing classifier for employees/industry/location
+      classifyFirmoText(text, result);
+
+      // Founded year — "Founded 2018" or standalone "2018" in a "Founded" labeled context
+      if (!result.founded) {
+        const yearMatch = text.match(/(?:founded\s+)?(\d{4})/i);
+        if (yearMatch && /founded/i.test(text)) result.founded = yearMatch[1];
+        else if (/^\d{4}$/.test(text)) result.founded = text;
+      }
+
+      // HQ location — "City, ST" or "City, Country" pattern not caught by classifyFirmoText
+      if (!result.hqLocation && /^[A-Z][a-zA-Z\s\-'\.]+,\s*[A-Z]/.test(text) && text.length < 50 && !/employees/i.test(text)) {
+        result.hqLocation = text;
+      }
+    });
+
+    // Also scan broader text nodes for founded
+    if (!result.founded) {
+      section.querySelectorAll('span, p, div').forEach(el => {
+        if (result.founded) return;
+        const text = el.textContent?.trim();
+        const m = text?.match(/founded\s+in\s+(\d{4})|founded\s+(\d{4})/i);
+        if (m) result.founded = m[1] || m[2];
+      });
+    }
+
+    // Links — external website and company LinkedIn URL
+    for (const a of section.querySelectorAll('a[href]')) {
+      const href = a.href;
+      if (href.includes('linkedin.com/company/') && !result.companyLinkedin) {
+        result.companyLinkedin = href.split('?')[0];
+      } else if (/^https?:\/\//.test(href) && !href.includes('linkedin.com') && !href.startsWith('chrome-extension') && !result.companyWebsite) {
+        result.companyWebsite = href.split('?')[0];
+      }
+    }
+  }
+
+  // Broader fallback: company LinkedIn link from anywhere on page
+  if (!result.companyLinkedin) {
+    for (const a of document.querySelectorAll('a[href*="linkedin.com/company/"]')) {
+      const href = a.href.split('?')[0];
+      if (/\/company\/[^/]+\/?$/.test(href)) { result.companyLinkedin = href; break; }
+    }
+  }
+
+  return (result.employees || result.industry || result.hqLocation || result.founded || result.companyWebsite || result.companyLinkedin)
+    ? result : null;
+}
+
+function extractLinkedInJobSignals() {
+  const result = {
+    seniorityLevel: null, jobFunction: null, jobSkills: [],
+    applicantCount: null, postedDate: null, isReposted: false,
+    linkedinSalaryEstimate: null, externalApplyUrl: null,
+  };
+
+  // Scope to job details panel
+  const panelSelectors = [
+    '#job-details', '.jobs-search__job-details--wrapper', '.scaffold-layout__detail',
+    '[class*="jobs-search__job-details"]', '.jobs-unified-top-card',
+    '.job-details-jobs-unified-top-card__container',
+  ];
+  let panel = null;
+  for (const sel of panelSelectors) {
+    const el = document.querySelector(sel);
+    if (el) { panel = el; break; }
+  }
+  const scope = panel || document;
+
+  // Seniority + job function from structured criteria list (most reliable)
+  scope.querySelectorAll('[class*="description__job-criteria-item"]').forEach(item => {
+    const label = item.querySelector('[class*="subheader"], [class*="criteria-subheader"]')?.textContent?.trim()
+      || item.querySelector('h3, span:first-child')?.textContent?.trim();
+    const value = item.querySelector('[class*="criteria-text"], ul, li')?.textContent?.trim()
+      || item.querySelectorAll('span')[1]?.textContent?.trim();
+    if (!label || !value) return;
+    if (/seniority/i.test(label) && !result.seniorityLevel) result.seniorityLevel = value;
+    if (/job\s*function/i.test(label) && !result.jobFunction) result.jobFunction = value;
+  });
+
+  // Seniority fallback: insight chips
+  if (!result.seniorityLevel) {
+    scope.querySelectorAll('[class*="job-insight"], .tvm__text, [class*="fit-level"]').forEach(el => {
+      if (result.seniorityLevel) return;
+      const t = el.textContent?.trim();
+      if (t && /\b(associate|entry[\s-]level|mid[\s-]senior|senior|director|executive|internship)\b/i.test(t) && t.length < 50) {
+        result.seniorityLevel = t;
+      }
+    });
+  }
+
+  // Skills chips — "How you match" section or job details
+  const skillsEl = document.querySelector('[class*="how-you-match"], [class*="match-qualifications"], [class*="job-details-skill"], [class*="skill-match"]');
+  if (skillsEl) {
+    skillsEl.querySelectorAll('[class*="skill"], [class*="pill"], span.t-14, span.t-16, li').forEach(chip => {
+      const t = chip.textContent?.trim();
+      if (t && t.length > 1 && t.length < 50 && result.jobSkills.length < 20 && !result.jobSkills.includes(t)) {
+        result.jobSkills.push(t);
+      }
+    });
+  }
+
+  // Applicant count, posted date, repost — scan short text nodes
+  scope.querySelectorAll('span, li').forEach(el => {
+    if (el.querySelector('span, li')) return; // non-leaf
+    const t = el.textContent?.trim();
+    if (!t || t.length > 80) return;
+    if (!result.applicantCount && /(?:over\s+)?\d+[\d,]*\s*applicants?/i.test(t)) result.applicantCount = t;
+    if (!result.postedDate && /\d+\s*(?:hour|day|week|month)s?\s*ago|just\s*now|today|yesterday/i.test(t)) {
+      result.postedDate = resolveRelativeDate(t);
+    }
+    if (!result.isReposted && /\breposted\b/i.test(t) && t.length < 30) result.isReposted = true;
+  });
+
+  // LinkedIn salary estimate — shows as "LinkedIn estimated" label
+  scope.querySelectorAll('[class*="compensation"], [class*="salary"], [class*="job-insight"]').forEach(el => {
+    if (result.linkedinSalaryEstimate) return;
+    const t = el.textContent?.trim();
+    if (t && /\$\d+[Kk]/.test(t) && /linkedin\s*estimated?|estimated?\s*by\s*linkedin/i.test(t) && t.length < 100) {
+      result.linkedinSalaryEstimate = t;
+    }
+  });
+
+  // External apply URL — "Apply on company website" links
+  for (const a of document.querySelectorAll('a[href]')) {
+    if (result.externalApplyUrl) break;
+    const label = (a.textContent?.trim() || '') + ' ' + (a.getAttribute('aria-label') || '');
+    if (/apply\s+on|apply\s+at\s+company|apply\s+now/i.test(label) && !a.href.includes('linkedin.com')) {
+      result.externalApplyUrl = a.href;
+    }
+  }
+
+  return result;
+}
+
+function extractLinkedInRecruiter() {
+  // Find "Meet the hiring team" card — shown on most LinkedIn job postings
+  let hiringSection = null;
+  for (const el of document.querySelectorAll('h2, h3, h4, span, div')) {
+    const t = el.textContent?.trim();
+    if (/meet\s+the\s+hiring\s+team/i.test(t) && t.length < 50) {
+      hiringSection = el.closest('[class*="hiring"], [class*="people-you-can-reach"], [class*="artdeco-card"], section')
+        || el.parentElement?.parentElement;
+      break;
+    }
+  }
+  // Fallback: "People you can reach out to" container
+  if (!hiringSection) {
+    for (const el of document.querySelectorAll('h2, h3, h4')) {
+      if (/people you can reach out to/i.test(el.textContent?.trim())) {
+        hiringSection = el.closest('[class*="artdeco-card"], section') || el.parentElement?.parentElement;
+        break;
+      }
+    }
+  }
+  if (!hiringSection) return null;
+
+  const recruiters = [];
+  hiringSection.querySelectorAll('a[href*="linkedin.com/in/"]').forEach(a => {
+    const href = a.href.split('?')[0];
+    if (!href.includes('/in/')) return;
+    if (recruiters.some(r => r.linkedin === href)) return; // dedup
+
+    // Extract name + title from text nodes inside the link
+    const spans = [...a.querySelectorAll('span, div')].filter(el => !el.querySelector('span, div'));
+    let name = null;
+    let title = null;
+    for (const span of spans) {
+      const t = span.textContent?.trim();
+      if (!t || t.length < 2 || t.length > 100) continue;
+      if (/job\s*poster|^[123](?:st|nd|rd)\s*·|^connect$/i.test(t)) continue;
+      if (!name) { name = t; continue; }
+      if (!title && !/^\d+$/.test(t)) { title = t; break; }
+    }
+    // Fallback: full link text
+    if (!name) name = a.textContent?.trim().split('\n')[0]?.trim();
+
+    if (name && name.length > 1) {
+      recruiters.push({
+        name:     name.slice(0, 80),
+        title:    title?.slice(0, 100) || null,
+        linkedin: href,
+        role:     'recruiter',
+        source:   'job_posting',
+        addedAt:  Date.now(),
+      });
+    }
+  });
+
+  return recruiters.length ? recruiters : null;
+}
+
+function extractLinkedInConnections() {
+  // LinkedIn shows "X connections work here" when logged-in user has connections at the company
+  for (const el of document.querySelectorAll('a, span, div')) {
+    const t = el.textContent?.trim();
+    if (!t || t.length > 80) continue;
+    const m = t.match(/(\d+)\s+connection[s]?\s+(?:work\s+here|at\s+(?:this\s+)?company)/i);
+    if (!m) continue;
+    const count = parseInt(m[1], 10);
+    const link = el.closest('a') || el.querySelector('a');
+    return {
+      linkedinConnectionsCount: count,
+      linkedinConnectionsUrl:   link?.href?.split('?')[0] || null,
+    };
+  }
+  return null;
+}
+
+async function extractLinkedInJobPosting() {
+  // Step 1: Expand JD and pull existing meta (salary chips, work arrangement)
+  const descData = await extractJobDescriptionForPanel();
+
+  // Step 2: JSON-LD — machine-readable, most stable
+  const ld = extractLinkedInJobJsonLd();
+
+  // Step 3: About box firmographics (job-page selectors, fixes broken extractLinkedInCompanyFirmo)
+  const firmo = extractLinkedInJobPageFirmo();
+
+  // Step 4: Job signals (seniority, skills, applicant count, posted date, etc.)
+  const signals = extractLinkedInJobSignals();
+
+  // Step 5: Hiring team (Phase 2)
+  const hiringTeam = extractLinkedInRecruiter();
+
+  // Step 6: LinkedIn connections at company (Phase 2)
+  const connections = extractLinkedInConnections();
+
+  // Compose — JSON-LD fills first, DOM fills gaps
+  return {
+    jobDescription:   descData?.jobDescription || ld?.jobDescription || null,
+    jobMeta:          descData?.jobMeta || null,
+
+    // Firmographics from About box
+    employees:        firmo?.employees || null,
+    industry:         firmo?.industry || null,
+    hqLocation:       firmo?.hqLocation || ld?.hqLocation || null,
+    founded:          firmo?.founded || null,
+    companyWebsite:   firmo?.companyWebsite || null,
+    companyLinkedin:  firmo?.companyLinkedin || ld?.companyLinkedin || null,
+
+    // Job signals
+    seniorityLevel:         signals.seniorityLevel || null,
+    jobFunction:            signals.jobFunction || ld?.jobFunction || null,
+    jobSkills:              signals.jobSkills.length ? signals.jobSkills : (ld?.jobSkillsLd || []),
+    applicantCount:         signals.applicantCount || null,
+    postedDate:             signals.postedDate || ld?.postedDate || null,
+    isReposted:             signals.isReposted || false,
+    linkedinSalaryEstimate: signals.linkedinSalaryEstimate || null,
+    externalApplyUrl:       signals.externalApplyUrl || null,
+
+    // From JSON-LD
+    employmentType:  ld?.employmentType || null,
+    disclosedSalary: ld?.disclosedSalary || null,
+
+    // Phase 2: hiring team + connections
+    hiringTeam:                hiringTeam || [],
+    linkedinConnectionsCount:  connections?.linkedinConnectionsCount || null,
+    linkedinConnectionsUrl:    connections?.linkedinConnectionsUrl || null,
+  };
+}
+
+async function injectCoopButton() {
+  if (_scoopInjected) return;
+
+  // Don't inject on extension pages
+  if (window.location.protocol === 'chrome-extension:') return;
+
+  const result = _findActionBar();
+  if (!result) return;
+  const { container: actionBar, mode } = result;
+
+  // For floating mode (generic pages), only inject if we detect a job title
+  if (mode === 'floating') {
+    const detected = await detectCompanyAndJob();
+    if (!detected?.jobTitle) return;
+  }
 
   // Don't inject twice
   if (document.getElementById('coop-scoop-btn')) { _scoopInjected = true; return; }
@@ -1492,17 +1943,27 @@ function injectCoopButton() {
   btn.innerHTML = `${coopFace}<span style="margin-left:4px">Send to Coop</span>`;
   btn.title = 'Save to Coop.ai + score with Coop';
 
-  // Style to match LinkedIn's pill buttons
-  Object.assign(btn.style, {
+  // Style — inline pill or floating pill depending on mode
+  _scoopIsFloating = mode === 'floating';
+  const baseStyle = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     gap: '0', padding: '0 16px', height: '36px',
     border: '1px solid #FF7A59', borderRadius: '24px',
     background: '#fff', color: '#FF7A59',
-    fontSize: '14px', fontWeight: '600', fontFamily: 'inherit',
+    fontSize: '14px', fontWeight: '600', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     cursor: 'pointer', transition: 'all 0.15s',
-    marginLeft: '8px', verticalAlign: 'middle', lineHeight: '1',
-    whiteSpace: 'nowrap', flexShrink: '0',
-  });
+    lineHeight: '1', whiteSpace: 'nowrap', flexShrink: '0',
+  };
+  if (mode === 'floating') {
+    Object.assign(baseStyle, {
+      position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.15)', marginLeft: '0',
+    });
+  } else {
+    baseStyle.marginLeft = '8px';
+    baseStyle.verticalAlign = 'middle';
+  }
+  Object.assign(btn.style, baseStyle);
 
   btn.addEventListener('mouseenter', () => {
     btn.style.background = '#FF7A59'; btn.style.color = '#fff';
@@ -1525,27 +1986,45 @@ function injectCoopButton() {
       const company = detected?.company || 'Unknown';
       const jobTitle = detected?.jobTitle || null;
 
-      // Extract job description
-      const descData = await extractJobDescriptionForPanel();
-      const jobDescription = descData?.description || null;
+      let jobDescription = null;
+      let jobMeta = null;
+      let linkedinJobData = null;
 
-      // Extract LinkedIn firmographics if available
-      const firmo = detected?.linkedinFirmo || null;
-      const jobMeta = detected?.jobMeta || null;
+      const isLinkedInJob = /linkedin\.com\/jobs\/view\//i.test(window.location.href);
+      if (isLinkedInJob) {
+        // Unified LinkedIn extractor: JSON-LD + About box + job signals
+        linkedinJobData = await extractLinkedInJobPosting();
+        jobDescription = linkedinJobData.jobDescription;
+        jobMeta = linkedinJobData.jobMeta
+          ? { ...linkedinJobData.jobMeta, easyApply: detected?.easyApply || false }
+          : (detected?.easyApply ? { easyApply: true } : null);
+      } else {
+        const descData = await extractJobDescriptionForPanel();
+        jobDescription = descData?.jobDescription || null;
+        jobMeta = detected?.jobMeta
+          ? { ...detected.jobMeta, easyApply: detected?.easyApply || false }
+          : (detected?.easyApply ? { easyApply: true } : null);
+      }
 
-      // Check if already saved
-      const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
-      const existing = savedCompanies || [];
-      const dup = existing.find(c => {
-        const nameMatch = c.company && company && c.company.toLowerCase().replace(/[^a-z0-9]/g,'') === company.toLowerCase().replace(/[^a-z0-9]/g,'');
-        const titleMatch = !jobTitle || !c.jobTitle || c.jobTitle.toLowerCase().includes(jobTitle.toLowerCase().slice(0, 20));
-        return nameMatch && titleMatch && c.isOpportunity;
+      // Unified save via background handler
+      const resp = await new Promise(resolve => {
+        chrome.runtime.sendMessage({
+          type: 'SAVE_OPPORTUNITY',
+          company,
+          jobTitle,
+          jobUrl: detected?.canonicalJobUrl || window.location.href,
+          jobDescription,
+          jobMeta,
+          linkedinFirmo: detected?.linkedinFirmo || null,
+          linkedinJobData: isLinkedInJob ? linkedinJobData : null,
+          source: detected?.source || 'other_ats',
+        }, resolve);
       });
 
-      if (dup) {
-        const { opportunityStages, customStages } = await new Promise(r => chrome.storage.local.get(['opportunityStages', 'customStages'], r));
-        const dupLabel = _coopStageLabel(dup.jobStage, opportunityStages || customStages || []);
-        btn.innerHTML = `${coopFace}<span style="margin-left:4px">${dupLabel} ✓</span>`;
+      if (resp?.error) throw new Error(resp.error);
+
+      if (resp?.isDuplicate) {
+        btn.innerHTML = `${coopFace}<span style="margin-left:4px">${resp.stageLabel} ✓</span>`;
         btn.classList.add('scooped');
         btn.style.background = '#f0f0f0'; btn.style.color = '#999'; btn.style.borderColor = '#ddd';
         btn.style.cursor = 'pointer';
@@ -1555,42 +2034,6 @@ function injectCoopButton() {
         });
         return;
       }
-
-      // Build entry
-      const companyLinkedin = /linkedin\.com\/company\//i.test(window.location.href) ? window.location.href : (detected?.companyLinkedinUrl || null);
-      const snap = jobMeta || null;
-      const entry = {
-        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-        type: 'company',
-        company,
-        savedAt: Date.now(),
-        notes: '',
-        rating: null,
-        tags: ['Job Posted', 'Sent to Coop'],
-        url: null,
-        employees: firmo?.employees || null,
-        industry: firmo?.industry || null,
-        companyWebsite: null,
-        companyLinkedin,
-        linkedinFirmo: firmo || null,
-        status: 'co_watchlist',
-        isOpportunity: true,
-        jobStage: 'needs_review',
-        jobTitle,
-        jobUrl: detected?.canonicalJobUrl || window.location.href,
-        jobDescription,
-        jobSnapshot: snap,
-        baseSalaryRange: snap?.baseSalaryRange || (snap?.salaryType === 'base' ? snap?.salary : null) || null,
-        oteTotalComp: snap?.oteTotalComp || (snap?.salaryType === 'ote' ? snap?.salary : null) || null,
-        equity: snap?.equity || null,
-        easyApply: detected?.easyApply || false,
-      };
-
-      // Save
-      await new Promise(r => chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, r));
-
-      // Queue for scoring
-      chrome.runtime.sendMessage({ type: 'QUEUE_QUICK_FIT', entryId: entry.id });
 
       // Success state — clickable to open queue
       btn.innerHTML = `${coopFace}<span style="margin-left:4px">Sent to Coop ✓</span>`;
@@ -1650,34 +2093,42 @@ async function checkCoopStatus(btn, coopFace) {
   } catch {}
 }
 
-// Watch for LinkedIn SPA navigation and job panel changes
+// Watch for SPA navigation and job panel changes — works on all supported sites
 function watchForCoopInjection() {
-  // Initial attempt
+  // Initial attempt (delay to let ATS pages render)
   setTimeout(injectCoopButton, 1500);
 
-  // Re-inject on SPA navigation (LinkedIn is a SPA)
+  // Re-inject on SPA navigation
   let lastUrl = window.location.href;
+  let _scoopRetryTimer = null;
   _scoopObserver = new MutationObserver(() => {
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       _scoopInjected = false;
+      _scoopIsFloating = false;
       const old = document.getElementById('coop-scoop-btn');
       if (old) old.remove();
-      if (/linkedin\.com\/jobs\//.test(lastUrl)) {
-        setTimeout(injectCoopButton, 1500);
-      }
+      clearTimeout(_scoopRetryTimer);
+      setTimeout(injectCoopButton, 1500);
     }
-    // Also re-try if button container appeared but our button isn't there yet
-    if (!_scoopInjected && /linkedin\.com\/jobs\//.test(window.location.href)) {
-      injectCoopButton();
+    // Throttled re-try if button container appeared but our button isn't there yet
+    if (!_scoopInjected && !_scoopRetryTimer) {
+      _scoopRetryTimer = setTimeout(() => {
+        _scoopRetryTimer = null;
+        injectCoopButton();
+      }, 500);
     }
   });
   _scoopObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-// Boot scoop injection on LinkedIn
-if (/linkedin\.com/.test(window.location.hostname)) {
+// Boot scoop injection on any supported job site
+const _coopInjectHosts = /linkedin\.com|greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|ashbyhq\.com|ats\.rippling\.com|workable\.com|workatastartup\.com/;
+if (_coopInjectHosts.test(window.location.hostname)) {
   watchForCoopInjection();
+} else if (window.location.protocol !== 'chrome-extension:') {
+  // Generic pages: single attempt after load — floating pill if a job is detected
+  setTimeout(injectCoopButton, 2500);
 }
 
 (function initFloatingSidebar() {

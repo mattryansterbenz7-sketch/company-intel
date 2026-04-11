@@ -219,9 +219,24 @@ export async function processQuickFitScore(entryId) {
   const firmo = entry.linkedinFirmo || {};
   if (entry.employees || firmo.employees) firmoLines.push(`Employees: ${entry.employees || firmo.employees}`);
   if (entry.industry || firmo.industry) firmoLines.push(`Industry: ${entry.industry || firmo.industry}`);
+  if (entry.hqLocation) firmoLines.push(`HQ: ${entry.hqLocation}`);
   if (entry.funding) firmoLines.push(`Funding: ${entry.funding}`);
   if (entry.founded) firmoLines.push(`Founded: ${entry.founded}`);
   const firmoBlock = firmoLines.length ? `Company Firmographics:\n${firmoLines.join('\n')}` : null;
+
+  // J1: Skills block — structured skill tags from job posting
+  const skillsBlock = entry.jobSkills?.length
+    ? `Required Skills: ${entry.jobSkills.join(', ')}`
+    : null;
+
+  // J1: Posting context (seniority, job function, applicant count, dates)
+  const postingSignals = [];
+  if (entry.seniorityLevel) postingSignals.push(`Seniority: ${entry.seniorityLevel}`);
+  if (entry.jobFunction) postingSignals.push(`Job Function: ${entry.jobFunction}`);
+  if (entry.applicantCount) postingSignals.push(`Applicants: ${entry.applicantCount}`);
+  if (entry.isReposted) postingSignals.push('Reposted: Yes');
+  if (entry.postedDate) postingSignals.push(`Posted: ${entry.postedDate}`);
+  const postingBlock = postingSignals.length ? `Posting Details:\n${postingSignals.join('\n')}` : null;
 
   // Employee reviews from full research — richer than scout snippets (targeted RepVue/Glassdoor drill)
   const reviewsBlock = entry.reviews?.length
@@ -236,10 +251,45 @@ export async function processQuickFitScore(entryId) {
     entry.jobDescription ? `Job Description:\n${entry.jobDescription.slice(0, 4000)}` : null,
     entry.jobSnapshot ? `Job Details: ${JSON.stringify(entry.jobSnapshot)}` : null,
     firmoBlock,
+    skillsBlock,
+    postingBlock,
     companyContext ? `Company Intel (web search):\n${companyContext}` : null,
     entry.intelligence ? `Company Intelligence:\n${typeof entry.intelligence === 'string' ? entry.intelligence : JSON.stringify(entry.intelligence)}` : null,
     reviewsBlock,
   ].filter(Boolean).join('\n\n');
+
+  // ── Interaction context: emails, meetings, transcripts, notes ──────────────
+  const interactionParts = [];
+  const hasEmails   = (entry.cachedEmails?.length || 0) > 0;
+  const hasMeetings = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes || entry.cachedMeetings?.length);
+  const hasNotes    = !!entry.notes;
+  const hasContacts = (entry.knownContacts?.length || 0) > 0;
+  const hasInteractionContext = hasEmails || hasMeetings || hasNotes;
+
+  if (hasEmails) {
+    interactionParts.push(`Email Threads (${entry.cachedEmails.length}):\n${entry.cachedEmails.slice(0, 15).map(e =>
+      `[${e.date || ''}] "${e.subject}" — ${e.from}${e.snippet ? '\n  ' + e.snippet.slice(0, 200) : ''}`
+    ).join('\n')}`);
+  }
+  if (entry.cachedMeetings?.length) {
+    interactionParts.push(`Meeting Transcripts (${entry.cachedMeetings.length} meetings):\n${entry.cachedMeetings.map(m =>
+      `--- ${m.title || 'Meeting'} | ${m.date || ''} ---\n${(m.summaryMarkdown || m.transcript || m.summary || '').slice(0, 3000)}`
+    ).join('\n\n')}`);
+  }
+  if (entry.cachedMeetingTranscript) {
+    interactionParts.push(`Meeting Notes:\n${entry.cachedMeetingTranscript.slice(0, 4000)}`);
+  }
+  if (hasNotes) {
+    interactionParts.push(`User Notes:\n${entry.notes.slice(0, 2000)}`);
+  }
+  if (hasContacts) {
+    interactionParts.push(`Known Contacts:\n${entry.knownContacts.map(c =>
+      `${c.name || ''}${c.title ? ' — ' + c.title : ''}${c.email ? ' <' + c.email + '>' : ''}`
+    ).join('\n')}`);
+  }
+  const interactionBlock = interactionParts.length
+    ? `\n\n=== INTERACTION CONTEXT (emails, meetings, notes) ===\n${interactionParts.join('\n\n')}`
+    : '';
 
   // Build flags reference for AI — each configured flag with ID, dimension, severity
   const allFlags = [
@@ -257,30 +307,31 @@ ${coopInterp.principlesBlock()}
 ${profileParts.join('\n\n') || 'No profile configured'}
 
 === JOB OPPORTUNITY ===
-${jobParts}
+${jobParts}${interactionBlock}
 
 === CONFIGURED FLAGS (evaluate each one) ===
 ${flagsRef}
 
 YOUR TASK:
-1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting or company data. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. No evidence either way = does not fire. Return only flags that fire.
+1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting, company data, or interaction context. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. No evidence either way = does not fire. Return only flags that fire.
 2. QUALIFICATIONS: Extract 3-8 key requirements from the job description. For each, assess against the candidate: met, partial, unmet, or unknown.
-3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
+3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
-5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit.
+5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text.
 6. COOP TAKE: 1-2 sentence honest bottom line on this opportunity.
 7. QUICK TAKE: 2-4 bullets of the most decisive signals (green or red).
-
+8. ROLE BRIEF: Summarize the role, why it could be interesting, key concerns, and comp in structured fields.
+${hasInteractionContext ? '9. CONVERSATION INSIGHTS: 2-4 sentence analysis of what emails/meetings/notes reveal about fit, culture, momentum. Reference specific details. Weight interaction signals heavily — they beat posting text.\n' : ''}
 EVIDENCE RULES:
-- Flag evidence MUST come from the job posting or company data, NEVER from the candidate's profile/resume.
+- Flag evidence MUST come from the job posting, company data, or interaction context — NEVER from the candidate's profile/resume.
 - Missing information is NOT evidence of a red flag. Undisclosed comp = neutral.
 - Only flag hardDQ when a flag with severity 5 is clearly triggered by direct evidence.
 - Unmet green flags are NOT red flags — they just mean the positive signal wasn't found.
-
+${hasInteractionContext ? '- When conversations contradict the posting, note BOTH and flag the discrepancy.\n- At least one fired flag should reference interaction signals when available.\n' : ''}
 Return ONLY valid JSON (no markdown fences):
 {
   "firedFlags": [
-    {"id": "<exact flag ID from configured list>", "evidence": "<verbatim quote from JD or company data>"}
+    {"id": "<exact flag ID from configured list>", "evidence": "<verbatim quote from JD, company data, or conversation>"}
   ],
   "qualificationFit": <1-10>,
   "qualifications": [
@@ -302,14 +353,21 @@ Return ONLY valid JSON (no markdown fences):
   },
   "coopTake": "<1-2 sentences>",
   "quickTake": [{"type": "green|red", "text": "8-15 word signal"}],
-  "hardDQ": {"flagged": false, "reasons": []}
+  "roleBrief": {
+    "roleSummary": "<1-2 sentence summary of the role — scope, function, team>",
+    "whyInteresting": "<why this could be a good fit for this candidate>",
+    "concerns": "<key concerns or risks with this opportunity>",
+    "compSummary": "<compensation summary from posting and/or conversations, or 'Not disclosed'>",
+    "qualificationMatch": "<X of Y requirements met>"
+  },
+  "hardDQ": {"flagged": false, "reasons": []}${hasInteractionContext ? ',\n  "conversationInsights": "<2-4 sentence analysis of what emails/meetings reveal — cite specifics>"' : ''}
 }`;
 
   const result = await chatWithFallback({
     model: getModelForTask('quickFitScoring'),
     system: `You are a JSON-only job fit analyst. Respond with valid JSON only, no markdown fences.`,
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 1500,
+    max_tokens: 2000,
     tag: 'QuickFit'
   });
 
@@ -434,6 +492,8 @@ Return ONLY valid JSON (no markdown fences):
 
   // Build unified jobMatch — the shape queue.js, company.js, sidepanel.js all read
   const existingJobMatch = entry.jobMatch || {};
+  const roleBrief = parsed.roleBrief || {};
+  roleBrief.qualificationScore = qualScore; // code-computed, not AI-picked
   const jobMatch = {
     ...existingJobMatch,
     score: overall,
@@ -445,6 +505,8 @@ Return ONLY valid JSON (no markdown fences):
     dimensionRationale: parsed.dimensionRationale || {},
     coopTake: parsed.coopTake || '',
     quickTake: parsed.quickTake || [],
+    roleBrief,
+    conversationInsights: parsed.conversationInsights || null,
     scoreRationale,
     hardDQ,
     scoringWeightsSnapshot: { ...weights },
@@ -456,6 +518,10 @@ Return ONLY valid JSON (no markdown fences):
       cost: result.usage?.cost || 0
     }
   };
+  // Clean up legacy deep fit fields — unified scoring replaces them
+  delete jobMatch.deepFitAnalysis;
+  delete jobMatch.strongFits;
+  delete jobMatch.redFlags;
 
   // Persist to storage
   const updateData = await new Promise(resolve =>
@@ -500,6 +566,13 @@ export async function processQueue() {
   while (state._scoringQueue.length > 0) {
     const entryId = state._scoringQueue.shift();
     try {
+      // Skip scoring for closed/rejected entries — no API calls on dead opportunities
+      const checkData = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+      const checkEntry = (checkData.savedCompanies || []).find(e => e.id === entryId);
+      if (checkEntry?.jobStage === 'rejected') {
+        console.log('[QuickFit] Skipping rejected entry:', checkEntry.company);
+        continue;
+      }
       await processQuickFitScore(entryId);
     } catch (err) {
       console.error('[QuickFit] Error scoring', entryId, err.message);

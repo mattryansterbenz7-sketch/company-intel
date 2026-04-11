@@ -137,7 +137,7 @@ All communication uses `chrome.runtime.sendMessage`. The service worker (`backgr
 | `GRANOLA_SEARCH` | Search Granola meeting notes by company/contact |
 | `GET_COMPANY` | Content script → detect company from current page DOM |
 | `GET_JOB_DESCRIPTION` | Content script → extract job posting text |
-| `DEEP_FIT_ANALYSIS` | Narrative fit analysis combining all signals |
+| `QUICK_FIT_SCORE` | Unified scoring — flags, qualifications, role brief, conversation insights |
 | `EXTRACT_NEXT_STEPS` | AI-generated next steps from meeting data |
 
 ### Research pipeline

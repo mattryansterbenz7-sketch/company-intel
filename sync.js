@@ -1,4 +1,4 @@
-// sync.js — Field sync, role briefs, deep fit analysis, next steps, email tasks, backfill, migration.
+// sync.js — Field sync, role briefs, next steps, email tasks, backfill, migration.
 
 import { state, QUEUE_AUTO_PROCESS } from './bg-state.js';
 import { chatWithFallback, aiCall, getModelForTask } from './api.js';
@@ -223,93 +223,11 @@ Then write the full role brief below.`;
   }
 }
 
-// ── Deep Fit Analysis ────────────────────────────────────────────────────────
-
-export async function deepFitAnalysis({ company, jobTitle, jobSummary, jobSnapshot, jobDescription, jobMatch, notes, transcripts, emails, prefs, roleBrief }) {
-  const contextParts = [`Company: ${company}`, `Role: ${jobTitle || 'Unknown'}`];
-
-  if (roleBrief) contextParts.push(`Role Brief (synthesized from conversations + posting):\n${roleBrief.slice(0, 3000)}`);
-  if (jobSummary) contextParts.push(`Job summary: ${jobSummary}`);
-  // Full description is richer than the snapshot — prefer it, fall back to snapshot
-  if (jobDescription) {
-    contextParts.push(`Full job description:\n${jobDescription.slice(0, 4000)}`);
-  } else if (jobSnapshot) {
-    const snap = typeof jobSnapshot === 'string' ? jobSnapshot : JSON.stringify(jobSnapshot);
-    contextParts.push(`Job posting details:\n${snap.slice(0, 2000)}`);
-  }
-  if (jobMatch?.strongFits?.length) contextParts.push(`Initial green flags: ${jobMatch.strongFits.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
-  if (jobMatch?.redFlags?.length)   contextParts.push(`Initial red flags: ${jobMatch.redFlags.map(f => typeof f === 'string' ? f : f?.text || '').join('; ')}`);
-  if (notes) contextParts.push(`My notes: ${notes.slice(0, 800)}`);
-  if (transcripts) contextParts.push(`Meeting transcripts:\n${transcripts.slice(0, 3000)}`);
-  if (emails?.length) {
-    contextParts.push(`Email activity:\n${emails.map(e => `- "${e.subject}" from ${e.from}: ${e.snippet || ''}`).join('\n')}`);
-  }
-  if (prefs?.resumeText)        contextParts.push(`Resume / LinkedIn profile:\n${prefs.resumeText.slice(0, 3000)}`);
-  if (prefs?.jobMatchBackground) contextParts.push(`My background: ${prefs.jobMatchBackground}`);
-  if (prefs?.roles)              contextParts.push(`Target roles: ${prefs.roles}`);
-  if (prefs?.avoid)              contextParts.push(`Things I want to avoid: ${prefs.avoid}`);
-  if (prefs?.roleLoved)          contextParts.push(`Roles / experiences I loved: ${prefs.roleLoved}`);
-  if (prefs?.roleHated)          contextParts.push(`Roles / experiences I disliked: ${prefs.roleHated}`);
-  if (prefs?.salaryFloor)        contextParts.push(`Salary floor: ${prefs.salaryFloor}`);
-  if (prefs?.salaryStrong)       contextParts.push(`Salary that feels like a strong offer: ${prefs.salaryStrong}`);
-  if (prefs?.workArrangement?.length) contextParts.push(`Work arrangement preference: ${prefs.workArrangement.join(', ')}`);
-
-  const system = `${coopInterp.principlesBlock()}You are a sharp, direct career advisor embedded in a job search tool. Analyze this opportunity against everything known: the job posting, the candidate's preferences and background, and — most importantly — any real interaction signals from meeting transcripts and emails.
-
-Write a focused 2-4 sentence narrative that covers:
-1. How well the role and company align with what the candidate is looking for (reference specifics from the posting and their stated preferences)
-2. What the actual conversations or emails reveal about fit, culture, and momentum — things the posting alone can't tell you
-3. A clear, honest recommendation (pursue / proceed with caution / pass) with the single most important reason
-
-Be specific. Reference real details. Don't hedge or restate the obvious. If transcripts/emails are available, weight them heavily — live interaction signals beat job description text every time.
-
-IMPORTANT: You MUST start your response with the structured assessment block FIRST, before your narrative:
-
-<fit_update>
-{"score": <1-10 updated fit score reflecting ALL context — meetings, emails, notes, not just the posting>, "verdict": "<updated one-sentence verdict>", "strongFits": [{"text": "<concrete green flag, 8-14 words>", "source": "<job_posting | company_data | preferences | candidate_profile>", "evidence": "<short verbatim quote/phrase justifying this — REQUIRED>"}], "redFlags": [{"text": "<concrete red flag, 8-14 words>", "source": "<job_posting | company_data | preferences | dealbreaker_keyword>", "evidence": "<short verbatim quote/phrase justifying this — REQUIRED. Omit the flag if you cannot quote evidence.>"}]}
-</fit_update>
-
-Then write your 2-4 sentence narrative analysis.
-
-Rules for the structured block:
-- Score reflects EVERYTHING known — posting, meetings, emails, notes.
-- Flags must cite real evidence. "Recruiter followed up personally" not "Company seems interested."
-- If meetings/emails exist, at least one flag should reference interaction signals.
-- 2-5 flags per category. Quality over quantity.
-- If insufficient evidence for red flags, include fewer rather than fabricating weak ones.`;
-
-
-  try {
-    const result = await aiCall('deepFitAnalysis', {
-      system,
-      messages: [{ role: 'user', content: contextParts.join('\n\n') }],
-      max_tokens: 1200
-    });
-    if (!result.ok) {
-      console.error('[DeepFit] AI call failed:', result.status, result.error);
-      return { error: result.error || 'AI call failed' };
-    }
-    const text = result.text || '';
-    console.log('[DeepFit] Raw response:', text.slice(0, 500));
-    const fitMatch = text.match(/<fit_update>([\s\S]*?)<\/fit_update>/);
-    let fitUpdate = null;
-    let cleanAnalysis = text;
-    if (fitMatch) {
-      try {
-        fitUpdate = JSON.parse(fitMatch[1].trim());
-        console.log('[DeepFit] Parsed fitUpdate:', JSON.stringify(fitUpdate));
-      } catch (e) {
-        console.warn('[DeepFit] fitUpdate JSON parse failed:', e.message, '| raw:', fitMatch[1].slice(0, 200));
-      }
-      cleanAnalysis = text.replace(/<fit_update>[\s\S]*?<\/fit_update>/, '').trim();
-    } else {
-      console.warn('[DeepFit] No <fit_update> block found in response');
-    }
-    return { analysis: cleanAnalysis, fitUpdate };
-  } catch (e) {
-    return { error: e.message };
-  }
-}
+// ── Deep Fit Analysis — REMOVED ──────────────────────────────────────────────
+// deepFitAnalysis() has been unified into processQuickFitScore() in scoring.js.
+// Scoring now includes emails, meetings, transcripts, and notes in a single call,
+// producing conversationInsights (replaces the deep fit narrative) alongside the
+// deterministic score. See scoring.js processQuickFitScore() for the unified path.
 
 // ── Next Step Extraction ─────────────────────────────────────────────────────
 
@@ -533,7 +451,7 @@ export async function migrateJobsToCompanies() {
 
 // ── Unified Save Opportunity Handler ─────────────────────────────────────────
 export async function handleSaveOpportunity(message) {
-  const { company, jobTitle, jobUrl, jobDescription, jobMeta, linkedinFirmo, source, triggerResearch } = message;
+  const { company, jobTitle, jobUrl, jobDescription, jobMeta, linkedinFirmo, linkedinJobData, source, triggerResearch } = message;
   if (!company) return { error: 'Missing company name' };
 
   const { savedCompanies, opportunityStages, customStages } = await new Promise(r =>
@@ -557,6 +475,36 @@ export async function handleSaveOpportunity(message) {
       if (!prev.linkedinFirmo) prev.linkedinFirmo = linkedinFirmo;
       if (!prev.employees && linkedinFirmo.employees) prev.employees = linkedinFirmo.employees;
       if (!prev.industry && linkedinFirmo.industry) prev.industry = linkedinFirmo.industry;
+    }
+    if (linkedinJobData) {
+      // Overwrite firmographics from job page (more reliable than company-page selectors)
+      if (linkedinJobData.employees && !prev.employees) prev.employees = linkedinJobData.employees;
+      if (linkedinJobData.industry && !prev.industry) prev.industry = linkedinJobData.industry;
+      if (linkedinJobData.hqLocation && !prev.hqLocation) prev.hqLocation = linkedinJobData.hqLocation;
+      if (linkedinJobData.founded && !prev.founded) prev.founded = linkedinJobData.founded;
+      if (linkedinJobData.companyWebsite && !prev.companyWebsite) prev.companyWebsite = linkedinJobData.companyWebsite;
+      if (linkedinJobData.companyLinkedin && !prev.companyLinkedin) prev.companyLinkedin = linkedinJobData.companyLinkedin;
+      // Job signals
+      if (linkedinJobData.seniorityLevel && !prev.seniorityLevel) prev.seniorityLevel = linkedinJobData.seniorityLevel;
+      if (linkedinJobData.jobFunction && !prev.jobFunction) prev.jobFunction = linkedinJobData.jobFunction;
+      if (linkedinJobData.jobSkills?.length && !prev.jobSkills?.length) prev.jobSkills = linkedinJobData.jobSkills;
+      if (linkedinJobData.applicantCount && !prev.applicantCount) prev.applicantCount = linkedinJobData.applicantCount;
+      if (linkedinJobData.postedDate && !prev.postedDate) prev.postedDate = linkedinJobData.postedDate;
+      if (linkedinJobData.isReposted) prev.isReposted = true;
+      if (linkedinJobData.linkedinSalaryEstimate && !prev.linkedinSalaryEstimate) prev.linkedinSalaryEstimate = linkedinJobData.linkedinSalaryEstimate;
+      if (linkedinJobData.externalApplyUrl && !prev.externalApplyUrl) prev.externalApplyUrl = linkedinJobData.externalApplyUrl;
+      // Hiring team → leaders[] (dedup by linkedin URL)
+      if (linkedinJobData.hiringTeam?.length) {
+        const current = prev.leaders || [];
+        const existingUrls = new Set(current.map(l => l.linkedin).filter(Boolean));
+        const incoming = linkedinJobData.hiringTeam.filter(r => !existingUrls.has(r.linkedin));
+        if (incoming.length) prev.leaders = [...current, ...incoming];
+      }
+      // LinkedIn connections
+      if (linkedinJobData.linkedinConnectionsCount > 0) {
+        prev.linkedinConnectionsCount = linkedinJobData.linkedinConnectionsCount;
+        if (linkedinJobData.linkedinConnectionsUrl) prev.linkedinConnectionsUrl = linkedinJobData.linkedinConnectionsUrl;
+      }
     }
     if (jobMeta) {
       prev.jobSnapshot = { ...(prev.jobSnapshot || {}), ...jobMeta };
@@ -602,11 +550,11 @@ export async function handleSaveOpportunity(message) {
     url:              null,
     oneLiner:         null,
     category:         null,
-    employees:        linkedinFirmo?.employees || null,
+    employees:        linkedinJobData?.employees || linkedinFirmo?.employees || null,
     funding:          null,
-    founded:          null,
-    companyWebsite:   null,
-    companyLinkedin:  null,
+    founded:          linkedinJobData?.founded || null,
+    companyWebsite:   linkedinJobData?.companyWebsite || null,
+    companyLinkedin:  linkedinJobData?.companyLinkedin || null,
     intelligence:     null,
     reviews:          null,
     leaders:          null,
@@ -623,9 +571,23 @@ export async function handleSaveOpportunity(message) {
     equity:           snap?.equity || null,
     compSource:       snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp ? 'Job posting' : null,
     compAutoExtracted: !!(snap?.salary || snap?.baseSalaryRange || snap?.oteTotalComp),
-    industry:         linkedinFirmo?.industry || null,
+    industry:         linkedinJobData?.industry || linkedinFirmo?.industry || null,
+    hqLocation:       linkedinJobData?.hqLocation || null,
     linkedinFirmo:    linkedinFirmo || null,
     easyApply:        jobMeta?.easyApply || false,
+    // J1: LinkedIn job posting signals
+    seniorityLevel:         linkedinJobData?.seniorityLevel || null,
+    jobFunction:            linkedinJobData?.jobFunction || null,
+    jobSkills:              linkedinJobData?.jobSkills?.length ? linkedinJobData.jobSkills : [],
+    applicantCount:         linkedinJobData?.applicantCount || null,
+    postedDate:             linkedinJobData?.postedDate || null,
+    isReposted:             linkedinJobData?.isReposted || false,
+    linkedinSalaryEstimate: linkedinJobData?.linkedinSalaryEstimate || null,
+    externalApplyUrl:       linkedinJobData?.externalApplyUrl || null,
+    // Phase 2: hiring team (→ leaders[]) + connections
+    leaders:                linkedinJobData?.hiringTeam?.length ? linkedinJobData.hiringTeam : null,
+    linkedinConnectionsCount: linkedinJobData?.linkedinConnectionsCount || null,
+    linkedinConnectionsUrl:   linkedinJobData?.linkedinConnectionsUrl || null,
   };
 
   await new Promise(r => chrome.storage.local.set({ savedCompanies: [entry, ...existing] }, r));

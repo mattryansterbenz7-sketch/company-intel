@@ -60,7 +60,6 @@ export const DEFAULT_PIPELINE_CONFIG = {
     companyIntelligence: 'claude-haiku-4-5-20251001',
     firmographicExtraction: 'claude-haiku-4-5-20251001',
     jobMatchScoring: 'claude-haiku-4-5-20251001',
-    deepFitAnalysis: 'claude-haiku-4-5-20251001',
     nextStepExtraction: 'claude-haiku-4-5-20251001',
     emailTaskExtraction: 'claude-haiku-4-5-20251001',
     chat: 'claude-haiku-4-5-20251001',
@@ -142,7 +141,6 @@ export function initPipelineConfig() {
     }
     // One-time migration: reset AI models that still have old defaults
     const oldDefaults = {
-      deepFitAnalysis: 'claude-haiku-4-5-20251001',
       jobMatchScoring: 'claude-haiku-4-5-20251001',
       chat: 'gpt-4.1-mini',
     };

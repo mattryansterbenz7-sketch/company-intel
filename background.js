@@ -9,7 +9,7 @@ import { buildGranolaIndex, searchGranolaNotes } from './granola.js';
 import { researchCompany, quickLookup } from './research.js';
 import { interpretProfileSection, processQuickFitScore, processQueue, computeStructuralMatches, analyzeJob, handleDevMockScore } from './scoring.js';
 import { consolidateProfile } from './memory.js';
-import { syncEntryFields, generateRoleBrief, deepFitAnalysis, extractNextSteps, extractEmailTasks, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
+import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
 import { handleQuickEnrichFirmo } from './search.js';
 
@@ -460,10 +460,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     generateRoleBrief(message).then(sendResponse);
     return true;
   }
-  if (message.type === 'DEEP_FIT_ANALYSIS') {
-    deepFitAnalysis(message).then(sendResponse);
-    return true;
-  }
+  // DEEP_FIT_ANALYSIS removed — unified into processQuickFitScore (scoring.js)
   if (message.type === 'EXTRACT_NEXT_STEPS') {
     extractNextSteps(message.notes, message.calendarEvents, message.transcripts, message.emailContext).then(sendResponse);
     return true;
@@ -554,6 +551,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ── Re-scrape LinkedIn job data into existing entry ─────────────────────────
+  if (message.type === 'RESCRAPE_LINKEDIN_JOB') {
+    rescrapeLinkedInJob(message).then(sendResponse).catch(err => {
+      console.error('[Rescrape] Error:', err);
+      sendResponse({ error: err.message });
+    });
+    return true;
+  }
+
   // ── Quick Fit Scoring Handlers ──────────────────────────────────────────────
   if (message.type === 'QUICK_FIT_SCORE') {
     processQuickFitScore(message.entryId).then(sendResponse).catch(err => {
@@ -607,3 +613,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Run backfill on service worker startup
 migrateJobsToCompanies();
 backfillMissingWebsites();
+
+// ── Re-scrape LinkedIn job page into existing entry ───────────────────────────
+async function rescrapeLinkedInJob({ entryId }) {
+  const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+  const entry = (savedCompanies || []).find(e => e.id === entryId);
+  if (!entry) throw new Error('Entry not found');
+  const jobUrl = entry.jobUrl;
+  if (!jobUrl || !/linkedin\.com\/jobs\/view\//i.test(jobUrl)) {
+    throw new Error('No LinkedIn job URL on this entry');
+  }
+
+  // Open a background tab (not stealing focus)
+  const tab = await new Promise(r => chrome.tabs.create({ url: jobUrl, active: false }, r));
+  console.log('[Rescrape] Opened background tab', tab.id, 'for', entry.company);
+
+  try {
+    // Wait for tab to finish loading
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Tab load timeout after 30s')), 30000);
+      const listener = (tabId, changeInfo) => {
+        if (tabId === tab.id && changeInfo.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+
+    // Give LinkedIn's SPA extra time to render the job details panel
+    await new Promise(r => setTimeout(r, 3500));
+
+    // Ask content script to extract all LinkedIn job data
+    const linkedinJobData = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Content script extraction timeout')), 20000);
+      chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_LINKEDIN_JOB' }, result => {
+        clearTimeout(timeout);
+        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+        if (result?.error) return reject(new Error(result.error));
+        resolve(result);
+      });
+    });
+
+    console.log('[Rescrape] Got data for', entry.company, '— employees:', linkedinJobData.employees, '| skills:', linkedinJobData.jobSkills?.length);
+
+    // Feed into existing duplicate-update path — updates all new fields + re-queues scoring
+    await handleSaveOpportunity({
+      company:        entry.company,
+      jobTitle:       entry.jobTitle,
+      jobUrl,
+      jobDescription: linkedinJobData.jobDescription || entry.jobDescription,
+      jobMeta:        linkedinJobData.jobMeta || null,
+      linkedinFirmo:  null,
+      linkedinJobData,
+      source:         'linkedin_page',
+      triggerResearch: false,
+    });
+
+    return { ok: true };
+  } finally {
+    // Always close the background tab
+    chrome.tabs.remove(tab.id).catch(() => {});
+  }
+}

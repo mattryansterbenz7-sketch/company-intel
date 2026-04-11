@@ -1,6 +1,4 @@
-function escapeHtml(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// escapeHtml — provided by ui-utils.js
 
 const QUEUE_STAGE = 'needs_review';
 const DISMISS_STAGE = 'rejected';
@@ -55,7 +53,7 @@ const TABLE_COLUMNS = [
       const isJob = !!c.isOpportunity;
       const fav = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
       const favHtml = fav ? `<img class="tbl-favicon" src="https://www.google.com/s2/favicons?domain=${fav}&sz=64" alt="" onerror="this.style.display='none'">` : '';
-      return `<div class="tbl-company">${favHtml}<div><a class="tbl-name" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${escapeHtml(c.company)}</a><div style="margin-top:1px;"><span class="tbl-type-badge ${isJob ? 'opp' : 'co'}">${isJob ? 'Opp' : 'Co'}</span></div></div></div>`;
+      return `<div class="tbl-company">${favHtml}<div><a class="tbl-name" href="${chrome.runtime.getURL('company.html')}?id=${c.id}">${escapeHtml(c.company)}</a><div style="margin-top:1px;"><span class="tbl-type-badge ${isJob ? 'opp' : 'co'}">${isJob ? 'Opp' : 'Co'}</span></div></div></div>`;
     }
   },
   {
@@ -82,6 +80,7 @@ const TABLE_COLUMNS = [
     key: 'score', label: 'Fit', defaultOn: true, sortable: true, filterable: true, defaultSortDir: 'desc',
     sortVal: c => c.jobMatch?.score || c.jobMatchScore || 0,
     filterVal: c => { const s = c.jobMatch?.score || c.jobMatchScore; if (!s) return 'Unscored'; if (s >= 9) return '9-10 · Strong'; if (s >= 7) return '7-8 · Good'; if (s >= 5) return '5-6 · Mixed'; return '1-4 · Poor'; },
+    filterOrder: ['9-10 · Strong', '7-8 · Good', '5-6 · Mixed', '1-4 · Poor', 'Unscored'],
     renderCell: c => {
       if (!c.isOpportunity) return '<span class="tbl-muted">—</span>';
       const score = c.jobMatch?.score || c.jobMatchScore;
@@ -100,7 +99,7 @@ const TABLE_COLUMNS = [
     key: 'actionStatus', label: 'Action On', defaultOn: true, sortable: true, filterable: true, defaultSortDir: 'asc',
     sortVal: c => c.actionStatus || '',
     filterVal: c => c.actionStatus === 'my_court' ? 'My Court' : c.actionStatus === 'their_court' ? 'Their Court' : c.actionStatus === 'scheduled' ? 'Scheduled' : 'None',
-    renderCell: c => c.actionStatus === 'their_court' ? `<span class="tbl-action their-court">Their Court</span>` : c.actionStatus === 'my_court' ? `<span class="tbl-action my-court">My Court</span>` : '<span class="tbl-muted">—</span>'
+    renderCell: c => c.actionStatus === 'their_court' ? `<span class="tbl-action their-court">Their Court</span>` : c.actionStatus === 'my_court' ? `<span class="tbl-action my-court">My Court</span>` : c.actionStatus === 'scheduled' ? `<span class="tbl-action scheduled">Scheduled</span>` : '<span class="tbl-muted">—</span>'
   },
   {
     key: 'employees', label: 'Employees', defaultOn: true, sortable: true, defaultSortDir: 'desc',
@@ -225,19 +224,7 @@ const DEFAULT_STAT_CARDS = [
 ];
 let statCardConfigs = DEFAULT_STAT_CARDS.map(c => ({ ...c }));
 
-function parseLocalDate(d) {
-  if (!d) return 0;
-  if (typeof d === 'number') return d;
-  const s = String(d);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00').getTime();
-  const ms = new Date(s).getTime();
-  return isNaN(ms) ? 0 : ms;
-}
-
-function truncLabel(str, max = 40) {
-  if (!str) return '';
-  return str.length > max ? str.slice(0, max - 1) + '…' : str;
-}
+// parseLocalDate, truncLabel — provided by ui-utils.js
 
 function computeLastActivity(entry) {
   const candidates = [];
@@ -362,40 +349,7 @@ function stageEnterTimestamp(entry, stageKey) {
 }
 
 // Auto-set "Action On" based on stage — my court for early stages, their court after applying
-function defaultActionStatus(stageKey) {
-  if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
-  if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
-  return null; // don't change for stages we don't recognize
-}
-
-function autoNextStepForStage(stageKey) {
-  const map = {
-    'needs_review':    'Coop → Review job score and decide whether to pursue',
-    'want_to_apply':   'Coop → Prepare and submit application',
-    'applied':         'Coop → Awaiting response from company',
-    'intro_requested': 'Coop → Waiting for intro to be made',
-    'conversations':   'Coop → Awaiting next steps from recruiter',
-    'offer_stage':     'Coop → Review and respond to offer',
-    'accepted':        'Coop → Complete onboarding steps',
-  };
-  return map[stageKey] || null;
-}
-
-// Apply auto actionStatus + auto nextStep when a stage change occurs.
-// Only overwrites nextStep if it's blank or was previously auto-set by Coop.
-function applyAutoStage(entry, stageKey, changes) {
-  const autoAction = defaultActionStatus(stageKey);
-  if (!autoAction) return;
-  changes.actionStatus = autoAction;
-  const autoStep = autoNextStepForStage(stageKey);
-  if (autoStep) {
-    const existing = entry?.nextStep || '';
-    if (!existing || existing.startsWith('Coop → ')) {
-      changes.nextStep = autoStep;
-      changes.nextStepSource = 'coop-auto';
-    }
-  }
-}
+// defaultActionStatus, autoNextStepForStage, applyAutoStage — provided by ui-utils.js
 
 function currentStages() {
   return activePipeline === 'company' ? customCompanyStages : customOpportunityStages;
@@ -421,18 +375,7 @@ function updateStageDynamicCSS() {
   }).join('\n');
 }
 
-function boldKeyPhrase(text) {
-  const splitRe = /\s+(matches|signals|aligns|mirrors|fits|exceeds|suggests|indicates|required|doesn't|limits|conflicts|may feel|verify|confirm|typical)\b/i;
-  const m = text.match(splitRe);
-  if (m) { const idx = text.indexOf(m[0]); return `<strong>${text.slice(0, idx)}</strong>${text.slice(idx)}`; }
-  const dashSplit = text.match(/^(.+?)\s*[;—–]\s*(.+)$/);
-  if (dashSplit) return `<strong>${dashSplit[1]}</strong> — ${dashSplit[2]}`;
-  return text;
-}
-
-function escHtmlGlobal(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
-}
+// boldKeyPhrase, escHtml — provided by ui-utils.js
 
 // Column view modes (compact vs standard) stored in localStorage
 const _colViewModes = JSON.parse(localStorage.getItem('ci_colViewModes') || '{}');
@@ -514,7 +457,7 @@ function renderCompactCard(c) {
   const tagsHtml = (c.tags || []).length
     ? `<div class="compact-tags">${(c.tags || []).map(t => {
         const cl = tagColor(t);
-        return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtmlGlobal(t)}</span>`;
+        return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}</span>`;
       }).join('')}</div>`
     : '';
 
@@ -522,12 +465,12 @@ function renderCompactCard(c) {
     <div class="compact-card score-${tier}${stateClass}" data-id="${c.id}" draggable="true">
       <div class="compact-card-score">${scoreHtml}</div>
       <div class="compact-card-body">
-        <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtmlGlobal(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
-        ${c.jobUrl ? `<a class="compact-title" href="${escHtmlGlobal(c.jobUrl)}" target="_blank" title="Open job posting">${escHtmlGlobal(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtmlGlobal(c.jobTitle || '')}</div>`}
+        <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtml(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
+        ${c.jobUrl ? `<a class="compact-title" href="${escHtml(c.jobUrl)}" target="_blank" title="Open job posting">${escHtml(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtml(c.jobTitle || '')}</div>`}
         ${(() => {
           // Filter meta: remove job title echo from salary/arrangement line
           if (meta && c.jobTitle && meta.toLowerCase().startsWith(c.jobTitle.toLowerCase())) return '';
-          return meta ? `<div class="compact-meta">${escHtmlGlobal(meta)}</div>` : '';
+          return meta ? `<div class="compact-meta">${escHtml(meta)}</div>` : '';
         })()}
         ${(c.jobMatch?.verdict || c.quickFitReason) && score != null ? (() => {
           let reason = c.jobMatch?.verdict || c.quickFitReason;
@@ -541,13 +484,13 @@ function renderCompactCard(c) {
             }
             if (reason && reason.length < 10 && !/[a-z]{3,}/i.test(reason)) reason = '';
           }
-          return reason ? `<div class="compact-meta" style="font-style:italic">${escHtmlGlobal(reason)}</div>` : '';
+          return reason ? `<div class="compact-meta" style="font-style:italic">${escHtml(reason)}</div>` : '';
         })() : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
         ${inQueue ? (() => {
           const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
           return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 2).map(qt =>
-            `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtmlGlobal(qt.text)}</div>`
+            `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtml(qt.text)}</div>`
           ).join('')}</div>` : '';
         })() : ''}
         ${tagsHtml}
@@ -595,7 +538,7 @@ function openScoreModal(entry) {
       const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
       const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
       const tip = _flagTip(f);
-      return `<div class="score-modal-flag" style="${dimOpacity}"><span class="score-modal-flag-icon" style="color:${greenShades[Math.min(i, greenShades.length - 1)]}">&#x2714;</span><span${strikeStyle}>${escHtmlGlobal(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f.text)}" data-entry-id="${entry.id}" data-flag-type="green" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
+      return `<div class="score-modal-flag" style="${dimOpacity}"><span class="score-modal-flag-icon" style="color:${greenShades[Math.min(i, greenShades.length - 1)]}">&#x2714;</span><span${strikeStyle}>${escHtml(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtml(f.text)}" data-entry-id="${entry.id}" data-flag-type="green" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
     }).join('')}
   </div>` : '';
   const redCol = redFlags.length ? `<div class="score-modal-flag-col red">
@@ -605,7 +548,7 @@ function openScoreModal(entry) {
       const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
       const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
       const tip = _flagTip(f);
-      return `<div class="score-modal-flag" style="${dimOpacity}" data-flag-text="${escHtmlGlobal(f.text)}"><span class="score-modal-flag-icon" style="color:${redShades[Math.min(i, redShades.length - 1)]}">&#x25CF;</span><span${strikeStyle}>${escHtmlGlobal(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtmlGlobal(f.text)}" data-entry-id="${entry.id}" data-flag-type="red" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
+      return `<div class="score-modal-flag" style="${dimOpacity}" data-flag-text="${escHtml(f.text)}"><span class="score-modal-flag-icon" style="color:${redShades[Math.min(i, redShades.length - 1)]}">&#x25CF;</span><span${strikeStyle}>${escHtml(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtml(f.text)}" data-entry-id="${entry.id}" data-flag-type="red" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
     }).join('')}
   </div>` : '';
   const flagsHtml = (greenCol || redCol) ? `${greenCol}${redCol}` : '';
@@ -613,7 +556,7 @@ function openScoreModal(entry) {
   // Tags
   const tagsHtml = (entry.tags || []).map(t => {
     const cl = tagColor(t);
-    return `<span class="score-modal-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtmlGlobal(t)}</span>`;
+    return `<span class="score-modal-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}</span>`;
   }).join('');
 
   // Favicon
@@ -631,9 +574,9 @@ function openScoreModal(entry) {
         <div class="score-modal-score-den">/10</div>
       </div>
       <div>
-        <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit">${favHtml} ${escHtmlGlobal(entry.company)}</a>
-        <div class="score-modal-title">${entry.jobUrl ? `<a href="${escHtmlGlobal(entry.jobUrl)}" target="_blank">${escHtmlGlobal(entry.jobTitle || '')}</a>` : escHtmlGlobal(entry.jobTitle || '')}</div>
-        ${meta ? `<div class="score-modal-meta">${escHtmlGlobal(meta)}</div>` : ''}
+        <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit">${favHtml} ${escHtml(entry.company)}</a>
+        <div class="score-modal-title">${entry.jobUrl ? `<a href="${escHtml(entry.jobUrl)}" target="_blank">${escHtml(entry.jobTitle || '')}</a>` : escHtml(entry.jobTitle || '')}</div>
+        ${meta ? `<div class="score-modal-meta">${escHtml(meta)}</div>` : ''}
         ${jm.lastUpdatedAt ? `<div style="font-size:10px;color:#9CA0A6;margin-top:4px;">Scored ${(() => {
           const mins = Math.floor((Date.now() - jm.lastUpdatedAt) / 60000);
           if (mins < 1) return 'just now';
@@ -652,16 +595,16 @@ function openScoreModal(entry) {
       const links = [];
       if (entry.companyWebsite) {
         const domain = entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-        links.push(`<a href="${escHtmlGlobal(entry.companyWebsite)}" target="_blank" style="${linkStyle}color:#516f90;background:rgba(81,111,144,0.08);border:1px solid rgba(81,111,144,0.15);">↗ ${escHtmlGlobal(domain)}</a>`);
+        links.push(`<a href="${escHtml(entry.companyWebsite)}" target="_blank" style="${linkStyle}color:#516f90;background:rgba(81,111,144,0.08);border:1px solid rgba(81,111,144,0.15);">↗ ${escHtml(domain)}</a>`);
       }
-      if (entry.companyLinkedin) links.push(`<a href="${escHtmlGlobal(entry.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
+      if (entry.companyLinkedin) links.push(`<a href="${escHtml(entry.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
       const reviews = entry.reviews || entry.intelligence?.reviews || [];
       if (reviews.length) {
         const glassdoor = reviews.find(r => /glassdoor/i.test(r.source || r.url || ''));
-        if (glassdoor?.url) links.push(`<a href="${escHtmlGlobal(glassdoor.url)}" target="_blank" style="${linkStyle}color:#0caa41;background:rgba(12,170,65,0.06);border:1px solid rgba(12,170,65,0.15);">★ Glassdoor</a>`);
+        if (glassdoor?.url) links.push(`<a href="${escHtml(glassdoor.url)}" target="_blank" style="${linkStyle}color:#0caa41;background:rgba(12,170,65,0.06);border:1px solid rgba(12,170,65,0.15);">★ Glassdoor</a>`);
         reviews.filter(r => r.url && !/glassdoor/i.test(r.source || r.url || '')).slice(0, 2).forEach(r => {
           const name = (r.source || 'Review').replace(/https?:\/\/(www\.)?/, '').split('/')[0];
-          links.push(`<a href="${escHtmlGlobal(r.url)}" target="_blank" style="${linkStyle}color:#6B6560;background:rgba(107,101,96,0.06);border:1px solid rgba(107,101,96,0.12);">★ ${escHtmlGlobal(name)}</a>`);
+          links.push(`<a href="${escHtml(r.url)}" target="_blank" style="${linkStyle}color:#6B6560;background:rgba(107,101,96,0.06);border:1px solid rgba(107,101,96,0.12);">★ ${escHtml(name)}</a>`);
         });
       }
       const industry = entry.industry || entry.intelligence?.industry || '';
@@ -670,8 +613,8 @@ function openScoreModal(entry) {
       if (!hasContext) return '';
       return `<div style="padding:0 20px 8px;border-bottom:1px solid #f0eeeb;margin-bottom:4px;">
         ${links.length ? `<div style="display:flex;gap:12px;align-items:center;margin-bottom:${industry || eli5 ? '6' : '0'}px;">${links.join('')}</div>` : ''}
-        ${industry ? `<div style="font-size:11px;font-weight:600;color:#A09A94;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">${escHtmlGlobal(industry)}</div>` : ''}
-        ${eli5 ? `<div style="font-size:12px;color:#6B6560;line-height:1.5;">${escHtmlGlobal(eli5)}</div>` : ''}
+        ${industry ? `<div style="font-size:11px;font-weight:600;color:#A09A94;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">${escHtml(industry)}</div>` : ''}
+        ${eli5 ? `<div style="font-size:12px;color:#6B6560;line-height:1.5;">${escHtml(eli5)}</div>` : ''}
       </div>`;
     })()}
     <div class="score-modal-body">
@@ -698,25 +641,25 @@ function openScoreModal(entry) {
         return `<div style="margin-bottom:14px;padding:12px 14px;background:#fafaf8;border:1px solid #ECE7E1;border-radius:10px;border-left:3px solid ${stageColorVal};">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${stageColorVal};"></span>
-            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${stageColorVal};">${escHtmlGlobal(stageLabel)}</span>
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${stageColorVal};">${escHtml(stageLabel)}</span>
           </div>
-          ${row('Next step', nextStep ? escHtmlGlobal(nextStep) : '')}
+          ${row('Next step', nextStep ? escHtml(nextStep) : '')}
           ${row('Step date', fmtDate(nextDate))}
-          ${row('Last activity', actStr ? escHtmlGlobal(actStr) : '')}
-          ${row('Notes', notes ? escHtmlGlobal(notes).replace(/\n/g, '<br>') : '', '#6B6560')}
+          ${row('Last activity', actStr ? escHtml(actStr) : '')}
+          ${row('Notes', notes ? escHtml(notes).replace(/\n/g, '<br>') : '', '#6B6560')}
         </div>`;
       })()}
       ${dqHtml}
-      ${summary ? `<div class="score-modal-verdict">${escHtmlGlobal(summary)}</div>` : ''}
+      ${summary ? `<div class="score-modal-verdict">${escHtml(summary)}</div>` : ''}
       ${flagsHtml ? `<div class="score-modal-flags">${flagsHtml}</div>` : ''}
-      ${rb.whyInteresting ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#1D9E75;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Why interesting</strong><br>${escHtmlGlobal(rb.whyInteresting)}</div>` : ''}
-      ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtmlGlobal(rb.concerns)}</div>` : ''}
-      ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/10)` : ''}</strong><br>${escHtmlGlobal(rb.qualificationMatch)}</div>` : ''}
-      ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtmlGlobal(rb.compSummary)}</div>` : ''}
+      ${rb.whyInteresting ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#1D9E75;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Why interesting</strong><br>${escHtml(rb.whyInteresting)}</div>` : ''}
+      ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtml(rb.concerns)}</div>` : ''}
+      ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/10)` : ''}</strong><br>${escHtml(rb.qualificationMatch)}</div>` : ''}
+      ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtml(rb.compSummary)}</div>` : ''}
       ${tagsHtml ? `<div class="score-modal-tags">${tagsHtml}</div>` : ''}
       <div style="display:flex;gap:8px;">
-        <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" target="_blank" style="flex:1">See full breakdown</a>
-        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtmlGlobal(entry.jobUrl)}" target="_blank" style="flex:1">View posting</a>` : ''}
+        <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" style="flex:1">See full breakdown</a>
+        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtml(entry.jobUrl)}" target="_blank" style="flex:1">View posting</a>` : ''}
       </div>
       <button class="score-modal-rescore" id="score-modal-rescore-btn">Re-score with latest criteria</button>
       ${entry.jobMatchScoredAt ? `<div style="text-align:center;font-size:11px;color:#A09A94;margin-top:4px;">Scored ${new Date(entry.jobMatchScoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>` : ''}
@@ -1096,21 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('open'); });
 });
 
-function scoreToVerdict(score) {
-  if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
-  if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
-  if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
-  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
-  return                   { label: 'Weak match',     cls: 'low' };
-}
-
-// Excitement Score modifier: user's gut feeling adjusts the AI score slightly
-function applyExcitementModifier(baseScore, rating) {
-  if (!baseScore || !rating || rating === 3) return { final: baseScore, mod: 0 };
-  const mod = { 1: -1, 2: -0.5, 4: 0.5, 5: 1 }[rating] || 0;
-  const final = Math.max(1, Math.min(10, Math.round((baseScore + mod) * 10) / 10));
-  return { final, mod };
-}
+// scoreToVerdict, applyExcitementModifier — provided by ui-utils.js
 
 // Tag color palette
 const TAG_PALETTE = [
@@ -1214,6 +1143,12 @@ function load() {
       if (first && first.key === 'needs_review' && /needs.review/i.test(first.label)) {
         first.label = "Coop\u2019s AI Scoring Queue";
         chrome.storage.local.set({ opportunityStages: storedOpp });
+      }
+      // Pin rejected to last — it's always the terminal column regardless of stored order
+      const rejIdx = storedOpp.findIndex(s => s.key === DISMISS_STAGE);
+      if (rejIdx !== -1 && rejIdx !== storedOpp.length - 1) {
+        const [rej] = storedOpp.splice(rejIdx, 1);
+        storedOpp.push(rej);
       }
       customOpportunityStages = storedOpp;
     }
@@ -1611,6 +1546,10 @@ function render() {
       };
       applyAutoStage(entry, sel.value, changes);
       updateCompany(sel.dataset.id, changes);
+      // Auto-rescore on stage transition — unified scoring picks up all accumulated context
+      if (entry?.isOpportunity && sel.value !== 'rejected') {
+        chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: sel.dataset.id }, () => void chrome.runtime.lastError);
+      }
     });
   });
 
@@ -1629,7 +1568,7 @@ function render() {
   grid.querySelectorAll('tbody tr').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('a, button, select, input')) return;
-      window.open(chrome.runtime.getURL('company.html') + '?id=' + row.dataset.id, '_blank');
+      coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + row.dataset.id);
     });
   });
 }
@@ -2304,7 +2243,7 @@ function createOpportunityFromCompany(companyId) {
   const company = allCompanies.find(c => c.id === companyId);
   if (!company) return;
   if (company.isOpportunity) {
-    window.open(chrome.runtime.getURL('company.html') + '?id=' + companyId, '_blank');
+    coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + companyId);
     return;
   }
   updateCompany(companyId, { isOpportunity: true, jobStage: 'needs_review' });
@@ -2643,7 +2582,7 @@ function renderKanbanCard(c) {
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
             ${faviconHtml}
             <span class="card-type ${isJob ? 'job' : 'company'}">${isJob ? 'Opp' : 'Co.'}</span>
-            <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank">${c.company}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</a>
+            <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}">${c.company}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</a>
           </div>
           ${isJob && c.jobTitle ? `<div class="kanban-card-job">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : c.jobTitle}</div>` : ''}
         </div>
@@ -2699,7 +2638,7 @@ function renderKanbanCard(c) {
       ${(() => {
         const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
         return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 4).map(qt =>
-          `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtmlGlobal(qt.text)}</div>`
+          `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtml(qt.text)}</div>`
         ).join('')}</div>` : '';
       })()}
       ${(() => {
@@ -2839,6 +2778,10 @@ function bindKanbanEvents(board) {
       applyAutoStage(entry, newStatus, changes);
       if (newStatus === 'applied' && !entry.appliedDate) changes.appliedDate = Date.now();
       updateCompany(draggingId, changes);
+      // Auto-rescore on stage transition
+      if (entry.isOpportunity && newStatus !== 'rejected') {
+        chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: draggingId }, () => void chrome.runtime.lastError);
+      }
       if (activePipeline !== 'company') {
         const confettiConfig = getConfettiConfig(newStatus);
         if (confettiConfig) {
@@ -2988,7 +2931,7 @@ function bindKanbanEvents(board) {
         const top = Math.round(screen.height / 2 - h / 2);
         window.open(chrome.runtime.getURL('queue.html') + `?mode=dq&id=${entry.id}`, '_blank', `width=${w},height=${h},left=${left},top=${top}`);
       } else {
-        window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+        coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id);
       }
     });
   });
@@ -3237,7 +3180,7 @@ function bindKanbanEvents(board) {
       if (entry.jobMatch?.score != null || entry.quickFitScore != null) {
         openScoreModal(entry);
       } else {
-        window.open(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id, '_blank');
+        coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id);
       }
     });
   });
@@ -3589,6 +3532,11 @@ function openColFilterPicker(th, colKey, colDef) {
     const aActive = activeFilters.has(a[0]) ? 1 : 0;
     const bActive = activeFilters.has(b[0]) ? 1 : 0;
     if (aActive !== bActive) return bActive - aActive;
+    if (colDef.filterOrder) {
+      const ai = colDef.filterOrder.indexOf(a[0]);
+      const bi = colDef.filterOrder.indexOf(b[0]);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    }
     return b[1] - a[1];
   });
 
@@ -3652,6 +3600,13 @@ function openColFilterPicker(th, colKey, colDef) {
       if (checked.length) tblFilters[colKey] = checked;
       else delete tblFilters[colKey];
       render();
+      // Re-anchor picker after render() replaces the th element
+      const newTh = document.querySelector(`th[data-col="${colKey}"]`);
+      if (newTh) {
+        const r = newTh.getBoundingClientRect();
+        picker.style.top = (r.bottom + 4) + 'px';
+        picker.style.left = Math.min(r.left, window.innerWidth - 236) + 'px';
+      }
     });
   });
 
@@ -3808,10 +3763,10 @@ function renderTasksView() {
       el.addEventListener('click', () => {
         const name = el.dataset.company;
         const entry = allCompanies.find(c => c.company === name);
-        if (entry) window.open(`company.html?id=${entry.id}`, '_blank');
+        if (entry) coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + entry.id);
       });
     });
-    container.querySelectorAll('.task-text').forEach(el => {
+    container.querySelectorAll('.task-text, .task-priority').forEach(el => {
       el.style.cursor = 'pointer';
       el.addEventListener('click', () => {
         const id = el.closest('.task-item').dataset.taskId;
@@ -3890,8 +3845,7 @@ function showTaskForm(editTask) {
   fc.querySelector('#task-cancel-btn').addEventListener('click', () => { fc.innerHTML = ''; });
 }
 
-// escHtml for tasks — use escHtmlGlobal if no local one in scope
-if (typeof escHtml === 'undefined') { var escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// escHtml — provided by ui-utils.js
 // Restore pipeline state on load (updatePipelineUI is defined later, call after DOM ready)
 document.addEventListener('DOMContentLoaded', () => {}, { once: true });
 // Pipeline UI is initialized via updatePipelineUI() called from load()
@@ -4082,10 +4036,10 @@ document.getElementById('stage-editor-modal').addEventListener('click', (e) => {
 });
 document.getElementById('edit-stages-btn').addEventListener('click', openStageEditor);
 document.getElementById('queue-header-btn')?.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('queue.html'), '_blank');
+  coopNavigate(chrome.runtime.getURL('queue.html'));
 });
 document.getElementById('apply-header-btn')?.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('queue.html?mode=apply'), '_blank');
+  coopNavigate(chrome.runtime.getURL('queue.html?mode=apply'));
 });
 
 // Search with autocomplete dropdown
@@ -4116,9 +4070,9 @@ document.getElementById('apply-header-btn')?.addEventListener('click', () => {
       return;
     }
     dropdown.innerHTML = matches.map((c, i) => {
-      const detail = c.isOpportunity && c.jobTitle ? escHtmlGlobal(c.jobTitle) : (c.oneLiner ? escHtmlGlobal(c.oneLiner) : '');
+      const detail = c.isOpportunity && c.jobTitle ? escHtml(c.jobTitle) : (c.oneLiner ? escHtml(c.oneLiner) : '');
       return `<div class="search-dropdown-item${i === activeIndex ? ' active' : ''}" data-id="${c.id}">
-        <span class="search-dropdown-company">${escHtmlGlobal(c.company)}</span>
+        <span class="search-dropdown-company">${escHtml(c.company)}</span>
         ${detail ? `<span class="search-dropdown-detail">${detail}</span>` : ''}
       </div>`;
     }).join('');
@@ -4152,7 +4106,7 @@ document.getElementById('apply-header-btn')?.addEventListener('click', () => {
       e.preventDefault();
       const match = matches[activeIndex];
       if (match) {
-        window.open(chrome.runtime.getURL('company.html') + '?id=' + match.id, '_blank');
+        coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + match.id);
         dropdown.classList.remove('visible');
         activeIndex = -1;
       }
@@ -4163,7 +4117,7 @@ document.getElementById('apply-header-btn')?.addEventListener('click', () => {
     const item = e.target.closest('.search-dropdown-item');
     if (item) {
       const id = item.dataset.id;
-      window.open(chrome.runtime.getURL('company.html') + '?id=' + id, '_blank');
+      coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + id);
       dropdown.classList.remove('visible');
       activeIndex = -1;
     }
@@ -4361,10 +4315,10 @@ function showMetricDrillDown(goalDef, range) {
         const name = e.jobTitle || e.company || 'Unnamed';
         const sub = (e.jobTitle && e.company) ? e.company : '';
         const url = chrome.runtime.getURL('company.html') + '?id=' + e.id;
-        return `<a class="metric-drill-row" href="${url}" target="_blank">
+        return `<a class="metric-drill-row" href="${url}">
           <div class="metric-drill-row-main">
-            <span class="metric-drill-name">${escHtmlGlobal(name)}</span>
-            ${sub ? `<span class="metric-drill-sub">${escHtmlGlobal(sub)}</span>` : ''}
+            <span class="metric-drill-name">${escHtml(name)}</span>
+            ${sub ? `<span class="metric-drill-sub">${escHtml(sub)}</span>` : ''}
           </div>
           <span class="metric-drill-stage" style="background:${stage.color}1a;color:${stage.color};border-color:${stage.color}55">${stage.label}</span>
         </a>`;
@@ -4839,9 +4793,7 @@ function openStatCardEditor() {
   const SIZE_ICONS = ['\u2922', '\u2921', '\u22A1'];
   const SIZE_CLASSES = ['', 'gc-maximized', 'gc-fullscreen'];
 
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
-  }
+  // escHtml — provided by ui-utils.js
 
   function renderMessages(showThinking) {
     if (history.length === 0) {
@@ -5067,17 +5019,21 @@ load();
 // ── Inbox: opens dedicated inbox page ────────────────────────────────────────
 
 document.getElementById('inbox-link')?.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('inbox.html'), '_blank');
+  coopNavigate(chrome.runtime.getURL('inbox.html'));
 });
 
 // Badge count for inbox link
 function updateInboxBadge() {
-  chrome.storage.local.get(['lastInboxViewedAt'], ({ lastInboxViewedAt }) => {
+  chrome.storage.local.get(['lastInboxViewedAt', 'readEmailKeys'], ({ lastInboxViewedAt, readEmailKeys: rk }) => {
     const lastViewed = lastInboxViewedAt || 0;
+    const readSet = new Set(Array.isArray(rk) ? rk : []);
     let unread = 0;
     (allCompanies || []).forEach(c => {
       (c.cachedEmails || []).forEach(e => {
-        if (e.date && new Date(e.date).getTime() > lastViewed) unread++;
+        const ts = e.date ? new Date(e.date).getTime() : 0;
+        if (ts <= lastViewed) return; // not genuinely new since last inbox open
+        const key = e.id || e.messageId || e.threadId || `${e.subject||''}|${e.date||''}|${e.from||''}`;
+        if (!readSet.has(key)) unread++;
       });
     });
     const badge = document.getElementById('inbox-badge');

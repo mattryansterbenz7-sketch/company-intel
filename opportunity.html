@@ -60,6 +60,14 @@
       border: 1px solid var(--ci-border-default); border-radius: 8px; transition: all var(--ci-transition-fast);
     }
     .hdr-prefs-link:hover { background: var(--ci-bg-base); color: var(--ci-text-primary); border-color: var(--ci-text-tertiary); }
+    .hdr-rescrape-btn {
+      font-size: 13px; color: var(--ci-text-secondary); font-weight: 600; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0; padding: 7px 12px;
+      border: 1px solid var(--ci-border-default); border-radius: 8px;
+      background: none; transition: all var(--ci-transition-fast);
+    }
+    .hdr-rescrape-btn:hover:not(:disabled) { background: var(--ci-bg-base); color: var(--ci-text-primary); border-color: #0ea5e9; color: #0ea5e9; }
+    .hdr-rescrape-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
     /* ── Body layout ── */
     #opp-body { display: flex; align-items: flex-start; min-height: calc(100vh - 60px); }

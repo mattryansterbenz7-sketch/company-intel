@@ -38,6 +38,7 @@ chrome.storage.sync.get(['prefs'], d => { _cachedUserName = (d.prefs && (d.prefs
 
 let entry = null;
 let allCompanies = [];
+// _deepFitInFlight removed — deep fit unified into processQuickFitScore
 let allKnownTags = [];
 let customCompanyStages = [];
 let customOpportunityStages = [];
@@ -48,52 +49,8 @@ let _researchAttempted = false; // guards against repeated RESEARCH_COMPANY call
 let _cacheMetadata = null; // { ts, _usage } from researchCache for current company
 
 // Auto-set "Action On" based on stage
-function defaultActionStatus(stageKey) {
-  if (/needs_review|want_to_apply|interested/i.test(stageKey)) return 'my_court';
-  if (/applied|intro_requested|conversations|offer|accepted/i.test(stageKey)) return 'their_court';
-  return null;
-}
-
-function autoNextStepForStage(stageKey) {
-  const map = {
-    'needs_review':    'Coop → Review job score and decide whether to pursue',
-    'want_to_apply':   'Coop → Prepare and submit application',
-    'applied':         'Coop → Awaiting response from company',
-    'intro_requested': 'Coop → Waiting for intro to be made',
-    'conversations':   'Coop → Awaiting next steps from recruiter',
-    'offer_stage':     'Coop → Review and respond to offer',
-    'accepted':        'Coop → Complete onboarding steps',
-  };
-  return map[stageKey] || null;
-}
-
-function applyAutoStage(entry, stageKey, changes) {
-  const autoAction = defaultActionStatus(stageKey);
-  if (!autoAction) return;
-  changes.actionStatus = autoAction;
-  const autoStep = autoNextStepForStage(stageKey);
-  if (autoStep) {
-    const existing = entry?.nextStep || '';
-    if (!existing || existing.startsWith('Coop → ')) {
-      changes.nextStep = autoStep;
-      changes.nextStepSource = 'coop-auto';
-    }
-  }
-}
-
-function parseLocalDate(d) {
-  if (!d) return 0;
-  if (typeof d === 'number') return d;
-  const s = String(d);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00').getTime();
-  const ms = new Date(s).getTime();
-  return isNaN(ms) ? 0 : ms;
-}
-
-function truncLabel(str, max = 40) {
-  if (!str) return '';
-  return str.length > max ? str.slice(0, max - 1) + '…' : str;
-}
+// defaultActionStatus, autoNextStepForStage, applyAutoStage,
+// parseLocalDate, truncLabel — provided by ui-utils.js
 
 function computeLastActivity(entry) {
   const candidates = [];
@@ -415,7 +372,6 @@ function init() {
     // Auto-refresh on open — show cache immediately, fetch fresh in background
     loadHubEmails(true);
     loadHubMeetings(false);
-    maybeRefreshDeepFitAnalysis();
 
     const focus = new URLSearchParams(location.search).get('focus');
     if (focus === 'opportunity') {
@@ -551,18 +507,18 @@ async function reEnrichMissingFields() {
   }
 }
 
-// Event-driven re-scoring: triggers when new context arrives (meetings, emails, notes)
+// Unified re-scoring: one call handles all context (JD + flags + emails + meetings + notes).
+// Triggers: stage transition, manual Rescore button, role brief update.
+// Does NOT trigger on email/meeting arrival — data accumulates, score catches up on stage change.
 function maybeRescore(reason) {
   if (!entry.isOpportunity) return;
-  // Only auto-rescore opportunities past the queue stage
   const stage = entry.jobStage || 'needs_review';
-  if (stage === 'needs_review') return;
+  if (stage === 'rejected') return;
 
-  console.log('[Rescore] Triggering unified re-score for', entry.company, '— reason:', reason);
+  console.log('[Rescore] Triggering unified score for', entry.company, '— reason:', reason);
   chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
     void chrome.runtime.lastError;
     if (result && !result.error) {
-      // Refresh entry from storage and re-render
       chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
         const fresh = (savedCompanies || []).find(c => c.id === entry.id);
         if (fresh) {
@@ -711,6 +667,10 @@ function renderHeader() {
     // Fire celebration if configured
     const celebCfg = _getCelebrationConfig(sel.value);
     if (celebCfg) _fireCelebration({ ...celebCfg, stageKey: sel.value });
+    // Auto-rescore on stage transition — unified scoring picks up all accumulated context
+    if (sel.value !== 'rejected' && entry.isOpportunity) {
+      maybeRescore('stage_transition');
+    }
   });
 
   document.getElementById('hdr-stars')?.querySelectorAll('.hdr-star').forEach(btn => {
@@ -865,13 +825,7 @@ function addToOpportunityPipeline() {
 
 function createOpportunity() { addToOpportunityPipeline(); } // backward compat
 
-function scoreToVerdict(score) {
-  if (score >= 8)   return { label: 'Strong match',   cls: 'high',     color: '#059669' };
-  if (score >= 6.5) return { label: 'Good match',     cls: 'mid',      color: '#2563eb' };
-  if (score >= 5)   return { label: 'Possible match', cls: 'possible', color: '#7c3aed' };
-  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed',    color: '#d97706' };
-  return                   { label: 'Weak match',     cls: 'low',      color: '#dc2626' };
-}
+// scoreToVerdict — provided by ui-utils.js
 
 function generateFieldSuggestions(e) {
   const suggestions = {};
@@ -1174,7 +1128,7 @@ function _legacyCreateJobRecord() {
   };
   allCompanies = [newEntry, ...allCompanies];
   chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
-    window.open(chrome.runtime.getURL('opportunity.html') + '?id=' + newEntry.id, '_blank');
+    coopNavigate(chrome.runtime.getURL('opportunity.html') + '?id=' + newEntry.id);
     renderHeader(); // refresh button to "View Opportunity"
     renderPanel('opportunities'); // refresh opportunities panel if visible
   });
@@ -1906,14 +1860,11 @@ function initIntelTab() {
     });
   });
 
-  // Trigger / refresh deep fit analysis
-  maybeRefreshDeepFitAnalysis();
-
   // Bind role brief events
   bindRoleBriefEvents();
 
-  // Auto-generate role brief on first load if data exists
-  if (entry.isOpportunity && !entry.roleBrief && (entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length)) {
+  // Auto-generate long-form role brief on first load if data exists and no short-form from scoring
+  if (entry.isOpportunity && !entry.roleBrief && !entry.jobMatch?.roleBrief?.roleSummary && (entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length)) {
     setTimeout(() => generateRoleBrief(), 1000);
   }
 }
@@ -1988,40 +1939,10 @@ function bindRoleBriefEvents() {
   document.getElementById('rb-stale-refresh')?.addEventListener('click', generateRoleBrief);
 }
 
-function maybeRefreshDeepFitAnalysis() {
-  // Scoring is now unified — auto-refresh only re-runs the single scorer
-  // when new interaction data (meetings, emails) arrives after the last score
-  if (!entry.isOpportunity || !entry.jobMatch?.score) return;
-
-  const hasNewInteractions = !!(entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
-    entry.cachedEmails?.length);
-  if (!hasNewInteractions) return;
-
-  const newestContext = Math.max(
-    entry.cachedEmailsAt || 0,
-    entry.cachedMeetingNotesAt || 0,
-    entry.cachedCalendarEventsAt || 0
-  );
-  const lastScored = entry.jobMatch?.lastUpdatedAt || entry.quickFitScoredAt || 0;
-  if (newestContext <= lastScored) return;
-
-  console.log('[FitScore] New interaction data detected — re-scoring');
-  chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
-    void chrome.runtime.lastError;
-    if (result && !result.error) {
-      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-        const fresh = (savedCompanies || []).find(c => c.id === entry.id);
-        if (fresh) {
-          Object.assign(entry, fresh);
-          const idx = allCompanies.findIndex(c => c.id === entry.id);
-          if (idx !== -1) allCompanies[idx] = entry;
-        }
-        const fitBlock = document.getElementById('hub-fit-block');
-        if (fitBlock) fitBlock.innerHTML = buildFitSection();
-      });
-    }
-  });
-}
+// maybeRefreshDeepFitAnalysis / maybeRunDeepFit — REMOVED
+// Deep fit analysis has been unified into processQuickFitScore (scoring.js).
+// Emails, meetings, transcripts, and notes are now included in the single scoring call.
+// Rescoring happens on stage transitions and manual Rescore — not on data arrival.
 
 function buildFitSection() {
   // Unified scoring — one source of truth: jobMatch
@@ -2060,10 +1981,13 @@ function buildFitSection() {
     } else if (reason) {
       html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5">${escapeHtml(reason)}</div>`;
     }
+    if (jm.conversationInsights) {
+      html += `<div style="font-size:13px;color:#374151;margin:10px 0 4px;line-height:1.6;border-left:3px solid #059669;padding-left:10px;background:#f0fdf4;border-radius:0 4px 4px 0;padding:8px 10px;"><span style="font-size:11px;font-weight:600;color:#059669;display:block;margin-bottom:4px;letter-spacing:0.04em">FROM CONVERSATIONS</span>${escapeHtml(jm.conversationInsights)}</div>`;
+    }
   }
 
   // Refresh button — always available for opportunities
-  html += `<button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-score using latest context">
+  html += `<button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-score using latest job data, emails, and meeting notes">
     ↻ ${score ? 'Refresh analysis' : 'Run fit analysis'}
   </button>`;
 
@@ -2247,11 +2171,8 @@ function bindHubTabs() {
     }
     chrome.runtime.sendMessage({ type: 'QUICK_FIT_SCORE', entryId: entry.id }, result => {
       void chrome.runtime.lastError;
-      btn.disabled = false;
-      btn.textContent = '↻ Refresh analysis';
       document.getElementById('coop-thinking-fit')?.remove();
       if (result && !result.error) {
-        // Reload entry from storage to pick up the updated jobMatch
         chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
           const fresh = (savedCompanies || []).find(c => c.id === entry.id);
           if (fresh) {
@@ -2260,7 +2181,12 @@ function bindHubTabs() {
             if (idx !== -1) allCompanies[idx] = entry;
           }
           if (fitBlock) fitBlock.innerHTML = buildFitSection();
+          btn.disabled = false;
+          btn.textContent = '↻ Refresh analysis';
         });
+      } else {
+        btn.disabled = false;
+        btn.textContent = '↻ Refresh analysis';
       }
     });
   }, { capture: true });
@@ -2536,7 +2462,7 @@ function loadHubEmails(forceRefresh) {
     if (result.extractedContacts?.length) {
       mergeExtractedContacts(result.extractedContacts);
     }
-    maybeRescore('new_emails');
+    // Data accumulates — score catches up on stage transition or manual Rescore
     const activityContainer = document.getElementById('activity-timeline');
     if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
       activityContainer.innerHTML = buildActivityTimeline(entry);
@@ -2677,9 +2603,7 @@ function loadHubMeetings(forceRefresh) {
         activityContainer.innerHTML = buildActivityTimeline(entry);
       }
 
-      // New context arrived — refresh fit analysis and job match score
-      maybeRefreshDeepFitAnalysis();
-      maybeRescore('new_meetings');
+      // Data accumulates — score catches up on stage transition or manual Rescore
 
       // Auto-populate next step + date if not already set
       maybeExtractNextSteps();
@@ -3716,14 +3640,14 @@ function buildOpportunities() {
   const oppCards = opps.map(o => {
     const sc = stageColor(o.status || 'needs_review', customOpportunityStages);
     const stage = customOpportunityStages.find(s => s.key === (o.status||'needs_review'));
-    return `<a class="opp-card" href="${chrome.runtime.getURL('opportunity.html')}?id=${o.id}" target="_blank">
+    return `<a class="opp-card" href="${chrome.runtime.getURL('opportunity.html')}?id=${o.id}">
       <div class="opp-card-title">${(o.jobTitle && o.jobTitle !== 'New Opportunity') ? o.jobTitle : `Custom Role @ ${o.company || entry.company}`}</div>
       <div class="opp-card-meta">Saved ${new Date(o.savedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
       <span class="opp-card-status" style="border-color:${sc};color:${sc};background:${hexToRgba(sc,0.08)}">${stage?.label||o.status||''}</span>
     </a>`;
   }).join('');
   const actionBtn = opps.length > 0
-    ? `<a class="new-opp-btn view-opp-btn" href="${chrome.runtime.getURL('opportunity.html')}?id=${opps[0].id}" target="_blank">View Opportunity →</a>`
+    ? `<a class="new-opp-btn view-opp-btn" href="${chrome.runtime.getURL('opportunity.html')}?id=${opps[0].id}">View Opportunity →</a>`
     : `<button class="new-opp-btn" id="new-opp-btn">+ Add as Opportunity</button>`;
   return `
     ${oppCards}
@@ -4770,9 +4694,7 @@ function bindNoteCardEvents() {
   });
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+// escapeHtml — provided by ui-utils.js
 
 function renderMarkdown(text) {
   // Escape HTML first, then apply markdown patterns

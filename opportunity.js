@@ -2,18 +2,7 @@ const params = new URLSearchParams(window.location.search);
 const entryId = params.get('id');
 let entry = null;
 
-// Local escapeHtml — opportunity.js references escapeHtml() in a few render
-// paths (notes, email threads) but didn't define it, relying on chat.js load
-// order. Defining it here avoids ReferenceErrors when chat.js isn't loaded
-// yet or the load order changes.
-function escapeHtml(str) {
-  return String(str == null ? '' : str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+// escapeHtml — provided by ui-utils.js
 let allTags = [];
 let stages = [];
 
@@ -41,20 +30,7 @@ let panelOrder      = JSON.parse(localStorage.getItem('ci_panel_order')     || '
 let collapsedPanels = JSON.parse(localStorage.getItem('ci_panel_collapsed') || '{}');
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
-
-function parseLocalDate(d) {
-  if (!d) return 0;
-  if (typeof d === 'number') return d;
-  const s = String(d);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00').getTime();
-  const ms = new Date(s).getTime();
-  return isNaN(ms) ? 0 : ms;
-}
-
-function truncLabel(str, max = 40) {
-  if (!str) return '';
-  return str.length > max ? str.slice(0, max - 1) + '\u2026' : str;
-}
+// parseLocalDate, truncLabel — provided by ui-utils.js
 
 function computeLastActivity(entry) {
   const candidates = [];
@@ -244,13 +220,7 @@ function tagColor(tag) {
   return OPP_TAG_PALETTE[Math.abs(hash) % OPP_TAG_PALETTE.length];
 }
 
-function scoreToVerdict(score) {
-  if (score >= 8)   return { label: 'Strong match',   cls: 'high' };
-  if (score >= 6.5) return { label: 'Good match',     cls: 'mid' };
-  if (score >= 5)   return { label: 'Possible match', cls: 'possible' };
-  if (score >= 3)   return { label: 'Mixed signals',  cls: 'mixed' };
-  return                   { label: 'Weak match',     cls: 'low' };
-}
+// scoreToVerdict — provided by ui-utils.js
 
 function stageColor(key) {
   return (stages.find(s => s.key === key) || stages[0] || DEFAULT_STAGES[0]).color;
@@ -368,6 +338,9 @@ function renderHeader() {
     </select>
     <div class="hdr-stars" id="hdr-stars">${stars}</div>
     ${entry.url ? `<a class="hdr-ext-link" href="${entry.url}" target="_blank">↗ Job Posting</a>` : ''}
+    ${entry.jobUrl && /linkedin\.com\/jobs\/view\//i.test(entry.jobUrl)
+      ? `<button class="hdr-rescrape-btn" id="hdr-rescrape-btn" title="Re-fetch all LinkedIn data (firmographics, skills, recruiter, etc.) and rescore">↺ Refresh LinkedIn data</button>`
+      : ''}
     <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Career OS</a>
   `;
 
@@ -396,6 +369,27 @@ function renderHeader() {
       });
     });
   });
+
+  const rescrapeBtn = document.getElementById('hdr-rescrape-btn');
+  if (rescrapeBtn) {
+    rescrapeBtn.addEventListener('click', () => {
+      rescrapeBtn.disabled = true;
+      rescrapeBtn.textContent = '↺ Opening LinkedIn tab…';
+      chrome.runtime.sendMessage({ type: 'RESCRAPE_LINKEDIN_JOB', entryId: entry.id }, resp => {
+        void chrome.runtime.lastError;
+        if (resp?.error) {
+          rescrapeBtn.disabled = false;
+          rescrapeBtn.textContent = '↺ Refresh LinkedIn data';
+          rescrapeBtn.title = 'Error: ' + resp.error;
+          rescrapeBtn.style.color = '#ef4444';
+          return;
+        }
+        // Reload page to show updated fields + new score
+        rescrapeBtn.textContent = '✓ Refreshed — reloading…';
+        setTimeout(() => window.location.reload(), 800);
+      });
+    });
+  }
 }
 
 // ── Left Sidebar ──────────────────────────────────────────────────────────────

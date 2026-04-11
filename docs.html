@@ -185,6 +185,8 @@
       <a href="#company-view">Company View</a>
       <a href="#opportunity">Opportunity Pipeline & Table View</a>
       <a href="#apply-queue">Apply Queue & Active Review</a>
+      <a href="#send-to-coop">Send to Coop (Save Flow)</a>
+      <a href="#linkedin-capture">LinkedIn Data Capture</a>
       <a href="#scoring-system">How Scoring Works</a>
       <a href="#score-breakdown">Score Breakdown</a>
       <a href="#qualifications">Qualification Matching</a>
@@ -887,67 +889,481 @@
       <p class="body">Green and red flags now use gradient colors — the most important signal is darkest, fading lighter for less critical ones. This gives you an instant visual sense of severity.</p>
     </div>
 
+    <!-- Send to Coop (Save Flow) -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="send-to-coop"></span>
+      <div class="doc-section-title">Send to Coop (Save Flow)</div>
+      <span class="pill pill-green">New Apr 11</span>
+
+      <p class="body">Every job save goes through a single unified handler (<code>SAVE_OPPORTUNITY</code>) regardless of where you click. One function, one entry shape, one dedup strategy, one scoring queue.</p>
+
+      <h3 class="sub">Three actions</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Send to Coop</strong> &mdash; Primary action. Extracts job description + metadata from the page, saves the entry, queues for scoring. Available as an on-page pill button (LinkedIn, Greenhouse, Lever, Workday, Ashby, Rippling, Workable, YC Work at a Startup, and generic career pages) and in the side panel when a job title is detected.</li>
+          <li><strong>Send to Coop + Research</strong> &mdash; Same as above, plus triggers the full enrichment pipeline (Apollo firmographics, leadership profiles, product deep-dive, competitive landscape, Claude synthesis) to populate the company detail page. For when you want the full dossier, not just a score. Side panel only.</li>
+          <li><strong>Save Company</strong> &mdash; For non-job pages. Saves a company-only entry with no job fields and no scoring. The Research button remains independent.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">What happens when you click</h3>
+      <!-- Save flow pipeline diagram -->
+      <div style="margin:24px 0;">
+        <svg width="100%" viewBox="0 0 740 290" xmlns="http://www.w3.org/2000/svg" style="border-radius:12px;border:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+          <text x="370" y="28" text-anchor="middle" font-size="13" font-weight="800" fill="#2D2D2D" font-family="-apple-system,sans-serif">Save Flow Pipeline</text>
+
+          <!-- Step 1: Extract -->
+          <rect x="20" y="48" width="160" height="90" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+          <text x="100" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#1e40af" font-family="-apple-system,sans-serif">1. EXTRACT</text>
+          <text x="35" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Company name</text>
+          <text x="35" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Job title + description</text>
+          <text x="35" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">LinkedIn firmographics</text>
+
+          <!-- Arrow -->
+          <defs><marker id="sarrow" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 4 L0 8z" fill="#FF7A59"/></marker></defs>
+          <path d="M180 93 L210 93" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#sarrow)"/>
+
+          <!-- Step 2: Dedup -->
+          <rect x="210" y="48" width="150" height="90" rx="10" fill="#fdf4ff" stroke="#e8d5f5" stroke-width="1"/>
+          <text x="285" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#7c3aed" font-family="-apple-system,sans-serif">2. DEDUP CHECK</text>
+          <text x="225" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Company name match</text>
+          <text x="225" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Title similarity check</text>
+          <text x="225" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Dup? Enrich existing</text>
+
+          <path d="M360 93 L390 93" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#sarrow)"/>
+
+          <!-- Step 3: Save -->
+          <rect x="390" y="48" width="150" height="90" rx="10" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+          <text x="465" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#16a34a" font-family="-apple-system,sans-serif">3. SAVE</text>
+          <text x="405" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Build canonical entry</text>
+          <text x="405" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Prepend to storage</text>
+          <text x="405" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Return immediately</text>
+
+          <path d="M540 93 L570 93" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#sarrow)"/>
+
+          <!-- Step 4: Score -->
+          <rect x="570" y="48" width="150" height="90" rx="10" fill="#fff7ed" stroke="#fed7aa" stroke-width="1"/>
+          <text x="645" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#c2410c" font-family="-apple-system,sans-serif">4. QUEUE SCORE</text>
+          <text x="585" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Async background job</text>
+          <text x="585" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">JD backfill if missing</text>
+          <text x="585" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Score arrives in ~3-5s</text>
+
+          <!-- Timing callout -->
+          <rect x="20" y="160" width="700" height="50" rx="10" fill="#f8f7f5" stroke="#d6d0c8" stroke-width="1"/>
+          <text x="370" y="180" text-anchor="middle" font-size="10" font-weight="700" fill="#2D2D2D" font-family="-apple-system,sans-serif">TIMING</text>
+          <text x="35" y="198" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Save completes in &lt;100ms. You can scroll to the next job immediately. Scoring runs async in the background and broadcasts the result when done.</text>
+
+          <!-- Data source callout -->
+          <rect x="20" y="225" width="700" height="50" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+          <text x="370" y="245" text-anchor="middle" font-size="10" font-weight="700" fill="#1e40af" font-family="-apple-system,sans-serif">SCORING DATA SOURCES</text>
+          <text x="35" y="263" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">JD text + LinkedIn firmographics + scoutCompany (2 Serper searches: overview + reviews/culture, cached 7 days). ~$0.01 per score.</text>
+        </svg>
+      </div>
+
+      <h3 class="sub">Job description capture</h3>
+      <p class="body">The content script extracts the full job description from the page DOM &mdash; up to 8,000 characters. On LinkedIn, it auto-clicks "see more" and waits for the expanded text. On Greenhouse, Lever, Workday, and Ashby, it reads directly from the page structure. The JD is captured <strong>before</strong> the save message is sent to background.js. If extraction fails at save time, the scoring layer has two fallbacks:</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>URL fetch</strong> &mdash; fetches the job URL directly (works for most ATS pages)</li>
+          <li><strong>Serper search</strong> &mdash; searches for <code>"company" "title" job description</code> as a last resort</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Duplicate handling</h3>
+      <p class="body">If you save the same role twice (company name match + similar title), the existing entry is enriched with any new data &mdash; a longer JD, updated firmographics, new salary info &mdash; and re-queued for scoring. No duplicate entries are created.</p>
+
+      <h3 class="sub">What gets saved</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li>Company name, LinkedIn URL, website</li>
+          <li>Job title, job URL, full job description text</li>
+          <li>Salary/OTE/equity (auto-extracted from posting)</li>
+          <li>Work arrangement, employment type, location, perks</li>
+          <li>Easy Apply flag (LinkedIn only)</li>
+          <li><strong>LinkedIn job pages also capture:</strong> employee count, industry, HQ location, founded year, seniority level, job function, skills tags, applicant count, posted date, repost flag, LinkedIn salary estimate, external apply URL, hiring team recruiter, connections count — see <a href="#linkedin-capture">LinkedIn Data Capture</a></li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">Tip</span>
+        <span>You don't need to click "see more" on LinkedIn job descriptions. The content script handles the expansion automatically before saving.</span>
+      </div>
+    </div>
+
+    <!-- LinkedIn Data Capture -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="linkedin-capture"></span>
+      <div class="doc-section-title">LinkedIn Data Capture</div>
+      <span class="pill pill-green">New Apr 11</span>
+
+      <p class="doc-section-lead">When you click "Send to Coop" on a LinkedIn job posting (<code>linkedin.com/jobs/view/…</code>), Coop extracts structured data from the page DOM and an embedded JSON-LD block — zero API calls, zero extra cost. This data feeds directly into scoring and the company profile.</p>
+
+      <h3 class="sub">Data sources</h3>
+      <p class="body">Extraction runs in order of reliability. Higher-priority sources win; DOM fills gaps.</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>JSON-LD (<code>&lt;script type="application/ld+json"&gt;</code>)</strong> — LinkedIn embeds a machine-readable <code>JobPosting</code> schema block on every job page for search engine indexing. Most stable source — LinkedIn maintains it carefully. Provides: job title, full description, posted date, employment type, job location, disclosed salary, job function, skills, hiring org name + LinkedIn URL.</li>
+          <li><strong>About the company sidebar</strong> — The right sidebar "About the company" section contains structured list items for: employee count, industry, HQ location, founded year, company website, company LinkedIn URL. These are job-page-specific selectors — not the company page selectors that were previously broken.</li>
+          <li><strong>Job details panel</strong> — The main panel contains: seniority level, job function, skills chips ("How you match" section), applicant count, posted/reposted date, LinkedIn salary estimate, external apply URL.</li>
+          <li><strong>Hiring team card</strong> — "Meet the hiring team" shows the recruiter or HR contact who posted the job. Captured: name, title, LinkedIn profile URL.</li>
+          <li><strong>Connections callout</strong> — If you have connections at the company, LinkedIn shows "X connections work here." Captured: count + link to see the list.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Field reference</h3>
+      <div style="overflow-x:auto;margin:16px 0;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:var(--ci-bg-raised);border-bottom:2px solid var(--ci-border-default);">
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--ci-text-primary);">Field</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--ci-text-primary);">Source</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--ci-text-primary);">Example</th>
+              <th style="text-align:left;padding:8px 12px;font-weight:700;color:var(--ci-text-primary);">Used in scoring?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">employees</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">About box DOM</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"201–500 employees"</td>
+              <td style="padding:8px 12px;">Yes — Company Fit</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">industry</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">About box DOM</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"Software Development"</td>
+              <td style="padding:8px 12px;">Yes — Company Fit</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">hqLocation</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">About box DOM / JSON-LD</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"San Francisco, CA"</td>
+              <td style="padding:8px 12px;">Yes — Company Fit</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">founded</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">About box DOM</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"2018"</td>
+              <td style="padding:8px 12px;">Yes — Company Fit</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">companyWebsite</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">About box DOM</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"https://acme.com"</td>
+              <td style="padding:8px 12px;">No (display only)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">companyLinkedin</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">About box DOM / JSON-LD</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"/company/acme"</td>
+              <td style="padding:8px 12px;">No (display only)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">seniorityLevel</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Job details panel</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"Mid-Senior level"</td>
+              <td style="padding:8px 12px;">Yes — Posting Details block</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">jobFunction</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Job details panel / JSON-LD</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"Sales, Business Development"</td>
+              <td style="padding:8px 12px;">Yes — Posting Details block</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">jobSkills[]</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Skills chips / JSON-LD</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">["Salesforce","CRM","B2B SaaS"]</td>
+              <td style="padding:8px 12px;">Yes — Required Skills block</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">applicantCount</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Job details panel</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"Over 100 applicants"</td>
+              <td style="padding:8px 12px;">Yes — Posting Details block</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">postedDate</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Page text / JSON-LD</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"2026-04-09" (resolved from "2 days ago")</td>
+              <td style="padding:8px 12px;">Yes — Posting Details block</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">isReposted</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Page text</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">true / false</td>
+              <td style="padding:8px 12px;">Yes — Posting Details block</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">linkedinSalaryEstimate</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Job details panel</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"$120K–$180K/yr (LinkedIn estimated)"</td>
+              <td style="padding:8px 12px;">No (display only)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">externalApplyUrl</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Apply button href</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Company careers page URL</td>
+              <td style="padding:8px 12px;">No (display only)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">leaders[] <em>(recruiter)</em></td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">"Meet the hiring team" card</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">name, title, linkedin URL, role: "recruiter"</td>
+              <td style="padding:8px 12px;">No (relationship intel)</td>
+            </tr>
+            <tr style="background:var(--ci-bg-raised);">
+              <td style="padding:8px 12px;font-family:monospace;font-size:12px;">linkedinConnectionsCount</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">Connections callout</td>
+              <td style="padding:8px 12px;color:var(--ci-text-secondary);">3</td>
+              <td style="padding:8px 12px;">No (relationship intel)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Hiring team → Leaders (not Known Contacts)</h3>
+      <p class="body">The recruiter from the job posting is stored in <code>leaders[]</code> — the same array used for Apollo-sourced and web-researched leadership contacts. This is intentional: <code>knownContacts[]</code> is email-keyed throughout the codebase (Gmail matching, dedup, the contacts panel all assume an email address). A recruiter scraped from a job page has no email address — only name, title, and LinkedIn URL.</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><code>knownContacts[]</code> — people you've <strong>communicated with</strong> (Gmail-sourced, email required, activity auto-tracked)</li>
+          <li><code>leaders[]</code> — people you know <strong>about</strong> at a company (Apollo, web research, job posting — no email required)</li>
+          <li>Recruiter cards in <code>leaders[]</code> carry <code>role: "recruiter"</code> and <code>source: "job_posting"</code> so they render distinctly in the UI</li>
+          <li>If a recruiter later emails you, Gmail extraction will promote them into <code>knownContacts</code> automatically</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Reliability tiers</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>High stability</strong> — JSON-LD block (LinkedIn maintains for SEO), company LinkedIn URL, employee count string</li>
+          <li><strong>Medium stability</strong> — About box selectors (simpler structure, LinkedIn iterates occasionally), recruiter card, connections callout</li>
+          <li><strong>Lower stability</strong> — Skills chips, seniority/job-function criteria panel (inside the details panel LinkedIn updates frequently)</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">Important</span>
+        <span>All extraction is best-effort. If a selector returns nothing the field is <code>null</code> — nothing breaks and the save always completes. Fields that fail to extract silently stay empty; they do not block scoring or cause errors.</span>
+      </div>
+    </div>
+
     <!-- How Scoring Works -->
     <div class="doc-section">
       <span class="doc-section-anchor" id="scoring-system"></span>
       <div class="doc-section-title">How Scoring Works</div>
-      <span class="pill pill-green">Updated</span>
+      <span class="pill pill-green">Updated Apr 11</span>
 
-      <p class="body">Coop uses a <strong>deterministic 5-dimension scoring model</strong>. The LLM detects which flags fired and extracts evidence; all scoring math happens in JavaScript — no black-box LLM scores.</p>
+      <p class="body">Coop uses a <strong>deterministic 5-dimension scoring model</strong>. The AI evaluates evidence and identifies which of your configured flags fire; all scoring math happens in JavaScript &mdash; no black-box LLM scores. You can verify every number.</p>
 
-      <div class="doc-screenshot">
-        <div class="doc-screenshot-icon">📐</div>
-        Queue card showing the 5-dimension score breakdown with weighted math row
+      <!-- Scoring pipeline flow diagram -->
+      <div style="margin:24px 0;">
+        <svg width="100%" viewBox="0 0 740 340" xmlns="http://www.w3.org/2000/svg" style="border-radius:12px;border:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+          <!-- Title -->
+          <text x="370" y="28" text-anchor="middle" font-size="13" font-weight="800" fill="#2D2D2D" font-family="-apple-system,sans-serif">Scoring Pipeline</text>
+
+          <!-- Phase 1: Data gathering -->
+          <rect x="20" y="48" width="200" height="116" rx="10" fill="#f8f7f5" stroke="#d6d0c8" stroke-width="1"/>
+          <text x="120" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#FF7A59" font-family="-apple-system,sans-serif">1. DATA GATHERING</text>
+          <text x="35" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Job Description (page-scraped)</text>
+          <text x="35" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">LinkedIn Firmographics</text>
+          <text x="35" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Resume + Skills + Experience</text>
+          <text x="35" y="136" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Configured Flags (green/red)</text>
+          <text x="35" y="152" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Scout fallback (if context thin)</text>
+
+          <!-- Arrow 1→2 -->
+          <path d="M220 106 L250 106" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#arrow)"/>
+          <defs><marker id="arrow" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 4 L0 8z" fill="#FF7A59"/></marker></defs>
+
+          <!-- Phase 2: AI evaluation -->
+          <rect x="250" y="48" width="200" height="116" rx="10" fill="#fdf4ff" stroke="#e8d5f5" stroke-width="1"/>
+          <text x="350" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#7c3aed" font-family="-apple-system,sans-serif">2. AI EVALUATION (Haiku)</text>
+          <text x="265" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Which flags fire? (by ID)</text>
+          <text x="265" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Extract qualifications</text>
+          <text x="265" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Comp vs floor assessment</text>
+          <text x="265" y="136" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Dimension rationale (1 sentence)</text>
+          <text x="265" y="152" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Coop's Take + Quick bullets</text>
+
+          <!-- Arrow 2→3 -->
+          <path d="M450 106 L480 106" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- Phase 3: Deterministic math -->
+          <rect x="480" y="48" width="240" height="116" rx="10" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+          <text x="600" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#16a34a" font-family="-apple-system,sans-serif">3. DETERMINISTIC MATH (JS)</text>
+          <text x="495" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Per-dim: 5.0 &plusmn; (severity &times; 0.5)</text>
+          <text x="495" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Comp: structural base/OTE adjustments</text>
+          <text x="495" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Qual: AI qualificationFit score (1-10)</text>
+          <text x="495" y="136" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Weighted avg &rarr; overall (1-10)</text>
+          <text x="495" y="152" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Hard DQ check (sev-5 only)</text>
+
+          <!-- Arrow 3→output -->
+          <path d="M600 164 L600 188" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- Phase 4: Output -->
+          <rect x="300" y="190" width="420" height="60" rx="10" fill="#fff7ed" stroke="#fed7aa" stroke-width="1"/>
+          <text x="510" y="210" text-anchor="middle" font-size="10" font-weight="700" fill="#c2410c" font-family="-apple-system,sans-serif">4. OUTPUT &rarr; entry.jobMatch</text>
+          <text x="315" y="230" font-size="9.5" fill="#516f90" font-family="-apple-system,sans-serif">score | scoreBreakdown | flagsFired | qualifications | compAssessment | coopTake | quickTake | hardDQ</text>
+          <text x="315" y="244" font-size="9.5" fill="#516f90" font-family="-apple-system,sans-serif">scoringWeightsSnapshot | dimensionRationale | scoreRationale | lastScoringUsage (model, tokens, cost)</text>
+
+          <!-- JD backfill callout -->
+          <rect x="20" y="190" width="260" height="60" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+          <text x="150" y="210" text-anchor="middle" font-size="10" font-weight="700" fill="#1e40af" font-family="-apple-system,sans-serif">JD DEFENSE LAYERS</text>
+          <text x="35" y="228" font-size="9.5" fill="#516f90" font-family="-apple-system,sans-serif">1. Page DOM extraction (best quality)</text>
+          <text x="35" y="242" font-size="9.5" fill="#516f90" font-family="-apple-system,sans-serif">2. URL fetch fallback &rarr; 3. Serper search fallback</text>
+
+          <!-- Flag math detail -->
+          <rect x="20" y="270" width="700" height="56" rx="10" fill="#f8f7f5" stroke="#d6d0c8" stroke-width="1"/>
+          <text x="370" y="290" text-anchor="middle" font-size="10" font-weight="700" fill="#2D2D2D" font-family="-apple-system,sans-serif">FLAG MATH EXAMPLE</text>
+          <text x="35" y="312" font-size="10" fill="#516f90" font-family="'SF Mono','Fira Code',monospace">roleFit: 5.0 + (sev3 green &times; 0.5 = +1.5) &minus; (sev2 red &times; 0.5 = &minus;1.0) = 5.5 &rarr; clamp(1, 10) &rarr; 5.5</text>
+        </svg>
       </div>
 
       <h3 class="sub">The five dimensions</h3>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Qualification (20%)</strong> — Deterministic from met/partial/unmet counts. Formula: <code>10 &times; credits / total</code> where met=1, partial=0.5, unmet=0. Comp-related qualifications are filtered out. The qualification drawer auto-expands so you always see what was matched.</li>
-          <li><strong>Role Fit (20%)</strong> — Starts at 5.0 baseline, adjusted by green/red flag deltas. Each flag has a severity (1-5) and contributes <code>&pm;severity &times; 0.5</code>. Clamped to 1-10.</li>
-          <li><strong>Culture Fit (25%)</strong> — Same flag-based formula. Detects signals like leadership style, remote culture, growth mindset from the posting and company context.</li>
-          <li><strong>Company Fit (20%)</strong> — Uses firmographic data (employees, funding, industry, product) when available. Enrichment auto-fetches from company website/LinkedIn if not stored.</li>
-          <li><strong>Comp Fit (15%)</strong> — Base and OTE compared against your floor and strong-offer thresholds. Flag-based adjustments for above/below signals.</li>
+          <li><strong>Qualification Fit (20%)</strong> &mdash; AI evaluates your resume, skills, and experience against extracted requirements. Returns a <code>qualificationFit</code> score (1&ndash;10) directly. The qualification drawer auto-expands so you always see what was matched.</li>
+          <li><strong>Role Fit (20%)</strong> &mdash; Starts at 5.0 baseline. Each fired green flag adds <code>severity &times; 0.5</code>; each red flag subtracts. Flags are your configured "Attracted to" and "Dealbreakers" assigned to the <code>roleFit</code> dimension. Clamped 1&ndash;10.</li>
+          <li><strong>Culture Fit (25%)</strong> &mdash; Same flag-based formula. Detects signals like leadership style, remote culture, growth mindset from the posting and company context.</li>
+          <li><strong>Company Fit (20%)</strong> &mdash; Same flag-based formula. Firmographic data (employees, funding, industry) comes from LinkedIn page scraping and the JD's "About us" section. <code>scoutCompany()</code> only runs when this context is thin.</li>
+          <li><strong>Comp Fit (15%)</strong> &mdash; Flag-based like the others, plus <strong>structural adjustments</strong>: base and OTE are compared against your floor and strong-offer thresholds, adding fixed deltas (+2.5 for above strong, &minus;2.5 for below floor, etc.).</li>
         </ul>
       </div>
 
       <h3 class="sub">The overall score</h3>
-      <p class="body">Weighted sum: <code>Q&times;20 + R&times;20 + Cu&times;25 + Co&times;20 + Comp&times;15 = X/100 &rarr; 1-10</code>. The math row at the bottom of every queue card shows the exact formula so you can verify the number.</p>
+      <p class="body">Weighted sum: <code>Q&times;20 + R&times;20 + Cu&times;25 + Co&times;20 + Comp&times;15 = X/100 &rarr; 1-10</code>. The math row at the bottom of every queue card shows the exact formula so you can verify the number. After computation, the excitement modifier may nudge the score toward your explicit rating if you've starred the opportunity.</p>
 
-      <h3 class="sub">Job description auto-fetch</h3>
-      <p class="body">If a job description isn't stored when scoring runs but a job URL exists, Coop automatically fetches the page, strips HTML to plain text, and persists it. This means opportunities saved from LinkedIn company pages (without visiting the actual posting) will still get full qualification extraction on first score.</p>
+      <h3 class="sub">Job description capture &amp; backfill</h3>
+      <p class="body">On LinkedIn and ATS pages, the content script extracts the job description asynchronously (800ms "see more" click, mutation observer, up to 8000 chars). If the description hasn't arrived by the time you save, the sidepanel <strong>re-requests it from the content script</strong> and patches storage before triggering scoring. A second backfill runs if the JD arrives late after save. This eliminates the race condition that previously caused "No requirements identified" on fast saves.</p>
 
-      <h3 class="sub">Firmographic enrichment in scoring</h3>
-      <p class="body">The scoring prompt now receives structured company data — employees, funding, industry, product overview, target customers, and competitors — when available on the entry. Previously only unstructured web snippets were passed, leading to "no company data" even when research had been completed.</p>
+      <h3 class="sub">Company intelligence in scoring</h3>
+      <p class="body">The scoring prompt receives the full job description plus all LinkedIn-scraped data (employee count, industry, HQ, founded year, seniority level, job function, required skills, applicant count, posted date, repost flag) plus <code>scoutCompany()</code> context &mdash; two quick Serper searches for company overview and employee reviews/culture (Glassdoor, RepVue, Reddit). Scout always runs unless full research intelligence already exists on the entry. Scout results are cached indefinitely per company — subsequent rescores of the same company hit the cache instantly. Cost: ~$0.002 per new company.</p>
+
+      <h3 class="sub">How flags work</h3>
+      <p class="body">Your configured flags ("Attracted to" and "Dealbreakers" in Career OS) are sent to the AI with their ID, dimension, severity, and keywords. The AI returns only flags that fired with verbatim evidence from the JD or company data. The code then:</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li>Looks up each fired flag ID in the configured flag map</li>
+          <li>Unknown IDs are silently dropped &mdash; no orphaned flags possible</li>
+          <li>Groups flags by dimension (roleFit, cultureFit, companyFit, compFit)</li>
+          <li>Computes delta: <code>severity &times; 0.5</code> (green adds, red subtracts)</li>
+          <li>Evidence must come from the JD/company data, never from your resume</li>
+        </ul>
+      </div>
 
       <h3 class="sub">Qualification matching</h3>
-      <p class="body">Coop extracts <strong>all</strong> qualifications from the job posting — including implicit ones based on role level and company. Each is rated:</p>
+      <p class="body">The AI extracts 3&ndash;8 key requirements from the job description and classifies each against your profile:</p>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Met</strong> (✓) — Clear evidence in your profile/resume</li>
-          <li><strong>Partial</strong> (◐) — Related experience but with a gap (e.g., "managed 5-person team; role needs 50+")</li>
-          <li><strong>Unmet</strong> (✗) — No evidence in your background</li>
-          <li><strong>Unknown</strong> (?) — Can't determine from available information</li>
+          <li><strong>Met</strong> (&check;) &mdash; Clear evidence in your profile/resume</li>
+          <li><strong>Partial</strong> (&half;) &mdash; Related experience but with a gap</li>
+          <li><strong>Unmet</strong> (&cross;) &mdash; No evidence in your background</li>
+          <li><strong>Unknown</strong> (?) &mdash; Can't determine from available info (hidden in UI)</li>
         </ul>
       </div>
-      <p class="body">Click any qualification's status icon to <strong>override it and explain why</strong>. Coop learns from your corrections and applies them to future scoring.</p>
-
-      <h3 class="sub">Training Coop's scoring</h3>
-      <p class="body">Coop improves through your feedback. Every correction is stored as a high-priority learned insight:</p>
-      <div class="info-block">
-        <ul style="font-size:13px;line-height:2;">
-          <li><strong>Dismiss a flag</strong> — Click &#x00D7; on any red or green flag, optionally explain why. Coop won't repeat dismissed flags and learns from your reasoning.</li>
-          <li><strong>Override a qualification</strong> — Click the status icon (✓/◐/✗) to change it. Add evidence from your background that Coop missed.</li>
-          <li><strong>Rescore</strong> — After giving feedback, hit "Rescore" to see Coop's updated assessment.</li>
-          <li><strong>Profile updates</strong> — Keep your Career OS profile current. Coop can only match qualifications against what he knows about you.</li>
-        </ul>
-      </div>
+      <p class="body">Comp-related qualifications (salary, OTE, equity) are filtered out of the qualification drawer since comp has its own dimension.</p>
 
       <h3 class="sub">Hard disqualification (DQ)</h3>
-      <p class="body">A Hard DQ flags roles with absolute verified dealbreakers — on-site when you require remote, base salary max below your floor, or fundamentally wrong role type. These show a red warning banner on the queue card.</p>
+      <p class="body">A Hard DQ is only honored when a <strong>severity-5 dealbreaker</strong> actually fired with matching evidence. If the AI flags a DQ but no sev-5 dealbreaker matches, the DQ is suppressed &mdash; preventing false disqualifications from hallucinated reasoning. Hard DQ caps the overall score at 4.</p>
+
+      <h3 class="sub">Training Coop's scoring</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Dismiss a flag</strong> &mdash; Click &times; on any red or green flag. Coop won't repeat dismissed flags.</li>
+          <li><strong>Override a qualification</strong> &mdash; Click the status icon to change it. Add evidence from your background that Coop missed.</li>
+          <li><strong>Rescore</strong> &mdash; After giving feedback, hit "Rescore" to see Coop's updated assessment.</li>
+          <li><strong>Configure flags</strong> &mdash; Each flag card links directly to its Career OS preferences section.</li>
+        </ul>
+      </div>
 
       <h3 class="sub">Auto-rescore</h3>
-      <p class="body">When enabled, profile changes trigger automatic rescoring. You control which pipeline stages get rescored — by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on. The toggle and stage selection live in <strong>Data Pipeline &amp; Usage</strong> (not Career OS).</p>
+      <p class="body">When enabled, profile changes trigger automatic rescoring. You control which pipeline stages get rescored &mdash; by default only Scoring Queue and Interested. This prevents burning API credits on roles you've already passed on. The toggle and stage selection live in <strong>Data Pipeline &amp; Usage</strong>.</p>
+
+      <h3 class="sub">Two-layer scoring model</h3>
+      <p class="body">Scoring runs in two layers. <strong>Layer 1</strong> runs at save time using the job description and web research. <strong>Layer 2</strong> runs automatically once you have real interaction data &mdash; emails or meeting transcripts &mdash; and layers those signals on top.</p>
+
+      <!-- Two-layer scoring diagram -->
+      <div style="margin:20px 0;">
+        <svg width="100%" viewBox="0 0 740 420" xmlns="http://www.w3.org/2000/svg" style="border-radius:12px;border:1px solid var(--ci-border-default);background:var(--ci-bg-raised);">
+          <defs>
+            <marker id="arr2" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="7" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 L10 4 L0 8z" fill="#94a3b8"/>
+            </marker>
+            <marker id="arr2g" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="7" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 L10 4 L0 8z" fill="#059669"/>
+            </marker>
+          </defs>
+
+          <!-- Layer 1 label -->
+          <rect x="16" y="16" width="708" height="168" rx="10" fill="#fffbf5" stroke="#fed7aa" stroke-width="1.5"/>
+          <text x="370" y="38" text-anchor="middle" font-size="11" font-weight="800" fill="#c2410c" font-family="-apple-system,sans-serif">LAYER 1 — QUICK FIT  ·  runs at save, reruns when new emails / meetings arrive  ·  ~$0.01</text>
+
+          <!-- L1 boxes -->
+          <!-- Box: JD -->
+          <rect x="28" y="50" width="128" height="120" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+          <text x="92" y="69" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ea580c" font-family="-apple-system,sans-serif">JOB DESCRIPTION</text>
+          <text x="92" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Page DOM scrape</text>
+          <text x="92" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">↓ URL fetch fallback</text>
+          <text x="92" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">↓ Serper search fallback</text>
+          <text x="92" y="155" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-style="italic" font-family="-apple-system,sans-serif">up to 8,000 chars</text>
+
+          <!-- Box: Company context -->
+          <rect x="170" y="50" width="128" height="120" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+          <text x="234" y="69" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ea580c" font-family="-apple-system,sans-serif">COMPANY CONTEXT</text>
+          <text x="234" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">2 Serper searches:</text>
+          <text x="234" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">overview + reviews</text>
+          <text x="234" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">(Glassdoor, RepVue,</text>
+          <text x="234" y="129" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Reddit)</text>
+          <text x="234" y="155" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-style="italic" font-family="-apple-system,sans-serif">skipped if full research exists</text>
+
+          <!-- Box: Your profile -->
+          <rect x="312" y="50" width="128" height="120" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+          <text x="376" y="69" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ea580c" font-family="-apple-system,sans-serif">YOUR PROFILE</text>
+          <text x="376" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Resume &amp; skills</text>
+          <text x="376" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Salary floors</text>
+          <text x="376" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Work arrangement</text>
+          <text x="376" y="129" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Green flags + dealbreakers</text>
+          <text x="376" y="155" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-style="italic" font-family="-apple-system,sans-serif">from Career OS / Preferences</text>
+
+          <!-- Box: AI eval -->
+          <rect x="454" y="50" width="128" height="120" rx="8" fill="#fdf4ff" stroke="#e9d5ff" stroke-width="1"/>
+          <text x="518" y="69" text-anchor="middle" font-size="9.5" font-weight="700" fill="#7c3aed" font-family="-apple-system,sans-serif">AI EVALUATION</text>
+          <text x="518" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Haiku reads everything</text>
+          <text x="518" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Which flags fired?</text>
+          <text x="518" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Qualification match?</text>
+          <text x="518" y="129" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Comp vs floor?</text>
+          <text x="518" y="155" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-style="italic" font-family="-apple-system,sans-serif">returns IDs + evidence only</text>
+
+          <!-- Box: Score -->
+          <rect x="596" y="50" width="112" height="120" rx="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+          <text x="652" y="69" text-anchor="middle" font-size="9.5" font-weight="700" fill="#16a34a" font-family="-apple-system,sans-serif">SCORE (JS)</text>
+          <text x="652" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">5 dimensions</text>
+          <text x="652" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Weighted avg</text>
+          <text x="652" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">→ 1–10</text>
+          <text x="652" y="129" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Deterministic math,</text>
+          <text x="652" y="143" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">not AI guesswork</text>
+
+          <!-- L1 arrows -->
+          <path d="M156 110 L170 110" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr2)"/>
+          <path d="M298 110 L312 110" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr2)"/>
+          <path d="M440 110 L454 110" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr2)"/>
+          <path d="M582 110 L596 110" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+          <!-- Unified: all context feeds into the single scoring call -->
+          <text x="370" y="200" text-anchor="middle" font-size="9" fill="#059669" font-family="-apple-system,sans-serif">When available, emails + meetings + notes also feed into the single call above</text>
+          <text x="370" y="214" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-style="italic" font-family="-apple-system,sans-serif">No separate deep fit call — one AI call produces score + role brief + conversation insights</text>
+        </svg>
+      </div>
+
+      <div class="info-block" style="margin-top:8px;">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>One unified scoring call.</strong> All context &mdash; job description, firmographics, flags, emails, meetings, transcripts, notes &mdash; feeds into a single AI call. No separate "deep fit" layer.</li>
+          <li><strong>Scoring runs at save and on stage transitions.</strong> When you move an opportunity to a new pipeline stage, Coop re-scores with all accumulated context. Data from emails and meetings accumulates silently &mdash; the score catches up on the next stage change.</li>
+          <li><strong>Manual Rescore always works.</strong> The "Refresh analysis" button fires a rescore using everything available, regardless of stage.</li>
+          <li><strong>Rejected entries never auto-rescore.</strong> Moving to rejected skips the rescore trigger.</li>
+          <li><strong>Produces role brief + conversation insights.</strong> The same call that scores also generates a structured role summary and, when interaction data exists, a "From Conversations" narrative citing specifics from emails and meetings.</li>
+          <li><strong>Cost:</strong> ~$0.015&ndash;0.025 per score (one Haiku call). No additional calls for deep fit or role brief summary.</li>
+        </ul>
+      </div>
     </div>
 
     <!-- Cost Tracking -->
@@ -995,38 +1411,103 @@
     <div class="doc-section">
       <span class="doc-section-anchor" id="coop-thinking"></span>
       <div class="doc-section-title">Coop Thinking Animation</div>
-      <span class="pill pill-green">New</span>
+      <span class="pill pill-green">Updated Apr 11</span>
 
-      <p class="body">When Coop is working — scoring, researching, generating a brief — a branded thinking animation replaces generic spinners across the entire platform.</p>
+      <p class="body">When Coop is working &mdash; scoring, researching, generating a brief &mdash; a branded thinking animation replaces generic spinners across the entire platform. Coop has a distinct <strong>hand-on-chin thinking pose</strong> that's different from his normal smiling avatar.</p>
 
-      <div class="doc-screenshot">
-        <div class="doc-screenshot-icon">🤔</div>
-        Coop thinking animation with orbit ring, thought bubbles, and gradient progress bar
+      <!-- Live SVG comparison: normal vs thinking -->
+      <div style="display:flex;gap:32px;justify-content:center;align-items:flex-end;margin:24px 0;padding:24px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-md);border:1px solid var(--ci-border-default);">
+        <div style="text-align:center;">
+          <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;">
+            <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+            <clipPath id="doc-norm"><circle cx="50" cy="50" r="48"/></clipPath>
+            <g clip-path="url(#doc-norm)">
+              <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+              <path d="M38 85 L50 91 L62 85" fill="none" stroke="#2D4050" stroke-width="1"/>
+              <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+              <path d="M28 45 Q28 30 38 24 Q50 20 62 24 Q72 30 72 45 Q72 56 65 64 Q59 70 50 72 Q41 70 35 64 Q28 56 28 45Z" fill="#F0CDA0"/>
+              <ellipse cx="28" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+              <ellipse cx="72" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+              <path d="M27 42 Q27 20 50 14 Q73 20 73 42 L71 36 Q69 20 50 17 Q31 20 29 36Z" fill="#7A5C3A"/>
+              <path d="M31 34 Q31 18 50 14 Q69 18 69 34 Q68 22 50 17 Q32 22 31 34Z" fill="#8B6B4A"/>
+              <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/>
+              <circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+              <circle cx="41" cy="44" r="1" fill="#2B6A8E"/>
+              <ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/>
+              <circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/>
+              <circle cx="59" cy="44" r="1" fill="#2B6A8E"/>
+              <path d="M35 38 Q41 36 47 37.5" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+              <path d="M53 37.5 Q59 36 65 38" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+              <path d="M40 58 Q45 65 50 66 Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/>
+            </g>
+          </svg>
+          <div style="font-size:11px;font-weight:700;color:var(--ci-text-secondary);margin-top:8px;">Normal</div>
+        </div>
+        <div style="font-size:20px;color:var(--ci-text-tertiary);">&rarr;</div>
+        <div style="text-align:center;">
+          <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;">
+            <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+            <clipPath id="doc-think"><circle cx="50" cy="50" r="48"/></clipPath>
+            <g clip-path="url(#doc-think)">
+              <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+              <path d="M38 85 L50 91 L62 85" fill="none" stroke="#2D4050" stroke-width="1"/>
+              <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+              <path d="M28 45 Q28 30 38 24 Q50 20 62 24 Q72 30 72 45 Q72 56 65 64 Q59 70 50 72 Q41 70 35 64 Q28 56 28 45Z" fill="#F0CDA0"/>
+              <ellipse cx="28" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+              <ellipse cx="72" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+              <path d="M27 42 Q27 20 50 14 Q73 20 73 42 L71 36 Q69 20 50 17 Q31 20 29 36Z" fill="#7A5C3A"/>
+              <path d="M31 34 Q31 18 50 14 Q69 18 69 34 Q68 22 50 17 Q32 22 31 34Z" fill="#8B6B4A"/>
+              <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/>
+              <circle cx="40" cy="42.5" r="2.5" fill="#4A8DB8"/>
+              <circle cx="39" cy="42" r="1" fill="#2B6A8E"/>
+              <ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/>
+              <circle cx="58" cy="42.5" r="2.5" fill="#4A8DB8"/>
+              <circle cx="57" cy="42" r="1" fill="#2B6A8E"/>
+              <path d="M35 38 Q41 35 47 37" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+              <path d="M53 36.5 Q59 34 65 37" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+              <path d="M44 59 Q50 62 56 59" fill="none" stroke="#8B6B4A" stroke-width="0.9" stroke-linecap="round"/>
+              <path d="M65 84 Q72 76 69 68 Q67 63 62 62" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.5"/>
+              <path d="M65 84 Q68 80 69 76" fill="none" stroke="#2D4050" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+              <path d="M48 66 Q50 62 56 61 Q62 62 63 66 Q62 69 58 70 Q52 71 49 68Z" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.5"/>
+            </g>
+          </svg>
+          <div style="font-size:11px;font-weight:700;color:var(--ci-text-secondary);margin-top:8px;">Thinking</div>
+        </div>
+      </div>
+
+      <h3 class="sub">Thinking pose details</h3>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Eyes</strong> &mdash; pupils shifted up and left (looking off into thought), slightly larger whites</li>
+          <li><strong>Eyebrows</strong> &mdash; asymmetric &mdash; right brow raised higher than left (the "hmm" expression)</li>
+          <li><strong>Mouth</strong> &mdash; closed thoughtful curve instead of open smile (no teeth)</li>
+          <li><strong>Arm</strong> &mdash; right arm from shoulder (shirt sleeve hint) curves up to chin</li>
+          <li><strong>Hand</strong> &mdash; cupping chin in the classic "thinker" pose</li>
+        </ul>
       </div>
 
       <h3 class="sub">Animation elements</h3>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Thinking face</strong> — Coop's SVG avatar with a thinking expression (eyes up, hand on chin) and animated floating thought bubbles</li>
-          <li><strong>Orbit ring</strong> — two dots (coral + amber) rotate around the face via CSS pseudo-elements on a 3-second loop</li>
-          <li><strong>Bouncing dots</strong> — three dots (coral, amber, teal) bounce in sequence below the face</li>
-          <li><strong>Gradient progress bar</strong> — a shimmer bar cycles through coral → amber → teal with a sliding + shimmer animation</li>
-          <li><strong>Labels</strong> — contextual text like "Scoring..." or "Researching..." with an optional subtitle</li>
+          <li><strong>Orbit ring</strong> &mdash; two dots (coral + amber) rotate around the face via CSS pseudo-elements on a 3-second loop</li>
+          <li><strong>Bouncing dots</strong> &mdash; three dots (coral, amber, teal) bounce in sequence below the face</li>
+          <li><strong>Gradient progress bar</strong> &mdash; shimmer bar cycles through coral &rarr; amber &rarr; teal</li>
+          <li><strong>Labels</strong> &mdash; contextual text like "Coop is thinking..." with subtitle "Analyzing job fit &amp; scoring"</li>
         </ul>
       </div>
 
       <h3 class="sub">Where it appears</h3>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Apply Queue</strong> — full overlay on the score card during rescore</li>
-          <li><strong>Company view</strong> — overlay on the fit section during scoring, inline in the refresh toast and role brief button</li>
-          <li><strong>Sidepanel</strong> — replaces the research spinner during company research</li>
-          <li><strong>Pipeline dashboard</strong> — compact face replaces the spinner in stat card loading</li>
+          <li><strong>Apply Queue</strong> &mdash; full overlay on the score card during rescore (64px face)</li>
+          <li><strong>Company view</strong> &mdash; overlay on the fit section during scoring</li>
+          <li><strong>Sidepanel chat</strong> &mdash; inline thinking indicator (22px face) via <code>COOP.thinkingHTML()</code></li>
+          <li><strong>Pipeline dashboard</strong> &mdash; compact face replaces spinner in stat card loading</li>
         </ul>
       </div>
 
-      <h3 class="sub">CSS architecture</h3>
-      <p class="body">All animation CSS lives in <code>design-tokens.css</code> as shared classes (<code>.coop-thinking-overlay</code>, <code>.coop-thinking-face-wrap</code>, <code>.coop-thinking-orbit</code>, etc.). The <code>.inline</code> modifier switches from absolute overlay to relative flow positioning. The SVG is generated by <code>COOP_THINKING_SVG(size)</code> in each JS file.</p>
+      <h3 class="sub">Implementation</h3>
+      <p class="body">The thinking avatar is generated by <code>COOP.thinkingAvatar(size)</code> in <code>coop.js</code> and used by <code>COOP.thinkingHTML()</code> for chat contexts. The Apply Queue has its own inline SVG (64px) for the full overlay. Animation CSS lives in <code>design-tokens.css</code> as shared classes (<code>.coop-thinking-overlay</code>, <code>.coop-thinking-face-wrap</code>, <code>.coop-thinking-orbit</code>, etc.).</p>
     </div>
 
     <!-- Inbox -->
