@@ -329,9 +329,7 @@ function renderInterpretation(panelKey, data) {
   panel.innerHTML = html || '<div style="color:#A09A94;font-size:12px">Could not parse interpretation.</div>';
 }
 
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// escHtml — provided by ui-utils.js
 
 function requestInterpretation(panelKey, storageKey, content) {
   if (!content.trim()) return;
@@ -2469,13 +2467,6 @@ function initCoopChatDrawer() {
   window.__coopChatHistory = chatHistory;
   let isOpen = false;
 
-  // Dock the chat as a right column on wide screens
-  const docked = window.matchMedia('(min-width: 1280px)').matches;
-  if (docked) {
-    document.body.classList.add('coop-docked');
-    drawer.classList.add('open');
-    isOpen = true;
-  }
 
   // Listen for insight extraction confirmations
   chrome.runtime.onMessage.addListener((msg) => {

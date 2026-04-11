@@ -76,9 +76,42 @@ const COOP = {
     </div>`;
   },
 
+  thinkingAvatar(size = 36) {
+    const id = 'ct' + size + Math.random().toString(36).slice(2, 6);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:50%;">
+      <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+      <clipPath id="${id}"><circle cx="50" cy="50" r="48"/></clipPath>
+      <g clip-path="url(#${id})">
+        <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
+        <path d="M38 85 L50 91 L62 85" fill="none" stroke="#2D4050" stroke-width="1"/>
+        <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
+        <path d="M28 45 Q28 30 38 24 Q50 20 62 24 Q72 30 72 45 Q72 56 65 64 Q59 70 50 72 Q41 70 35 64 Q28 56 28 45Z" fill="#F0CDA0"/>
+        <ellipse cx="28" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+        <ellipse cx="72" cy="46" rx="3" ry="4.5" fill="#E5B888"/>
+        <path d="M27 42 Q27 20 50 14 Q73 20 73 42 L71 36 Q69 20 50 17 Q31 20 29 36Z" fill="#7A5C3A"/>
+        <path d="M31 34 Q31 18 50 14 Q69 18 69 34 Q68 22 50 17 Q32 22 31 34Z" fill="#8B6B4A"/>
+        <ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/>
+        <circle cx="40" cy="42.5" r="2.5" fill="#4A8DB8"/>
+        <circle cx="39" cy="42" r="1" fill="#2B6A8E"/>
+        <circle cx="41" cy="41.5" r="0.8" fill="white" opacity="0.8"/>
+        <ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/>
+        <circle cx="58" cy="42.5" r="2.5" fill="#4A8DB8"/>
+        <circle cx="57" cy="42" r="1" fill="#2B6A8E"/>
+        <circle cx="59" cy="41.5" r="0.8" fill="white" opacity="0.8"/>
+        <path d="M35 38 Q41 35 47 37" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M53 36.5 Q59 34 65 37" fill="none" stroke="#7A6040" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M49.5 48 Q50 53 52.5 52" fill="none" stroke="#D9A07A" stroke-width="0.7" stroke-linecap="round"/>
+        <path d="M44 59 Q50 62 56 59" fill="none" stroke="#8B6B4A" stroke-width="0.9" stroke-linecap="round"/>
+        <path d="M65 84 Q72 76 69 68 Q67 63 62 62" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.5"/>
+        <path d="M65 84 Q68 80 69 76" fill="none" stroke="#2D4050" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+        <path d="M48 66 Q50 62 56 61 Q62 62 63 66 Q62 69 58 70 Q52 71 49 68Z" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.5"/>
+      </g>
+    </svg>`;
+  },
+
   thinkingHTML() {
     return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
-      ${this.avatar(22)}
+      ${this.thinkingAvatar(22)}
       <span style="color:#8B8680;font-size:13px;font-style:italic;">Coop is thinking...</span>
     </div>`;
   },
@@ -91,5 +124,6 @@ const COOP = {
   }
 };
 
+// Legacy global assignment for non-module contexts (content scripts, HTML pages)
 if (typeof window !== 'undefined') window.COOP = COOP;
 if (typeof globalThis !== 'undefined') globalThis.COOP = COOP;

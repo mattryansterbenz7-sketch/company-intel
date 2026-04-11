@@ -377,8 +377,7 @@
         chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
           void chrome.runtime.lastError;
           const cached = researchCache?.[company.toLowerCase()];
-          const TTL = 24 * 60 * 60 * 1000;
-          if (cached && Date.now() - cached.ts < TTL) {
+          if (cached) {
             hasResearched = true;
             currentResearch = cached.data;
             render(cached.data);

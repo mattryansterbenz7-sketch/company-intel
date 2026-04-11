@@ -6,6 +6,7 @@ let allEmails = [];
 let companyMap = {};
 let entryMap = {};
 let selectedCompanyId = null;
+let highlightedCompanyId = null; // tracks which company the currently-open email belongs to
 let selectedEmailIdx = -1;
 let searchQuery = '';
 let stageFilter = 'active';
@@ -22,16 +23,19 @@ function markEmailRead(email) {
   const k = emailKey(email);
   if (!k || readEmailKeys.has(k)) return;
   readEmailKeys.add(k);
-  // Mark in-memory copies so the next render reflects it
   allEmails.forEach(e => { if (emailKey(e) === k) e._unread = false; });
   chrome.storage.local.set({ readEmailKeys: [...readEmailKeys] });
 }
 
-function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+function markEmailUnread(email) {
+  const k = emailKey(email);
+  if (!k) return;
+  readEmailKeys.delete(k);
+  allEmails.forEach(e => { if (emailKey(e) === k) e._unread = true; });
+  chrome.storage.local.set({ readEmailKeys: [...readEmailKeys] });
 }
+
+// escHtml — provided by ui-utils.js
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -146,7 +150,18 @@ function buildEmailIndex() {
     const stage = entry.jobStage || entry.status || 'saved';
     companyMap[entry.id] = { name: entry.company, favDomain, id: entry.id, stage, isOpportunity: !!entry.isOpportunity };
 
+    const blockedSenders = new Set((entry.blockedEmailSenders || []).map(s => s.toLowerCase()));
+
     entry.cachedEmails.forEach(email => {
+      // Skip ghost emails with no subject and no content
+      if (!email.subject && !email.body && !email.snippet) return;
+      // Skip emails from senders explicitly blocked for this company
+      if (blockedSenders.size) {
+        const fromAddr = (email.from || '').toLowerCase();
+        for (const blocked of blockedSenders) {
+          if (fromAddr.includes(blocked)) return;
+        }
+      }
       const key = emailKey(email);
       // Unread = "I haven't clicked it yet AND it arrived since I last opened the inbox".
       // Once an email is in readEmailKeys, it stays read forever, regardless of dates.
@@ -180,12 +195,15 @@ function buildEmailIndex() {
 function init() {
   // Back button
   document.getElementById('back-btn').addEventListener('click', () => {
-    window.open(chrome.runtime.getURL('saved.html'), '_blank');
+    coopNavigate(chrome.runtime.getURL('saved.html'));
   });
 
   // Stats
   const companies = [...new Set(allEmails.map(e => e._companyId))];
   document.getElementById('inbox-stats').textContent = `${allEmails.length} emails across ${companies.length} companies`;
+
+  // Refresh button
+  document.getElementById('inbox-refresh-btn')?.addEventListener('click', () => refreshInboxEmails());
 
   // Search
   const searchEl = document.getElementById('inbox-search');
@@ -264,7 +282,8 @@ function buildSidebar() {
     const favHtml = info.favDomain
       ? `<img class="sidebar-item-favicon" src="https://www.google.com/s2/favicons?domain=${info.favDomain}&sz=32" onerror="this.style.display='none'">`
       : '';
-    html += `<div class="sidebar-item ${selectedCompanyId === id ? 'active' : ''}" data-company="${id}">
+    const isHighlighted = selectedCompanyId === null && highlightedCompanyId === id;
+    html += `<div class="sidebar-item ${selectedCompanyId === id ? 'active' : ''} ${isHighlighted ? 'email-highlighted' : ''}" data-company="${id}">
       ${favHtml}
       <span class="sidebar-item-name">${escHtml(info.name)}</span>
       ${unread > 0 ? `<span class="sidebar-item-count unread">${unread}</span>` : ''}
@@ -277,6 +296,7 @@ function buildSidebar() {
     item.addEventListener('click', () => {
       const val = item.dataset.company;
       selectedCompanyId = val === 'all' ? null : val;
+      highlightedCompanyId = null;
       selectedEmailIdx = -1;
       buildSidebar();
       renderEmailList();
@@ -407,10 +427,16 @@ function renderEmailList() {
       const email = getFilteredEmails()[idx];
       if (email) {
         markEmailRead(email);
+        highlightedCompanyId = email._companyId || null;
         renderDetail(email);
         // Reflect read state in list + sidebar counts
         renderEmailList();
         buildSidebar();
+        // Scroll to and highlight the associated company in sidebar
+        if (highlightedCompanyId) {
+          const sidebarItem = document.querySelector(`.sidebar-item[data-company="${highlightedCompanyId}"]`);
+          if (sidebarItem) sidebarItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
       }
       highlightRow();
     });
@@ -518,7 +544,7 @@ function renderDetail(email) {
       const body = stripQuotedContent(te.body || te.snippet || '');
       const teName = parseFromName(te.from);
       html += `<div class="thread-msg ${isLast ? '' : 'collapsed'}">
-        <div class="thread-msg-header" ${!isLast ? 'onclick="this.parentElement.classList.toggle(\'collapsed\')"' : ''}>
+        <div class="thread-msg-header">
           ${avatarHtml(teName, 'sm')}
           <span class="thread-msg-from">${escHtml(teName)}</span>
           <span class="thread-msg-date">${formatDate(te.date)}</span>
@@ -535,26 +561,67 @@ function renderDetail(email) {
   html += `<div class="detail-footer">
     <a class="detail-btn primary" href="${gmailUrl}" target="_blank">Open in Gmail ↗</a>
     ${companyUrl ? `<a class="detail-btn" href="${companyUrl}" target="_blank">View Company</a>` : ''}
-    <button class="detail-btn detail-btn-delete" id="detail-delete-btn">Delete</button>
+    <button class="detail-btn" id="detail-unread-btn">${email._unread ? 'Mark read' : 'Mark unread'}</button>
+    <button class="detail-btn detail-btn-delete" id="detail-remove-btn" title="Remove all emails from this sender and block them from re-associating with ${escHtml(email._company)}">Remove sender</button>
   </div>`;
 
   detailEl.innerHTML = html;
   detailEl.scrollTop = 0;
 
-  detailEl.querySelector('#detail-delete-btn')?.addEventListener('click', () => deleteEmail(email));
+  detailEl.querySelectorAll('.thread-msg.collapsed .thread-msg-header').forEach(header => {
+    header.style.cursor = 'pointer';
+    header.addEventListener('click', () => header.closest('.thread-msg').classList.toggle('collapsed'));
+  });
+
+  detailEl.querySelector('#detail-unread-btn')?.addEventListener('click', () => {
+    if (email._unread) {
+      markEmailRead(email);
+    } else {
+      markEmailUnread(email);
+    }
+    renderDetail(email);
+    renderEmailList();
+    buildSidebar();
+  });
+
+  detailEl.querySelector('#detail-remove-btn')?.addEventListener('click', () => deleteEmail(email));
 }
 
 function deleteEmail(email) {
   const key = emailKey(email);
-  // Remove from in-memory list
-  const idx = allEmails.findIndex(e => emailKey(e) === key);
-  if (idx !== -1) allEmails.splice(idx, 1);
-  // Remove from readEmailKeys
-  readEmailKeys.delete(key);
-  // Remove from entry's cachedEmails in storage
   const entry = entryMap[email._companyId];
+
+  // Extract the raw sender address to block
+  const fromAddrMatch = (email.from || '').match(/<([^>]+)>/);
+  const senderAddr = (fromAddrMatch ? fromAddrMatch[1] : email.from || '').toLowerCase().trim();
+
+  // Block sender on this company so they don't re-appear after Refresh
+  if (entry && senderAddr) {
+    if (!entry.blockedEmailSenders) entry.blockedEmailSenders = [];
+    if (!entry.blockedEmailSenders.includes(senderAddr)) {
+      entry.blockedEmailSenders.push(senderAddr);
+    }
+  }
+
+  // Remove ALL emails from this sender for this company (not just this one)
   if (entry?.cachedEmails) {
-    entry.cachedEmails = entry.cachedEmails.filter(e => emailKey(e) !== key);
+    entry.cachedEmails = entry.cachedEmails.filter(e => {
+      const eAddr = ((e.from || '').match(/<([^>]+)>/) || [])[1] || e.from || '';
+      return eAddr.toLowerCase().trim() !== senderAddr;
+    });
+  }
+
+  // Remove all in-memory emails from this sender for this company
+  allEmails.splice(0, allEmails.length, ...allEmails.filter(e => {
+    if (e._companyId !== email._companyId) return true;
+    const eAddr = ((e.from || '').match(/<([^>]+)>/) || [])[1] || e.from || '';
+    return eAddr.toLowerCase().trim() !== senderAddr;
+  }));
+
+  // Clean up readEmailKeys for removed emails
+  readEmailKeys.delete(key);
+
+  if (entry) {
     const updated = allCompanies.map(c => c.id === entry.id ? entry : c);
     chrome.storage.local.set({ savedCompanies: updated, readEmailKeys: [...readEmailKeys] });
   }
@@ -570,6 +637,65 @@ function deleteEmail(email) {
   }
   renderEmailList();
   buildSidebar();
+}
+
+async function refreshInboxEmails() {
+  const btn = document.getElementById('inbox-refresh-btn');
+  const labelEl = btn?.querySelector('.refresh-label');
+
+  let companiesToRefresh = allCompanies.filter(entry => entry.companyWebsite);
+  if (stageFilter === 'active') {
+    companiesToRefresh = companiesToRefresh.filter(entry =>
+      entry.isOpportunity && !TERMINAL_STAGE_RE.test(entry.jobStage || entry.status || '')
+    );
+  } else if (stageFilter !== 'all') {
+    companiesToRefresh = companiesToRefresh.filter(entry =>
+      (entry.jobStage || entry.status || '') === stageFilter
+    );
+  }
+
+  const total = companiesToRefresh.length;
+  if (!total) return;
+
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+  let done = 0;
+
+  const fetchOne = (entry) => new Promise(resolve => {
+    const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+    if (!domain) { done++; if (labelEl) labelEl.textContent = `${done}/${total}`; resolve(); return; }
+    const knownContactEmails = (entry.knownContacts || []).map(c => c.email);
+    chrome.runtime.sendMessage({
+      type: 'GMAIL_FETCH_EMAILS',
+      domain,
+      companyName: entry.company || '',
+      linkedinSlug: (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop(),
+      knownContactEmails,
+    }, result => {
+      void chrome.runtime.lastError;
+      if (result?.emails?.length) {
+        entry.cachedEmails = result.emails;
+        entry.cachedEmailsAt = Date.now();
+      }
+      done++;
+      if (labelEl) labelEl.textContent = `${done}/${total}`;
+      resolve();
+    });
+  });
+
+  // Run 4 fetches at a time
+  const CONCURRENCY = 4;
+  for (let i = 0; i < companiesToRefresh.length; i += CONCURRENCY) {
+    await Promise.all(companiesToRefresh.slice(i, i + CONCURRENCY).map(fetchOne));
+  }
+
+  chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+    buildEmailIndex();
+    buildSidebar();
+    renderEmailList();
+    // Restore button
+    if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+    if (labelEl) labelEl.textContent = 'Refresh';
+  });
 }
 
 function stripQuotedContent(text) {

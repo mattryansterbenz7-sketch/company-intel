@@ -542,11 +542,4 @@ function bindThreadToggles(container) {
   if (first) first.click();
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/\n/g, '<br>');
-}
+// escapeHtml — provided by ui-utils.js
