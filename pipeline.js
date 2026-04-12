@@ -803,14 +803,12 @@ function renderUsageDashboard(usage, alloc, integrations) {
 // ── Auto-rescore section ──
 function loadAutoRescoreSection() {
   chrome.storage.local.get(['coopConfig', 'savedCompanies'], data => {
-    const DEFAULT_AUTOMATIONS = { insightExtraction: true, autoRescore: true, autoFetchUrls: true, applicationModeDetection: true, contextualSuggestions: true };
+    const DEFAULT_AUTOMATIONS = {
+      insightExtraction: true, autoFetchUrls: true, applicationModeDetection: true, contextualSuggestions: true,
+      rescoreOnProfileChange: false, rescoreOnPrefChange: false, rescoreOnNewData: false,
+    };
     const cfg = { automations: { ...DEFAULT_AUTOMATIONS, ...(data.coopConfig?.automations || {}) }, rescoreStages: data.coopConfig?.rescoreStages || [], ...data.coopConfig };
 
-    // Derive stages from saved opportunities
-    const savedCompanies = data.savedCompanies || [];
-    const stageKeys = [...new Set(savedCompanies.filter(c => c.isOpportunity).map(c => c.jobStage).filter(Boolean))];
-
-    // Fall back to default opportunity stages if none found
     const DEFAULT_STAGES = [
       { key: 'needs_review', label: "Coop's AI Scoring Queue" },
       { key: 'want_to_apply', label: 'I Want to Apply' },
@@ -824,33 +822,44 @@ function loadAutoRescoreSection() {
 
     chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
       const stages = stageData.opportunityStages || stageData.customStages || DEFAULT_STAGES;
-      const selected = cfg.rescoreStages?.length ? cfg.rescoreStages : stages.filter(s => ['conversations', 'intro_requested', 'offer_stage'].includes(s.key)).map(s => s.key);
+      const selected = cfg.rescoreStages?.length ? cfg.rescoreStages : [];
 
-      const enabled = cfg.automations.autoRescore !== false;
+      const anyEnabled = cfg.automations.rescoreOnProfileChange || cfg.automations.rescoreOnPrefChange || cfg.automations.rescoreOnNewData;
       const container = document.getElementById('auto-rescore-section');
       if (!container) return;
 
+      const triggers = [
+        { key: 'rescoreOnProfileChange', label: 'Profile changes', desc: 'Re-score when you update flags, skills, resume, or ICP' },
+        { key: 'rescoreOnPrefChange', label: 'Salary / work pref changes', desc: 'Re-score when salary floors or work arrangement change' },
+        { key: 'rescoreOnNewData', label: 'New interaction data', desc: 'Re-score when new emails, meetings, or transcripts are added (15s debounce)' },
+      ];
+
       container.innerHTML = `
         <div class="pipeline-subsection">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-            <div>
-              <div class="pipeline-sub-title">Auto-rescore on profile changes</div>
-              <div class="pipeline-sub-desc">When you update Career OS preferences, only re-score opportunities in these stages:</div>
+          <div class="pipeline-sub-title">Auto-rescore triggers</div>
+          <div class="pipeline-sub-desc" style="margin-bottom:10px;">All off by default. Each trigger re-scores only opportunities in the selected stages below. Scoring uses ~$0.003–0.007 per entry.</div>
+          ${triggers.map(t => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--ci-border-default);">
+              <div>
+                <div style="font-size:12px;font-weight:500;color:var(--ci-text-primary);">${t.label}</div>
+                <div style="font-size:11px;color:var(--ci-text-secondary);">${t.desc}</div>
+              </div>
+              <label class="pipeline-toggle" style="flex-shrink:0;margin-left:16px;">
+                <input type="checkbox" class="rescore-trigger-cb" data-key="${t.key}" ${cfg.automations[t.key] ? 'checked' : ''}>
+                <span class="pipeline-toggle-track"></span>
+              </label>
+            </div>`).join('')}
+          <div style="margin-top:12px;">
+            <div style="font-size:12px;font-weight:500;color:var(--ci-text-primary);margin-bottom:6px;">Stages to re-score</div>
+            <div id="rescore-stage-list" style="display:flex;flex-wrap:wrap;gap:6px;${!anyEnabled ? 'opacity:0.4;pointer-events:none;' : ''}">
+              ${stages.filter(s => s.key !== 'rejected').map(s => `
+                <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-raised);">
+                  <input type="checkbox" class="rescore-stage-cb" value="${s.key}" ${selected.includes(s.key) ? 'checked' : ''} style="margin:0;"> ${s.label}
+                </label>`).join('')}
             </div>
-            <label class="pipeline-toggle" style="flex-shrink:0;margin-left:16px;">
-              <input type="checkbox" id="auto-rescore-toggle" ${enabled ? 'checked' : ''}>
-              <span class="pipeline-toggle-track"></span>
-            </label>
-          </div>
-          <div id="rescore-stage-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;${!enabled ? 'opacity:0.4;pointer-events:none;' : ''}">
-            ${stages.map(s => `
-              <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-raised);">
-                <input type="checkbox" class="rescore-stage-cb" value="${s.key}" ${selected.includes(s.key) ? 'checked' : ''} style="margin:0;"> ${s.label}
-              </label>`).join('')}
           </div>
         </div>`;
 
-      const toggle = container.querySelector('#auto-rescore-toggle');
       const stageList = container.querySelector('#rescore-stage-list');
 
       function saveCoopConfig() {
@@ -858,13 +867,16 @@ function loadAutoRescoreSection() {
         chrome.storage.local.set({ coopConfig: cfg });
         const toast = document.getElementById('pipeline-save-toast');
         if (toast) { toast.style.opacity = '1'; setTimeout(() => toast.style.opacity = '0', 1800); }
+        const any = cfg.automations.rescoreOnProfileChange || cfg.automations.rescoreOnPrefChange || cfg.automations.rescoreOnNewData;
+        stageList.style.opacity = any ? '1' : '0.4';
+        stageList.style.pointerEvents = any ? '' : 'none';
       }
 
-      toggle.addEventListener('change', () => {
-        cfg.automations.autoRescore = toggle.checked;
-        stageList.style.opacity = toggle.checked ? '1' : '0.4';
-        stageList.style.pointerEvents = toggle.checked ? '' : 'none';
-        saveCoopConfig();
+      container.querySelectorAll('.rescore-trigger-cb').forEach(cb => {
+        cb.addEventListener('change', () => {
+          cfg.automations[cb.dataset.key] = cb.checked;
+          saveCoopConfig();
+        });
       });
 
       container.querySelectorAll('.rescore-stage-cb').forEach(cb => {

@@ -143,6 +143,33 @@ chrome.storage.onChanged.addListener((changes, area) => {
     state._apolloExhausted = false;
     state._serperExhausted = false;
   }
+
+  // Auto-rescore on profile changes (opt-in, OFF by default)
+  const profileKeys = ['profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'];
+  const changedProfileKeys = profileKeys.filter(k => changes[k]);
+  if (area === 'local' && changedProfileKeys.length && state.coopConfig.automations?.rescoreOnProfileChange) {
+    const rescoreStages = state.coopConfig.rescoreStages || [];
+    if (rescoreStages.length) {
+      console.log('[AutoRescore] Profile changed:', changedProfileKeys, '— rescoring stages:', rescoreStages);
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const active = (savedCompanies || []).filter(c =>
+          c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
+        );
+        if (!active.length) return;
+        let i = 0;
+        const processBatch = () => {
+          const batch = active.slice(i, i + 2);
+          if (!batch.length) return;
+          batch.forEach(entry => {
+            chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, () => void chrome.runtime.lastError);
+          });
+          i += 2;
+          if (i < active.length) setTimeout(processBatch, 2000);
+        };
+        processBatch();
+      });
+    }
+  }
 });
 
 // Periodic Granola index refresh (every 6 hours, using setInterval — no alarms permission needed)
@@ -166,6 +193,69 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const p = changes.prefs.newValue || {};
     state.cachedUserName = p.name || p.fullName || '';
   }
+
+  // Auto-rescore on salary/work pref changes (opt-in, OFF by default)
+  if (area === 'sync' && changes.prefs && state.coopConfig.automations?.rescoreOnPrefChange) {
+    const oldPrefs = changes.prefs.oldValue || {};
+    const newPrefs = changes.prefs.newValue || {};
+    const salaryChanged = oldPrefs.salaryFloor !== newPrefs.salaryFloor || oldPrefs.salaryStrong !== newPrefs.salaryStrong ||
+      oldPrefs.oteFloor !== newPrefs.oteFloor || oldPrefs.oteStrong !== newPrefs.oteStrong;
+    const workChanged = JSON.stringify(oldPrefs.workArrangement) !== JSON.stringify(newPrefs.workArrangement);
+    if (salaryChanged || workChanged) {
+      const rescoreStages = state.coopConfig.rescoreStages || [];
+      if (rescoreStages.length) {
+        console.log('[AutoRescore] Salary/work prefs changed — rescoring stages:', rescoreStages);
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+          const active = (savedCompanies || []).filter(c =>
+            c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
+          );
+          if (!active.length) return;
+          let i = 0;
+          const processBatch = () => {
+            const batch = active.slice(i, i + 2);
+            if (!batch.length) return;
+            batch.forEach(entry => {
+              chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, () => void chrome.runtime.lastError);
+            });
+            i += 2;
+            if (i < active.length) setTimeout(processBatch, 2000);
+          };
+          processBatch();
+        });
+      }
+    }
+  }
+});
+
+// Auto-rescore when interaction data changes (opt-in, OFF by default)
+// Detects new emails, meetings, transcripts, or significant note changes
+const _interactionRescoreTimers = {};
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.savedCompanies || !state.coopConfig.automations?.rescoreOnNewData) return;
+  const oldEntries = changes.savedCompanies.oldValue || [];
+  const newEntries = changes.savedCompanies.newValue || [];
+  const oldMap = {};
+  oldEntries.forEach(e => { if (e.id) oldMap[e.id] = e; });
+  const rescoreStages = state.coopConfig.rescoreStages || [];
+  newEntries.forEach(e => {
+    if (!e.isOpportunity || !e.id) return;
+    if (rescoreStages.length && !rescoreStages.includes(e.jobStage || 'needs_review')) return;
+    const old = oldMap[e.id];
+    if (!old) return; // new entry — initial score on save handles this
+    const emailsChanged = (e.cachedEmails?.length || 0) !== (old.cachedEmails?.length || 0);
+    const meetingsChanged = (e.cachedMeetings?.length || 0) !== (old.cachedMeetings?.length || 0);
+    const transcriptChanged = (e.cachedMeetingTranscript?.length || 0) !== (old.cachedMeetingTranscript?.length || 0);
+    const notesDelta = Math.abs((e.notes?.length || 0) - (old.notes?.length || 0));
+    const notesChanged = notesDelta > 50; // only rescore on significant note changes
+    if (emailsChanged || meetingsChanged || transcriptChanged || notesChanged) {
+      clearTimeout(_interactionRescoreTimers[e.id]);
+      _interactionRescoreTimers[e.id] = setTimeout(() => {
+        console.log(`[AutoRescore] Interaction data changed for ${e.company} — rescoring`);
+        chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: e.id }, () => void chrome.runtime.lastError);
+        delete _interactionRescoreTimers[e.id];
+      }, 15000); // 15s debounce — avoids rescoring during rapid edits
+    }
+  });
 });
 
 // ── One-time scan for data contamination ────────────────────────────────────

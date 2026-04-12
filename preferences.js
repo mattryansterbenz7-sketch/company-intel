@@ -2906,10 +2906,12 @@ const DEFAULT_COOP_CONFIG = {
   styleOverride: null,
   automations: {
     insightExtraction: true,
-    autoRescore: true,
     autoFetchUrls: true,
     applicationModeDetection: true,
     contextualSuggestions: true,
+    rescoreOnProfileChange: false,
+    rescoreOnPrefChange: false,
+    rescoreOnNewData: false,
   },
 };
 
