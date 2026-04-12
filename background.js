@@ -260,7 +260,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     // Retroactive: entry moved into an eligible stage with stale interaction data
     const stageChanged = (e.jobStage || 'needs_review') !== (old.jobStage || 'needs_review');
     if (stageChanged && rescoreStages.includes(e.jobStage || 'needs_review') && !rescoreStages.includes(old.jobStage || 'needs_review')) {
-      const scoredAt = e.quickFitScoredAt || 0;
+      const scoredAt = e.scoredAt || 0;
       const dataAt = Math.max(e.cachedEmailsAt || 0, e.cachedMeetingNotesAt || 0);
       if (dataAt > scoredAt) {
         clearTimeout(_interactionRescoreTimers[e.id]);

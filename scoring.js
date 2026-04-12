@@ -559,11 +559,11 @@ Return ONLY valid JSON (no markdown fences):
       if (!updateEntries[updateIdx].equity && s.equity) updateEntries[updateIdx].equity = s.equity;
     }
     // Backward-compat surface fields (Kanban cards, sidepanel score pills)
-    updateEntries[updateIdx].quickFitScore = overall;
-    updateEntries[updateIdx].quickFitReason = parsed.coopTake || '';
+    updateEntries[updateIdx].fitScore = overall;
+    updateEntries[updateIdx].fitReason = parsed.coopTake || '';
     updateEntries[updateIdx].quickTake = parsed.quickTake || [];
-    updateEntries[updateIdx].quickFitScoredAt = Date.now();
-    updateEntries[updateIdx].quickFitModel = result.usedModel || 'unknown';
+    updateEntries[updateIdx].scoredAt = Date.now();
+    updateEntries[updateIdx].scoringModel = result.usedModel || 'unknown';
     if (hardDQ.flagged) updateEntries[updateIdx].hardDQ = hardDQ;
     await new Promise(resolve =>
       chrome.storage.local.set({ savedCompanies: updateEntries }, resolve)
@@ -576,15 +576,15 @@ Return ONLY valid JSON (no markdown fences):
     entryId,
     companyId: entryId,
     score: overall,
-    quickFitScore: overall,
-    quickFitReason: parsed.coopTake || '',
+    fitScore: overall,
+    fitReason: parsed.coopTake || '',
     quickTake: parsed.quickTake || [],
     hardDQ,
     jobSnapshot,
     scoredAt: Date.now(),
   }).catch(() => {});
 
-  return { quickFitScore: overall, quickFitReason: parsed.coopTake || '', quickTake: parsed.quickTake || [], hardDQ, jobSnapshot };
+  return { fitScore: overall, fitReason: parsed.coopTake || '', quickTake: parsed.quickTake || [], hardDQ, jobSnapshot };
 }
 
 export async function processQueue() {
@@ -617,9 +617,9 @@ export async function processQueue() {
         const failEntries = failData.savedCompanies || [];
         const failIdx = failEntries.findIndex(e => e.id === entryId);
         if (failIdx !== -1) {
-          failEntries[failIdx].quickFitScore = null;
-          failEntries[failIdx].quickFitReason = 'Scoring failed — tap to retry';
-          failEntries[failIdx].quickFitScoredAt = Date.now();
+          failEntries[failIdx].fitScore = null;
+          failEntries[failIdx].fitReason = 'Scoring failed — tap to retry';
+          failEntries[failIdx].scoredAt = Date.now();
           await new Promise(resolve =>
             chrome.storage.local.set({ savedCompanies: failEntries }, resolve)
           );
@@ -630,8 +630,8 @@ export async function processQueue() {
           entryId,
           companyId: entryId,
           score: null,
-          quickFitScore: null,
-          quickFitReason: 'Scoring failed — tap to retry',
+          fitScore: null,
+          fitReason: 'Scoring failed — tap to retry',
           scoredAt: Date.now(),
         }).catch(() => {});
       }
@@ -813,8 +813,8 @@ export async function handleDevMockScore(entryId) {
     mockScoredAt: Date.now(),
     lastScoringUsage: { model: 'dev-mock', input: 0, output: 0, cost: 0 }
   };
-  entries[idx].quickFitScore = overall;
-  entries[idx].quickFitReason = entries[idx].jobMatch.coopTake;
+  entries[idx].fitScore = overall;
+  entries[idx].fitReason = entries[idx].jobMatch.coopTake;
   entries[idx].quickTake = entries[idx].jobMatch.quickTake;
 
   await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));

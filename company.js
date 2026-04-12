@@ -1735,7 +1735,7 @@ function buildRoleBriefSection() {
       ${staleHtml}
       <div class="rb-card">
         <div class="rb-content">${sections.join('')}</div>
-        <div style="margin-top:10px;font-size:11px;color:#7c98b6;">Auto-generated from scoring${entry.quickFitScoredAt ? ' · ' + new Date(entry.quickFitScoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
+        <div style="margin-top:10px;font-size:11px;color:#7c98b6;">Auto-generated from scoring${entry.scoredAt ? ' · ' + new Date(entry.scoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
       </div>
       ${hasData ? '<button class="rb-generate-btn" id="rb-generate-btn" style="margin-top:8px">Generate detailed brief</button>' : ''}`;
   }
@@ -1955,7 +1955,7 @@ function buildFitSection() {
   const _flagSrcIcon = s => ({ job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' }[s] || 'ⓘ');
   const _flagTipHtml = f => (_flagSrcLabel(f.source) + (f.evidence ? ` — "${f.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
   const jobSummary = jm.jobSummary  || entry.jobSummary || '';
-  const reason     = jm.verdict || entry.quickFitReason || '';
+  const reason     = jm.verdict || entry.fitReason || '';
   const v          = score ? scoreToVerdict(score) : null;
 
   const coopTake = jm.coopTake || '';

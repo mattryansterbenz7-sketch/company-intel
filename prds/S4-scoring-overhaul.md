@@ -134,7 +134,7 @@ entry.jobMatch = {
 };
 ```
 
-Also stored on the entry: `jobSnapshot` (salary, workArrangement, equity, location, employmentType) and backward-compat surface fields (`quickFitScore`, `quickFitReason`, `quickTake`).
+Also stored on the entry: `jobSnapshot` (salary, workArrangement, equity, location, employmentType) and surface fields (`fitScore`, `fitReason`, `quickTake`).
 
 `strongFits` and `redFlags` are explicitly deleted — replaced by `flagsFired` (grouped by dimension with severity deltas).
 

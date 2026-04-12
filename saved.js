@@ -389,7 +389,7 @@ function setColViewMode(stageKey, mode) {
 }
 
 function renderCompactCard(c) {
-  const score = c.jobMatch?.score ?? c.quickFitScore ?? null;
+  const score = c.jobMatch?.score ?? c.fitScore ?? null;
   const isScoring = c._queuedForScoring && score === null;
 
   const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
@@ -472,8 +472,8 @@ function renderCompactCard(c) {
           if (meta && c.jobTitle && meta.toLowerCase().startsWith(c.jobTitle.toLowerCase())) return '';
           return meta ? `<div class="compact-meta">${escHtml(meta)}</div>` : '';
         })()}
-        ${(c.jobMatch?.verdict || c.quickFitReason) && score != null ? (() => {
-          let reason = c.jobMatch?.verdict || c.quickFitReason;
+        ${(c.jobMatch?.verdict || c.fitReason) && score != null ? (() => {
+          let reason = c.jobMatch?.verdict || c.fitReason;
           if (c.jobTitle) {
             reason = stripTitleEcho(reason);
             // Also strip if the remaining text still closely matches the title
@@ -506,7 +506,7 @@ function openScoreModal(entry) {
   const content = document.getElementById('score-modal-content');
   if (!overlay || !content) return;
 
-  const score = entry.jobMatch?.score ?? entry.quickFitScore ?? null;
+  const score = entry.jobMatch?.score ?? entry.fitScore ?? null;
   const tier = score != null ? (score >= SCORE_THRESHOLDS.green ? 'green' : score >= SCORE_THRESHOLDS.amber ? 'amber' : 'red') : '';
   const jm = entry.jobMatch || {};
 
@@ -844,7 +844,7 @@ function openScoreModal(entry) {
       result => {
         void chrome.runtime.lastError;
         console.log('[Scorecard] Re-score result:', result);
-        if (result?.quickFitScore != null) {
+        if (result?.fitScore != null) {
           // scoreOpportunity persists + broadcasts — reload from storage for fresh state
           chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
             allCompanies = savedCompanies || allCompanies;
@@ -2363,8 +2363,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const idx = allCompanies.findIndex(c => c.id === msg.companyId);
     if (idx !== -1) {
       const updates = {};
-      if (msg.score != null) updates.quickFitScore = msg.score;
-      if (msg.scoredAt) updates.quickFitScoredAt = msg.scoredAt;
+      if (msg.score != null) updates.fitScore = msg.score;
+      if (msg.scoredAt) updates.scoredAt = msg.scoredAt;
       if (msg.jobSnapshot) updates.jobSnapshot = msg.jobSnapshot;
       if (msg.quickTake) updates.quickTake = msg.quickTake;
       if (msg.hardDQ) updates.hardDQ = msg.hardDQ;
@@ -2393,11 +2393,11 @@ function renderKanban(filtered) {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
       return validKeys.has(s) ? s === statusKey : statusKey === stages[0].key;
     });
-    // Queue column: scored first (by quickFitScore desc), then scoring, then unscored
+    // Queue column: scored first (by fitScore desc), then scoring, then unscored
     if (statusKey === QUEUE_STAGE && activePipeline === 'opportunity') {
       cards.sort((a, b) => {
-        const aScore = a.quickFitScore ?? a.jobMatch?.score ?? null;
-        const bScore = b.quickFitScore ?? b.jobMatch?.score ?? null;
+        const aScore = a.fitScore ?? a.jobMatch?.score ?? null;
+        const bScore = b.fitScore ?? b.jobMatch?.score ?? null;
         const aScoring = a._queuedForScoring && aScore === null;
         const bScoring = b._queuedForScoring && bScore === null;
         // Scored first
@@ -2412,8 +2412,8 @@ function renderKanban(filtered) {
     } else if (activePipeline === 'opportunity') {
       // Sort: score first (highest first), then action priority, then most recent activity
       cards.sort((a, b) => {
-        const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : (a.quickFitScore || -1);
-        const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : (b.quickFitScore || -1);
+        const sa = a.jobMatch?.score ? applyExcitementModifier(a.jobMatch.score, a.rating).final : (a.fitScore || -1);
+        const sb = b.jobMatch?.score ? applyExcitementModifier(b.jobMatch.score, b.rating).final : (b.fitScore || -1);
         if (sb !== sa) return sb - sa;
         // Scheduled items surface above same-score items
         const actionPriority = { scheduled: 2, my_court: 1, their_court: 0 };
@@ -2576,7 +2576,7 @@ function renderKanbanCard(c) {
           return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
         })() : '';
         const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
-        const entryScore = c.jobMatch?.score ?? c.quickFitScore ?? null;
+        const entryScore = c.jobMatch?.score ?? c.fitScore ?? null;
         const hardDQHtml = hardDQ?.flagged && entryScore != null && entryScore <= 3 ? '<span class="hard-dq-badge">\u{1F6AB} Hard DQ</span>' : '';
         return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}" title="Coop's Score">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
       })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
@@ -2901,8 +2901,8 @@ function bindKanbanEvents(board) {
               if (result && !result.error) {
                 const idx = allCompanies.findIndex(c => c.id === entry.id);
                 if (idx >= 0) {
-                  if (result.quickFitScore != null) allCompanies[idx].quickFitScore = result.quickFitScore;
-                  if (result.quickFitReason) allCompanies[idx].quickFitReason = result.quickFitReason;
+                  if (result.fitScore != null) allCompanies[idx].fitScore = result.fitScore;
+                  if (result.fitReason) allCompanies[idx].fitReason = result.fitReason;
                   if (result.quickTake) allCompanies[idx].quickTake = result.quickTake;
                   if (result.hardDQ) allCompanies[idx].hardDQ = result.hardDQ;
                 }
@@ -3060,7 +3060,7 @@ function bindKanbanEvents(board) {
       if (e.target.closest('button, a')) return;
       const entry = allCompanies.find(c => c.id === cardEl.dataset.id);
       if (!entry) return;
-      if (entry.jobMatch?.score != null || entry.quickFitScore != null) {
+      if (entry.jobMatch?.score != null || entry.fitScore != null) {
         openScoreModal(entry);
       } else {
         coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id);

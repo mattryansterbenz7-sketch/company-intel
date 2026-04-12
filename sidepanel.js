@@ -5148,8 +5148,8 @@ function queueSaveEntry(callback, { triggerResearch = false } = {}) {
         id: entry.id,
         company: entry.company,
         jobTitle: entry.jobTitle,
-        quickFitScore: null,
-        quickFitReason: null,
+        fitScore: null,
+        fitReason: null,
       });
 
       showPipelineStats();
@@ -5248,9 +5248,9 @@ function renderQueueConfirmation(entry) {
     const items = _sessionSaves.slice().reverse().map(s => {
       let scoreCls = 'pending';
       let scoreText = '...';
-      if (s.quickFitScore != null) {
-        scoreText = s.quickFitScore + '/10';
-        scoreCls = s.quickFitScore >= 7 ? 'high' : s.quickFitScore >= 4 ? 'mid' : 'low';
+      if (s.fitScore != null) {
+        scoreText = s.fitScore + '/10';
+        scoreCls = s.fitScore >= 7 ? 'high' : s.fitScore >= 4 ? 'mid' : 'low';
       }
       return `<div class="save-session-item" data-session-id="${s.id}">
         <div class="item-info">
@@ -5302,8 +5302,8 @@ function autoSaveConfirmField(entryId, changes) {
 function updateSessionFeedScore(entryId, score, reason) {
   const item = _sessionSaves.find(s => s.id === entryId);
   if (item) {
-    item.quickFitScore = score;
-    item.quickFitReason = reason;
+    item.fitScore = score;
+    item.fitReason = reason;
   }
   // Re-render feed items in DOM if visible
   const feedEl = document.getElementById('session-feed');
