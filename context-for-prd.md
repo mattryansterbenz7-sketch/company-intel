@@ -29,8 +29,8 @@ When a job is saved (via "Send to Coop" on LinkedIn or manually), it enters a sc
 The prompt asks the model to produce:
 - **Overall score** (1-10)
 - **5 sub-scores** (scoreBreakdown)
-- **quickTake** — 2-4 decisive signal bullets
-- **strongFits** / **redFlags** — evidence-backed
+- **keySignals** — 2-4 decisive signal bullets (green/red)
+- **flagsFired** — evidence-backed flags grouped by dimension
 - **qualifications** — line-by-line requirement matching
 - **roleBrief** — summary, why interesting, concerns, comp summary
 - **hardDQ** — only for severity-5 dealbreakers

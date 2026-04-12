@@ -7,6 +7,10 @@ const _rawMode = new URLSearchParams(location.search).get('mode');
 const MODE = _rawMode === 'apply' ? 'apply' : _rawMode === 'dq' ? 'dq' : 'score';
 const SINGLE_ID = new URLSearchParams(location.search).get('id'); // single-entry DQ mode
 const DEV_MOCK = new URLSearchParams(location.search).get('mock') === '1'; // ?mock=1 → skip API, use fixture data
+let _cachedUserFirstName = '';
+chrome.storage.sync.get(['prefs'], d => { const n = d.prefs?.name || d.prefs?.fullName || ''; _cachedUserFirstName = n.split(/\s/)[0]; });
+chrome.storage.onChanged.addListener((c, a) => { if (a === 'sync' && c.prefs) { const n = c.prefs.newValue?.name || c.prefs.newValue?.fullName || ''; _cachedUserFirstName = n.split(/\s/)[0]; } });
+
 const QUEUE_CONFIG = {
   score: { title: "Coop's Scoring Queue", emptyTitle: 'Queue is clear', emptySub: 'New opportunities will appear here when saved', showCta: false, passLabel: 'Pass', interestedLabel: 'Interested' },
   apply: { title: 'Apply Queue', emptyTitle: 'All caught up', emptySub: 'Nothing left to apply to right now', showCta: true, passLabel: 'Skip', interestedLabel: 'Applied' },
@@ -180,7 +184,7 @@ function renderCurrent() {
   const _normFlag = f => typeof f === 'string' ? { text: f, source: null, evidence: null, configuredEntry: null } : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null, configuredEntry: f?.configuredEntry || null };
   const strongFits = (jm.strongFits || []).map(_normFlag).filter(f => f.text);
   const redFlags = (jm.redFlags || []).map(_normFlag).filter(f => f.text);
-  const quickTake = jm.quickTake || c.quickTake || [];
+  const keySignals = jm.keySignals || c.keySignals || [];
   const breakdown = jm.scoreBreakdown || {};
   const qualMatch = rb.qualificationMatch || '';
   const qualScore = rb.qualificationScore || 0;
@@ -314,13 +318,13 @@ function renderCurrent() {
 
   // 5-dim breakdown
   const DIM_DEFS = [
-    { key: 'qualificationFit', label: 'Qualification', dot: 'qual' },
+    { key: 'qualificationFit', label: _cachedUserFirstName ? `${_cachedUserFirstName}'s Qualifications` : 'Qualifications', dot: 'qual' },
     { key: 'roleFit',          label: 'Role fit',      dot: 'role' },
     { key: 'cultureFit',       label: 'Culture fit',   dot: 'culture' },
     { key: 'companyFit',       label: 'Company fit',   dot: 'company' },
     { key: 'compFit',          label: 'Comp fit',      dot: 'comp' },
   ];
-  const DIM_LABELS = { qualificationFit: 'Qualification', roleFit: 'Role fit', cultureFit: 'Culture fit', companyFit: 'Company fit', compFit: 'Comp fit' };
+  const DIM_LABELS = { qualificationFit: _cachedUserFirstName ? `${_cachedUserFirstName}'s Qualifications` : 'Qualifications', roleFit: 'Role fit', cultureFit: 'Culture fit', companyFit: 'Company fit', compFit: 'Comp fit' };
   // Map old format keys to new display slots
   const displayBreakdown = isNewFormat ? breakdown : {
     qualificationFit: breakdown.qualificationFit,
@@ -544,6 +548,17 @@ function renderCurrent() {
             ${redFlags.length ? `<div class="qc-flag-col"><div class="qc-flag-heading red">Red Flags</div>${redHtml}</div>` : ''}
           </div>` : ''}
       </div>
+      ${rb.roleSummary ? `<details class="qc-role-brief">
+        <summary style="font-size:12px;font-weight:600;color:var(--ci-text-secondary);cursor:pointer;padding:8px 0 4px;list-style:none;display:flex;align-items:center;gap:4px;">
+          <span style="font-size:10px;transition:transform 0.15s;">▸</span> Role Brief
+        </summary>
+        <div style="font-size:12px;line-height:1.6;color:var(--ci-text-primary);padding:0 0 12px;">
+          <div style="margin-bottom:8px;">${escHtml(rb.roleSummary)}</div>
+          ${rb.whyInteresting ? `<div style="margin-bottom:6px;"><span style="font-weight:600;color:#059669;">Why interesting:</span> ${escHtml(rb.whyInteresting)}</div>` : ''}
+          ${rb.concerns ? `<div style="margin-bottom:6px;"><span style="font-weight:600;color:#dc2626;">Concerns:</span> ${escHtml(rb.concerns)}</div>` : ''}
+          ${rb.compRange ? `<div><span style="font-weight:600;color:var(--ci-text-secondary);">Comp:</span> ${escHtml(rb.compRange)}</div>` : ''}
+        </div>
+      </details>` : ''}
       <div class="qc-more" id="qc-more" data-id="${c.id}">View full details →</div>
       <div class="queue-nav">
         <span class="queue-nav-pos">${currentIdx + 1} / ${queue.length}</span>

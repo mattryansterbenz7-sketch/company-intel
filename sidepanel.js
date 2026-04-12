@@ -2683,7 +2683,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
           <div id="sp-thumb-form" style="display:none"></div>
           ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
           ${(jobMatch.redFlags || jobMatch.watchOuts) ? `<details open class="flags-red"><summary>Red Flags</summary><div class="detail-body">${renderBullets(jobMatch.redFlags || jobMatch.watchOuts, 'flag')}</div></details>` : ''}
-          ${jobMatch.qualifications?.length ? `<details class="flags-qual"><summary>Qualifications (${jobMatch.qualifications.filter(q => q.status === 'met' && !q.dismissed).length}/${jobMatch.qualifications.length})</summary><div class="detail-body">${renderQualifications(jobMatch.qualifications)}</div></details>` : ''}
+          ${jobMatch.qualifications?.length ? `<details class="flags-qual"><summary>${(_cachedUserName || '').split(/\s/)[0] ? (_cachedUserName.split(/\s/)[0] + "'s Qualifications") : 'Qualifications'} (${jobMatch.qualifications.filter(q => q.status === 'met' && !q.dismissed).length}/${jobMatch.qualifications.length})</summary><div class="detail-body">${renderQualifications(jobMatch.qualifications)}</div></details>` : ''}
           ${jobMatch.scoreBreakdown ? `<details class="flags-breakdown"><summary>Score Breakdown</summary><div class="detail-body">${renderScoreBreakdown(jobMatch.scoreBreakdown)}</div></details>` : ''}
         `;
         })() : ''}
@@ -2880,7 +2880,8 @@ document.addEventListener('click', e => {
       if (qualDetails) {
         const allQuals = companies[idx].jobMatch.qualifications;
         const metCount = allQuals.filter(q => q.status === 'met' && !q.dismissed).length;
-        qualDetails.textContent = `Qualifications (${metCount}/${allQuals.length})`;
+        const _fn = (_cachedUserName || '').split(/\s/)[0];
+        qualDetails.textContent = `${_fn ? _fn + "'s Qualifications" : 'Qualifications'} (${metCount}/${allQuals.length})`;
       }
     });
   });

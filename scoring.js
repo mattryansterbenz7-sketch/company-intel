@@ -352,7 +352,7 @@ Return ONLY valid JSON (no markdown fences):
     "compFit": "<1 sentence>"
   },
   "coopTake": "<1-2 sentences>",
-  "quickTake": [{"type": "green|red", "text": "8-15 word signal"}],
+  "keySignals": [{"type": "green|red", "text": "8-15 word signal"}],
   "roleBrief": {
     "roleSummary": "<1-2 sentence summary of the role — scope, function, team>",
     "whyInteresting": "<why this could be a good fit for this candidate>",
@@ -370,7 +370,7 @@ Return ONLY valid JSON (no markdown fences):
     "location": "<city/state if hybrid or on-site, null if remote>",
     "employmentType": "<Full-time/Part-time/Contract or null>"
   },
-  "hardDQ": {"flagged": false, "reasons": []}${hasInteractionContext ? ',\n  "conversationInsights": "<2-4 sentence analysis of what emails/meetings reveal — cite specifics>"' : ''}
+  "hardDQ": {"flagged": false, "reasons": []}${hasInteractionContext ? ',\n  "interactionSummary": "<2-4 sentence analysis of what emails/meetings reveal — cite specifics>"' : ''}
 }`;
 
   const result = await chatWithFallback({
@@ -514,9 +514,9 @@ Return ONLY valid JSON (no markdown fences):
     compAssessment: compAssess,
     dimensionRationale: parsed.dimensionRationale || {},
     coopTake: parsed.coopTake || '',
-    quickTake: parsed.quickTake || [],
+    keySignals: parsed.keySignals || [],
     roleBrief,
-    conversationInsights: parsed.conversationInsights || null,
+    interactionSummary: parsed.interactionSummary || null,
     scoreRationale,
     hardDQ,
     scoringWeightsSnapshot: { ...weights },
@@ -561,7 +561,7 @@ Return ONLY valid JSON (no markdown fences):
     // Backward-compat surface fields (Kanban cards, sidepanel score pills)
     updateEntries[updateIdx].fitScore = overall;
     updateEntries[updateIdx].fitReason = parsed.coopTake || '';
-    updateEntries[updateIdx].quickTake = parsed.quickTake || [];
+    updateEntries[updateIdx].keySignals = parsed.keySignals || [];
     updateEntries[updateIdx].scoredAt = Date.now();
     updateEntries[updateIdx].scoringModel = result.usedModel || 'unknown';
     if (hardDQ.flagged) updateEntries[updateIdx].hardDQ = hardDQ;
@@ -578,13 +578,13 @@ Return ONLY valid JSON (no markdown fences):
     score: overall,
     fitScore: overall,
     fitReason: parsed.coopTake || '',
-    quickTake: parsed.quickTake || [],
+    keySignals: parsed.keySignals || [],
     hardDQ,
     jobSnapshot,
     scoredAt: Date.now(),
   }).catch(() => {});
 
-  return { fitScore: overall, fitReason: parsed.coopTake || '', quickTake: parsed.quickTake || [], hardDQ, jobSnapshot };
+  return { fitScore: overall, fitReason: parsed.coopTake || '', keySignals: parsed.keySignals || [], hardDQ, jobSnapshot };
 }
 
 export async function processQueue() {
@@ -790,7 +790,7 @@ export async function handleDevMockScore(entryId) {
     flagsFired,
     neutralFlags,
     qualifications: mockQuals,
-    quickTake: [{ type: 'green', text: '[Mock] Strong culture alignment signals' }, { type: 'red', text: '[Mock] Unclear growth trajectory' }],
+    keySignals: [{ type: 'green', text: '[Mock] Strong culture alignment signals' }, { type: 'red', text: '[Mock] Unclear growth trajectory' }],
     coopTake: '[Mock] Solid role fit with some comp uncertainty. Good enough to explore.',
     scoreRationale: `qual ${qualScore}×${weights.qualificationFit}% + role ${roleDim.score}×${weights.roleFit}% + culture ${cultureDim.score}×${weights.cultureFit}% + company ${companyDim.score}×${weights.companyFit}% + comp ${compScore}×${weights.compFit}% = ${rawOverall.toFixed(2)} → ${overall}/10`,
     compAssessment: mockCompAssess,
@@ -815,7 +815,7 @@ export async function handleDevMockScore(entryId) {
   };
   entries[idx].fitScore = overall;
   entries[idx].fitReason = entries[idx].jobMatch.coopTake;
-  entries[idx].quickTake = entries[idx].jobMatch.quickTake;
+  entries[idx].keySignals = entries[idx].jobMatch.keySignals;
 
   await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));
   console.log('[DevMock] Wrote mock score for', entries[idx].company, '— score:', overall);

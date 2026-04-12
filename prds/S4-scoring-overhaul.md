@@ -123,10 +123,10 @@ entry.jobMatch = {
   dimensionRationale: { qualificationFit: "...", ... },
   qualifications: [...],
   compAssessment: { ... },
-  quickTake: [...],     // 2-4 headline signals
+  keySignals: [...],     // 2-4 headline signals
   coopTake: "...",
   roleBrief: { roleSummary, whyInteresting, concerns, compSummary, qualificationMatch },
-  conversationInsights: "...",  // only when emails/meetings/notes exist
+  interactionSummary: "...",  // only when emails/meetings/notes exist
   hardDQ: { flagged: false, reasons: [] },
   scoreRationale: "qual 8×20% + role 7.5×20% + ...",
   lastUpdatedAt: Date.now(),
@@ -134,7 +134,7 @@ entry.jobMatch = {
 };
 ```
 
-Also stored on the entry: `jobSnapshot` (salary, workArrangement, equity, location, employmentType) and surface fields (`fitScore`, `fitReason`, `quickTake`).
+Also stored on the entry: `jobSnapshot` (salary, workArrangement, equity, location, employmentType) and surface fields (`fitScore`, `fitReason`, `keySignals`).
 
 `strongFits` and `redFlags` are explicitly deleted — replaced by `flagsFired` (grouped by dimension with severity deltas).
 

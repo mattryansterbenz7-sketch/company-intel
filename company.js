@@ -1981,8 +1981,8 @@ function buildFitSection() {
     } else if (reason) {
       html += `<div style="font-size:13px;color:#516f90;margin:8px 0;line-height:1.5">${escapeHtml(reason)}</div>`;
     }
-    if (jm.conversationInsights) {
-      html += `<div style="font-size:13px;color:#374151;margin:10px 0 4px;line-height:1.6;border-left:3px solid #059669;padding-left:10px;background:#f0fdf4;border-radius:0 4px 4px 0;padding:8px 10px;"><span style="font-size:11px;font-weight:600;color:#059669;display:block;margin-bottom:4px;letter-spacing:0.04em">FROM CONVERSATIONS</span>${escapeHtml(jm.conversationInsights)}</div>`;
+    if (jm.interactionSummary) {
+      html += `<div style="font-size:13px;color:#374151;margin:10px 0 4px;line-height:1.6;border-left:3px solid #059669;padding-left:10px;background:#f0fdf4;border-radius:0 4px 4px 0;padding:8px 10px;"><span style="font-size:11px;font-weight:600;color:#059669;display:block;margin-bottom:4px;letter-spacing:0.04em">FROM CONVERSATIONS</span>${escapeHtml(jm.interactionSummary)}</div>`;
     }
   }
 

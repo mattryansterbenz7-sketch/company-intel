@@ -488,8 +488,8 @@ function renderCompactCard(c) {
         })() : ''}
         ${isScoring ? '<div class="compact-meta">Scoring...</div>' : ''}
         ${inQueue ? (() => {
-          const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
-          return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 2).map(qt =>
+          const keySignals = c.jobMatch?.keySignals || c.keySignals || [];
+          return keySignals.length ? `<div class="quick-take">${keySignals.slice(0, 2).map(qt =>
             `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtml(qt.text)}</div>`
           ).join('')}</div>` : '';
         })() : ''}
@@ -2366,7 +2366,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg.score != null) updates.fitScore = msg.score;
       if (msg.scoredAt) updates.scoredAt = msg.scoredAt;
       if (msg.jobSnapshot) updates.jobSnapshot = msg.jobSnapshot;
-      if (msg.quickTake) updates.quickTake = msg.quickTake;
+      if (msg.keySignals) updates.keySignals = msg.keySignals;
       if (msg.hardDQ) updates.hardDQ = msg.hardDQ;
       allCompanies[idx] = { ...allCompanies[idx], ...updates, _queuedForScoring: false };
       _scoreRenderHits++;
@@ -2601,8 +2601,8 @@ function renderKanbanCard(c) {
         </div>`;
       })() : ''}
       ${(() => {
-        const quickTake = c.jobMatch?.quickTake || c.quickTake || [];
-        return quickTake.length ? `<div class="quick-take">${quickTake.slice(0, 4).map(qt =>
+        const keySignals = c.jobMatch?.keySignals || c.keySignals || [];
+        return keySignals.length ? `<div class="quick-take">${keySignals.slice(0, 4).map(qt =>
           `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtml(qt.text)}</div>`
         ).join('')}</div>` : '';
       })()}
@@ -2903,7 +2903,7 @@ function bindKanbanEvents(board) {
                 if (idx >= 0) {
                   if (result.fitScore != null) allCompanies[idx].fitScore = result.fitScore;
                   if (result.fitReason) allCompanies[idx].fitReason = result.fitReason;
-                  if (result.quickTake) allCompanies[idx].quickTake = result.quickTake;
+                  if (result.keySignals) allCompanies[idx].keySignals = result.keySignals;
                   if (result.hardDQ) allCompanies[idx].hardDQ = result.hardDQ;
                 }
                 if (cardEl) { cardEl.classList.remove('rescore-active'); cardEl.classList.add('rescore-done'); }

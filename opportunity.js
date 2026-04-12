@@ -1,6 +1,8 @@
 const params = new URLSearchParams(window.location.search);
 const entryId = params.get('id');
 let entry = null;
+let _cachedUserFirstName = '';
+chrome.storage.sync.get(['prefs'], d => { const n = d.prefs?.name || d.prefs?.fullName || ''; _cachedUserFirstName = n.split(/\s/)[0]; });
 
 // escapeHtml — provided by ui-utils.js
 let allTags = [];
@@ -805,7 +807,7 @@ function renderPanelBody(pid) {
           : '';
         html += `<div style="margin-top:20px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div class="p-label" style="margin:0">Qualifications <span style="font-weight:400;color:#6B6560">(${metCount}/${quals.length} met${reqCount ? `, ${reqMetCount}/${reqCount} required` : ''})</span>${pendingPill}</div>
+            <div class="p-label" style="margin:0">${_cachedUserFirstName ? _cachedUserFirstName + "'s" : ''} Qualifications <span style="font-weight:400;color:#6B6560">(${metCount}/${quals.length} met${reqCount ? `, ${reqMetCount}/${reqCount} required` : ''})</span>${pendingPill}</div>
             <button class="b1-toggle" data-entry-id="${e.id}" style="background:none;border:none;color:#FF7A59;font-size:11px;font-weight:600;cursor:pointer;padding:2px 6px">${seeWhyLabel}</button>
           </div>`;
         // hardDQ callout (always visible when present, not gated by expand)
@@ -861,7 +863,7 @@ function renderPanelBody(pid) {
       // Score breakdown
       if (breakdown) {
         const components = [
-          { key: 'qualificationFit', label: 'Qualifications' },
+          { key: 'qualificationFit', label: _cachedUserFirstName ? `${_cachedUserFirstName}'s Qualifications` : 'Qualifications' },
           { key: 'preferenceFit', label: 'Green Flags' },
           { key: 'dealbreakers', label: 'Red Flag Impact' },
           { key: 'compFit', label: 'Compensation' },
