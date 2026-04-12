@@ -137,6 +137,8 @@ All communication uses `chrome.runtime.sendMessage`. The service worker (`backgr
 | `GET_COMPANY` | Content script → detect company from current page DOM |
 | `GET_JOB_DESCRIPTION` | Content script → extract job posting text |
 | `SCORE_OPPORTUNITY` | Unified scoring — flags, qualifications, role brief, job snapshot, conversation insights |
+| `QUEUE_SCORE` | Queue an entry for scoring (used on save, post-research) |
+| `SCORE_COMPLETE` | Broadcast after scoring completes — listeners update UI |
 | `EXTRACT_NEXT_STEPS` | AI-generated next steps from meeting data |
 
 ### Research pipeline
@@ -175,7 +177,7 @@ Skips providers with no API key configured. The UI shows a fallback note when a 
 
 Single `savedCompanies[]` array in `chrome.storage.local`. Each entry is either a company or opportunity (`isOpportunity: true`).
 
-Key fields: `company`, `companyWebsite`, `companyLinkedin`, `employees`, `funding`, `industry`, `intelligence`, `leaders[]`, `reviews[]`, `knownContacts[]`, `cachedEmails[]`, `cachedMeetings[]`, `notes`, `tags[]`, `rating`, `status`, `jobStage`, `jobTitle`, `jobDescription`, `jobMatch`, `stageTimestamps`, `actionStatus` (my_court/their_court).
+Key fields: `company`, `companyWebsite`, `companyLinkedin`, `employees`, `funding`, `industry`, `intelligence`, `leaders[]`, `reviews[]`, `knownContacts[]`, `cachedEmails[]`, `cachedMeetings[]`, `notes`, `tags[]`, `rating`, `status`, `jobStage`, `jobTitle`, `jobDescription`, `jobMatch`, `jobSnapshot`, `fitScore`, `fitReason`, `scoredAt`, `stageTimestamps`, `actionStatus` (my_court/their_court).
 
 User preferences in `chrome.storage.sync` (syncs across devices): `prefs` object with resume, roles, salary floors, work arrangement, etc.
 
@@ -194,6 +196,8 @@ Research cache: separate `researchCache` object in `chrome.storage.local`, keyed
 - **`claudeApiCall()`** — wrapper with exponential backoff on 429
 - **`openAiChatCall()`** — mirror of claudeApiCall for OpenAI
 - **`chatWithFallback()`** — unified chat call that cycles through all providers on failure
+- **`scoreOpportunity()`** — single scoring function in scoring.js. Produces score, flags, qualifications, role brief, job snapshot, conversation insights in one AI call. Triggered via `SCORE_OPPORTUNITY` message, broadcasts `SCORE_COMPLETE` when done.
+- **Auto-rescore triggers** — three opt-in triggers (all OFF by default) in Data Pipeline settings: profile changes, salary/work pref changes, new interaction data. Retroactive rescore fires when an entry moves into an eligible stage with stale interaction data.
 
 ## Content detection
 

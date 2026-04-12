@@ -1276,7 +1276,7 @@
       </div>
 
       <h3 class="sub">Scoring triggers</h3>
-      <p class="body">Scoring runs <strong>once on save</strong> (automatic) and <strong>on manual re-score</strong> (scorecard button, score match button, or batch re-score). Three optional auto-rescore triggers can be enabled in <strong>Data Pipeline &amp; Usage</strong> (all OFF by default): profile changes, salary/work pref changes, and new interaction data (emails, meetings, transcripts). Each trigger only re-scores opportunities in stages you select.</p>
+      <p class="body">Scoring runs <strong>once on save</strong> (automatic) and <strong>on manual re-score</strong> (scorecard button, score match button, or batch re-score). Three optional auto-rescore triggers can be enabled in <strong>Data Pipeline &amp; Usage</strong> (all OFF by default): profile changes, salary/work pref changes, and new interaction data (emails, meetings, transcripts). Each trigger only re-scores opportunities in stages you select. If interaction data arrives while an entry is in an excluded stage, moving it to an eligible stage later will retroactively trigger a rescore.</p>
 
       <h3 class="sub">Unified scoring model</h3>
       <p class="body">All scoring goes through a <strong>single path</strong> (<code>scoreOpportunity</code> via <code>SCORE_OPPORTUNITY</code>). One AI call evaluates the job description, company context, your profile, and any interaction data (emails, meetings, notes) in a single pass. The same call produces the score, role brief, conversation insights, job snapshot (salary, work arrangement, equity), and qualification breakdown. No competing functions, no conflicting writes.</p>
