@@ -39,22 +39,27 @@ const COOP = {
         <path d="M55 76 Q56 75 57 76" fill="none" stroke="#2C3E4E" stroke-width="0.3"/>
         <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
         <ellipse cx="50" cy="76.5" rx="1.2" ry="1" fill="#2C3E4E"/>
-        <!-- Neck with shadow -->
-        <rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/>
-        <path d="M44 71 L44 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
-        <path d="M56 71 L56 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
-        <!-- Head — angular jaw, warm peach tone -->
-        <path d="M29 43 Q29 27 39 21 Q50 17 61 21 Q71 27 71 43 Q71 54 66 61 Q61 67 55 70 L50 72 L45 70 Q39 67 34 61 Q29 54 29 43Z" fill="#EDBB92"/>
-        <!-- Jaw shadow — sharp -->
-        <path d="M34 61 Q39 67 45 70 L50 72 L55 70 Q61 67 66 61" fill="none" stroke="#C8966E" stroke-width="0.8" opacity="0.5"/>
-        <!-- Cheekbone highlights -->
-        <ellipse cx="35" cy="50" rx="4" ry="2.5" fill="#F2C9A2" opacity="0.6"/>
-        <ellipse cx="65" cy="50" rx="4" ry="2.5" fill="#F2C9A2" opacity="0.6"/>
+        <!-- Neck — wider, masculine -->
+        <rect x="42" y="70" width="16" height="9" rx="2" fill="#E8C4A0"/>
+        <path d="M43 70 L43 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
+        <path d="M57 70 L57 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
+        <!-- Head — square jaw, strong chin -->
+        <path d="M28 43 Q28 27 39 21 Q50 16 61 21 Q72 27 72 43 Q72 53 68 58 L63 64 L56 68 L50 70 L44 68 L37 64 Q32 58 28 53 Q28 48 28 43Z" fill="#EDBB92"/>
+        <!-- Jaw shadow — angular, defined -->
+        <path d="M37 64 L44 68 L50 70 L56 68 L63 64" fill="none" stroke="#B8865E" stroke-width="1" opacity="0.5"/>
+        <path d="M68 58 L63 64" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.4"/>
+        <path d="M32 58 L37 64" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.4"/>
+        <!-- Cheekbone highlights — high, angular -->
+        <ellipse cx="35" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
+        <ellipse cx="65" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
+        <!-- Cheek hollow below cheekbone -->
+        <path d="M34 52 Q37 54 39 56" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.25"/>
+        <path d="M66 52 Q63 54 61 56" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.25"/>
         <!-- Ears -->
-        <ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-        <path d="M28 42 Q27 44 28 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
-        <ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-        <path d="M72 42 Q73 44 72 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
+        <ellipse cx="28" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+        <path d="M27 42 Q26 44 27 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
+        <ellipse cx="72" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+        <path d="M73 42 Q74 44 73 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
         <!-- Hair: near-black, slicked back, detailed strands -->
         <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
         <!-- Side taper — tight -->
@@ -105,31 +110,35 @@ const COOP = {
         <!-- Brow bone shadow -->
         <path d="M36 38 Q41 36.5 46 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
         <path d="M54 38 Q59 36.5 64 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
-        <!-- Nose — bridge, tip, nostril shadow -->
-        <path d="M50 39 L49 50" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.5"/>
-        <path d="M47 53 Q48 55 50 55.5 Q52 55 53 53" fill="none" stroke="#B8865E" stroke-width="0.8" stroke-linecap="round"/>
-        <path d="M47 53 Q48 52 49 53" fill="none" stroke="#B8865E" stroke-width="0.5" opacity="0.6"/>
-        <path d="M51 53 Q52 52 53 53" fill="none" stroke="#B8865E" stroke-width="0.5" opacity="0.6"/>
-        <!-- Nasolabial folds -->
-        <path d="M38 52 Q39 56 40 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.45"/>
-        <path d="M62 52 Q61 56 60 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.45"/>
-        <!-- Mouth — defined lips, confident closed smile -->
-        <path d="M42 60 Q46 57 50 57 Q54 57 58 60" fill="#D4947A" opacity="0.3"/>
-        <path d="M42 60 Q46 63 50 63.5 Q54 63 58 60" fill="#D4947A" opacity="0.4"/>
-        <path d="M42 60 Q46 63 50 63.5 Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/>
-        <path d="M42 60 Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/>
+        <!-- Nose — wider bridge, strong, masculine -->
+        <path d="M50 38 L49 50" fill="none" stroke="#C8966E" stroke-width="0.7" opacity="0.5"/>
+        <path d="M46.5 53 Q48 55.5 50 56 Q52 55.5 53.5 53" fill="none" stroke="#B8865E" stroke-width="0.9" stroke-linecap="round"/>
+        <path d="M46.5 53 Q47.5 51.5 49 53" fill="none" stroke="#B8865E" stroke-width="0.5" opacity="0.6"/>
+        <path d="M51 53 Q52.5 51.5 53.5 53" fill="none" stroke="#B8865E" stroke-width="0.5" opacity="0.6"/>
+        <!-- Nasolabial folds — deeper, following squarer jaw -->
+        <path d="M37 52 Q38 56 39 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.5"/>
+        <path d="M63 52 Q62 56 61 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.5"/>
+        <!-- Mouth — confident closed smile, wider -->
+        <path d="M41 59 Q46 56.5 50 56.5 Q54 56.5 59 59" fill="#D4947A" opacity="0.25"/>
+        <path d="M41 59 Q46 62 50 62.5 Q54 62 59 59" fill="#D4947A" opacity="0.35"/>
+        <path d="M41 59 Q46 62 50 62.5 Q54 62 59 59" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/>
+        <path d="M41 59 Q50 57 59 59" fill="none" stroke="#9B7055" stroke-width="0.6"/>
         <!-- Smirk — right side lifts -->
-        <path d="M58 59.5 Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/>
-        <!-- Chin definition -->
-        <path d="M46 67 Q50 69 54 67" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.4"/>
-        <!-- Subtle stubble dots -->
-        <circle cx="44" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
-        <circle cx="47" cy="66" r="0.3" fill="#B89878" opacity="0.2"/>
-        <circle cx="50" cy="66.5" r="0.3" fill="#B89878" opacity="0.2"/>
-        <circle cx="53" cy="66" r="0.3" fill="#B89878" opacity="0.2"/>
-        <circle cx="56" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
-        <circle cx="45" cy="63" r="0.25" fill="#B89878" opacity="0.15"/>
-        <circle cx="55" cy="63" r="0.25" fill="#B89878" opacity="0.15"/>
+        <path d="M59 58.5 Q61 57 62 57.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/>
+        <!-- Chin — strong, square, with cleft hint -->
+        <path d="M44 66 L44 68 L50 70 L56 68 L56 66" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.35"/>
+        <path d="M49 68 L49 69.5" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.25"/>
+        <path d="M51 68 L51 69.5" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.25"/>
+        <!-- Stubble — five o'clock shadow -->
+        <circle cx="43" cy="64" r="0.3" fill="#B89878" opacity="0.2"/>
+        <circle cx="46" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
+        <circle cx="50" cy="66" r="0.3" fill="#B89878" opacity="0.2"/>
+        <circle cx="54" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
+        <circle cx="57" cy="64" r="0.3" fill="#B89878" opacity="0.2"/>
+        <circle cx="44" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
+        <circle cx="56" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
+        <circle cx="40" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
+        <circle cx="60" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
       </g>
     </svg>`;
   },
@@ -174,14 +183,14 @@ const COOP = {
         <path d="M59 78 Q56 73 50 76 Q56 79 59 78Z" fill="#3D4F5F"/>
         <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
         <ellipse cx="50" cy="76.5" rx="1.2" ry="1" fill="#2C3E4E"/>
-        <!-- Neck -->
-        <rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/>
-        <!-- Head -->
-        <path d="M29 43 Q29 27 39 21 Q50 17 61 21 Q71 27 71 43 Q71 54 66 61 Q61 67 55 70 L50 72 L45 70 Q39 67 34 61 Q29 54 29 43Z" fill="#EDBB92"/>
-        <path d="M34 61 Q39 67 45 70 L50 72 L55 70 Q61 67 66 61" fill="none" stroke="#D4A070" stroke-width="0.6" opacity="0.4"/>
+        <!-- Neck — wider -->
+        <rect x="42" y="70" width="16" height="9" rx="2" fill="#E8C4A0"/>
+        <!-- Head — square jaw -->
+        <path d="M28 43 Q28 27 39 21 Q50 16 61 21 Q72 27 72 43 Q72 53 68 58 L63 64 L56 68 L50 70 L44 68 L37 64 Q32 58 28 53 Q28 48 28 43Z" fill="#EDBB92"/>
+        <path d="M37 64 L44 68 L50 70 L56 68 L63 64" fill="none" stroke="#B8865E" stroke-width="0.8" opacity="0.45"/>
         <!-- Ears -->
-        <ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-        <ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+        <ellipse cx="28" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+        <ellipse cx="72" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
         <!-- Hair -->
         <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
         <path d="M27 40 Q27 25 36 18 L34 21 Q29 27 28 38Z" fill="#1E1410"/>

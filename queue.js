@@ -25,7 +25,7 @@ let allStages = []; // populated on load, used for Move-to dropdown
 // Update header title for current mode
 document.addEventListener('DOMContentLoaded', () => {
   const titleEl = document.querySelector('.header-title');
-  if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M29 43Q29 27 39 21Q50 17 61 21Q71 27 71 43Q71 54 66 61Q61 67 55 70L50 72L45 70Q39 67 34 61Q29 54 29 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/><path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/><path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/><path d="M47 53Q48 55 50 55.5Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/><path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/><path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/><path d="M58 59.5Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/></g></svg><span>${CFG.title}</span>`;
+  if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M28 43Q28 27 39 21Q50 16 61 21Q72 27 72 43Q72 53 68 58L63 64L56 68L50 70L44 68L37 64Q32 58 28 53Q28 48 28 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/><path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/><path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/><path d="M47 53Q48 55 50 55.5Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/><path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/><path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/><path d="M58 59.5Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/></g></svg><span>${CFG.title}</span>`;
   document.title = 'Coop.ai — ' + CFG.title;
   if (DEV_MOCK) {
     const banner = document.createElement('div');
@@ -623,19 +623,23 @@ function renderCurrent() {
               <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
               <ellipse cx="50" cy="76.5" rx="1.2" ry="1" fill="#2C3E4E"/>
               <!-- Neck -->
-              <rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/>
-              <path d="M44 71 L44 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
-              <path d="M56 71 L56 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
-              <!-- Head -->
-              <path d="M29 43 Q29 27 39 21 Q50 17 61 21 Q71 27 71 43 Q71 54 66 61 Q61 67 55 70 L50 72 L45 70 Q39 67 34 61 Q29 54 29 43Z" fill="#EDBB92"/>
-              <path d="M34 61 Q39 67 45 70 L50 72 L55 70 Q61 67 66 61" fill="none" stroke="#D4A070" stroke-width="0.6" opacity="0.4"/>
-              <ellipse cx="35" cy="50" rx="4" ry="2.5" fill="#F2C9A2" opacity="0.5"/>
-              <ellipse cx="65" cy="50" rx="4" ry="2.5" fill="#F2C9A2" opacity="0.5"/>
+              <rect x="42" y="70" width="16" height="9" rx="2" fill="#E8C4A0"/>
+              <path d="M43 70 L43 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
+              <path d="M57 70 L57 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
+              <!-- Head — square jaw -->
+              <path d="M28 43 Q28 27 39 21 Q50 16 61 21 Q72 27 72 43 Q72 53 68 58 L63 64 L56 68 L50 70 L44 68 L37 64 Q32 58 28 53 Q28 48 28 43Z" fill="#EDBB92"/>
+              <path d="M37 64 L44 68 L50 70 L56 68 L63 64" fill="none" stroke="#B8865E" stroke-width="1" opacity="0.5"/>
+              <path d="M68 58 L63 64" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.4"/>
+              <path d="M32 58 L37 64" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.4"/>
+              <ellipse cx="35" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
+              <ellipse cx="65" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
+              <path d="M34 52 Q37 54 39 56" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.25"/>
+              <path d="M66 52 Q63 54 61 56" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.25"/>
               <!-- Ears -->
-              <ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-              <path d="M28 42 Q27 44 28 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
-              <ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-              <path d="M72 42 Q73 44 72 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
+              <ellipse cx="28" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+              <path d="M27 42 Q26 44 27 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
+              <ellipse cx="72" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+              <path d="M73 42 Q74 44 73 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
               <!-- Hair -->
               <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
               <path d="M27 40 Q27 25 36 18 L34 21 Q29 27 28 38Z" fill="#1E1410"/>
@@ -674,20 +678,24 @@ function renderCurrent() {
               <!-- Brow bone shadow -->
               <path d="M36 38 Q41 36.5 46 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
               <path d="M54 38 Q59 36.5 64 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
-              <!-- Nose -->
-              <path d="M50 39 L49 50" fill="none" stroke="#D4A070" stroke-width="0.5" opacity="0.4"/>
-              <path d="M47 53 Q48 55 50 55.5 Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/>
+              <!-- Nose — wider bridge -->
+              <path d="M50 38 L49 50" fill="none" stroke="#C8966E" stroke-width="0.7" opacity="0.5"/>
+              <path d="M46.5 53 Q48 55.5 50 56 Q52 55.5 53.5 53" fill="none" stroke="#B8865E" stroke-width="0.9" stroke-linecap="round"/>
               <!-- Nasolabial folds -->
-              <path d="M38 52 Q39 56 40 59" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.35"/>
-              <path d="M62 52 Q61 56 60 59" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.35"/>
-              <!-- Mouth — thoughtful closed -->
-              <path d="M43 60 Q47 62 50 62 Q53 62 57 60" fill="none" stroke="#9B7055" stroke-width="1" stroke-linecap="round"/>
-              <!-- Chin -->
-              <path d="M46 67 Q50 69 54 67" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.3"/>
+              <path d="M37 52 Q38 56 39 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.5"/>
+              <path d="M63 52 Q62 56 61 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.5"/>
+              <!-- Mouth — thoughtful closed, wider -->
+              <path d="M42 59 Q47 61.5 50 61.5 Q53 61.5 58 59" fill="none" stroke="#9B7055" stroke-width="1" stroke-linecap="round"/>
+              <!-- Chin — square with cleft -->
+              <path d="M44 66 L44 68 L50 70 L56 68 L56 66" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.35"/>
+              <path d="M49 67 L49 69" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.2"/>
+              <path d="M51 67 L51 69" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.2"/>
               <!-- Stubble -->
-              <circle cx="44" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
-              <circle cx="50" cy="66.5" r="0.3" fill="#B89878" opacity="0.2"/>
-              <circle cx="56" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
+              <circle cx="43" cy="64" r="0.3" fill="#B89878" opacity="0.2"/>
+              <circle cx="50" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
+              <circle cx="57" cy="64" r="0.3" fill="#B89878" opacity="0.2"/>
+              <circle cx="40" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
+              <circle cx="60" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
               <!-- Arm from shoulder to chin -->
               <path d="M65 84 Q72 76 69 68 Q67 63 62 62" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
               <path d="M65 84 Q68 80 69 76" fill="none" stroke="#364854" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>
