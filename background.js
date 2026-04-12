@@ -607,6 +607,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+  if (message.type === 'REFRESH_JOB_DATA') {
+    refreshJobData(message.entryId).then(sendResponse).catch(err => {
+      console.error('[RefreshJob] Error:', err);
+      sendResponse({ error: err.message });
+    });
+    return true;
+  }
 
   // ── Quick Fit Scoring Handlers ──────────────────────────────────────────────
   if (message.type === 'SCORE_OPPORTUNITY') {
@@ -724,4 +731,36 @@ async function rescrapeLinkedInJob({ entryId }) {
     // Always close the background tab
     chrome.tabs.remove(tab.id).catch(() => {});
   }
+}
+
+// Re-fetch JD from a non-LinkedIn job URL (Greenhouse, Lever, Workday, etc.)
+async function refreshJobData(entryId) {
+  const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+  const entries = savedCompanies || [];
+  const idx = entries.findIndex(e => e.id === entryId);
+  if (idx === -1) throw new Error('Entry not found');
+  const entry = entries[idx];
+  if (!entry.jobUrl) return { ok: true, skipped: true };
+
+  try {
+    const resp = await fetch(entry.jobUrl, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    if (resp.ok) {
+      const html = await resp.text();
+      let text = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+      text = text.replace(/<style[\s\S]*?<\/style>/gi, '');
+      text = text.replace(/<nav[\s\S]*?<\/nav>/gi, '');
+      text = text.replace(/<footer[\s\S]*?<\/footer>/gi, '');
+      text = text.replace(/<[^>]+>/g, ' ');
+      text = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ');
+      text = text.replace(/\s+/g, ' ').trim();
+      if (text.length > 300) {
+        entries[idx].jobDescription = text.slice(0, 8000);
+        await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));
+        console.log('[RefreshJob] Updated JD for', entry.company, `(${text.length} chars)`);
+      }
+    }
+  } catch (e) {
+    console.log('[RefreshJob] Fetch failed for', entry.jobUrl, ':', e.message);
+  }
+  return { ok: true };
 }

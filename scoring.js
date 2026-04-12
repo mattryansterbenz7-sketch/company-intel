@@ -132,6 +132,12 @@ const BASELINE = 5.0;
 const BASE_COMP_MAP = { above_strong: 2.5, above_floor: 1.5, at_floor: 0, below_floor: -2.5, unknown: 0 };
 const OTE_COMP_MAP = { above_strong: 2.0, above_floor: 1.0, at_floor: 0, below_floor: -2.0, unknown: 0 };
 
+// Map legacy category field to dimension — mirrors preferences.js CATEGORY_TO_DIMENSION
+const CATEGORY_TO_DIMENSION = {
+  role: 'roleFit', culture: 'cultureFit', company: 'companyFit', comp: 'compFit',
+  team: 'cultureFit', industry: 'companyFit', product: 'companyFit', other: 'roleFit',
+};
+
 export async function scoreOpportunity(entryId) {
   // Load entry from storage
   const { savedCompanies } = await new Promise(resolve =>
@@ -238,7 +244,43 @@ export async function scoreOpportunity(entryId) {
   if (entry.postedDate) postingSignals.push(`Posted: ${entry.postedDate}`);
   const postingBlock = postingSignals.length ? `Posting Details:\n${postingSignals.join('\n')}` : null;
 
-  // Employee reviews from full research — richer than scout snippets (targeted RepVue/Glassdoor drill)
+  // Fetch reviews if none exist (one-time, not re-triggered on rescore)
+  if (!entry.reviews?.length && entry.company && !state._serperExhausted) {
+    try {
+      console.log('[QuickFit] No reviews found — fetching for', entry.company);
+      const reviewHits = await fetchSearchResults(
+        `"${entry.company}" reviews culture glassdoor repvue reddit`, 5
+      );
+      if (reviewHits.length) {
+        const reviews = reviewHits.map(r => {
+          const url = (r.link || '').toLowerCase();
+          let source = 'Web';
+          if (url.includes('glassdoor.com')) source = 'Glassdoor';
+          else if (url.includes('repvue.com')) source = 'RepVue';
+          else if (url.includes('reddit.com')) source = 'Reddit';
+          else if (url.includes('blind')) source = 'Blind';
+          else if (url.includes('indeed.com')) source = 'Indeed';
+          const ratingMatch = (r.snippet || '').match(/(\d\.\d)\s*(?:★|star|out of|\/\s*5)/i);
+          return { snippet: r.snippet || r.title || '', source, rating: ratingMatch ? ratingMatch[1] : null, url: r.link || null };
+        }).filter(r => r.snippet);
+        if (reviews.length) {
+          entry.reviews = reviews;
+          // Persist to storage so they don't get re-fetched
+          const { savedCompanies } = await new Promise(resolve => chrome.storage.local.get(['savedCompanies'], resolve));
+          const idx = (savedCompanies || []).findIndex(c => c.id === entry.id);
+          if (idx !== -1) {
+            savedCompanies[idx].reviews = reviews;
+            await new Promise(resolve => chrome.storage.local.set({ savedCompanies }, resolve));
+          }
+          console.log('[QuickFit] Saved', reviews.length, 'reviews for', entry.company);
+        }
+      }
+    } catch (e) {
+      console.warn('[QuickFit] Review fetch failed (non-fatal):', e.message);
+    }
+  }
+
+  // Employee reviews — from full research or auto-fetched above
   const reviewsBlock = entry.reviews?.length
     ? `Employee Reviews (Glassdoor / RepVue / Reddit):\n${entry.reviews.slice(0, 6).map(r =>
         `- ${r.rating ? r.rating + '★ ' : ''}${r.snippet || r.title || ''}${r.source ? ` (${r.source})` : ''}`
@@ -292,9 +334,11 @@ export async function scoreOpportunity(entryId) {
     : '';
 
   // Build flags reference for AI — each configured flag with ID, dimension, severity
+  // Migrate flags that only have category (no dimension) — mirrors preferences.js migration
+  const migrateFlag = f => f.dimension ? f : { ...f, dimension: CATEGORY_TO_DIMENSION[f.category] || 'roleFit' };
   const allFlags = [
-    ...attractedTo.map(f => ({ ...f, _type: 'green' })),
-    ...dealbreakers.map(f => ({ ...f, _type: 'red' }))
+    ...attractedTo.map(f => ({ ...migrateFlag(f), _type: 'green' })),
+    ...dealbreakers.map(f => ({ ...migrateFlag(f), _type: 'red' }))
   ];
   const flagsRef = allFlags.length ? allFlags.map(f =>
     `- ID: ${f.id} | ${f._type === 'green' ? 'GREEN' : 'RED'} | Dim: ${f.dimension || 'roleFit'} | Sev: ${f.severity || 2} | "${f.text}"${f.keywords?.length ? ` [keywords: ${f.keywords.join(', ')}]` : ''}`
@@ -313,8 +357,8 @@ ${jobParts}${interactionBlock}
 ${flagsRef}
 
 YOUR TASK:
-1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting, company data, or interaction context. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. No evidence either way = does not fire. Return only flags that fire.
-2. QUALIFICATIONS: Extract all key requirements from the job description. For each, assess against the candidate: met, partial, unmet, or unknown.
+1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting, company data, or interaction context. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. CRITICAL: If you cannot find direct evidence that a flag is triggered, DO NOT include it in firedFlags. "No evidence" or "no direct evidence" means the flag did NOT fire — omit it entirely. Return ONLY flags with real, affirmative evidence.
+2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the job description — be thorough. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown.
 3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
 5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text.
@@ -325,6 +369,7 @@ ${hasInteractionContext ? '9. CONVERSATION INSIGHTS: 2-4 sentence analysis of wh
 EVIDENCE RULES:
 - Flag evidence MUST come from the job posting, company data, or interaction context — NEVER from the candidate's profile/resume.
 - Missing information is NOT evidence of a red flag. Undisclosed comp = neutral.
+- If your assessment of a flag is "no evidence", "no direct evidence", "no mentions", or "not enough information" — that flag DID NOT FIRE. Do not include it in firedFlags.
 - Only flag hardDQ when a flag with severity 5 is clearly triggered by direct evidence.
 - Unmet green flags are NOT red flags — they just mean the positive signal wasn't found.
 ${hasInteractionContext ? '- When conversations contradict the posting, note BOTH and flag the discrepancy.\n- At least one fired flag should reference interaction signals when available.\n' : ''}
@@ -377,7 +422,7 @@ Return ONLY valid JSON (no markdown fences):
     model: getModelForTask('quickFitScoring'),
     system: `You are a JSON-only job fit analyst. Respond with valid JSON only, no markdown fences.`,
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 2000,
+    max_tokens: 4000,
     tag: 'QuickFit'
   });
 
@@ -393,6 +438,16 @@ Return ONLY valid JSON (no markdown fences):
 
   // ── Deterministic scoring — AI evaluates evidence, code computes scores ────
 
+  // Post-process: strip flags where evidence says "no evidence" (model ignored instructions)
+  const NO_EVIDENCE_RX = /\bno (direct |clear )?(evidence|mentions?|indication|signs?)\b|\bnot enough information\b|\bno .{0,20} found\b/i;
+  const cleanedFlags = (parsed.firedFlags || []).filter(ff => {
+    if (ff.evidence && NO_EVIDENCE_RX.test(ff.evidence)) {
+      console.warn('[QuickFit] Stripping flag with "no evidence":', ff.id, ff.evidence?.slice(0, 80));
+      return false;
+    }
+    return true;
+  });
+
   // Build flag lookup by ID
   const flagMap = {};
   allFlags.forEach(f => { flagMap[f.id] = f; });
@@ -402,7 +457,7 @@ Return ONLY valid JSON (no markdown fences):
   SCORING_DIMS.forEach(d => { dimFlags[d] = { green: [], red: [] }; });
   const firedFlagIds = new Set();
 
-  (parsed.firedFlags || []).forEach(ff => {
+  cleanedFlags.forEach(ff => {
     const flag = flagMap[ff.id];
     if (!flag) return; // AI returned unknown ID — skip silently
     firedFlagIds.add(ff.id);
@@ -493,16 +548,20 @@ Return ONLY valid JSON (no markdown fences):
 
   // Neutral flags — configured but not fired, marked unknownNeutral
   const neutralFlags = {};
+  const migratedAttractedTo = attractedTo.map(migrateFlag);
+  const migratedDealbreakers = dealbreakers.map(migrateFlag);
   SCORING_DIMS.forEach(dim => {
     neutralFlags[dim] = {
-      green: attractedTo.filter(f => (f.dimension || 'roleFit') === dim && !firedFlagIds.has(f.id) && f.unknownNeutral),
-      red: dealbreakers.filter(f => (f.dimension || 'roleFit') === dim && !firedFlagIds.has(f.id) && f.unknownNeutral)
+      green: migratedAttractedTo.filter(f => (f.dimension || 'roleFit') === dim && !firedFlagIds.has(f.id) && f.unknownNeutral),
+      red: migratedDealbreakers.filter(f => (f.dimension || 'roleFit') === dim && !firedFlagIds.has(f.id) && f.unknownNeutral)
     };
   });
 
   // Build unified jobMatch — the shape queue.js, company.js, sidepanel.js all read
   const existingJobMatch = entry.jobMatch || {};
   const roleBrief = parsed.roleBrief || {};
+  // Normalize compSummary → compRange for queue.js compatibility
+  if (roleBrief.compSummary && !roleBrief.compRange) roleBrief.compRange = roleBrief.compSummary;
   roleBrief.qualificationScore = qualScore; // code-computed, not AI-picked
   const jobMatch = {
     ...existingJobMatch,

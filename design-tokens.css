@@ -131,7 +131,7 @@ input, textarea, select { transition: border-color var(--ci-transition-fast), ba
 }
 /* Orbit ring — spinning dots around the face */
 .coop-thinking-orbit {
-  position: absolute; inset: -12px; border-radius: 50%;
+  position: absolute; inset: -18px; border-radius: 50%;
   animation: thinkOrbit 3s linear infinite;
   z-index: 1;
 }
@@ -139,19 +139,19 @@ input, textarea, select { transition: border-color var(--ci-transition-fast), ba
   content: ''; position: absolute; border-radius: 50%;
 }
 .coop-thinking-orbit::before {
-  width: 5px; height: 5px; background: var(--ci-accent-primary); top: 0; left: 50%;
-  transform: translateX(-50%); box-shadow: 0 0 6px rgba(252,99,107,0.5);
+  width: 8px; height: 8px; background: var(--ci-accent-primary); top: 0; left: 50%;
+  transform: translateX(-50%); box-shadow: 0 0 10px rgba(252,99,107,0.5);
 }
 .coop-thinking-orbit::after {
-  width: 4px; height: 4px; background: var(--ci-accent-amber); bottom: 4px; right: 4px;
-  box-shadow: 0 0 5px rgba(245,166,35,0.4);
+  width: 6px; height: 6px; background: var(--ci-accent-amber); bottom: 6px; right: 6px;
+  box-shadow: 0 0 8px rgba(245,166,35,0.4);
 }
 @keyframes thinkOrbit { to { transform: rotate(360deg); } }
 
 /* Bouncing dots */
-.coop-thinking-dots { display: flex; gap: 6px; margin-top: 12px; }
+.coop-thinking-dots { display: flex; gap: 8px; margin-top: 16px; }
 .coop-thinking-dots span {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary);
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-primary);
   animation: thinkBounce 1.2s ease-in-out infinite;
 }
 .coop-thinking-dots span:nth-child(2) { animation-delay: 0.15s; background: var(--ci-accent-amber); }
@@ -162,11 +162,11 @@ input, textarea, select { transition: border-color var(--ci-transition-fast), ba
 }
 
 /* Labels */
-.coop-thinking-label { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); letter-spacing: 0.02em; }
-.coop-thinking-sub { font-size: 10px; color: var(--ci-text-tertiary); margin-top: 2px; }
+.coop-thinking-label { margin-top: 14px; font-size: 15px; font-weight: 700; color: var(--ci-text-secondary); letter-spacing: 0.02em; }
+.coop-thinking-sub { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 3px; }
 
 /* Progress bar with gradient shimmer */
-.coop-thinking-bar { width: 120px; height: 3px; background: var(--ci-bg-inset); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+.coop-thinking-bar { width: 180px; height: 4px; background: var(--ci-bg-inset); border-radius: 2px; margin-top: 16px; overflow: hidden; }
 .coop-thinking-bar-fill {
   height: 100%; width: 40%; border-radius: 2px;
   background: linear-gradient(90deg, var(--ci-accent-primary), var(--ci-accent-amber), var(--ci-accent-teal), var(--ci-accent-primary));

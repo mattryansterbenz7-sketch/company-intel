@@ -404,7 +404,7 @@ function renderCompactCard(c) {
   if (score != null) {
     scoreHtml = `<span class="compact-score-num ${tier}" title="Coop's Score">${score}</span><span class="compact-score-den">/10</span>${compactDQHtml}`;
   } else if (isScoring) {
-    scoreHtml = '<svg class="compact-spinner" width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="42.5" cy="40.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/><circle cx="60.5" cy="40.5" r="2.5" fill="#4A8DB8"/></svg>';
+    scoreHtml = '<svg class="compact-spinner" width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="2.5" fill="#5B8C3E"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="2.5" fill="#5B8C3E"/></svg>';
   } else {
     scoreHtml = '<span class="compact-queue-dot"></span>';
   }

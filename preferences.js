@@ -1034,6 +1034,11 @@ function saveICPWeights() {
 function renderICPDimRow(dim) {
   const el = document.getElementById(`icp-dim-${dim.key}`);
   if (!el) return;
+
+  // Preserve open/closed state and scroll position across re-render
+  const wasOpen = document.getElementById(`dim-body-${dim.key}`)?.classList.contains('open');
+  const scrollY = window.scrollY;
+
   const greens = _icpGreens.filter(f => (f.dimension || 'roleFit') === dim.key);
   const reds   = _icpReds.filter(f => (f.dimension || 'roleFit') === dim.key);
 
@@ -1049,14 +1054,17 @@ function renderICPDimRow(dim) {
       <span class="icp-dim-title">${dim.label}</span>
       ${countsHtml}
       <span class="icp-dim-weight-pill" id="dim-weight-pill-${dim.key}">${_icpWeights[dim.key]}%</span>
-      <span class="icp-dim-chevron" id="dim-chev-${dim.key}">›</span>
+      <span class="icp-dim-chevron${wasOpen ? ' open' : ''}" id="dim-chev-${dim.key}">›</span>
     </div>
-    <div class="icp-dim-body" id="dim-body-${dim.key}">
+    <div class="icp-dim-body${wasOpen ? ' open' : ''}" id="dim-body-${dim.key}">
       ${renderICPDimBody(dim, greens, reds)}
     </div>`;
 
   el.querySelector('.icp-dim-header').addEventListener('click', () => toggleICPDim(dim.key));
   bindICPDimEvents(dim, el);
+
+  // Restore scroll position
+  window.scrollTo(0, scrollY);
 }
 
 function renderICPDimBody(dim, greens, reds) {
@@ -1175,11 +1183,20 @@ function showICPInlineForm(dim, type, editFlag, anchorEl) {
       ${keywords.length === 0 ? `<span class="icp-kw-placeholder">+ keyword</span>` : ''}
       <input class="icp-kw-text-input" type="text" placeholder="${keywords.length > 0 ? '+ keyword' : ''}" id="icp-kw-input-${dim.key}">
     </div>
-    <div class="icp-sev-row">
-      <label>Severity</label>
-      <select class="icp-sev-select" id="icp-sev-select-${dim.key}">
-        ${[1,2,3,4,5].map(n => `<option value="${n}" ${sev === n ? 'selected' : ''}>${n} — ${labels[n-1]}</option>`).join('')}
-      </select>
+    <div class="icp-sev-dim-row">
+      <div class="icp-sev-pills-wrap">
+        <label>${type === 'green' ? 'Importance' : 'Severity'}</label>
+        <div class="icp-sev-pills" data-type="${type}">
+          ${[1,2,3,4,5].map(n => `<button type="button" class="icp-sev-pill${sev === n ? ' active' : ''}" data-sev="${n}" style="--sev-color:${colors[n-1]}">${n}</button>`).join('')}
+          <span class="icp-sev-label">${labels[sev-1]}</span>
+        </div>
+      </div>
+      <div class="icp-dim-pills-wrap">
+        <label>Scores toward</label>
+        <div class="icp-dim-pills">
+          ${ICP_DIMENSIONS.filter(d => !d.noFlags).map(d => `<button type="button" class="icp-dim-pill${(editFlag?.dimension || dim.key) === d.key ? ' active' : ''}" data-dim="${d.key}" style="--dim-color:${d.color}">${d.label}</button>`).join('')}
+        </div>
+      </div>
     </div>
     <div class="icp-form-btns">
       <button class="icp-form-cancel">Cancel</button>
@@ -1233,6 +1250,24 @@ function showICPInlineForm(dim, type, editFlag, anchorEl) {
     }
   });
 
+  // Severity pill toggle
+  form.querySelectorAll('.icp-sev-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      form.querySelectorAll('.icp-sev-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      const sevLabel = form.querySelector('.icp-sev-label');
+      if (sevLabel) sevLabel.textContent = labels[parseInt(pill.dataset.sev) - 1];
+    });
+  });
+
+  // Dimension pill toggle
+  form.querySelectorAll('.icp-dim-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      form.querySelectorAll('.icp-dim-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+
   form.querySelector('.icp-form-cancel').addEventListener('click', () => {
     form.remove();
     document.querySelectorAll('.icp-flag-card[data-hidden]').forEach(c => { c.style.display = ''; delete c.dataset.hidden; });
@@ -1241,16 +1276,17 @@ function showICPInlineForm(dim, type, editFlag, anchorEl) {
   form.querySelector('.icp-form-save').addEventListener('click', () => {
     const text = form.querySelector('textarea').value.trim();
     if (!text) return;
-    const severity = parseInt(form.querySelector('.icp-sev-select').value);
+    const severity = parseInt(form.querySelector('.icp-sev-pill.active')?.dataset.sev) || 3;
 
     // Add trailing keywords from input box if any
     const rawKw = kwInput.value.trim().replace(/,$/, '');
     if (rawKw && !currentKeywords.includes(rawKw)) currentKeywords.push(rawKw);
 
+    const selectedDim = form.querySelector('.icp-dim-pill.active')?.dataset.dim || dim.key;
     if (editFlag) {
-      updateICPFlag(type, editFlag.id, { text, severity, keywords: currentKeywords, dimension: dim.key });
+      updateICPFlag(type, editFlag.id, { text, severity, keywords: currentKeywords, dimension: selectedDim });
     } else {
-      addICPFlag(type, { text, severity, keywords: currentKeywords, dimension: dim.key });
+      addICPFlag(type, { text, severity, keywords: currentKeywords, dimension: selectedDim });
     }
     form.remove();
   });
@@ -1258,39 +1294,64 @@ function showICPInlineForm(dim, type, editFlag, anchorEl) {
 
 function addICPFlag(type, fields) {
   const storageKey = type === 'green' ? 'profileAttractedTo' : 'profileDealbreakers';
-  const arr = type === 'green' ? _icpGreens : _icpReds;
-  const newFlag = { id: generateId(), category: 'other', source: 'manual', createdAt: Date.now(), ...fields };
-  arr.push(newFlag);
-  chrome.storage.local.set({ [storageKey]: arr }, () => {
-    showSaveStatus();
-    const dim = ICP_DIMENSIONS.find(d => d.key === fields.dimension);
-    if (dim) renderICPDimRow(dim);
+  // Read from storage first to avoid overwriting changes from other forms
+  chrome.storage.local.get([storageKey], data => {
+    const arr = data[storageKey] || [];
+    const newFlag = { id: generateId(), category: 'other', source: 'manual', createdAt: Date.now(), ...fields };
+    arr.push(newFlag);
+    // Sync in-memory arrays
+    if (type === 'green') _icpGreens = arr; else _icpReds = arr;
+    chrome.storage.local.set({ [storageKey]: arr }, () => {
+      showSaveStatus();
+      const dim = ICP_DIMENSIONS.find(d => d.key === fields.dimension);
+      if (dim) renderICPDimRow(dim);
+    });
   });
 }
 
 function updateICPFlag(type, id, fields) {
   const storageKey = type === 'green' ? 'profileAttractedTo' : 'profileDealbreakers';
-  const arr = type === 'green' ? _icpGreens : _icpReds;
-  const idx = arr.findIndex(f => f.id === id);
-  if (idx !== -1) arr[idx] = { ...arr[idx], ...fields };
-  chrome.storage.local.set({ [storageKey]: arr }, () => {
-    showSaveStatus();
-    const dim = ICP_DIMENSIONS.find(d => d.key === fields.dimension);
-    if (dim) renderICPDimRow(dim);
+  // Read from storage first to avoid overwriting changes from other forms
+  chrome.storage.local.get([storageKey], data => {
+    const arr = data[storageKey] || [];
+    const idx = arr.findIndex(f => f.id === id);
+    if (idx === -1) return;
+    const oldDim = arr[idx].dimension || 'roleFit';
+    arr[idx] = { ...arr[idx], ...fields };
+    // Sync in-memory arrays
+    if (type === 'green') _icpGreens = arr; else _icpReds = arr;
+    chrome.storage.local.set({ [storageKey]: arr }, () => {
+      showSaveStatus();
+      // Re-render new dimension
+      const newDim = ICP_DIMENSIONS.find(d => d.key === fields.dimension);
+      if (newDim) renderICPDimRow(newDim);
+      // Also re-render old dimension if it changed (removes stale card)
+      if (oldDim !== fields.dimension) {
+        const old = ICP_DIMENSIONS.find(d => d.key === oldDim);
+        if (old) renderICPDimRow(old);
+      }
+    });
   });
 }
 
 function deleteICPFlag(dimKey, id) {
-  const inGreens = _icpGreens.find(f => f.id === id);
-  if (inGreens) {
-    _icpGreens = _icpGreens.filter(f => f.id !== id);
-    chrome.storage.local.set({ profileAttractedTo: _icpGreens }, () => showSaveStatus());
-  } else {
-    _icpReds = _icpReds.filter(f => f.id !== id);
-    chrome.storage.local.set({ profileDealbreakers: _icpReds }, () => showSaveStatus());
-  }
-  const dim = ICP_DIMENSIONS.find(d => d.key === dimKey);
-  if (dim) renderICPDimRow(dim);
+  // Read from storage first to avoid overwriting changes from other forms
+  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers'], data => {
+    let greens = data.profileAttractedTo || [];
+    let reds = data.profileDealbreakers || [];
+    const inGreens = greens.find(f => f.id === id);
+    if (inGreens) {
+      greens = greens.filter(f => f.id !== id);
+      _icpGreens = greens;
+      chrome.storage.local.set({ profileAttractedTo: greens }, () => showSaveStatus());
+    } else {
+      reds = reds.filter(f => f.id !== id);
+      _icpReds = reds;
+      chrome.storage.local.set({ profileDealbreakers: reds }, () => showSaveStatus());
+    }
+    const dim = ICP_DIMENSIONS.find(d => d.key === dimKey);
+    if (dim) renderICPDimRow(dim);
+  });
 }
 
 function toggleICPDim(key) {
@@ -1383,6 +1444,10 @@ function addStructuredEntry(storageKey, entry, callback) {
     arr.push({ ...entry, id: generateId(), createdAt: Date.now() });
     chrome.storage.local.set({ [storageKey]: arr }, () => {
       void chrome.runtime.lastError;
+      // Sync ICP in-memory arrays so dimension accordion stays current
+      if (storageKey === 'profileAttractedTo') _icpGreens = arr;
+      else if (storageKey === 'profileDealbreakers') _icpReds = arr;
+      ICP_DIMENSIONS.forEach(dim => renderICPDimRow(dim));
       showSaveStatus();
       if (callback) callback(arr);
     });
@@ -1397,6 +1462,9 @@ function updateStructuredEntry(storageKey, id, updates, callback) {
     arr[idx] = { ...arr[idx], ...updates };
     chrome.storage.local.set({ [storageKey]: arr }, () => {
       void chrome.runtime.lastError;
+      if (storageKey === 'profileAttractedTo') _icpGreens = arr;
+      else if (storageKey === 'profileDealbreakers') _icpReds = arr;
+      ICP_DIMENSIONS.forEach(dim => renderICPDimRow(dim));
       showSaveStatus();
       if (callback) callback(arr);
     });
@@ -1408,6 +1476,9 @@ function deleteStructuredEntry(storageKey, id, callback) {
     const arr = (data[storageKey] || []).filter(e => e.id !== id);
     chrome.storage.local.set({ [storageKey]: arr }, () => {
       void chrome.runtime.lastError;
+      if (storageKey === 'profileAttractedTo') _icpGreens = arr;
+      else if (storageKey === 'profileDealbreakers') _icpReds = arr;
+      ICP_DIMENSIONS.forEach(dim => renderICPDimRow(dim));
       showSaveStatus();
       if (callback) callback(arr);
     });
@@ -1574,8 +1645,14 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
           <input type="checkbox" class="comp-unknown-neutral" ${editEntry?.compUnknownNeutral !== false ? 'checked' : ''}> If not disclosed = neutral
         </label>
       </div>
-      <div class="entry-form-row">
-        <input type="text" class="field-input entry-form-keywords" placeholder="Keywords (comma-separated, e.g. grit, hustle)" value="${escHtml((editEntry?.keywords || []).join(', '))}">
+      <div class="entry-form-row" style="gap:6px;flex-wrap:wrap;">
+        <input type="text" class="field-input entry-form-keywords" placeholder="Keywords (comma-separated, e.g. grit, hustle)" value="${escHtml((editEntry?.keywords || []).join(', '))}" style="flex:1;min-width:200px;">
+        <select class="field-input entry-form-dimension" style="width:auto;font-size:12px;padding:4px 8px;">
+          <option value="roleFit" ${(editEntry?.dimension || CATEGORY_TO_DIMENSION[editEntry?.category] || 'roleFit') === 'roleFit' ? 'selected' : ''}>→ Role fit</option>
+          <option value="cultureFit" ${(editEntry?.dimension || CATEGORY_TO_DIMENSION[editEntry?.category]) === 'cultureFit' ? 'selected' : ''}>→ Culture fit</option>
+          <option value="companyFit" ${(editEntry?.dimension || CATEGORY_TO_DIMENSION[editEntry?.category]) === 'companyFit' ? 'selected' : ''}>→ Company fit</option>
+          <option value="compFit" ${(editEntry?.dimension || CATEGORY_TO_DIMENSION[editEntry?.category]) === 'compFit' ? 'selected' : ''}>→ Comp fit</option>
+        </select>
       </div>
       <label style="font-size:11px;color:var(--ci-text-secondary);display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0;">
         <input type="checkbox" class="entry-unknown-neutral" ${editEntry?.unknownNeutral !== false ? 'checked' : ''}>
@@ -1595,10 +1672,15 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
   catHint.style.cssText = 'font-size:11px;color:var(--ci-text-tertiary);line-height:1.4;margin-top:2px;padding:0 2px;';
   catSelect?.parentNode.insertAdjacentElement('afterend', catHint);
 
+  const dimSelect = formWrap.querySelector('.entry-form-dimension');
   const updateCatHint = () => {
     const meta = getCatMeta(catSelect?.value || '');
     catHint.textContent = meta.tip || '';
     if (compRow) compRow.style.display = (storageKey === 'profileDealbreakers' && catSelect?.value === 'comp') ? 'flex' : 'none';
+    // Auto-sync dimension when category changes (unless user manually overrode)
+    if (dimSelect && CATEGORY_TO_DIMENSION[catSelect?.value]) {
+      dimSelect.value = CATEGORY_TO_DIMENSION[catSelect.value];
+    }
   };
   catSelect?.addEventListener('change', updateCatHint);
   updateCatHint();
@@ -1635,7 +1717,8 @@ function showEntryForm(containerId, storageKey, opts = {}, editEntry = null) {
     const keywords = formWrap.querySelector('.entry-form-keywords').value.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
     const severity = parseInt(formWrap.querySelector('.sev-num-btn.active')?.dataset.sev) || 2;
 
-    const entryData = { text, category, keywords, source: 'manual' };
+    const dimension = formWrap.querySelector('.entry-form-dimension')?.value || CATEGORY_TO_DIMENSION[category] || 'roleFit';
+    const entryData = { text, category, keywords, dimension, source: 'manual' };
     if (opts.showSeverity) entryData.severity = severity;
     // Unknown = neutral applies to all entries
     entryData.unknownNeutral = formWrap.querySelector('.entry-unknown-neutral')?.checked !== false;
@@ -2492,9 +2575,7 @@ function initCoopChatDrawer() {
       appendMessage('assistant', "Hey! I can see your full Career OS profile. Ask me anything — or tell me something and I'll propose an update.\n\nTry: *\"Add a dealbreaker for grit culture\"* or *\"What are my dealbreakers?\"*");
     }
   });
-  if (docked && !chatHistory.length) {
-    appendMessage('assistant', "Hey! I'm docked here as your Career OS sidekick. Ask me anything about your profile — or talk through your context window and we can regenerate it together.");
-  }
+  // Docked mode removed — drawer is toggle-only now
   closeBtn?.addEventListener('click', () => {
     isOpen = false;
     drawer.classList.remove('open');

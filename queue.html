@@ -162,10 +162,9 @@
     .qc-breakdown { display: flex; flex-direction: column; gap: 0; margin-bottom: 4px; }
     .qc-breakdown-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-secondary); margin-bottom: 4px; }
 
-    /* Dimension rows */
-    .queue-dim-row { border: 1px solid var(--ci-border-subtle); border-radius: 6px; margin-bottom: 3px; overflow: hidden; }
-    .queue-dim-bar-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; user-select: none; transition: background 0.12s; }
-    .queue-dim-bar-row:hover { background: var(--ci-bg-inset); }
+    /* Overview bar rows */
+    .qc-breakdown .queue-dim-bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 10px; cursor: pointer; user-select: none; transition: background 0.12s; border-radius: 4px; }
+    .qc-breakdown .queue-dim-bar-row:hover { background: var(--ci-bg-inset); }
     .queue-dim-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .queue-dim-dot.qual { background: #378ADD; }
     .queue-dim-dot.role { background: #3B6D11; }
@@ -182,24 +181,28 @@
     .queue-dim-score.high { color: #639922; }
     .queue-dim-score.mid { color: #ef9f27; }
     .queue-dim-score.low { color: #e24b4a; }
-    .queue-dim-chevron { font-size: 14px; color: var(--ci-text-primary); transition: transform 0.2s; flex-shrink: 0; width: 16px; text-align: center; font-weight: 700; opacity: 0.7; }
-    .queue-dim-row.open .queue-dim-chevron { transform: rotate(90deg); }
 
-    /* Inline flag chips on collapsed row */
-    .queue-dim-flags { display: flex; flex-wrap: nowrap; gap: 4px; padding: 0 12px 4px 112px; overflow: hidden; max-height: 22px; }
-    .queue-flag-chip { font-size: 10px; border-radius: 20px; padding: 2px 8px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; flex-shrink: 0; }
-    .queue-flag-chip.green { background: #EAF3DE; color: #27500A; border: 0.5px solid #C0DD97; }
-    .queue-flag-chip.red { background: #FCEBEB; color: #791F1F; border: 0.5px solid #F7C1C1; }
-    .queue-flag-chip.amber { background: #FAEEDA; color: #633806; border: 0.5px solid #FAC775; }
-    .queue-flag-chip.more { background: var(--ci-bg-inset); color: var(--ci-text-tertiary); border: 0.5px solid var(--ci-border); }
+    /* Segmented dimension toggle */
+    .queue-dim-toggle { display: flex; margin: 8px 0 0; border: 1px solid var(--ci-border-default); border-radius: 8px; overflow: hidden; background: var(--ci-bg-raised); transition: border-radius 0.15s; }
+    .queue-dim-toggle.has-active { border-radius: 8px 8px 0 0; }
+    .queue-dim-toggle-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 4px; font-size: 11px; font-weight: 600; font-family: inherit; color: var(--ci-text-secondary); background: transparent; border: none; border-right: 1px solid var(--ci-border-subtle); cursor: pointer; transition: all 0.15s; user-select: none; }
+    .queue-dim-toggle-btn:last-child { border-right: none; }
+    .queue-dim-toggle-btn:hover { background: var(--ci-bg-inset); }
+    .queue-dim-toggle-btn.active { background: var(--ci-bg-header); color: #fff; }
+    .queue-dim-toggle-btn.active .queue-dim-dot { box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
+    .queue-dim-toggle-btn .queue-dim-dot { width: 7px; height: 7px; }
+    .queue-dim-toggle-score { font-size: 10px; font-weight: 700; opacity: 0.7; }
+    .queue-dim-toggle-btn.active .queue-dim-toggle-score { opacity: 1; }
 
-    /* Expanded drawer */
-    .queue-dim-drawer { display: none; background: var(--ci-bg-inset); border-top: 1px solid var(--ci-border-subtle); padding: 10px 14px; }
-    .queue-dim-row.open .queue-dim-drawer { display: block; }
+    /* Detail panels (one visible at a time) */
+    .queue-dim-details { margin-top: 0; }
+    .queue-dim-detail { display: none; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-top: none; border-radius: 0 0 8px 8px; padding: 8px 12px; }
+    .queue-dim-detail.active { display: block; }
+    .queue-dim-detail-note { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; padding: 4px 0; font-style: italic; }
 
     /* Math row */
-    .queue-math-row { display: flex; justify-content: space-between; align-items: center; font-family: var(--ci-font-mono, monospace); font-size: 11px; color: var(--ci-text-primary); padding: 5px 10px; background: #fff; border-radius: 4px; margin-bottom: 8px; }
-    .queue-math-right { color: var(--ci-text-tertiary); font-style: italic; }
+    .queue-math-row { display: flex; justify-content: space-between; align-items: center; font-family: var(--ci-font-mono, monospace); font-size: 10.5px; color: var(--ci-text-tertiary); padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 3px; margin-bottom: 6px; }
+    .queue-math-right { color: var(--ci-text-tertiary); }
 
     /* Flag columns — stacked by default, side-by-side with .horizontal */
     .queue-flag-cols { display: flex; flex-direction: column; gap: 6px; }
@@ -217,7 +220,7 @@
     .queue-flag-card.red { background: #FCEBEB; border: 0.5px solid #F7C1C1; }
     .queue-flag-card.amber { background: #FAEEDA; border: 0.5px solid #FAC775; }
     .queue-flag-card.neutral { background: #f5f8fa; border: 0.5px solid #eef1f5; }
-    .queue-flag-card-row { padding: 6px 10px; display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 1.35; }
+    .queue-flag-card-row { padding: 5px 8px; display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1.3; }
     .queue-flag-card.green .queue-flag-card-row { color: #27500A; }
     .queue-flag-card.red .queue-flag-card-row { color: #791F1F; }
     .queue-flag-card.amber .queue-flag-card-row { color: #633806; }
@@ -232,7 +235,7 @@
     .queue-flag-settings-link:hover { background: #D0E4F7; }
     .queue-flag-dismiss-btn { background: none; border: none; font-size: 14px; color: var(--ci-text-tertiary); cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
     .queue-flag-dismiss-btn:hover { color: #E8384F; }
-    .queue-flag-evidence { padding: 4px 10px 4px 12px; margin: 0 10px 6px; font-size: 11.5px; font-style: italic; line-height: 1.4; border-left: 2px solid; border-radius: 2px; }
+    .queue-flag-evidence { padding: 3px 8px 3px 10px; margin: 0 8px 5px; font-size: 11px; font-style: italic; line-height: 1.35; border-left: 2px solid; border-radius: 2px; }
     .queue-flag-card.green .queue-flag-evidence { color: #3B6D11; border-color: #3B6D11; background: rgba(234,243,222,0.35); }
     .queue-flag-card.red .queue-flag-evidence { color: #791F1F; border-color: #c0392b; background: rgba(252,235,235,0.35); }
     .queue-flag-card.amber .queue-flag-evidence { color: #633806; border-color: #d97706; background: rgba(250,238,218,0.35); }
@@ -300,6 +303,10 @@
     .queue-qual-line-icon.unmet { color: #E8384F; }
     .queue-qual-line-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .queue-qual-line-src { font-size: 8px; font-weight: 700; padding: 0 5px; border-radius: 8px; background: rgba(55,138,221,0.10); color: #378ADD; flex-shrink: 0; }
+    .queue-qual-line.expandable { cursor: pointer; flex-wrap: wrap; }
+    .queue-qual-line.expandable:hover { background: rgba(0,0,0,0.03); }
+    .queue-qual-line-evidence { display: none; width: 100%; font-size: 10px; color: var(--ci-text-secondary); font-style: italic; padding: 2px 0 2px 19px; line-height: 1.35; }
+    .queue-qual-line.expanded .queue-qual-line-evidence { display: block; }
 
     /* Inline comp summary (new format) */
     .queue-comp-inline { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ci-text-primary); padding: 4px 0 2px; flex-wrap: wrap; }
@@ -310,16 +317,12 @@
     .queue-comp-inline-verdict.unknown { background: var(--ci-bg-inset); color: var(--ci-text-tertiary); }
     .queue-comp-sep { color: var(--ci-text-tertiary); font-weight: 400; margin: 0 2px; }
 
-    /* Empty dimension inline note */
-    .queue-dim-note-row { padding: 0 12px 4px 34px; }
-    .queue-dim-inline-note { font-size: 10px; font-style: italic; color: var(--ci-text-tertiary); line-height: 1.3; }
-
-    /* No-drawer modifier — remove pointer cursor, no hover bg */
-    .queue-dim-row.no-drawer .queue-dim-bar-row { cursor: default; }
-    .queue-dim-row.no-drawer .queue-dim-bar-row:hover { background: transparent; }
+    /* Inline rationale in detail panel */
+    .queue-dim-inline-rationale { font-size: 11.5px; color: var(--ci-text-secondary); line-height: 1.4; display: block; }
 
     /* Drawer note */
     .queue-drawer-note { font-size: 11px; font-style: italic; color: var(--ci-text-tertiary); margin-top: 8px; padding-top: 6px; border-top: 0.5px solid var(--ci-border-subtle); }
+    .queue-drawer-rationale { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; margin-bottom: 8px; padding: 6px 10px; background: #fff; border-radius: 4px; border-left: 2px solid var(--ci-border-default); }
 
     /* Total formula row (at bottom of breakdown) */
     .queue-total-formula { font-family: var(--ci-font-mono, monospace); font-size: 10px; color: var(--ci-text-tertiary); padding: 6px 10px; background: var(--ci-bg-inset); border-radius: 6px; margin-top: 6px; margin-bottom: 8px; }
@@ -435,7 +438,7 @@
       Pipeline
     </a>
     <div class="header-title" style="display:flex;align-items:center;gap:10px;">
-      <svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="cq"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/><path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/></g></svg>
+      <svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="cq"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M29 43Q29 27 39 21Q50 17 61 21Q71 27 71 43Q71 54 66 61Q61 67 55 70L50 72L45 70Q39 67 34 61Q29 54 29 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/><path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/><path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/><path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/><path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/><path d="M58 59.5Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/></g></svg>
       <span><span>Coop's</span> Scoring Queue</span>
     </div>
     <div class="header-count" id="queue-count">0 remaining</div>

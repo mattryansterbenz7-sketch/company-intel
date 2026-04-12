@@ -25,7 +25,7 @@ let allStages = []; // populated on load, used for Move-to dropdown
 // Update header title for current mode
 document.addEventListener('DOMContentLoaded', () => {
   const titleEl = document.querySelector('.header-title');
-  if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#E8E5E0"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/><rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/><path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/><path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/><ellipse cx="41" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.5" r="2.5" fill="#4A8DB8"/><ellipse cx="59" cy="44" rx="4.5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.5" r="2.5" fill="#4A8DB8"/><path d="M40 58Q45 65 50 66Q55 65 60 58" fill="white" stroke="#8B6B4A" stroke-width="0.8"/></g></svg><span>${CFG.title}</span>`;
+  if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M29 43Q29 27 39 21Q50 17 61 21Q71 27 71 43Q71 54 66 61Q61 67 55 70L50 72L45 70Q39 67 34 61Q29 54 29 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/><path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/><path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/><path d="M47 53Q48 55 50 55.5Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/><path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/><path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/><path d="M58 59.5Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/></g></svg><span>${CFG.title}</span>`;
   document.title = 'Coop.ai — ' + CFG.title;
   if (DEV_MOCK) {
     const banner = document.createElement('div');
@@ -385,27 +385,43 @@ function renderCurrent() {
       </div>`;
   }
 
-  // Build dimension rows
+  // Build score overview bars + detail panels (toggle view)
   const weights = jm.scoringWeightsSnapshot || {};
-  const dimRows = DIM_DEFS.map(dim => {
+  const dimBars = [];
+  const dimToggles = [];
+  const dimPanels = [];
+  const DIM_SHORT = { qualificationFit: 'Qual', roleFit: 'Role', cultureFit: 'Culture', companyFit: 'Company', compFit: 'Comp' };
+
+  DIM_DEFS.forEach(dim => {
     const val = displayBreakdown[dim.key];
-    if (val == null) return '';
+    if (val == null) return;
     const tier = dimTier(val);
     const fired = isNewFormat ? (flagsFired[dim.key] || {}) : {};
     const allGreens = fired.green || [];
     const allReds   = fired.red   || [];
-    // Neutral flags (unfired, unknownNeutral) are NOT shown — absence of evidence is neutral, not a flag
 
     const w = weights[dim.key] || 0;
     const hasFlags = allGreens.length || allReds.length;
     const isQual = dim.key === 'qualificationFit';
     const isComp = dim.key === 'compFit';
-    // Determine if this dimension has content worth expanding
     const hasContent = isNewFormat && (hasFlags || isQual || isComp);
 
-    // Build expanded drawer content — only for dimensions with actual content
-    let drawerHtml = '';
-    let inlineNote = ''; // small note shown in the bar row itself for empty dimensions
+    // Overview bar row (always visible, click selects matching toggle)
+    dimBars.push(`
+      <div class="queue-dim-bar-row" data-dim="${dim.key}">
+        <span class="queue-dim-dot ${dim.dot}"></span>
+        <span class="queue-dim-name">${dim.label}</span>
+        <div class="queue-bar-track"><div class="queue-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
+        <span class="queue-dim-score ${tier}">${val}</span>
+      </div>`);
+
+    // Toggle button
+    dimToggles.push(`<button class="queue-dim-toggle-btn${isQual ? ' active' : ''}" data-dim="${dim.key}">
+      <span class="queue-dim-dot ${dim.dot}"></span>${DIM_SHORT[dim.key] || dim.label}<span class="queue-dim-toggle-score ${tier}">${val}</span>
+    </button>`);
+
+    // Build detail panel content
+    let panelContent = '';
     if (isNewFormat && hasContent) {
       const contribution = (val * w / 100).toFixed(2);
 
@@ -416,19 +432,19 @@ function renderCurrent() {
         const otherQuals = skillQuals.filter(q => q.status !== 'met' && q.status !== 'unknown');
         const metCount = metQuals.length, partialCount = otherQuals.filter(q => q.status === 'partial').length, unmetCount = otherQuals.filter(q => q.status === 'unmet').length;
         const totalQ = metCount + partialCount + unmetCount;
-        // Compact inline items — one line each, no card wrapper
         const qualLine = q => {
           const icon = q.status === 'met' ? '✓' : q.status === 'partial' ? '~' : '✕';
           const cls = q.status;
-          return `<div class="queue-qual-line ${cls}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${(q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''}</div>`;
+          const hasEvidence = q.evidence && q.evidence.trim();
+          return `<div class="queue-qual-line ${cls}${hasEvidence ? ' expandable' : ''}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${q.importance === 'preferred' ? '<span class="queue-qual-line-src">nice to have</span>' : ''}${(q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''}${hasEvidence ? `<div class="queue-qual-line-evidence">${escHtml(q.evidence)}</div>` : ''}</div>`;
         };
-        const QLIMIT = 4;
+        const QLIMIT = 6;
         const allQuals = [...metQuals, ...otherQuals];
         const visible = allQuals.slice(0, QLIMIT).map(qualLine).join('');
         const overflow = allQuals.length > QLIMIT
           ? `<div class="queue-flags-overflow" style="display:none;">${allQuals.slice(QLIMIT).map(qualLine).join('')}</div><button class="queue-flags-more-btn" data-expanded="0">+${allQuals.length - QLIMIT} more</button>`
           : '';
-        drawerHtml = `<div class="queue-dim-drawer"><div class="queue-math-row"><span>${totalQ ? `${metCount} met · ${partialCount} partial · ${unmetCount} unmet` : 'No requirements identified'} → ${val}/10</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}</div>`;
+        panelContent = `<div class="queue-math-row"><span>${totalQ ? `${metCount} met · ${partialCount} partial · ${unmetCount} unmet` : 'No requirements identified'} → ${val}/10</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}`;
       } else if (isComp) {
         const verdictCls = v => v?.includes('above') ? 'above' : v === 'at_floor' ? 'at' : v === 'below_floor' ? 'below' : 'unknown';
         const verdictLabel = { above_strong: 'Above target', above_floor: 'Above floor', at_floor: 'At floor', below_floor: 'Below floor' };
@@ -440,46 +456,34 @@ function renderCurrent() {
         const oteDisplay = compAssess.oteAmount ? '$' + compAssess.oteAmount.toLocaleString() : (totalComp || null);
         const showBase = baseDisplay && compAssess.baseVsFloor !== 'unknown';
         const showOte = oteDisplay && compAssess.oteVsFloor !== 'unknown';
-        // Inline comp summary instead of big cards
         const compParts = [];
         if (showBase) compParts.push(`Base: ${baseDisplay} <span class="queue-comp-inline-verdict ${verdictCls(compAssess.baseVsFloor)}">${verdictLabel[compAssess.baseVsFloor] || ''}</span>`);
         if (showOte) compParts.push(`OTE: ${oteDisplay} <span class="queue-comp-inline-verdict ${verdictCls(compAssess.oteVsFloor)}">${verdictLabel[compAssess.oteVsFloor] || ''}</span>`);
-        drawerHtml = `<div class="queue-dim-drawer"><div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${compParts.length ? `<div class="queue-comp-inline">${compParts.join('<span class="queue-comp-sep">·</span>')}</div>` : ''}${hasFlags ? `<div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>` : ''}</div>`;
+        panelContent = `<div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${compParts.length ? `<div class="queue-comp-inline">${compParts.join('<span class="queue-comp-sep">·</span>')}</div>` : ''}${hasFlags ? `<div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>` : ''}`;
       } else {
-        // Standard dimension with flags
         const allAdj = allGreens.concat(allReds);
         const mathParts = ['5.0'];
         allAdj.forEach(a => { const d = a.delta ?? 0; mathParts.push(`${d > 0 ? '+' : ''}${d.toFixed(1)}`); });
         const rawScore = allAdj.reduce((s, a) => s + a.delta, 5.0);
         const mathStr = `${mathParts.join(' ')} = ${rawScore.toFixed(1)} → ${val}`;
-        drawerHtml = `<div class="queue-dim-drawer"><div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>${dimRationale[dim.key] ? `<div class="queue-drawer-note">${escHtml(dimRationale[dim.key])}</div>` : ''}</div>`;
+        panelContent = `${dimRationale[dim.key] ? `<div class="queue-drawer-rationale">${escHtml(dimRationale[dim.key])}</div>` : ''}<div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>`;
       }
     } else if (isNewFormat && !hasContent) {
-      // Empty dimension — no drawer, just inline rationale
-      inlineNote = dimRationale[dim.key] ? `<span class="queue-dim-inline-note">${escHtml(dimRationale[dim.key])}</span>` : '<span class="queue-dim-inline-note">No signals</span>';
+      const note = dimRationale[dim.key] ? escHtml(dimRationale[dim.key]) : 'No flags configured for this dimension';
+      panelContent = `<div class="queue-dim-detail-note">${note}</div>`;
     }
 
-    // Auto-expand qualification so items are always visible
-    const autoOpen = isQual && hasContent;
-
-    return `
-      <div class="queue-dim-row${hasContent ? '' : ' no-drawer'}${autoOpen ? ' open' : ''}" data-dim="${dim.key}">
-        <div class="queue-dim-bar-row">
-          <span class="queue-dim-dot ${dim.dot}"></span>
-          <span class="queue-dim-name">${dim.label}</span>
-          <div class="queue-bar-track"><div class="queue-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
-          <span class="queue-dim-score ${tier}">${val}</span>
-          ${hasContent ? '<span class="queue-dim-chevron">›</span>' : ''}
-        </div>${inlineNote ? `<div class="queue-dim-note-row">${inlineNote}</div>` : ''}${drawerHtml}
-      </div>`;
-  }).join('');
+    dimPanels.push(`<div class="queue-dim-detail${isQual ? ' active' : ''}" data-dim="${dim.key}">${panelContent}</div>`);
+  });
 
   // Total formula row
   const totalFormulaHtml = jm.scoreRationale ? `<div class="queue-total-formula">${escHtml(jm.scoreRationale)}</div>` : '';
 
-  const barsHtml = dimRows.trim() ? `
-    <div class="qc-breakdown-label">Score breakdown — click to expand</div>
-    <div class="qc-breakdown">${dimRows}</div>${totalFormulaHtml}` : '';
+  const barsHtml = dimBars.length ? `
+    <div class="qc-breakdown-label">Score breakdown</div>
+    <div class="qc-breakdown">${dimBars.join('')}</div>
+    <div class="queue-dim-toggle has-active">${dimToggles.join('')}</div>
+    <div class="queue-dim-details">${dimPanels.join('')}</div>${totalFormulaHtml}` : '';
 
   // Remove old separate qualification and rationale sections — they're now inside the drawer
   const rationaleHtml = '';
@@ -562,10 +566,7 @@ function renderCurrent() {
       <div class="qc-more" id="qc-more" data-id="${c.id}">View full details →</div>
       <div class="queue-nav">
         <span class="queue-nav-pos">${currentIdx + 1} / ${queue.length}</span>
-        ${c.jobUrl && /linkedin\.com\/jobs\/view\//i.test(c.jobUrl)
-          ? `<button class="queue-rescrape-btn" id="btn-rescrape" title="Re-fetch LinkedIn data (firmographics, skills, recruiter) then rescore">↺ Refresh data</button>`
-          : ''}
-        <button class="queue-rescore-btn" id="btn-rescore" title="Re-score with latest preferences">↻ Rescore</button>
+        <button class="queue-rescore-btn" id="btn-rescore" title="Refresh data & rescore">↻ Rescore</button>
       </div>
       <div class="queue-actions">
         <button class="queue-action-btn pass" id="btn-pass">${CFG.passLabel} <span class="kbd">←</span></button>
@@ -580,31 +581,12 @@ function renderCurrent() {
   document.getElementById('btn-prev')?.addEventListener('click', () => { if (currentIdx > 0) { currentIdx--; renderCurrent(); } });
   document.getElementById('btn-next')?.addEventListener('click', () => { if (currentIdx < queue.length - 1) { currentIdx++; renderCurrent(); } });
 
-  document.getElementById('btn-rescrape')?.addEventListener('click', () => {
-    const btn = document.getElementById('btn-rescrape');
-    btn.disabled = true;
-    btn.textContent = '↺ Opening tab…';
-    chrome.runtime.sendMessage({ type: 'RESCRAPE_LINKEDIN_JOB', entryId: c.id }, resp => {
-      void chrome.runtime.lastError;
-      if (resp?.error) {
-        btn.disabled = false;
-        btn.textContent = '↺ Refresh data';
-        btn.title = 'Error: ' + resp.error;
-        btn.style.color = '#ef4444';
-        return;
-      }
-      // Reload card data then trigger rescore
-      btn.textContent = '↺ Refreshed — rescoring…';
-      document.getElementById('btn-rescore')?.click();
-    });
-  });
-
   document.getElementById('btn-rescore')?.addEventListener('click', () => {
     const btn = document.getElementById('btn-rescore');
     const card = document.getElementById('queue-card');
-    btn.innerHTML = DEV_MOCK ? '<span class="rescore-spinner"></span> Mock scoring...' : '<span class="rescore-spinner"></span> Rescoring...';
     btn.disabled = true;
-    // Coop thinking overlay
+
+    // Show Coop thinking overlay immediately
     const shell = card?.closest('.queue-card-shell');
     if (shell) {
       shell.style.position = 'relative';
@@ -614,44 +596,120 @@ function renderCurrent() {
       overlay.innerHTML = `
         <div class="coop-thinking-face-wrap">
           <div class="coop-thinking-orbit"></div>
-          <svg class="coop-thinking-face" width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="50" fill="#E8E5E0"/>
+          <svg class="coop-thinking-face" width="192" height="192" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="50" fill="#3B5068"/>
             <clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath>
             <g clip-path="url(#ct)">
-              <ellipse cx="50" cy="96" rx="42" ry="23" fill="#3D5468"/>
-              <path d="M38 85 L50 91 L62 85" fill="none" stroke="#2D4050" stroke-width="1"/>
-              <rect x="43" y="73" width="14" height="12" rx="3" fill="#E5BF9A"/>
-              <path d="M28 45Q28 30 38 24Q50 20 62 24Q72 30 72 45Q72 56 65 64Q59 70 50 72Q41 70 35 64Q28 56 28 45Z" fill="#F0CDA0"/>
-              <path d="M27 42Q27 20 50 14Q73 20 73 42L71 36Q69 20 50 17Q31 20 29 36Z" fill="#7A5C3A"/>
-              <path d="M31 34Q31 18 50 14Q69 18 69 34Q68 22 50 17Q32 22 31 34Z" fill="#8B6B4A"/>
-              <!-- Eyes looking up-left (thinking) -->
-              <ellipse cx="41" cy="43" rx="5" ry="5.5" fill="white"/>
-              <circle cx="40" cy="41" r="2.8" fill="#4A8DB8"/>
-              <circle cx="39" cy="40.5" r="1" fill="#2B6A8E"/>
-              <circle cx="41" cy="40" r="0.9" fill="white" opacity="0.8"/>
-              <ellipse cx="59" cy="43" rx="5" ry="5.5" fill="white"/>
-              <circle cx="58" cy="41" r="2.8" fill="#4A8DB8"/>
-              <circle cx="57" cy="40.5" r="1" fill="#2B6A8E"/>
-              <circle cx="59" cy="40" r="0.9" fill="white" opacity="0.8"/>
-              <!-- Eyebrows: one raised (thinking asymmetry) -->
-              <path d="M35 36Q41 33 47 35" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M53 34.5Q59 31 64 34" fill="none" stroke="#7A5C3A" stroke-width="1.8" stroke-linecap="round"/>
-              <!-- Thoughtful closed mouth -->
-              <path d="M44 59Q50 62 56 59" fill="none" stroke="#8B6B4A" stroke-width="1.2" stroke-linecap="round"/>
-              <!-- Arm from right shoulder up to chin -->
-              <path d="M65 84Q72 76 69 68Q67 63 62 62" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.6"/>
-              <path d="M65 84Q68 80 69 76" fill="none" stroke="#2D4050" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+              <!-- Suit jacket -->
+              <ellipse cx="50" cy="100" rx="48" ry="28" fill="#3D4F5F"/>
+              <ellipse cx="50" cy="100" rx="46" ry="26" fill="#435766"/>
+              <path d="M18 96 Q28 84 38 80" fill="none" stroke="#364854" stroke-width="0.5"/>
+              <path d="M82 96 Q72 84 62 80" fill="none" stroke="#364854" stroke-width="0.5"/>
+              <path d="M26 100 L40 77 L50 88 L60 77 L74 100" fill="#364854"/>
+              <path d="M40 77 L50 88" stroke="#2C3E4E" stroke-width="0.8" fill="none"/>
+              <path d="M60 77 L50 88" stroke="#2C3E4E" stroke-width="0.8" fill="none"/>
+              <path d="M40 77 L38 80 L50 90 L50 88Z" fill="#3A4E5E" opacity="0.5"/>
+              <path d="M60 77 L62 80 L50 90 L50 88Z" fill="#3A4E5E" opacity="0.5"/>
+              <!-- Shirt + collar -->
+              <path d="M40 77 L50 94 L60 77" fill="#F0EAE0"/>
+              <path d="M43 80 L50 90 L57 80" fill="#E8E2D8" opacity="0.4"/>
+              <path d="M40 77 L43 75 L44 78Z" fill="#F0EAE0"/>
+              <path d="M60 77 L57 75 L56 78Z" fill="#F0EAE0"/>
+              <!-- Bow tie -->
+              <path d="M41 78 Q44 73 50 76 Q44 79 41 78Z" fill="#3D4F5F"/>
+              <path d="M59 78 Q56 73 50 76 Q56 79 59 78Z" fill="#3D4F5F"/>
+              <path d="M43 76 Q44 75 45 76" fill="none" stroke="#2C3E4E" stroke-width="0.3"/>
+              <path d="M55 76 Q56 75 57 76" fill="none" stroke="#2C3E4E" stroke-width="0.3"/>
+              <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
+              <ellipse cx="50" cy="76.5" rx="1.2" ry="1" fill="#2C3E4E"/>
+              <!-- Neck -->
+              <rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/>
+              <path d="M44 71 L44 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
+              <path d="M56 71 L56 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
+              <!-- Head -->
+              <path d="M29 43 Q29 27 39 21 Q50 17 61 21 Q71 27 71 43 Q71 54 66 61 Q61 67 55 70 L50 72 L45 70 Q39 67 34 61 Q29 54 29 43Z" fill="#EDBB92"/>
+              <path d="M34 61 Q39 67 45 70 L50 72 L55 70 Q61 67 66 61" fill="none" stroke="#D4A070" stroke-width="0.6" opacity="0.4"/>
+              <ellipse cx="35" cy="50" rx="4" ry="2.5" fill="#F2C9A2" opacity="0.5"/>
+              <ellipse cx="65" cy="50" rx="4" ry="2.5" fill="#F2C9A2" opacity="0.5"/>
+              <!-- Ears -->
+              <ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+              <path d="M28 42 Q27 44 28 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
+              <ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+              <path d="M72 42 Q73 44 72 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
+              <!-- Hair -->
+              <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
+              <path d="M27 40 Q27 25 36 18 L34 21 Q29 27 28 38Z" fill="#1E1410"/>
+              <path d="M73 40 Q73 25 64 18 L66 21 Q71 27 72 38Z" fill="#1E1410"/>
+              <path d="M29 31 Q30 13 50 10 Q70 13 71 31 Q69 17 50 13 Q31 17 29 31Z" fill="#3D2A1E"/>
+              <path d="M37 19 Q44 11 56 11 Q64 13 68 19" fill="none" stroke="#1E1410" stroke-width="1" opacity="0.6"/>
+              <path d="M33 23 Q38 13 50 11 Q58 11 63 15" fill="#3D2A1E" opacity="0.7"/>
+              <path d="M35 26 Q40 16 50 12 Q55 12 58 14" fill="#4A3728" opacity="0.4"/>
+              <path d="M30 38 L30 44" stroke="#2D1F16" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
+              <path d="M70 38 L70 44" stroke="#2D1F16" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
+              <!-- Forehead lines -->
+              <path d="M39 30 Q45 29 51 30" fill="none" stroke="#D4A070" stroke-width="0.3" opacity="0.3"/>
+              <!-- Eyes — green/hazel, looking up-left (thinking) -->
+              <ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/>
+              <ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/>
+              <circle cx="40" cy="42.5" r="3" fill="#5B8C3E"/>
+              <circle cx="40" cy="42.5" r="2.2" fill="#4A7A30"/>
+              <circle cx="40" cy="42.5" r="1.2" fill="#3A6B28"/>
+              <circle cx="40.5" cy="41.8" r="0.8" fill="white" opacity="0.7"/>
+              <circle cx="58" cy="42.5" r="3" fill="#5B8C3E"/>
+              <circle cx="58" cy="42.5" r="2.2" fill="#4A7A30"/>
+              <circle cx="58" cy="42.5" r="1.2" fill="#3A6B28"/>
+              <circle cx="58.5" cy="41.8" r="0.8" fill="white" opacity="0.7"/>
+              <!-- Upper eyelids -->
+              <path d="M36 42.5 Q41 40 46 42.5" fill="#EDBB92" opacity="0.5"/>
+              <path d="M54 42.5 Q59 40 64 42.5" fill="#EDBB92" opacity="0.5"/>
+              <!-- Lower lid line -->
+              <path d="M37 46.5 Q41 48 45 46.5" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.4"/>
+              <path d="M55 46.5 Q59 48 63 46.5" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.4"/>
+              <!-- Crow's feet -->
+              <path d="M34 43 L32.5 41.5" stroke="#D4A070" stroke-width="0.3" opacity="0.3"/>
+              <path d="M66 43 L67.5 41.5" stroke="#D4A070" stroke-width="0.3" opacity="0.3"/>
+              <!-- Eyebrows — right raised (thinking) -->
+              <path d="M35 37 Q38 35 41 35 Q44 35 47 37" fill="#2D1F16" opacity="0.8"/>
+              <path d="M53 35.5 Q56 33 59 33 Q62 33 65 35.5" fill="#2D1F16" opacity="0.8"/>
+              <!-- Brow bone shadow -->
+              <path d="M36 38 Q41 36.5 46 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
+              <path d="M54 38 Q59 36.5 64 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
+              <!-- Nose -->
+              <path d="M50 39 L49 50" fill="none" stroke="#D4A070" stroke-width="0.5" opacity="0.4"/>
+              <path d="M47 53 Q48 55 50 55.5 Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/>
+              <!-- Nasolabial folds -->
+              <path d="M38 52 Q39 56 40 59" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.35"/>
+              <path d="M62 52 Q61 56 60 59" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.35"/>
+              <!-- Mouth — thoughtful closed -->
+              <path d="M43 60 Q47 62 50 62 Q53 62 57 60" fill="none" stroke="#9B7055" stroke-width="1" stroke-linecap="round"/>
+              <!-- Chin -->
+              <path d="M46 67 Q50 69 54 67" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.3"/>
+              <!-- Stubble -->
+              <circle cx="44" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
+              <circle cx="50" cy="66.5" r="0.3" fill="#B89878" opacity="0.2"/>
+              <circle cx="56" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
+              <!-- Arm from shoulder to chin -->
+              <path d="M65 84 Q72 76 69 68 Q67 63 62 62" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
+              <path d="M65 84 Q68 80 69 76" fill="none" stroke="#364854" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>
               <!-- Hand on chin -->
-              <path d="M48 66Q50 62 56 61Q62 62 63 66Q62 69 58 70Q52 71 49 68Z" fill="#E5BF9A" stroke="#D9A07A" stroke-width="0.6"/>
+              <path d="M48 66 Q50 62 56 61 Q62 62 63 66 Q62 69 58 70 Q52 71 49 68Z" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
             </g>
           </svg>
         </div>
         <div class="coop-thinking-dots"><span></span><span></span><span></span></div>
         <div class="coop-thinking-label">Coop is thinking...</div>
-        <div class="coop-thinking-sub">Analyzing job fit & scoring</div>
+        <div class="coop-thinking-sub">Preparing to score...</div>
         <div class="coop-thinking-bar"><div class="coop-thinking-bar-fill"></div></div>`;
       shell.appendChild(overlay);
     }
+
+    // If LinkedIn job URL, rescrape first (free — just DOM read), then score
+    const canRescrape = c.jobUrl && /linkedin\.com\/jobs\/view\//i.test(c.jobUrl);
+    const startScoring = () => {
+      btn.innerHTML = DEV_MOCK ? '<span class="rescore-spinner"></span> Mock scoring...' : '<span class="rescore-spinner"></span> Scoring...';
+      // Update overlay sub-label for scoring phase
+      const thinkSub = document.querySelector('.coop-thinking-sub');
+      if (thinkSub) thinkSub.textContent = 'Analyzing job fit & scoring';
     const startTime = Date.now();
     chrome.runtime.sendMessage({ type: DEV_MOCK ? 'DEV_MOCK_SCORE' : 'SCORE_OPPORTUNITY', entryId: c.id }, (response) => {
       void chrome.runtime.lastError;
@@ -682,8 +740,33 @@ function renderCurrent() {
         }
       });
     }, 1500);
-    // Timeout after 30s
-    setTimeout(() => { clearInterval(pollInterval); btn.innerHTML = '↻ Rescore'; btn.disabled = false; document.getElementById('coop-thinking')?.remove(); }, 30000);
+      // Timeout after 30s
+      setTimeout(() => { clearInterval(pollInterval); btn.innerHTML = '↻ Rescore'; btn.disabled = false; document.getElementById('coop-thinking')?.remove(); }, 30000);
+    };
+
+    // Refresh data before scoring when a job URL exists
+    if (canRescrape) {
+      // LinkedIn: open background tab for full DOM scrape (auth-walled SPA)
+      btn.innerHTML = '<span class="rescore-spinner"></span> Refreshing data...';
+      const s1 = document.querySelector('.coop-thinking-sub');
+      if (s1) s1.textContent = 'Refreshing LinkedIn job data...';
+      chrome.runtime.sendMessage({ type: 'RESCRAPE_LINKEDIN_JOB', entryId: c.id }, resp => {
+        void chrome.runtime.lastError;
+        if (resp?.error) console.warn('[Queue] Rescrape failed, scoring with existing data:', resp.error);
+        startScoring();
+      });
+    } else if (c.jobUrl) {
+      // Non-LinkedIn: re-fetch JD from URL (direct fetch, free)
+      btn.innerHTML = '<span class="rescore-spinner"></span> Refreshing data...';
+      const s2 = document.querySelector('.coop-thinking-sub');
+      if (s2) s2.textContent = 'Refreshing job posting data...';
+      chrome.runtime.sendMessage({ type: 'REFRESH_JOB_DATA', entryId: c.id }, resp => {
+        void chrome.runtime.lastError;
+        startScoring();
+      });
+    } else {
+      startScoring();
+    }
   });
   document.getElementById('qc-apply-cta')?.addEventListener('click', (e) => {
     if (!c.jobUrl) return;
@@ -716,12 +799,39 @@ function renderCurrent() {
     coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + c.id);
   });
 
-  // Dimension row expand/collapse
-  document.querySelectorAll('.queue-dim-bar-row').forEach(row => {
+  // Dimension toggle — switch which detail panel is visible
+  document.querySelectorAll('.queue-dim-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dimKey = btn.dataset.dim;
+      const wasActive = btn.classList.contains('active');
+      document.querySelectorAll('.queue-dim-toggle-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.queue-dim-detail').forEach(p => p.classList.remove('active'));
+      const toggleStrip = document.querySelector('.queue-dim-toggle');
+      if (!wasActive) {
+        btn.classList.add('active');
+        const panel = document.querySelector(`.queue-dim-detail[data-dim="${dimKey}"]`);
+        if (panel) panel.classList.add('active');
+        if (toggleStrip) toggleStrip.classList.add('has-active');
+      } else {
+        if (toggleStrip) toggleStrip.classList.remove('has-active');
+      }
+    });
+  });
+
+  // Clicking a bar row also selects that dimension's toggle
+  document.querySelectorAll('.qc-breakdown .queue-dim-bar-row').forEach(row => {
     row.addEventListener('click', () => {
-      const dimRow = row.closest('.queue-dim-row');
-      if (!dimRow || !dimRow.querySelector('.queue-dim-drawer')) return;
-      dimRow.classList.toggle('open');
+      const dimKey = row.dataset.dim;
+      const btn = document.querySelector(`.queue-dim-toggle-btn[data-dim="${dimKey}"]`);
+      if (btn) btn.click();
+    });
+  });
+
+  // Qualification expand/collapse for evidence
+  document.querySelectorAll('.queue-qual-line.expandable').forEach(line => {
+    line.addEventListener('click', e => {
+      if (e.target.closest('.queue-qual-correct-btn, .queue-qual-line-src')) return;
+      line.classList.toggle('expanded');
     });
   });
 
