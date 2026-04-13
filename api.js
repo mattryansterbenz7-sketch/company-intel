@@ -163,7 +163,6 @@ export async function claudeApiCall(body, maxRetries = 3, opTag) {
         'x-api-key': state.ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true',
-        'anthropic-beta': 'prompt-caching-2024-07-31'
       },
       body: JSON.stringify(body)
     });

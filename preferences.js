@@ -4699,7 +4699,7 @@ function initCoopContextWindow() {
         'profileResume', 'profileStory', 'profileExperience', 'profileExperienceEntries',
         'profilePrinciples', 'profileMotivators', 'profileSkills', 'profileFAQ',
         'profileGreenLights', 'profileRedLights', 'profileLinks',
-        'coopMemory', 'coopIdealRoleAssessment', 'storyTime'
+        'coopMemory', 'storyTime'
       ];
       const localData = await new Promise(r => chrome.storage.local.get(localKeys, r));
       const syncData = await new Promise(r => chrome.storage.sync.get(['prefs'], r));
@@ -4736,11 +4736,6 @@ function initCoopContextWindow() {
         const memLines = localData.coopMemory.entries.slice(0, 30).map(e => `- [${e.type || 'note'}] ${e.text || e.body || ''}`.slice(0, 300));
         sourceParts.push(`## TYPED MEMORY ENTRIES\n${memLines.join('\n')}`);
       }
-      if (localData.coopIdealRoleAssessment?.text) {
-        const stripped = localData.coopIdealRoleAssessment.text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 2500);
-        sourceParts.push(`## PRIOR IDEAL-ROLE ASSESSMENT\n${stripped}`);
-      }
-
       if (!sourceParts.length) {
         contentEl.innerHTML = '<span style="color:var(--ci-accent-red);font-size:13px;">No profile data found. Fill in your Story, Experience, or other sections first.</span>';
         return;

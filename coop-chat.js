@@ -867,12 +867,12 @@ export async function handleCoopAssistRewrite(message) {
   if (!text || text.trim().length < 10) return { error: 'Text too short' };
 
   const { voiceProfile, prefs, storyTime } = await new Promise(r => {
-    chrome.storage.local.get(['voiceProfile', 'storyTime'], local => {
+    chrome.storage.local.get(['voiceProfile', 'coopProfileSummary'], local => {
       chrome.storage.sync.get(['prefs'], sync => r({ ...local, ...sync }));
     });
   });
   const userName = (prefs && (prefs.name || prefs.fullName)) || getUserName('the user');
-  const profileBlurb = (storyTime && storyTime.profileSummary) || '';
+  const profileBlurb = coopProfileSummary || '';
   const antiPhrases = (voiceProfile && voiceProfile.antiPhrases) || [
     'i hope this email finds you well', 'i wanted to reach out', 'circle back', 'kindly', 'leverage'
   ];
