@@ -109,7 +109,7 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 | `queue.js` | Apply Queue — Tinder-style swipe triage over pipeline opportunities |
 | `coop-assist.js` | Ambient Grammarly-style writing assistant. Content script on all pages. Watches focused text fields, runs local voice heuristics + cached LLM proofread, surfaces a floating pill → suggestions + rewrite modes (In my voice / Tighten / Punchier / Warmer). Domain blocklist for banking/auth/gov |
 | `onboarding.js` / `onboardingSteps.js` | Self-serve Coop onboarding (G1 Phase 1). Static step manifest + persistent state, injected as first-message in side panel chat when an unmet step exists |
-| `widget.js` | Floating button (currently disabled, replaced by content.js sidebar) |
+| `widget.js` | Floating button (dead code — disabled at line 3, removed from manifest. File kept for reference) |
 
 HTML pages: `sidepanel.html`, `saved.html`, `company.html`, `opportunity.html`, `preferences.html`, `integrations.html`
 
@@ -229,15 +229,15 @@ Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No w
 
 **Architecture**
 - Research cache vs entry data drift — research fields live on both `researchCache` and the entry and can diverge. Long-term fix: company detail view reads from cache; entry holds only user data.
-- Shared functions (`stageColor`, `scoreToVerdict`, `defaultActionStatus`, `escapeHtml`) are copy-pasted across files. Extract to a common module.
+- Shared functions (`stageColor`) are copy-pasted across files (company.js, saved.js, opportunity.js). `escapeHtml`, `scoreToVerdict`, `defaultActionStatus` already consolidated in ui-utils.js.
 - No automated tests.
 
 **Content detection**
 - LinkedIn selectors change frequently and have no wait/retry for dynamic React content. Needs URL-structure signals + auth-vs-public DOM handling. Falls back to domain name today.
 
 **Data**
-- Dirty `jobTitle` data from early saves ("Undefined …", "New Opportunity"). Needs a one-time migration.
-- Legacy `appliedAt` / `introAt` / `interviewedAt` fields linger on migrated entries (harmless).
+- ~~Dirty `jobTitle` data~~ — migrated via `_migratedLegacyFields` in background.js.
+- ~~Legacy `appliedAt` / `introAt` / `interviewedAt`~~ — migrated to `stageTimestamps` via `_migratedLegacyFields` in background.js.
 
 **Watch out for**
 - The user's own name appears in all Granola meeting titles — matching filters names that appear in >60% of notes.
@@ -247,7 +247,6 @@ Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No w
 **Roadmap**
 - LinkedIn detection reliability
 - Research cache as source of truth
-- Shared utility module
-- jobTitle migration
+- `stageColor()` consolidation into ui-utils.js
 - Export/import backup
 - Analytics dashboard (funnel conversion, response rate)

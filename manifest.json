@@ -31,12 +31,6 @@
       "matches": ["<all_urls>"],
       "js": ["coop.js", "content.js", "coop-assist.js"]
     },
-    {
-      "matches": ["<all_urls>"],
-      "exclude_matches": ["*://*.linkedin.com/*"],
-      "js": ["widget.js"],
-      "run_at": "document_idle"
-    }
   ],
   "side_panel": {
     "default_path": "sidepanel.html"

@@ -4379,7 +4379,6 @@ function initCoopAssessment() {
     if (/<(h[1-3]|ul|ol|li|p|strong|em)\b/i.test(md)) {
       return md;
     }
-    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = md.split('\n');
     const out = [];
     let inList = false;
@@ -4531,7 +4530,6 @@ function initCoopContextWindow() {
 
   function renderMarkdown(md) {
     if (!md) return '';
-    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = md.split('\n');
     const out = [];
     let inList = false;

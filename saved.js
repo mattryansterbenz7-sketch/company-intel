@@ -150,8 +150,8 @@ const TABLE_COLUMNS = [
   },
   {
     key: 'appliedAt', label: 'Applied', defaultOn: false, sortable: true, defaultSortDir: 'desc',
-    sortVal: c => c.stageTimestamps?.applied || c.appliedAt || 0,
-    renderCell: c => { const ts = c.stageTimestamps?.applied || c.appliedAt; return ts ? `<span class="tbl-muted">${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : '<span class="tbl-muted">—</span>'; }
+    sortVal: c => c.stageTimestamps?.applied || 0,
+    renderCell: c => { const ts = c.stageTimestamps?.applied; return ts ? `<span class="tbl-muted">${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : '<span class="tbl-muted">—</span>'; }
   },
   {
     key: 'lastActivity', label: 'Last Activity', defaultOn: false, sortable: true, defaultSortDir: 'desc',
@@ -1134,23 +1134,14 @@ function load() {
     updateStageDynamicCSS();
     allCompanies = (savedCompanies || []).sort((a, b) => b.savedAt - a.savedAt);
 
-    // Migrate old per-field timestamps → generic stageTimestamps map
+    // Backfill: if entry is at a stage but has no stageTimestamp for it, stamp it
     let needsBackfill = false;
     allCompanies = allCompanies.map(c => {
       if (!c.isOpportunity) return c;
       const stage = c.jobStage || '';
-      let st = c.stageTimestamps ? { ...c.stageTimestamps } : {};
-      let migrated = false;
-      // Migrate old fields
-      if (c.appliedAt && !st['applied'])        { st['applied'] = c.appliedAt; migrated = true; }
-      if (c.introAt && !st['intro_requested'])   { st['intro_requested'] = c.introAt; migrated = true; }
-      if (c.interviewedAt && !st['conversations']) { st['conversations'] = c.interviewedAt; migrated = true; }
-      // Backfill: if entry is at a stage but has no timestamp for it, stamp it
-      if (stage && !st[stage]) { st[stage] = c.savedAt || Date.now(); migrated = true; }
-      if (migrated) {
+      if (stage && (!c.stageTimestamps || !c.stageTimestamps[stage])) {
         needsBackfill = true;
-        const { appliedAt, introAt, interviewedAt, ...rest } = c;
-        return { ...rest, stageTimestamps: st };
+        return { ...c, stageTimestamps: { ...c.stageTimestamps, [stage]: c.savedAt || Date.now() } };
       }
       return c;
     });

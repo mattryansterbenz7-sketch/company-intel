@@ -128,6 +128,37 @@ chrome.storage.local.get(['savedCompanies', 'researchCache', 'photoCache', '_mig
   if (dirty || cacheDirty) console.log('[Migration] Cleaned company names and job titles');
 });
 
+// ── One-time migration: clean legacy fields & dirty jobTitles ─────────────────
+chrome.storage.local.get(['savedCompanies', '_migratedLegacyFields'], data => {
+  if (data._migratedLegacyFields) return;
+  const entries = data.savedCompanies || [];
+  let dirty = false;
+
+  for (const c of entries) {
+    // Convert legacy timestamp fields → stageTimestamps
+    if (c.appliedAt || c.introAt || c.interviewedAt) {
+      if (!c.stageTimestamps) c.stageTimestamps = {};
+      if (c.appliedAt && !c.stageTimestamps['applied']) c.stageTimestamps['applied'] = c.appliedAt;
+      if (c.introAt && !c.stageTimestamps['intro_requested']) c.stageTimestamps['intro_requested'] = c.introAt;
+      if (c.interviewedAt && !c.stageTimestamps['conversations']) c.stageTimestamps['conversations'] = c.interviewedAt;
+      delete c.appliedAt;
+      delete c.introAt;
+      delete c.interviewedAt;
+      dirty = true;
+    }
+
+    // Clean dirty jobTitles from early saves
+    if (c.jobTitle && /^(New Opportunity|Undefined)/i.test(c.jobTitle.trim())) {
+      c.jobTitle = '';
+      dirty = true;
+    }
+  }
+
+  if (dirty) chrome.storage.local.set({ savedCompanies: entries });
+  chrome.storage.local.set({ _migratedLegacyFields: true });
+  if (dirty) console.log('[Migration] Cleaned legacy fields and dirty jobTitles');
+});
+
 // Live-update keys when user saves them from Integrations page
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.integrations) {
