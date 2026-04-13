@@ -1,7 +1,7 @@
 // memory.js — Coop memory store, insight extraction, profile consolidation.
 
 import { state } from './bg-state.js';
-import { getModelForTask, claudeApiCall, trackApiCall } from './api.js';
+import { getModelForTask, claudeApiCall } from './api.js';
 
 // ── Story Time: Passive Learning (insight extraction after every chat) ───────
 
@@ -230,13 +230,12 @@ export async function routeInsights(insights, source) {
     await applyCoopMemoryActions(memoryActions, source);
   }
 
-  // Write to structured entries (preferred) with legacy text fallback
+  // Write to structured flag arrays (profileAttractedTo / profileDealbreakers)
   if (profileChanged) {
-    chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'profileGreenLights', 'profileRedLights'], data => {
+    chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers'], data => {
       const updates = {};
       for (const insight of insights) {
         if (insight.target_field === 'profileGreenLights' && insight.category === 'green_light') {
-          // Write structured entry
           const arr = data.profileAttractedTo || [];
           arr.push({
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
@@ -247,11 +246,8 @@ export async function routeInsights(insights, source) {
             createdAt: Date.now()
           });
           updates.profileAttractedTo = arr;
-          // Also append to legacy text for backward compat
-          updates.profileGreenLights = (data.profileGreenLights || '') + '\n' + insight.text;
         }
         if (insight.target_field === 'profileRedLights' && insight.category === 'red_light') {
-          // Write structured entry
           const arr = data.profileDealbreakers || [];
           arr.push({
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
@@ -263,8 +259,6 @@ export async function routeInsights(insights, source) {
             createdAt: Date.now()
           });
           updates.profileDealbreakers = arr;
-          // Also append to legacy text for backward compat
-          updates.profileRedLights = (data.profileRedLights || '') + '\n' + insight.text;
         }
       }
       if (Object.keys(updates).length) chrome.storage.local.set(updates);
@@ -302,23 +296,16 @@ ${rawInput || '(none provided)'}
 ${insights || '(none yet)'}`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': state.ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: getModelForTask('profileConsolidate'),
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    trackApiCall('anthropic', res.clone(), getModelForTask('profileConsolidate'), 'profile');
+    const res = await claudeApiCall({
+      model: getModelForTask('profileConsolidate'),
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
+    }, 3, 'profile');
+    if (!res || !res.ok) {
+      const errText = res ? await res.text().catch(() => '') : 'no response';
+      return { error: `API error ${res?.status || 'no response'}: ${errText.slice(0, 200)}` };
+    }
     const data = await res.json();
-    if (!res.ok) return { error: data?.error?.message || `API error ${res.status}` };
     return { profileSummary: data.content?.[0]?.text || '' };
   } catch (err) {
     return { error: err.message };

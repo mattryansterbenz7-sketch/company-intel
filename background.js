@@ -587,10 +587,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleGlobalChatMessage(message).then(sendResponse);
     return true;
   }
-  if (message.type === 'COOP_MESSAGE') {
-    handleCoopMessage(message).then(sendResponse);
-    return true;
-  }
   if (message.type === 'GET_KEY_STATUS') {
     sendResponse({
       anthropic: !!state.ANTHROPIC_KEY,
