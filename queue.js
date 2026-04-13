@@ -430,21 +430,25 @@ function renderCurrent() {
         const skillQuals = qualifications.filter(q => !_compRx.test(q.requirement) && !q.dismissed);
         const metQuals = skillQuals.filter(q => q.status === 'met');
         const otherQuals = skillQuals.filter(q => q.status !== 'met' && q.status !== 'unknown');
+        const unknownQuals = skillQuals.filter(q => q.status === 'unknown');
         const metCount = metQuals.length, partialCount = otherQuals.filter(q => q.status === 'partial').length, unmetCount = otherQuals.filter(q => q.status === 'unmet').length;
         const totalQ = metCount + partialCount + unmetCount;
         const qualLine = q => {
-          const icon = q.status === 'met' ? '✓' : q.status === 'partial' ? '~' : '✕';
-          const cls = q.status;
+          const isUnknown = q.status === 'unknown';
+          const icon = isUnknown ? '?' : q.status === 'met' ? '✓' : q.status === 'partial' ? '~' : '✕';
+          const cls = isUnknown ? 'unknown' : q.status;
           const hasEvidence = q.evidence && q.evidence.trim();
-          return `<div class="queue-qual-line ${cls}${hasEvidence ? ' expandable' : ''}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${q.importance === 'preferred' ? '<span class="queue-qual-line-src">nice to have</span>' : ''}${(q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''}${hasEvidence ? `<div class="queue-qual-line-evidence">${escHtml(q.evidence)}</div>` : ''}</div>`;
+          return `<div class="queue-qual-line ${cls}${hasEvidence ? ' expandable' : ''}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${isUnknown ? '<span class="queue-qual-line-src" style="font-style:italic;">not in profile</span>' : q.importance === 'preferred' ? '<span class="queue-qual-line-src">nice to have</span>' : ''}${!isUnknown && (q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''}${hasEvidence ? `<div class="queue-qual-line-evidence">${escHtml(q.evidence)}</div>` : ''}</div>`;
         };
         const QLIMIT = 6;
-        const allQuals = [...metQuals, ...otherQuals];
+        const assessedQuals = [...metQuals, ...otherQuals];
+        const allQuals = [...assessedQuals, ...unknownQuals];
         const visible = allQuals.slice(0, QLIMIT).map(qualLine).join('');
         const overflow = allQuals.length > QLIMIT
           ? `<div class="queue-flags-overflow" style="display:none;">${allQuals.slice(QLIMIT).map(qualLine).join('')}</div><button class="queue-flags-more-btn" data-expanded="0">+${allQuals.length - QLIMIT} more</button>`
           : '';
-        const qualSummary = totalQ ? `<span style="color:#16a34a;font-weight:700;">${metCount} met</span> · <span style="color:#d97706;font-weight:600;">${partialCount} partial</span> · <span style="color:#dc2626;font-weight:600;">${unmetCount} unmet</span> <span class="qmth-eq">→ <span class="qmth-result">${val}/10</span></span>` : `<span style="color:var(--ci-text-tertiary)">No requirements identified</span>`;
+        const unknownNote = unknownQuals.length ? ` · <span style="color:var(--ci-text-tertiary);font-weight:500;">${unknownQuals.length} not in profile</span>` : '';
+        const qualSummary = totalQ ? `<span style="color:#16a34a;font-weight:700;">${metCount} met</span> · <span style="color:#d97706;font-weight:600;">${partialCount} partial</span> · <span style="color:#dc2626;font-weight:600;">${unmetCount} unmet</span>${unknownNote} <span class="qmth-eq">→ <span class="qmth-result">${val}/10</span></span>` : `<span style="color:var(--ci-text-tertiary)">No requirements identified</span>`;
         panelContent = `<div class="queue-math-row"><span class="queue-math-left">${qualSummary}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}`;
       } else if (isComp) {
         const verdictCls = v => v?.includes('above') ? 'above' : v === 'at_floor' ? 'at' : v === 'below_floor' ? 'below' : 'unknown';
