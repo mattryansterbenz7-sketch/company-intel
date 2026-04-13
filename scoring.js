@@ -281,10 +281,20 @@ export async function scoreOpportunity(entryId) {
   }
 
   // Employee reviews — from full research or auto-fetched above
+  // Pull out numeric ratings explicitly so they're not buried in snippet text
+  const _reviewRatings = (entry.reviews || [])
+    .map(r => ({ source: r.source || 'Web', rating: parseFloat(r.rating) }))
+    .filter(r => !isNaN(r.rating));
+  const _ratingLine = _reviewRatings.length
+    ? `Employee Ratings: ${_reviewRatings.map(r => `${r.rating}/5 (${r.source})`).join(', ')}`
+    : null;
   const reviewsBlock = entry.reviews?.length
-    ? `Employee Reviews (Glassdoor / RepVue / Reddit):\n${entry.reviews.slice(0, 6).map(r =>
-        `- ${r.rating ? r.rating + '★ ' : ''}${r.snippet || r.title || ''}${r.source ? ` (${r.source})` : ''}`
-      ).join('\n')}`
+    ? [
+        _ratingLine,
+        `Employee Reviews (Glassdoor / RepVue / Reddit):\n${entry.reviews.slice(0, 6).map(r =>
+          `- ${r.rating ? r.rating + '★ ' : ''}${r.snippet || r.title || ''}${r.source ? ` (${r.source})` : ''}`
+        ).join('\n')}`
+      ].filter(Boolean).join('\n')
     : null;
 
   const jobParts = [
@@ -361,7 +371,7 @@ YOUR TASK:
 2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the job description — be thorough. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown.
 3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
-5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text.
+5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If no ratings exist, note that.
 6. COOP TAKE: 1-2 sentence honest bottom line on this opportunity.
 7. QUICK TAKE: 2-4 bullets of the most decisive signals (green or red).
 8. ROLE BRIEF: Summarize the role, why it could be interesting, key concerns, and comp in structured fields.

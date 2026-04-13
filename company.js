@@ -663,7 +663,7 @@ function renderHeader() {
     saveEntry(stageChanges);
     // Update Action On dropdown if visible
     const actionSel = document.getElementById('opp-action-status');
-    if (actionSel && autoAction) actionSel.value = autoAction;
+    if (actionSel && stageChanges.actionStatus) actionSel.value = stageChanges.actionStatus;
     // Fire celebration if configured
     const celebCfg = _getCelebrationConfig(sel.value);
     if (celebCfg) _fireCelebration({ ...celebCfg, stageKey: sel.value });

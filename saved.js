@@ -1005,7 +1005,68 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!overlay) return;
   document.getElementById('score-modal-close')?.addEventListener('click', () => overlay.classList.remove('open'));
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('open'); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      overlay.classList.remove('open');
+      closeQueueOverlay();
+    }
+  });
+});
+
+// ── Queue / card overlay (iframe over blurred pipeline) ──────────────────────
+
+function openQueueOverlay(path) {
+  const wrap = document.getElementById('queue-overlay');
+  const iframe = document.getElementById('queue-overlay-iframe');
+  if (!wrap || !iframe) return;
+  iframe.src = chrome.runtime.getURL(path);
+  wrap.classList.add('open');
+}
+
+function closeQueueOverlay() {
+  const wrap = document.getElementById('queue-overlay');
+  const iframe = document.getElementById('queue-overlay-iframe');
+  if (!wrap || !wrap.classList.contains('open')) return;
+  wrap.classList.remove('open');
+  // Blank the iframe src so it stops running
+  setTimeout(() => { if (iframe) iframe.src = ''; }, 300);
+  render(); // refresh pipeline state
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('queue-overlay-backdrop')?.addEventListener('click', closeQueueOverlay);
+
+  // Flanking nav arrow buttons — send postMessage into the iframe
+  const _qPrev = document.getElementById('queue-overlay-prev');
+  const _qNext = document.getElementById('queue-overlay-next');
+  const _qIframe = () => document.getElementById('queue-overlay-iframe');
+  _qPrev?.addEventListener('click', () => _qIframe()?.contentWindow?.postMessage({ type: 'COOP_QUEUE_PREV' }, '*'));
+  _qNext?.addEventListener('click', () => _qIframe()?.contentWindow?.postMessage({ type: 'COOP_QUEUE_NEXT' }, '*'));
+
+  // Arrow keys navigate when overlay is open
+  document.addEventListener('keydown', (e) => {
+    if (!document.getElementById('queue-overlay')?.classList.contains('open')) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); _qIframe()?.contentWindow?.postMessage({ type: 'COOP_QUEUE_PREV' }, '*'); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); _qIframe()?.contentWindow?.postMessage({ type: 'COOP_QUEUE_NEXT' }, '*'); }
+  });
+
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'COOP_QUEUE_CLOSE') closeQueueOverlay();
+    if (e.data?.type === 'COOP_NAVIGATE') {
+      if (e.data.url) window.location.href = e.data.url;
+    }
+    // iframe tells us nav arrow enabled state after each card render
+    if (e.data?.type === 'COOP_QUEUE_NAV_STATE') {
+      if (_qPrev) _qPrev.disabled = !e.data.canPrev;
+      if (_qNext) _qNext.disabled = !e.data.canNext;
+      // Only show arrows when queue has more than 1 entry
+      if (e.data.count !== undefined) {
+        const show = e.data.count > 1;
+        if (_qPrev) _qPrev.style.visibility = show ? '' : 'hidden';
+        if (_qNext) _qNext.style.visibility = show ? '' : 'hidden';
+      }
+    }
+  });
 });
 
 // scoreToVerdict, applyExcitementModifier — provided by ui-utils.js
@@ -2541,6 +2602,10 @@ function renderKanbanCard(c) {
             <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}">${c.company}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</a>
           </div>
           ${isJob && c.jobTitle ? `<div class="kanban-card-job">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : c.jobTitle}</div>` : ''}
+          ${(c.companyLinkedin || c.companyWebsite) ? `<div class="card-top-links">
+            ${c.companyLinkedin ? `<a class="card-link card-link-li" href="${c.companyLinkedin}" target="_blank">LinkedIn</a>` : ''}
+            ${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}
+          </div>` : ''}
         </div>
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
@@ -2649,20 +2714,6 @@ function renderKanbanCard(c) {
           return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value" title="${act.label} · ${dateStr}">${dateStr} · ${act.label}</span></div>`;
         })()}
       </div>
-      <div class="card-stars"><span class="card-stars-label">Excitement</span>${stars}</div>
-      <textarea class="card-notes" data-id="${c.id}" placeholder="Notes...">${c.notes || ''}</textarea>
-      <div class="card-footer" style="margin-top:0">
-        <span class="card-date">${new Date(c.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-        <div class="card-links">
-          ${!isJob ? `<button class="add-opp-btn" data-id="${c.id}">+ Pipeline</button>` : ''}
-          ${c.jobUrl ? `<a class="card-link" href="${c.jobUrl}" target="_blank">↗</a>` : c.url ? `<a class="card-link" href="${c.url}" target="_blank">↗</a>` : ''}
-          ${c.companyLinkedin
-            ? `<a class="card-link card-link-li" href="${c.companyLinkedin}" target="_blank">LinkedIn</a>`
-            : `<a class="card-link card-link-li" href="https://www.linkedin.com/company/${encodeURIComponent(c.company.toLowerCase().replace(/\s+/g, '-'))}" target="_blank">LinkedIn</a>`}
-          ${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}
-        </div>
-      </div>
-      ${detailsHtml}
     </div>`;
 }
 
@@ -2845,10 +2896,7 @@ function bindKanbanEvents(board) {
       if (e.target.closest('a, button, select, textarea, input, .card-tag, .star, .card-stars, details, summary')) return;
       const entry = allCompanies.find(c => c.id === cardEl.dataset.id);
       if (entry?.isOpportunity && !firstTwoStages.has(entry.jobStage || '')) {
-        const w = 520, h = 760;
-        const left = Math.round(screen.width / 2 - w / 2);
-        const top = Math.round(screen.height / 2 - h / 2);
-        window.open(chrome.runtime.getURL('queue.html') + `?mode=dq&id=${entry.id}`, '_blank', `width=${w},height=${h},left=${left},top=${top}`);
+        openQueueOverlay(`queue.html?mode=dq&id=${entry.id}`);
       } else {
         coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id);
       }
@@ -3052,7 +3100,7 @@ function bindKanbanEvents(board) {
       const entry = allCompanies.find(c => c.id === cardEl.dataset.id);
       if (!entry) return;
       if (entry.jobMatch?.score != null || entry.fitScore != null) {
-        openScoreModal(entry);
+        openQueueOverlay(`queue.html?mode=dq&id=${entry.id}`);
       } else {
         coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + cardEl.dataset.id);
       }
@@ -3910,10 +3958,10 @@ document.getElementById('stage-editor-modal').addEventListener('click', (e) => {
 });
 document.getElementById('edit-stages-btn').addEventListener('click', openStageEditor);
 document.getElementById('queue-header-btn')?.addEventListener('click', () => {
-  coopNavigate(chrome.runtime.getURL('queue.html'));
+  openQueueOverlay('queue.html');
 });
 document.getElementById('apply-header-btn')?.addEventListener('click', () => {
-  coopNavigate(chrome.runtime.getURL('queue.html?mode=apply'));
+  openQueueOverlay('queue.html?mode=apply');
 });
 
 // Search with autocomplete dropdown
@@ -4011,11 +4059,20 @@ document.getElementById('apply-header-btn')?.addEventListener('click', () => {
   });
 })();
 
-// Pipeline buttons
+// Pipeline dropdown
 function updatePipelineUI() {
-  document.getElementById('pipeline-all-btn').classList.toggle('active', activePipeline === 'all');
-  document.getElementById('pipeline-opp-btn').classList.toggle('active', activePipeline === 'opportunity');
-  document.getElementById('pipeline-co-btn').classList.toggle('active',  activePipeline === 'company');
+  const ddBtn = document.getElementById('pipeline-dd-btn');
+  const ddMenu = document.getElementById('pipeline-dd-menu');
+  const labelEl = document.getElementById('pipeline-dd-label');
+  const labels = { all: 'All Saved', opportunity: 'Opportunity Pipeline', company: 'Company Pipeline' };
+
+  if (labelEl) labelEl.textContent = labels[activePipeline] || 'All Saved';
+  if (ddBtn) ddBtn.dataset.active = activePipeline;
+  if (ddMenu) {
+    ddMenu.querySelectorAll('.pipeline-dd-opt').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.pipeline === activePipeline);
+    });
+  }
 
   const isAll = activePipeline === 'all';
 
@@ -4049,27 +4106,48 @@ function updatePipelineUI() {
   }
 }
 
-[
-  ['pipeline-all-btn', 'all'],
-  ['pipeline-opp-btn', 'opportunity'],
-  ['pipeline-co-btn',  'company'],
-].forEach(([id, pipeline]) => {
-  document.getElementById(id).addEventListener('click', () => {
-    activePipeline = pipeline;
-    localStorage.setItem('ci_activePipeline', activePipeline);
-    activeStatus = 'all';
-    // Kanban doesn't apply to "All Saved" — drop back to grid
-    if (pipeline === 'all' && viewMode === 'kanban') {
-      viewMode = 'grid';
-      localStorage.setItem('ci_viewMode', 'grid');
-      document.getElementById('view-grid-btn').classList.add('active');
-      document.getElementById('view-kanban-btn').classList.remove('active');
+(function() {
+  const ddBtn = document.getElementById('pipeline-dd-btn');
+  const ddMenu = document.getElementById('pipeline-dd-menu');
+
+  ddBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = ddMenu.classList.toggle('open');
+    ddBtn.classList.toggle('open', open);
+    if (open) {
+      const r = ddBtn.getBoundingClientRect();
+      ddMenu.style.top  = (r.bottom + 6) + 'px';
+      ddMenu.style.left = r.left + 'px';
     }
-    updatePipelineUI();
-    updateStatusToolbar();
-    render();
   });
-});
+
+  ddMenu.querySelectorAll('.pipeline-dd-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const pipeline = opt.dataset.pipeline;
+      activePipeline = pipeline;
+      localStorage.setItem('ci_activePipeline', activePipeline);
+      activeStatus = 'all';
+      if (pipeline === 'all' && viewMode === 'kanban') {
+        viewMode = 'grid';
+        localStorage.setItem('ci_viewMode', 'grid');
+        document.getElementById('view-grid-btn').classList.add('active');
+        document.getElementById('view-kanban-btn').classList.remove('active');
+      }
+      ddMenu.classList.remove('open');
+      ddBtn.classList.remove('open');
+      updatePipelineUI();
+      updateStatusToolbar();
+      render();
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!ddBtn.contains(e.target)) {
+      ddMenu.classList.remove('open');
+      ddBtn.classList.remove('open');
+    }
+  });
+})();
 
 // Rating dropdown
 (function() {

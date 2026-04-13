@@ -37,10 +37,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // escHtml, scoreToVerdict — provided by ui-utils.js
 
+// Detect iframe context (loaded as overlay inside saved.html)
+const _inOverlay = window.parent !== window;
+
+function _overlayClose() {
+  if (_inOverlay) {
+    window.parent.postMessage({ type: 'COOP_QUEUE_CLOSE' }, '*');
+  } else {
+    coopNavigate(chrome.runtime.getURL('saved.html'));
+  }
+}
+
+function _overlayNavigate(url) {
+  if (_inOverlay) {
+    window.parent.postMessage({ type: 'COOP_NAVIGATE', url }, '*');
+  } else {
+    coopNavigate(url);
+  }
+}
+
 // Back button
 document.getElementById('back-btn').addEventListener('click', e => {
   e.preventDefault();
-  coopNavigate(chrome.runtime.getURL('saved.html'));
+  _overlayClose();
 });
 
 // Mock mode button — opens same queue with ?mock=1
@@ -304,12 +323,74 @@ function renderCurrent() {
   const compAssess = jm.compAssessment || {};
   const qualifications = jm.qualifications || [];
 
-  // Coop's take — new field or fall back to old summary
+  // Stage info — shared between stage header and pipeline ctx
+  const _stage      = c.jobStage || '';
+  const _triageStgs = new Set(['needs_review', 'want_to_apply']);
+  const _stageDef   = (allStages || []).find(s => s.key === _stage);
+  const _stageColor = _stageDef?.color || 'var(--ci-accent-primary)';
+  const _stageLabel = _stageDef?.label || _stage.replace(/_/g, ' ');
+  const _active     = _stage && !_triageStgs.has(_stage);
+  const _actionSt   = c.actionStatus || '';
+  const _actionLabel = _actionSt === 'my_court' ? '🏀 My Court' : _actionSt === 'their_court' ? '⏳ Their Court' : _actionSt === 'scheduled' ? '📅 Scheduled' : '';
+  const _actionColor = _actionSt === 'my_court' ? '#FF7A59' : _actionSt === 'their_court' ? '#0ea5e9' : '#a78bfa';
+
+  // Stage header — shown OUTSIDE the card above it
+  const stageHeaderHtml = _active ? `<div class="qc-stage-header">
+    <span class="qc-stage-dot" style="background:${_stageColor}"></span>
+    <span class="qc-stage-label" style="color:${_stageColor}">${escHtml(_stageLabel)}</span>
+    ${_actionLabel ? `<span class="qc-action-badge" style="color:${_actionColor}">${_actionLabel}</span>` : ''}
+  </div>` : '';
+
+  // Pipeline context block — next step (editable), due date (editable), last activity, tasks placeholder
+  const pipelineCtxHtml = (() => {
+    if (!_active) return '';
+    const nextStep = c.nextStep || '';
+    const nextDate = c.nextStepDate || '';
+    const isOverdue = nextDate && new Date(nextDate + 'T00:00:00') < new Date();
+
+    const emailTs = (c.cachedEmails || []).reduce((max, t) => {
+      const ts = t.messages?.length ? new Date(t.messages[t.messages.length - 1].date).getTime() : (t.date ? new Date(t.date).getTime() : 0);
+      return ts > max ? ts : max;
+    }, 0);
+    const meetTs = (c.cachedMeetings || []).reduce((max, m) => {
+      const ts = m.date ? new Date(m.date).getTime() : 0;
+      return ts > max ? ts : max;
+    }, 0);
+    const lastTs = Math.max(emailTs, meetTs);
+    const lastActSource = lastTs === 0 ? '' : lastTs === meetTs ? 'Meeting' : 'Email';
+    const lastActStr = lastTs ? new Date(lastTs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (lastActSource ? ` · ${lastActSource}` : '') : '';
+
+    return `<div class="qc-pipeline-ctx">
+      <div class="qc-pipeline-ctx-rows">
+        <div class="qc-pipeline-ctx-row">
+          <span class="qc-pipeline-ctx-key">Next step</span>
+          <input class="qc-nextstep-input" id="qc-nextstep-input" type="text" value="${escHtml(nextStep)}" placeholder="Add next step…">
+        </div>
+        <div class="qc-pipeline-ctx-row">
+          <span class="qc-pipeline-ctx-key">Next Step Date</span>
+          <input class="qc-date-input${isOverdue ? ' overdue' : ''}" id="qc-nextdate-input" type="date" value="${escHtml(nextDate)}" title="Next step due date">
+        </div>
+        ${lastActStr ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last activity</span><span class="qc-pipeline-ctx-val">${escHtml(lastActStr)}</span></div>` : ''}
+      </div>
+      <div id="qc-tasks-inject"></div>
+    </div>`;
+  })();
+
+  // Coop's Quick Take — merges coopTake sentence + role brief bullets
   const coopTakeText = jm.coopTake || summary;
-  const coopTakeHtml = coopTakeText ? `
+  const hasRoleBriefRows = rb.whyInteresting || rb.concerns || rb.compRange;
+  const coopTakeHtml = (coopTakeText || hasRoleBriefRows) ? `
     <div class="queue-coop-take">
-      <span class="queue-coop-label">Coop's take</span>
-      <span class="queue-coop-text">${escHtml(coopTakeText)}</span>
+      <div class="queue-coop-take-main">
+        <span class="queue-coop-label">Coop's Quick Take</span>
+        ${coopTakeText ? `<span class="queue-coop-text">${escHtml(coopTakeText)}</span>` : ''}
+      </div>
+      ${hasRoleBriefRows ? `
+      <div class="queue-coop-brief-rows">
+        ${rb.whyInteresting ? `<div class="queue-coop-brief-row"><span class="qcbr-pos">Why interesting —</span> ${escHtml(rb.whyInteresting)}</div>` : ''}
+        ${rb.concerns ? `<div class="queue-coop-brief-row"><span class="qcbr-neg">Concerns —</span> ${escHtml(rb.concerns)}</div>` : ''}
+        ${rb.compRange ? `<div class="queue-coop-brief-row"><span class="qcbr-neutral">Comp —</span> ${escHtml(rb.compRange)}</div>` : ''}
+      </div>` : ''}
     </div>` : '';
 
   // Verdict pill
@@ -498,11 +579,18 @@ function renderCurrent() {
     return `<div class="queue-total-formula">${chips}<span class="qf-sep">=</span><span class="qf-total">${raw.toFixed(2)}</span><span class="qf-sep">→</span><span class="qf-score">${jm.score}/10</span></div>`;
   })();
 
-  const barsHtml = dimBars.length ? `
+  // Split bars: compact bar rows go side-by-side with Quick Take; detail panels go full-width below
+  const barsOnlyHtml = dimBars.length ? `
     <div class="qc-breakdown-label">Score breakdown</div>
-    <div class="qc-breakdown">${dimBars.join('')}</div>
-    <div class="queue-dim-toggle has-active">${dimToggles.join('')}</div>
-    <div class="queue-dim-details">${dimPanels.join('')}</div>${totalFormulaHtml}` : '';
+    <div class="qc-breakdown">${dimBars.join('')}</div>` : '';
+
+  const barsDetailHtml = dimBars.length ? `
+    <div class="qc-bars-detail">
+      <div class="queue-dim-toggle has-active">${dimToggles.join('')}</div>
+      <div class="queue-dim-details">${dimPanels.join('')}</div>${totalFormulaHtml}
+    </div>` : '';
+
+  const barsHtml = barsOnlyHtml; // kept for legacy references (none remain)
 
   // Remove old separate qualification and rationale sections — they're now inside the drawer
   const rationaleHtml = '';
@@ -529,6 +617,7 @@ function renderCurrent() {
     <div class="queue-card-shell">
       <button class="queue-side-nav prev" id="btn-prev" ${currentIdx === 0 ? 'disabled' : ''} title="Previous (↑)" aria-label="Previous card">‹</button>
       <button class="queue-side-nav next" id="btn-next" ${currentIdx >= queue.length - 1 ? 'disabled' : ''} title="Next (↓)" aria-label="Next card">›</button>
+      ${stageHeaderHtml}
     <div class="queue-card" id="queue-card">
       <div class="qc-header">
         <div class="qc-score-wrap">
@@ -553,16 +642,19 @@ function renderCurrent() {
             const text = parts[0] ? parts[0].slice(0, 220) : '';
             return text ? `<div class="qc-company-blurb">${escHtml(text)}</div>` : '';
           })()}
+          ${linksHtml}
         </div>
         ${factsHtml}
       </div>
-      ${linksHtml}
       ${ctaHtml}
       <div class="qc-body">
         ${dqHtml}
-        ${verdictPillHtml}
-        ${coopTakeHtml}
-        ${barsHtml}
+        ${pipelineCtxHtml}
+        <div class="qc-take-bars-row">
+          <div class="qc-take-col">${coopTakeHtml}</div>
+          <div class="qc-bars-col">${barsOnlyHtml}</div>
+        </div>
+        ${barsDetailHtml}
         ${rationaleHtml}
         ${qualHtml}
         ${(!isNewFormat && (strongFits.length || redFlags.length)) ? `
@@ -571,29 +663,30 @@ function renderCurrent() {
             ${redFlags.length ? `<div class="qc-flag-col"><div class="qc-flag-heading red">Red Flags</div>${redHtml}</div>` : ''}
           </div>` : ''}
       </div>
-      ${(rb.roleSummary || rb.whyInteresting || rb.concerns) ? `
-      <div class="qc-role-brief-section">
-        <div class="qc-role-brief-title">Role Brief</div>
-        ${rb.roleSummary ? `<div class="qc-role-brief-summary">${escHtml(rb.roleSummary)}</div>` : ''}
-        ${rb.whyInteresting ? `<div class="qc-role-brief-row"><span style="color:#059669;font-weight:600;">Why interesting — </span>${escHtml(rb.whyInteresting)}</div>` : ''}
-        ${rb.concerns ? `<div class="qc-role-brief-row"><span style="color:#dc2626;font-weight:600;">Concerns — </span>${escHtml(rb.concerns)}</div>` : ''}
-        ${rb.compRange ? `<div class="qc-role-brief-row"><span style="font-weight:600;">Comp — </span>${escHtml(rb.compRange)}</div>` : ''}
-      </div>` : ''}
       <div class="qc-more" id="qc-more" data-id="${c.id}">View full details →</div>
       <div class="queue-nav">
         <span class="queue-nav-pos">${currentIdx + 1} / ${queue.length}</span>
-        <button class="queue-rescore-btn" id="btn-rescore" title="Refresh data & rescore">↻ Rescore</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="queue-rescrape-btn" id="btn-research" title="Re-fetch company intelligence from the web — reviews, funding, leadership, recent news">🔎 Re-research</button>
+          <button class="queue-rescore-btn" id="btn-rescore" title="Re-scrape the job posting for latest data, then re-score against your preferences">↻ Re-score posting</button>
+        </div>
       </div>
-      <div class="queue-actions">
+      ${MODE !== 'dq' ? `<div class="queue-actions">
         <button class="queue-action-btn pass" id="btn-pass">${CFG.passLabel} <span class="kbd">←</span></button>
         <button class="queue-action-btn interested" id="btn-interested">${CFG.interestedLabel} <span class="kbd">→</span></button>
-      </div>
+      </div>` : ''}
     </div>
     </div>`;
 
+  // Broadcast nav state to parent overlay arrows, and hide in-card arrows when in overlay
+  broadcastNavState();
+  if (_inOverlay) {
+    document.querySelectorAll('.queue-side-nav').forEach(el => { el.style.display = 'none'; });
+  }
+
   // Bind actions
-  document.getElementById('btn-pass').addEventListener('click', () => triageAction('pass'));
-  document.getElementById('btn-interested').addEventListener('click', () => triageAction('interested'));
+  document.getElementById('btn-pass')?.addEventListener('click', () => triageAction('pass'));
+  document.getElementById('btn-interested')?.addEventListener('click', () => triageAction('interested'));
   document.getElementById('btn-prev')?.addEventListener('click', () => { if (currentIdx > 0) { currentIdx--; renderCurrent(); } });
   document.getElementById('btn-next')?.addEventListener('click', () => { if (currentIdx < queue.length - 1) { currentIdx++; renderCurrent(); } });
 
@@ -602,130 +695,7 @@ function renderCurrent() {
     const card = document.getElementById('queue-card');
     btn.disabled = true;
 
-    // Show Coop thinking overlay immediately
-    const shell = card?.closest('.queue-card-shell');
-    if (shell) {
-      shell.style.position = 'relative';
-      const overlay = document.createElement('div');
-      overlay.className = 'coop-thinking-overlay';
-      overlay.id = 'coop-thinking';
-      overlay.innerHTML = `
-        <div class="coop-thinking-face-wrap">
-          <div class="coop-thinking-orbit"></div>
-          <svg class="coop-thinking-face" width="192" height="192" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="50" fill="#3B5068"/>
-            <clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath>
-            <g clip-path="url(#ct)">
-              <!-- Suit jacket -->
-              <ellipse cx="50" cy="100" rx="48" ry="28" fill="#3D4F5F"/>
-              <ellipse cx="50" cy="100" rx="46" ry="26" fill="#435766"/>
-              <path d="M18 96 Q28 84 38 80" fill="none" stroke="#364854" stroke-width="0.5"/>
-              <path d="M82 96 Q72 84 62 80" fill="none" stroke="#364854" stroke-width="0.5"/>
-              <path d="M26 100 L40 77 L50 88 L60 77 L74 100" fill="#364854"/>
-              <path d="M40 77 L50 88" stroke="#2C3E4E" stroke-width="0.8" fill="none"/>
-              <path d="M60 77 L50 88" stroke="#2C3E4E" stroke-width="0.8" fill="none"/>
-              <path d="M40 77 L38 80 L50 90 L50 88Z" fill="#3A4E5E" opacity="0.5"/>
-              <path d="M60 77 L62 80 L50 90 L50 88Z" fill="#3A4E5E" opacity="0.5"/>
-              <!-- Shirt + collar -->
-              <path d="M40 77 L50 94 L60 77" fill="#F0EAE0"/>
-              <path d="M43 80 L50 90 L57 80" fill="#E8E2D8" opacity="0.4"/>
-              <path d="M40 77 L43 75 L44 78Z" fill="#F0EAE0"/>
-              <path d="M60 77 L57 75 L56 78Z" fill="#F0EAE0"/>
-              <!-- Bow tie -->
-              <path d="M41 78 Q44 73 50 76 Q44 79 41 78Z" fill="#3D4F5F"/>
-              <path d="M59 78 Q56 73 50 76 Q56 79 59 78Z" fill="#3D4F5F"/>
-              <path d="M43 76 Q44 75 45 76" fill="none" stroke="#2C3E4E" stroke-width="0.3"/>
-              <path d="M55 76 Q56 75 57 76" fill="none" stroke="#2C3E4E" stroke-width="0.3"/>
-              <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
-              <ellipse cx="50" cy="76.5" rx="1.2" ry="1" fill="#2C3E4E"/>
-              <!-- Neck -->
-              <rect x="42" y="70" width="16" height="9" rx="2" fill="#E8C4A0"/>
-              <path d="M43 70 L43 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
-              <path d="M57 70 L57 75" stroke="#D4A878" stroke-width="0.3" opacity="0.4"/>
-              <!-- Head — square jaw -->
-              <path d="M28 43 Q28 27 39 21 Q50 16 61 21 Q72 27 72 43 Q72 53 68 58 L63 64 L56 68 L50 70 L44 68 L37 64 Q32 58 28 53 Q28 48 28 43Z" fill="#EDBB92"/>
-              <path d="M37 64 L44 68 L50 70 L56 68 L63 64" fill="none" stroke="#B8865E" stroke-width="1" opacity="0.5"/>
-              <path d="M68 58 L63 64" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.4"/>
-              <path d="M32 58 L37 64" fill="none" stroke="#C8966E" stroke-width="0.6" opacity="0.4"/>
-              <ellipse cx="35" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
-              <ellipse cx="65" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
-              <path d="M34 52 Q37 54 39 56" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.25"/>
-              <path d="M66 52 Q63 54 61 56" fill="none" stroke="#D4A070" stroke-width="0.4" opacity="0.25"/>
-              <!-- Ears -->
-              <ellipse cx="28" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-              <path d="M27 42 Q26 44 27 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
-              <ellipse cx="72" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-              <path d="M73 42 Q74 44 73 46" fill="none" stroke="#C8966E" stroke-width="0.4"/>
-              <!-- Hair -->
-              <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
-              <path d="M27 40 Q27 25 36 18 L34 21 Q29 27 28 38Z" fill="#1E1410"/>
-              <path d="M73 40 Q73 25 64 18 L66 21 Q71 27 72 38Z" fill="#1E1410"/>
-              <path d="M29 31 Q30 13 50 10 Q70 13 71 31 Q69 17 50 13 Q31 17 29 31Z" fill="#3D2A1E"/>
-              <path d="M37 19 Q44 11 56 11 Q64 13 68 19" fill="none" stroke="#1E1410" stroke-width="1" opacity="0.6"/>
-              <path d="M33 23 Q38 13 50 11 Q58 11 63 15" fill="#3D2A1E" opacity="0.7"/>
-              <path d="M35 26 Q40 16 50 12 Q55 12 58 14" fill="#4A3728" opacity="0.4"/>
-              <path d="M30 38 L30 44" stroke="#2D1F16" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
-              <path d="M70 38 L70 44" stroke="#2D1F16" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
-              <!-- Forehead lines -->
-              <path d="M39 30 Q45 29 51 30" fill="none" stroke="#D4A070" stroke-width="0.3" opacity="0.3"/>
-              <!-- Eyes — green/hazel, looking up-left (thinking) -->
-              <ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/>
-              <ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/>
-              <circle cx="40" cy="42.5" r="3" fill="#5B8C3E"/>
-              <circle cx="40" cy="42.5" r="2.2" fill="#4A7A30"/>
-              <circle cx="40" cy="42.5" r="1.2" fill="#3A6B28"/>
-              <circle cx="40.5" cy="41.8" r="0.8" fill="white" opacity="0.7"/>
-              <circle cx="58" cy="42.5" r="3" fill="#5B8C3E"/>
-              <circle cx="58" cy="42.5" r="2.2" fill="#4A7A30"/>
-              <circle cx="58" cy="42.5" r="1.2" fill="#3A6B28"/>
-              <circle cx="58.5" cy="41.8" r="0.8" fill="white" opacity="0.7"/>
-              <!-- Upper eyelids -->
-              <path d="M36 42.5 Q41 40 46 42.5" fill="#EDBB92" opacity="0.5"/>
-              <path d="M54 42.5 Q59 40 64 42.5" fill="#EDBB92" opacity="0.5"/>
-              <!-- Lower lid line -->
-              <path d="M37 46.5 Q41 48 45 46.5" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.4"/>
-              <path d="M55 46.5 Q59 48 63 46.5" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.4"/>
-              <!-- Crow's feet -->
-              <path d="M34 43 L32.5 41.5" stroke="#D4A070" stroke-width="0.3" opacity="0.3"/>
-              <path d="M66 43 L67.5 41.5" stroke="#D4A070" stroke-width="0.3" opacity="0.3"/>
-              <!-- Eyebrows — right raised (thinking) -->
-              <path d="M35 37 Q38 35 41 35 Q44 35 47 37" fill="#2D1F16" opacity="0.8"/>
-              <path d="M53 35.5 Q56 33 59 33 Q62 33 65 35.5" fill="#2D1F16" opacity="0.8"/>
-              <!-- Brow bone shadow -->
-              <path d="M36 38 Q41 36.5 46 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
-              <path d="M54 38 Q59 36.5 64 38" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.3"/>
-              <!-- Nose — wider bridge -->
-              <path d="M50 38 L49 50" fill="none" stroke="#C8966E" stroke-width="0.7" opacity="0.5"/>
-              <path d="M46.5 53 Q48 55.5 50 56 Q52 55.5 53.5 53" fill="none" stroke="#B8865E" stroke-width="0.9" stroke-linecap="round"/>
-              <!-- Nasolabial folds -->
-              <path d="M37 52 Q38 56 39 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.5"/>
-              <path d="M63 52 Q62 56 61 59" fill="none" stroke="#C8966E" stroke-width="0.5" opacity="0.5"/>
-              <!-- Mouth — thoughtful closed, wider -->
-              <path d="M42 59 Q47 61.5 50 61.5 Q53 61.5 58 59" fill="none" stroke="#9B7055" stroke-width="1" stroke-linecap="round"/>
-              <!-- Chin — square with cleft -->
-              <path d="M44 66 L44 68 L50 70 L56 68 L56 66" fill="none" stroke="#C8966E" stroke-width="0.4" opacity="0.35"/>
-              <path d="M49 67 L49 69" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.2"/>
-              <path d="M51 67 L51 69" fill="none" stroke="#C8966E" stroke-width="0.3" opacity="0.2"/>
-              <!-- Stubble -->
-              <circle cx="43" cy="64" r="0.3" fill="#B89878" opacity="0.2"/>
-              <circle cx="50" cy="65" r="0.3" fill="#B89878" opacity="0.2"/>
-              <circle cx="57" cy="64" r="0.3" fill="#B89878" opacity="0.2"/>
-              <circle cx="40" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
-              <circle cx="60" cy="62" r="0.25" fill="#B89878" opacity="0.15"/>
-              <!-- Arm from shoulder to chin -->
-              <path d="M65 84 Q72 76 69 68 Q67 63 62 62" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
-              <path d="M65 84 Q68 80 69 76" fill="none" stroke="#364854" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>
-              <!-- Hand on chin -->
-              <path d="M48 66 Q50 62 56 61 Q62 62 63 66 Q62 69 58 70 Q52 71 49 68Z" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
-            </g>
-          </svg>
-        </div>
-        <div class="coop-thinking-dots"><span></span><span></span><span></span></div>
-        <div class="coop-thinking-label">Coop is thinking...</div>
-        <div class="coop-thinking-sub">Preparing to score...</div>
-        <div class="coop-thinking-bar"><div class="coop-thinking-bar-fill"></div></div>`;
-      shell.appendChild(overlay);
-    }
+    showThinkingOverlay('Coop is thinking...', 'Preparing to score...');
 
     // If LinkedIn job URL, rescrape first (free — just DOM read), then score
     const canRescrape = c.jobUrl && /linkedin\.com\/jobs\/view\//i.test(c.jobUrl);
@@ -739,7 +709,7 @@ function renderCurrent() {
       void chrome.runtime.lastError;
       if (response?.error) {
         clearInterval(pollInterval);
-        document.getElementById('coop-thinking')?.remove();
+        hideThinkingOverlay();
         btn.innerHTML = '⚠ Rescore failed';
         btn.disabled = false;
         console.error('[Queue] Rescore error:', response.error);
@@ -758,14 +728,14 @@ function renderCurrent() {
           const modelStr = u?.model ? ` · ${u.model.replace(/^claude-/, '').replace(/^gpt-/, '')}` : '';
           btn.innerHTML = `✓ ${elapsed}s${modelStr}${costStr}`;
           btn.title = u ? `Model: ${u.model || '?'}\nInput: ${u.input} tokens\nOutput: ${u.output} tokens\nCost: ~$${u.cost?.toFixed(4) || '?'}` : '';
-          document.getElementById('coop-thinking')?.remove();
+          hideThinkingOverlay();
           queue[currentIdx] = updated;
           setTimeout(() => renderCurrent(), 3000);
         }
       });
     }, 1500);
       // Timeout after 30s
-      setTimeout(() => { clearInterval(pollInterval); btn.innerHTML = '↻ Rescore'; btn.disabled = false; document.getElementById('coop-thinking')?.remove(); }, 30000);
+      setTimeout(() => { clearInterval(pollInterval); btn.innerHTML = '↻ Rescore'; btn.disabled = false; hideThinkingOverlay(); }, 30000);
     };
 
     // Refresh data before scoring when a job URL exists
@@ -792,6 +762,64 @@ function renderCurrent() {
       startScoring();
     }
   });
+
+  document.getElementById('btn-research')?.addEventListener('click', () => {
+    const btn = document.getElementById('btn-research');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="rescore-spinner"></span> Researching...';
+    showThinkingOverlay('Coop is researching...', 'Fetching reviews, funding, leadership from the web...');
+    const domain = c.companyWebsite
+      ? c.companyWebsite.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^www\./i, '')
+      : null;
+    const startTime = Date.now();
+    chrome.runtime.sendMessage({
+      type: 'RESEARCH_COMPANY',
+      company: c.company,
+      domain,
+      companyLinkedin: c.companyLinkedin || null,
+      prefs: null
+    }, (response) => {
+      void chrome.runtime.lastError;
+      hideThinkingOverlay();
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      if (!response || response.error) {
+        btn.innerHTML = '⚠ Failed';
+        btn.disabled = false;
+        setTimeout(() => { btn.innerHTML = '🔎 Re-research'; }, 3000);
+        return;
+      }
+      btn.innerHTML = `✓ ${elapsed}s`;
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const updated = (savedCompanies || []).find(x => x.id === c.id);
+        if (updated) queue[currentIdx] = updated;
+        setTimeout(() => renderCurrent(), 2500);
+      });
+    });
+  });
+
+  // Pipeline context: save next step + due date on change
+  document.getElementById('qc-nextstep-input')?.addEventListener('change', e => {
+    _saveEntryField(c.id, 'nextStep', e.target.value.trim());
+  });
+  document.getElementById('qc-nextdate-input')?.addEventListener('change', e => {
+    _saveEntryField(c.id, 'nextStepDate', e.target.value);
+    const input = e.target;
+    const isOverdue = e.target.value && new Date(e.target.value + 'T00:00:00') < new Date();
+    input.classList.toggle('overdue', isOverdue);
+  });
+
+  // Inject tasks linked to this entry
+  chrome.storage.local.get(['userTasks'], ({ userTasks }) => {
+    const tasks = (userTasks || []).filter(t => !t.completed && t.company && t.company.toLowerCase() === c.company.toLowerCase());
+    const el = document.getElementById('qc-tasks-inject');
+    if (!el || !tasks.length) return;
+    el.innerHTML = `<div class="qc-tasks-row">${tasks.map(t => {
+      const due = t.dueDate ? new Date(t.dueDate + 'T00:00:00') : null;
+      const isOverdue = due && due < new Date();
+      return `<span class="qc-task-chip${isOverdue ? ' overdue' : ''}" title="${escHtml(t.dueDate ? 'Due ' + t.dueDate : '')}">${escHtml(t.text)}</span>`;
+    }).join('')}</div>`;
+  });
+
   document.getElementById('qc-apply-cta')?.addEventListener('click', (e) => {
     if (!c.jobUrl) return;
     e.preventDefault();
@@ -820,7 +848,7 @@ function renderCurrent() {
   });
 
   document.getElementById('qc-more').addEventListener('click', () => {
-    coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + c.id);
+    _overlayNavigate(chrome.runtime.getURL('company.html') + '?id=' + c.id);
   });
 
   // Dimension toggle — switch which detail panel is visible
@@ -1118,7 +1146,7 @@ function triageAction(action, fromDrag) {
 
   // Next card after animation
   setTimeout(() => {
-    if (SINGLE_ID) { window.close(); return; }
+    if (SINGLE_ID) { _overlayClose(); return; }
     queue.splice(currentIdx, 1);
     if (currentIdx >= queue.length) currentIdx = 0;
     updateCount();
@@ -1126,15 +1154,117 @@ function triageAction(action, fromDrag) {
   }, 300);
 }
 
-// Keyboard shortcuts
+// ── Coop thinking overlay helper ──────────────────────────────────────────────
+function showThinkingOverlay(label, sub) {
+  const card = document.getElementById('queue-card');
+  const shell = card?.closest('.queue-card-shell');
+  if (!shell || document.getElementById('coop-thinking')) return;
+  shell.style.position = 'relative';
+  const overlay = document.createElement('div');
+  overlay.className = 'coop-thinking-overlay';
+  overlay.id = 'coop-thinking';
+  overlay.innerHTML = `
+    <div class="coop-thinking-face-wrap">
+      <div class="coop-thinking-orbit"></div>
+      <svg class="coop-thinking-face" width="192" height="192" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="50" fill="#3B5068"/>
+        <clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath>
+        <g clip-path="url(#ct)">
+          <ellipse cx="50" cy="100" rx="48" ry="28" fill="#3D4F5F"/>
+          <ellipse cx="50" cy="100" rx="46" ry="26" fill="#435766"/>
+          <path d="M18 96 Q28 84 38 80" fill="none" stroke="#364854" stroke-width="0.5"/>
+          <path d="M82 96 Q72 84 62 80" fill="none" stroke="#364854" stroke-width="0.5"/>
+          <path d="M26 100 L40 77 L50 88 L60 77 L74 100" fill="#364854"/>
+          <path d="M40 77 L50 88" stroke="#2C3E4E" stroke-width="0.8" fill="none"/>
+          <path d="M60 77 L50 88" stroke="#2C3E4E" stroke-width="0.8" fill="none"/>
+          <path d="M40 77 L38 80 L50 90 L50 88Z" fill="#3A4E5E" opacity="0.5"/>
+          <path d="M60 77 L62 80 L50 90 L50 88Z" fill="#3A4E5E" opacity="0.5"/>
+          <path d="M40 77 L50 94 L60 77" fill="#F0EAE0"/>
+          <path d="M43 80 L50 90 L57 80" fill="#E8E2D8" opacity="0.4"/>
+          <path d="M40 77 L43 75 L44 78Z" fill="#F0EAE0"/>
+          <path d="M60 77 L57 75 L56 78Z" fill="#F0EAE0"/>
+          <path d="M41 78 Q44 73 50 76 Q44 79 41 78Z" fill="#3D4F5F"/>
+          <path d="M59 78 Q56 73 50 76 Q56 79 59 78Z" fill="#3D4F5F"/>
+          <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
+          <ellipse cx="50" cy="76.5" rx="1.2" ry="1" fill="#2C3E4E"/>
+          <rect x="42" y="70" width="16" height="9" rx="2" fill="#E8C4A0"/>
+          <path d="M28 43 Q28 27 39 21 Q50 16 61 21 Q72 27 72 43 Q72 53 68 58 L63 64 L56 68 L50 70 L44 68 L37 64 Q32 58 28 53 Q28 48 28 43Z" fill="#EDBB92"/>
+          <ellipse cx="35" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
+          <ellipse cx="65" cy="49" rx="4.5" ry="2" fill="#F2C9A2" opacity="0.6"/>
+          <ellipse cx="28" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+          <ellipse cx="72" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
+          <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
+          <ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/>
+          <ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/>
+          <ellipse cx="40" cy="43.5" rx="3" ry="3.5" fill="#5C8A3C"/>
+          <ellipse cx="58" cy="43.5" rx="3" ry="3.5" fill="#5C8A3C"/>
+          <ellipse cx="39.5" cy="43" rx="2" ry="2.5" fill="#1a1a2e"/>
+          <ellipse cx="57.5" cy="43" rx="2" ry="2.5" fill="#1a1a2e"/>
+          <ellipse cx="39" cy="42.5" rx="0.8" ry="0.8" fill="white" opacity="0.7"/>
+          <ellipse cx="57" cy="42.5" rx="0.8" ry="0.8" fill="white" opacity="0.7"/>
+          <path d="M36 39 Q41 37.5 46 39" fill="none" stroke="#8B6914" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M54 39 Q59 37.5 64 39" fill="none" stroke="#8B6914" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M44 58 Q50 60 56 58" fill="none" stroke="#C8966E" stroke-width="0.8" stroke-linecap="round"/>
+          <path d="M65 84 Q72 76 69 68 Q67 63 62 62" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
+          <path d="M48 66 Q50 62 56 61 Q62 62 63 66 Q62 69 58 70 Q52 71 49 68Z" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/>
+        </g>
+      </svg>
+    </div>
+    <div class="coop-thinking-dots"><span></span><span></span><span></span></div>
+    <div class="coop-thinking-label">${label}</div>
+    <div class="coop-thinking-sub">${sub}</div>
+    <div class="coop-thinking-bar"><div class="coop-thinking-bar-fill"></div></div>`;
+  shell.appendChild(overlay);
+}
+function hideThinkingOverlay() {
+  document.getElementById('coop-thinking')?.remove();
+}
+
+// Save a single field on an entry without triggering a full re-render
+function _saveEntryField(entryId, field, value) {
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    const companies = savedCompanies || [];
+    const idx = companies.findIndex(x => x.id === entryId);
+    if (idx === -1) return;
+    companies[idx][field] = value;
+    if (queue[currentIdx]?.id === entryId) queue[currentIdx][field] = value;
+    _suppressStorageReload = true;
+    chrome.storage.local.set({ savedCompanies: companies });
+  });
+}
+
+// Broadcast nav state to parent overlay so it can enable/disable flanking arrows
+function broadcastNavState() {
+  if (_inOverlay) {
+    window.parent.postMessage({
+      type: 'COOP_QUEUE_NAV_STATE',
+      canPrev: currentIdx > 0,
+      canNext: currentIdx < queue.length - 1,
+      count: queue.length
+    }, '*');
+  }
+}
+
+// Listen for nav commands from parent overlay arrows
+window.addEventListener('message', e => {
+  if (e.data?.type === 'COOP_QUEUE_PREV') {
+    if (currentIdx > 0) { currentIdx--; renderCurrent(); }
+  }
+  if (e.data?.type === 'COOP_QUEUE_NEXT') {
+    if (currentIdx < queue.length - 1) { currentIdx++; renderCurrent(); }
+  }
+});
+
+// Keyboard shortcuts — arrow keys browse the queue, action buttons take action
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === 'ArrowLeft') { e.preventDefault(); triageAction('pass'); }
-  if (e.key === 'ArrowRight') { e.preventDefault(); triageAction('interested'); }
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
     e.preventDefault();
-    if (e.key === 'ArrowDown' && currentIdx < queue.length - 1) { currentIdx++; renderCurrent(); }
-    if (e.key === 'ArrowUp' && currentIdx > 0) { currentIdx--; renderCurrent(); }
+    if (currentIdx > 0) { currentIdx--; renderCurrent(); }
+  }
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (currentIdx < queue.length - 1) { currentIdx++; renderCurrent(); }
   }
 });
 

@@ -94,11 +94,34 @@
     .view-toggle-btn:not(.active):hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
     .view-toggle-btn:disabled { opacity: 0.3; cursor: default; }
 
-    /* ── Pipeline buttons ── */
+    /* ── Pipeline buttons (kept for tbl-cols-btn) ── */
     .pipeline-btn { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-secondary); font-size: 13px; font-weight: 600; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all var(--ci-transition-fast); }
-    .pipeline-btn.active { border-color: var(--ci-accent-primary); color: var(--ci-text-on-dark); background: var(--ci-accent-primary); }
-    .pipeline-btn:hover:not(.active) { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
-    #pipeline-all-btn.active { background: var(--ci-bg-inset); border-color: var(--ci-text-secondary); color: var(--ci-text-primary); }
+    .pipeline-btn:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+
+    /* ── Pipeline dropdown ── */
+    .pipeline-dd { position: relative; }
+    .pipeline-dd-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: 10px; color: var(--ci-text-primary); font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; white-space: nowrap; transition: all var(--ci-transition-fast); font-family: inherit; }
+    .pipeline-dd-btn:hover { border-color: var(--ci-border-strong); }
+    .pipeline-dd-btn.open { border-color: var(--ci-accent-primary); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft); }
+    .pipeline-dd-btn[data-active="opportunity"] { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }
+    .pipeline-dd-btn[data-active="company"] { border-color: var(--ci-accent-blue); color: var(--ci-accent-blue); background: rgba(69,115,210,0.07); }
+    .pipeline-dd-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--ci-text-tertiary); transition: background var(--ci-transition-fast); }
+    .pipeline-dd-btn[data-active="opportunity"] .pipeline-dd-dot { background: var(--ci-accent-primary); }
+    .pipeline-dd-btn[data-active="company"] .pipeline-dd-dot { background: var(--ci-accent-blue); }
+    .pipeline-dd-arrow { font-size: 11px; color: var(--ci-text-tertiary); transition: transform 0.15s; margin-left: 2px; }
+    .pipeline-dd-btn.open .pipeline-dd-arrow { transform: rotate(180deg); }
+    .pipeline-dd-menu { display: none; position: fixed; background: var(--ci-bg-overlay); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: 0 8px 30px rgba(0,0,0,0.13); z-index: 10001; min-width: 220px; padding: 6px 0; }
+    .pipeline-dd-menu.open { display: block; }
+    .pipeline-dd-opt { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; font-weight: 500; color: var(--ci-text-primary); cursor: pointer; transition: background 0.1s; user-select: none; position: relative; }
+    .pipeline-dd-opt:hover { background: var(--ci-bg-inset); }
+    .pipeline-dd-opt::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ci-border-strong); flex-shrink: 0; }
+    .pipeline-dd-opt[data-pipeline="opportunity"]::before { background: var(--ci-accent-primary); }
+    .pipeline-dd-opt[data-pipeline="company"]::before { background: var(--ci-accent-blue); }
+    .pipeline-dd-opt.active { font-weight: 600; }
+    .pipeline-dd-opt[data-pipeline="all"].active { color: var(--ci-text-primary); }
+    .pipeline-dd-opt[data-pipeline="opportunity"].active { color: var(--ci-accent-primary); }
+    .pipeline-dd-opt[data-pipeline="company"].active { color: var(--ci-accent-blue); }
+    .pipeline-dd-opt.active::after { content: '✓'; position: absolute; right: 16px; font-size: 12px; }
 
     /* Edit stages btn */
     .stage-add-btn { background: var(--ci-bg-inset); border: 1.5px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-secondary); font-size: 13px; font-weight: 700; padding: 8px 18px; cursor: pointer; transition: all var(--ci-transition-fast); }
@@ -232,6 +255,7 @@
     .card-footer { display: flex; align-items: center; justify-content: space-between; }
     .card-date { font-size: 11px; color: var(--ci-text-tertiary); }
     .card-links { display: flex; gap: 10px; align-items: center; }
+    .card-top-links { display: flex; gap: 8px; margin-top: 4px; }
     .card-link { font-size: 11px; color: var(--ci-accent-primary); text-decoration: none; font-weight: 600; }
     .card-link:hover { color: var(--ci-accent-primary-hover); }
     .card-link-li { color: var(--ci-accent-blue); }
@@ -981,9 +1005,59 @@
       left: 20px; color: #1D9E75; border: 3px solid #1D9E75;
       background: rgba(29,158,117,0.08);
     }
+
+    /* Queue / card overlay (iframe on top of blurred pipeline) */
+    .queue-overlay-wrap {
+      display: none; position: fixed; inset: 0; z-index: 9998;
+      align-items: center; justify-content: center;
+    }
+    .queue-overlay-wrap.open { display: flex; }
+    .queue-overlay-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+    }
+    .queue-overlay-frame {
+      position: relative; z-index: 1;
+      width: 900px; max-width: 96vw;
+      height: 94vh; max-height: 920px;
+      border: none; border-radius: 16px;
+      box-shadow: 0 32px 96px rgba(0,0,0,0.4);
+      background: var(--ci-bg-surface);
+    }
+    /* Flanking prev/next nav buttons — outside the card, fixed vertical center */
+    .queue-overlay-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 60px; height: 60px; border-radius: 50%; z-index: 2;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      border: 1.5px solid rgba(255,255,255,0.6);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.28);
+      cursor: pointer; font-size: 28px; line-height: 1; color: #2d3e50;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .queue-overlay-nav:hover:not(:disabled) {
+      background: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.36);
+      transform: translateY(-50%) scale(1.07);
+      color: var(--ci-accent-primary);
+      border-color: var(--ci-accent-primary);
+    }
+    .queue-overlay-nav:disabled { opacity: 0.2; cursor: default; }
+    .queue-overlay-nav.prev { left: calc(50% - 510px); }
+    .queue-overlay-nav.next { right: calc(50% - 510px); }
   </style>
 </head>
 <body>
+  <!-- Queue / card overlay (iframe over blurred pipeline) -->
+  <div class="queue-overlay-wrap" id="queue-overlay">
+    <div class="queue-overlay-backdrop" id="queue-overlay-backdrop"></div>
+    <button class="queue-overlay-nav prev" id="queue-overlay-prev" disabled style="visibility:hidden" aria-label="Previous">‹</button>
+    <iframe id="queue-overlay-iframe" src="" class="queue-overlay-frame"></iframe>
+    <button class="queue-overlay-nav next" id="queue-overlay-next" disabled style="visibility:hidden" aria-label="Next">›</button>
+  </div>
+
   <!-- Score Preview Modal -->
   <div class="score-modal-overlay" id="score-modal-overlay">
     <div class="score-modal" id="score-modal" style="position:relative;">
@@ -1078,9 +1152,18 @@
   </div>
   <div class="toolbar toolbar-type">
     <span class="filter-label">Pipeline:</span>
-    <button class="pipeline-btn active" id="pipeline-all-btn">All Saved</button>
-    <button class="pipeline-btn" id="pipeline-opp-btn">Opportunity Pipeline</button>
-    <button class="pipeline-btn" id="pipeline-co-btn">Company Pipeline</button>
+    <div class="pipeline-dd" id="pipeline-dd">
+      <button class="pipeline-dd-btn" id="pipeline-dd-btn" data-active="all">
+        <span class="pipeline-dd-dot"></span>
+        <span id="pipeline-dd-label">All Saved</span>
+        <span class="pipeline-dd-arrow">▾</span>
+      </button>
+      <div class="pipeline-dd-menu" id="pipeline-dd-menu">
+        <div class="pipeline-dd-opt active" data-pipeline="all">All Saved</div>
+        <div class="pipeline-dd-opt" data-pipeline="opportunity">Opportunity Pipeline</div>
+        <div class="pipeline-dd-opt" data-pipeline="company">Company Pipeline</div>
+      </div>
+    </div>
     <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
       <span class="filter-label">View:</span>
       <div class="view-toggle">
