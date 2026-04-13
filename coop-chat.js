@@ -5,7 +5,7 @@ import { state } from './bg-state.js';
 import { dlog, getUserName, truncateToTokenBudget, buildIdentityPrompt, coopInterp } from './utils.js';
 import { claudeApiCall, chatWithFallback, getModelForTask } from './api.js';
 import { applyCoopMemoryActions } from './memory.js';
-import { buildCoopProfileContext, buildCoopPipelineSummary, detectContextIntent, buildCrossCompanyMeetings, buildCrossCompanyEmails, buildCrossCompanyContacts } from './coop-context.js';
+import { buildCoopPipelineSummary, detectContextIntent, buildCrossCompanyMeetings, buildCrossCompanyEmails, buildCrossCompanyContacts } from './coop-context.js';
 import { COOP_TOOLS, runCoopTool } from './coop-tools.js';
 
 // Blocking insight extraction — inlined from memory.js's private _doExtractInsightsFromChat.
@@ -69,7 +69,7 @@ Assistant: ${reply}
 
 Existing memory index (avoid duplicates):
 ${existingIndex}` }]
-    });
+    }, 3, 'insight');
     const data = await res.json();
     if (!res.ok) { console.warn('[Insights] Skipped — API busy (', res.status, ')'); return; }
 
@@ -98,18 +98,19 @@ ${existingIndex}` }]
 // large enough that tools+base comfortably exceeds 2048 or neither breakpoint
 // writes a cache. The padding in the TOOL PATTERNS / GROUNDING / RESPONSE
 // DISCIPLINE sections below is deliberate — do not trim without remeasuring.
-function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr }) {
+function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary }) {
   const principles = coopInterp.principlesBlock();
   const base = [
     buildIdentityPrompt(state.coopConfig, { globalChat: isGlobalChat, contextType: 'company', userName: getUserName() }),
     `\n=== TODAY ===\n${todayStr}`,
     principles,
+    profileSummary ? `\n=== USER AT A GLANCE ===\n${profileSummary}` : '',
     `\n=== TOOL USE ===
 You have access to tools that fetch context on demand. Follow these rules exactly:
 
 1. For ANY question about a specific company, ALWAYS call get_company_context first unless you already have the answer from the current conversation.
 2. For ANY question about what was said, discussed, emailed, or in a meeting — ALWAYS call get_communications. DO NOT guess. DO NOT ask the user to paste content you can fetch yourself.
-3. For questions about the user's background, experience, dealbreakers, story, skills, or learnings — call get_profile_section with the specific slice you need. Do not fetch 'story' for unrelated questions.
+3. For questions about the user's background, experience, story, skills — call get_profile_section(section: "profile"). For dealbreakers, job criteria, comp, ICP — call get_profile_section(section: "preferences"). Use tier: "full" only for drafts, scoring, or deep analysis; "standard" is the default.
 4. For cross-pipeline questions ("what should I focus on", "compare my top 3") — call get_pipeline_overview.
 5. For "remember when I said..." — call search_memory.
 6. Trivial questions (greetings, "switch to Sonnet", "what time is it") — answer directly. No tools.
@@ -124,21 +125,21 @@ These are reference patterns. Match the user's question to the closest pattern, 
 - "What did Sarah say about equity?" → get_communications(keywords: ["equity", "comp", "compensation", "options", "rsu"])
 - "What was discussed in our last call?" → get_communications(types: ["meetings"], limit: 3)
 - "Did they ever email me back?" → get_communications(types: ["emails"], limit: 10)
-- "Should I apply to this?" → get_company_context + get_profile_section(section: "dealbreakers") IN PARALLEL
+- "Should I apply to this?" → get_company_context + get_profile_section(section: "preferences") IN PARALLEL
 - "Is this a fit?" → get_company_context + get_profile_section(section: "preferences") IN PARALLEL
-- "Draft a cover letter for this" → get_company_context + get_profile_section(section: "story") + get_profile_section(section: "experience") IN PARALLEL
+- "Draft a cover letter for this" → get_company_context + get_profile_section(section: "profile", tier: "full") IN PARALLEL
 - "Draft a reply to this email" → get_communications(types: ["emails"], limit: 5) — use the thread context
-- "What's my background in X?" → get_profile_section(section: "experience")
-- "What are my dealbreakers?" → get_profile_section(section: "dealbreakers")
+- "What's my background in X?" → get_profile_section(section: "profile")
+- "What are my dealbreakers?" → get_profile_section(section: "preferences")
 - "What should I focus on this week?" → get_pipeline_overview(filter: "needs_action")
 - "Who's in my pipeline right now?" → get_pipeline_overview(filter: "active")
 - "Compare Acme and Globex" → get_company_context for BOTH IN PARALLEL
 - "Remember when I said I didn't want to manage people?" → search_memory(query: "manage people")
-- "What did I learn from my last interview?" → get_profile_section(section: "learnings")
+- "What did I learn from my last interview?" → get_profile_section(section: "profile")
 
 === ANTI-PATTERNS (do not do these) ===
 - Do NOT ask the user to paste transcript content you can fetch with get_communications.
-- Do NOT fetch 'story' profile section for questions that aren't about the user's narrative/background.
+- Do NOT fetch full-tier profile when standard is sufficient — save tokens for drafts, scoring, and deep analysis.
 - Do NOT call get_pipeline_overview for a single-company question.
 - Do NOT call get_company_context repeatedly in the same turn for the same company.
 - Do NOT call the same tool twice with identical arguments in one message.
@@ -178,11 +179,17 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   const boundEntryId = context.entryId || null;
   const isGlobalChat = !!globalChat || !boundCompany;
 
-  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr });
+  // Fetch compiled standard-tier docs for inline embedding.
+  // Haiku 4.5 cache minimum is 4096 tokens — summaries alone (~400 tokens) aren't enough.
+  // Standard profile (~700 tokens) + standard prefs (~2300 tokens) push base well above threshold.
+  const { coopProfileStandard, coopPrefsStandard } = await new Promise(r =>
+    chrome.storage.local.get(['coopProfileStandard', 'coopPrefsStandard'], r));
+  const profileSummary = [coopProfileStandard, coopPrefsStandard].filter(Boolean).join('\n\n');
+  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary });
   const toolCtx = { boundCompany, boundEntryId };
 
   // G2.1 diagnostic: one-shot fingerprint so we can confirm base is (a) above
-  // Haiku's ~2048-token cache minimum and (b) byte-identical across steps.
+  // Haiku 4.5's 4096-token cache minimum and (b) byte-identical across steps.
   const _fp = (s) => {
     let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
     return (h >>> 0).toString(16);
@@ -206,7 +213,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
       ],
       messages: conversation,
       tools: COOP_TOOLS,
-    });
+    }, 3, 'chat');
     if (!res || !res.ok) {
       const errText = res ? await res.text().catch(() => '') : 'no response';
       console.error('[Coop][ToolUse] API error:', res?.status, errText.slice(0, 300));
@@ -258,9 +265,9 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function handleCoopMessage({ messages, context, globalChat, pipeline, enrichments, chatModel, careerOSChat }) {
-  // G2: route through tool-use path when flag is on.
-  // Skip for Career OS editor chat and application-mode (different system prompts).
-  if (state.coopConfig.useToolUse && !careerOSChat && !context?._applicationMode) {
+  // G2 tool-use is the default path. Legacy only used for Career OS editor and application-mode
+  // (which have specialized system prompts not yet ported to tool-use).
+  if (!careerOSChat && !context?._applicationMode) {
     try {
       return await handleCoopMessageToolUse({ messages, context, globalChat, chatModel });
     } catch (err) {
@@ -355,12 +362,14 @@ Valid settings:
 When the user asks to switch models, change defaults, or adjust settings, respond with the settings-update block AND a brief confirmation of what will change and the cost impact.`);
   }
 
-  // Layer 3: Profile context
-  const profileContext = await buildCoopProfileContext();
+  // Layer 3: Profile context (compiled .md — same source of truth as G2 tool-use path)
+  const { coopProfileFull, coopPrefsFull } = await new Promise(r =>
+    chrome.storage.local.get(['coopProfileFull', 'coopPrefsFull'], r));
+  const profileContext = [coopProfileFull, coopPrefsFull].filter(Boolean).join('\n\n');
   if (profileContext) {
     systemParts.push(profileContext);
   } else {
-    console.warn('[Coop Chat] WARNING: Profile context is empty — user data may not be loaded');
+    console.warn('[Coop Chat] WARNING: Compiled profile is empty — run profile compiler or fill in Career OS sections');
   }
 
   // Layer 4: Pipeline summary
@@ -680,7 +689,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const slimModel = state.OPENAI_KEY ? 'gpt-4.1-nano' : 'claude-haiku-4-5-20251001';
     console.log(`[Coop] ROUTED → Tier 1 (slim) | ${slimModel} | ${slimSystem.length} chars (${Math.round((1 - slimSystem.length/fullSize) * 100)}% saved)`);
     try {
-      const result = await chatWithFallback({ model: slimModel, system: slimSystem, messages, max_tokens: 1024, tag: 'Chat-Slim' });
+      const result = await chatWithFallback({ model: slimModel, system: slimSystem, messages, max_tokens: 1024, tag: 'Chat-Slim', opTag: 'chat' });
       if (!result.error) return { reply: result.reply, model: result.usedModel, usage: result.usage, routed: 'slim' };
     } catch (e) { console.warn('[Coop] Tier 1 failed, escalating:', e.message); }
   }
@@ -730,7 +739,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const visionTotal = baseSystem.length + visionTail.length;
     console.log(`[Coop] ROUTED → Tier 2.5 (vision) | ${visionModel} | base:${baseSystem.length} tail:${visionTail.length} chars (${Math.round((1 - visionTotal/fullSize) * 100)}% saved vs full)`);
     try {
-      const result = await chatWithFallback({ model: visionModel, system: { base: baseSystem, tail: visionTail }, messages, max_tokens: 2048, tag: 'Chat-Vision' });
+      const result = await chatWithFallback({ model: visionModel, system: { base: baseSystem, tail: visionTail }, messages, max_tokens: 2048, tag: 'Chat-Vision', opTag: 'chat' });
       if (!result.error) {
         const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
         if (hasTrigger) await _doBlockingInsightExtraction(lastUserMsg, result.reply, source);
@@ -759,7 +768,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const mediumTotal = baseSystem.length + mediumTail.length;
     console.log(`[Coop] ROUTED → Tier 2 (medium, follow-up #${userMsgCount}) | ${mediumModel} | base:${baseSystem.length} tail:${mediumTail.length} chars (${Math.round((1 - mediumTotal/fullSize) * 100)}% saved)`);
     try {
-      const result = await chatWithFallback({ model: mediumModel, system: { base: baseSystem, tail: mediumTail }, messages, max_tokens: 2048, tag: 'Chat-Medium' });
+      const result = await chatWithFallback({ model: mediumModel, system: { base: baseSystem, tail: mediumTail }, messages, max_tokens: 2048, tag: 'Chat-Medium', opTag: 'chat' });
       if (!result.error) {
         if (NEEDS_ESCALATION_RE.test(result.reply || '')) {
           console.log('[Coop] Tier 2 → escalating to Tier 3 via [[NEEDS_FULL_CONTEXT]] token');
@@ -829,7 +838,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const tailText = tailParts.join('\n');
     let model = chatModel || getModelForTask('chat');
     console.log(`[Coop] ROUTED → Tier 3 (full) | ${model} | base:${baseSystem.length} tail:${tailText.length} chars | global: ${!!globalChat} | company: ${context.company || '(none)'}`);
-    const result = await chatWithFallback({ model, system: { base: baseSystem, tail: tailText }, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat' });
+    const result = await chatWithFallback({ model, system: { base: baseSystem, tail: tailText }, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat', opTag: 'chat' });
     if (result.error) return result;
     const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
     if (hasTrigger) {
@@ -895,6 +904,7 @@ OUTPUT: Return ONLY the rewritten text. No preamble, no explanation, no quotes a
     messages: [{ role: 'user', content: userMsg }],
     max_tokens: 800,
     tag: 'CoopAssist-Rewrite',
+    opTag: 'rewrite',
   });
   if (result.error) return { error: result.error };
   let rewrite = (result.reply || '').trim();

@@ -86,7 +86,7 @@ const TABLE_COLUMNS = [
       const score = c.jobMatch?.score || c.jobMatchScore;
       if (!score) return '<span class="tbl-muted">—</span>';
       const v = scoreToVerdict(score);
-      return `<span class="tbl-score ${v.cls}">${score}/10</span>`;
+      return `<span class="tbl-score ${v.cls}">${Number(score).toFixed(1)}/10</span>`;
     }
   },
   {
@@ -402,7 +402,7 @@ function renderCompactCard(c) {
   // Score display
   let scoreHtml;
   if (score != null) {
-    scoreHtml = `<span class="compact-score-num ${tier}" title="Coop's Score">${score}</span><span class="compact-score-den">/10</span>${compactDQHtml}`;
+    scoreHtml = `<span class="compact-score-num ${tier}" title="Coop's Score">${typeof score === 'number' ? score.toFixed(1) : score}</span><span class="compact-score-den">/10</span>${compactDQHtml}`;
   } else if (isScoring) {
     scoreHtml = '<svg class="compact-spinner" width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="2.5" fill="#5B8C3E"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="2.5" fill="#5B8C3E"/></svg>';
   } else {
@@ -570,7 +570,7 @@ function openScoreModal(entry) {
   content.innerHTML = `
     <div class="score-modal-header">
       <div class="score-modal-score ${tier}">
-        <div class="score-modal-score-num" style="color:${tier === 'green' ? '#0F6E56' : tier === 'amber' ? '#854F0B' : '#A32D2D'}">${score}</div>
+        <div class="score-modal-score-num" style="color:${tier === 'green' ? '#0F6E56' : tier === 'amber' ? '#854F0B' : '#A32D2D'}">${typeof score === 'number' ? score.toFixed(1) : score}</div>
         <div class="score-modal-score-den">/10</div>
       </div>
       <div>
@@ -760,20 +760,24 @@ function openScoreModal(entry) {
                   memEntry.jobMatch.dismissedFlags = jm.dismissedFlags;
                   memEntry.jobMatch.dismissedFlagsWithReasons = jm.dismissedFlagsWithReasons;
                 }
-                // Save reason as a Coop learned insight for future scoring
+                // Save reason to coopMemory for future scoring
                 if (reason) {
-                  chrome.storage.local.get(['storyTime'], d => {
-                    const st = d.storyTime || {};
-                    st.learnedInsights = st.learnedInsights || [];
-                    st.learnedInsights.push({
+                  chrome.storage.local.get(['coopMemory'], d => {
+                    const mem = d.coopMemory && Array.isArray(d.coopMemory.entries) ? d.coopMemory : { entries: [] };
+                    const now = new Date().toISOString();
+                    mem.entries.push({
+                      id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+                      type: 'feedback',
+                      name: `scoring_feedback: ${flagText.slice(0, 50)}`,
+                      description: `Dismissed ${flagType} flag for ${companies[idx].company || 'unknown'}`,
+                      body: `Dismissed ${flagType} flag "${flagText}" — reason: ${reason}`,
+                      createdAt: now,
+                      updatedAt: now,
                       source: companies[idx].company || 'scoring-feedback',
-                      date: new Date().toISOString().slice(0, 10),
-                      insight: `Dismissed ${flagType} flag "${flagText}" — reason: ${reason}`,
-                      category: 'scoring_feedback',
-                      priority: 'high',
                     });
-                    st.learnedInsights = st.learnedInsights.slice(-100);
-                    chrome.storage.local.set({ storyTime: st });
+                    if (mem.entries.length > 200) mem.entries = mem.entries.slice(-200);
+                    mem.updatedAt = now;
+                    chrome.storage.local.set({ coopMemory: mem });
                   });
                 }
                 row.innerHTML = `<span style="font-size:11px;color:#8B8680;">✓ ${reason ? 'Feedback saved — Coop will remember this' : 'Dismissed'}</span>`;
@@ -2287,6 +2291,93 @@ function updateCostPill() {
 }
 updateCostPill();
 
+// ── Cost Summary Card (dashboard) ─────────────────────────────────────────
+function renderCostCard() {
+  chrome.storage.local.get('apiUsage', d => {
+    const usage = d.apiUsage || {};
+    const container = document.getElementById('cost-summary-container');
+    if (!container) return;
+
+    const costToday = usage.costToday || 0;
+    const fmtCost = c => c < 0.01 ? '$' + c.toFixed(4) : '$' + c.toFixed(2);
+
+    // Color class based on spend level
+    const costClass = costToday >= 1 ? 'cost-high' : costToday >= 0.25 ? 'cost-mid' : 'cost-low';
+
+    // Build 7-day sparkline from dailyHistory (merge anthropic + openai by date)
+    const today = new Date();
+    const dayKeys = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      dayKeys.push(d.toISOString().slice(0, 10));
+    }
+
+    const dailyCosts = {};
+    dayKeys.forEach(k => { dailyCosts[k] = 0; });
+
+    const providers = ['anthropic', 'openai'];
+    providers.forEach(p => {
+      const hist = usage[p]?.dailyHistory || [];
+      hist.forEach(entry => {
+        const dateKey = (entry.date || '').slice(0, 10);
+        if (dailyCosts.hasOwnProperty(dateKey)) {
+          dailyCosts[dateKey] += entry.estimatedCost || 0;
+        }
+      });
+    });
+
+    // For today, prefer the live costToday value (more accurate than dailyHistory)
+    const todayKey = dayKeys[dayKeys.length - 1];
+    if (costToday > 0) dailyCosts[todayKey] = costToday;
+
+    const costValues = dayKeys.map(k => dailyCosts[k]);
+    const maxCost = Math.max(...costValues, 0.01); // avoid div-by-zero
+
+    const sparkBars = dayKeys.map((k, i) => {
+      const val = costValues[i];
+      const pct = Math.max((val / maxCost) * 100, 7); // min 7% height for visibility
+      const isToday = i === dayKeys.length - 1;
+      const dayLabel = new Date(k + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+      return `<div class="cost-spark-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${dayLabel}: ${fmtCost(val)}"></div>`;
+    }).join('');
+
+    // Top cost category today — aggregate by op field from callLog
+    const log = (usage.callLog || []).filter(c => c.ts > Date.now() - 86400000);
+    const byOp = {};
+    log.forEach(c => {
+      const op = c.op || c.provider || 'unknown';
+      byOp[op] = (byOp[op] || 0) + (c.cost || 0);
+    });
+    const topOp = Object.entries(byOp).sort((a, b) => b[1] - a[1])[0];
+    const opNames = {
+      chat: 'Coop Chat', research: 'Research', scoring: 'Scoring',
+      quick_lookup: 'Quick Lookup', enrichment: 'Enrichment',
+      anthropic: 'Anthropic', openai: 'OpenAI', serper: 'Serper',
+      apollo: 'Apollo', granola: 'Granola'
+    };
+    const topCatHtml = topOp
+      ? `<div class="cost-top-cat"><b>${opNames[topOp[0]] || topOp[0]}:</b> ${fmtCost(topOp[1])}</div>`
+      : `<div class="cost-top-cat" style="color:var(--ci-text-tertiary)">No API calls today</div>`;
+
+    container.innerHTML = `
+      <div class="cost-summary-card" style="margin: 0 32px;">
+        <div style="display:flex;flex-direction:column;align-items:flex-start;">
+          <div class="cost-today-amount ${costClass}">${fmtCost(costToday)}</div>
+          <div class="cost-today-label">Today's spend</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <div class="cost-sparkline">${sparkBars}</div>
+          <div style="font-size:9px;color:var(--ci-text-tertiary)">7-day trend</div>
+        </div>
+        ${topCatHtml}
+        <a class="cost-details-link" href="pipeline.html#usage">View Details &rarr;</a>
+      </div>
+    `;
+  });
+}
+renderCostCard();
+
 // Cost breakdown modal
 document.getElementById('cost-pill')?.addEventListener('click', () => {
   chrome.storage.local.get('apiUsage', d => {
@@ -2377,7 +2468,10 @@ document.getElementById('cost-pill')?.addEventListener('click', () => {
         ${modelRows ? `<div style="margin-bottom:16px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ci-text-tertiary);margin-bottom:6px">By Model</div>${modelRows}</div>` : ''}
         ${recentRows ? `<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ci-text-tertiary);margin-bottom:6px">Recent Calls</div>${recentRows}</div>` : ''}
       </div>
-      <div style="padding:10px 20px;border-top:1px solid var(--ci-border-subtle);font-size:10px;color:var(--ci-text-tertiary);text-align:center">${log.length} API calls today &middot; Resets at midnight</div>
+      <div style="padding:10px 20px;border-top:1px solid var(--ci-border-subtle);font-size:10px;color:var(--ci-text-tertiary);text-align:center;display:flex;align-items:center;justify-content:space-between">
+        <span>${log.length} API calls today &middot; Resets at midnight</span>
+        <a href="pipeline.html#usage" style="color:var(--ci-accent-primary);font-weight:600;text-decoration:none;font-size:11px">Full Report &rarr;</a>
+      </div>
     </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -2386,7 +2480,7 @@ document.getElementById('cost-pill')?.addEventListener('click', () => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.apiUsage) updateCostPill();
+  if (area === 'local' && changes.apiUsage) { updateCostPill(); renderCostCard(); }
   if (area === 'local' && (changes.savedCompanies || changes.allTags)) {
     if (_storageReloadHits === 0) _storageFirstHitAt = Date.now();
     _storageReloadHits++;
@@ -4345,10 +4439,10 @@ function renderActivitySection() {
 
   const funnelStages = customOpportunityStages
     .filter(s => s.key !== 'rejected')
-    .map(s => ({ label: s.label, color: s.color, count: opps.filter(c => (c.jobStage || 'needs_review') === s.key).length }));
+    .map(s => ({ key: s.key, label: s.label, color: s.color, count: opps.filter(c => (c.jobStage || 'needs_review') === s.key).length }));
 
   const funnelHtml = funnelStages.map((s, i) => `
-    <div class="funnel-stage">
+    <div class="funnel-stage" data-stage-key="${s.key}" style="cursor:pointer" title="View ${s.label}">
       <div class="funnel-count" style="${s.count > 0 ? `color:${s.color}` : 'color:#b0c1d4'}">${s.count || '—'}</div>
       <div class="funnel-label">${s.label}</div>
     </div>${i < funnelStages.length - 1 ? '<div class="funnel-arrow">›</div>' : ''}
@@ -4409,6 +4503,19 @@ function renderActivitySection() {
       <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
     </div>
   `;
+
+  // Funnel stage click → scroll kanban column into view
+  section.querySelectorAll('.funnel-stage[data-stage-key]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.stageKey;
+      const col = document.querySelector(`.kanban-col[data-col-key="${key}"]`);
+      if (col) {
+        col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        col.style.outline = `2px solid ${funnelStages.find(s => s.key === key)?.color || '#FF7A59'}`;
+        setTimeout(() => { col.style.outline = ''; }, 1200);
+      }
+    });
+  });
 
   section.querySelectorAll('.period-tab').forEach(btn => {
     btn.addEventListener('click', () => {

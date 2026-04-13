@@ -33,7 +33,8 @@ export async function interpretProfileSection(section, content) {
       system: 'You are a concise profile analyst. Respond in valid JSON only, no markdown fences.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 500,
-      tag: 'ProfileInterpret'
+      tag: 'ProfileInterpret',
+      opTag: 'profile',
     });
     if (result.error) return { error: result.error };
     const clean = result.reply.replace(/```json|```/g, '').trim();
@@ -178,47 +179,21 @@ export async function scoreOpportunity(entryId) {
     companyContext = await scoutCompany(entry.company || 'Unknown');
   }
 
-  // Load user profile data (structured + legacy fallback)
+  // Load compiled profile .md (single source of truth) + structured scoring data
   const localData = await new Promise(resolve =>
     chrome.storage.local.get([
-      'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags',
-      'profileRoleICP', 'profileCompanyICP',
-      'profileResume', 'profileExperience', 'profileExperienceEntries',
-      'scoringWeights'
+      'profileAttractedTo', 'profileDealbreakers', 'scoringWeights',
+      'coopProfileFull', 'coopPrefsFull'
     ], resolve)
   );
-  const syncData = await new Promise(resolve =>
-    chrome.storage.sync.get(['prefs'], resolve)
-  );
-  const prefs = syncData.prefs || {};
   const weights = localData.scoringWeights || {
     qualificationFit: 20, roleFit: 20, cultureFit: 25, companyFit: 20, compFit: 15
   };
   const attractedTo = localData.profileAttractedTo || [];
   const dealbreakers = localData.profileDealbreakers || [];
 
-  // Build candidate profile context
-  const profileParts = [];
-  if (localData.profileResume) profileParts.push(`Resume:\n${String(localData.profileResume).slice(0, 3000)}`);
-  if (localData.profileExperienceEntries?.length) {
-    profileParts.push(`Experience:\n${localData.profileExperienceEntries.map(e => `${e.title} at ${e.company}: ${e.summary || ''}`).join('\n')}`);
-  } else if (localData.profileExperience) {
-    profileParts.push(`Experience:\n${localData.profileExperience.slice(0, 2000)}`);
-  }
-  if (localData.profileSkillTags?.length) {
-    profileParts.push(`Skills:\n${localData.profileSkillTags.map(s => `- ${s.text} [${s.category || 'general'}]`).join('\n')}`);
-  }
-  if (localData.profileRoleICP) profileParts.push(`Target Role ICP:\n${localData.profileRoleICP}`);
-  if (localData.profileCompanyICP) profileParts.push(`Target Company ICP:\n${localData.profileCompanyICP}`);
-  if (prefs.roles) profileParts.push(`Target Roles: ${prefs.roles}`);
-  if (prefs.avoid) profileParts.push(`Avoid: ${prefs.avoid}`);
-  if (prefs.jobMatchBackground) profileParts.push(`Background: ${prefs.jobMatchBackground}`);
-  if (prefs.salaryFloor) profileParts.push(`Base Salary Floor: ${prefs.salaryFloor}`);
-  if (prefs.salaryStrong) profileParts.push(`Base Salary Strong: ${prefs.salaryStrong}`);
-  if (prefs.oteFloor) profileParts.push(`OTE Floor: ${prefs.oteFloor}`);
-  if (prefs.oteStrong) profileParts.push(`OTE Strong: ${prefs.oteStrong}`);
-  if (prefs.workArrangement?.length) profileParts.push(`Work Arrangement: ${prefs.workArrangement.join(', ')}`);
-  if (prefs.userLocation) profileParts.push(`Location: ${prefs.userLocation}`);
+  // Compiled .md docs — same source of truth Coop uses in chat
+  const compiledProfile = [localData.coopProfileFull, localData.coopPrefsFull].filter(Boolean).join('\n\n');
 
   // Build job context — page-scraped data first, Serper scout only if thin
   const firmoLines = [];
@@ -358,7 +333,7 @@ export async function scoreOpportunity(entryId) {
 ${coopInterp.principlesBlock()}
 
 === CANDIDATE PROFILE ===
-${profileParts.join('\n\n') || 'No profile configured'}
+${compiledProfile || 'No profile configured'}
 
 === JOB OPPORTUNITY ===
 ${jobParts}${interactionBlock}
@@ -434,7 +409,8 @@ Return ONLY valid JSON (no markdown fences):
     system: `You are a JSON-only job fit analyst. Respond with valid JSON only, no markdown fences.`,
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 4000,
-    tag: 'QuickFit'
+    tag: 'QuickFit',
+    opTag: 'scoring',
   });
 
   if (result.error) throw new Error(result.error);
@@ -511,7 +487,16 @@ Return ONLY valid JSON (no markdown fences):
     return Math.round(Math.max(1, Math.min(10, s)));
   }
 
-  const qualScore = Math.max(1, Math.min(10, Math.round(parsed.qualificationFit || 5)));
+  // Compute qualScore deterministically from qualification counts
+  // met = full credit, partial = half credit, unmet/unknown = no credit
+  const _compRxQ = /\b(salary|salaries|comp(ensation)?|pay\b|ote\b|base\s*pay|incentive|bonus|equity|stock|commission)/i;
+  const _skillQuals = (parsed.qualifications || []).filter(q => !_compRxQ.test(q.requirement));
+  const _qMet = _skillQuals.filter(q => q.status === 'met').length;
+  const _qPartial = _skillQuals.filter(q => q.status === 'partial').length;
+  const _qTotal = _skillQuals.length;
+  const qualScore = _qTotal > 0
+    ? Math.max(1, Math.min(10, parseFloat(((_qMet + _qPartial * 0.5) / _qTotal * 10).toFixed(1))))
+    : Math.max(1, Math.min(10, Math.round(parsed.qualificationFit || 5)));
   const scoreBreakdown = {
     qualificationFit: qualScore,
     roleFit: computeDimScore('roleFit'),
@@ -561,7 +546,7 @@ Return ONLY valid JSON (no markdown fences):
   }
 
   // Score rationale (shown in queue total formula row)
-  const scoreRationale = `qual ${scoreBreakdown.qualificationFit}×${weights.qualificationFit}% + role ${scoreBreakdown.roleFit}×${weights.roleFit}% + culture ${scoreBreakdown.cultureFit}×${weights.cultureFit}% + company ${scoreBreakdown.companyFit}×${weights.companyFit}% + comp ${scoreBreakdown.compFit}×${weights.compFit}% = ${rawOverall.toFixed(2)} → ${overall}/10`;
+  const scoreRationale = `qual ${scoreBreakdown.qualificationFit}×${weights.qualificationFit}% + role ${scoreBreakdown.roleFit}×${weights.roleFit}% + culture ${scoreBreakdown.cultureFit}×${weights.cultureFit}% + company ${scoreBreakdown.companyFit}×${weights.companyFit}% + comp ${scoreBreakdown.compFit}×${weights.compFit}% = ${rawOverall.toFixed(2)} → ${Number(overall).toFixed(1)}/10`;
 
   // Neutral flags — configured but not fired, marked unknownNeutral
   const neutralFlags = {};
@@ -868,7 +853,7 @@ export async function handleDevMockScore(entryId) {
     qualifications: mockQuals,
     keySignals: [{ type: 'green', text: '[Mock] Strong culture alignment signals' }, { type: 'red', text: '[Mock] Unclear growth trajectory' }],
     coopTake: '[Mock] Solid role fit with some comp uncertainty. Good enough to explore.',
-    scoreRationale: `qual ${qualScore}×${weights.qualificationFit}% + role ${roleDim.score}×${weights.roleFit}% + culture ${cultureDim.score}×${weights.cultureFit}% + company ${companyDim.score}×${weights.companyFit}% + comp ${compScore}×${weights.compFit}% = ${rawOverall.toFixed(2)} → ${overall}/10`,
+    scoreRationale: `qual ${qualScore}×${weights.qualificationFit}% + role ${roleDim.score}×${weights.roleFit}% + culture ${cultureDim.score}×${weights.cultureFit}% + company ${companyDim.score}×${weights.companyFit}% + comp ${compScore}×${weights.compFit}% = ${rawOverall.toFixed(2)} → ${Number(overall).toFixed(1)}/10`,
     compAssessment: mockCompAssess,
     dimensionRationale: {
       roleFit: '[Mock] Role aligns well with GTM leadership background',

@@ -515,6 +515,24 @@
     .act-date-reset { background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 5px 10px; font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit; }
     .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--ci-transition-fast); flex-shrink: 0; }
     .stat-cards-edit-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+
+    /* ── Cost Summary Card ── */
+    .cost-summary-card { display: flex; align-items: center; gap: 18px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 14px 20px; margin-top: 14px; transition: border-color 0.15s, box-shadow 0.2s; }
+    .cost-summary-card:hover { border-color: var(--ci-border-strong); box-shadow: 0 4px 12px rgba(45,62,80,0.1); }
+    .cost-today-amount { font-size: 22px; font-weight: 800; font-family: var(--ci-font-mono); line-height: 1; }
+    .cost-today-amount.cost-low { color: var(--ci-accent-teal); }
+    .cost-today-amount.cost-mid { color: var(--ci-accent-amber); }
+    .cost-today-amount.cost-high { color: var(--ci-accent-red); }
+    .cost-today-label { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+    .cost-sparkline { display: flex; align-items: flex-end; gap: 2px; height: 28px; }
+    .cost-spark-bar { width: 4px; border-radius: 2px; background: var(--ci-accent-blue); opacity: 0.55; transition: opacity 0.15s; min-height: 2px; }
+    .cost-spark-bar.today { opacity: 1; background: var(--ci-accent-primary); }
+    .cost-spark-bar:hover { opacity: 1; }
+    .cost-top-cat { font-size: 12px; color: var(--ci-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+    .cost-top-cat b { color: var(--ci-text-primary); font-weight: 700; }
+    .cost-details-link { font-size: 11px; font-weight: 700; color: var(--ci-text-link); text-decoration: none; white-space: nowrap; margin-left: auto; }
+    .cost-details-link:hover { text-decoration: underline; }
+
     .sc-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1001; align-items: center; justify-content: center; }
 
     /* ── Metric Drill-down Modal ── */
@@ -1006,47 +1024,49 @@
       background: rgba(29,158,117,0.08);
     }
 
-    /* Queue / card overlay (iframe on top of blurred pipeline) */
+    /* Queue / card overlay — queue card appears on the page, pipeline blurred behind it */
     .queue-overlay-wrap {
-      display: none; position: fixed; inset: 0; z-index: 9998;
-      align-items: center; justify-content: center;
+      display: none; position: fixed;
+      top: 52px; left: 0; right: 0; bottom: 0; /* header stays visible above */
+      z-index: 9998;
+      align-items: flex-start; justify-content: center;
     }
     .queue-overlay-wrap.open { display: flex; }
     .queue-overlay-backdrop {
       position: absolute; inset: 0;
-      background: rgba(0,0,0,0.5);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background: rgba(0,0,0,0.08); /* barely tinted — blur does the work */
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       cursor: pointer;
     }
     .queue-overlay-frame {
       position: relative; z-index: 1;
-      width: 900px; max-width: 96vw;
-      height: 94vh; max-height: 920px;
-      border: none; border-radius: 16px;
-      box-shadow: 0 32px 96px rgba(0,0,0,0.4);
+      width: 1040px; max-width: calc(100vw - 120px);
+      height: 100%;
+      border: none; border-radius: 0; /* no dialog chrome */
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.07), 0 8px 32px rgba(0,0,0,0.1);
       background: var(--ci-bg-surface);
     }
-    /* Flanking prev/next nav buttons — outside the card, fixed vertical center */
+    /* Flanking prev/next nav buttons — sit on the blurred backdrop on either side */
     .queue-overlay-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
-      width: 60px; height: 60px; border-radius: 50%; z-index: 2;
-      background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      border: 1.5px solid rgba(255,255,255,0.6);
-      box-shadow: 0 6px 24px rgba(0,0,0,0.28);
-      cursor: pointer; font-size: 28px; line-height: 1; color: #2d3e50;
+      width: 52px; height: 52px; border-radius: 50%; z-index: 2;
+      background: rgba(255,255,255,0.88); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.5);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      cursor: pointer; font-size: 26px; line-height: 1; color: #2d3e50;
       display: flex; align-items: center; justify-content: center;
       transition: all 0.15s; font-family: inherit;
     }
     .queue-overlay-nav:hover:not(:disabled) {
-      background: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.36);
-      transform: translateY(-50%) scale(1.07);
+      background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.24);
+      transform: translateY(-50%) scale(1.06);
       color: var(--ci-accent-primary);
       border-color: var(--ci-accent-primary);
     }
     .queue-overlay-nav:disabled { opacity: 0.2; cursor: default; }
-    .queue-overlay-nav.prev { left: calc(50% - 510px); }
-    .queue-overlay-nav.next { right: calc(50% - 510px); }
+    .queue-overlay-nav.prev { left: 24px; }
+    .queue-overlay-nav.next { right: 24px; }
   </style>
 </head>
 <body>
@@ -1072,7 +1092,7 @@
     <div style="display:flex;align-items:center;gap:0;">
       <a class="logo" href="saved.html" style="text-decoration:none">Coop<span>.ai</span> <span class="slash">/ Saved</span></a>
       <button class="queue-header-btn" id="queue-header-btn">
-        <svg width="18" height="18" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.25)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.7)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.9)"/></g></svg>
+        <img src="icon48.png" width="18" height="18" style="border-radius:4px;flex-shrink:0;object-fit:contain;">
         <span id="queue-header-label">Coop's Scoring Queue</span>
         <span class="queue-arrow">→</span>
       </button>
@@ -1095,6 +1115,7 @@
 
 
   <div id="activity-section" class="activity-section"></div>
+  <div id="cost-summary-container"></div>
   <div id="color-picker-popover"></div>
 
   <div class="metric-drill-overlay" id="metric-drill-overlay">

@@ -12,6 +12,7 @@ import { consolidateProfile } from './memory.js';
 import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
 import { handleQuickEnrichFirmo } from './search.js';
+import { initProfileCompiler } from './profile-compiler.js';
 
 // Floating sidebar is the primary UI — icon click toggles it
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -179,27 +180,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const profileKeys = ['profileRoleICP', 'profileCompanyICP', 'profileAttractedTo', 'profileDealbreakers', 'profileSkillTags'];
   const changedProfileKeys = profileKeys.filter(k => changes[k]);
   if (area === 'local' && changedProfileKeys.length && state.coopConfig.automations?.rescoreOnProfileChange) {
-    const rescoreStages = state.coopConfig.rescoreStages || [];
-    if (rescoreStages.length) {
-      console.log('[AutoRescore] Profile changed:', changedProfileKeys, '— rescoring stages:', rescoreStages);
-      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-        const active = (savedCompanies || []).filter(c =>
-          c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
-        );
-        if (!active.length) return;
-        let i = 0;
-        const processBatch = () => {
-          const batch = active.slice(i, i + 2);
-          if (!batch.length) return;
-          batch.forEach(entry => {
-            chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, () => void chrome.runtime.lastError);
-          });
-          i += 2;
-          if (i < active.length) setTimeout(processBatch, 2000);
-        };
-        processBatch();
-      });
-    }
+    _queueGlobalRescore('profile_change');
   }
 });
 
@@ -211,6 +192,7 @@ initCoopConfig();
 initCachedUserName();
 
 initPipelineConfig();
+initProfileCompiler();
 
 // Live-update pipeline config
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -233,33 +215,48 @@ chrome.storage.onChanged.addListener((changes, area) => {
       oldPrefs.oteFloor !== newPrefs.oteFloor || oldPrefs.oteStrong !== newPrefs.oteStrong;
     const workChanged = JSON.stringify(oldPrefs.workArrangement) !== JSON.stringify(newPrefs.workArrangement);
     if (salaryChanged || workChanged) {
-      const rescoreStages = state.coopConfig.rescoreStages || [];
-      if (rescoreStages.length) {
-        console.log('[AutoRescore] Salary/work prefs changed — rescoring stages:', rescoreStages);
-        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
-          const active = (savedCompanies || []).filter(c =>
-            c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
-          );
-          if (!active.length) return;
-          let i = 0;
-          const processBatch = () => {
-            const batch = active.slice(i, i + 2);
-            if (!batch.length) return;
-            batch.forEach(entry => {
-              chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, () => void chrome.runtime.lastError);
-            });
-            i += 2;
-            if (i < active.length) setTimeout(processBatch, 2000);
-          };
-          processBatch();
-        });
-      }
+      _queueGlobalRescore('pref_change');
     }
   }
 });
 
-// Auto-rescore when interaction data changes (opt-in, OFF by default)
-// Detects new emails, meetings, transcripts, or significant note changes
+// ── Global rescore debounce ──────────────────────────────────────────────────
+// All auto-rescore triggers feed into this queue. A 5-second window dedupes
+// entries across triggers (profile change + salary change = one rescore, not two).
+let _globalRescoreTimer = null;
+const _globalRescoreReasons = new Set();
+
+function _queueGlobalRescore(reason) {
+  const rescoreStages = state.coopConfig.rescoreStages || [];
+  if (!rescoreStages.length) return;
+  _globalRescoreReasons.add(reason);
+  clearTimeout(_globalRescoreTimer);
+  _globalRescoreTimer = setTimeout(() => {
+    const reasons = [..._globalRescoreReasons];
+    _globalRescoreReasons.clear();
+    console.log('[AutoRescore] Debounced global rescore — reasons:', reasons);
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const active = (savedCompanies || []).filter(c =>
+        c.isOpportunity && rescoreStages.includes(c.jobStage || 'needs_review')
+      );
+      if (!active.length) return;
+      let i = 0;
+      const processBatch = () => {
+        const batch = active.slice(i, i + 2);
+        if (!batch.length) return;
+        batch.forEach(entry => {
+          chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: entry.id }, () => void chrome.runtime.lastError);
+        });
+        i += 2;
+        if (i < active.length) setTimeout(processBatch, 2000);
+      };
+      processBatch();
+    });
+  }, 5000);
+}
+
+// Per-entry rescore when interaction data changes (opt-in, OFF by default)
+// Also feeds into the global debounce for stage transitions with stale data.
 const _interactionRescoreTimers = {};
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes.savedCompanies || !state.coopConfig.automations?.rescoreOnNewData) return;
@@ -272,19 +269,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (!e.isOpportunity || !e.id) return;
     if (rescoreStages.length && !rescoreStages.includes(e.jobStage || 'needs_review')) return;
     const old = oldMap[e.id];
-    if (!old) return; // new entry — initial score on save handles this
+    if (!old) return;
     const emailsChanged = (e.cachedEmails?.length || 0) !== (old.cachedEmails?.length || 0);
     const meetingsChanged = (e.cachedMeetings?.length || 0) !== (old.cachedMeetings?.length || 0);
     const transcriptChanged = (e.cachedMeetingTranscript?.length || 0) !== (old.cachedMeetingTranscript?.length || 0);
     const notesDelta = Math.abs((e.notes?.length || 0) - (old.notes?.length || 0));
-    const notesChanged = notesDelta > 50; // only rescore on significant note changes
+    const notesChanged = notesDelta > 50;
     if (emailsChanged || meetingsChanged || transcriptChanged || notesChanged) {
       clearTimeout(_interactionRescoreTimers[e.id]);
       _interactionRescoreTimers[e.id] = setTimeout(() => {
         console.log(`[AutoRescore] Interaction data changed for ${e.company} — rescoring`);
         chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: e.id }, () => void chrome.runtime.lastError);
         delete _interactionRescoreTimers[e.id];
-      }, 15000); // 15s debounce — avoids rescoring during rapid edits
+      }, 15000);
       return;
     }
 
@@ -296,7 +293,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
       if (dataAt > scoredAt) {
         clearTimeout(_interactionRescoreTimers[e.id]);
         _interactionRescoreTimers[e.id] = setTimeout(() => {
-          console.log(`[AutoRescore] ${e.company} moved to eligible stage with stale interaction data — rescoring`);
+          console.log(`[AutoRescore] ${e.company} moved to eligible stage with stale data — rescoring`);
           chrome.runtime.sendMessage({ type: 'SCORE_OPPORTUNITY', entryId: e.id }, () => void chrome.runtime.lastError);
           delete _interactionRescoreTimers[e.id];
         }, 5000);
@@ -573,7 +570,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               { type: 'text', text: 'Extract all text from this image. Return the text exactly as it appears, preserving formatting. If this is a job description, preserve section headings and bullet points.' }
             ]
           }]
-        });
+        }, 3, 'extract');
         const data = await res.json();
         if (data?.content?.[0]?.text) {
           sendResponse({ text: data.content[0].text });

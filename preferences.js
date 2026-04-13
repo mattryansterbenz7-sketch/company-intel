@@ -4486,183 +4486,63 @@ function initFaqPairs() {
   });
 }
 
-// ── Coop's Ideal Role Assessment ────────────────────────────────────────────
+// ── What Coop Sees (compiled profile viewer) ────────────────────────────────
 
-function initCoopAssessment() {
-  const contentEl = document.getElementById('coop-assessment-content');
-  const dateEl = document.getElementById('coop-assessment-date');
-  const refreshBtn = document.getElementById('coop-assessment-refresh');
-  if (!contentEl || !refreshBtn) return;
+function initCompiledProfileViewer() {
+  const contentEl = document.getElementById('compiled-profile-content');
+  const metaEl = document.getElementById('compiled-profile-meta');
+  if (!contentEl) return;
 
-  contentEl.classList.add('ctx-md');
-  const editBtn = document.getElementById('coop-assessment-edit');
+  let activeTier = 'standard';
+  let activeDoc = 'profile';
 
-  editBtn?.addEventListener('click', () => {
-    chrome.storage.local.get(['coopIdealRoleAssessment'], d => {
-      const a = d.coopIdealRoleAssessment || {};
-      const seed = a.markdown || (a.text ? a.text.replace(/<[^>]+>/g, m => {
-        // crude HTML→markdown for legacy saves
-        return m === '</p>' || m === '</li>' || m === '</h2>' || m === '</h3>' ? '\n'
-          : m === '<li>' ? '- '
-          : m === '<h2>' || m === '<h3>' ? '## '
-          : m.startsWith('<strong>') || m.startsWith('</strong>') ? '**'
-          : '';
-      }) : '');
-      const ta = document.createElement('textarea');
-      ta.className = 'ctx-edit-area';
-      ta.value = seed;
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'icp-autofill-btn icp-autofill-btn--primary';
-      saveBtn.style.marginTop = '10px';
-      saveBtn.textContent = 'Save edits';
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'icp-autofill-btn';
-      cancelBtn.style.cssText = 'margin-top:10px;margin-left:8px;';
-      cancelBtn.textContent = 'Cancel';
-      const wrap = document.createElement('div');
-      wrap.appendChild(ta);
-      const btnRow = document.createElement('div');
-      btnRow.appendChild(saveBtn);
-      btnRow.appendChild(cancelBtn);
-      wrap.appendChild(btnRow);
-      const prevHTML = contentEl.innerHTML;
-      contentEl.innerHTML = '';
-      contentEl.appendChild(wrap);
-      cancelBtn.addEventListener('click', () => { contentEl.innerHTML = prevHTML; });
-      saveBtn.addEventListener('click', () => {
-        const md = ta.value;
-        const html = renderAssessmentMarkdown(md);
-        const date = a.date || new Date().toISOString();
-        chrome.storage.local.set({
-          coopIdealRoleAssessment: { ...a, text: html, markdown: md, date, editedAt: new Date().toISOString() }
-        }, () => {
-          if (chrome.runtime.lastError) {
-            console.error('[CoopAssessment] save edits failed:', chrome.runtime.lastError);
-            prefsToast('Save failed: ' + chrome.runtime.lastError.message, { kind: 'error' });
-            return;
-          }
-          contentEl.innerHTML = html;
-          if (dateEl) dateEl.textContent = (dateEl.textContent || 'Generated') + ' · edited just now';
-        });
-      });
+  const STORAGE_MAP = {
+    'profile-standard': 'coopProfileStandard',
+    'profile-full': 'coopProfileFull',
+    'preferences-standard': 'coopPrefsStandard',
+    'preferences-full': 'coopPrefsFull',
+  };
+
+  function loadCompiledDoc() {
+    const key = STORAGE_MAP[`${activeDoc}-${activeTier}`];
+    chrome.storage.local.get([key, 'coopProfileCompiledAt'], d => {
+      const text = d[key];
+      if (text) {
+        contentEl.textContent = text;
+      } else {
+        contentEl.innerHTML = `<span style="color:var(--ci-text-tertiary);">Not compiled yet. Fill in your profile sections above and the compiler will generate this automatically.</span>`;
+      }
+      if (d.coopProfileCompiledAt) {
+        const ago = Math.floor((Date.now() - new Date(d.coopProfileCompiledAt).getTime()) / 60000);
+        metaEl.textContent = ago < 1 ? 'Compiled just now' : ago < 60 ? `Compiled ${ago}m ago` : `Compiled ${Math.floor(ago / 60)}h ago`;
+        metaEl.textContent += ` · ${(text || '').length} chars · ~${Math.round((text || '').length / 4)} tokens`;
+      } else {
+        metaEl.textContent = '';
+      }
+    });
+  }
+
+  // Tier toggle
+  document.querySelectorAll('.compiled-tier-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.compiled-tier-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeTier = btn.dataset.tier;
+      loadCompiledDoc();
     });
   });
 
-  function renderAssessmentMarkdown(md) {
-    if (!md) return '';
-    // Strip code fences (```html, ```, etc.)
-    md = md.replace(/^\s*```[a-z]*\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-    // If the model already returned HTML, pass it through unchanged
-    if (/<(h[1-3]|ul|ol|li|p|strong|em)\b/i.test(md)) {
-      return md;
-    }
-    const lines = md.split('\n');
-    const out = [];
-    let inList = false;
-    for (let raw of lines) {
-      if (/^#{1,3}\s+/.test(raw)) {
-        if (inList) { out.push('</ul>'); inList = false; }
-        const level = raw.match(/^#+/)[0].length;
-        out.push(`<h${level}>${escapeHtml(raw.replace(/^#+\s+/, ''))}</h${level}>`);
-      } else if (/^\d+\.\s+/.test(raw) && /\*\*/.test(raw)) {
-        // Numbered section header like "1. **Role Summary**"
-        if (inList) { out.push('</ul>'); inList = false; }
-        out.push(`<h2>${escapeHtml(raw.replace(/^\d+\.\s+/, '').replace(/\*\*/g, ''))}</h2>`);
-      } else if (/^[-*]\s+/.test(raw)) {
-        if (!inList) { out.push('<ul>'); inList = true; }
-        out.push(`<li>${escapeHtml(raw.replace(/^[-*]\s+/, ''))}</li>`);
-      } else if (raw.trim() === '') {
-        if (inList) { out.push('</ul>'); inList = false; }
-      } else {
-        if (inList) { out.push('</ul>'); inList = false; }
-        out.push(`<p>${escapeHtml(raw)}</p>`);
-      }
-    }
-    if (inList) out.push('</ul>');
-    return out.join('\n')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
-  }
-
-  // Load existing assessment
-  chrome.storage.local.get(['coopIdealRoleAssessment'], d => {
-    const a = d.coopIdealRoleAssessment;
-    if (a?.text) {
-      // Old saves stored already-rendered HTML; new saves store raw markdown.
-      // Detect by sniffing for HTML tags.
-      if (a.markdown) {
-        contentEl.innerHTML = renderAssessmentMarkdown(a.markdown);
-      } else if (/<(h[1-3]|ul|li|p)\b/i.test(a.text)) {
-        contentEl.innerHTML = a.text;
-      } else {
-        contentEl.innerHTML = renderAssessmentMarkdown(a.text);
-      }
-      if (a.date) {
-        const days = Math.floor((Date.now() - new Date(a.date).getTime()) / 86400000);
-        dateEl.textContent = days === 0 ? 'Generated today' : days === 1 ? 'Generated yesterday' : `Generated ${days}d ago`;
-      }
-    }
+  // Doc toggle
+  document.querySelectorAll('.compiled-doc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.compiled-doc-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeDoc = btn.dataset.doc;
+      loadCompiledDoc();
+    });
   });
 
-  refreshBtn.addEventListener('click', async () => {
-    refreshBtn.disabled = true;
-    setCoopThinking(true, 'Assessing ideal role');
-    refreshBtn.textContent = 'Coop is thinking...';
-    contentEl.innerHTML = '<span style="color:var(--ci-text-tertiary);">Analyzing your profile, preferences, and conversations...</span>';
-
-    try {
-      const result = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          type: 'GLOBAL_CHAT_MESSAGE',
-          messages: [{ role: 'user', content: `Based on everything you know about me — my full Career OS profile, skills, experience, green flags, red flags, dealbreakers, company ICP, role ICP, compensation thresholds, interview learnings, and everything we've discussed — write a detailed description of my IDEAL next role.
-
-Format it as clean markdown with ## for each section heading. Use these sections in order:
-
-## Role Summary
-2-3 sentences describing the perfect title, company stage, and what I'd own.
-
-## Must-Haves
-Bullet list of non-negotiable requirements.
-
-## Dream Factors
-What would make this role a 10/10 for me.
-
-## Red Lines
-What would make me walk away.
-
-## Compensation Target
-What I should be targeting based on my experience.
-
-## Where to Look
-Types of companies, industries, or specific companies that fit.
-
-Rules:
-- Use markdown only — ## for headings, **bold** for emphasis, - for bullets. Do NOT return HTML tags or code fences.
-- Be specific and opinionated. Use what you actually know about me, not generic advice.
-- If something in my profile is unclear or contradictory, call it out.` }],
-          chatModel: _coopModels.coopMemorySynthesis || 'claude-sonnet-4-6'
-        }, r => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else if (r?.error) reject(new Error(r.error));
-          else resolve(r);
-        });
-      });
-
-      const text = result.reply || 'Could not generate assessment.';
-      const html = renderAssessmentMarkdown(text);
-      contentEl.innerHTML = html;
-      const now = new Date().toISOString();
-      dateEl.textContent = 'Generated just now';
-      chrome.storage.local.set({ coopIdealRoleAssessment: { text: html, markdown: text, date: now } }, () => {
-        if (chrome.runtime.lastError) console.error('[CoopAssessment] save failed:', chrome.runtime.lastError);
-      });
-    } catch (e) {
-      contentEl.innerHTML = `<span style="color:var(--ci-accent-red);">Error: ${e.message}</span>`;
-    }
-    setCoopThinking(false);
-    refreshBtn.disabled = false;
-    refreshBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.2)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.6)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.8)"/></g></svg> Ask Coop to refresh`;
-  });
+  loadCompiledDoc();
 }
 
 // ── Coop's Context Window (Claude project-memory style narrative) ──────────
@@ -5708,7 +5588,7 @@ loadPrefsWithMigration(syncPrefs => {
     initCoopMemory();
     initCoopSettings();
     initCoopQuickPrompts();
-    initCoopAssessment();
+    initCompiledProfileViewer();
     initCoopContextWindow();
     initFaqPairs();
     initStructuredExperience();

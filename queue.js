@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Detect iframe context (loaded as overlay inside saved.html)
 const _inOverlay = window.parent !== window;
+if (_inOverlay) document.body.classList.add('in-overlay');
 
 function _overlayClose() {
   if (_inOverlay) {
@@ -473,8 +474,20 @@ function renderCurrent() {
   const dimPanels = [];
   const DIM_SHORT = { qualificationFit: 'Qualifications', roleFit: 'Role', cultureFit: 'Culture', companyFit: 'Company', compFit: 'Comp' };
 
+  // Precompute qual score from counts so formula row, bars, tabs, and panel are all consistent
+  const _compRxPre = /\b(salary|salaries|comp(ensation)?|pay\b|ote\b|base\s*pay|incentive|bonus|equity|stock|commission)/i;
+  const _preSkillQuals = qualifications.filter(q => !_compRxPre.test(q.requirement) && !q.dismissed);
+  const _preMet = _preSkillQuals.filter(q => q.status === 'met').length;
+  const _prePartial = _preSkillQuals.filter(q => q.status === 'partial').length;
+  const _preTotal = _preSkillQuals.length;
+  const _preQualScore = _preTotal > 0
+    ? parseFloat(((_preMet + _prePartial * 0.5) / _preTotal * 10).toFixed(1))
+    : displayBreakdown.qualificationFit;
+  // Use corrected breakdown everywhere (formula row, bars, tab labels)
+  const effectiveBreakdown = { ...displayBreakdown, qualificationFit: _preQualScore ?? displayBreakdown.qualificationFit };
+
   DIM_DEFS.forEach(dim => {
-    const val = displayBreakdown[dim.key];
+    const val = effectiveBreakdown[dim.key];
     if (val == null) return;
     const tier = dimTier(val);
     const fired = isNewFormat ? (flagsFired[dim.key] || {}) : {};
@@ -510,27 +523,33 @@ function renderCurrent() {
         const _compRx = /\b(salary|salaries|comp(ensation)?|pay\b|ote\b|base\s*pay|incentive|bonus|equity|stock|commission)/i;
         const skillQuals = qualifications.filter(q => !_compRx.test(q.requirement) && !q.dismissed);
         const metQuals = skillQuals.filter(q => q.status === 'met');
-        const otherQuals = skillQuals.filter(q => q.status !== 'met' && q.status !== 'unknown');
-        const unknownQuals = skillQuals.filter(q => q.status === 'unknown');
-        const metCount = metQuals.length, partialCount = otherQuals.filter(q => q.status === 'partial').length, unmetCount = otherQuals.filter(q => q.status === 'unmet').length;
+        const partialQuals = skillQuals.filter(q => q.status === 'partial');
+        // unknown = "not in profile" — treat as unmet (no evidence = lacking)
+        const unmetQuals = skillQuals.filter(q => q.status === 'unmet' || q.status === 'unknown');
+        const metCount = metQuals.length, partialCount = partialQuals.length, unmetCount = unmetQuals.length;
         const totalQ = metCount + partialCount + unmetCount;
+        // Compute score from counts: met=full, partial=half, unmet/unknown=none
+        const computedQualScore = totalQ > 0
+          ? parseFloat(((metCount + partialCount * 0.5) / totalQ * 10).toFixed(1))
+          : val;
         const qualLine = q => {
           const isUnknown = q.status === 'unknown';
-          const icon = isUnknown ? '?' : q.status === 'met' ? '✓' : q.status === 'partial' ? '~' : '✕';
-          const cls = isUnknown ? 'unknown' : q.status;
+          const icon = q.status === 'met' ? '✓' : q.status === 'partial' ? '~' : '✕';
+          const cls = q.status === 'met' ? 'met' : q.status === 'partial' ? 'partial' : 'unmet';
           const hasEvidence = q.evidence && q.evidence.trim();
-          return `<div class="queue-qual-line ${cls}${hasEvidence ? ' expandable' : ''}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${isUnknown ? '<span class="queue-qual-line-src" style="font-style:italic;">not in profile</span>' : q.importance === 'preferred' ? '<span class="queue-qual-line-src">nice to have</span>' : ''}${!isUnknown && (q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''}${hasEvidence ? `<div class="queue-qual-line-evidence">${escHtml(q.evidence)}</div>` : ''}</div>`;
+          const srcLabel = isUnknown
+            ? '<span class="queue-qual-line-src" style="font-style:italic;color:var(--ci-text-tertiary);">not in profile</span>'
+            : (q.importance === 'preferred' ? '<span class="queue-qual-line-src">nice to have</span>' : (!isUnknown && (q.sources||[]).length ? `<span class="queue-qual-line-src">${q.sources[0]}</span>` : ''));
+          return `<div class="queue-qual-line ${cls}${hasEvidence ? ' expandable' : ''}"><span class="queue-qual-line-icon ${cls}">${icon}</span><span class="queue-qual-line-text">${escHtml(q.requirement)}</span>${srcLabel}${hasEvidence ? `<div class="queue-qual-line-evidence">${escHtml(q.evidence)}</div>` : ''}</div>`;
         };
         const QLIMIT = 6;
-        const assessedQuals = [...metQuals, ...otherQuals];
-        const allQuals = [...assessedQuals, ...unknownQuals];
+        const allQuals = [...metQuals, ...partialQuals, ...unmetQuals];
         const visible = allQuals.slice(0, QLIMIT).map(qualLine).join('');
         const overflow = allQuals.length > QLIMIT
           ? `<div class="queue-flags-overflow" style="display:none;">${allQuals.slice(QLIMIT).map(qualLine).join('')}</div><button class="queue-flags-more-btn" data-expanded="0">+${allQuals.length - QLIMIT} more</button>`
           : '';
-        const unknownNote = unknownQuals.length ? ` · <span style="color:var(--ci-text-tertiary);font-weight:500;">${unknownQuals.length} not in profile</span>` : '';
-        const qualSummary = totalQ ? `<span style="color:#16a34a;font-weight:700;">${metCount} met</span> · <span style="color:#d97706;font-weight:600;">${partialCount} partial</span> · <span style="color:#dc2626;font-weight:600;">${unmetCount} unmet</span>${unknownNote} <span class="qmth-eq">→ <span class="qmth-result">${val}/10</span></span>` : `<span style="color:var(--ci-text-tertiary)">No requirements identified</span>`;
-        panelContent = `<div class="queue-math-row"><span class="queue-math-left">${qualSummary}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}`;
+        const qualSummary = totalQ ? `<span style="color:#16a34a;font-weight:700;">${metCount} met</span> · <span style="color:#d97706;font-weight:600;">${partialCount} partial</span> · <span style="color:#dc2626;font-weight:600;">${unmetCount} unmet</span> <span class="qmth-eq">→ <span class="qmth-result">${computedQualScore}/10</span></span>` : `<span style="color:var(--ci-text-tertiary)">No requirements identified</span>`;
+        panelContent = `<div class="queue-math-row"><span class="queue-math-left">${qualSummary}</span><span class="queue-math-right">${computedQualScore}×${w}% = ${(computedQualScore * w / 100).toFixed(2)}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}`;
       } else if (isComp) {
         const verdictCls = v => v?.includes('above') ? 'above' : v === 'at_floor' ? 'at' : v === 'below_floor' ? 'below' : 'unknown';
         const verdictLabel = { above_strong: 'Above target', above_floor: 'Above floor', at_floor: 'At floor', below_floor: 'Below floor' };
@@ -570,13 +589,13 @@ function renderCurrent() {
       { key: 'cultureFit',       short: 'Culture', color: '#7F77DD' },
       { key: 'companyFit',       short: 'Company', color: '#BA7517' },
       { key: 'compFit',          short: 'Comp',    color: '#0F6E56' },
-    ].filter(d => displayBreakdown[d.key] != null && weights[d.key]);
+    ].filter(d => effectiveBreakdown[d.key] != null && weights[d.key]);
     if (!fDims.length) return '';
-    const raw = fDims.reduce((s, d) => s + displayBreakdown[d.key] * (weights[d.key] / 100), 0);
+    const raw = fDims.reduce((s, d) => s + effectiveBreakdown[d.key] * (weights[d.key] / 100), 0);
     const chips = fDims.map((d, i) =>
-      `${i > 0 ? '<span class="qf-sep">+</span>' : ''}<span class="qf-chip" style="color:${d.color}"><span class="qf-dot" style="background:${d.color}"></span>${d.short} <b>${displayBreakdown[d.key]}</b><span style="font-weight:400;color:var(--ci-text-tertiary)">×${weights[d.key]}%</span></span>`
+      `${i > 0 ? '<span class="qf-sep">+</span>' : ''}<span class="qf-chip" style="color:${d.color}"><span class="qf-dot" style="background:${d.color}"></span>${d.short} <b>${effectiveBreakdown[d.key]}</b><span style="font-weight:400;color:var(--ci-text-tertiary)">×${weights[d.key]}%</span></span>`
     ).join('');
-    return `<div class="queue-total-formula">${chips}<span class="qf-sep">=</span><span class="qf-total">${raw.toFixed(2)}</span><span class="qf-sep">→</span><span class="qf-score">${jm.score}/10</span></div>`;
+    return `<div class="queue-total-formula">${chips}<span class="qf-sep">=</span><span class="qf-total">${raw.toFixed(2)}</span><span class="qf-sep">→</span><span class="qf-score">${Number(jm.score).toFixed(1)}/10</span></div>`;
   })();
 
   // Split bars: compact bar rows go side-by-side with Quick Take; detail panels go full-width below
@@ -622,7 +641,7 @@ function renderCurrent() {
       <div class="qc-header">
         <div class="qc-score-wrap">
           <div class="qc-score ${tier}">
-            <div class="qc-score-num">${score}</div>
+            <div class="qc-score-num">${typeof score === 'number' ? score.toFixed(1) : score}</div>
             <div class="qc-score-den">/10</div>
           </div>
           <span class="qc-score-label">Coop's Score</span>
@@ -1061,12 +1080,22 @@ function renderCurrent() {
               chrome.storage.local.set({ savedCompanies: companies });
               queue[currentIdx].jobMatch = jm;
               if (reason) {
-                chrome.storage.local.get(['storyTime'], d => {
-                  const st = d.storyTime || {};
-                  st.learnedInsights = st.learnedInsights || [];
-                  st.learnedInsights.push({ source: c.company, date: new Date().toISOString().slice(0, 10), insight: `Dismissed ${flagType} flag "${flagText}" — reason: ${reason}`, category: 'scoring_feedback', priority: 'high' });
-                  st.learnedInsights = st.learnedInsights.slice(-100);
-                  chrome.storage.local.set({ storyTime: st });
+                chrome.storage.local.get(['coopMemory'], d => {
+                  const mem = d.coopMemory && Array.isArray(d.coopMemory.entries) ? d.coopMemory : { entries: [] };
+                  const now = new Date().toISOString();
+                  mem.entries.push({
+                    id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+                    type: 'feedback',
+                    name: `scoring_feedback: ${flagText.slice(0, 50)}`,
+                    description: `Dismissed ${flagType} flag for ${c.company}`,
+                    body: `Dismissed ${flagType} flag "${flagText}" — reason: ${reason}`,
+                    createdAt: now,
+                    updatedAt: now,
+                    source: c.company,
+                  });
+                  if (mem.entries.length > 200) mem.entries = mem.entries.slice(-200);
+                  mem.updatedAt = now;
+                  chrome.storage.local.set({ coopMemory: mem });
                 });
               }
               row.innerHTML = `<span style="font-size:11px;color:#9CA0A6;">✓ ${reason ? 'Feedback saved — Coop will remember this' : 'Dismissed'}</span>`;
@@ -1358,7 +1387,11 @@ function initCardSwipe() {
       // Trigger action
       card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
       const direction = currentX < 0 ? 'pass' : 'interested';
-      card.style.transform = `translateX(${currentX < 0 ? '-120%' : '120%'}) rotate(${currentX < 0 ? '-12' : '12'}deg)`;
+      if (_inOverlay) {
+        card.style.transform = `translateX(${currentX < 0 ? -30 : 30}px) scale(0.88) rotate(${currentX < 0 ? -5 : 5}deg)`;
+      } else {
+        card.style.transform = `translateX(${currentX < 0 ? '-120%' : '120%'}) rotate(${currentX < 0 ? '-12' : '12'}deg)`;
+      }
       card.style.opacity = '0';
       setTimeout(() => triageAction(direction, true), 150);
     } else {

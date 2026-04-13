@@ -976,7 +976,7 @@ function buildOpportunity() {
     return `<div class="prop-row">
       <span class="prop-label">Match</span>
       <div class="prop-val-wrap" style="gap:6px">
-        <span style="font-size:13px;font-weight:700;color:#33475b">${entry.jobMatch.score}/10</span>
+        <span style="font-size:13px;font-weight:700;color:#33475b">${Number(entry.jobMatch.score).toFixed(1)}/10</span>
         <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(45,62,80,0.07);color:#516f90">${v.label}</span>
       </div>
     </div>`;
@@ -1863,9 +1863,17 @@ function initIntelTab() {
   // Bind role brief events
   bindRoleBriefEvents();
 
-  // Auto-generate long-form role brief on first load if data exists and no short-form from scoring
-  if (entry.isOpportunity && !entry.roleBrief && !entry.jobMatch?.roleBrief?.roleSummary && (entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length)) {
-    setTimeout(() => generateRoleBrief(), 1000);
+  // Auto-generate long-form role brief only for opportunities in configured rescore stages
+  // All other stages require manual trigger via the Generate button
+  if (entry.isOpportunity && !entry.roleBrief && !entry.jobMatch?.roleBrief?.roleSummary
+      && (entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length)) {
+    chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
+      const rescoreStages = coopConfig?.rescoreStages || [];
+      const currentStage = entry.jobStage || 'needs_review';
+      if (rescoreStages.length && rescoreStages.includes(currentStage)) {
+        setTimeout(() => generateRoleBrief(), 1000);
+      }
+    });
   }
 }
 
@@ -1967,7 +1975,7 @@ function buildFitSection() {
     const noteA = fb?.type === 'note' ? ' active note' : '';
     const downA = fb?.type === 'down' ? ' active down' : '';
     html += `<div class="fit-score-row">
-      <span class="fit-score"><span class="fit-score-label">Coop's Score</span>${score}<span class="fit-score-denom">/10</span></span>
+      <span class="fit-score"><span class="fit-score-label">Coop's Score</span>${typeof score === 'number' ? score.toFixed(1) : score}<span class="fit-score-denom">/10</span></span>
       <span class="fit-verdict" style="color:${v.color}">${v.label}</span>
       <span class="verdict-thumbs">
         <button class="thumb-btn${upA}" data-dir="up" title="Agree">👍</button>

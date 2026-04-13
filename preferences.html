@@ -634,6 +634,9 @@
       color: #fff; background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);
     }
     .icp-autofill-btn--primary:hover { background: var(--ci-accent-primary-hover); border-color: var(--ci-accent-primary-hover); color: #fff; }
+    .compiled-tier-btn.active, .compiled-doc-btn.active {
+      color: #fff; background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);
+    }
     .icp-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .icp-attrs .field { margin-bottom: 0; }
 
@@ -1668,26 +1671,29 @@
       </div>
     </div>
 
-    <!-- ── Coop's Ideal Role Assessment ── -->
-    <div class="card" id="card-coop-assessment" data-card="coop-assessment">
+    <!-- ── What Coop Sees ── -->
+    <div class="card" id="card-coop-compiled" data-card="coop-compiled">
       <div class="card-header">
         <div class="card-header-text">
-          <div class="card-title">Coop's assessment of your ideal role</div>
-          <div class="card-subtitle">Coop's synthesized understanding based on your profile, preferences, and all conversations</div>
+          <div class="card-title">What Coop sees</div>
+          <div class="card-subtitle">The compiled profile and preferences Coop uses for scoring, chat, and recommendations — auto-updated when you change your settings</div>
         </div>
         <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
       <div class="card-body">
-        <div id="coop-assessment-content" style="font-size:13px;line-height:1.7;color:var(--ci-text-secondary);min-height:40px;">
-          <span style="color:var(--ci-text-tertiary);">Click "Refresh" to generate Coop's assessment</span>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="icp-autofill-btn compiled-tier-btn active" data-tier="standard" style="margin-bottom:0;">Standard</button>
+          <button class="icp-autofill-btn compiled-tier-btn" data-tier="full" style="margin-bottom:0;">Full</button>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
-          <button id="coop-assessment-refresh" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--ci-accent-primary);color:#fff;border:none;border-radius:var(--ci-radius-sm);font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:all 0.15s;">
-            <svg width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="rgba(255,255,255,0.2)"/><g><ellipse cx="50" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.6)"/><circle cx="50" cy="45" r="20" fill="rgba(255,255,255,0.8)"/></g></svg>
-            Ask Coop to refresh
-          </button>
-          <button id="coop-assessment-edit" class="icp-autofill-btn" style="margin-bottom:0;">Edit</button>
-          <span id="coop-assessment-date" style="font-size:10px;color:var(--ci-text-tertiary);"></span>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="icp-autofill-btn compiled-doc-btn active" data-doc="profile" style="margin-bottom:0;">Profile</button>
+          <button class="icp-autofill-btn compiled-doc-btn" data-doc="preferences" style="margin-bottom:0;">Preferences</button>
+        </div>
+        <div id="compiled-profile-content" style="font-size:13px;line-height:1.7;color:var(--ci-text-secondary);min-height:40px;white-space:pre-wrap;font-family:var(--ci-font-sans,system-ui);border:1px solid var(--ci-border);border-radius:8px;padding:14px;background:var(--ci-bg-page);max-height:500px;overflow-y:auto;">
+          <span style="color:var(--ci-text-tertiary);">Loading compiled profile...</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <span id="compiled-profile-meta" style="font-size:10px;color:var(--ci-text-tertiary);"></span>
         </div>
       </div>
     </div>
@@ -1841,13 +1847,7 @@
           </div>
           <label class="toggle-switch"><input type="checkbox" id="coop-sounds" checked><span class="toggle-track"></span></label>
         </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Tool use (experimental)</span>
-            <span class="toggle-desc">Coop fetches context on demand via tool calls instead of preloading everything. Dramatically cheaper per message. Haiku only. See prds/G2-coop-tool-use.md.</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-tool-use"><span class="toggle-track"></span></label>
-        </div>
+        <!-- Tool-use (G2) is now the default chat path. Legacy only used for Career OS editor and application mode. -->
       </div>
     </div>
 

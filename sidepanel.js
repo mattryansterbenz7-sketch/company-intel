@@ -15,6 +15,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// ── Task filter state ───────────────────────────────────────────────────────
+let _taskPriFilter = 'all';
+let _taskDateFilter = 'all';
+
 // ── Coop quick prompts ──────────────────────────────────────────────────────
 const DEFAULT_QUICK_PROMPTS_SP = [
   { id: 'cover-letter', label: 'Cover letter', prompt: 'Help me write a custom cover letter for this role. Use what you know about me and the company to make it specific and compelling.' },
@@ -72,6 +76,60 @@ setInterval(() => { if (!document.hidden) updateHealthDot(); }, 60000);
 
 document.getElementById('sp-health-dot')?.addEventListener('click', () => {
   coopNavigate(chrome.runtime.getURL('integrations.html'), true);
+});
+
+// ── Cost Badge ─────────────────────────────────────────────────────────────
+
+const _costOpLabels = {
+  chat: 'Coop Chat', insight: 'Memory Extraction', scoring: 'Job Scoring',
+  research: 'Company Research', search: 'Web Search', enrich: 'Data Enrichment',
+  profile: 'Profile Processing', extract: 'Task Extraction', rewrite: 'Writing Assistant',
+  scout: 'Scout'
+};
+
+function updateCostBadge() {
+  chrome.storage.local.get(['apiUsage'], d => {
+    const badge = document.getElementById('sp-cost-badge');
+    if (!badge) return;
+    const usage = d.apiUsage || {};
+    const cost = typeof usage.costToday === 'number' ? usage.costToday : 0;
+
+    badge.textContent = `~$${cost.toFixed(2)}`;
+
+    // Color code
+    badge.classList.remove('cost-green', 'cost-orange', 'cost-red');
+    if (cost > 1.00) badge.classList.add('cost-red');
+    else if (cost >= 0.25) badge.classList.add('cost-orange');
+    else badge.classList.add('cost-green');
+
+    // Build tooltip with per-op breakdown
+    const log = Array.isArray(usage.callLog) ? usage.callLog : [];
+    const today = new Date().toDateString();
+    const opTotals = {};
+    for (const entry of log) {
+      if (!entry.ts || new Date(entry.ts).toDateString() !== today) continue;
+      const label = _costOpLabels[entry.op] || entry.op || 'Other';
+      opTotals[label] = (opTotals[label] || 0) + (entry.cost || 0);
+    }
+    const lines = Object.entries(opTotals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([op, c]) => `${op}: $${c.toFixed(3)}`);
+    badge.title = lines.length
+      ? `API spend today: ~$${cost.toFixed(2)}\n${lines.join('\n')}`
+      : `API spend today: ~$${cost.toFixed(2)}`;
+  });
+}
+
+updateCostBadge();
+setInterval(() => { if (!document.hidden) updateCostBadge(); }, 30000);
+
+// Update after storage changes (catches post-chat, post-scoring, etc.)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.apiUsage) updateCostBadge();
+});
+
+document.getElementById('sp-cost-badge')?.addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('pipeline.html#usage') });
 });
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -306,7 +364,9 @@ document.getElementById('sp-close-btn')?.addEventListener('click', () => {
 // Re-render tasks/stats when storage changes from another page (e.g. saved.html)
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.userTasks) {
-    showPipelineStats();
+    const homeEl = document.getElementById('sp-home');
+    if (homeEl && homeEl.style.display !== 'none') renderHomeState();
+    else showPipelineStats();
   }
 });
 
@@ -1357,8 +1417,8 @@ function renderHomeState() {
 
       const tasksEl = document.getElementById('sp-home-tasks');
       // Read filter state
-      const taskPriFilter = tasksEl._priFilter || 'all';
-      const taskDateFilter = tasksEl._dateFilter || 'all';
+      const taskPriFilter = _taskPriFilter;
+      const taskDateFilter = _taskDateFilter;
 
       // Apply filters
       const filtered = tasks.filter(t => {
@@ -1434,9 +1494,9 @@ function renderHomeState() {
           btn.addEventListener('click', () => {
             const key = btn.dataset.filterKey;
             const val = btn.dataset.filterVal;
-            if (key === 'pri') tasksEl._priFilter = val;
-            else tasksEl._dateFilter = val;
-            showPipelineStats();
+            if (key === 'pri') _taskPriFilter = val;
+            else _taskDateFilter = val;
+            renderHomeState();
           });
         });
 
@@ -1522,7 +1582,7 @@ function renderHomeState() {
             chrome.storage.local.set({ userTasks: all }, () => {
               const form = tasksEl.querySelector('#sp-task-add-form');
               if (form) form.style.display = 'none';
-              showPipelineStats();
+              renderHomeState();
             });
           });
         };
@@ -1581,11 +1641,11 @@ function renderHomeState() {
                   const task = allTasks.find(t => t.id === taskId);
                   if (task) {
                     task.dueDate = newDate;
-                    chrome.storage.local.set({ userTasks: allTasks }, () => showPipelineStats());
+                    chrome.storage.local.set({ userTasks: allTasks }, () => renderHomeState());
                   }
                 });
               } else {
-                showPipelineStats(); // re-render to restore label
+                renderHomeState(); // re-render to restore label
               }
             };
             input.addEventListener('change', save);
@@ -1762,7 +1822,7 @@ function renderHomeState() {
                 const all = d.userTasks || [];
                 const t = all.find(t => t.id === taskId);
                 if (t) Object.assign(t, { text, dueDate, priority: editPri });
-                chrome.storage.local.set({ userTasks: all }, () => showPipelineStats());
+                chrome.storage.local.set({ userTasks: all }, () => renderHomeState());
               });
             };
 
@@ -2678,7 +2738,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
               <button class="thumb-btn${noteActive}" data-dir="note" title="Leave a note on the wording/format">💬</button>
               <button class="thumb-btn${downActive}" data-dir="down" title="Disagree with assessment">👎</button>
             </span>
-            <span class="fit-verdict">${jobMatch.verdict}</span>
+            ${jobMatch.verdict ? `<span class="fit-verdict">${jobMatch.verdict}</span>` : ''}
           </div>
           <div id="sp-thumb-form" style="display:none"></div>
           ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
@@ -2939,25 +2999,29 @@ document.addEventListener('click', e => {
       if (feedback) qual.userFeedback = feedback;
       chrome.storage.local.set({ savedCompanies: companies });
 
-      // Save feedback as learned insight
+      // Save feedback to coopMemory for future scoring
       if (feedback) {
-        chrome.storage.local.get(['storyTime'], d => {
-          const st = d.storyTime || {};
-          st.learnedInsights = st.learnedInsights || [];
-          st.learnedInsights.push({
+        chrome.storage.local.get(['coopMemory'], d => {
+          const mem = d.coopMemory && Array.isArray(d.coopMemory.entries) ? d.coopMemory : { entries: [] };
+          const now = new Date().toISOString();
+          mem.entries.push({
+            id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            type: 'feedback',
+            name: `scoring_feedback: ${(qual.requirement || '').slice(0, 50)}`,
+            description: `Qualification feedback for ${company}`,
+            body: `Qualification "${qual.requirement}" — user says ${selectedStatus || qual.status}: ${feedback}`,
+            createdAt: now,
+            updatedAt: now,
             source: company,
-            date: new Date().toISOString().slice(0, 10),
-            insight: `Qualification "${qual.requirement}" — user says ${selectedStatus || qual.status}: ${feedback}`,
-            category: 'scoring_feedback',
-            priority: 'high',
           });
-          st.learnedInsights = st.learnedInsights.slice(-100);
-          chrome.storage.local.set({ storyTime: st });
+          if (mem.entries.length > 200) mem.entries = mem.entries.slice(-200);
+          mem.updatedAt = now;
+          chrome.storage.local.set({ coopMemory: mem });
         });
       }
 
       // Update icon
-      const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '?' };
+      const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '✗' };
       const newStatus = selectedStatus || qual.status;
       iconBtn.textContent = icons[newStatus] || '?';
       iconBtn.className = `qual-icon ${newStatus}`;
@@ -3059,7 +3123,7 @@ function renderQualifications(qualifications) {
   const metCount = qualifications.filter(q => q.status === 'met' && !q.dismissed).length;
   const reqCount = qualifications.filter(q => q.importance === 'required').length;
   const reqMetCount = qualifications.filter(q => q.importance === 'required' && q.status === 'met' && !q.dismissed).length;
-  const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '?' };
+  const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '✗' };
   const summary = `<div class="qual-summary">
     <span class="qual-summary-item"><strong>${metCount}</strong>/${qualifications.length} met</span>
     ${reqCount ? `<span class="qual-summary-item"><strong>${reqMetCount}</strong>/${reqCount} required</span>` : ''}
@@ -5374,6 +5438,9 @@ function applyQueueBind(entry) {
   if (entry.jobMatch) renderJobOpportunity(entry.jobMatch, entry.jobSnapshot || null);
   showSaveBar();
   if (saveBtn) { saveBtn.textContent = '✓ Saved'; saveBtn.classList.add('saved'); }
+  // Hide the queue save buttons — this entry is already saved
+  const _qPanel = document.getElementById('queue-save-panel');
+  if (_qPanel) _qPanel.style.display = 'none';
   showCrmLink(entry);
   console.log('[SP] Queue bind applied for:', entry.company);
 }

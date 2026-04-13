@@ -37,13 +37,19 @@ export const COOP_TOOLS = [
   },
   {
     name: 'get_profile_section',
-    description: "Returns one slice of the user's Career OS profile. Use when answering questions about the user's background, experience, story, dealbreakers, preferences, skills, or learnings. Fetch only the section you need — do not fetch 'story' unless the question is actually about the user's story.",
+    description: "Returns the user's compiled Career OS profile or preferences as markdown. Use 'profile' for background/story/experience/skills, 'preferences' for job search criteria/flags/comp/ICP. Use 'full' tier for scoring, cover letters, deep career questions; 'standard' for general chat.",
     input_schema: {
       type: 'object',
       properties: {
         section: {
           type: 'string',
-          enum: ['story', 'experience', 'dealbreakers', 'preferences', 'attracted_to', 'skills', 'learnings'],
+          enum: ['profile', 'preferences'],
+          description: "'profile' = who the user is (story, experience, skills, voice). 'preferences' = what they want (ICP, flags, comp, location, learnings).",
+        },
+        tier: {
+          type: 'string',
+          enum: ['standard', 'full'],
+          description: "Detail level. 'standard' (~800 tokens) for most questions. 'full' (~2000 tokens) for scoring, applications, cover letters.",
         },
       },
       required: ['section'],
@@ -220,54 +226,31 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
   return _capToolResult(out);
 }
 
-async function _tool_get_profile_section({ section }) {
-  const prefs = await new Promise(r => chrome.storage.sync.get(['prefs'], d => r(d.prefs || {})));
-  const keys = ['profileStory', 'profileExperience', 'profileExperienceEntries', 'profilePrinciples', 'profileMotivators',
-    'profileVoice', 'profileSkills', 'storyTime', 'profileAttractedTo', 'profileDealbreakers',
-    'profileSkillTags', 'profileRoleICP', 'profileCompanyICP', 'profileInterviewLearnings'];
+async function _tool_get_profile_section({ section, tier }) {
+  const t = tier || 'standard';
+  const keys = t === 'full'
+    ? ['coopProfileFull', 'coopPrefsFull']
+    : ['coopProfileStandard', 'coopPrefsStandard'];
   const d = await new Promise(r => chrome.storage.local.get(keys, r));
-  switch (section) {
-    case 'story': {
-      const s = d.profileStory || d.storyTime?.profileSummary || d.storyTime?.rawInput || '';
-      return { section, content: s.slice(0, 16000) };
-    }
-    case 'experience': {
-      let text = (d.profileExperience || '').slice(0, 12000);
-      const entries = d.profileExperienceEntries || [];
-      if (entries.length) {
-        text += '\n\nStructured experience (tagged skills are confirmed proficiency):';
-        entries.forEach(e => {
-          if (!e.company && !(e.tags || []).length) return;
-          const tags = (e.tags || []).join(', ');
-          text += `\n- ${e.company || 'Unknown'}${e.titles ? ` (${e.titles})` : ''}${e.dateRange ? ` [${e.dateRange}]` : ''}${tags ? `: ${tags}` : ''}`;
-        });
-      }
-      return { section, content: text };
-    }
-    case 'dealbreakers':
-      return { section, content: d.profileDealbreakers || [] };
-    case 'attracted_to':
-      return { section, content: d.profileAttractedTo || [] };
-    case 'preferences':
-      return {
-        section,
-        content: {
-          roleICP: d.profileRoleICP || null,
-          companyICP: d.profileCompanyICP || null,
-          salaryFloor: prefs.salaryFloor || null,
-          oteFloor: prefs.oteFloor || null,
-          workArrangement: prefs.workArrangement || [],
-          location: prefs.userLocation || null,
-          maxTravel: prefs.maxTravel || null,
-        },
-      };
-    case 'skills':
-      return { section, content: { skills: d.profileSkills || '', tags: d.profileSkillTags || [] } };
-    case 'learnings':
-      return { section, content: (d.profileInterviewLearnings || []).slice(-20) };
-    default:
-      return { error: `Unknown section: ${section}` };
+
+  if (section === 'profile') {
+    const content = t === 'full' ? d.coopProfileFull : d.coopProfileStandard;
+    if (content) return { section, tier: t, content };
+    // Fallback: compile on-demand if not yet compiled
+    const { compileProfile } = await import('./profile-compiler.js');
+    const compiled = await compileProfile();
+    return { section, tier: t, content: t === 'full' ? compiled.coopProfileFull : compiled.coopProfileStandard };
   }
+
+  if (section === 'preferences') {
+    const content = t === 'full' ? d.coopPrefsFull : d.coopPrefsStandard;
+    if (content) return { section, tier: t, content };
+    const { compileProfile } = await import('./profile-compiler.js');
+    const compiled = await compileProfile();
+    return { section, tier: t, content: t === 'full' ? compiled.coopPrefsFull : compiled.coopPrefsStandard };
+  }
+
+  return { error: `Unknown section: ${section}. Use 'profile' or 'preferences'.` };
 }
 
 async function _tool_get_pipeline_overview({ filter, stage }) {

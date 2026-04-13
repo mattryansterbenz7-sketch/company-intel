@@ -317,6 +317,61 @@ function renderScoringSection(config) {
   return html;
 }
 
+function renderChatFallbackSection(config) {
+  const fb = config.chatFallback || { enabled: true, allowExpensive: false, showIndicator: true };
+
+  let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">Chat Model Fallback</div>';
+  html += '<div class="pipeline-sub-desc">When the primary chat model fails (rate limit, outage), Coop can try other models. Control which models are allowed.</div>';
+
+  // Fallback enabled toggle
+  html += `<div class="pipeline-count-row" style="margin-bottom:8px">
+    <div>
+      <div class="pipeline-count-label" style="font-weight:600">Enable fallback</div>
+      <div style="font-size:10px;color:#7c98b6">If disabled, Coop will show an error instead of trying another model.</div>
+    </div>
+    <label class="pipeline-toggle">
+      <input type="checkbox" id="fb-enabled" ${fb.enabled ? 'checked' : ''}>
+      <span class="pipeline-toggle-track"></span>
+    </label>
+  </div>`;
+
+  // Allow expensive models toggle
+  html += `<div class="pipeline-count-row" style="margin-bottom:8px">
+    <div>
+      <div class="pipeline-count-label" style="font-weight:600">Allow expensive fallback models</div>
+      <div style="font-size:10px;color:#7c98b6">When OFF, fallback is limited to cheap models (Haiku, GPT-4.1 Mini). When ON, Sonnet and GPT-4.1 are also available as fallbacks — these cost 3-5x more per message.</div>
+    </div>
+    <label class="pipeline-toggle">
+      <input type="checkbox" id="fb-allow-expensive" ${fb.allowExpensive ? 'checked' : ''}>
+      <span class="pipeline-toggle-track"></span>
+    </label>
+  </div>`;
+
+  // Show fallback indicator toggle
+  html += `<div class="pipeline-count-row">
+    <div>
+      <div class="pipeline-count-label" style="font-weight:600">Show fallback indicator in chat</div>
+      <div style="font-size:10px;color:#7c98b6">Display a notice when Coop used a different model than your selected one.</div>
+    </div>
+    <label class="pipeline-toggle">
+      <input type="checkbox" id="fb-show-indicator" ${fb.showIndicator ? 'checked' : ''}>
+      <span class="pipeline-toggle-track"></span>
+    </label>
+  </div>`;
+
+  // Current fallback order display
+  const cheapModels = ['Haiku ($1/$5 per MTok)', 'GPT-4.1 Mini ($0.40/$1.60 per MTok)'];
+  const expensiveModels = ['Sonnet ($3/$15 per MTok)', 'GPT-4.1 ($2/$8 per MTok)'];
+  html += `<div style="margin-top:10px;padding:10px 12px;background:var(--ci-bg-secondary, #f5f0eb);border-radius:8px;font-size:11px;color:#7c98b6">
+    <div style="font-weight:600;margin-bottom:4px;color:var(--ci-text-primary, #2d2a26)">Current fallback order:</div>
+    <div>Your selected model → ${cheapModels.join(' → ')}${fb.allowExpensive ? ' → ' + expensiveModels.join(' → ') : ''}</div>
+    ${!fb.enabled ? '<div style="color:var(--ci-accent-red, #c44040);margin-top:4px;font-weight:600">Fallback disabled — errors will surface directly.</div>' : ''}
+  </div>`;
+
+  html += '</div>';
+  return html;
+}
+
 function renderPipelineOverview(config, keyStatus) {
   const models = config.aiModels || {};
   const counts = config.searchCounts || {};
@@ -433,6 +488,7 @@ async function loadPipelineSettings() {
     renderAIModels(config) +
     renderSearchCounts(config) +
     renderScoringSection(config) +
+    renderChatFallbackSection(config) +
     renderPhotosSection(config) +
     renderPipelineOverview(config, keyStatus) +
     '<div id="auto-rescore-section"></div>';
@@ -550,6 +606,32 @@ async function loadPipelineSettings() {
     scoutCacheDays.addEventListener('change', () => {
       if (!config.scoring) config.scoring = {};
       config.scoring.scoutCacheDays = parseInt(scoutCacheDays.value);
+      savePipelineConfig(config);
+    });
+  }
+
+  // ── Chat Fallback controls ──
+  const fbEnabled = document.getElementById('fb-enabled');
+  if (fbEnabled) {
+    fbEnabled.addEventListener('change', () => {
+      if (!config.chatFallback) config.chatFallback = {};
+      config.chatFallback.enabled = fbEnabled.checked;
+      savePipelineConfig(config);
+    });
+  }
+  const fbExpensive = document.getElementById('fb-allow-expensive');
+  if (fbExpensive) {
+    fbExpensive.addEventListener('change', () => {
+      if (!config.chatFallback) config.chatFallback = {};
+      config.chatFallback.allowExpensive = fbExpensive.checked;
+      savePipelineConfig(config);
+    });
+  }
+  const fbIndicator = document.getElementById('fb-show-indicator');
+  if (fbIndicator) {
+    fbIndicator.addEventListener('change', () => {
+      if (!config.chatFallback) config.chatFallback = {};
+      config.chatFallback.showIndicator = fbIndicator.checked;
       savePipelineConfig(config);
     });
   }
@@ -886,9 +968,367 @@ function loadAutoRescoreSection() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Cost Dashboard (Usage & Costs tab)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const COST_OP_LABELS = {
+  chat:     'Coop Chat',
+  insight:  'Memory Extraction',
+  scoring:  'Job Scoring',
+  research: 'Company Research',
+  search:   'Web Search',
+  enrich:   'Data Enrichment',
+  profile:  'Profile Processing',
+  extract:  'Task Extraction',
+  rewrite:  'Writing Assistant',
+  scout:    'Company Scout'
+};
+
+const COST_OP_COLORS = {
+  chat:     '#4573D2',
+  insight:  '#7C6EF0',
+  scoring:  '#FC636B',
+  research: '#F5A623',
+  search:   '#3B82F6',
+  enrich:   '#36B37E',
+  profile:  '#E8384F',
+  extract:  '#10B981',
+  rewrite:  '#8B5CF6',
+  scout:    '#D97706'
+};
+
+const COST_PROVIDER_NAMES = {
+  anthropic: 'Anthropic (Claude)',
+  openai:    'OpenAI (GPT)',
+  serper:    'Serper',
+  apollo:    'Apollo',
+  granola:   'Granola'
+};
+
+const COST_PROVIDER_COLORS = {
+  anthropic: '#D97706',
+  openai:    '#10A37F',
+  serper:    '#3B82F6',
+  apollo:    '#6366F1',
+  granola:   '#8B5CF6'
+};
+
+const COST_PROVIDERS = ['anthropic', 'openai', 'serper', 'apollo', 'granola'];
+
+function costFmt(c) {
+  if (c == null || c === 0) return '$0.00';
+  return c < 0.01 ? '$' + c.toFixed(4) : '$' + c.toFixed(2);
+}
+
+function costFmtLong(c) {
+  if (c == null || c === 0) return '$0.000';
+  return '$' + c.toFixed(4);
+}
+
+function costFmtTokens(t) {
+  if (!t) return '0';
+  return t > 999 ? (t / 1000).toFixed(1) + 'k' : String(t);
+}
+
+function costColorClass(cost) {
+  if (cost < 0.25) return 'cost-green';
+  if (cost <= 1.00) return 'cost-yellow';
+  return 'cost-red';
+}
+
+function costBarColor(cost) {
+  if (cost < 0.25) return 'var(--ci-accent-teal)';
+  if (cost <= 1.00) return 'var(--ci-accent-amber)';
+  return 'var(--ci-accent-red)';
+}
+
+function costEscapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function costTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadAndRenderCosts() {
+  chrome.storage.local.get('apiUsage', d => {
+    const usage = d.apiUsage || {};
+    renderCostDashboard(usage);
+    const note = document.getElementById('cost-refresh-note');
+    if (note) note.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+  });
+}
+
+function renderCostDashboard(usage) {
+  const today = costTodayStr();
+  const log = (usage.callLog || []).filter(c => {
+    const d = new Date(c.ts).toISOString().slice(0, 10);
+    return d === today;
+  });
+
+  renderCostSummary(usage, log);
+  renderCostOpBreakdown(log);
+  renderCostProviders(usage, log);
+  renderCostLog(usage.callLog || []);
+  renderCostChart(usage);
+}
+
+function renderCostSummary(usage, todayLog) {
+  const totalCost = usage.costToday || 0;
+  const totalCalls = todayLog.length;
+
+  const sumTotal = document.getElementById('cost-sum-total');
+  if (sumTotal) {
+    sumTotal.textContent = costFmt(totalCost);
+    sumTotal.className = 'cost-summary-card-value ' + costColorClass(totalCost);
+  }
+
+  const resetDate = usage.lastDayReset || costTodayStr();
+  const detailEl = document.getElementById('cost-sum-total-detail');
+  if (detailEl) detailEl.textContent = 'Since ' + resetDate;
+
+  const callsEl = document.getElementById('cost-sum-calls');
+  if (callsEl) callsEl.textContent = totalCalls;
+  const providerCounts = {};
+  todayLog.forEach(c => { const p = c.provider || 'unknown'; providerCounts[p] = (providerCounts[p] || 0) + 1; });
+  const topProvider = Object.entries(providerCounts).sort((a, b) => b[1] - a[1])[0];
+  const callsDetail = document.getElementById('cost-sum-calls-detail');
+  if (callsDetail) callsDetail.textContent = topProvider ? `Most active: ${topProvider[0]} (${topProvider[1]})` : '';
+
+  const opCosts = {};
+  todayLog.forEach(c => { const op = c.op || 'unknown'; opCosts[op] = (opCosts[op] || 0) + (c.cost || 0); });
+  const topOp = Object.entries(opCosts).sort((a, b) => b[1] - a[1])[0];
+  const sumExpensive = document.getElementById('cost-sum-expensive');
+  const sumExpensiveDetail = document.getElementById('cost-sum-expensive-detail');
+  if (sumExpensive) {
+    if (topOp && topOp[1] > 0) {
+      sumExpensive.textContent = COST_OP_LABELS[topOp[0]] || topOp[0];
+      if (sumExpensiveDetail) sumExpensiveDetail.textContent = costFmt(topOp[1]) + ' total';
+    } else {
+      sumExpensive.textContent = '--';
+      if (sumExpensiveDetail) sumExpensiveDetail.textContent = 'No calls today';
+    }
+  }
+
+  const chatEntries = todayLog.filter(c => c.op === 'chat');
+  const avgChat = chatEntries.length > 0
+    ? chatEntries.reduce((s, c) => s + (c.cost || 0), 0) / chatEntries.length
+    : 0;
+  const avgEl = document.getElementById('cost-sum-avg-chat');
+  if (avgEl) avgEl.textContent = costFmtLong(avgChat);
+  const avgDetail = document.getElementById('cost-sum-avg-chat-detail');
+  if (avgDetail) avgDetail.textContent = chatEntries.length + ' chat calls today';
+}
+
+function renderCostOpBreakdown(todayLog) {
+  const container = document.getElementById('cost-op-rows');
+  if (!container) return;
+
+  const ops = {};
+  todayLog.forEach(c => { const op = c.op || 'unknown'; if (!ops[op]) ops[op] = { count: 0, cost: 0 }; ops[op].count++; ops[op].cost += (c.cost || 0); });
+  const totalCost = todayLog.reduce((s, c) => s + (c.cost || 0), 0);
+  const sorted = Object.entries(ops).sort((a, b) => b[1].cost - a[1].cost);
+
+  if (sorted.length === 0) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ci-text-tertiary);font-size:13px;">No API calls today</div>';
+    return;
+  }
+
+  container.innerHTML = sorted.map(([op, data]) => {
+    const label = COST_OP_LABELS[op] || op;
+    const color = COST_OP_COLORS[op] || 'var(--ci-text-tertiary)';
+    const pct = totalCost > 0 ? (data.cost / totalCost * 100) : 0;
+    const avg = data.count > 0 ? data.cost / data.count : 0;
+    return `<div class="cost-op-row">
+      <div class="cost-op-name"><span class="cost-op-badge" style="background:${color}"></span>${costEscapeHtml(label)}</div>
+      <div class="cost-op-mono">${data.count}</div>
+      <div class="cost-op-mono">${costFmt(data.cost)}</div>
+      <div class="cost-op-mono">${costFmtLong(avg)}</div>
+      <div><div class="cost-op-bar-wrap"><div class="cost-op-bar-fill" style="width:${Math.max(pct, 1)}%;background:${color}"></div></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderCostProviders(usage, todayLog) {
+  const container = document.getElementById('cost-provider-grid');
+  if (!container) return;
+
+  const modelsByProvider = {};
+  todayLog.forEach(c => {
+    const p = c.provider || 'unknown';
+    const m = c.model || 'unknown';
+    if (!modelsByProvider[p]) modelsByProvider[p] = {};
+    if (!modelsByProvider[p][m]) modelsByProvider[p][m] = { count: 0, cost: 0 };
+    modelsByProvider[p][m].count++;
+    modelsByProvider[p][m].cost += (c.cost || 0);
+  });
+
+  container.innerHTML = COST_PROVIDERS.map(key => {
+    const pd = usage[key] || {};
+    const name = COST_PROVIDER_NAMES[key] || key;
+    const color = COST_PROVIDER_COLORS[key] || '#999';
+    const cost = pd.costToday || 0;
+    const requests = pd.totalRequests || 0;
+    const tokensIn = pd.tokensToday?.input || 0;
+    const tokensOut = pd.tokensToday?.output || 0;
+    const errors = pd.errors || {};
+
+    let modelsHtml = '';
+    const models = modelsByProvider[key];
+    if (models && Object.keys(models).length > 0) {
+      const sorted = Object.entries(models).sort((a, b) => b[1].cost - a[1].cost);
+      modelsHtml = `<div class="cost-provider-models">
+        <div class="cost-provider-models-title">Models</div>
+        ${sorted.map(([m, d]) => `<div class="cost-model-row">
+          <span class="cost-model-name">${costEscapeHtml(m)}</span>
+          <span class="cost-model-cost">${d.count} calls / ${costFmt(d.cost)}</span>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    let errorHtml = '';
+    if ((errors.count429 || 0) > 0) errorHtml += `<div class="cost-provider-error">Rate limited: ${errors.count429} x 429 errors</div>`;
+    if ((errors.count401 || 0) > 0) errorHtml += `<div class="cost-provider-error">Auth error: ${errors.count401} x 401 errors</div>`;
+    if ((errors.countOther || 0) > 0) errorHtml += `<div class="cost-provider-error">Other errors: ${errors.countOther}</div>`;
+
+    return `<div class="cost-provider-card">
+      <div class="cost-provider-name"><span class="cost-provider-dot" style="background:${color}"></span>${costEscapeHtml(name)}</div>
+      <div class="cost-provider-stat"><span class="cost-provider-stat-label">Calls today</span><span class="cost-provider-stat-value">${requests}</span></div>
+      <div class="cost-provider-stat"><span class="cost-provider-stat-label">Tokens in / out</span><span class="cost-provider-stat-value">${costFmtTokens(tokensIn)} / ${costFmtTokens(tokensOut)}</span></div>
+      <div class="cost-provider-stat"><span class="cost-provider-stat-label">Cost today</span><span class="cost-provider-stat-value">${costFmt(cost)}</span></div>
+      ${modelsHtml}
+      ${errorHtml}
+    </div>`;
+  }).join('');
+}
+
+function renderCostLog(callLog) {
+  const container = document.getElementById('cost-log-rows');
+  if (!container) return;
+  const recent = callLog.slice(-50).reverse();
+
+  if (recent.length === 0) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ci-text-tertiary);font-size:13px;">No recent activity</div>';
+    return;
+  }
+
+  container.innerHTML = recent.map(entry => {
+    const time = new Date(entry.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const date = new Date(entry.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const op = entry.op || 'unknown';
+    const label = COST_OP_LABELS[op] || op;
+    const color = COST_OP_COLORS[op] || '#999';
+    return `<div class="cost-log-row">
+      <div class="cost-log-time">${date} ${time}</div>
+      <div><span class="cost-log-op-tag" style="background:${color}15;color:${color}">${costEscapeHtml(label)}</span></div>
+      <div class="cost-log-provider">${costEscapeHtml(entry.provider || '--')}</div>
+      <div class="cost-log-model" title="${costEscapeHtml(entry.model || '--')}">${costEscapeHtml(entry.model || '--')}</div>
+      <div class="cost-log-tokens">${costFmtTokens(entry.input || 0)} / ${costFmtTokens(entry.output || 0)}</div>
+      <div class="cost-log-cost">${costFmt(entry.cost || 0)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCostChart(usage) {
+  const container = document.getElementById('cost-chart-container');
+  if (!container) return;
+
+  const dayMap = {};
+  COST_PROVIDERS.forEach(key => {
+    const pd = usage[key] || {};
+    (pd.dailyHistory || []).forEach(entry => {
+      if (!entry.date) return;
+      dayMap[entry.date] = (dayMap[entry.date] || 0) + (entry.estimatedCost || 0);
+    });
+  });
+
+  const days = [];
+  const now = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    days.push({ date: ds, cost: dayMap[ds] || 0 });
+  }
+
+  const todayKey = costTodayStr();
+  const todayEntry = days.find(d => d.date === todayKey);
+  if (todayEntry && (usage.costToday || 0) > todayEntry.cost) {
+    todayEntry.cost = usage.costToday || 0;
+  }
+
+  const maxCost = Math.max(...days.map(d => d.cost), 0.01);
+
+  if (maxCost <= 0) {
+    container.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--ci-text-secondary);font-size:14px;">No cost history yet</div>';
+    return;
+  }
+
+  const ySteps = 4;
+  const yLabels = [];
+  for (let i = ySteps; i >= 0; i--) yLabels.push(costFmt(maxCost * i / ySteps));
+
+  const barsHtml = days.map(d => {
+    const pct = d.cost > 0 ? Math.max((d.cost / maxCost) * 100, 2) : 0;
+    const color = costBarColor(d.cost);
+    const dayLabel = d.date.slice(5);
+    const isToday = d.date === todayKey;
+    return `<div class="cost-chart-bar-wrap">
+      <div class="cost-chart-bar" style="height:${pct}%;background:${color};${isToday ? 'outline:2px solid var(--ci-accent-primary);outline-offset:1px;' : ''}">
+        <div class="cost-chart-bar-tooltip">${d.date}: ${costFmt(d.cost)}</div>
+      </div>
+      <div class="cost-chart-label" style="${isToday ? 'font-weight:700;color:var(--ci-text-primary);' : ''}">${dayLabel}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="cost-chart-wrapper">
+    <div class="cost-chart-y-axis">${yLabels.map(l => `<div class="cost-chart-y-label">${l}</div>`).join('')}</div>
+    <div class="cost-chart-bars" style="flex:1;">${barsHtml}</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab switching
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initTabs() {
+  const tabs = document.querySelectorAll('.page-tab');
+  const panels = document.querySelectorAll('.tab-panel');
+  let costLoaded = false;
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      panels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + target));
+
+      if (target === 'usage' && !costLoaded) {
+        costLoaded = true;
+        loadAndRenderCosts();
+      }
+    });
+  });
+
+  // Auto-select usage tab if URL hash is #usage
+  if (location.hash === '#usage') {
+    const usageTab = document.querySelector('[data-tab="usage"]');
+    if (usageTab) usageTab.click();
+  }
+}
+
 // ── Boot ──
 loadPipelineSettings();
 loadUsageDashboard();
-// Refresh usage dashboard every 30s — but only when tab is visible
-// (pauses when backgrounded to avoid wasted storage reads)
-setInterval(() => { if (!document.hidden) loadUsageDashboard(); }, 30000);
+initTabs();
+// Refresh dashboards every 30s — but only when tab is visible
+setInterval(() => {
+  if (document.hidden) return;
+  loadUsageDashboard();
+  // Only refresh cost dashboard if the usage tab is active
+  if (document.getElementById('tab-usage')?.classList.contains('active')) {
+    loadAndRenderCosts();
+  }
+}, 30000);

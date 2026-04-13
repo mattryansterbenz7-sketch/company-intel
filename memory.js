@@ -1,7 +1,7 @@
 // memory.js — Coop memory store, insight extraction, profile consolidation.
 
 import { state } from './bg-state.js';
-import { getModelForTask, claudeApiCall } from './api.js';
+import { getModelForTask, claudeApiCall, trackApiCall } from './api.js';
 
 // ── Story Time: Passive Learning (insight extraction after every chat) ───────
 
@@ -76,7 +76,7 @@ Assistant: ${assistantResponse}
 
 Existing memory index (avoid duplicates):
 ${existingIndex}` }]
-    });
+    }, 3, 'insight');
     const data = await res.json();
     if (!res.ok) { console.warn('[Insights] Skipped — API busy (', res.status, ')'); return; }
 
@@ -182,35 +182,39 @@ export async function routeInsights(insights, source) {
 
   const { storyTime } = await new Promise(r => chrome.storage.local.get(['storyTime'], r));
   const st = storyTime || {};
-  st.learnedInsights = st.learnedInsights || [];
 
   let profileChanged = false;
   const profileUpdates = {};
 
+  // Route insights to coopMemory (single source of truth)
+  const memoryActions = [];
   for (const insight of insights) {
-    // Add to learned insights array (always)
-    st.learnedInsights.push({
-      source,
-      date: new Date().toISOString().slice(0, 10),
-      insight: insight.text,
-      category: insight.category || 'general',
-      priority: insight.priority || 'normal',
-      context: insight.context || null,
-    });
+    const category = insight.category || 'general';
+
+    // Create coopMemory entry for actionable insights
+    if (['green_light', 'red_light', 'scoring_feedback', 'experience_update'].includes(category)) {
+      memoryActions.push({
+        op: 'create',
+        type: 'feedback',
+        name: `${category}: ${(insight.text || '').slice(0, 60)}`,
+        description: `Learned from ${source} on ${new Date().toISOString().slice(0, 10)}`,
+        body: insight.text + (insight.context ? `\nContext: ${insight.context}` : ''),
+      });
+    }
 
     // Route to specific profile fields (structured entries preferred, legacy fallback)
-    if (insight.target_field === 'profileGreenLights' && insight.category === 'green_light') {
+    if (insight.target_field === 'profileGreenLights' && category === 'green_light') {
       profileUpdates.profileAttractedTo = true;
       profileChanged = true;
     }
-    if (insight.target_field === 'profileRedLights' && insight.category === 'red_light') {
+    if (insight.target_field === 'profileRedLights' && category === 'red_light') {
       profileUpdates.profileDealbreakers = true;
       profileChanged = true;
     }
-    if (insight.target_field === 'rawInput' && insight.category === 'experience_update') {
+    if (insight.target_field === 'rawInput' && category === 'experience_update') {
       st.rawInput = (st.rawInput || '') + '\n\n[Learned ' + new Date().toISOString().slice(0, 10) + '] ' + insight.text;
     }
-    if (insight.category === 'answer_pattern') {
+    if (category === 'answer_pattern') {
       st.answerPatterns = st.answerPatterns || [];
       if (st.answerPatterns.length < 50) {
         st.answerPatterns.push({ text: insight.text, context: insight.context, date: new Date().toISOString().slice(0, 10), source });
@@ -218,11 +222,13 @@ export async function routeInsights(insights, source) {
     }
   }
 
-  // Keep last 100 insights
-  st.learnedInsights = st.learnedInsights.slice(-100);
-
-  // Save storyTime
+  // Save storyTime (profile field routing still writes here)
   chrome.storage.local.set({ storyTime: st });
+
+  // Write insights to coopMemory — now the single source of truth
+  if (memoryActions.length) {
+    await applyCoopMemoryActions(memoryActions, source);
+  }
 
   // Write to structured entries (preferred) with legacy text fallback
   if (profileChanged) {
@@ -310,6 +316,7 @@ ${insights || '(none yet)'}`;
         messages: [{ role: 'user', content: prompt }]
       })
     });
+    trackApiCall('anthropic', res.clone(), getModelForTask('profileConsolidate'), 'profile');
     const data = await res.json();
     if (!res.ok) return { error: data?.error?.message || `API error ${res.status}` };
     return { profileSummary: data.content?.[0]?.text || '' };

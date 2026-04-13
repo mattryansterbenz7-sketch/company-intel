@@ -38,7 +38,7 @@ export async function saveApiUsage(usage) {
   return new Promise(r => chrome.storage.local.set({ apiUsage: usage }, r));
 }
 
-export async function trackApiCall(provider, response, model) {
+export async function trackApiCall(provider, response, model, opTag) {
   try {
     const usage = await getApiUsage();
     const today = new Date().toISOString().slice(0, 10);
@@ -103,7 +103,7 @@ export async function trackApiCall(provider, response, model) {
           : '';
         console.log(`[Cost] ${model || provider} — in:${inputTokens} out:${outputTokens}${cacheNote} → $${callCost.toFixed(4)} (today: $${usage.costToday.toFixed(4)})`);
         if (!usage.callLog) usage.callLog = [];
-        usage.callLog.push({ ts: Date.now(), provider, model: model || provider, input: totalIn, output: outputTokens, cost: callCost });
+        usage.callLog.push({ ts: Date.now(), provider, model: model || provider, input: totalIn, output: outputTokens, cost: callCost, ...(opTag ? { op: opTag } : {}) });
         usage.callLog = usage.callLog.filter(c => c.ts > Date.now() - 86400000).slice(-500);
       } catch (costErr) {
         console.error('[Cost] Failed to track cost:', costErr.message);
@@ -148,7 +148,7 @@ export function getModelForTask(taskId) {
 }
 
 // ── Claude API call with retry ─────────────────────────────────────────────
-export async function claudeApiCall(body, maxRetries = 3) {
+export async function claudeApiCall(body, maxRetries = 3, opTag) {
   if (typeof body.system === 'string' && body.system.length > 500) {
     body = {
       ...body,
@@ -167,7 +167,7 @@ export async function claudeApiCall(body, maxRetries = 3) {
       },
       body: JSON.stringify(body)
     });
-    trackApiCall('anthropic', res.clone(), body.model);
+    trackApiCall('anthropic', res.clone(), body.model, opTag);
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[Claude] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -179,7 +179,7 @@ export async function claudeApiCall(body, maxRetries = 3) {
 }
 
 // ── OpenAI API call with retry ─────────────────────────────────────────────
-export async function openAiChatCall({ model, system, messages, max_tokens }, maxRetries = 3) {
+export async function openAiChatCall({ model, system, messages, max_tokens, opTag }, maxRetries = 3) {
   const oaiMessages = [{ role: 'system', content: system }];
   for (const m of messages) {
     if (Array.isArray(m.content)) {
@@ -203,7 +203,7 @@ export async function openAiChatCall({ model, system, messages, max_tokens }, ma
       },
       body: JSON.stringify({ model, messages: oaiMessages, max_tokens })
     });
-    trackApiCall('openai', res.clone(), model);
+    trackApiCall('openai', res.clone(), model, opTag);
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[OpenAI] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -215,7 +215,7 @@ export async function openAiChatCall({ model, system, messages, max_tokens }, ma
 }
 
 // ── Unified chat with automatic fallback ───────────────────────────────────
-export async function chatWithFallback({ model, system, messages, max_tokens, tag }) {
+export async function chatWithFallback({ model, system, messages, max_tokens, tag, opTag }) {
   const isSplit = system && typeof system === 'object' && typeof system.base === 'string';
   const claudeSystem = isSplit
     ? [
@@ -225,15 +225,22 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
     : system;
   const openAiSystem = isSplit ? (system.base + '\n' + system.tail) : system;
 
-  const fallbackChain = [
+  const fbConfig = state.pipelineConfig?.chatFallback || { enabled: true, allowExpensive: false, showIndicator: true };
+  const CHEAP_MODELS = new Set(['gpt-4.1-mini', 'claude-haiku-4-5-20251001']);
+  const fullChain = [
     { id: 'gpt-4.1-mini', type: 'openai' },
     { id: 'claude-haiku-4-5-20251001', type: 'claude' },
     { id: 'claude-sonnet-4-6', type: 'claude' },
     { id: 'gpt-4.1', type: 'openai' },
   ];
   const ordered = [{ id: model, type: model.startsWith('gpt-') ? 'openai' : 'claude' }];
-  for (const fb of fallbackChain) {
-    if (fb.id !== model) ordered.push(fb);
+  if (fbConfig.enabled) {
+    for (const fb of fullChain) {
+      if (fb.id === model) continue;
+      // Skip expensive models unless explicitly allowed
+      if (!fbConfig.allowExpensive && !CHEAP_MODELS.has(fb.id)) continue;
+      ordered.push(fb);
+    }
   }
 
   let lastError = null;
@@ -243,34 +250,36 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
 
     try {
       if (candidate.type === 'openai') {
-        const res = await openAiChatCall({ model: candidate.id, system: openAiSystem, messages, max_tokens });
+        const res = await openAiChatCall({ model: candidate.id, system: openAiSystem, messages, max_tokens, opTag });
         const data = await res.json();
         if (res.ok) {
           const reply = data.choices?.[0]?.message?.content || 'No response.';
-          if (candidate.id !== model) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
+          const didFallback = candidate.id !== model;
+          if (didFallback) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
           const usage = {
             input: data.usage?.prompt_tokens || 0,
             output: data.usage?.completion_tokens || 0,
             cacheCreation: 0,
             cacheRead: 0,
           };
-          return { reply, usedModel: candidate.id, usage };
+          return { reply, usedModel: candidate.id, usage, fellBack: didFallback, originalModel: didFallback ? model : undefined };
         }
         lastError = data?.error?.message || `OpenAI error ${res.status}`;
         console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
       } else {
-        const res = await claudeApiCall({ model: candidate.id, max_tokens, system: claudeSystem, messages });
+        const res = await claudeApiCall({ model: candidate.id, max_tokens, system: claudeSystem, messages }, 3, opTag);
         const data = await res.json();
         if (res.ok) {
           const reply = data.content?.[0]?.text || 'No response.';
-          if (candidate.id !== model) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
+          const didFallback = candidate.id !== model;
+          if (didFallback) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
           const usage = {
             input: data.usage?.input_tokens || 0,
             output: data.usage?.output_tokens || 0,
             cacheCreation: data.usage?.cache_creation_input_tokens || 0,
             cacheRead: data.usage?.cache_read_input_tokens || 0,
           };
-          return { reply, usedModel: candidate.id, usage };
+          return { reply, usedModel: candidate.id, usage, fellBack: didFallback, originalModel: didFallback ? model : undefined };
         }
         lastError = data?.error?.message || `Claude error ${res.status}`;
         console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
@@ -284,18 +293,18 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
 }
 
 // ── Generic AI call router ─────────────────────────────────────────────────
-export async function aiCall(taskId, { system, messages, max_tokens }) {
+export async function aiCall(taskId, { system, messages, max_tokens }, opTag) {
   const model = getModelForTask(taskId);
 
   if (model.startsWith('gpt-')) {
     if (!state.OPENAI_KEY) {
       console.warn(`[AI] OpenAI key missing for task ${taskId}, falling back to Claude`);
       const fallback = model.includes('mini') ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
-      const res = await claudeApiCall({ model: fallback, system, messages, max_tokens });
+      const res = await claudeApiCall({ model: fallback, system, messages, max_tokens }, 3, opTag);
       const data = await res.json();
       return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model: fallback };
     }
-    const res = await openAiChatCall({ model, system, messages, max_tokens });
+    const res = await openAiChatCall({ model, system, messages, max_tokens, opTag });
     const data = await res.json();
     return { ok: res.ok, status: res.status, text: data.choices?.[0]?.message?.content || '', raw: data, provider: 'openai', model };
   }
@@ -304,14 +313,14 @@ export async function aiCall(taskId, { system, messages, max_tokens }) {
     console.warn(`[AI] Anthropic key missing for task ${taskId}, falling back to OpenAI`);
     if (state.OPENAI_KEY) {
       const fallback = model.includes('sonnet') ? 'gpt-4.1' : 'gpt-4.1-mini';
-      const res = await openAiChatCall({ model: fallback, system, messages, max_tokens });
+      const res = await openAiChatCall({ model: fallback, system, messages, max_tokens, opTag });
       const data = await res.json();
       return { ok: res.ok, status: res.status, text: data.choices?.[0]?.message?.content || '', raw: data, provider: 'openai', model: fallback };
     }
     return { ok: false, status: 0, text: '', raw: {}, provider: 'none', model, error: 'No AI keys configured' };
   }
 
-  const res = await claudeApiCall({ model, system, messages, max_tokens });
+  const res = await claudeApiCall({ model, system, messages, max_tokens }, 3, opTag);
   const data = await res.json();
   return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model };
 }
