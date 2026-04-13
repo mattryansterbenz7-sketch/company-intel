@@ -30,7 +30,7 @@
     {
       "matches": ["<all_urls>"],
       "js": ["coop.js", "content.js", "coop-assist.js"]
-    },
+    }
   ],
   "side_panel": {
     "default_path": "sidepanel.html"
