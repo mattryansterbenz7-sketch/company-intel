@@ -116,6 +116,7 @@ function saveSyncPrefs(showConfirm = true) {
     chrome.storage.sync.set({ prefs }, () => {
       void chrome.runtime.lastError;
       if (showConfirm) showSaveStatus();
+      syncICPFlags();
     });
   });
 }
@@ -955,6 +956,9 @@ function initICPScoring() {
 
     // Signal that ICP flag cards are now in the DOM
     document.dispatchEvent(new Event('icp-scoring-ready'));
+
+    // Sync ICP-generated flags on load (keeps flags current with ICP settings)
+    syncICPFlags();
   });
 }
 
@@ -1106,9 +1110,12 @@ function renderICPFlagCard(flag, type) {
   const sev = typeof flag.severity === 'number' ? flag.severity : (flag.severity === 'hard' ? 4 : 2);
   const colors = type === 'green' ? SEV_GREEN_COLORS : SEV_RED_COLORS;
   const kws = (flag.keywords || []).map(k => `<span class="icp-kw">${escHtml(k)}</span>`).join('');
+  const icpBadge = (flag.source === 'icp' && !flag.manuallyEdited)
+    ? `<span class="icp-auto-badge" title="Auto-generated from your ICP settings — edit to customize">⚙ ICP</span>`
+    : '';
   return `
     <div class="icp-flag-card ${type}" data-id="${flag.id}">
-      <div class="icp-flag-text">${escHtml(flag.text)}</div>
+      <div class="icp-flag-text">${escHtml(flag.text)}${icpBadge}</div>
       ${kws ? `<div class="icp-flag-keywords">${kws}</div>` : ''}
       <span class="icp-flag-sev" style="background:${colors[sev-1]}">${sev}</span>
       <div class="icp-flag-actions">
@@ -1317,7 +1324,9 @@ function updateICPFlag(type, id, fields) {
     const idx = arr.findIndex(f => f.id === id);
     if (idx === -1) return;
     const oldDim = arr[idx].dimension || 'roleFit';
+    const wasICP = arr[idx].source === 'icp';
     arr[idx] = { ...arr[idx], ...fields };
+    if (wasICP) arr[idx].manuallyEdited = true;
     // Sync in-memory arrays
     if (type === 'green') _icpGreens = arr; else _icpReds = arr;
     chrome.storage.local.set({ [storageKey]: arr }, () => {
@@ -2388,7 +2397,11 @@ function saveRoleICP() {
     sellingMotion: gv('role-icp-selling-motion'),
     teamSizePreference: gv('role-icp-team-size'),
   };
-  saveBucket('profileRoleICP', icp);
+  chrome.storage.local.set({ profileRoleICP: icp }, () => {
+    void chrome.runtime.lastError;
+    showSaveStatus();
+    syncICPFlags();
+  });
 }
 
 function saveCompanyICP() {
@@ -2400,7 +2413,171 @@ function saveCompanyICP() {
     industryPreferences: getPicklistValues('company-icp-industries', ICP_PICKLIST_OPTIONS.industryPreferences),
     cultureMarkers: gv('company-icp-culture').split(',').map(s => s.trim()).filter(Boolean),
   };
-  saveBucket('profileCompanyICP', icp);
+  chrome.storage.local.set({ profileCompanyICP: icp }, () => {
+    void chrome.runtime.lastError;
+    showSaveStatus();
+    syncICPFlags();
+  });
+}
+
+// ── ICP → Flags auto-sync ────────────────────────────────────────────────────
+
+function generateFlagsFromICP(prefs, roleICP, companyICP) {
+  const green = [], red = [];
+  const now = Date.now();
+
+  function mkFlag(icpKey, text, dimension, severity, keywords, category, isRed) {
+    return {
+      id: `icp_${icpKey}`, text,
+      category,
+      keywords: keywords || [],
+      dimension, severity,
+      source: 'icp', icpKey,
+      createdAt: now,
+      unknownNeutral: !isRed,
+    };
+  }
+
+  // ── Work arrangement ──────────────────────────────────────────────────────
+  const arr = (prefs.workArrangement || []).filter(Boolean);
+  const willRemote = arr.some(a => /^remote$/i.test(a));
+  const willHybrid = arr.some(a => /^hybrid$/i.test(a));
+  const willOnsite = arr.some(a => /on.?site|onsite/i.test(a));
+  const acceptCount = (willRemote ? 1 : 0) + (willHybrid ? 1 : 0) + (willOnsite ? 1 : 0);
+
+  if (acceptCount > 0 && acceptCount < 3) {
+    const labelParts = [], kwParts = [];
+    if (willRemote)  { labelParts.push('Remote');    kwParts.push('remote', 'remote-first', 'work from home', 'fully remote', 'distributed'); }
+    if (willHybrid)  { labelParts.push('Hybrid');    kwParts.push('hybrid'); }
+    if (willOnsite)  { labelParts.push('In-office'); kwParts.push('in-office', 'on-site', 'onsite', 'office'); }
+    green.push(mkFlag('work_arr', `${labelParts.join(' / ')} work arrangement preferred`,
+      'roleFit', 3, kwParts, 'location', false));
+
+    if (!willOnsite && !willHybrid) {
+      // Remote-only: any office attendance is a hard DQ
+      red.push(mkFlag('work_arr_office_req', 'In-office or hybrid attendance required',
+        'roleFit', 5,
+        ['in-office', 'on-site', 'onsite', 'office required', 'hybrid required', 'days in office', 'in office'],
+        'location', true));
+    } else if (!willOnsite) {
+      // Remote + hybrid: fully in-office is a strong concern
+      red.push(mkFlag('work_arr_no_onsite', 'Fully in-office required (no remote or hybrid option)',
+        'roleFit', 4,
+        ['fully in-office', 'in-office only', '5 days in office', 'no remote', 'office required'],
+        'location', true));
+    }
+    if (!willRemote && !willHybrid) {
+      // Onsite-only: remote-only is a concern
+      red.push(mkFlag('work_arr_remote_only', 'Remote-only, no in-office presence possible',
+        'roleFit', 4,
+        ['remote only', 'fully remote', '100% remote', 'distributed only', 'no office'],
+        'location', true));
+    } else if (!willRemote && willHybrid) {
+      // Hybrid + onsite: remote-only is a mild concern
+      red.push(mkFlag('work_arr_remote_only', 'Remote-only, no office presence option',
+        'roleFit', 3,
+        ['remote only', 'fully remote', '100% remote'],
+        'location', true));
+    }
+  }
+
+  // ── Role ICP ─────────────────────────────────────────────────────────────
+  if (roleICP) {
+    const { targetFunction, seniority, scope, sellingMotion } = roleICP;
+    if (targetFunction?.length) {
+      green.push(mkFlag('role_function',
+        `Target function: ${targetFunction.join(', ')}`,
+        'roleFit', 3,
+        targetFunction.map(f => f.toLowerCase()),
+        'role_type', false));
+    }
+    if (seniority?.trim()) {
+      green.push(mkFlag('role_seniority',
+        `Seniority: ${seniority.trim()}`,
+        'roleFit', 3,
+        seniority.split(/[,\/\s]+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 1),
+        'role_type', false));
+    }
+    if (scope?.trim()) {
+      green.push(mkFlag('role_scope',
+        `Role scope: ${scope.trim()}`,
+        'roleFit', 2,
+        scope.split(/[,\/]/).map(s => s.trim().toLowerCase()).filter(Boolean),
+        'role_type', false));
+    }
+    if (sellingMotion?.trim()) {
+      green.push(mkFlag('role_selling_motion',
+        `Selling motion: ${sellingMotion.trim()}`,
+        'roleFit', 2,
+        sellingMotion.split(/[,\/]/).map(s => s.trim().toLowerCase()).filter(Boolean),
+        'role_type', false));
+    }
+  }
+
+  // ── Company ICP ──────────────────────────────────────────────────────────
+  if (companyICP) {
+    const { stage, sizeRange, industryPreferences, cultureMarkers } = companyICP;
+    if (stage?.length) {
+      green.push(mkFlag('co_stage',
+        `Company stage: ${stage.join(', ')}`,
+        'companyFit', 3,
+        stage.map(s => s.toLowerCase()),
+        'product', false));
+    }
+    if (sizeRange?.length) {
+      green.push(mkFlag('co_size',
+        `Company size: ${sizeRange.join(', ')} employees`,
+        'companyFit', 2,
+        sizeRange,
+        'product', false));
+    }
+    if (industryPreferences?.length) {
+      green.push(mkFlag('co_industry',
+        `Industry: ${industryPreferences.join(', ')}`,
+        'companyFit', 2,
+        industryPreferences.map(s => s.toLowerCase()),
+        'industry', false));
+    }
+    if (cultureMarkers?.length) {
+      const markers = cultureMarkers.filter(m => m.trim());
+      if (markers.length) {
+        green.push(mkFlag('co_culture',
+          markers.join(', '),
+          'cultureFit', 2,
+          markers.map(m => m.toLowerCase()),
+          'culture', false));
+      }
+    }
+  }
+
+  return { green, red };
+}
+
+function syncICPFlags(onDone) {
+  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'profileRoleICP', 'profileCompanyICP'], localData => {
+    chrome.storage.sync.get(['prefs'], syncData => {
+      void chrome.runtime.lastError;
+      const prefs = syncData.prefs || {};
+      const roleICP = localData.profileRoleICP || {};
+      const companyICP = localData.profileCompanyICP || {};
+      const { green: newGreens, red: newReds } = generateFlagsFromICP(prefs, roleICP, companyICP);
+
+      // Remove old ICP-sourced flags (preserve any the user has manually edited)
+      const greens = (localData.profileAttractedTo || []).filter(f => f.source !== 'icp' || f.manuallyEdited);
+      const reds   = (localData.profileDealbreakers || []).filter(f => f.source !== 'icp' || f.manuallyEdited);
+
+      const finalGreens = [...greens, ...newGreens];
+      const finalReds   = [...reds, ...newReds];
+
+      chrome.storage.local.set({ profileAttractedTo: finalGreens, profileDealbreakers: finalReds }, () => {
+        void chrome.runtime.lastError;
+        _icpGreens = finalGreens;
+        _icpReds   = finalReds;
+        ICP_DIMENSIONS.forEach(dim => renderICPDimRow(dim));
+        if (onDone) onDone();
+      });
+    });
+  });
 }
 
 // ── Interview learnings ─────────────────────────────────────────────────────

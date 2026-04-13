@@ -188,6 +188,7 @@
       <a href="#send-to-coop">Send to Coop (Save Flow)</a>
       <a href="#linkedin-capture">LinkedIn Data Capture</a>
       <a href="#scoring-system">How Scoring Works</a>
+      <a href="#icp-flags">ICP → Flags Auto-sync</a>
       <a href="#score-breakdown">Score Breakdown</a>
       <a href="#qualifications">Qualification Matching</a>
       <a href="#cost-tracking">Cost Tracking</a>
@@ -1238,6 +1239,23 @@
 
       <h3 class="sub">Company intelligence in scoring</h3>
       <p class="body">The scoring prompt receives the full job description plus all LinkedIn-scraped data (employee count, industry, HQ, founded year, seniority level, job function, required skills, applicant count, posted date, repost flag) plus <code>scoutCompany()</code> context &mdash; two quick Serper searches for company overview and employee reviews/culture (Glassdoor, RepVue, Reddit). Scout always runs unless full research intelligence already exists on the entry. Scout results are cached indefinitely per company — subsequent rescores of the same company hit the cache instantly. Cost: ~$0.002 per new company.</p>
+
+      <h3 class="sub" id="icp-flags">ICP → flags auto-sync</h3>
+      <p class="body">Coop auto-generates green and red flags from your <strong>Role ICP</strong>, <strong>Company ICP</strong>, and <strong>Work arrangement</strong> settings in Career OS. Every time you save those sections, the generated flags are refreshed in your scoring config. You don't need to manually recreate them.</p>
+      <div class="info-block">
+        <ul style="font-size:13px;line-height:2;">
+          <li><strong>Work arrangement</strong> — check every arrangement you're <em>willing</em> to accept (not just your preference). Coop generates green flags for checked options and red flags for things you won't do:</li>
+          <ul style="font-size:12px;margin-left:16px;line-height:1.9;">
+            <li><strong>Remote only checked:</strong> generates a severity-5 hard DQ flag for "in-office or hybrid required"</li>
+            <li><strong>Remote + Hybrid checked:</strong> generates a severity-4 flag for "fully in-office required"</li>
+            <li><strong>On-site only checked:</strong> generates a severity-4 flag for "remote-only roles"</li>
+            <li><strong>All three checked:</strong> fully flexible — no red flags generated</li>
+          </ul>
+          <li><strong>Role ICP</strong> — target function, seniority, scope, and selling motion become green flags in the Role fit dimension</li>
+          <li><strong>Company ICP</strong> — stage, size, industry, and culture markers become green flags in Company fit and Culture fit dimensions</li>
+        </ul>
+      </div>
+      <p class="body">ICP-generated flags are labeled <strong>⚙ ICP</strong> in your flag cards. You can edit them at any time — once edited, the flag is marked as customized and won't be overwritten by future ICP syncs. Delete an ICP flag and it will be regenerated on the next save. To permanently remove a generated flag, either clear the underlying ICP field or manually replace it.</p>
 
       <h3 class="sub">How flags work</h3>
       <p class="body">Your configured flags ("Attracted to" and "Dealbreakers" in Career OS) are sent to the AI with their ID, dimension, severity, and keywords. The AI returns only flags that fired with verbatim evidence from the JD or company data. The code then:</p>
