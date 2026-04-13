@@ -390,7 +390,7 @@ function renderCurrent() {
   const dimBars = [];
   const dimToggles = [];
   const dimPanels = [];
-  const DIM_SHORT = { qualificationFit: 'Qual', roleFit: 'Role', cultureFit: 'Culture', companyFit: 'Company', compFit: 'Comp' };
+  const DIM_SHORT = { qualificationFit: 'Qualifications', roleFit: 'Role', cultureFit: 'Culture', companyFit: 'Company', compFit: 'Comp' };
 
   DIM_DEFS.forEach(dim => {
     const val = displayBreakdown[dim.key];
@@ -416,7 +416,7 @@ function renderCurrent() {
       </div>`);
 
     // Toggle button
-    dimToggles.push(`<button class="queue-dim-toggle-btn${isQual ? ' active' : ''}" data-dim="${dim.key}">
+    dimToggles.push(`<button class="queue-dim-toggle-btn${isQual ? ' active' : ''}" data-dim="${dim.key}" data-dot="${dim.dot}">
       <span class="queue-dim-dot ${dim.dot}"></span>${DIM_SHORT[dim.key] || dim.label}<span class="queue-dim-toggle-score ${tier}">${val}</span>
     </button>`);
 
@@ -444,14 +444,15 @@ function renderCurrent() {
         const overflow = allQuals.length > QLIMIT
           ? `<div class="queue-flags-overflow" style="display:none;">${allQuals.slice(QLIMIT).map(qualLine).join('')}</div><button class="queue-flags-more-btn" data-expanded="0">+${allQuals.length - QLIMIT} more</button>`
           : '';
-        panelContent = `<div class="queue-math-row"><span>${totalQ ? `${metCount} met · ${partialCount} partial · ${unmetCount} unmet` : 'No requirements identified'} → ${val}/10</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}`;
+        const qualSummary = totalQ ? `<span style="color:#16a34a;font-weight:700;">${metCount} met</span> · <span style="color:#d97706;font-weight:600;">${partialCount} partial</span> · <span style="color:#dc2626;font-weight:600;">${unmetCount} unmet</span> <span class="qmth-eq">→ <span class="qmth-result">${val}/10</span></span>` : `<span style="color:var(--ci-text-tertiary)">No requirements identified</span>`;
+        panelContent = `<div class="queue-math-row"><span class="queue-math-left">${qualSummary}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${allQuals.length ? `<div class="queue-qual-list">${visible}${overflow}</div>` : ''}`;
       } else if (isComp) {
         const verdictCls = v => v?.includes('above') ? 'above' : v === 'at_floor' ? 'at' : v === 'below_floor' ? 'below' : 'unknown';
         const verdictLabel = { above_strong: 'Above target', above_floor: 'Above floor', at_floor: 'At floor', below_floor: 'Below floor' };
         const allAdj = allGreens.concat(allReds);
-        const mathParts = ['5.0'];
-        allAdj.forEach(a => { const d = a.delta ?? 0; mathParts.push(`${d > 0 ? '+' : ''}${d.toFixed(1)}`); });
-        const mathStr = mathParts.length > 1 ? `${mathParts.join(' ')} = ${val}` : `${val}`;
+        const mathParts = ['<span class="qmth-base">5.0</span>'];
+        allAdj.forEach(a => { const d = a.delta ?? 0; const cls = d > 0 ? 'qmth-pos' : d < 0 ? 'qmth-neg' : 'qmth-base'; mathParts.push(`<span class="${cls}">${d > 0 ? '+' : ''}${d.toFixed(1)}</span>`); });
+        const mathStr = mathParts.length > 1 ? `${mathParts.join(' ')} <span class="qmth-eq">= <span class="qmth-result">${val}</span></span>` : `<span class="qmth-result">${val}</span>`;
         const baseDisplay = compAssess.baseAmount ? '$' + compAssess.baseAmount.toLocaleString() : (baseSalary || null);
         const oteDisplay = compAssess.oteAmount ? '$' + compAssess.oteAmount.toLocaleString() : (totalComp || null);
         const showBase = baseDisplay && compAssess.baseVsFloor !== 'unknown';
@@ -459,14 +460,14 @@ function renderCurrent() {
         const compParts = [];
         if (showBase) compParts.push(`Base: ${baseDisplay} <span class="queue-comp-inline-verdict ${verdictCls(compAssess.baseVsFloor)}">${verdictLabel[compAssess.baseVsFloor] || ''}</span>`);
         if (showOte) compParts.push(`OTE: ${oteDisplay} <span class="queue-comp-inline-verdict ${verdictCls(compAssess.oteVsFloor)}">${verdictLabel[compAssess.oteVsFloor] || ''}</span>`);
-        panelContent = `<div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${compParts.length ? `<div class="queue-comp-inline">${compParts.join('<span class="queue-comp-sep">·</span>')}</div>` : ''}${hasFlags ? `<div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>` : ''}`;
+        panelContent = `<div class="queue-math-row"><span class="queue-math-left">${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${compParts.length ? `<div class="queue-comp-inline">${compParts.join('<span class="queue-comp-sep">·</span>')}</div>` : ''}${hasFlags ? `<div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>` : ''}`;
       } else {
         const allAdj = allGreens.concat(allReds);
-        const mathParts = ['5.0'];
-        allAdj.forEach(a => { const d = a.delta ?? 0; mathParts.push(`${d > 0 ? '+' : ''}${d.toFixed(1)}`); });
+        const mathParts = ['<span class="qmth-base">5.0</span>'];
+        allAdj.forEach(a => { const d = a.delta ?? 0; const cls = d > 0 ? 'qmth-pos' : d < 0 ? 'qmth-neg' : 'qmth-base'; mathParts.push(`<span class="${cls}">${d > 0 ? '+' : ''}${d.toFixed(1)}</span>`); });
         const rawScore = allAdj.reduce((s, a) => s + a.delta, 5.0);
-        const mathStr = `${mathParts.join(' ')} = ${rawScore.toFixed(1)} → ${val}`;
-        panelContent = `${dimRationale[dim.key] ? `<div class="queue-drawer-rationale">${escHtml(dimRationale[dim.key])}</div>` : ''}<div class="queue-math-row"><span>${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>`;
+        const mathStr = `${mathParts.join(' ')} <span class="qmth-eq">= ${rawScore.toFixed(1)} → <span class="qmth-result">${val}</span></span>`;
+        panelContent = `${dimRationale[dim.key] ? `<div class="queue-drawer-rationale">${escHtml(dimRationale[dim.key])}</div>` : ''}<div class="queue-math-row"><span class="queue-math-left">${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>`;
       }
     } else if (isNewFormat && !hasContent) {
       const note = dimRationale[dim.key] ? escHtml(dimRationale[dim.key]) : 'No flags configured for this dimension';
@@ -477,7 +478,21 @@ function renderCurrent() {
   });
 
   // Total formula row
-  const totalFormulaHtml = jm.scoreRationale ? `<div class="queue-total-formula">${escHtml(jm.scoreRationale)}</div>` : '';
+  const totalFormulaHtml = (() => {
+    const fDims = [
+      { key: 'qualificationFit', short: 'Qual', color: '#378ADD' },
+      { key: 'roleFit',          short: 'Role',    color: '#3B6D11' },
+      { key: 'cultureFit',       short: 'Culture', color: '#7F77DD' },
+      { key: 'companyFit',       short: 'Company', color: '#BA7517' },
+      { key: 'compFit',          short: 'Comp',    color: '#0F6E56' },
+    ].filter(d => displayBreakdown[d.key] != null && weights[d.key]);
+    if (!fDims.length) return '';
+    const raw = fDims.reduce((s, d) => s + displayBreakdown[d.key] * (weights[d.key] / 100), 0);
+    const chips = fDims.map((d, i) =>
+      `${i > 0 ? '<span class="qf-sep">+</span>' : ''}<span class="qf-chip" style="color:${d.color}"><span class="qf-dot" style="background:${d.color}"></span>${d.short} <b>${displayBreakdown[d.key]}</b><span style="font-weight:400;color:var(--ci-text-tertiary)">×${weights[d.key]}%</span></span>`
+    ).join('');
+    return `<div class="queue-total-formula">${chips}<span class="qf-sep">=</span><span class="qf-total">${raw.toFixed(2)}</span><span class="qf-sep">→</span><span class="qf-score">${jm.score}/10</span></div>`;
+  })();
 
   const barsHtml = dimBars.length ? `
     <div class="qc-breakdown-label">Score breakdown</div>
@@ -552,17 +567,14 @@ function renderCurrent() {
             ${redFlags.length ? `<div class="qc-flag-col"><div class="qc-flag-heading red">Red Flags</div>${redHtml}</div>` : ''}
           </div>` : ''}
       </div>
-      ${rb.roleSummary ? `<details class="qc-role-brief">
-        <summary style="font-size:12px;font-weight:600;color:var(--ci-text-secondary);cursor:pointer;padding:8px 0 4px;list-style:none;display:flex;align-items:center;gap:4px;">
-          <span style="font-size:10px;transition:transform 0.15s;">▸</span> Role Brief
-        </summary>
-        <div style="font-size:12px;line-height:1.6;color:var(--ci-text-primary);padding:0 0 12px;">
-          <div style="margin-bottom:8px;">${escHtml(rb.roleSummary)}</div>
-          ${rb.whyInteresting ? `<div style="margin-bottom:6px;"><span style="font-weight:600;color:#059669;">Why interesting:</span> ${escHtml(rb.whyInteresting)}</div>` : ''}
-          ${rb.concerns ? `<div style="margin-bottom:6px;"><span style="font-weight:600;color:#dc2626;">Concerns:</span> ${escHtml(rb.concerns)}</div>` : ''}
-          ${rb.compRange ? `<div><span style="font-weight:600;color:var(--ci-text-secondary);">Comp:</span> ${escHtml(rb.compRange)}</div>` : ''}
-        </div>
-      </details>` : ''}
+      ${(rb.roleSummary || rb.whyInteresting || rb.concerns) ? `
+      <div class="qc-role-brief-section">
+        <div class="qc-role-brief-title">Role Brief</div>
+        ${rb.roleSummary ? `<div class="qc-role-brief-summary">${escHtml(rb.roleSummary)}</div>` : ''}
+        ${rb.whyInteresting ? `<div class="qc-role-brief-row"><span style="color:#059669;font-weight:600;">Why interesting — </span>${escHtml(rb.whyInteresting)}</div>` : ''}
+        ${rb.concerns ? `<div class="qc-role-brief-row"><span style="color:#dc2626;font-weight:600;">Concerns — </span>${escHtml(rb.concerns)}</div>` : ''}
+        ${rb.compRange ? `<div class="qc-role-brief-row"><span style="font-weight:600;">Comp — </span>${escHtml(rb.compRange)}</div>` : ''}
+      </div>` : ''}
       <div class="qc-more" id="qc-more" data-id="${c.id}">View full details →</div>
       <div class="queue-nav">
         <span class="queue-nav-pos">${currentIdx + 1} / ${queue.length}</span>

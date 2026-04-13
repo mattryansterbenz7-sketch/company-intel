@@ -370,6 +370,7 @@ EVIDENCE RULES:
 - Flag evidence MUST come from the job posting, company data, or interaction context — NEVER from the candidate's profile/resume.
 - Missing information is NOT evidence of a red flag. Undisclosed comp = neutral.
 - If your assessment of a flag is "no evidence", "no direct evidence", "no mentions", or "not enough information" — that flag DID NOT FIRE. Do not include it in firedFlags.
+- Evidence must CONFIRM the flag applies. If your evidence starts with "not", "no", or explicitly states the company/role does NOT have the flagged characteristic, you are arguing against the flag — that means it DID NOT fire. Omit it.
 - Only flag hardDQ when a flag with severity 5 is clearly triggered by direct evidence.
 - Unmet green flags are NOT red flags — they just mean the positive signal wasn't found.
 ${hasInteractionContext ? '- When conversations contradict the posting, note BOTH and flag the discrepancy.\n- At least one fired flag should reference interaction signals when available.\n' : ''}
@@ -438,11 +439,17 @@ Return ONLY valid JSON (no markdown fences):
 
   // ── Deterministic scoring — AI evaluates evidence, code computes scores ────
 
-  // Post-process: strip flags where evidence says "no evidence" (model ignored instructions)
+  // Post-process: strip flags where evidence says "no evidence" or contradicts the flag
   const NO_EVIDENCE_RX = /\bno (direct |clear )?(evidence|mentions?|indication|signs?)\b|\bnot enough information\b|\bno .{0,20} found\b/i;
+  // Catch evidence that argues against the flag (e.g. "not generic AI services; they are defined solutions...")
+  const CONTRADICTORY_RX = /^not\b|^no\b|^doesn't\b|^does not\b|^this is not\b|^they are not\b/i;
   const cleanedFlags = (parsed.firedFlags || []).filter(ff => {
     if (ff.evidence && NO_EVIDENCE_RX.test(ff.evidence)) {
       console.warn('[QuickFit] Stripping flag with "no evidence":', ff.id, ff.evidence?.slice(0, 80));
+      return false;
+    }
+    if (ff.evidence && CONTRADICTORY_RX.test(ff.evidence.trim())) {
+      console.warn('[QuickFit] Stripping flag with contradictory evidence:', ff.id, ff.evidence?.slice(0, 80));
       return false;
     }
     return true;
