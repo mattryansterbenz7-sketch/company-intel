@@ -30,9 +30,11 @@ let _quickPrompts = DEFAULT_QUICK_PROMPTS_SP;
 chrome.storage.local.get(['coopQuickPrompts'], d => {
   if (Array.isArray(d.coopQuickPrompts)) _quickPrompts = d.coopQuickPrompts;
 });
+let _onQuickPromptsChanged = null; // set by chat init to re-render empty state
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.coopQuickPrompts) {
     _quickPrompts = Array.isArray(changes.coopQuickPrompts.newValue) ? changes.coopQuickPrompts.newValue : DEFAULT_QUICK_PROMPTS_SP;
+    _onQuickPromptsChanged?.();
   }
 });
 
@@ -129,7 +131,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 document.getElementById('sp-cost-badge')?.addEventListener('click', () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL('pipeline.html#usage') });
+  chrome.tabs.create({ url: chrome.runtime.getURL('coop-settings.html') });
 });
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -4035,9 +4037,9 @@ function renderContactsSection(el, contacts) {
         ).join('')
       : '';
 
-    // Contextual suggestions row (auto, context-aware)
+    // Contextual suggestions row (auto, context-aware) — only shown when no user-configured prompts exist
     let contextualHTML = '';
-    if (_coopConfig.automations?.contextualSuggestions !== false) {
+    if (_quickPrompts.length === 0 && _coopConfig.automations?.contextualSuggestions !== false) {
       const ctx = detectSuggestionContext();
       const suggestions = SUGGESTIONS_BY_CONTEXT[ctx] || SUGGESTIONS_BY_CONTEXT.company;
       contextualHTML = suggestions.map(s =>
@@ -4053,6 +4055,12 @@ function renderContactsSection(el, contacts) {
     ${quickPromptsHTML ? `<div class="sp-suggestions sp-quick-prompts-row">${quickPromptsHTML}</div>` : ''}
     ${contextualHTML ? `<div class="sp-suggestions">${contextualHTML}</div>` : ''}`;
   }
+
+  // Re-render empty state when quick prompts change in settings
+  _onQuickPromptsChanged = () => {
+    const emptyEl = msgsEl.querySelector('.sp-chat-empty');
+    if (emptyEl) emptyEl.innerHTML = buildEmptyStateHTML();
+  };
 
   // Restore saved chat height
   const savedChatH = localStorage.getItem('ci_sp_chat_height');
@@ -4726,6 +4734,53 @@ function renderContactsSection(el, contacts) {
     if (result?.toolCalls) msgEntry._toolCalls = result.toolCalls;
     history.push(msgEntry);
     renderMessages();
+    generateFollowUpChips(replyText);
+  }
+
+  // ── Follow-up suggestion chips ────────────────────────────────────────────
+  function generateFollowUpChips(lastReply) {
+    if (_coopConfig.automations?.followUpChips === false) return;
+    // Remove any existing chips
+    document.getElementById('sp-followup-chips')?.remove();
+    // Ask the model for 2-3 short follow-up questions based on the last reply
+    const context = history.slice(-4).map(m => `${m.role}: ${(m.content || '').slice(0, 400)}`).join('\n');
+    chrome.runtime.sendMessage({
+      type: 'CHAT_MESSAGE',
+      payload: {
+        message: `Based on this conversation, suggest exactly 3 very short follow-up questions the user might want to ask next. Return ONLY a JSON array of strings, no explanation. Each question max 8 words.\n\n${context}`,
+        history: [],
+        model: 'gpt-4.1-nano',
+        systemPrompt: 'You generate follow-up question suggestions. Return only a JSON array of 3 short strings.',
+        isGlobalChat: true,
+        _internal: true,
+      }
+    }, result => {
+      if (!result?.reply) return;
+      let chips;
+      try {
+        const cleaned = result.reply.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+        chips = JSON.parse(cleaned);
+        if (!Array.isArray(chips)) return;
+      } catch { return; }
+      chips = chips.slice(0, 3).filter(c => typeof c === 'string' && c.trim());
+      if (!chips.length) return;
+      const container = document.createElement('div');
+      container.id = 'sp-followup-chips';
+      container.className = 'sp-followup-chips';
+      container.innerHTML = chips.map(c =>
+        `<button class="sp-followup-chip" data-prompt="${c.replace(/"/g, '&quot;')}">${c}</button>`
+      ).join('');
+      container.querySelectorAll('.sp-followup-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          inputEl.value = btn.dataset.prompt;
+          inputEl.dispatchEvent(new Event('input'));
+          container.remove();
+          send();
+        });
+      });
+      msgsEl.appendChild(container);
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    });
   }
 
   // ── @ Mention autocomplete ──
@@ -4734,6 +4789,32 @@ function renderContactsSection(el, contacts) {
   let mentionStartIdx = -1;
   let mentionSelectedIdx = 0;
   let mentionEntries = [];
+
+  // ── Quick prompts button ──────────────────────────────────────────────────
+  const promptsBtn = document.getElementById('sp-prompts-btn');
+  if (promptsBtn) {
+    promptsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      document.getElementById('sp-prompts-dropdown')?.remove();
+      if (!_quickPrompts.length) return;
+      const dd = document.createElement('div');
+      dd.id = 'sp-prompts-dropdown';
+      dd.className = 'sp-prompts-dropdown';
+      dd.innerHTML = _quickPrompts.map(p =>
+        `<button class="sp-prompts-dropdown-item" data-prompt="${p.prompt.replace(/"/g, '&quot;')}">${p.label}</button>`
+      ).join('');
+      promptsBtn.closest('.sp-chat-input-row').appendChild(dd);
+      dd.querySelectorAll('.sp-prompts-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+          inputEl.value = item.dataset.prompt;
+          inputEl.dispatchEvent(new Event('input'));
+          dd.remove();
+          inputEl.focus();
+        });
+      });
+      document.addEventListener('click', () => dd.remove(), { once: true });
+    });
+  }
 
   sendBtn.addEventListener('click', send);
   inputEl.addEventListener('keydown', e => {

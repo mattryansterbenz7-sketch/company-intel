@@ -641,6 +641,17 @@
     .sp-chat-input-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--ci-bg-raised); position: relative; border-top: 1px solid var(--ci-border-subtle); }
     .sp-chat-input-main { display: flex; gap: 8px; align-items: flex-end; }
     .sp-chat-input-bottom { display: flex; align-items: center; gap: 6px; padding: 0 2px; }
+    /* Quick prompts button */
+    .sp-prompts-btn { display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:8px;border:1px solid var(--ci-border-default);background:transparent;color:var(--ci-text-secondary);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;font-family:inherit; }
+    .sp-prompts-btn:hover { background:var(--ci-bg-page);color:var(--ci-text-primary); }
+    .sp-prompts-dropdown { position:absolute;bottom:calc(100% + 6px);left:14px;right:14px;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-md);box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:200;overflow:hidden; }
+    .sp-prompts-dropdown-item { display:block;width:100%;padding:10px 14px;text-align:left;background:transparent;border:none;border-bottom:1px solid var(--ci-border-subtle);color:var(--ci-text-primary);font-size:13px;cursor:pointer;font-family:inherit;transition:background 0.1s; }
+    .sp-prompts-dropdown-item:last-child { border-bottom:none; }
+    .sp-prompts-dropdown-item:hover { background:var(--ci-bg-page); }
+    /* Follow-up suggestion chips */
+    .sp-followup-chips { display:flex;flex-wrap:wrap;gap:6px;padding:6px 14px 2px; }
+    .sp-followup-chip { padding:5px 12px;border-radius:999px;border:1px solid var(--ci-border-default);background:var(--ci-bg-raised);color:var(--ci-text-secondary);font-size:12px;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap; }
+    .sp-followup-chip:hover { border-color:var(--ci-accent-primary);color:var(--ci-accent-primary);background:var(--ci-accent-primary-soft); }
     .sp-chat-input { flex: 1; background: var(--ci-bg-base); border: 1.5px solid var(--ci-border-default); border-radius: 14px; color: var(--ci-text-primary); font-size: 14px; padding: 10px 16px; font-family: inherit; resize: none; outline: none; min-height: 42px; max-height: 100px; line-height: 1.4; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s; }
     .sp-chat-input:focus { border-color: var(--ci-accent-primary); background: var(--ci-bg-raised); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft), 0 2px 8px rgba(252,99,107,0.06); }
     .sp-chat-input::placeholder { color: var(--ci-text-tertiary); }
@@ -1147,6 +1158,7 @@
           </button>
         </div>
         <div class="sp-chat-input-bottom">
+          <button class="sp-prompts-btn" id="sp-prompts-btn" title="Quick prompts">⚡ Prompts</button>
           <button class="sp-model-toggle" id="sp-model-toggle" title="Switch model">
             <span class="sp-model-label-text" id="sp-model-label">Fast</span>
             <span class="sp-model-caret">&#8964;</span>

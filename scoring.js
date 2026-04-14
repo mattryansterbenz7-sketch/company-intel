@@ -130,8 +130,38 @@ async function fetchJobDescriptionFallback(url, company, title) {
 const SCORING_DIMS = ['roleFit', 'cultureFit', 'companyFit', 'compFit'];
 const SEV_MUL = 0.5; // severity multiplier: sev 2 → ±1.0, sev 3 → ±1.5, sev 5 → ±2.5
 const BASELINE = 5.0;
-const BASE_COMP_MAP = { above_strong: 2.5, above_floor: 1.5, at_floor: 0, below_floor: -2.5, unknown: 0 };
-const OTE_COMP_MAP = { above_strong: 2.0, above_floor: 1.0, at_floor: 0, below_floor: -2.0, unknown: 0 };
+// Canonical bracket tier keys — shared between scoring.js and preferences.js
+const COMP_BRACKET_TIERS = [
+  { key: 'well_above',     label: 'Well above',     type: 'green', defaultSev: 5, thresholdFn: (f, s) => s * 1.15 },
+  { key: 'meets_target',   label: 'Meets target',   type: 'green', defaultSev: 4, thresholdFn: (f, s) => s },
+  { key: 'above_floor',    label: 'Above floor',    type: 'green', defaultSev: 2, thresholdFn: (f, s) => (f + s) / 2 },
+  { key: 'meets_floor',    label: 'Meets floor',    type: 'green', defaultSev: 1, thresholdFn: (f, s) => f },
+  { key: 'slightly_below', label: 'Slightly below', type: 'red',   defaultSev: 2, thresholdFn: (f, s) => f * 0.9 },
+  { key: 'below_floor',    label: 'Below floor',    type: 'red',   defaultSev: 3, thresholdFn: (f, s) => f * 0.8 },
+  { key: 'well_below',     label: 'Well below',     type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
+];
+
+// compBracket — graduated comp scoring from ICP salary prefs
+// customSevs: optional { well_above: n, meets_target: n, ... } overrides from compBracketSeverities storage
+function compBracket(amount, floor, strong, customSevs) {
+  if (!amount || !floor) return null;
+  floor = parseFloat(floor);
+  strong = parseFloat(strong) || floor * 1.3;
+  if (!floor) return null;
+
+  const sev = (tier) => {
+    const override = customSevs?.[tier.key];
+    return (typeof override === 'number' && override >= 1 && override <= 5) ? override : tier.defaultSev;
+  };
+
+  if (amount >= strong * 1.15) { const t = COMP_BRACKET_TIERS[0]; return { type: t.type, sev: sev(t), label: 'Well above target' }; }
+  if (amount >= strong)        { const t = COMP_BRACKET_TIERS[1]; return { type: t.type, sev: sev(t), label: 'Meets target' }; }
+  if (amount >= (floor + strong) / 2) { const t = COMP_BRACKET_TIERS[2]; return { type: t.type, sev: sev(t), label: 'Above floor' }; }
+  if (amount >= floor)         { const t = COMP_BRACKET_TIERS[3]; return { type: t.type, sev: sev(t), label: 'Meets floor' }; }
+  if (amount >= floor * 0.9)   { const t = COMP_BRACKET_TIERS[4]; return { type: t.type, sev: sev(t), label: 'Slightly below floor' }; }
+  if (amount >= floor * 0.8)   { const t = COMP_BRACKET_TIERS[5]; return { type: t.type, sev: sev(t), label: 'Below floor' }; }
+  const t = COMP_BRACKET_TIERS[6]; return { type: t.type, sev: sev(t), label: 'Well below floor' };
+}
 
 // Map legacy category field to dimension — mirrors preferences.js CATEGORY_TO_DIMENSION
 const CATEGORY_TO_DIMENSION = {
@@ -183,7 +213,7 @@ export async function scoreOpportunity(entryId) {
   const localData = await new Promise(resolve =>
     chrome.storage.local.get([
       'profileAttractedTo', 'profileDealbreakers', 'scoringWeights',
-      'coopProfileFull', 'coopPrefsFull'
+      'coopProfileFull', 'coopPrefsFull', 'compBracketSeverities'
     ], resolve)
   );
   const weights = localData.scoringWeights || {
@@ -191,6 +221,11 @@ export async function scoreOpportunity(entryId) {
   };
   const attractedTo = localData.profileAttractedTo || [];
   const dealbreakers = localData.profileDealbreakers || [];
+
+  // Load sync prefs for ICP salary fields (salaryFloor, salaryStrong, oteFloor, oteStrong)
+  const syncData = await new Promise(resolve =>
+    chrome.storage.sync.get(['prefs'], resolve)
+  );
 
   // Compiled .md docs — same source of truth Coop uses in chat
   const compiledProfile = [localData.coopProfileFull, localData.coopPrefsFull].filter(Boolean).join('\n\n');
@@ -370,9 +405,9 @@ Return ONLY valid JSON (no markdown fences):
   ],
   "compAssessment": {
     "baseDisclosed": true|false,
-    "baseAmount": <number|null>,
+    "baseAmount": <number|null — if a range is given (e.g. '$90k-$140k'), use the midpoint>,
     "oteDisclosed": true|false,
-    "oteAmount": <number|null>,
+    "oteAmount": <number|null — if a range is given, use the midpoint>,
     "baseVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown",
     "oteVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown"
   },
@@ -464,19 +499,43 @@ Return ONLY valid JSON (no markdown fences):
     });
   });
 
-  // Add structural comp adjustments to compFit dimension
-  const compAssess = parsed.compAssessment || {};
-  const bDelta = BASE_COMP_MAP[compAssess.baseVsFloor] ?? 0;
-  const oDelta = OTE_COMP_MAP[compAssess.oteVsFloor] ?? 0;
-  if (bDelta !== 0) {
-    dimFlags.compFit[bDelta > 0 ? 'green' : 'red'].push(
-      { type: bDelta > 0 ? 'green' : 'red', label: 'Base salary vs floor', delta: bDelta }
-    );
+  // ── Comp bracket dedup: only the highest-severity green and red fire ──
+  // When multiple manual comp flags fire (e.g. 5 salary thresholds all met),
+  // keep only the single highest-delta flag per color to prevent score stacking.
+  if (dimFlags.compFit) {
+    ['green', 'red'].forEach(type => {
+      const arr = dimFlags.compFit[type];
+      if (arr.length > 1) {
+        const best = arr.reduce((a, b) => Math.abs(b.delta) > Math.abs(a.delta) ? b : a);
+        dimFlags.compFit[type] = [best];
+      }
+    });
   }
-  if (oDelta !== 0) {
-    dimFlags.compFit[oDelta > 0 ? 'green' : 'red'].push(
-      { type: oDelta > 0 ? 'green' : 'red', label: 'OTE vs floor', delta: oDelta }
-    );
+
+  // Add structural comp adjustments from ICP salary prefs (graduated brackets)
+  const compAssess = parsed.compAssessment || {};
+  const prefs = syncData.prefs || {};
+
+  const bracketSevs = localData.compBracketSeverities || {};
+
+  // Auto-generate base salary bracket
+  const baseBracket = compBracket(compAssess.baseAmount, prefs.salaryFloor, prefs.salaryStrong, bracketSevs.base);
+  if (baseBracket) {
+    const delta = baseBracket.sev * SEV_MUL * (baseBracket.type === 'red' ? -1 : 1);
+    dimFlags.compFit[baseBracket.type].push({
+      type: baseBracket.type, label: `Base: ${baseBracket.label}`, delta, sev: baseBracket.sev,
+      evidence: `Detected base $${(compAssess.baseAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.salaryFloor)/1000).toFixed(0)}k`
+    });
+  }
+
+  // Auto-generate OTE bracket
+  const oteBracket = compBracket(compAssess.oteAmount, prefs.oteFloor, prefs.oteStrong, bracketSevs.ote);
+  if (oteBracket) {
+    const delta = oteBracket.sev * SEV_MUL * (oteBracket.type === 'red' ? -1 : 1);
+    dimFlags.compFit[oteBracket.type].push({
+      type: oteBracket.type, label: `OTE: ${oteBracket.label}`, delta, sev: oteBracket.sev,
+      evidence: `Detected OTE $${(compAssess.oteAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.oteFloor)/1000).toFixed(0)}k`
+    });
   }
 
   // Per-dimension scores: baseline 5.0 ± flag deltas, clamped [1, 10]

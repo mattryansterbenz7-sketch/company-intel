@@ -51,7 +51,8 @@ export async function fetchCalendarEvents(domain, companyName, knownContactEmail
             const d = (email.split('@')[1] || '');
             return d === domain || (baseDomain && d.split('.')[0] === baseDomain) || contactEmailSet.has(email);
           });
-          const inTitle = companyLower && (event.summary || '').toLowerCase().includes(companyLower);
+          const inTitle = companyLower && companyLower.length > 2 &&
+            new RegExp(`\\b${companyLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.summary || '');
           return hasCompanyAttendee || inTitle;
         };
 

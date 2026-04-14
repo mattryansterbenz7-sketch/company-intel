@@ -37,7 +37,7 @@ export const COOP_TOOLS = [
   },
   {
     name: 'get_profile_section',
-    description: "Returns the user's compiled Career OS profile or preferences as markdown. Use 'profile' for background/story/experience/skills, 'preferences' for job search criteria/flags/comp/ICP. Use 'full' tier for scoring, cover letters, deep career questions; 'standard' for general chat.",
+    description: "Returns the user's compiled My Profile data or preferences as markdown. Use 'profile' for background/story/experience/skills, 'preferences' for job search criteria/flags/comp/ICP. Use 'full' tier for scoring, cover letters, deep career questions; 'standard' for general chat.",
     input_schema: {
       type: 'object',
       properties: {
@@ -77,6 +77,15 @@ export const COOP_TOOLS = [
         limit: { type: 'integer', default: 5 },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'get_memory_narrative',
+    description: "Returns Coop's synthesized narrative memory of the user — a holistic summary of who they are, what they want, how they think, and what Coop has learned from past interactions. Use for deep personalization questions, 'what do you know about me', advisor-style reflection, or when profile + preferences alone aren't enough context.",
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
     },
   },
 ];
@@ -382,17 +391,28 @@ export function serializeToolResult(result) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+async function _tool_get_memory_narrative() {
+  const { coopContextWindow } = await new Promise(r => chrome.storage.local.get(['coopContextWindow'], r));
+  const md = coopContextWindow?.markdown;
+  if (!md) return { content: 'No memory narrative has been generated yet. The user can generate one from the Coop settings page under Memory.' };
+  const generatedAt = coopContextWindow.generatedAt;
+  const age = generatedAt ? Math.floor((Date.now() - new Date(generatedAt).getTime()) / 86400000) : null;
+  const ageLine = age !== null ? `\n\n_(Last synthesized ${age === 0 ? 'today' : age === 1 ? '1 day ago' : `${age} days ago`})_` : '';
+  return { content: md + ageLine };
+}
+
 // Tool router
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function runCoopTool(name, input, ctx) {
   try {
     switch (name) {
-      case 'get_company_context':   return await _tool_get_company_context(input || {}, ctx);
-      case 'get_communications':    return await _tool_get_communications(input || {}, ctx);
-      case 'get_profile_section':   return await _tool_get_profile_section(input || {}, ctx);
-      case 'get_pipeline_overview': return await _tool_get_pipeline_overview(input || {}, ctx);
-      case 'search_memory':         return await _tool_search_memory(input || {}, ctx);
+      case 'get_company_context':    return await _tool_get_company_context(input || {}, ctx);
+      case 'get_communications':     return await _tool_get_communications(input || {}, ctx);
+      case 'get_profile_section':    return await _tool_get_profile_section(input || {}, ctx);
+      case 'get_pipeline_overview':  return await _tool_get_pipeline_overview(input || {}, ctx);
+      case 'search_memory':          return await _tool_search_memory(input || {}, ctx);
+      case 'get_memory_narrative':   return await _tool_get_memory_narrative();
       default: return { error: `Unknown tool: ${name}` };
     }
   } catch (err) {

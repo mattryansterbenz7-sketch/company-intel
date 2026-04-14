@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="design-tokens.css">
-  <title>Coop.ai — Career OS</title>
+  <title>Coop.ai — My Profile</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -14,38 +14,6 @@
 
     /* ── Page container ── */
     .page { max-width: 1700px; margin: 0 auto; }
-
-    /* ── Compact Coop identity bar ── */
-    .coop-bar {
-      display: flex; align-items: center; gap: 16px;
-      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-md);
-      padding: 14px 20px; margin-bottom: 14px;
-      box-shadow: var(--ci-shadow-sm);
-    }
-    .coop-bar svg { width: 40px; height: 40px; flex-shrink: 0; transition: box-shadow 0.4s ease; }
-    @keyframes coopGlow {
-      0%, 100% { box-shadow: 0 2px 8px rgba(45,62,80,0.15), 0 0 0 2px rgba(255,122,89,0.15); }
-      50%       { box-shadow: 0 2px 16px rgba(255,122,89,0.5), 0 0 0 3px rgba(255,122,89,0.6); }
-    }
-    @keyframes coopDot {
-      0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
-      40%           { opacity: 1;   transform: translateY(-2px); }
-    }
-    .coop-bar svg.coop-thinking { animation: coopGlow 1.4s ease-in-out infinite; }
-    .coop-thinking-dots { display: inline-flex; gap: 2px; margin-left: 3px; vertical-align: middle; }
-    .coop-thinking-dots span { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--ci-accent-primary); animation: coopDot 1.4s ease-in-out infinite; }
-    .coop-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .coop-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
-    .coop-bar-info { flex: 1; min-width: 0; }
-    .coop-bar-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
-    .coop-bar-name { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); }
-    .coop-bar-role { font-size: 12px; color: var(--ci-text-secondary); }
-    .coop-bar-desc { font-size: 12px; color: #3D3D3D; line-height: 1.5; }
-    .coop-bio-traits { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; flex-shrink: 0; }
-    .coop-bio-trait {
-      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
-      background: rgba(255,122,89,0.1); color: var(--ci-accent-primary-hover); letter-spacing: 0.02em;
-    }
 
     /* ── DEPRECATED: page-header (kept for JS compat) ── */
     .page-header { display: none; }
@@ -86,8 +54,6 @@
     .prefs-col { display: flex; flex-direction: column; gap: 12px; }
     @media (max-width: 900px) {
       .prefs-body { grid-template-columns: 1fr; }
-      .coop-bar { flex-direction: column; align-items: flex-start; }
-      .coop-bio-traits { margin-left: 0; }
     }
 
     /* ── Career OS shell: left nav + center content ── */
@@ -125,6 +91,17 @@
     .cos-tab.active:hover { background: var(--ci-accent-primary-hover); }
     .cos-tab-panel { display: none; }
     .cos-tab-panel.active { display: block; }
+
+    /* ── Sub-nav anchors (appear under active tab) ── */
+    .cos-sub-links { display: none; flex-direction: column; gap: 0; padding: 2px 0 4px 18px; border-left: 2px solid var(--ci-border-subtle); margin-left: 18px; }
+    .cos-tab.active + .cos-sub-links { display: flex; }
+    .cos-sub-link {
+      font-size: 11px; font-weight: 500; color: var(--ci-text-tertiary); padding: 4px 10px;
+      cursor: pointer; border-radius: var(--ci-radius-sm); transition: color 0.12s, background 0.12s;
+      background: none; border: none; text-align: left; font-family: inherit; white-space: nowrap;
+    }
+    .cos-sub-link:hover { color: var(--ci-text-primary); background: var(--ci-bg-inset); }
+    .cos-sub-link.viewing { color: var(--ci-accent-primary); font-weight: 600; }
 
     /* ── Section headers within tabs ── */
     .cos-section-label {
@@ -399,64 +376,6 @@
     .toggle-switch input:checked + .toggle-track { background: var(--ci-accent-teal); }
     .toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
 
-    /* ── Quick Prompts editor ── */
-    .qp-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
-    .qp-row { border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-base); overflow: hidden; transition: border-color 0.15s; }
-    .qp-row.expanded { border-color: var(--ci-accent-primary); }
-    .qp-row-header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; user-select: none; }
-    .qp-row-header:hover { background: var(--ci-bg-raised); }
-    .qp-row.expanded .qp-row-header { background: var(--ci-bg-raised); }
-    .qp-row-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-primary); flex-shrink: 0; }
-    .qp-row-label { flex: 1; font-size: 13px; font-weight: 600; color: var(--ci-text-primary); }
-    .qp-row-toggle { font-size: 11px; color: var(--ci-text-tertiary); transition: transform 0.15s; }
-    .qp-row.expanded .qp-row-toggle { transform: rotate(180deg); }
-    .qp-row-del { background: none; border: none; font-size: 14px; color: var(--ci-text-tertiary); cursor: pointer; padding: 2px 4px; border-radius: 4px; transition: all 0.12s; line-height: 1; }
-    .qp-row-del:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
-    .qp-row-body { display: none; padding: 0 12px 12px; border-top: 1px solid var(--ci-border-subtle); }
-    .qp-row.expanded .qp-row-body { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
-    .qp-field-label { font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
-    .qp-label-input { width: 100%; padding: 6px 10px; border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); font-size: 13px; font-weight: 600; color: var(--ci-text-primary); background: var(--ci-bg-inset); font-family: inherit; outline: none; }
-    .qp-label-input:focus { border-color: var(--ci-accent-primary); }
-    .qp-prompt-textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); font-size: 12px; color: var(--ci-text-primary); background: var(--ci-bg-inset); font-family: inherit; resize: vertical; min-height: 68px; outline: none; line-height: 1.5; }
-    .qp-prompt-textarea:focus { border-color: var(--ci-accent-primary); }
-    .qp-row-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .qp-save-btn { padding: 5px 14px; background: var(--ci-accent-primary); color: #fff; border: none; border-radius: var(--ci-radius-sm); font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.12s; }
-    .qp-save-btn:hover { background: var(--ci-accent-primary-hover); }
-    .qp-cancel-btn { padding: 5px 12px; background: none; border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); font-size: 12px; color: var(--ci-text-secondary); cursor: pointer; font-family: inherit; transition: all 0.12s; }
-    .qp-cancel-btn:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
-    .qp-add-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; background: none; border: 1.5px dashed var(--ci-border-default); border-radius: var(--ci-radius-sm); font-size: 13px; color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit; width: 100%; transition: all 0.15s; }
-    .qp-add-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); background: rgba(252,99,107,0.04); }
-
-    /* ── Coop Presets ── */
-    .coop-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
-    .coop-preset-btn {
-      display: flex; flex-direction: column; gap: 4px; padding: 14px 16px;
-      background: var(--ci-bg-base); border: 2px solid var(--ci-border-default); border-radius: var(--ci-radius-md);
-      cursor: pointer; transition: all 0.15s; text-align: left;
-    }
-    .coop-preset-btn:hover { border-color: var(--ci-border-strong); background: var(--ci-bg-raised); }
-    .coop-preset-btn.active { border-color: var(--ci-accent-purple); background: var(--ci-bg-raised); box-shadow: 0 0 0 3px var(--ci-accent-purple-soft); }
-    .coop-preset-label { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); }
-    .coop-preset-subtitle { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.4; }
-    .coop-prompt-preview {
-      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: 8px;
-      padding: 12px 14px; margin-top: 12px; font-size: 12px; line-height: 1.6;
-    }
-    .coop-prompt-preview-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 8px; gap: 8px;
-    }
-    .coop-prompt-preview-title { font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
-    .coop-prompt-preview-reset {
-      font-size: 11px; color: var(--ci-accent-purple); background: none; border: none;
-      cursor: pointer; padding: 2px 6px; border-radius: 4px; display: none;
-    }
-    .coop-prompt-preview-reset:hover { background: var(--ci-border-default); }
-    .coop-prompt-preview-reset.visible { display: inline-block; }
-    .coop-prompt-field { width: 100%; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: inherit; line-height: 1.5; color: var(--ci-text-primary); resize: vertical; min-height: 48px; }
-    .coop-prompt-field:focus { border-color: var(--ci-accent-purple); outline: none; box-shadow: 0 0 0 2px var(--ci-accent-purple-soft); }
-    .coop-prompt-field-label { font-size: 11px; font-weight: 500; color: var(--ci-text-secondary); margin-bottom: 4px; }
-
     /* ── Import ── */
     .import-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
     .import-btn {
@@ -634,9 +553,6 @@
       color: #fff; background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);
     }
     .icp-autofill-btn--primary:hover { background: var(--ci-accent-primary-hover); border-color: var(--ci-accent-primary-hover); color: #fff; }
-    .compiled-tier-btn.active, .compiled-doc-btn.active {
-      color: #fff; background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);
-    }
     .icp-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .icp-attrs .field { margin-bottom: 0; }
 
@@ -801,103 +717,6 @@
       body.coop-docked #coop-chat-close { display: none; }
     }
 
-    /* ── Context window markdown polish ── */
-    .ctx-md { font-size: 14px; line-height: 1.7; color: var(--ci-text-primary); }
-    .ctx-md h1, .ctx-md h2, .ctx-md h3 {
-      font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.01em;
-      margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--ci-border-subtle);
-    }
-    .ctx-md h1 { font-size: 19px; }
-    .ctx-md h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ci-text-secondary); border-bottom-color: var(--ci-border-subtle); }
-    .ctx-md h3 { font-size: 13px; border-bottom: none; margin: 14px 0 4px; color: var(--ci-text-secondary); }
-    .ctx-md h2:first-child, .ctx-md h1:first-child { margin-top: 0; }
-    .ctx-md p { margin: 0 0 12px; }
-    .ctx-md ul { margin: 6px 0 14px 4px; padding: 0; list-style: none; }
-    .ctx-md li { position: relative; padding-left: 18px; margin-bottom: 6px; }
-    .ctx-md li::before { content: ''; position: absolute; left: 4px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--ci-accent-primary); }
-    .ctx-md strong { color: var(--ci-text-primary); font-weight: 700; }
-    .ctx-md em { color: var(--ci-text-secondary); font-style: italic; }
-    .ctx-edit-area {
-      width: 100%; min-height: 320px; max-height: 60vh; resize: vertical;
-      padding: 14px 18px; font: 13px/1.6 ui-monospace, 'SF Mono', Menlo, monospace;
-      background: var(--ci-bg-base); color: var(--ci-text-primary);
-      border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md);
-    }
-
-    /* ── Coop memory ── */
-    .memory-entry {
-      position: relative; padding: 14px 36px 14px 16px; border: 0.5px solid var(--ci-border-subtle);
-      border-left: 3px solid var(--ci-border-default);
-      border-radius: 8px; margin-bottom: 6px; background: var(--ci-bg-base); transition: all 0.12s;
-    }
-    .memory-entry.user { border-left-color: #3B82F6; }
-    .memory-entry.feedback { border-left-color: #F59E0B; }
-    .memory-entry.project { border-left-color: #10B981; }
-    .memory-entry.reference { border-left-color: #8B5CF6; }
-    .memory-frontmatter {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 10px; color: var(--ci-text-muted); padding: 6px 8px; background: var(--ci-bg-inset);
-      border-radius: 4px; margin-bottom: 8px; line-height: 1.7;
-    }
-    .memory-frontmatter .fm-key { color: #6b7280; }
-    .memory-frontmatter .fm-val { color: var(--ci-text); }
-    .memory-body strong { color: var(--ci-text); font-weight: 700; }
-    .memory-body .why-line, .memory-body .how-line {
-      display: block; margin-top: 6px; padding-left: 8px;
-      border-left: 2px solid var(--ci-border-subtle); color: var(--ci-text-secondary);
-    }
-    .memory-body .why-line strong, .memory-body .how-line strong { color: var(--ci-text); }
-    .memory-entry:hover { background: var(--ci-bg-inset); }
-    .memory-entry:hover .memory-delete { opacity: 1; }
-    .memory-insight { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; }
-    .memory-meta { font-size: 10px; color: #6b7280; margin-top: 3px; display: flex; gap: 8px; }
-    .memory-cat {
-      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-      padding: 1px 6px; border-radius: 3px; background: var(--ci-bg-inset); color: var(--ci-text-secondary);
-    }
-    .memory-cat.style_instruction { background: #EDE9FE; color: #6d28d9; }
-    .memory-cat.green_light { background: #D1FAE5; color: #065f46; }
-    .memory-cat.red_light { background: #FEE2E2; color: #991b1b; }
-    .memory-cat.answer_pattern { background: #FEF3C7; color: #92400e; }
-    .memory-cat.high { background: #FEE2E2; color: #991b1b; }
-    .memory-delete {
-      position: absolute; top: 8px; right: 8px; opacity: 0; background: none; border: none;
-      cursor: pointer; font-size: 14px; color: #ccc; transition: opacity 0.15s;
-    }
-    .memory-delete:hover { color: #ef4444; }
-    .memory-filter-btn {
-      font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 12px;
-      border: 1px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit;
-    }
-    .memory-filter-btn.active { background: var(--ci-bg-header); color: #fff; border-color: var(--ci-bg-header); }
-    .memory-section { margin-bottom: 18px; }
-    .memory-type-chip {
-      display: inline-block; padding: 3px 10px; font-size: 10px; font-weight: 700;
-      letter-spacing: 0.04em; text-transform: uppercase; border-radius: 10px;
-      background: var(--ci-bg-inset); color: var(--ci-text-muted);
-    }
-    .memory-type-chip.user { background: #DBEAFE; color: #1E40AF; }
-    .memory-type-chip.feedback { background: #FEF3C7; color: #92400E; }
-    .memory-type-chip.project { background: #D1FAE5; color: #065F46; }
-    .memory-type-chip.reference { background: #EDE9FE; color: #6D28D9; }
-    .memory-name { font-size: 13px; font-weight: 700; color: var(--ci-text); margin-bottom: 2px; }
-    .memory-desc { font-size: 11px; color: var(--ci-text-muted); margin-bottom: 8px; font-style: italic; }
-    .memory-body { font-size: 12px; line-height: 1.55; color: var(--ci-text); white-space: pre-wrap; padding: 8px 10px; background: var(--ci-bg-inset); border-radius: 6px; margin-bottom: 6px; }
-    .memory-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
-    .memory-entry { position: relative; }
-    .memory-entry:hover .memory-actions { opacity: 1; }
-    .memory-edit, .memory-delete {
-      width: 24px; height: 24px; border: 1px solid var(--ci-border); border-radius: 6px;
-      background: #fff; cursor: pointer; font-size: 12px; color: var(--ci-text-muted);
-      display: flex; align-items: center; justify-content: center; padding: 0;
-    }
-    .memory-edit:hover { color: var(--ci-accent); }
-    .memory-delete:hover { color: #E8384F; border-color: #E8384F; }
-    .memory-section-title {
-      font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase;
-      letter-spacing: 0.06em; margin-bottom: 8px; padding-top: 4px;
-    }
-
     /* ── Micro-interactions ── */
     button, [role="button"] { transition: all 0.15s ease; }
     button:active:not(:disabled) { transform: scale(0.96); }
@@ -1058,11 +877,11 @@
 <body>
 
 <div class="header">
-  <a class="logo" href="saved.html" style="text-decoration:none">Coop<span>.ai</span> <span class="slash">/ Career OS</span></a>
+  <a class="logo" href="saved.html" style="text-decoration:none">Coop<span>.ai</span> <span class="slash">/ My Profile</span></a>
   <div class="header-nav">
-    <a class="header-nav-item active" href="preferences.html">Career OS</a>
+    <a class="header-nav-item active" href="preferences.html">My Profile</a>
+    <a class="header-nav-item" href="coop-settings.html">Coop</a>
     <a class="header-nav-item" href="integrations.html">Integrations</a>
-    <a class="header-nav-item" href="pipeline.html">Pipeline &amp; Usage</a>
     <a class="header-nav-item" href="docs.html" target="_blank">Docs</a>
   </div>
 </div>
@@ -1070,50 +889,6 @@
 <div class="settings-content" style="padding: 24px 20px 80px; max-width: 1700px; margin: 0 auto;">
 
   <div class="page">
-
-    <!-- ── Compact Coop identity bar ── -->
-    <div class="coop-bar">
-      <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;box-shadow:0 2px 8px rgba(45,62,80,0.15), 0 0 0 2px rgba(255,122,89,0.15);">
-        <circle cx="50" cy="50" r="50" fill="#3B5068"/>
-        <clipPath id="hdr-coop"><circle cx="50" cy="50" r="48"/></clipPath>
-        <g clip-path="url(#hdr-coop)">
-          <ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/>
-          <path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/>
-          <path d="M40 77L50 94L60 77" fill="#F0EAE0"/>
-          <path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/>
-          <path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/>
-          <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
-          <rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/>
-          <path d="M28 43Q28 27 39 21Q50 16 61 21Q72 27 72 43Q72 53 68 58L63 64L56 68L50 70L44 68L37 64Q32 58 28 53Q28 48 28 43Z" fill="#EDBB92"/>
-          <ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-          <ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/>
-          <path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/>
-          <path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/>
-          <ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/>
-          <ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/>
-          <path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/>
-          <path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/>
-          <path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/>
-          <path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/>
-          <path d="M58 59.5Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/>
-        </g>
-      </svg>
-      <div class="coop-bar-info">
-        <div class="coop-bar-top">
-          <span class="coop-bar-name" id="page-title">Coop</span>
-          <span class="coop-bar-role">Your co-operator</span>
-        </div>
-        <div class="coop-bar-desc">Everything on this page is how Coop thinks about you.</div>
-      </div>
-      <div id="api-cost-badge" style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);white-space:nowrap;padding:3px 8px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-full);border:1px solid var(--ci-border);display:none;" title="Estimated API spend today across all providers"></div>
-      <div class="coop-bio-traits">
-        <span class="coop-bio-trait">Direct</span>
-        <span class="coop-bio-trait">Opinionated</span>
-        <span class="coop-bio-trait">Never sugarcoats</span>
-        <span class="coop-bio-trait">Connects dots</span>
-        <span class="coop-bio-trait">Strategic</span>
-      </div>
-    </div>
 
     <!-- ── Job Match toggle ── -->
     <div class="card" style="margin-bottom:10px;">
@@ -1137,19 +912,22 @@
     <!-- ── Career OS Shell: left nav + center content ── -->
     <div class="career-os-shell">
     <div class="cos-tabs">
-      <div class="cos-nav-section-label">Coop</div>
-      <button class="cos-tab active" data-tab="memory">Coop's view</button>
-      <div class="cos-nav-section-label">Your data</div>
-      <button class="cos-tab" data-tab="profile">Profile</button>
+      <button class="cos-tab active" data-tab="profile">Profile</button>
       <button class="cos-tab" data-tab="fit">Experience</button>
-      <button class="cos-tab" data-tab="icp">ICP &amp; Preferences</button>
+      <button class="cos-tab" data-tab="icp">ICP &amp; Scoring</button>
+      <div class="cos-sub-links" id="icp-sub-links">
+        <button class="cos-sub-link" data-anchor="section-role-icp">Role ICP</button>
+        <button class="cos-sub-link" data-anchor="section-company-icp">Company ICP</button>
+        <button class="cos-sub-link" data-anchor="section-comp">Compensation</button>
+        <button class="cos-sub-link" data-anchor="icp-scoring-section">Scoring Weights</button>
+      </div>
     </div>
     <div class="cos-content">
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <!-- TAB 1: YOUR PROFILE                                                 -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div class="cos-tab-panel" data-panel="profile">
+    <div class="cos-tab-panel active" data-panel="profile">
 
     <div class="card" id="card-personal" data-card="personal">
       <div class="card-header">
@@ -1162,8 +940,8 @@
       <div class="card-body">
         <div class="grid-3" style="margin-bottom:2px;">
           <div class="field">
-            <label class="field-label">Your name</label>
-            <input type="text" class="field-input" id="pref-name" placeholder="First name">
+            <label class="field-label">Full name</label>
+            <input type="text" class="field-input" id="pref-name" placeholder="First and last name">
           </div>
         </div>
         <div class="grid-3">
@@ -1494,7 +1272,7 @@
     <div class="cos-tab-panel" data-panel="icp">
 
     <div class="grid-2" style="margin-bottom:10px;">
-      <div class="icp-card" style="margin-bottom:0;">
+      <div class="icp-card" id="section-role-icp" style="margin-bottom:0;">
         <div class="icp-card-header">
           <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
           <div class="icp-card-title">Role ICP <span class="field-info" data-tip="Your ideal role profile. Coop compares every job posting against these criteria for the Role Fit score. Saved values auto-generate green flags in your scoring settings.">i</span> <a href="docs.html#icp-flags" target="_blank" class="docs-link-tiny" title="How ICP settings sync to scoring flags">↗</a></div>
@@ -1511,41 +1289,50 @@
         </div>
 
         <!-- Comp & Logistics — merged into Role ICP since they define role requirements -->
-        <div style="border-top:1px solid var(--ci-border-subtle);margin-top:14px;padding-top:14px;">
+        <div id="section-comp" style="border-top:1px solid var(--ci-border-subtle);margin-top:14px;padding-top:14px;">
           <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:var(--ci-text-tertiary);text-transform:uppercase;margin-bottom:10px;">Compensation &amp; Logistics</div>
 
-          <!-- Comp grid: type | floor | strong -->
-          <div style="display:grid;grid-template-columns:36px 1fr 1fr;gap:5px 10px;align-items:center;margin-bottom:12px;">
-            <span style="font-size:10px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;grid-column:1;align-self:end;padding-bottom:4px;">Base</span>
-            <div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
-                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-red);">Floor</span>
-                <span class="field-info" data-tip="Hard minimum — Coop auto-flags any role where posted base falls below this as a severity-5 dealbreaker. Works even when salary isn't in the job description if Coop can infer it.">i</span>
+          <!-- Comp inputs + bracket preview side-by-side -->
+          <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:12px;">
+            <!-- Comp grid: type | floor | strong -->
+            <div style="display:grid;grid-template-columns:36px 1fr 1fr;gap:5px 10px;align-items:center;flex:0 0 auto;min-width:240px;">
+              <span style="font-size:10px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;grid-column:1;align-self:end;padding-bottom:4px;">Base</span>
+              <div>
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+                  <span style="font-size:11px;font-weight:600;color:var(--ci-accent-red);">Floor</span>
+                  <span class="field-info" data-tip="Hard minimum — Coop auto-flags any role where posted base falls below this as a severity-5 dealbreaker. Works even when salary isn't in the job description if Coop can infer it.">i</span>
+                </div>
+                <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="e.g. $100K" style="width:100%;">
               </div>
-              <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="e.g. $100K" style="width:100%;">
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
-                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-teal);">Strong</span>
-                <span class="field-info" data-tip="Target ceiling — when posted base meets or exceeds this, Coop boosts the match score. This is your &quot;yes without hesitation&quot; number.">i</span>
+              <div>
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+                  <span style="font-size:11px;font-weight:600;color:var(--ci-accent-teal);">Strong</span>
+                  <span class="field-info" data-tip="Target ceiling — when posted base meets or exceeds this, Coop boosts the match score. This is your &quot;yes without hesitation&quot; number.">i</span>
+                </div>
+                <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="e.g. $150K" style="width:100%;">
               </div>
-              <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="e.g. $150K" style="width:100%;">
+
+              <span style="font-size:10px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;align-self:end;padding-bottom:4px;">OTE</span>
+              <div>
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+                  <span style="font-size:11px;font-weight:600;color:var(--ci-accent-red);">Floor</span>
+                  <span class="field-info" data-tip="OTE walk-away — same logic as base floor but for total comp (base + variable). Coop flags low OTE even if the base looks fine. Comp floor = Base floor + OTE floor both satisfied.">i</span>
+                </div>
+                <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="e.g. $200K" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+                  <span style="font-size:11px;font-weight:600;color:var(--ci-accent-teal);">Strong</span>
+                  <span class="field-info" data-tip="Aspirational OTE target — Coop boosts match score when total comp opportunity meets or exceeds this. Think of it as your &quot;excited to respond&quot; number.">i</span>
+                </div>
+                <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="e.g. $250K" style="width:100%;">
+              </div>
             </div>
 
-            <span style="font-size:10px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;align-self:end;padding-bottom:4px;">OTE</span>
-            <div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
-                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-red);">Floor</span>
-                <span class="field-info" data-tip="OTE walk-away — same logic as base floor but for total comp (base + variable). Coop flags low OTE even if the base looks fine. Comp floor = Base floor + OTE floor both satisfied.">i</span>
-              </div>
-              <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="e.g. $200K" style="width:100%;">
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
-                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-teal);">Strong</span>
-                <span class="field-info" data-tip="Aspirational OTE target — Coop boosts match score when total comp opportunity meets or exceeds this. Think of it as your &quot;excited to respond&quot; number.">i</span>
-              </div>
-              <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="e.g. $250K" style="width:100%;">
+            <!-- Comp bracket preview (right side) -->
+            <div id="comp-bracket-preview" style="flex:1;min-width:0;padding:8px 12px;background:var(--ci-bg-inset);border:1px solid var(--ci-border-subtle);border-radius:var(--ci-radius-md);display:none;">
+              <div style="font-size:10px;font-weight:600;color:var(--ci-text-tertiary);margin-bottom:4px;">Scoring brackets</div>
+              <div id="comp-bracket-rows" style="display:flex;flex-direction:column;gap:2px;font-size:11px;"></div>
             </div>
           </div>
 
@@ -1584,7 +1371,7 @@
           </div>
         </div>
       </div>
-      <div class="icp-card" style="margin-bottom:0;">
+      <div class="icp-card" id="section-company-icp" style="margin-bottom:0;">
         <div class="icp-card-header">
           <svg class="icp-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
           <div class="icp-card-title">Company ICP <span class="field-info" data-tip="Your ideal company profile. Coop checks company stage, size, and culture signals against these. Saved values auto-generate green flags in your scoring settings.">i</span> <a href="docs.html#icp-flags" target="_blank" class="docs-link-tiny" title="How ICP settings sync to scoring flags">↗</a></div>
@@ -1636,274 +1423,7 @@
 
     </div><!-- end ICP tab panel -->
 
-    
 
-    <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- TAB 4: COOP                                                         -->
-    <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div class="cos-tab-panel active" data-panel="memory">
-
-    <!-- ── Coop's Context Window (Claude project-memory style) ── -->
-    <div class="card" id="card-coop-context-window" data-card="coop-context-window" style="border-color: var(--ci-accent-primary); border-width: 1.5px;">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div class="card-title" style="margin:0;">Memory</div>
-            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:var(--ci-text-secondary);background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:999px;padding:3px 10px;">
-              <svg width="11" height="12" viewBox="0 0 12 14" fill="none" style="flex-shrink:0;opacity:0.7"><rect x="1" y="5" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              Only you
-            </span>
-          </div>
-          <div class="card-subtitle">A living narrative of everything Coop knows about you — synthesized from your profile, experience, tags, and conversations.</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div id="coop-context-window-content" class="ctx-md" style="min-height:60px;padding:20px 26px;background:var(--ci-bg-base);border:1px solid var(--ci-border-subtle);border-radius:var(--ci-radius-md);max-height:560px;overflow-y:auto;">
-          <span style="color:var(--ci-text-tertiary);font-size:13px;">No memory yet. Click "Generate memory" — Coop will read everything you've given him and write a narrative summary of his understanding.</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;">
-          <button id="coop-context-regenerate" class="icp-autofill-btn icp-autofill-btn--primary" style="margin-bottom:0;">Generate memory</button>
-          <button id="coop-context-regen-chat" class="icp-autofill-btn" style="margin-bottom:0;display:none;" title="Re-synthesize using your recent chat with Coop as additional context">Regenerate from our chat</button>
-          <button id="coop-context-edit" class="icp-autofill-btn" style="margin-bottom:0;">Edit</button>
-          <span id="coop-context-meta" style="font-size:11px;color:var(--ci-text-tertiary);"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── What Coop Sees ── -->
-    <div class="card" id="card-coop-compiled" data-card="coop-compiled">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">What Coop sees</div>
-          <div class="card-subtitle">The compiled profile and preferences Coop uses for scoring, chat, and recommendations — auto-updated when you change your settings</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div style="display:flex;gap:8px;margin-bottom:14px;">
-          <button class="icp-autofill-btn compiled-tier-btn active" data-tier="standard" style="margin-bottom:0;">Standard</button>
-          <button class="icp-autofill-btn compiled-tier-btn" data-tier="full" style="margin-bottom:0;">Full</button>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;">
-          <button class="icp-autofill-btn compiled-doc-btn active" data-doc="profile" style="margin-bottom:0;">Profile</button>
-          <button class="icp-autofill-btn compiled-doc-btn" data-doc="preferences" style="margin-bottom:0;">Preferences</button>
-        </div>
-        <div id="compiled-profile-content" style="font-size:13px;line-height:1.7;color:var(--ci-text-secondary);min-height:40px;white-space:pre-wrap;font-family:var(--ci-font-sans,system-ui);border:1px solid var(--ci-border);border-radius:8px;padding:14px;background:var(--ci-bg-page);max-height:500px;overflow-y:auto;">
-          <span style="color:var(--ci-text-tertiary);">Loading compiled profile...</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
-          <span id="compiled-profile-meta" style="font-size:10px;color:var(--ci-text-tertiary);"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Personality & Voice ── -->
-    <div class="card" id="card-coop-personality" data-card="coop-personality">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Personality &amp; voice</div>
-          <div class="card-subtitle">Choose how Coop communicates — pick a preset and optionally add custom instructions</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="field-label" style="margin-bottom:8px;">Preset</div>
-        <div class="coop-presets" id="coop-presets">
-          <button class="coop-preset-btn active" data-preset="sharp-colleague">
-            <span class="coop-preset-label">Sharp Colleague</span>
-            <span class="coop-preset-subtitle">Direct, opinionated, Slack-style</span>
-          </button>
-          <button class="coop-preset-btn" data-preset="strategic-advisor">
-            <span class="coop-preset-label">Strategic Advisor</span>
-            <span class="coop-preset-subtitle">Measured, analytical, long-term thinking</span>
-          </button>
-          <button class="coop-preset-btn" data-preset="hype-man">
-            <span class="coop-preset-label">Hype Man</span>
-            <span class="coop-preset-subtitle">Encouraging, confidence-building</span>
-          </button>
-          <button class="coop-preset-btn" data-preset="formal-analyst">
-            <span class="coop-preset-label">Formal Analyst</span>
-            <span class="coop-preset-subtitle">Structured, data-driven, report-style</span>
-          </button>
-        </div>
-        <div class="coop-prompt-preview" id="coop-prompt-preview">
-          <div class="coop-prompt-preview-header">
-            <span class="coop-prompt-preview-title">System prompt — sent to Coop on every message</span>
-            <button class="coop-prompt-preview-reset" id="coop-prompt-reset" title="Reset to preset default">Reset to default</button>
-          </div>
-          <div style="font-size:11px;color:var(--ci-text-tertiary);margin-bottom:8px;">Edit these to change exactly what Coop receives. Changes apply immediately.</div>
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            <div>
-              <div class="coop-prompt-field-label">Tone instruction — "You're [this text]"</div>
-              <textarea class="coop-prompt-field" id="coop-prompt-tone" rows="3"></textarea>
-            </div>
-            <div>
-              <div class="coop-prompt-field-label">Style instruction — "Response style: [this text]"</div>
-              <textarea class="coop-prompt-field" id="coop-prompt-style" rows="3"></textarea>
-            </div>
-          </div>
-        </div>
-        <div class="field" style="margin-top:16px;padding:14px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-md);background:var(--ci-bg-raised);">
-          <label class="field-label" for="coop-operating-principles" style="font-weight:700;">Coop's Operating Principles</label>
-          <div style="font-size:12px;color:var(--ci-text-secondary);margin:4px 0 8px;">Tell Coop how to interpret your data — your floors, dealbreakers, and preferences. He reads these in every conversation. <strong>This is the single source of truth for how Coop forms opinions.</strong> Edit anytime — no code changes needed.</div>
-          <textarea class="field-input" id="coop-operating-principles" rows="10" placeholder="(Default principles will load — edit freely.)" style="resize:vertical;min-height:180px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-            <div style="font-size:11px;color:var(--ci-text-tertiary);">Empty = use defaults.</div>
-            <button id="coop-principles-reset" type="button" style="font-size:11px;padding:4px 10px;background:var(--ci-bg-inset);border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);">Reset to default</button>
-          </div>
-        </div>
-        <div class="field" style="margin-top:12px;">
-          <label class="field-label" for="coop-custom-instructions">Custom instructions (optional)</label>
-          <textarea class="field-input" id="coop-custom-instructions" rows="4" placeholder="Misc one-off tweaks. Most users won't need this — put interpretation rules in Operating Principles above." style="resize:vertical;min-height:80px;"></textarea>
-          <div style="font-size:11px;color:#A09A94;margin-top:4px;">Appended to the preset alongside operating principles.</div>
-        </div>
-
-        <div class="field" style="margin-top:16px;padding:14px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-md);background:var(--ci-bg-raised);">
-          <label class="field-label" style="font-weight:700;">Coop voice profile</label>
-          <div style="font-size:12px;color:var(--ci-text-secondary);margin:4px 0 12px;">Tunes the ambient writing assistant on any page. Coop flags phrases that aren't your voice and rewrites on request.</div>
-
-          <div style="margin-bottom:12px;">
-            <label class="field-label" for="coop-voice-anti-phrases" style="font-size:12px;">Anti-phrases</label>
-            <div style="font-size:11px;color:var(--ci-text-tertiary);margin:2px 0 6px;">Phrases Coop will flag as off-voice. One per line.</div>
-            <textarea class="field-input" id="coop-voice-anti-phrases" rows="8" style="resize:vertical;min-height:140px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
-          </div>
-
-          <div style="margin-bottom:12px;">
-            <label class="field-label" for="coop-voice-max-exclamations" style="font-size:12px;">Max exclamations per field</label>
-            <input class="field-input" id="coop-voice-max-exclamations" type="number" min="0" max="5" step="1" style="width:90px;">
-          </div>
-
-          <div style="margin-bottom:6px;">
-            <label class="field-label" for="coop-voice-signoffs" style="font-size:12px;">Preferred signoffs</label>
-            <div style="font-size:11px;color:var(--ci-text-tertiary);margin:2px 0 6px;">One per line.</div>
-            <textarea class="field-input" id="coop-voice-signoffs" rows="5" style="resize:vertical;min-height:90px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
-          </div>
-
-          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
-            <button id="coop-voice-reset" type="button" style="font-size:11px;padding:4px 10px;background:var(--ci-bg-inset);border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);">Reset to defaults</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Quick Prompts ── -->
-    <div class="card" id="card-coop-quick-prompts" data-card="coop-quick-prompts">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Quick prompts</div>
-          <div class="card-subtitle">One-tap starters that appear in Coop's chat — customize for your workflow</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="qp-list" id="qp-list"></div>
-        <button class="qp-add-btn" id="qp-add-btn">+ Add quick prompt</button>
-      </div>
-    </div>
-
-    <!-- ── Automations ── -->
-    <div class="card" id="card-coop-automations" data-card="coop-automations">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Automations</div>
-          <div class="card-subtitle">Control what Coop does automatically in the background</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Learn from conversations</span>
-            <span class="toggle-desc">Coop extracts insights from every chat to build your profile over time</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-insights" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Auto-fetch URLs in chat</span>
-            <span class="toggle-desc">When you paste a link, Coop fetches and summarizes the page content</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-urls" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Application mode auto-detection</span>
-            <span class="toggle-desc">Coop automatically switches to app-helper mode on career pages</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-appmode" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Contextual suggestions</span>
-            <span class="toggle-desc">Show context-aware quick prompts when the chat is empty</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-suggestions" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Sound effects</span>
-            <span class="toggle-desc">Play subtle audio feedback for send, receive, screen share, and snip</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-sounds" checked><span class="toggle-track"></span></label>
-        </div>
-        <!-- Tool-use (G2) is now the default chat path. Legacy only used for Career OS editor and application mode. -->
-      </div>
-    </div>
-
-    <!-- ── Coop Assist (writing assistant) ── -->
-    <div class="card" id="card-coop-assist" data-card="coop-assist">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Coop Assist (writing helper)</div>
-          <div class="card-subtitle">Ambient suggestions in any text field across the web (Phase 1: local heuristics, no AI calls)</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Enable Coop Assist</span>
-            <span class="toggle-desc">Show suggestions when writing in text fields on any site</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-assist-enabled" checked><span class="toggle-track"></span></label>
-        </div>
-        <div style="padding:12px 0;">
-          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;">Blocked domains (one per line)</label>
-          <textarea id="coop-assist-blocklist" rows="4" placeholder="bank.com&#10;mychart.com" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--ci-border-strong);border-radius:6px;"></textarea>
-          <div style="font-size:11px;color:var(--ci-text-secondary);margin-top:4px;">Banking, healthcare, and gov domains are always excluded by default.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Coop's Memory ── -->
-    <div class="card" id="card-coop-memory" data-card="coop-memory">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title" style="display:flex;align-items:center;gap:10px;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;">
-              <circle cx="12" cy="12" r="10" stroke="var(--ci-accent-purple)" stroke-width="1.5" fill="var(--ci-accent-purple-soft)"/>
-              <path d="M12 7v0a3 3 0 013 3v1a3 3 0 01-3 3v0a3 3 0 01-3-3v-1a3 3 0 013-3z" stroke="var(--ci-accent-purple)" stroke-width="1.3"/>
-              <path d="M8 17c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="var(--ci-accent-purple)" stroke-width="1.3" stroke-linecap="round"/>
-              <circle cx="12" cy="12" r="10" stroke="var(--ci-accent-purple)" stroke-width="1.5" fill="none" opacity="0.3">
-                <animate attributeName="r" values="10;12;10" dur="3s" repeatCount="indefinite"/>
-                <animate attributeName="opacity" values="0.3;0;0.3" dur="3s" repeatCount="indefinite"/>
-              </circle>
-            </svg>
-            Coop's memory
-          </div>
-          <div class="card-subtitle">Coop's persistent memory — typed entries (User, Feedback, Project, Reference) that carry across conversations. Built like Claude Code's project memory.</div>
-        </div>
-        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-      </div>
-      <div class="card-body">
-        <div id="coop-memory-filters" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
-        <div id="coop-memory-list"></div>
-        <div id="coop-memory-patterns" style="margin-top:16px;"></div>
-      </div>
-    </div>
-
-    </div><!-- end memory tab panel -->
 
     </div><!-- /.cos-content -->
     </div><!-- /.career-os-shell -->
@@ -1986,7 +1506,7 @@
         </svg>
         <div>
           <div class="coop-chat-title">Coop</div>
-          <div class="coop-chat-subtitle">Career OS editor mode</div>
+          <div class="coop-chat-subtitle">My Profile editor mode</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">

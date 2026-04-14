@@ -162,18 +162,21 @@
     .qc-pipeline-ctx-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .qc-pipeline-ctx-stage-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
     .qc-pipeline-ctx-action { font-size: 11px; font-weight: 600; margin-left: auto; }
-    .qc-pipeline-ctx-rows { display: flex; flex-direction: column; gap: 3px; }
+    .qc-pipeline-ctx-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
     .qc-pipeline-ctx-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
     .qc-pipeline-ctx-key { color: var(--ci-text-tertiary); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; min-width: 96px; flex-shrink: 0; }
     .qc-pipeline-ctx-val { color: var(--ci-text-secondary); line-height: 1.4; }
     .qc-pipeline-ctx-val.overdue { color: var(--ci-accent-red); font-weight: 600; }
 
     /* Pipeline context inputs */
+    .qc-pipeline-ctx-row:first-child { grid-column: 1 / -1; }
     .qc-nextstep-input { flex: 1; min-width: 0; font-size: 11.5px; font-family: inherit; padding: 2px 7px; border: 1px solid var(--ci-border-subtle); border-radius: 4px; background: var(--ci-bg-raised); color: var(--ci-text-primary); }
     .qc-nextstep-input:focus { border-color: var(--ci-accent-primary); outline: none; }
     .qc-date-input { font-size: 11.5px; font-family: inherit; padding: 2px 6px; border: 1px solid var(--ci-border-subtle); border-radius: 4px; background: var(--ci-bg-raised); color: var(--ci-text-primary); }
     .qc-date-input:focus { border-color: var(--ci-accent-primary); outline: none; }
     .qc-date-input.overdue { border-color: var(--ci-accent-red); color: var(--ci-accent-red); background: rgba(232,56,79,0.04); }
+    .qc-action-select { font-size: 11.5px; padding: 2px 6px; border: 1px solid var(--ci-border-subtle); border-radius: 4px; background: var(--ci-bg-raised); font-family: inherit; color: var(--ci-text-primary); }
+    .qc-action-select:focus { border-color: var(--ci-accent-primary); outline: none; }
 
     /* Tasks row inside pipeline ctx */
     .qc-tasks-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; padding-top: 6px; border-top: 1px solid var(--ci-border-subtle); }

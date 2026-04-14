@@ -282,7 +282,7 @@ function renderCurrent() {
     if (/culture|leadership|toxic|environment/.test(lower)) return 'flags';
     return 'flags';
   }
-  const configIcon = (tab) => `<a href="${chrome.runtime.getURL('preferences.html')}#${tab}" target="_blank" class="qc-flag-config" title="Edit this in Career OS">⚙</a>`;
+  const configIcon = (tab) => `<a href="${chrome.runtime.getURL('preferences.html')}#${tab}" target="_blank" class="qc-flag-config" title="Edit this in My Profile">⚙</a>`;
   const sourceLabel = (s) => {
     if (!s) return 'No source linked';
     const map = {
@@ -385,6 +385,15 @@ function renderCurrent() {
         <div class="qc-pipeline-ctx-row">
           <span class="qc-pipeline-ctx-key">Next Step Date</span>
           <input class="qc-date-input${isOverdue ? ' overdue' : ''}" id="qc-nextdate-input" type="date" value="${escHtml(nextDate)}" title="Next step due date">
+        </div>
+        <div class="qc-pipeline-ctx-row">
+          <span class="qc-pipeline-ctx-key">Action on</span>
+          <select class="qc-action-select" id="qc-action-select">
+            <option value="">—</option>
+            <option value="my_court" ${_actionSt === 'my_court' ? 'selected' : ''}>🏀 My Court</option>
+            <option value="their_court" ${_actionSt === 'their_court' ? 'selected' : ''}>⏳ Their Court</option>
+            <option value="scheduled" ${_actionSt === 'scheduled' ? 'selected' : ''}>📅 Scheduled</option>
+          </select>
         </div>
         ${lastActStr ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last activity</span><span class="qc-pipeline-ctx-val">${escHtml(lastActStr)}</span></div>` : ''}
         ${stageLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Stage entered</span><span class="qc-pipeline-ctx-val">${stageLine}</span></div>` : ''}
@@ -843,6 +852,9 @@ function renderCurrent() {
     const input = e.target;
     const isOverdue = e.target.value && new Date(e.target.value + 'T00:00:00') < new Date();
     input.classList.toggle('overdue', isOverdue);
+  });
+  document.getElementById('qc-action-select')?.addEventListener('change', e => {
+    _saveEntryField(c.id, 'actionStatus', e.target.value);
   });
 
   // Inject tasks linked to this entry

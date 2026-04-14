@@ -343,7 +343,7 @@ function renderHeader() {
     ${entry.jobUrl && /linkedin\.com\/jobs\/view\//i.test(entry.jobUrl)
       ? `<button class="hdr-rescrape-btn" id="hdr-rescrape-btn" title="Re-fetch all LinkedIn data (firmographics, skills, recruiter, etc.) and rescore">↺ Refresh LinkedIn data</button>`
       : ''}
-    <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ Career OS</a>
+    <a class="hdr-prefs-link" href="${chrome.runtime.getURL('preferences.html')}" target="_blank">⚙ My Profile</a>
   `;
 
   document.title = `${entry.company}${entry.jobTitle ? ' · ' + entry.jobTitle : ''} — Coop.ai`;

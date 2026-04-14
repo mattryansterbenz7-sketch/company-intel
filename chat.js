@@ -22,10 +22,11 @@ function buildChatPanel(container, entry) {
 
   // Model switcher — default GPT-4.1 mini, click to cycle
   const CHAT_MODELS = [
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', icon: '◆' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku', icon: '⚡' },
-    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', icon: '✦' },
+    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆' },
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', icon: '⚡' },
     { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
+    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', icon: '✦' },
   ];
   let chatModelIdx = 0;
 

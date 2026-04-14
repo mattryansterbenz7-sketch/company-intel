@@ -2418,7 +2418,7 @@ document.getElementById('cost-pill')?.addEventListener('click', () => {
       </div>
       <div style="padding:10px 20px;border-top:1px solid var(--ci-border-subtle);font-size:10px;color:var(--ci-text-tertiary);text-align:center;display:flex;align-items:center;justify-content:space-between">
         <span>${log.length} API calls today &middot; Resets at midnight</span>
-        <a href="pipeline.html#usage" style="color:var(--ci-accent-primary);font-weight:600;text-decoration:none;font-size:11px">Full Report &rarr;</a>
+        <a href="coop-settings.html" style="color:var(--ci-accent-primary);font-weight:600;text-decoration:none;font-size:11px">Full Report &rarr;</a>
       </div>
     </div>`;
     document.body.appendChild(overlay);

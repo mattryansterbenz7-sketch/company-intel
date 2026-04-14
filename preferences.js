@@ -170,6 +170,34 @@ function initCosTabs() {
       }, 50);
     });
   });
+
+  // Sub-link smooth scroll + active tracking
+  document.querySelectorAll('.cos-sub-link').forEach(link => {
+    link.addEventListener('click', () => {
+      const el = document.getElementById(link.dataset.anchor);
+      if (!el) return;
+      // Ensure the ICP tab is active first
+      const icpTab = document.querySelector('.cos-tab[data-tab="icp"]');
+      if (icpTab && !icpTab.classList.contains('active')) icpTab.click();
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+    });
+  });
+
+  // Highlight sub-link based on scroll position
+  const subLinks = document.querySelectorAll('.cos-sub-link');
+  if (subLinks.length) {
+    const anchors = [...subLinks].map(l => ({ link: l, el: document.getElementById(l.dataset.anchor) })).filter(a => a.el);
+    window.addEventListener('scroll', () => {
+      const icpTab = document.querySelector('.cos-tab[data-tab="icp"]');
+      if (!icpTab?.classList.contains('active')) return;
+      let current = anchors[0];
+      for (const a of anchors) {
+        if (a.el.getBoundingClientRect().top <= 120) current = a;
+      }
+      subLinks.forEach(l => l.classList.remove('viewing'));
+      if (current) current.link.classList.add('viewing');
+    }, { passive: true });
+  }
 }
 
 // ── Textarea "See more / See less" toggles ──────────────────────────────────
@@ -487,49 +515,6 @@ function loadStoredInterpretations() {
   });
 }
 
-// ── Page header: user's first name ───────────────────────────────────────────
-
-function setHeaderName() {
-  // Try profileLinks first, then storyTime, then sync prefs
-  chrome.storage.local.get(['profileLinks', 'storyTime'], data => {
-    void chrome.runtime.lastError;
-    let firstName = '';
-
-    // Check if we have a name from LinkedIn import stored in storyTime or elsewhere
-    chrome.storage.sync.get(['prefs'], ({ prefs }) => {
-      void chrome.runtime.lastError;
-      // Try to extract name from LinkedIn URL or profile data
-      const links = data.profileLinks || {};
-      const st = data.storyTime || {};
-
-      // If we have a profileSummary, try to extract name from it
-      if (st.profileSummary) {
-        const nameMatch = st.profileSummary.match(/^(?:Name:\s*)(.+?)(?:\n|$)/i);
-        if (nameMatch) firstName = nameMatch[1].split(' ')[0];
-      }
-
-      // If we have raw input that starts with "Name:", extract it
-      if (!firstName && st.rawInput) {
-        const nameMatch = st.rawInput.match(/^(?:Name:\s*)(.+?)(?:\n|$)/im);
-        if (nameMatch) firstName = nameMatch[1].split(' ')[0];
-      }
-
-      // Check if name is in profileLinks email (before @)
-      if (!firstName && links.email) {
-        const emailName = links.email.split('@')[0];
-        // Only use if it looks like a real name (not a username with numbers)
-        if (emailName && /^[a-zA-Z]+$/.test(emailName) && emailName.length > 2) {
-          firstName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        }
-      }
-
-      const titleEl = document.getElementById('page-title');
-      if (firstName && titleEl) {
-        titleEl.textContent = `${firstName}'s Career OS`;
-      }
-    });
-  });
-}
 
 // ── Resume upload ────────────────────────────────────────────────────────────
 
@@ -681,14 +666,6 @@ function initLinkedInImport() {
           // Store the imported text in profileExperience (the new bucket for this data)
           document.getElementById('profile-experience').value = text;
           saveBucket('profileExperience', text);
-
-          // Try to extract name for the header
-          const nameMatch = text.match(/^Name:\s*(.+?)$/m);
-          if (nameMatch) {
-            const firstName = nameMatch[1].split(' ')[0];
-            const titleEl = document.getElementById('page-title');
-            if (firstName && titleEl) titleEl.textContent = `${firstName}'s Career OS`;
-          }
 
           // Also keep in sync prefs for backward compat
           chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
@@ -910,7 +887,7 @@ const ICP_DIMENSIONS = [
   { key: 'roleFit',          label: 'Role fit',          color: '#3B6D11', subtitle: 'Day-to-day work' },
   { key: 'cultureFit',       label: 'Culture fit',       color: '#7F77DD', subtitle: 'Values & environment' },
   { key: 'companyFit',       label: 'Company fit',       color: '#BA7517', subtitle: 'Stage & product' },
-  { key: 'compFit',          label: 'Comp fit',          color: '#0F6E56', subtitle: 'Base, OTE & equity' },
+  { key: 'compFit',          label: 'Comp fit',          color: '#0F6E56', subtitle: 'Base, OTE & equity', compFitBracket: true },
 ];
 
 const SEV_GREEN_LABELS = ['Mild signal', 'Preference', 'Green factor', 'Dream factor', 'Hard qualifier'];
@@ -923,9 +900,10 @@ let _icpGreens  = [];
 let _icpReds    = [];
 
 function initICPScoring() {
-  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'scoringWeights'], data => {
+  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'scoringWeights', 'compBracketSeverities'], data => {
     _icpGreens = data.profileAttractedTo || [];
     _icpReds   = data.profileDealbreakers || [];
+    _compBracketSeverities = data.compBracketSeverities || { base: {}, ote: {} };
 
     // Validate loaded weights — must have all required keys and sum to 100
     const loaded = data.scoringWeights;
@@ -1041,11 +1019,14 @@ function renderICPDimRow(dim) {
   const greens = _icpGreens.filter(f => (f.dimension || 'roleFit') === dim.key);
   const reds   = _icpReds.filter(f => (f.dimension || 'roleFit') === dim.key);
 
-  const countsHtml = dim.noFlags ? `<span class="icp-dim-auto-note">auto-scored from resume</span>` : `
-    <div class="icp-flag-counts">
-      <span class="icp-count-pill green">${greens.length} green</span>
-      <span class="icp-count-pill red">${reds.length} red</span>
-    </div>`;
+  const countsHtml = dim.noFlags
+    ? `<span class="icp-dim-auto-note">auto-scored from resume</span>`
+    : dim.compFitBracket
+      ? `<span class="icp-dim-auto-note">7 brackets · Base &amp; OTE</span>`
+      : `<div class="icp-flag-counts">
+           <span class="icp-count-pill green">${greens.length} green</span>
+           <span class="icp-count-pill red">${reds.length} red</span>
+         </div>`;
 
   el.innerHTML = `
     <div class="icp-dim-header" data-dim="${dim.key}">
@@ -1066,8 +1047,105 @@ function renderICPDimRow(dim) {
   window.scrollTo(0, scrollY);
 }
 
+// Bracket tier definitions mirroring scoring.js COMP_BRACKET_TIERS
+const COMP_BRACKET_TIERS_UI = [
+  { key: 'well_above',     label: 'Well above',     type: 'green', defaultSev: 5, thresholdFn: (f, s) => s * 1.15 },
+  { key: 'meets_target',   label: 'Meets target',   type: 'green', defaultSev: 4, thresholdFn: (f, s) => s },
+  { key: 'above_floor',    label: 'Above floor',    type: 'green', defaultSev: 2, thresholdFn: (f, s) => (f + s) / 2 },
+  { key: 'meets_floor',    label: 'Meets floor',    type: 'green', defaultSev: 1, thresholdFn: (f, s) => f },
+  { key: 'slightly_below', label: 'Slightly below', type: 'red',   defaultSev: 2, thresholdFn: (f, s) => f * 0.9 },
+  { key: 'below_floor',    label: 'Below floor',    type: 'red',   defaultSev: 3, thresholdFn: (f, s) => f * 0.8 },
+  { key: 'well_below',     label: 'Well below',     type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
+];
+
+let _compBracketSeverities = { base: {}, ote: {} };
+
+function loadCompBracketSeverities(cb) {
+  chrome.storage.local.get(['compBracketSeverities'], d => {
+    _compBracketSeverities = d.compBracketSeverities || { base: {}, ote: {} };
+    cb?.();
+  });
+}
+
+function saveCompBracketSeverities() {
+  chrome.storage.local.set({ compBracketSeverities: _compBracketSeverities });
+}
+
+function renderCompBracketEditor() {
+  const fmtK = v => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`;
+
+  function bracketSection(compType, floor, strong, label) {
+    if (!floor) return `<div style="font-size:12px;color:var(--ci-text-tertiary);padding:4px 0;">No ${label} floor set — configure in Compensation above.</div>`;
+    const sevs = _compBracketSeverities[compType] || {};
+    const rows = COMP_BRACKET_TIERS_UI.map((tier, i) => {
+      const threshold = tier.thresholdFn(floor, strong);
+      const threshLabel = i === COMP_BRACKET_TIERS_UI.length - 1 ? `<${fmtK(floor * 0.8)}` : `≥${fmtK(threshold)}`;
+      const sev = typeof sevs[tier.key] === 'number' ? sevs[tier.key] : tier.defaultSev;
+      const dot = tier.type === 'green' ? '#22c55e' : '#ef4444';
+      const sevColor = tier.type === 'green' ? SEV_GREEN_COLORS[sev - 1] : SEV_RED_COLORS[sev - 1];
+      return `<div class="comp-bracket-row" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--ci-border-subtle);">
+        <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
+        <span style="flex:1;font-size:13px;color:var(--ci-text-primary);">${tier.label}</span>
+        <span style="font-size:11px;color:var(--ci-text-tertiary);min-width:52px;text-align:right;">${threshLabel}</span>
+        <button class="comp-sev-btn" data-comp="${compType}" data-tier="${tier.key}" data-sev="${sev}"
+          style="width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${sevColor};flex-shrink:0;"
+          title="Click to change severity (1–5)">${sev}</button>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--ci-text-tertiary);text-transform:uppercase;margin-bottom:6px;">${label}</div>
+      ${rows}
+    </div>`;
+  }
+
+  const salaryFloor  = parseFloat(document.getElementById('pref-salary-floor')?.value) || 0;
+  const salaryStrong = parseFloat(document.getElementById('pref-salary-strong')?.value) || salaryFloor * 1.3;
+  const oteFloor     = parseFloat(document.getElementById('pref-ote-floor')?.value) || 0;
+  const oteStrong    = parseFloat(document.getElementById('pref-ote-strong')?.value) || oteFloor * 1.3;
+
+  return `<div id="comp-bracket-editor">
+    <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:14px;line-height:1.5;">
+      Thresholds are computed from your comp settings. Click a severity badge to cycle it (1–5).
+      <span style="color:var(--ci-text-tertiary);">Higher = more impact on score.</span>
+    </div>
+    ${bracketSection('base', salaryFloor, salaryStrong, 'Base')}
+    ${bracketSection('ote', oteFloor, oteStrong, 'OTE')}
+  </div>`;
+}
+
+function bindCompBracketEditorEvents(el) {
+  el.querySelectorAll('.comp-sev-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const compType = btn.dataset.comp;
+      const tierKey  = btn.dataset.tier;
+      const cur = parseInt(btn.dataset.sev) || 1;
+      const next = cur >= 5 ? 1 : cur + 1;
+      if (!_compBracketSeverities[compType]) _compBracketSeverities[compType] = {};
+      _compBracketSeverities[compType][tierKey] = next;
+      saveCompBracketSeverities();
+      // Re-render just this button
+      btn.dataset.sev = next;
+      btn.textContent = next;
+      const tier = COMP_BRACKET_TIERS_UI.find(t => t.key === tierKey);
+      const colors = tier?.type === 'green' ? SEV_GREEN_COLORS : SEV_RED_COLORS;
+      btn.style.background = colors[next - 1];
+    });
+  });
+}
+
 function renderICPDimBody(dim, greens, reds) {
   const qualNote = dim.noFlags ? `<div class="icp-qual-note">Qualification fit is calculated from your resume and experience — not flags. It answers "would they hire me?" based on seniority, skills, and stated requirements in the job posting.</div>` : '';
+
+  if (dim.compFitBracket) {
+    return `
+      <div class="icp-dim-weight-row">
+        <label>Scoring weight</label>
+        <input type="range" min="0" max="50" step="1" value="${_icpWeights[dim.key]}"
+               id="body-slider-${dim.key}" data-dim="${dim.key}" class="dim-slider-${dim.key}">
+        <span class="icp-dim-weight-val" id="body-slider-val-${dim.key}">${_icpWeights[dim.key]}%</span>
+      </div>
+      ${renderCompBracketEditor()}`;
+  }
 
   const flagCols = dim.noFlags ? '' : `
     <div class="icp-flags-cols">
@@ -1128,6 +1206,16 @@ function bindICPDimEvents(dim, el) {
       const val = document.getElementById(`body-slider-val-${dim.key}`);
       if (val) val.textContent = `${_icpWeights[dim.key]}%`;
     });
+    return;
+  }
+
+  if (dim.compFitBracket) {
+    el.querySelector(`#body-slider-${dim.key}`)?.addEventListener('input', e => {
+      autoBalanceICPWeights(dim.key, parseInt(e.target.value));
+      const val = document.getElementById(`body-slider-val-${dim.key}`);
+      if (val) val.textContent = `${_icpWeights[dim.key]}%`;
+    });
+    bindCompBracketEditorEvents(el);
     return;
   }
 
@@ -2744,7 +2832,7 @@ function initCoopChatDrawer() {
     drawer.classList.toggle('open', isOpen);
     toggle.classList.toggle('open', isOpen);
     if (isOpen && !chatHistory.length) {
-      appendMessage('assistant', "Hey! I can see your full Career OS profile. Ask me anything — or tell me something and I'll propose an update.\n\nTry: *\"Add a dealbreaker for grit culture\"* or *\"What are my dealbreakers?\"*");
+      appendMessage('assistant', "Hey! I can see your full profile. Ask me anything — or tell me something and I'll propose an update.\n\nTry: *\"Add a dealbreaker for grit culture\"* or *\"What are my dealbreakers?\"*");
     }
   });
   // Docked mode removed — drawer is toggle-only now
@@ -3031,430 +3119,6 @@ function estimateTokenCost(modelId, inputTokens, outputTokens) {
   const r = rates[key];
   const cost = (inputTokens / 1_000_000 * r.input) + (outputTokens / 1_000_000 * r.output);
   return cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3);
-}
-
-// ── Coop settings (personality + automations) ──────────────────────────────
-
-const COOP_PRESETS = {
-  'sharp-colleague': {
-    label: 'Sharp Colleague',
-    subtitle: 'Direct, opinionated, Slack-style',
-    tone: `confident, direct, and always in his corner. You speak like a sharp colleague, not a corporate chatbot. Keep it real, keep it useful.`,
-    style: `Keep answers short and direct. Use short paragraphs. Bold key terms sparingly. Use bullet lists only when listing 3+ items. No headers or horizontal rules unless asked. Write like a smart colleague in Slack, not a formal report.`,
-  },
-  'strategic-advisor': {
-    label: 'Strategic Advisor',
-    subtitle: 'Measured, analytical, long-term thinking',
-    tone: `thoughtful and analytical — a seasoned advisor who pushes on long-term implications. You ask the questions others miss and challenge assumptions when the stakes matter.`,
-    style: `Structure responses around trade-offs and second-order effects. Use frameworks when they add clarity. Be willing to say "slow down" when a decision deserves more thought. Medium-length responses are fine when depth is warranted.`,
-  },
-  'hype-man': {
-    label: 'Hype Man',
-    subtitle: 'Encouraging, confidence-building',
-    tone: `encouraging and energizing — the colleague who genuinely believes in your strengths and makes sure you see them too. You highlight wins, reframe setbacks, and keep momentum high.`,
-    style: `Lead with strengths and positive framing. Be specific about what makes the user strong for each opportunity. Keep energy high without being fake. Short, punchy responses that build confidence.`,
-  },
-  'formal-analyst': {
-    label: 'Formal Analyst',
-    subtitle: 'Structured, data-driven, report-style',
-    tone: `precise and structured — a senior analyst delivering clear, evidence-based assessments. You organize information systematically and let data drive conclusions.`,
-    style: `Use headers and structured sections freely. Prefer numbered lists and tables when comparing options. Cite specific data points from context. Longer, more thorough responses are expected. Professional tone throughout.`,
-  },
-};
-
-const DEFAULT_OPERATING_PRINCIPLES = `- Treat my floors and dealbreakers as preferences with weight, not as refusal triggers. Flag concerns once, then help me with what I asked.
-- When I ask you to draft something (cover letter, email, application answer, intro, follow-up), draft it. Save fit critique for when I explicitly ask "should I apply?" or "is this a fit?".
-- When evaluating, be honest and specific. When producing, produce.
-- A score below my floor is a concern, not a hard pass. Tell me once, not every turn.
-- Hard DQ is reserved only for things I have explicitly marked as hard DQ in my dealbreakers list — nothing else.
-- Use the data I've given you (Green Lights, Red Lights, Dealbreakers, ICP, floors) as the source of truth for what I want. Don't editorialize on top of it.`;
-
-// Must match the defaults baked into coop-assist.js line-for-line.
-const DEFAULT_VOICE_PROFILE = {
-  antiPhrases: [
-    'i hope this email finds you well',
-    'i hope this finds you well',
-    'i wanted to reach out',
-    'i wanted to touch base',
-    'just wanted to follow up',
-    'circle back',
-    'per my last email',
-    'as per',
-    'kindly',
-    'utilize',
-    'leverage',
-    'in conclusion',
-    'furthermore',
-    'moreover',
-    'to whom it may concern',
-    'dear sir or madam',
-  ],
-  preferredSignoffs: [],
-  avoidExclamations: true,
-  maxExclamations: 1,
-};
-
-function initVoiceProfileEditor() {
-  const antiEl = document.getElementById('coop-voice-anti-phrases');
-  const maxEl = document.getElementById('coop-voice-max-exclamations');
-  const signoffEl = document.getElementById('coop-voice-signoffs');
-  const resetBtn = document.getElementById('coop-voice-reset');
-  if (!antiEl || !maxEl || !signoffEl) return;
-
-  const linesToArr = (s) => String(s || '').split('\n').map(l => l.trim()).filter(Boolean);
-  const arrToLines = (a) => (Array.isArray(a) ? a : []).join('\n');
-
-  function hydrate(vp) {
-    const merged = { ...DEFAULT_VOICE_PROFILE, ...(vp || {}) };
-    antiEl.value = arrToLines(merged.antiPhrases);
-    signoffEl.value = arrToLines(merged.preferredSignoffs);
-    const n = Number.isFinite(merged.maxExclamations) ? merged.maxExclamations : DEFAULT_VOICE_PROFILE.maxExclamations;
-    maxEl.value = String(n);
-  }
-
-  function readStored(cb) {
-    chrome.storage.local.get(['voiceProfile'], ({ voiceProfile }) => cb(voiceProfile || {}));
-  }
-
-  function save() {
-    readStored((current) => {
-      const raw = parseInt(maxEl.value, 10);
-      const maxEx = Number.isFinite(raw) ? Math.max(0, Math.min(5, raw)) : DEFAULT_VOICE_PROFILE.maxExclamations;
-      const merged = {
-        ...DEFAULT_VOICE_PROFILE,
-        ...current,
-        antiPhrases: linesToArr(antiEl.value),
-        preferredSignoffs: linesToArr(signoffEl.value),
-        maxExclamations: maxEx,
-        avoidExclamations: true,
-      };
-      chrome.storage.local.set({ voiceProfile: merged }, () => {
-        if (typeof showSaveStatus === 'function') showSaveStatus();
-      });
-    });
-  }
-
-  readStored(hydrate);
-
-  antiEl.addEventListener('blur', save);
-  signoffEl.addEventListener('blur', save);
-  maxEl.addEventListener('blur', save);
-  maxEl.addEventListener('change', save);
-
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      hydrate(DEFAULT_VOICE_PROFILE);
-      chrome.storage.local.set({ voiceProfile: { ...DEFAULT_VOICE_PROFILE } }, () => {
-        if (typeof showSaveStatus === 'function') showSaveStatus();
-      });
-    });
-  }
-}
-
-const DEFAULT_COOP_CONFIG = {
-  preset: 'sharp-colleague',
-  operatingPrinciples: '',  // empty = use DEFAULT_OPERATING_PRINCIPLES at runtime
-  customInstructions: '',
-  toneOverride: null,   // null = use preset default, string = custom override
-  styleOverride: null,
-  automations: {
-    insightExtraction: true,
-    autoFetchUrls: true,
-    applicationModeDetection: true,
-    contextualSuggestions: true,
-    rescoreOnProfileChange: false,
-    rescoreOnPrefChange: false,
-    rescoreOnNewData: false,
-  },
-};
-
-function initCoopSettings() {
-  chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
-    const cfg = { ...DEFAULT_COOP_CONFIG, ...coopConfig, automations: { ...DEFAULT_COOP_CONFIG.automations, ...(coopConfig?.automations || {}) } };
-
-    // ── Prompt preview fields ──
-    const toneEl = document.getElementById('coop-prompt-tone');
-    const styleEl = document.getElementById('coop-prompt-style');
-    const resetBtn = document.getElementById('coop-prompt-reset');
-
-    function updatePromptPreview() {
-      const preset = COOP_PRESETS[cfg.preset] || COOP_PRESETS['sharp-colleague'];
-      const currentTone = cfg.toneOverride ?? preset.tone;
-      const currentStyle = cfg.styleOverride ?? preset.style;
-      if (toneEl) toneEl.value = currentTone;
-      if (styleEl) styleEl.value = currentStyle;
-      // Show reset button if user has customized
-      const isCustomized = cfg.toneOverride !== null || cfg.styleOverride !== null;
-      if (resetBtn) resetBtn.classList.toggle('visible', isCustomized);
-    }
-
-    // ── Preset buttons ──
-    const presetBtns = document.querySelectorAll('.coop-preset-btn');
-    presetBtns.forEach(btn => {
-      if (btn.dataset.preset === cfg.preset) btn.classList.add('active');
-      else btn.classList.remove('active');
-
-      btn.addEventListener('click', () => {
-        presetBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        cfg.preset = btn.dataset.preset;
-        cfg.toneOverride = null;  // reset overrides when switching preset
-        cfg.styleOverride = null;
-        chrome.storage.local.set({ coopConfig: cfg });
-        updatePromptPreview();
-        showSaveStatus();
-      });
-    });
-
-    // Populate prompt preview on load
-    updatePromptPreview();
-
-    // Save tone/style edits as overrides
-    if (toneEl) {
-      toneEl.addEventListener('blur', () => {
-        const preset = COOP_PRESETS[cfg.preset] || COOP_PRESETS['sharp-colleague'];
-        const val = toneEl.value.trim();
-        cfg.toneOverride = (val === preset.tone) ? null : val;
-        chrome.storage.local.set({ coopConfig: cfg });
-        if (resetBtn) resetBtn.classList.toggle('visible', cfg.toneOverride !== null || cfg.styleOverride !== null);
-        showSaveStatus();
-      });
-    }
-    if (styleEl) {
-      styleEl.addEventListener('blur', () => {
-        const preset = COOP_PRESETS[cfg.preset] || COOP_PRESETS['sharp-colleague'];
-        const val = styleEl.value.trim();
-        cfg.styleOverride = (val === preset.style) ? null : val;
-        chrome.storage.local.set({ coopConfig: cfg });
-        if (resetBtn) resetBtn.classList.toggle('visible', cfg.toneOverride !== null || cfg.styleOverride !== null);
-        showSaveStatus();
-      });
-    }
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        cfg.toneOverride = null;
-        cfg.styleOverride = null;
-        chrome.storage.local.set({ coopConfig: cfg });
-        updatePromptPreview();
-        showSaveStatus();
-      });
-    }
-
-    // ── Operating Principles (single source of truth for interpretation) ──
-    const principlesEl = document.getElementById('coop-operating-principles');
-    const principlesResetBtn = document.getElementById('coop-principles-reset');
-    if (principlesEl) {
-      principlesEl.value = (cfg.operatingPrinciples && cfg.operatingPrinciples.trim()) || DEFAULT_OPERATING_PRINCIPLES;
-      principlesEl.addEventListener('blur', () => {
-        const val = principlesEl.value.trim();
-        // Store empty string only if user matches the default exactly — otherwise persist their edits
-        cfg.operatingPrinciples = (val === DEFAULT_OPERATING_PRINCIPLES.trim()) ? '' : val;
-        chrome.storage.local.set({ coopConfig: cfg });
-        showSaveStatus();
-      });
-    }
-    if (principlesResetBtn) {
-      principlesResetBtn.addEventListener('click', () => {
-        if (principlesEl) principlesEl.value = DEFAULT_OPERATING_PRINCIPLES;
-        cfg.operatingPrinciples = '';
-        chrome.storage.local.set({ coopConfig: cfg });
-        showSaveStatus();
-      });
-    }
-
-    // ── Custom instructions ──
-    const instrEl = document.getElementById('coop-custom-instructions');
-    if (instrEl) {
-      instrEl.value = cfg.customInstructions || '';
-      instrEl.addEventListener('blur', () => {
-        cfg.customInstructions = instrEl.value.trim();
-        chrome.storage.local.set({ coopConfig: cfg });
-        showSaveStatus();
-      });
-    }
-
-    // ── Voice profile (coop-assist.js ambient writing assistant) ──
-    initVoiceProfileEditor();
-
-    // ── Automation toggles ──
-    const toggleMap = {
-      'coop-auto-insights': 'insightExtraction',
-      'coop-auto-urls': 'autoFetchUrls',
-      'coop-auto-appmode': 'applicationModeDetection',
-      'coop-auto-suggestions': 'contextualSuggestions',
-    };
-    for (const [elId, key] of Object.entries(toggleMap)) {
-      const el = document.getElementById(elId);
-      if (!el) continue;
-      el.checked = cfg.automations[key] !== false;
-      el.addEventListener('change', () => {
-        cfg.automations[key] = el.checked;
-        chrome.storage.local.set({ coopConfig: cfg });
-        showSaveStatus();
-      });
-    }
-
-    // ── G2 tool-use flag (experimental) ──
-    const toolUseEl = document.getElementById('coop-tool-use');
-    if (toolUseEl) {
-      toolUseEl.checked = cfg.useToolUse === true;
-      toolUseEl.addEventListener('change', () => {
-        cfg.useToolUse = toolUseEl.checked;
-        chrome.storage.local.set({ coopConfig: cfg });
-        showSaveStatus();
-      });
-    }
-
-    // ── Sound toggle ──
-    const soundEl = document.getElementById('coop-sounds');
-    if (soundEl) {
-      soundEl.checked = cfg.soundsMuted !== true;
-      soundEl.addEventListener('change', () => {
-        cfg.soundsMuted = !soundEl.checked;
-        chrome.storage.local.set({ coopConfig: cfg });
-        showSaveStatus();
-      });
-    }
-
-    // ── Coop Assist (writing helper) ──
-    chrome.storage.local.get(['coopAssistantConfig'], r => {
-      const ac = r.coopAssistantConfig || { enabled: true, blocklist: [], pausedUntil: 0 };
-      const enEl = document.getElementById('coop-assist-enabled');
-      const pauseBtn = document.getElementById('coop-assist-pause-btn');
-      const blockEl = document.getElementById('coop-assist-blocklist');
-      if (enEl) {
-        enEl.checked = ac.enabled !== false;
-        enEl.addEventListener('change', () => {
-          ac.enabled = enEl.checked;
-          chrome.storage.local.set({ coopAssistantConfig: ac });
-          showSaveStatus();
-        });
-      }
-      if (pauseBtn) {
-        const refreshLabel = () => {
-          const remaining = (ac.pausedUntil || 0) - Date.now();
-          pauseBtn.textContent = remaining > 0 ? `Paused (${Math.ceil(remaining/60000)}m)` : 'Pause 1h';
-        };
-        refreshLabel();
-        pauseBtn.addEventListener('click', () => {
-          ac.pausedUntil = Date.now() + 60 * 60 * 1000;
-          chrome.storage.local.set({ coopAssistantConfig: ac });
-          refreshLabel();
-          showSaveStatus();
-        });
-      }
-      if (blockEl) {
-        blockEl.value = (ac.blocklist || []).join('\n');
-        blockEl.addEventListener('blur', () => {
-          ac.blocklist = blockEl.value.split('\n').map(s => s.trim()).filter(Boolean);
-          chrome.storage.local.set({ coopAssistantConfig: ac });
-          showSaveStatus();
-        });
-      }
-    });
-
-  });
-}
-
-// ── Coop Quick Prompts ────────────────────────────────────────────────────────
-
-const DEFAULT_QUICK_PROMPTS = [
-  { id: 'cover-letter', label: 'Cover letter', prompt: 'Help me write a custom cover letter for this role. Use what you know about me and the company to make it specific and compelling.' },
-  { id: 'interview-prep', label: 'Interview prep', prompt: 'Prep me for an interview here — what should I know about the company, what questions will they likely ask, and how should I position myself?' },
-  { id: 'why-this-role', label: 'Why this role', prompt: 'Help me articulate why I\'m genuinely interested in this role in a way that\'s specific and authentic, not generic.' },
-  { id: 'draft-followup', label: 'Draft follow-up', prompt: 'Draft a follow-up message I can send after my last touch with this company. Make it brief and natural.' },
-];
-
-function initCoopQuickPrompts() {
-  const listEl = document.getElementById('qp-list');
-  const addBtn = document.getElementById('qp-add-btn');
-  if (!listEl || !addBtn) return;
-
-  let prompts = [];
-
-  function save() {
-    chrome.storage.local.set({ coopQuickPrompts: prompts }, () => { void chrome.runtime.lastError; showSaveStatus(); });
-  }
-
-  function renderList() {
-    listEl.innerHTML = '';
-    if (prompts.length === 0) {
-      listEl.innerHTML = '<div style="font-size:12px;color:var(--ci-text-tertiary);padding:4px 0;">No quick prompts yet. Add one below.</div>';
-      return;
-    }
-    prompts.forEach((p, idx) => {
-      const row = document.createElement('div');
-      row.className = 'qp-row';
-      row.dataset.idx = idx;
-      row.innerHTML = `
-        <div class="qp-row-header">
-          <div class="qp-row-dot"></div>
-          <span class="qp-row-label">${p.label}</span>
-          <span class="qp-row-toggle">▾</span>
-          <button class="qp-row-del" title="Delete" data-idx="${idx}">✕</button>
-        </div>
-        <div class="qp-row-body">
-          <div>
-            <div class="qp-field-label">Label (shown on button)</div>
-            <input class="qp-label-input" type="text" value="${p.label.replace(/"/g, '&quot;')}" placeholder="e.g., Cover letter">
-          </div>
-          <div>
-            <div class="qp-field-label">Prompt (sent to Coop)</div>
-            <textarea class="qp-prompt-textarea" placeholder="e.g., Help me write a cover letter...">${p.prompt.replace(/</g, '&lt;')}</textarea>
-          </div>
-          <div class="qp-row-actions">
-            <button class="qp-cancel-btn">Cancel</button>
-            <button class="qp-save-btn">Save</button>
-          </div>
-        </div>`;
-
-      row.querySelector('.qp-row-header').addEventListener('click', e => {
-        if (e.target.closest('.qp-row-del')) return;
-        row.classList.toggle('expanded');
-        if (row.classList.contains('expanded')) row.querySelector('.qp-label-input').focus();
-      });
-
-      row.querySelector('.qp-row-del').addEventListener('click', e => {
-        e.stopPropagation();
-        prompts.splice(idx, 1);
-        save();
-        renderList();
-      });
-
-      row.querySelector('.qp-cancel-btn').addEventListener('click', () => row.classList.remove('expanded'));
-
-      row.querySelector('.qp-save-btn').addEventListener('click', () => {
-        const label = row.querySelector('.qp-label-input').value.trim();
-        const prompt = row.querySelector('.qp-prompt-textarea').value.trim();
-        if (!label || !prompt) return;
-        prompts[idx] = { ...prompts[idx], label, prompt };
-        save();
-        renderList();
-      });
-
-      listEl.appendChild(row);
-    });
-  }
-
-  function addNewRow() {
-    const newPrompt = { id: 'custom-' + Date.now(), label: 'New prompt', prompt: '' };
-    prompts.push(newPrompt);
-    renderList();
-    // Auto-expand the new row
-    const rows = listEl.querySelectorAll('.qp-row');
-    const lastRow = rows[rows.length - 1];
-    if (lastRow) {
-      lastRow.classList.add('expanded');
-      lastRow.querySelector('.qp-label-input').select();
-    }
-  }
-
-  addBtn.addEventListener('click', addNewRow);
-
-  chrome.storage.local.get(['coopQuickPrompts'], ({ coopQuickPrompts }) => {
-    prompts = Array.isArray(coopQuickPrompts) ? coopQuickPrompts : [...DEFAULT_QUICK_PROMPTS];
-    renderList();
-  });
 }
 
 // ── Structured Experience Entries ────────────────────────────────────────────
@@ -4487,575 +4151,6 @@ function initFaqPairs() {
   });
 }
 
-// ── What Coop Sees (compiled profile viewer) ────────────────────────────────
-
-function initCompiledProfileViewer() {
-  const contentEl = document.getElementById('compiled-profile-content');
-  const metaEl = document.getElementById('compiled-profile-meta');
-  if (!contentEl) return;
-
-  let activeTier = 'standard';
-  let activeDoc = 'profile';
-
-  const STORAGE_MAP = {
-    'profile-standard': 'coopProfileStandard',
-    'profile-full': 'coopProfileFull',
-    'preferences-standard': 'coopPrefsStandard',
-    'preferences-full': 'coopPrefsFull',
-  };
-
-  function loadCompiledDoc() {
-    const key = STORAGE_MAP[`${activeDoc}-${activeTier}`];
-    chrome.storage.local.get([key, 'coopProfileCompiledAt'], d => {
-      const text = d[key];
-      if (text) {
-        contentEl.textContent = text;
-      } else {
-        contentEl.innerHTML = `<span style="color:var(--ci-text-tertiary);">Not compiled yet. Fill in your profile sections above and the compiler will generate this automatically.</span>`;
-      }
-      if (d.coopProfileCompiledAt) {
-        const ago = Math.floor((Date.now() - new Date(d.coopProfileCompiledAt).getTime()) / 60000);
-        metaEl.textContent = ago < 1 ? 'Compiled just now' : ago < 60 ? `Compiled ${ago}m ago` : `Compiled ${Math.floor(ago / 60)}h ago`;
-        metaEl.textContent += ` · ${(text || '').length} chars · ~${Math.round((text || '').length / 4)} tokens`;
-      } else {
-        metaEl.textContent = '';
-      }
-    });
-  }
-
-  // Tier toggle
-  document.querySelectorAll('.compiled-tier-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.compiled-tier-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeTier = btn.dataset.tier;
-      loadCompiledDoc();
-    });
-  });
-
-  // Doc toggle
-  document.querySelectorAll('.compiled-doc-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.compiled-doc-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeDoc = btn.dataset.doc;
-      loadCompiledDoc();
-    });
-  });
-
-  loadCompiledDoc();
-}
-
-// ── Coop's Context Window (Claude project-memory style narrative) ──────────
-
-function initCoopContextWindow() {
-  const contentEl = document.getElementById('coop-context-window-content');
-  const metaEl = document.getElementById('coop-context-meta');
-  const regenBtn = document.getElementById('coop-context-regenerate');
-  if (!contentEl || !regenBtn) return;
-
-  function renderSavedContext(onLoaded) {
-    chrome.storage.local.get(['coopContextWindow'], d => {
-      if (chrome.runtime.lastError) {
-        console.warn('[CoopContextWindow] load error:', chrome.runtime.lastError);
-        onLoaded?.(null);
-        return;
-      }
-      const ctx = d.coopContextWindow;
-      if (!ctx?.markdown) {
-        console.log('[CoopContextWindow] no saved context found');
-        onLoaded?.(null);
-        return;
-      }
-      contentEl.innerHTML = renderMarkdown(ctx.markdown);
-      if (metaEl && ctx.generatedAt) {
-        const days = Math.floor((Date.now() - new Date(ctx.generatedAt).getTime()) / 86400000);
-        const when = days === 0 ? 'Last updated today' : days === 1 ? 'Last updated 1 day ago' : `Last updated ${days} days ago`;
-        const tokens = ctx.sourceTokens ? ` · ${ctx.sourceTokens.toLocaleString()} tokens` : '';
-        metaEl.textContent = when + tokens;
-      }
-      onLoaded?.(ctx);
-    });
-  }
-  renderSavedContext(ctx => {
-    // Auto-refresh once per day — only fires while user is on this page
-    const age = ctx?.generatedAt ? Date.now() - new Date(ctx.generatedAt).getTime() : Infinity;
-    if (age > 24 * 60 * 60 * 1000) {
-      console.log('[CoopContextWindow] Auto-refreshing stale context (age:', Math.round(age / 3600000), 'h)');
-      setTimeout(() => runRegen(false), 1500);
-    }
-  });
-
-  function renderMarkdown(md) {
-    if (!md) return '';
-    const lines = md.split('\n');
-    const out = [];
-    let inList = false;
-    for (let raw of lines) {
-      if (/^#{1,3}\s+/.test(raw)) {
-        if (inList) { out.push('</ul>'); inList = false; }
-        const level = raw.match(/^#+/)[0].length;
-        out.push(`<h${level}>${escapeHtml(raw.replace(/^#+\s+/, ''))}</h${level}>`);
-      } else if (/^[-*]\s+/.test(raw)) {
-        if (!inList) { out.push('<ul>'); inList = true; }
-        out.push(`<li>${escapeHtml(raw.replace(/^[-*]\s+/, ''))}</li>`);
-      } else if (raw.trim() === '') {
-        if (inList) { out.push('</ul>'); inList = false; }
-      } else {
-        if (inList) { out.push('</ul>'); inList = false; }
-        out.push(`<p>${escapeHtml(raw)}</p>`);
-      }
-    }
-    if (inList) out.push('</ul>');
-    return out.join('\n')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
-  }
-
-  const editBtn = document.getElementById('coop-context-edit');
-  const regenChatBtn = document.getElementById('coop-context-regen-chat');
-
-  // ── Edit affordance ──
-  editBtn?.addEventListener('click', () => {
-    chrome.storage.local.get(['coopContextWindow'], d => {
-      const ctx = d.coopContextWindow || { markdown: '' };
-      const ta = document.createElement('textarea');
-      ta.className = 'ctx-edit-area';
-      ta.value = ctx.markdown || '';
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'icp-autofill-btn icp-autofill-btn--primary';
-      saveBtn.style.marginTop = '10px';
-      saveBtn.textContent = 'Save edits';
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'icp-autofill-btn';
-      cancelBtn.style.cssText = 'margin-top:10px;margin-left:8px;';
-      cancelBtn.textContent = 'Cancel';
-      const wrap = document.createElement('div');
-      wrap.appendChild(ta);
-      const btnRow = document.createElement('div');
-      btnRow.appendChild(saveBtn);
-      btnRow.appendChild(cancelBtn);
-      wrap.appendChild(btnRow);
-      const prevHTML = contentEl.innerHTML;
-      contentEl.innerHTML = '';
-      contentEl.appendChild(wrap);
-      cancelBtn.addEventListener('click', () => { contentEl.innerHTML = prevHTML; });
-      saveBtn.addEventListener('click', () => {
-        const md = ta.value;
-        const generatedAt = ctx.generatedAt || new Date().toISOString();
-        chrome.storage.local.set({
-          coopContextWindow: { ...ctx, markdown: md, generatedAt, editedAt: new Date().toISOString() }
-        }, () => {
-          if (chrome.runtime.lastError) {
-            console.error('[CoopContextWindow] save edits failed:', chrome.runtime.lastError);
-            prefsToast('Save failed: ' + chrome.runtime.lastError.message, { kind: 'error' });
-            return;
-          }
-          renderSavedContext();
-          if (metaEl) metaEl.textContent = (metaEl.textContent || 'Generated') + ' · edited just now';
-        });
-      });
-    });
-  });
-
-  // ── Regen-from-chat: visible when there's chat history ──
-  // Event-driven: listen for a custom event fired when chat history changes,
-  // instead of polling every 1.5s (was 40 DOM checks/min even when backgrounded).
-  function refreshRegenFromChatVisibility() {
-    if (!regenChatBtn) return;
-    const hist = window.__coopChatHistory || [];
-    regenChatBtn.style.display = hist.length >= 2 ? '' : 'none';
-  }
-  refreshRegenFromChatVisibility();
-  window.addEventListener('coop-chat-history-changed', refreshRegenFromChatVisibility);
-
-  async function runRegen(includeChat) {
-    regenBtn.disabled = true;
-    if (regenChatBtn) regenChatBtn.disabled = true;
-    const origText = regenBtn.textContent;
-    regenBtn.textContent = 'Updating memory...';
-    contentEl.innerHTML = '<span style="color:var(--ci-text-tertiary);font-size:13px;">Coop is reading everything you\'ve given him and writing a fresh narrative...</span>';
-    if (metaEl) metaEl.textContent = '';
-    setCoopThinking(true, 'Writing memory');
-    try {
-      await doRegen(includeChat);
-    } finally {
-      setCoopThinking(false);
-      regenBtn.disabled = false;
-      if (regenChatBtn) regenChatBtn.disabled = false;
-      regenBtn.textContent = origText;
-    }
-  }
-
-  regenBtn.addEventListener('click', () => runRegen(false));
-  regenChatBtn?.addEventListener('click', () => runRegen(true));
-
-  async function doRegen(includeChat) {
-    const _noop = () => {};
-    _noop();
-
-    try {
-      // Gather all source data
-      const localKeys = [
-        'profileResume', 'profileStory', 'profileExperience', 'profileExperienceEntries',
-        'profilePrinciples', 'profileMotivators', 'profileSkills', 'profileFAQ',
-        'profileGreenLights', 'profileRedLights', 'profileLinks',
-        'coopMemory', 'storyTime'
-      ];
-      const localData = await new Promise(r => chrome.storage.local.get(localKeys, r));
-      const syncData = await new Promise(r => chrome.storage.sync.get(['prefs'], r));
-
-      const sourceParts = [];
-      if (localData.profileStory) sourceParts.push(`## STORY\n${localData.profileStory.slice(0, 3000)}`);
-      if (localData.profileExperience) sourceParts.push(`## EXPERIENCE\n${localData.profileExperience.slice(0, 5000)}`);
-      if (localData.profileExperienceEntries?.length) {
-        const tagSummary = {};
-        localData.profileExperienceEntries.forEach(e => {
-          (e.tags || []).forEach(t => {
-            if (!tagSummary[t]) tagSummary[t] = [];
-            if (e.company) tagSummary[t].push(e.company);
-          });
-        });
-        const tagLines = Object.keys(tagSummary).sort().map(t => `- ${t}: ${tagSummary[t].join(', ')}`);
-        if (tagLines.length) sourceParts.push(`## EXPERIENCE TAG ROLLUP\n${tagLines.join('\n')}`);
-      }
-      if (localData.profileSkills) sourceParts.push(`## SKILLS\n${localData.profileSkills.slice(0, 2000)}`);
-      if (localData.profilePrinciples) sourceParts.push(`## PRINCIPLES\n${localData.profilePrinciples.slice(0, 2000)}`);
-      if (localData.profileMotivators) sourceParts.push(`## MOTIVATORS\n${localData.profileMotivators.slice(0, 2000)}`);
-      if (localData.profileGreenLights) sourceParts.push(`## GREEN LIGHTS\n${localData.profileGreenLights.slice(0, 2000)}`);
-      if (localData.profileRedLights) sourceParts.push(`## RED LIGHTS / DEALBREAKERS\n${localData.profileRedLights.slice(0, 2000)}`);
-      if (syncData.prefs) {
-        const p = syncData.prefs;
-        const prefsLines = [];
-        if (p.roles) prefsLines.push(`Target roles: ${Array.isArray(p.roles) ? p.roles.join(', ') : p.roles}`);
-        if (p.salaryFloor) prefsLines.push(`Salary floor: ${p.salaryFloor}`);
-        if (p.oteFloor) prefsLines.push(`OTE floor: ${p.oteFloor}`);
-        if (p.workArrangement) prefsLines.push(`Work arrangement: ${p.workArrangement}`);
-        if (prefsLines.length) sourceParts.push(`## PREFERENCES\n${prefsLines.join('\n')}`);
-      }
-      if (localData.coopMemory?.entries?.length) {
-        const memLines = localData.coopMemory.entries.slice(0, 30).map(e => `- [${e.type || 'note'}] ${e.text || e.body || ''}`.slice(0, 300));
-        sourceParts.push(`## TYPED MEMORY ENTRIES\n${memLines.join('\n')}`);
-      }
-      if (!sourceParts.length) {
-        contentEl.innerHTML = '<span style="color:var(--ci-accent-red);font-size:13px;">No profile data found. Fill in your Story, Experience, or other sections first.</span>';
-        return;
-      }
-
-      // Optionally include recent chat with Coop as additional context
-      if (includeChat && Array.isArray(window.__coopChatHistory) && window.__coopChatHistory.length) {
-        const recent = window.__coopChatHistory.slice(-20);
-        const lines = recent.map(m => `${m.role === 'user' ? 'User' : 'Coop'}: ${(m.content || '').slice(0, 600)}`);
-        sourceParts.push(`## RECENT CONVERSATION WITH USER\nUse these exchanges to update your understanding — pay attention to corrections, new facts, or shifts in direction.\n${lines.join('\n')}`);
-      }
-
-      const sourceContent = sourceParts.join('\n\n');
-
-      const prompt = `You are Coop, an AI career advisor. Write a "context window" document — a narrative summary of everything you currently know about this user. This document is what you, Coop, will read at the start of every future conversation to remember who they are and what they're trying to do. It should be written in YOUR voice, in third person (e.g. "They are...", "They're looking for..."), structured as a living memory document like Claude's project memory feature. If you know the user's name from the data, use it.
-
-Structure the document with these markdown headings (use ## for each):
-
-## Purpose & context
-2-3 paragraphs. Who they are, what they're doing right now, why this matters.
-
-## Current state
-What they're actively working on, what stage of the search they're in, what's in flight.
-
-## Background & experience
-A factual rollup of their work history. Use the experience tag rollup as ground truth — it is dimension-grouped (Industry, Stage, Role, Motion, Skills, Tools, Deal) so you can correctly interpret each tag. Do NOT hallucinate or contradict it. Be specific about companies, roles, and what each company actually does. Call out concentrations of expertise (e.g. "Most of their career has been in martech / salestech, primarily at Series A–B companies, running outbound and land-and-expand motions").
-
-## Strengths & superpowers
-What they're uniquely good at, based on accomplishments and patterns across roles.
-
-## What they want next
-Target role, comp, motion, vertical, company stage, geography. Be specific.
-
-## Red flags & disqualifiers
-Things to flag immediately if they come up in any opportunity.
-
-## Voice & working style
-How to communicate with them — based on their style preferences and how they've corrected me in the past.
-
-## Open questions
-Things I'm unsure about that I should ask them when relevant — DO NOT make up facts to fill gaps. Be honest about what's unclear.
-
-Rules:
-- Write in clean markdown. Use ## for section headings, **bold** for emphasis, - for bullets.
-- Be specific. Use real company names, real numbers, real tags. Never generic.
-- If the experience tag rollup says martech, say martech. Do not contradict the data.
-- If something is missing or contradictory, surface it in "Open questions" rather than fabricating.
-- Length: aim for 600-1000 words total. Dense, scannable, no filler.
-
-Source data:
-${sourceContent}`;
-
-      const result = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          type: 'COOP_CHAT',
-          messages: [{ role: 'user', content: prompt }],
-          globalChat: true,
-          careerOSChat: true,
-          chatModel: _coopModels.coopMemorySynthesis || 'claude-sonnet-4-6'
-        }, r => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else if (r?.error) reject(new Error(r.error));
-          else resolve(r);
-        });
-      });
-
-      const md = result.reply || '';
-      if (!md.trim()) throw new Error('Empty response from Coop');
-
-      const generatedAt = new Date().toISOString();
-      const tokens = result.usage ? (result.usage.input || 0) + (result.usage.output || 0) : null;
-
-      await new Promise((resolve, reject) => {
-        chrome.storage.local.set({
-          coopContextWindow: { markdown: md, generatedAt, sourceTokens: tokens }
-        }, () => {
-          if (chrome.runtime.lastError) {
-            console.error('[CoopContextWindow] save failed:', chrome.runtime.lastError);
-            reject(new Error('Save failed: ' + chrome.runtime.lastError.message));
-          } else {
-            console.log('[CoopContextWindow] saved', md.length, 'chars');
-            resolve();
-          }
-        });
-      });
-
-      contentEl.innerHTML = renderMarkdown(md);
-      if (metaEl) metaEl.textContent = 'Generated just now' + (tokens ? ` · ${tokens.toLocaleString()} tokens` : '');
-    } catch (e) {
-      console.error('[CoopContextWindow] Error:', e);
-      contentEl.innerHTML = `<span style="color:var(--ci-accent-red);font-size:13px;">Error: ${e.message}</span>`;
-    }
-  }
-}
-
-// ── Coop's memory viewer (Claude Code-style typed entries) ──────────────────
-
-const COOP_MEMORY_TYPES = ['user', 'feedback', 'project', 'reference'];
-const COOP_MEMORY_TYPE_LABELS = {
-  user: 'User',
-  feedback: 'Feedback',
-  project: 'Project',
-  reference: 'Reference',
-};
-const COOP_MEMORY_TYPE_DESCRIPTIONS = {
-  user: 'Who you are — role, goals, expertise, working style',
-  feedback: 'Corrections and validated approaches Coop has learned from you',
-  project: 'In-flight opportunities, deadlines, and strategic decisions',
-  reference: 'Pointers to where info lives (links, dashboards, tools)',
-};
-let _memoryTypeFilter = 'all';
-
-// One-time migration from legacy storyTime.learnedInsights → coopMemory entries
-function migrateLegacyMemoryIfNeeded(callback) {
-  chrome.storage.local.get(['coopMemory', 'storyTime'], data => {
-    if (data.coopMemory?._migrated) { callback?.(data.coopMemory); return; }
-    const mem = data.coopMemory && Array.isArray(data.coopMemory.entries)
-      ? data.coopMemory
-      : { entries: [] };
-    const insights = (data.storyTime?.learnedInsights || []).filter(Boolean);
-    insights.forEach(item => {
-      const i = typeof item === 'string' ? { insight: item, category: 'general' } : item;
-      const cat = i.category || 'general';
-      let type = 'user';
-      if (cat === 'style_instruction' || cat === 'answer_pattern') type = 'feedback';
-      else if (cat === 'green_light' || cat === 'red_light' || cat === 'strategic_preference') type = 'user';
-      else if (cat === 'experience_update') type = 'user';
-      else if (cat === 'scoring_feedback') type = 'feedback';
-      else if (i.source && /^chat:/.test(i.source)) type = 'project';
-      const text = i.insight || '';
-      if (!text) return;
-      const name = (text.split(/[.!?\n]/)[0] || 'Insight').slice(0, 60);
-      mem.entries.push({
-        id: 'mem_' + Math.random().toString(36).slice(2, 10),
-        type,
-        name,
-        description: text.length > 60 ? text.slice(0, 140) : '',
-        body: text,
-        createdAt: i.date ? new Date(i.date).toISOString() : new Date().toISOString(),
-        updatedAt: i.date ? new Date(i.date).toISOString() : new Date().toISOString(),
-        source: i.source || 'legacy',
-      });
-    });
-    mem._migrated = true;
-    mem.updatedAt = new Date().toISOString();
-    chrome.storage.local.set({ coopMemory: mem }, () => callback?.(mem));
-  });
-}
-
-function initCoopMemory() {
-  migrateLegacyMemoryIfNeeded(() => renderCoopMemory());
-}
-
-function renderCoopMemory() {
-  const listEl = document.getElementById('coop-memory-list');
-  const filtersEl = document.getElementById('coop-memory-filters');
-  const patternsEl = document.getElementById('coop-memory-patterns');
-  if (!listEl) return;
-
-  chrome.storage.local.get(['coopMemory'], data => {
-    const mem = data.coopMemory && Array.isArray(data.coopMemory.entries) ? data.coopMemory : { entries: [] };
-    const entries = mem.entries.slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-
-    // Counts per type
-    const counts = { all: entries.length };
-    COOP_MEMORY_TYPES.forEach(t => counts[t] = 0);
-    entries.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
-
-    // Type filter chips
-    filtersEl.innerHTML =
-      `<button class="memory-filter-btn ${_memoryTypeFilter === 'all' ? 'active' : ''}" data-filter="all">All (${counts.all})</button>` +
-      COOP_MEMORY_TYPES.map(t =>
-        `<button class="memory-filter-btn ${_memoryTypeFilter === t ? 'active' : ''}" data-filter="${t}">${COOP_MEMORY_TYPE_LABELS[t]} (${counts[t]})</button>`
-      ).join('') +
-      `<button class="memory-filter-btn" id="coop-memory-add" style="margin-left:auto;">+ Add</button>`;
-
-    filtersEl.querySelectorAll('.memory-filter-btn[data-filter]').forEach(btn => {
-      btn.addEventListener('click', () => { _memoryTypeFilter = btn.dataset.filter; renderCoopMemory(); });
-    });
-    document.getElementById('coop-memory-add')?.addEventListener('click', () => openMemoryEditor(null));
-
-    const filtered = _memoryTypeFilter === 'all' ? entries : entries.filter(e => e.type === _memoryTypeFilter);
-
-    if (!filtered.length) {
-      listEl.innerHTML = `<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No memory entries yet. Chat with Coop and he'll start building memory — or click <strong>+ Add</strong> to write one yourself.</div>`;
-      patternsEl.innerHTML = '';
-      return;
-    }
-
-    // Group by type for display
-    const groups = {};
-    filtered.forEach(e => { (groups[e.type] = groups[e.type] || []).push(e); });
-
-    // Render body in Claude-Code project-memory style:
-    // - **bold** spans become <strong>
-    // - "Why: …" and "How to apply: …" lines get pulled into stylized blocks
-    const renderMemoryBody = (raw) => {
-      if (!raw) return '';
-      const lines = raw.split('\n');
-      const out = [];
-      for (const ln of lines) {
-        const whyMatch = ln.match(/^\s*\*?\*?(Why)\*?\*?\s*[:：]\s*(.+)$/i);
-        const howMatch = ln.match(/^\s*\*?\*?(How to apply)\*?\*?\s*[:：]\s*(.+)$/i);
-        if (whyMatch) {
-          out.push(`<span class="why-line"><strong>Why:</strong> ${escHtml(whyMatch[2])}</span>`);
-        } else if (howMatch) {
-          out.push(`<span class="how-line"><strong>How to apply:</strong> ${escHtml(howMatch[2])}</span>`);
-        } else {
-          // Inline **bold** support
-          const safe = escHtml(ln).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-          out.push(safe);
-        }
-      }
-      return out.join('<br>');
-    };
-
-    const fmtDate = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-
-    listEl.innerHTML = COOP_MEMORY_TYPES.filter(t => groups[t]).map(t => `
-      <div class="memory-section">
-        <div class="memory-section-title">
-          <span class="memory-type-chip ${t}">${COOP_MEMORY_TYPE_LABELS[t]}</span>
-          <span style="font-weight:400;color:#7c98b6;font-size:11px;margin-left:8px;">${COOP_MEMORY_TYPE_DESCRIPTIONS[t]}</span>
-        </div>
-        ${groups[t].map(e => `
-          <div class="memory-entry ${t}" data-id="${e.id}">
-            <div class="memory-frontmatter">
-              <div><span class="fm-key">name:</span> <span class="fm-val">${escHtml(e.name || 'untitled')}</span></div>
-              ${e.description ? `<div><span class="fm-key">description:</span> <span class="fm-val">${escHtml(e.description)}</span></div>` : ''}
-              <div><span class="fm-key">type:</span> <span class="fm-val">${t}</span></div>
-              <div><span class="fm-key">updated:</span> <span class="fm-val">${fmtDate(e.updatedAt)}</span>${e.source ? ` <span class="fm-key">· source:</span> <span class="fm-val">${escHtml(e.source)}</span>` : ''}</div>
-            </div>
-            <div class="memory-body">${renderMemoryBody(e.body || '')}</div>
-            <div class="memory-actions">
-              <button class="memory-edit" data-id="${e.id}" title="Edit">✎</button>
-              <button class="memory-delete" data-id="${e.id}" title="Delete">×</button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `).join('');
-
-    listEl.querySelectorAll('.memory-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const e = entries.find(x => x.id === btn.dataset.id);
-        if (e) openMemoryEditor(e);
-      });
-    });
-    listEl.querySelectorAll('.memory-delete').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        chrome.storage.local.get(['coopMemory'], d => {
-          const m = d.coopMemory || { entries: [] };
-          m.entries = (m.entries || []).filter(x => x.id !== id);
-          m.updatedAt = new Date().toISOString();
-          chrome.storage.local.set({ coopMemory: m }, () => {
-            showSaveStatus();
-            renderCoopMemory();
-          });
-        });
-      });
-    });
-
-    patternsEl.innerHTML = '';
-  });
-}
-
-function openMemoryEditor(entry) {
-  const isNew = !entry;
-  const e = entry || { id: 'mem_' + Math.random().toString(36).slice(2, 10), type: 'user', name: '', description: '', body: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), source: 'manual' };
-
-  // Remove any existing modal
-  document.getElementById('memory-editor-modal')?.remove();
-  const modal = document.createElement('div');
-  modal.id = 'memory-editor-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  modal.innerHTML = `
-    <div style="background:#fff;border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow:auto;font-family:inherit;">
-      <h3 style="margin:0 0 16px;font-size:16px;font-weight:700;">${isNew ? 'New memory entry' : 'Edit memory entry'}</h3>
-      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Type</label>
-      <select id="me-type" style="width:100%;padding:8px;border:1px solid #E0E4E8;border-radius:6px;margin-bottom:12px;font-family:inherit;">
-        ${COOP_MEMORY_TYPES.map(t => `<option value="${t}" ${e.type === t ? 'selected' : ''}>${COOP_MEMORY_TYPE_LABELS[t]} — ${COOP_MEMORY_TYPE_DESCRIPTIONS[t]}</option>`).join('')}
-      </select>
-      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Name</label>
-      <input id="me-name" value="${escHtml(e.name)}" style="width:100%;padding:8px;border:1px solid #E0E4E8;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
-      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Description (one line, ≤150 chars)</label>
-      <input id="me-desc" value="${escHtml(e.description)}" style="width:100%;padding:8px;border:1px solid #E0E4E8;border-radius:6px;margin-bottom:12px;font-family:inherit;font-size:13px;">
-      <label style="display:block;font-size:11px;font-weight:600;color:#6B6F76;margin-bottom:4px;">Body</label>
-      <textarea id="me-body" style="width:100%;padding:10px;border:1px solid #E0E4E8;border-radius:6px;font-family:inherit;font-size:13px;min-height:140px;resize:vertical;">${escHtml(e.body)}</textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-        <button id="me-cancel" style="padding:8px 16px;border:1px solid #E0E4E8;border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Cancel</button>
-        <button id="me-save" style="padding:8px 16px;border:none;border-radius:6px;background:#FC636B;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;">Save</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  modal.querySelector('#me-cancel').addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', ev => { if (ev.target === modal) modal.remove(); });
-  modal.querySelector('#me-save').addEventListener('click', () => {
-    const type = modal.querySelector('#me-type').value;
-    const name = modal.querySelector('#me-name').value.trim();
-    const description = modal.querySelector('#me-desc').value.trim();
-    const body = modal.querySelector('#me-body').value.trim();
-    if (!name || !body) { prefsToast('Name and Body are required', { kind: 'error' }); return; }
-    chrome.storage.local.get(['coopMemory'], d => {
-      const m = d.coopMemory && Array.isArray(d.coopMemory.entries) ? d.coopMemory : { entries: [] };
-      const idx = m.entries.findIndex(x => x.id === e.id);
-      const updated = { ...e, type, name, description, body, updatedAt: new Date().toISOString() };
-      if (idx === -1) m.entries.push(updated);
-      else m.entries[idx] = updated;
-      m.updatedAt = new Date().toISOString();
-      chrome.storage.local.set({ coopMemory: m }, () => {
-        showSaveStatus();
-        modal.remove();
-        renderCoopMemory();
-      });
-    });
-  });
-}
-
 // ── Data migration ───────────────────────────────────────────────────────────
 
 function migrateOldData(syncPrefs, callback) {
@@ -5465,7 +4560,7 @@ function initAutoSave() {
 
   // Sync prefs fields — save on blur/change
   const syncFields = [
-    'pref-location-city', 'pref-location-state', 'pref-max-travel',
+    'pref-name', 'pref-location-city', 'pref-location-state', 'pref-max-travel',
     'pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong'
   ];
   syncFields.forEach(id => {
@@ -5482,6 +4577,56 @@ function initAutoSave() {
 
   // Job match toggle
   document.getElementById('pref-job-match-toggle').addEventListener('change', () => saveSyncPrefs(true));
+
+  // Comp bracket preview — update live as user types
+  const compFields = ['pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong'];
+  compFields.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', renderCompBracketPreview);
+  });
+  renderCompBracketPreview();
+}
+
+function renderCompBracketPreview() {
+  const container = document.getElementById('comp-bracket-preview');
+  const rowsEl = document.getElementById('comp-bracket-rows');
+  if (!container || !rowsEl) return;
+
+  const parse = id => {
+    const raw = (document.getElementById(id)?.value || '').replace(/[^0-9.]/g, '');
+    const n = parseFloat(raw);
+    return n > 0 ? (n < 1000 ? n * 1000 : n) : 0;  // treat "120" as 120k
+  };
+
+  const salaryFloor = parse('pref-salary-floor');
+  const salaryStrong = parse('pref-salary-strong');
+  const oteFloor = parse('pref-ote-floor');
+  const oteStrong = parse('pref-ote-strong');
+
+  if (!salaryFloor && !oteFloor) { container.style.display = 'none'; return; }
+  container.style.display = '';
+
+  const fmt = n => '$' + Math.round(n / 1000) + 'k';
+
+  function bracketRow(color, label, threshold, sev) {
+    return `<div style="display:flex;align-items:center;gap:4px;line-height:1.3;"><span style="color:${color};font-size:8px;">&#9679;</span><span style="color:var(--ci-text-secondary);flex:1;white-space:nowrap;">${label}</span><span style="color:var(--ci-text-tertiary);font-size:10px;">${threshold}</span><span style="color:var(--ci-text-tertiary);font-size:9px;opacity:0.6;">s${sev}</span></div>`;
+  }
+  function bracketRows(floor, strong, label) {
+    if (!floor) return '';
+    const s = strong || floor * 1.3;
+    const mid = (floor + s) / 2;
+    return `<div style="font-size:9px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;margin-top:3px;margin-bottom:1px;">${label}</div>`
+      + bracketRow('#22c55e', 'Well above', '\u2265' + fmt(s * 1.15), 5)
+      + bracketRow('#22c55e', 'Meets target', '\u2265' + fmt(s), 4)
+      + bracketRow('#22c55e', 'Above floor', '\u2265' + fmt(mid), 2)
+      + bracketRow('#22c55e', 'Meets floor', '\u2265' + fmt(floor), 1)
+      + bracketRow('#ef4444', 'Slightly below', '\u2265' + fmt(floor * 0.9), 2)
+      + bracketRow('#ef4444', 'Below floor', '\u2265' + fmt(floor * 0.8), 3)
+      + bracketRow('#ef4444', 'Well below', '<' + fmt(floor * 0.8), 5);
+  }
+
+  rowsEl.innerHTML = bracketRows(salaryFloor, salaryStrong, 'Base') + bracketRows(oteFloor, oteStrong, 'OTE');
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -5559,8 +4704,6 @@ loadPrefsWithMigration(syncPrefs => {
     }
 
     // Set header name
-    setHeaderName();
-
     // Now that textareas have content, add See more/less toggles
     initTextareaSeeMore();
   });
@@ -5588,11 +4731,6 @@ loadPrefsWithMigration(syncPrefs => {
     initICPAutofill();
     initFlagsAutofill();
     initInterviewLearnings();
-    initCoopMemory();
-    initCoopSettings();
-    initCoopQuickPrompts();
-    initCompiledProfileViewer();
-    initCoopContextWindow();
     initFaqPairs();
     initStructuredExperience();
 

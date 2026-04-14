@@ -138,6 +138,9 @@ These are reference patterns. Match the user's question to the closest pattern, 
 - "Remember when I said I didn't want to manage people?" → search_memory(query: "manage people")
 - "What did I learn from my last interview?" → get_profile_section(section: "profile")
 - "Help me answer this application question" → get_company_context + get_profile_section(section: "profile", tier: "full") IN PARALLEL
+- "What do you know about me?" → get_memory_narrative
+- "Give me your honest take on my job search" → get_memory_narrative + get_pipeline_overview IN PARALLEL
+- "How well do you know me?" → get_memory_narrative
 
 === ANTI-PATTERNS (do not do these) ===
 - Do NOT ask the user to paste transcript content you can fetch with get_communications.
@@ -182,14 +185,14 @@ OUTPUT FORMAT:
 - No preamble, no alternatives unless asked, no commentary after.
 - NEVER wrap in quotation marks.
 
-CRITICAL: You have the user's FULL Career OS profile available via tools. ALWAYS call get_profile_section(section: "profile", tier: "full") + get_company_context IN PARALLEL on the first application question. DRAFT the answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information you can fetch.
+CRITICAL: You have the user's FULL profile available via tools. ALWAYS call get_profile_section(section: "profile", tier: "full") + get_company_context IN PARALLEL on the first application question. DRAFT the answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information you can fetch.
 
 When the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
   }
 
   if (careerOSChat) {
-    tailParts.push(`\n=== CAREER OS EDITOR MODE ===
-You are on the Career OS preferences page. The user can ask you to view, add, or update their structured profile.
+    tailParts.push(`\n=== MY PROFILE EDITOR MODE ===
+You are on the My Profile preferences page. The user can ask you to view, add, or update their structured profile.
 
 You have full visibility into their structured profile fields via get_profile_section(section: "preferences", tier: "full"):
 - Attracted To: structured entries with text, category, severity, and keyword triggers
@@ -553,17 +556,17 @@ When you flag that the user lacks direct experience for something (e.g., "you do
 Then, when the user shares a story in response, acknowledge it concretely ("Got it — adding this: [1-line paraphrase]") so they know it was captured. Your passive memory extractor will save it automatically; your job is just to invite the story and confirm the capture. Skip the invitation only if the user has explicitly told you to stop asking, or if the gap is so minor it's not worth a story.`;
 
   const systemParts = [identityPrompt, `\n=== TODAY ===\n${todayStr}`, _principlesBlock, _gapToStoryBlock,
-    `\nCRITICAL RULE: You have the user's FULL Career OS profile loaded in your context — their story, experience, accomplishments, skills, resume, preferences, and everything they've told you. ALWAYS use this data first. When helping with applications, DRAFT an answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information that's already in your context. If they ask you to write something about their background, write it immediately using what you have.`];
+    `\nCRITICAL RULE: You have the user's FULL profile loaded in your context — their story, experience, accomplishments, skills, resume, preferences, and everything they've told you. ALWAYS use this data first. When helping with applications, DRAFT an answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information that's already in your context. If they ask you to write something about their background, write it immediately using what you have.`];
 
   // Layer 2: Application helper mode
   if (context._applicationMode && state.coopConfig.automations?.applicationModeDetection !== false) {
     systemParts.push(`\n=== APPLICATION HELPER MODE ===\nSITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.\n\nVOICE & TONE:\n- Write as the user in first person. Conversational, confident, specific.\n- Sound like a smart person talking, not an AI writing.\n- No dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.\n\nLENGTH: 2-5 sentences unless the user specifies otherwise.\n\nOUTPUT FORMAT:\n- Give ONE clean answer the user can copy-paste directly.\n- No preamble, no alternatives unless asked, no commentary after.\n- NEVER wrap in quotation marks.\n\nWhen the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
   }
 
-  // Layer 2b: Career OS editor mode
+  // Layer 2b: My Profile editor mode
   if (careerOSChat) {
-    systemParts.push(`\n=== CAREER OS EDITOR MODE ===
-You are on the Career OS preferences page. The user can ask you to view, add, or update their structured profile.
+    systemParts.push(`\n=== MY PROFILE EDITOR MODE ===
+You are on the My Profile preferences page. The user can ask you to view, add, or update their structured profile.
 
 You have full visibility into their structured profile fields:
 - Attracted To: structured entries with text, category, severity, and keyword triggers
@@ -610,7 +613,7 @@ When the user asks to switch models, change defaults, or adjust settings, respon
   if (profileContext) {
     systemParts.push(profileContext);
   } else {
-    console.warn('[Coop Chat] WARNING: Compiled profile is empty — run profile compiler or fill in Career OS sections');
+    console.warn('[Coop Chat] WARNING: Compiled profile is empty — run profile compiler or fill in My Profile sections');
   }
 
   // Layer 4: Pipeline summary
@@ -839,7 +842,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     `\n=== TODAY ===\n${todayStr}`,
     _principlesBlock,
     _gapToStoryBlock,
-    `\nCRITICAL RULE: You have the user's FULL Career OS profile loaded in your context — their story, experience, accomplishments, skills, resume, preferences, and everything they've told you. ALWAYS use this data first. When helping with applications, DRAFT an answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information that's already in your context. If they ask you to write something about their background, write it immediately using what you have.`,
+    `\nCRITICAL RULE: You have the user's FULL profile loaded in your context — their story, experience, accomplishments, skills, resume, preferences, and everything they've told you. ALWAYS use this data first. When helping with applications, DRAFT an answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information that's already in your context. If they ask you to write something about their background, write it immediately using what you have.`,
     profileLayer || '',
   ].join('\n');
 
