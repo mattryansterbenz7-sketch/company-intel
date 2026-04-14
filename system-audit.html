@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Coop.ai System Reference</title>
+<style>
+  :root {
+    --bg: #faf8f5;
+    --card: #ffffff;
+    --border: #e8e0d8;
+    --text: #2d2a26;
+    --muted: #8a8479;
+    --accent: #c45d3e;
+    --green: #3a8a5c;
+    --yellow: #c9951a;
+    --red: #c44040;
+    --blue: #3a6ea5;
+    --purple: #7c5cbf;
+    --tag-bg: #f0ece6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  /* Nav tabs */
+  .tab-nav {
+    display: flex;
+    gap: 2px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .stat-card .label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .stat-card .detail {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .stat-card.red .value { color: var(--red); }
+  .stat-card.yellow .value { color: var(--yellow); }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.blue .value { color: var(--blue); }
+  .stat-card.purple .value { color: var(--purple); }
+
+  /* Flow diagrams */
+  .flow-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .flow-section h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .flow-section h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 16px 0 8px;
+    color: var(--text);
+  }
+
+  .flow-section .desc {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .flow-section p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 8px;
+  }
+
+  /* Flow nodes */
+  .flow-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .flow-node {
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    flex: 1;
+    min-width: 0;
+    cursor: default;
+    transition: all 0.15s;
+    position: relative;
+  }
+
+  .flow-node:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .flow-node .node-title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+
+  .flow-node .node-detail {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .flow-node.red { border-left: 3px solid var(--red); }
+  .flow-node.yellow { border-left: 3px solid var(--yellow); }
+  .flow-node.green { border-left: 3px solid var(--green); }
+  .flow-node.blue { border-left: 3px solid var(--blue); }
+  .flow-node.purple { border-left: 3px solid var(--purple); }
+
+  .flow-arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 18px;
+    padding: 2px 0;
+  }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 2px;
+  }
+
+  .tag.red { background: #fde8e8; color: var(--red); }
+  .tag.yellow { background: #fef3cd; color: #8a6d00; }
+  .tag.green { background: #d4edda; color: #1a5632; }
+  .tag.blue { background: #d6eaf8; color: #1a4a6e; }
+  .tag.purple { background: #ede7f6; color: #5c3d99; }
+  .tag.gray { background: #eee; color: #666; }
+
+  /* Tables */
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 12px 0;
+  }
+
+  .audit-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--tag-bg);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .audit-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .audit-table tr:hover td { background: #faf8f5; }
+
+  .audit-table .mono {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+
+  /* Expandable details */
+  .expandable {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .expandable::before {
+    content: '\25B6';
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+
+  .expandable.open::before {
+    transform: rotate(90deg);
+  }
+
+  .expand-content {
+    display: none;
+    padding: 12px 16px;
+    margin: 8px 0;
+    background: var(--tag-bg);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .expand-content.open { display: block; }
+
+  /* Info cards */
+  .info-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+  }
+
+  .info-card.accent { border-left: 4px solid var(--accent); }
+  .info-card.blue-accent { border-left: 4px solid var(--blue); }
+  .info-card.green-accent { border-left: 4px solid var(--green); }
+  .info-card.purple-accent { border-left: 4px solid var(--purple); }
+  .info-card.yellow-accent { border-left: 4px solid var(--yellow); }
+
+  .info-card .card-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .info-card .card-body {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .info-card .card-body strong { color: var(--text); }
+  .info-card .card-body code {
+    background: var(--tag-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+
+  /* Connection map */
+  .connection-map {
+    display: grid;
+    grid-template-columns: 1fr 40px 1fr 40px 1fr;
+    gap: 0;
+    align-items: start;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+
+  .conn-column {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .conn-arrows {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 18px;
+    padding-top: 20px;
+  }
+
+  .conn-node {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .conn-node .conn-label {
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .conn-node.source { background: #e8f4fd; border-color: #b8d4e8; }
+  .conn-node.prompt { background: #fef3e0; border-color: #e8d4a8; }
+  .conn-node.output { background: #e8f5e9; border-color: #a8d8b0; }
+
+  .col-header {
+    font-weight: 700;
+    font-size: 13px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+  }
+
+  /* Two-column layout */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .two-col { grid-template-columns: 1fr; }
+    .connection-map { grid-template-columns: 1fr; }
+    .conn-arrows { transform: rotate(90deg); padding: 8px 0; }
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    background: var(--tag-bg);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .callout {
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin: 12px 0;
+    line-height: 1.6;
+  }
+
+  .callout.blue { background: #e8f4fd; border: 1px solid #b8d4e8; }
+  .callout.yellow { background: #fef9e7; border: 1px solid #e8d4a8; }
+  .callout.green { background: #e8f5e9; border: 1px solid #a8d8b0; }
+
+  ul.clean {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  ul.clean li::before {
+    content: '\2022';
+    color: var(--muted);
+    margin-right: 8px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Coop.ai System Reference</h1>
+<p class="subtitle">How the system works &mdash; architecture, data flow, scoring, costs</p>
+
+<!-- Nav -->
+<div class="tab-nav">
+  <button class="tab-btn active" data-tab="how">How It Works</button>
+  <button class="tab-btn" data-tab="sees">What Coop Sees</button>
+  <button class="tab-btn" data-tab="scoring">Scoring</button>
+  <button class="tab-btn" data-tab="cost">Cost &amp; API</button>
+  <button class="tab-btn" data-tab="chat">Chat Architecture</button>
+</div>
+
+<!-- ==================== TAB 1: HOW IT WORKS ==================== -->
+<div class="tab-content active" id="tab-how">
+
+  <div class="summary-grid">
+    <div class="stat-card blue">
+      <div class="label">Architecture</div>
+      <div class="value">MV3</div>
+      <div class="detail">Chrome Extension, Manifest V3. Service worker + side panel + full-page views.</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">Backend</div>
+      <div class="value">None</div>
+      <div class="detail">All data in chrome.storage.local/sync. No server. API keys stored locally.</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="label">Build Step</div>
+      <div class="value">None</div>
+      <div class="detail">Raw HTML/JS/CSS. ES modules in service worker, standalone scripts in pages.</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="label">AI Models</div>
+      <div class="value">5</div>
+      <div class="detail">Haiku 4.5, Sonnet 4, Opus 4, GPT-4.1 mini, GPT-4.1</div>
+    </div>
+  </div>
+
+  <!-- Architecture flow -->
+  <div class="flow-section">
+    <h2>High-Level Architecture</h2>
+    <div class="desc">Message-based IPC. All side effects route through the service worker (background.js).</div>
+
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node blue">
+          <div class="node-title">Content Script</div>
+          <div class="node-detail">content.js &mdash; runs on every page. Detects companies and jobs from LinkedIn, Greenhouse, Lever, Workday, Ashby, generic sites.</div>
+        </div>
+        <div class="flow-node blue">
+          <div class="node-title">Side Panel</div>
+          <div class="node-detail">sidepanel.js &mdash; company detection display, research trigger, save flow, inline chat.</div>
+        </div>
+        <div class="flow-node blue">
+          <div class="node-title">Full-Page Views</div>
+          <div class="node-detail">saved.js (dashboard/Kanban), company.js (detail), opportunity.js (job detail), queue.js (swipe triage), preferences.js (Career OS).</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">&darr; chrome.runtime.sendMessage &darr;</div>
+
+      <div class="flow-row">
+        <div class="flow-node green" style="flex: 2;">
+          <div class="node-title">Service Worker (background.js)</div>
+          <div class="node-detail">Message router, API orchestration, research pipeline, chat handler, scoring queue, caching, data migrations. Imports ES modules: api.js, coop-chat.js, coop-tools.js, scoring.js, memory.js, profile-compiler.js, bg-state.js, research.js, search.js, utils.js</div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">&darr; fetch() &darr;</div>
+
+      <div class="flow-row">
+        <div class="flow-node purple">
+          <div class="node-title">Anthropic API</div>
+          <div class="node-detail">Claude Haiku 4.5, Sonnet 4, Opus 4. Research synthesis, scoring, chat, insight extraction.</div>
+        </div>
+        <div class="flow-node purple">
+          <div class="node-title">OpenAI API</div>
+          <div class="node-detail">GPT-4.1 mini, GPT-4.1. Chat fallback, research fallback.</div>
+        </div>
+        <div class="flow-node yellow">
+          <div class="node-title">Apollo</div>
+          <div class="node-detail">Company firmographics: employees, funding, industry, LinkedIn URL.</div>
+        </div>
+        <div class="flow-node yellow">
+          <div class="node-title">Serper</div>
+          <div class="node-detail">Web search: reviews, leadership, jobs, product info, JD backfill.</div>
+        </div>
+        <div class="flow-node yellow">
+          <div class="node-title">Gmail / Calendar / Granola</div>
+          <div class="node-detail">Chrome OAuth for Gmail/Calendar. REST API key for Granola meeting notes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data lifecycle -->
+  <div class="flow-section">
+    <h2>Data Lifecycle: Profile to Prompt</h2>
+    <div class="desc">User fills in Career OS profile and preferences. The profile compiler turns them into clean markdown. Every consumer (chat, scoring, tools) reads from compiled .md &mdash; single source of truth.</div>
+
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node blue">
+          <div class="node-title">1. User Input</div>
+          <div class="node-detail">preferences.js &mdash; Story, Experience, Skills, Principles, Voice, FAQ, Green/Red Flags, Role ICP, Company ICP, Comp floors, Interview Learnings.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr; chrome.storage.local.set() &darr;</div>
+      <div class="flow-row">
+        <div class="flow-node yellow">
+          <div class="node-title">2. Storage Event</div>
+          <div class="node-detail">chrome.storage.onChanged fires. profile-compiler.js detects a relevant key changed (e.g. profileStory, profileDealbreakers, prefs). Schedules recompile with 2-second debounce.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr; compileProfile() &darr;</div>
+      <div class="flow-row">
+        <div class="flow-node green">
+          <div class="node-title">3. Compiled .md Documents</div>
+          <div class="node-detail">6 compiled strings written to chrome.storage.local: coopProfileFull, coopProfileStandard, coopProfileSummary, coopPrefsFull, coopPrefsStandard, coopPrefsSummary. Zero API cost &mdash; pure text transform.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr; read by consumers &darr;</div>
+      <div class="flow-row">
+        <div class="flow-node purple">
+          <div class="node-title">4a. Chat (G2 Tool-Use)</div>
+          <div class="node-detail">Standard tier embedded inline in system prompt. Full tier fetched on demand via get_profile_section tool.</div>
+        </div>
+        <div class="flow-node purple">
+          <div class="node-title">4b. Scoring</div>
+          <div class="node-detail">Full tier loaded directly: coopProfileFull + coopPrefsFull injected into the scoring prompt.</div>
+        </div>
+        <div class="flow-node purple">
+          <div class="node-title">4c. Legacy Chat</div>
+          <div class="node-detail">Full tier embedded inline in system prompt. Used for Career OS editor mode and application helper mode.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat architecture overview -->
+  <div class="flow-section">
+    <h2>Chat Architecture: Two Paths</h2>
+    <div class="desc">Coop chat routes through one of two paths depending on the context.</div>
+
+    <div class="two-col">
+      <div class="info-card green-accent">
+        <div class="card-title"><span class="tag green">DEFAULT</span> G2 Tool-Use Path</div>
+        <div class="card-body">
+          <strong>Used for:</strong> All company chat, global pipeline chat, side panel chat.<br><br>
+          <strong>How it works:</strong> Slim system prompt (~3000 tokens) with standard-tier profile/prefs embedded. Model gets 5 tools it can call on demand. Loops up to 5 times: model requests tools, handler executes them, feeds results back. Final text response returned to user.<br><br>
+          <strong>Model:</strong> Haiku 4.5 (hardcoded in v1).<br>
+          <strong>Prompt caching:</strong> System prompt split into base + tail with <code>cache_control: ephemeral</code>. First message in a session writes the cache (~$0.003); follow-up messages read from cache at 90% discount.
+        </div>
+      </div>
+
+      <div class="info-card blue-accent">
+        <div class="card-title"><span class="tag blue">LEGACY</span> Full-Context Path</div>
+        <div class="card-body">
+          <strong>Used for:</strong> Career OS editor mode (<code>careerOSChat</code>), Application helper mode (<code>_applicationMode</code>), and as fallback if G2 path throws a fatal error.<br><br>
+          <strong>How it works:</strong> Large system prompt with full-tier profile/prefs, pipeline summary, company context, emails, meetings, transcripts all embedded inline. No tools. Single API call per message.<br><br>
+          <strong>Model:</strong> User-selectable via <code>chatWithFallback()</code>.<br>
+          <strong>Prompt size:</strong> Can reach 15k+ tokens depending on context loaded.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API trigger map -->
+  <div class="flow-section">
+    <h2>What Triggers API Calls</h2>
+    <div class="desc">Every API call requires explicit user action. Nothing auto-fires on page load.</div>
+
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>User Action</th>
+          <th>What Fires</th>
+          <th>Approx Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Click "Research" on a company</td>
+          <td>Apollo lookup + Serper searches (reviews, leadership, jobs, product) + Claude Haiku synthesis</td>
+          <td>~$0.01&ndash;0.03</td>
+        </tr>
+        <tr>
+          <td>Send a chat message</td>
+          <td>1 Haiku call (+ up to 5 tool calls within the loop) + 1 Haiku insight extraction (60s debounce)</td>
+          <td>~$0.002&ndash;0.008</td>
+        </tr>
+        <tr>
+          <td>Score an opportunity</td>
+          <td>Optional: scout search (2 Serper queries) + review fetch (1 Serper query) + 1 Haiku scoring call</td>
+          <td>~$0.005&ndash;0.01</td>
+        </tr>
+        <tr>
+          <td>Save a new opportunity</td>
+          <td>Entry queued for scoring (fires after save completes)</td>
+          <td>Same as scoring above</td>
+        </tr>
+        <tr>
+          <td>Consolidate profile (Story Time)</td>
+          <td>1 Haiku or Sonnet call to compress career profile into dense summary</td>
+          <td>~$0.005&ndash;0.02</td>
+        </tr>
+        <tr>
+          <td>Interpret profile section</td>
+          <td>1 chatWithFallback call for structured extraction</td>
+          <td>~$0.002</td>
+        </tr>
+        <tr>
+          <td>Coop Assist proofread</td>
+          <td>1 Haiku call to proofread text field content</td>
+          <td>~$0.001</td>
+        </tr>
+        <tr>
+          <td>Extract image text (paste screenshot)</td>
+          <td>1 Haiku vision call</td>
+          <td>~$0.003</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== TAB 2: WHAT COOP SEES ==================== -->
+<div class="tab-content" id="tab-sees">
+
+  <div class="flow-section">
+    <h2>The Compiled .md System</h2>
+    <div class="desc">profile-compiler.js compiles user data into 6 markdown strings. Two documents (Profile + Preferences) at three tiers (Summary, Standard, Full). Compilation is a local text transform &mdash; zero API cost.</div>
+
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Storage Key</th>
+          <th>Document</th>
+          <th>Tier</th>
+          <th>Typical Size</th>
+          <th>Contents</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">coopProfileSummary</td>
+          <td>Profile</td>
+          <td><span class="tag gray">SUMMARY</span></td>
+          <td>~100 chars</td>
+          <td>Name | role | top 5 skills | location | work arrangement. One line.</td>
+        </tr>
+        <tr>
+          <td class="mono">coopProfileStandard</td>
+          <td>Profile</td>
+          <td><span class="tag blue">STANDARD</span></td>
+          <td>~800 tokens</td>
+          <td>Abbreviated story (1500 chars), top 5 experience entries (company + title + tags), skill tags, abbreviated principles and voice.</td>
+        </tr>
+        <tr>
+          <td class="mono">coopProfileFull</td>
+          <td>Profile</td>
+          <td><span class="tag purple">FULL</span></td>
+          <td>~2000 tokens</td>
+          <td>Complete story, all experience entries with summaries and date ranges, full skills, principles, voice, anti-phrases, FAQ pairs, resume (6000 char cap), links.</td>
+        </tr>
+        <tr>
+          <td class="mono">coopPrefsSummary</td>
+          <td>Preferences</td>
+          <td><span class="tag gray">SUMMARY</span></td>
+          <td>~150 chars</td>
+          <td>Role ICP snippet | comp floors | location | flag counts. One line.</td>
+        </tr>
+        <tr>
+          <td class="mono">coopPrefsStandard</td>
+          <td>Preferences</td>
+          <td><span class="tag blue">STANDARD</span></td>
+          <td>~2300 tokens</td>
+          <td>Compact Role/Company ICP, green/red flags (text only, no keywords), one-line comp, one-line location, last 5 interview learnings.</td>
+        </tr>
+        <tr>
+          <td class="mono">coopPrefsFull</td>
+          <td>Preferences</td>
+          <td><span class="tag purple">FULL</span></td>
+          <td>~3000 tokens</td>
+          <td>Full Role ICP with all attributes, full Company ICP, green flags with categories/keywords/neutral markers, red flags with severity/keywords, comp floors and strong numbers, location/travel, last 20 interview learnings.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Consumer tier map -->
+  <div class="flow-section">
+    <h2>Who Reads Which Tier</h2>
+    <div class="desc">Each consumer reads the tier appropriate for its token budget and purpose.</div>
+
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Consumer</th>
+          <th>Profile Tier</th>
+          <th>Prefs Tier</th>
+          <th>How</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>G2 Chat (inline system prompt)</td>
+          <td><span class="tag blue">STANDARD</span></td>
+          <td><span class="tag blue">STANDARD</span></td>
+          <td>Embedded in system prompt base block for prompt caching</td>
+        </tr>
+        <tr>
+          <td>G2 Chat (tool: get_profile_section, default)</td>
+          <td><span class="tag blue">STANDARD</span></td>
+          <td><span class="tag blue">STANDARD</span></td>
+          <td>Fetched on demand when model calls the tool</td>
+        </tr>
+        <tr>
+          <td>G2 Chat (tool: get_profile_section, tier=full)</td>
+          <td><span class="tag purple">FULL</span></td>
+          <td><span class="tag purple">FULL</span></td>
+          <td>Fetched on demand for drafts, scoring, cover letters</td>
+        </tr>
+        <tr>
+          <td>Scoring (scoreOpportunity)</td>
+          <td><span class="tag purple">FULL</span></td>
+          <td><span class="tag purple">FULL</span></td>
+          <td>Loaded directly from storage into scoring prompt</td>
+        </tr>
+        <tr>
+          <td>Legacy Chat (Career OS / Application mode)</td>
+          <td><span class="tag purple">FULL</span></td>
+          <td><span class="tag purple">FULL</span></td>
+          <td>Embedded inline in system prompt</td>
+        </tr>
+        <tr>
+          <td>Pipeline Advisor header</td>
+          <td><span class="tag gray">SUMMARY</span></td>
+          <td><span class="tag gray">SUMMARY</span></td>
+          <td>Quick glance display in UI</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Storage map -->
+  <div class="flow-section">
+    <h2>Storage Key Map</h2>
+    <div class="desc">What lives where in Chrome storage.</div>
+
+    <div class="two-col">
+      <div>
+        <h3>chrome.storage.local</h3>
+        <table class="audit-table">
+          <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">savedCompanies</td><td>All companies and opportunities. Single array. Each entry has company data, job data, scores, emails, meetings, notes, tags, stage, contacts.</td></tr>
+            <tr><td class="mono">researchCache</td><td>24h TTL cache keyed by normalized company name. Stores enrichment results.</td></tr>
+            <tr><td class="mono">coopProfile*</td><td>6 compiled .md strings (Full/Standard/Summary for Profile and Prefs).</td></tr>
+            <tr><td class="mono">coopProfileCompiledAt</td><td>Timestamp of last compilation.</td></tr>
+            <tr><td class="mono">profileStory, profileExperience, profileSkills, ...</td><td>Raw user input from Career OS sections (17 keys total).</td></tr>
+            <tr><td class="mono">profileAttractedTo</td><td>Structured green flag entries with text, category, severity, keywords, dimension.</td></tr>
+            <tr><td class="mono">profileDealbreakers</td><td>Structured red flag entries with text, category, severity, keywords, dimension.</td></tr>
+            <tr><td class="mono">scoringWeights</td><td>Per-dimension weights: qualificationFit, roleFit, cultureFit, companyFit, compFit. Default: 20/20/25/20/15.</td></tr>
+            <tr><td class="mono">coopMemory</td><td>Persistent memory store. Typed entries (user/feedback/project/reference) with name, description, body. Cap: 200 entries.</td></tr>
+            <tr><td class="mono">storyTime</td><td>Profile consolidation output (profileSummary), raw input, answer patterns.</td></tr>
+            <tr><td class="mono">voiceProfile</td><td>Anti-phrases list for voice matching in Coop Assist.</td></tr>
+            <tr><td class="mono">coopConfig</td><td>Coop personality preset, custom instructions, automations toggles.</td></tr>
+            <tr><td class="mono">pipelineConfig</td><td>AI model assignments, enrichment order, search counts, photo config, scoring config, chat fallback config.</td></tr>
+            <tr><td class="mono">integrations</td><td>API keys: anthropic_key, openai_key, apollo_key, serper_key, granola_key, google_cse_key/cx.</td></tr>
+            <tr><td class="mono">apiUsage</td><td>Cost tracking: per-provider request counts, token counts, daily history (30 days), call log (last 500 entries, 24h window).</td></tr>
+            <tr><td class="mono">photoCache</td><td>Leader headshot cache. 30-day TTL.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <h3>chrome.storage.sync</h3>
+        <table class="audit-table">
+          <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">prefs</td><td>User preferences that sync across devices: name, resumeText, linkedinUrl, salaryFloor, salaryStrong, oteFloor, oteStrong, userLocation, workArrangement, maxTravel.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin-top: 24px;">Auto-Recompilation</h3>
+        <div class="callout blue">
+          <strong>Trigger:</strong> <code>chrome.storage.onChanged</code> listener in profile-compiler.js watches for changes to any of the 17 profile storage keys (local) or the <code>prefs</code> key (sync).<br><br>
+          <strong>Debounce:</strong> 2-second timer. Multiple rapid saves collapse into one recompile.<br><br>
+          <strong>Self-loop prevention:</strong> Compiler detects its own output keys (<code>coopProfileFull</code>, etc.) and skips recompilation when those change.<br><br>
+          <strong>Boot:</strong> <code>initProfileCompiler()</code> compiles once on service worker startup to ensure docs are always fresh.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 3: SCORING ==================== -->
+<div class="tab-content" id="tab-scoring">
+
+  <div class="summary-grid">
+    <div class="stat-card blue">
+      <div class="label">Scoring Dimensions</div>
+      <div class="value">5</div>
+      <div class="detail">qualificationFit, roleFit, cultureFit, companyFit, compFit</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">Default Weights</div>
+      <div class="value">20/20/25/20/15</div>
+      <div class="detail">qual / role / culture / company / comp (configurable in preferences)</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="label">Baseline Score</div>
+      <div class="value">5.0</div>
+      <div class="detail">Each dimension starts at 5.0, adjusted by fired flags</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="label">Cost per Score</div>
+      <div class="value">~$0.007</div>
+      <div class="detail">Haiku scoring call + optional Serper scout/review queries</div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>How Scoring Works</h2>
+    <div class="desc">Hybrid AI + deterministic. AI evaluates evidence against user-configured flags. Deterministic code computes the actual scores. This prevents the AI from inventing numbers.</div>
+
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node blue">
+          <div class="node-title">Inputs</div>
+          <div class="node-detail">Job description (scraped or fetched from URL/search) + company firmographics + employee reviews + intelligence + emails/meetings/notes + compiled profile .md (full tier) + structured green/red flags with keywords</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-row">
+        <div class="flow-node yellow">
+          <div class="node-title">AI Evaluation (Haiku)</div>
+          <div class="node-detail">Single prompt asks AI to: (1) evaluate each configured flag against evidence, (2) extract all qualifications from JD, (3) assess comp vs floors, (4) write 1-sentence rationale per dimension, (5) generate role brief + job snapshot. Returns structured JSON.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-row">
+        <div class="flow-node green">
+          <div class="node-title">Deterministic Scoring</div>
+          <div class="node-detail">Code computes scores. No AI involvement in the math. Post-processes fired flags, validates evidence, strips contradictory or "no evidence" flags, computes per-dimension scores from flag severity deltas, calculates weighted average, applies hard DQ and excitement modifiers.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr;</div>
+      <div class="flow-row">
+        <div class="flow-node purple">
+          <div class="node-title">Output: jobMatch Object</div>
+          <div class="node-detail">score (1-10), scoreBreakdown (5 dimensions), flagsFired, neutralFlags, qualifications[], compAssessment, dimensionRationale, coopTake, keySignals, roleBrief, jobSnapshot, interactionSummary, hardDQ, scoreRationale.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>The 5 Dimensions</h2>
+
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>Default Weight</th>
+          <th>How Score is Computed</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>qualificationFit</strong></td>
+          <td>20%</td>
+          <td>Deterministic from qualification counts. AI extracts each requirement from JD and marks met/partial/unmet/unknown. Code computes: (met + partial*0.5) / total * 10, clamped [1,10]. Comp-related qualifications are filtered out (handled by compFit).</td>
+        </tr>
+        <tr>
+          <td><strong>roleFit</strong></td>
+          <td>20%</td>
+          <td>Baseline 5.0 +/- fired flag deltas. Green flags in role/other categories add severity * 0.5. Red flags subtract. Clamped [1,10].</td>
+        </tr>
+        <tr>
+          <td><strong>cultureFit</strong></td>
+          <td>25%</td>
+          <td>Same baseline+delta formula. Culture and team category flags. AI must reference Glassdoor/employee ratings when available (4.0+ = positive, 3.0-3.9 = neutral, &lt;3.0 = risk).</td>
+        </tr>
+        <tr>
+          <td><strong>companyFit</strong></td>
+          <td>20%</td>
+          <td>Same baseline+delta formula. Company, industry, and product category flags.</td>
+        </tr>
+        <tr>
+          <td><strong>compFit</strong></td>
+          <td>15%</td>
+          <td>Baseline 5.0 + structural comp adjustments. Base salary vs floor: above_strong +2.5, above_floor +1.5, at_floor 0, below_floor -2.5. OTE similar but smaller deltas. Plus any comp-category flags.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout blue">
+      <strong>Overall score formula:</strong> Weighted average of all 5 dimensions. Then: hard DQ caps at 4 if a severity-5 dealbreaker fires. Excitement modifier nudges toward user's star rating (rating 4-5 nudges up, rating 1-2 nudges down, by 0.3 per point). Final score clamped [1, 10].
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>Evidence Validation</h2>
+    <div class="desc">Deterministic post-processing strips invalid AI flag evaluations.</div>
+
+    <ul class="clean">
+      <li><strong>No-evidence filter:</strong> If flag evidence matches "no evidence", "no direct evidence", "no mentions", "no indication", "not enough information" &mdash; flag is stripped. It did not fire.</li>
+      <li><strong>Contradictory filter:</strong> If evidence starts with "not", "no", "doesn't", "does not", "this is not", "they are not" &mdash; the AI is arguing against the flag. Stripped.</li>
+      <li><strong>Unknown ID filter:</strong> If AI returns a flag ID not in the configured list, silently skipped.</li>
+      <li><strong>Hard DQ validation:</strong> AI can flag hardDQ, but code only honors it if a severity-5 dealbreaker actually fired. Otherwise suppressed.</li>
+      <li><strong>Neutral flags:</strong> Configured flags marked <code>unknownNeutral: true</code> that don't fire are tracked separately as neutral &mdash; zero impact on score.</li>
+    </ul>
+  </div>
+
+  <div class="flow-section">
+    <h2>What Triggers Scoring</h2>
+
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Trigger</th>
+          <th>Message Type</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>User clicks "Score" button</td>
+          <td><code>SCORE_OPPORTUNITY</code></td>
+          <td>Direct call to scoreOpportunity(entryId). Blocks UI until complete.</td>
+        </tr>
+        <tr>
+          <td>Save new opportunity</td>
+          <td><code>QUEUE_SCORE</code></td>
+          <td>Entry ID pushed to scoring queue. Processed asynchronously.</td>
+        </tr>
+        <tr>
+          <td>Post-research</td>
+          <td><code>QUEUE_SCORE</code></td>
+          <td>After company research completes, entry is queued for rescore if it has a job title.</td>
+        </tr>
+        <tr>
+          <td>Auto-rescore (opt-in triggers)</td>
+          <td><code>QUEUE_SCORE</code></td>
+          <td>Three triggers (all OFF by default): profile changes, salary/work pref changes, new interaction data. Fire retroactively for entries in eligible stages.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout yellow">
+      <strong>Scoring queue:</strong> <code>state._scoringQueue</code> is an array of entry IDs. <code>processQueue()</code> runs one at a time (<code>_scoringInProgress</code> guard). Broadcasts <code>SCORE_COMPLETE</code> when each entry finishes so UI listeners can update.
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>JD Backfill</h2>
+    <div class="desc">If an entry has no jobDescription when scoring starts, the system tries to fetch one before scoring.</div>
+
+    <ul class="clean">
+      <li><strong>Step 1:</strong> If the entry has a <code>jobUrl</code>, try a direct HTTP fetch. Works for Greenhouse, Lever, Workday, Ashby. Fails for LinkedIn (auth wall).</li>
+      <li><strong>Step 2:</strong> If direct fetch fails or no URL, run a Serper search: <code>"Company" "Title" job description responsibilities qualifications</code>.</li>
+      <li><strong>Step 3:</strong> If found, backfill <code>entry.jobDescription</code> and persist to storage so future rescores don't re-fetch.</li>
+      <li><strong>Step 4:</strong> If nothing found, scoring proceeds with metadata only (firmographics, reviews, intelligence).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== TAB 4: COST & API ==================== -->
+<div class="tab-content" id="tab-cost">
+
+  <div class="summary-grid">
+    <div class="stat-card green">
+      <div class="label">Cheapest Model</div>
+      <div class="value">GPT-4.1m</div>
+      <div class="detail">$0.40 / $1.60 per MTok (in/out). Default fallback.</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="label">Default Workhorse</div>
+      <div class="value">Haiku 4.5</div>
+      <div class="detail">$1.00 / $5.00 per MTok. Chat, scoring, research, insight extraction.</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="label">Mid-Tier</div>
+      <div class="value">Sonnet 4</div>
+      <div class="detail">$3.00 / $15.00 per MTok. Memory synthesis, optional chat upgrade.</div>
+    </div>
+    <div class="stat-card red">
+      <div class="label">Expensive</div>
+      <div class="value">Opus 4</div>
+      <div class="detail">$15.00 / $75.00 per MTok. Not used by default; available in model picker.</div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>Every Operation That Costs Money</h2>
+
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Operation</th>
+          <th>Provider(s)</th>
+          <th>Default Model</th>
+          <th>Approx Cost</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chat message (G2 tool-use)</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>$0.002&ndash;0.008</td>
+          <td>1 API call per tool-loop step (up to 5 steps). Prompt caching cuts follow-up cost ~88%.</td>
+        </tr>
+        <tr>
+          <td>Chat message (legacy path)</td>
+          <td>Anthropic / OpenAI</td>
+          <td>User-selected</td>
+          <td>$0.002&ndash;0.02</td>
+          <td>Single call. Cost depends on context size (can be 15k+ tokens).</td>
+        </tr>
+        <tr>
+          <td>Insight extraction</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.002</td>
+          <td>Fires after chat messages. 60-second debounce &mdash; multiple rapid messages = 1 call. Blocking extraction triggers immediately for "remember this" phrases.</td>
+        </tr>
+        <tr>
+          <td>Score opportunity</td>
+          <td>Anthropic / OpenAI</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.005&ndash;0.01</td>
+          <td>Via chatWithFallback. Large prompt (~4000 tokens JD + profile + flags).</td>
+        </tr>
+        <tr>
+          <td>Company research</td>
+          <td>Apollo + Serper + Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.01&ndash;0.03</td>
+          <td>Apollo lookup + 4-5 Serper searches + Haiku synthesis. Cached indefinitely (user force-refreshes).</td>
+        </tr>
+        <tr>
+          <td>Scout company (scoring pre-check)</td>
+          <td>Serper</td>
+          <td>N/A</td>
+          <td>~$0.002</td>
+          <td>2 Serper queries for reviews + overview. Skipped if full research intel already exists.</td>
+        </tr>
+        <tr>
+          <td>Review fetch (scoring)</td>
+          <td>Serper</td>
+          <td>N/A</td>
+          <td>~$0.001</td>
+          <td>1 Serper query. Only fires if entry has no reviews. Persisted to avoid re-fetch.</td>
+        </tr>
+        <tr>
+          <td>JD backfill (scoring)</td>
+          <td>Serper (fallback)</td>
+          <td>N/A</td>
+          <td>~$0.001</td>
+          <td>Only when entry has no JD. Direct URL fetch tried first (free). Serper search as fallback.</td>
+        </tr>
+        <tr>
+          <td>Profile consolidation</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.005&ndash;0.02</td>
+          <td>Manual trigger only. Compresses career profile into dense summary.</td>
+        </tr>
+        <tr>
+          <td>Profile section interpretation</td>
+          <td>Anthropic / OpenAI</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.002</td>
+          <td>Structured extraction of profile sections (bullets, entries, summaries).</td>
+        </tr>
+        <tr>
+          <td>Image text extraction</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.003</td>
+          <td>Vision call. Triggered by pasting a screenshot.</td>
+        </tr>
+        <tr>
+          <td>Coop Assist proofread</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.001</td>
+          <td>Content script on all pages. Only fires when user clicks the floating pill.</td>
+        </tr>
+        <tr>
+          <td>Next steps extraction</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.002</td>
+          <td>AI-generated next steps from meeting + email context.</td>
+        </tr>
+        <tr>
+          <td>Email task extraction</td>
+          <td>Anthropic</td>
+          <td>Haiku 4.5</td>
+          <td>~$0.002</td>
+          <td>Extracts action items from email threads.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flow-section">
+    <h2>Model Fallback Chain</h2>
+    <div class="desc"><code>chatWithFallback()</code> tries the user's selected model first, then cycles through available models on failure (429, quota, network error).</div>
+
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node green">
+          <div class="node-title">1. GPT-4.1 mini</div>
+          <div class="node-detail">$0.40/$1.60 per MTok. Cheapest. First in chain.</div>
+        </div>
+        <div class="flow-node green">
+          <div class="node-title">2. Haiku 4.5</div>
+          <div class="node-detail">$1.00/$5.00 per MTok. Default for most tasks.</div>
+        </div>
+        <div class="flow-node yellow">
+          <div class="node-title">3. Sonnet 4</div>
+          <div class="node-detail">$3.00/$15.00 per MTok. Only if allowExpensive=true.</div>
+        </div>
+        <div class="flow-node red">
+          <div class="node-title">4. GPT-4.1</div>
+          <div class="node-detail">$2.00/$8.00 per MTok. Only if allowExpensive=true.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout yellow">
+      <strong>Config:</strong> <code>pipelineConfig.chatFallback</code> controls behavior. <code>enabled: true</code> (allow fallback), <code>allowExpensive: false</code> (restrict to cheap models only by default), <code>showIndicator: true</code> (show fallback note in UI). Skips providers with no API key configured.
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>Prompt Caching</h2>
+    <div class="desc">Anthropic's prompt caching significantly reduces cost for multi-turn conversations.</div>
+
+    <div class="two-col">
+      <div class="info-card green-accent">
+        <div class="card-title">How It Works</div>
+        <div class="card-body">
+          The system prompt is split into two blocks, each with <code>cache_control: { type: 'ephemeral' }</code>:<br><br>
+          <strong>Block 1 (base):</strong> Identity prompt + date + principles + profile summary + tool-use rules. ~3000 tokens. Stable across messages in a session.<br><br>
+          <strong>Block 2 (tail):</strong> Current binding context (which company the chat is bound to). ~50 tokens. Changes only when switching companies.<br><br>
+          The Claude API automatically caches any <code>cache_control</code> block that exceeds the model's minimum (Haiku 4.5 = 4096 tokens). COOP_TOOLS definitions (~700 tokens) are sent as the <code>tools</code> parameter, which counts toward the cacheable prefix.
+        </div>
+      </div>
+
+      <div class="info-card blue-accent">
+        <div class="card-title">Cost Impact</div>
+        <div class="card-body">
+          <strong>First message:</strong> Cache write costs 1.25x the normal input rate. So ~$0.003 for a typical system prompt.<br><br>
+          <strong>Follow-up messages:</strong> Cache read costs 0.10x the normal input rate. That's an <strong>~88% discount</strong> on the system prompt tokens.<br><br>
+          <strong>In practice:</strong> A 10-message conversation where the system prompt is ~3000 tokens saves roughly $0.025 compared to no caching.<br><br>
+          <strong>Console logging:</strong> Each tool-use step logs <code>cacheW</code> (write tokens) and <code>cacheR</code> (read tokens) so you can verify caching is active.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>Cost Tracking</h2>
+    <div class="desc">All API calls route through <code>claudeApiCall()</code> or <code>openAiChatCall()</code>, which call <code>trackApiCall()</code> for every request.</div>
+
+    <ul class="clean">
+      <li><strong>Per-call logging:</strong> Every API call logs to console: <code>[Cost] model -- in:X out:Y (cache: write=Z read=W) -> $0.XXXX (today: $X.XX)</code></li>
+      <li><strong>Daily tracking:</strong> <code>apiUsage</code> in chrome.storage.local tracks per-provider daily history (last 30 days), request counts, token counts, estimated cost.</li>
+      <li><strong>Call log:</strong> Last 500 calls within 24 hours, with provider, model, token counts, estimated cost, and operation tag (chat/scoring/research/insight/profile/extract).</li>
+      <li><strong>Rate limit headers:</strong> For Anthropic, tracks tokens-remaining, tokens-limit, requests-remaining, requests-limit from response headers.</li>
+      <li><strong>View costs:</strong> Open <code>pipeline.html#usage</code> to see the usage dashboard with daily breakdown.</li>
+    </ul>
+  </div>
+
+  <div class="flow-section">
+    <h2>Model Routing by Task</h2>
+    <div class="desc"><code>getModelForTask(taskId)</code> in api.js returns the configured model for each task. All default to Haiku 4.5 except memory synthesis (Sonnet 4).</div>
+
+    <table class="audit-table">
+      <thead>
+        <tr><th>Task ID</th><th>Default Model</th><th>Used By</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">chat</td><td>Haiku 4.5</td><td>Legacy chat path (chatWithFallback)</td></tr>
+        <tr><td class="mono">jobMatchScoring</td><td>Haiku 4.5</td><td>scoreOpportunity</td></tr>
+        <tr><td class="mono">companyIntelligence</td><td>Haiku 4.5</td><td>Research synthesis</td></tr>
+        <tr><td class="mono">firmographicExtraction</td><td>Haiku 4.5</td><td>Apollo result parsing</td></tr>
+        <tr><td class="mono">nextStepExtraction</td><td>Haiku 4.5</td><td>AI next steps from meetings</td></tr>
+        <tr><td class="mono">emailTaskExtraction</td><td>Haiku 4.5</td><td>Email action items</td></tr>
+        <tr><td class="mono">profileInterpret</td><td>Haiku 4.5</td><td>Profile section analysis</td></tr>
+        <tr><td class="mono">profileConsolidate</td><td>Haiku 4.5</td><td>Story Time compression</td></tr>
+        <tr><td class="mono">coopAutofill</td><td>Haiku 4.5</td><td>Coop Assist writing helper</td></tr>
+        <tr><td class="mono">coopMemorySynthesis</td><td>Sonnet 4</td><td>Memory consolidation (heavier reasoning)</td></tr>
+        <tr><td class="mono">roleBrief</td><td>Haiku 4.5</td><td>Role brief generation</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== TAB 5: CHAT ARCHITECTURE ==================== -->
+<div class="tab-content" id="tab-chat">
+
+  <div class="flow-section">
+    <h2>G2 Tool-Use Path (Default)</h2>
+    <div class="desc">Slim prompt + on-demand tools. The model decides what context it needs and fetches it. This keeps the base prompt small and cacheable.</div>
+
+    <h3>System Prompt Structure</h3>
+    <div class="connection-map">
+      <div class="conn-column">
+        <div class="col-header">Prompt Block</div>
+        <div class="conn-node prompt">
+          <div class="conn-label">Identity</div>
+          buildIdentityPrompt() &mdash; Coop personality, preset, custom instructions
+        </div>
+        <div class="conn-node prompt">
+          <div class="conn-label">Today</div>
+          Current date string
+        </div>
+        <div class="conn-node prompt">
+          <div class="conn-label">Principles</div>
+          Operating principles from coopConfig
+        </div>
+        <div class="conn-node prompt">
+          <div class="conn-label">User at a Glance</div>
+          coopProfileStandard + coopPrefsStandard (~3100 tokens combined)
+        </div>
+        <div class="conn-node prompt">
+          <div class="conn-label">Tool Use Rules</div>
+          10 rules, usage patterns, anti-patterns, grounding rules, response discipline (~800 tokens)
+        </div>
+      </div>
+      <div class="conn-arrows">&rarr;</div>
+      <div class="conn-column">
+        <div class="col-header">Cache Layer</div>
+        <div class="conn-node source">
+          <div class="conn-label">Block 1: base</div>
+          All of the above, concatenated. cache_control: ephemeral. ~3000 tokens. Stable across messages.
+        </div>
+        <div class="conn-node source">
+          <div class="conn-label">Block 2: tail</div>
+          Current binding (company name or "global pipeline chat"). ~50 tokens. cache_control: ephemeral.
+        </div>
+      </div>
+      <div class="conn-arrows">&rarr;</div>
+      <div class="conn-column">
+        <div class="col-header">API Call</div>
+        <div class="conn-node output">
+          <div class="conn-label">claudeApiCall()</div>
+          model: claude-haiku-4-5-20251001<br>
+          system: [base, tail]<br>
+          tools: COOP_TOOLS (5 tools)<br>
+          messages: conversation history<br>
+          max_tokens: 2048
+        </div>
+      </div>
+    </div>
+
+    <h3>The 5 Tools</h3>
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Purpose</th>
+          <th>Key Params</th>
+          <th>Returns</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">get_company_context</td>
+          <td>Core data for a company or opportunity</td>
+          <td><code>company_name</code> (optional if bound)</td>
+          <td>Firmographics, leadership (top 6), role details, stage, rating, intelligence, tags, notes (1200 char cap), stageTimestamps, nextStep</td>
+        </tr>
+        <tr>
+          <td class="mono">get_communications</td>
+          <td>Emails and meeting transcripts</td>
+          <td><code>company_name</code>, <code>types</code> (emails/meetings), <code>limit</code>, <code>keywords</code></td>
+          <td>Email snippets (400 char), meeting summaries (800 char). Keyword-matching meetings expand to full transcript (20k char).</td>
+        </tr>
+        <tr>
+          <td class="mono">get_profile_section</td>
+          <td>User's compiled Career OS profile or preferences</td>
+          <td><code>section</code> (profile/preferences), <code>tier</code> (standard/full)</td>
+          <td>Compiled markdown document at requested tier. Falls back to on-demand compile if not yet compiled.</td>
+        </tr>
+        <tr>
+          <td class="mono">get_pipeline_overview</td>
+          <td>All saved entries at a glance</td>
+          <td><code>filter</code> (active/all/needs_action), <code>stage</code></td>
+          <td>Up to 50 entries with name, stage, rating, actionStatus, jobTitle, score, nextStep.</td>
+        </tr>
+        <tr>
+          <td class="mono">search_memory</td>
+          <td>Keyword search over Coop's persistent memory</td>
+          <td><code>query</code>, <code>limit</code></td>
+          <td>Matching memory entries (type, name, text, source, date). Keyword-based scoring.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Tool Loop</h3>
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node blue">
+          <div class="node-title">Step 0: Initial API call</div>
+          <div class="node-detail">Send system prompt + tools + conversation history. Model either responds with text (done) or requests tool calls.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr; stop_reason: tool_use &darr;</div>
+      <div class="flow-row">
+        <div class="flow-node yellow">
+          <div class="node-title">Steps 1-4: Tool execution</div>
+          <div class="node-detail">For each tool_use block in the response: execute runCoopTool(), collect JSON results, append as tool_result messages, send back to model. Model can call multiple tools in parallel within a single step.</div>
+        </div>
+      </div>
+      <div class="flow-arrow">&darr; stop_reason: end_turn &darr;</div>
+      <div class="flow-row">
+        <div class="flow-node green">
+          <div class="node-title">Final: Text response</div>
+          <div class="node-detail">Model returns a text block. Extracted as the reply. Usage tracked across all steps (input, output, cacheCreation, cacheRead). Tool call log returned for debugging.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout yellow">
+      <strong>Hard cap:</strong> 5 tool-loop iterations. If the model hasn't produced a text response after 5 steps, a fallback message is returned: "I reached the tool-call limit while gathering context."<br><br>
+      <strong>Result size cap:</strong> Tool results are capped at 60,000 chars (~15k tokens) to prevent context overflow.
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>What's Embedded Inline vs Fetched On Demand</h2>
+
+    <div class="two-col">
+      <div class="info-card green-accent">
+        <div class="card-title">Embedded in System Prompt (every message)</div>
+        <div class="card-body">
+          <ul class="clean">
+            <li><strong>Identity block:</strong> Coop personality, preset, tone rules</li>
+            <li><strong>Today's date</strong></li>
+            <li><strong>Operating principles</strong> from coopConfig</li>
+            <li><strong>Standard profile:</strong> coopProfileStandard (~800 tokens)</li>
+            <li><strong>Standard preferences:</strong> coopPrefsStandard (~2300 tokens)</li>
+            <li><strong>Tool use rules:</strong> 10 rules + patterns + anti-patterns + grounding + discipline</li>
+            <li><strong>Binding context:</strong> Which company this chat is about (or "global")</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="info-card blue-accent">
+        <div class="card-title">Fetched On Demand (tool calls)</div>
+        <div class="card-body">
+          <ul class="clean">
+            <li><strong>Full-tier profile/prefs:</strong> Only when drafting, scoring, or deep career analysis</li>
+            <li><strong>Company details:</strong> Firmographics, leadership, role data, intelligence, notes</li>
+            <li><strong>Communications:</strong> Email threads, meeting transcripts (keyword-expanded)</li>
+            <li><strong>Pipeline overview:</strong> All active entries for cross-pipeline questions</li>
+            <li><strong>Memory entries:</strong> Past insights and learned facts, searched by keyword</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>Legacy Chat Path</h2>
+    <div class="desc">Used for Career OS editor mode and Application helper mode. Also serves as fallback if the G2 path throws a fatal error.</div>
+
+    <h3>When It's Used</h3>
+    <ul class="clean">
+      <li><strong>Career OS editor:</strong> <code>careerOSChat: true</code> &mdash; preferences page chat. Has special system prompt for structured profile updates (code fences with <code>career-os-update</code> and <code>settings-update</code> actions).</li>
+      <li><strong>Application mode:</strong> <code>context._applicationMode: true</code> &mdash; detected when user is filling out a job application form. Short, copy-paste-ready answers in the user's voice.</li>
+      <li><strong>G2 fallback:</strong> If <code>handleCoopMessageToolUse()</code> throws a fatal error, falls through to legacy path automatically.</li>
+    </ul>
+
+    <h3>What It Reads</h3>
+    <p>The legacy path builds a large system prompt with everything inline:</p>
+    <ul class="clean">
+      <li><strong>Layer 1:</strong> Coop identity + principles + gap-to-story loop rules + "use your full context" instruction</li>
+      <li><strong>Layer 2:</strong> Mode-specific prompt (application helper or Career OS editor)</li>
+      <li><strong>Layer 3:</strong> Full profile context: coopProfileFull + coopPrefsFull (same compiled .md source of truth)</li>
+      <li><strong>Layer 4:</strong> Pipeline summary (all active entries)</li>
+      <li><strong>Layer 5:</strong> Deep company context &mdash; firmographics, intelligence, leadership, contacts, role brief, job description, match score, reviews, email history, meeting transcripts (with relevance-ranked expansion)</li>
+      <li><strong>Layer 6:</strong> Coop memory block (buildCoopMemoryBlock)</li>
+    </ul>
+    <p>Sent via <code>chatWithFallback()</code> which supports the full model fallback chain and user model selection.</p>
+  </div>
+
+  <div class="flow-section">
+    <h2>Coop Memory System</h2>
+    <div class="desc">Persistent, typed memory store modeled after Claude Code's project memory. Entries are extracted from chat conversations and stored in <code>coopMemory</code>.</div>
+
+    <h3>Memory Types</h3>
+    <table class="audit-table">
+      <thead>
+        <tr><th>Type</th><th>What It Stores</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">user</td><td>Facts about who the user is: role, goals, expertise, preferences. 1-3 sentences, plain prose.</td></tr>
+        <tr><td class="mono">feedback</td><td>Corrections or validated approaches: "don't do X", "yes that worked". Rule + Why + How to apply.</td></tr>
+        <tr><td class="mono">project</td><td>In-flight work, opportunities, deadlines, strategic decisions tied to a company/role.</td></tr>
+        <tr><td class="mono">reference</td><td>Pointers to where info lives (links, dashboards, tools, accounts).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Extraction Flow</h3>
+    <ul class="clean">
+      <li><strong>After every chat message:</strong> <code>extractInsightsFromChat()</code> queues a Haiku call with 60-second debounce. Multiple rapid messages = 1 extraction call.</li>
+      <li><strong>Blocking extraction:</strong> If the user says "remember this", "from now on", etc., extraction runs immediately (blocking) before the chat response returns.</li>
+      <li><strong>Actions:</strong> The extraction AI returns <code>{ actions: [create/update/delete] }</code>. Applied via <code>applyCoopMemoryActions()</code>.</li>
+      <li><strong>Dedup:</strong> Name collision on create converts to update. Entries capped at 200.</li>
+      <li><strong>Injection:</strong> <code>buildCoopMemoryBlock()</code> formats entries into a MEMORY.md-style block grouped by type, injected into legacy chat prompts.</li>
+    </ul>
+  </div>
+
+  <div class="flow-section">
+    <h2>Coop Assist (Writing Helper)</h2>
+    <div class="desc">Content script (<code>coop-assist.js</code>) that runs on all pages. Ambient Grammarly-style writing assistant.</div>
+
+    <ul class="clean">
+      <li><strong>What it does:</strong> Watches focused text fields. Runs local voice heuristics + cached LLM proofread. Surfaces a floating pill with suggestions and rewrite modes.</li>
+      <li><strong>Rewrite modes:</strong> "In my voice" (uses voice profile), "Tighten", "Punchier", "Warmer".</li>
+      <li><strong>Model:</strong> Haiku 4.5 via <code>coopAutofill</code> task ID.</li>
+      <li><strong>Cost:</strong> ~$0.001 per proofread. Only fires on user interaction (clicking the pill), not continuously.</li>
+      <li><strong>Domain blocklist:</strong> Disabled on banking, auth, and government sites.</li>
+      <li><strong>Voice profile:</strong> Uses <code>voiceProfile.antiPhrases</code> to flag phrases that don't match the user's natural voice.</li>
+    </ul>
+  </div>
+
+  <div class="flow-section">
+    <h2>Message Types Reference</h2>
+    <div class="desc">All IPC flows through <code>chrome.runtime.sendMessage</code>. The service worker handles all of these in its message listener.</div>
+
+    <table class="audit-table">
+      <thead>
+        <tr><th>Message Type</th><th>Handler</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">CHAT_MESSAGE</td><td>handleChatMessage</td><td>Legacy company-scoped chat</td></tr>
+        <tr><td class="mono">GLOBAL_CHAT_MESSAGE</td><td>handleGlobalChatMessage</td><td>Legacy pipeline-wide chat</td></tr>
+        <tr><td class="mono">COOP_CHAT</td><td>handleCoopMessage</td><td>Unified Coop chat (G2 tool-use or legacy)</td></tr>
+        <tr><td class="mono">RESEARCH_COMPANY</td><td>researchCompany</td><td>Full research pipeline</td></tr>
+        <tr><td class="mono">QUICK_ENRICH_FIRMO</td><td>handleQuickEnrichFirmo</td><td>Fast firmographic lookup</td></tr>
+        <tr><td class="mono">SCORE_OPPORTUNITY</td><td>scoreOpportunity</td><td>Unified scoring (5 dimensions)</td></tr>
+        <tr><td class="mono">QUEUE_SCORE</td><td>processQueue</td><td>Queue entry for async scoring</td></tr>
+        <tr><td class="mono">SCORE_COMPLETE</td><td>(broadcast)</td><td>UI update after scoring completes</td></tr>
+        <tr><td class="mono">GMAIL_FETCH_EMAILS</td><td>fetchEmails</td><td>Fetch email threads by domain</td></tr>
+        <tr><td class="mono">CALENDAR_FETCH_EVENTS</td><td>fetchCalendarEvents</td><td>Calendar events with contacts</td></tr>
+        <tr><td class="mono">GRANOLA_SEARCH</td><td>searchGranolaNotes</td><td>Search meeting notes</td></tr>
+        <tr><td class="mono">GRANOLA_BUILD_INDEX</td><td>buildGranolaIndex</td><td>Index Granola meeting library</td></tr>
+        <tr><td class="mono">EXTRACT_NEXT_STEPS</td><td>extractNextSteps</td><td>AI next steps from meetings</td></tr>
+        <tr><td class="mono">EXTRACT_EMAIL_TASKS</td><td>extractEmailTasks</td><td>Action items from email threads</td></tr>
+        <tr><td class="mono">CONSOLIDATE_PROFILE</td><td>consolidateProfile</td><td>Story Time profile compression</td></tr>
+        <tr><td class="mono">EXTRACT_IMAGE_TEXT</td><td>(inline)</td><td>OCR via Haiku vision</td></tr>
+        <tr><td class="mono">SAVE_OPPORTUNITY</td><td>handleSaveOpportunity</td><td>Save + optional auto-score</td></tr>
+        <tr><td class="mono">GENERATE_ROLE_BRIEF</td><td>generateRoleBrief</td><td>AI role summary</td></tr>
+        <tr><td class="mono">GET_KEY_STATUS</td><td>(inline)</td><td>Check which API keys are configured</td></tr>
+        <tr><td class="mono">UPDATE_PIPELINE_SETTING</td><td>(inline)</td><td>Change model assignments</td></tr>
+        <tr><td class="mono">SYNC_ENTRY_FIELDS</td><td>syncEntryFields</td><td>Cross-entry field sync</td></tr>
+        <tr><td class="mono">FETCH_URL</td><td>(inline)</td><td>Background fetch (bypass CORS)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tab JS -->
+<script>
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.expandable').forEach(el => {
+    el.addEventListener('click', () => {
+      el.classList.toggle('open');
+      const content = el.nextElementSibling;
+      if (content) content.classList.toggle('open');
+    });
+  });
+</script>
+
+</body>
+</html>
