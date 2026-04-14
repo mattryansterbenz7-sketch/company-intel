@@ -3,10 +3,10 @@
 
 import { state } from './bg-state.js';
 import { dlog, getUserName, truncateToTokenBudget, buildIdentityPrompt, coopInterp } from './utils.js';
-import { claudeApiCall, chatWithFallback, getModelForTask } from './api.js';
+import { claudeApiCall, chatWithFallback, getModelForTask, trackApiCall } from './api.js';
 import { applyCoopMemoryActions } from './memory.js';
 import { buildCoopPipelineSummary, detectContextIntent, buildCrossCompanyMeetings, buildCrossCompanyEmails, buildCrossCompanyContacts } from './coop-context.js';
-import { COOP_TOOLS, runCoopTool } from './coop-tools.js';
+import { COOP_TOOLS, COOP_TOOLS_OPENAI, runCoopTool, serializeToolResult } from './coop-tools.js';
 
 // Blocking insight extraction — inlined from memory.js's private _doExtractInsightsFromChat.
 // Used when the user's message contains a trigger phrase ("remember this", "from now on", etc.)
@@ -98,8 +98,9 @@ ${existingIndex}` }]
 // large enough that tools+base comfortably exceeds 2048 or neither breakpoint
 // writes a cache. The padding in the TOOL PATTERNS / GROUNDING / RESPONSE
 // DISCIPLINE sections below is deliberate — do not trim without remeasuring.
-function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary }) {
-  const principles = coopInterp.principlesBlock();
+function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat }) {
+  const principles = coopInterp.principlesBlock() +
+    (applicationMode ? coopInterp.draftHint?.() || '' : '');
   const base = [
     buildIdentityPrompt(state.coopConfig, { globalChat: isGlobalChat, contextType: 'company', userName: getUserName() }),
     `\n=== TODAY ===\n${todayStr}`,
@@ -136,6 +137,7 @@ These are reference patterns. Match the user's question to the closest pattern, 
 - "Compare Acme and Globex" → get_company_context for BOTH IN PARALLEL
 - "Remember when I said I didn't want to manage people?" → search_memory(query: "manage people")
 - "What did I learn from my last interview?" → get_profile_section(section: "profile")
+- "Help me answer this application question" → get_company_context + get_profile_section(section: "profile", tier: "full") IN PARALLEL
 
 === ANTI-PATTERNS (do not do these) ===
 - Do NOT ask the user to paste transcript content you can fetch with get_communications.
@@ -160,10 +162,123 @@ These are reference patterns. Match the user's question to the closest pattern, 
 - When evaluating: be specific and honest. Point to the exact signal (a transcript line, a dealbreaker, a firmographic). Vague advice is worse than no advice.`,
   ].join('\n');
 
-  const tail = isGlobalChat
+  // Mode-specific prompt extensions go in the tail (not cached — they vary per chat surface)
+  const tailParts = [];
+
+  if (applicationMode) {
+    tailParts.push(`\n=== APPLICATION HELPER MODE ===
+SITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.
+
+VOICE & TONE:
+- Write as the user in first person. Conversational, confident, specific.
+- Sound like a smart person talking, not an AI writing.
+- No dramatic framing, no buzzword stacking, no filler.
+- NEVER wrap the answer in quotation marks.
+
+LENGTH: 2-5 sentences unless the user specifies otherwise.
+
+OUTPUT FORMAT:
+- Give ONE clean answer the user can copy-paste directly.
+- No preamble, no alternatives unless asked, no commentary after.
+- NEVER wrap in quotation marks.
+
+CRITICAL: You have the user's FULL Career OS profile available via tools. ALWAYS call get_profile_section(section: "profile", tier: "full") + get_company_context IN PARALLEL on the first application question. DRAFT the answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information you can fetch.
+
+When the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
+  }
+
+  if (careerOSChat) {
+    tailParts.push(`\n=== CAREER OS EDITOR MODE ===
+You are on the Career OS preferences page. The user can ask you to view, add, or update their structured profile.
+
+You have full visibility into their structured profile fields via get_profile_section(section: "preferences", tier: "full"):
+- Attracted To: structured entries with text, category, severity, and keyword triggers
+- Dealbreakers: structured entries with text, category, severity (hard/soft), and keyword triggers
+- Skill Tags: array of searchable skill labels
+- Role ICP: target function (array), seniority, scope, selling motion, team size preference
+- Company ICP: stage (array), size range (array), industry preferences (array), culture markers
+- Interview Learnings: text + source company + date
+
+When the user asks to ADD or UPDATE profile data, respond with your explanation AND a code fence containing the structured update:
+
+\`\`\`career-os-update
+{"action":"add","target":"dealbreakers","data":{"text":"Companies that glorify grit culture","category":"culture","severity":"hard","keywords":["grit","hustle","grind"]}}
+\`\`\`
+
+Valid targets: attractedTo, dealbreakers, skillTags, roleICP, companyICP, learnings
+Valid actions: add
+
+For skillTags, data is a string array: {"action":"add","target":"skillTags","data":["Salesforce","HubSpot"]}
+For ICP updates, data is a partial object to merge: {"action":"add","target":"roleICP","data":{"seniority":"VP","targetFunction":["GTM","Sales"]}}
+Note: targetFunction, stage, sizeRange, and industryPreferences are arrays of strings.
+
+When asked "what are my dealbreakers?" or similar, call get_profile_section then read back the structured data clearly.
+Always suggest relevant keywords when adding entries — keywords enable deterministic matching during job scoring.
+
+You can also change system settings when asked. Use a \`\`\`settings-update code fence:
+
+\`\`\`settings-update
+{"action":"update","setting":"chatModel","value":"claude-haiku-4-5-20251001","label":"Claude Haiku"}
+\`\`\`
+
+Valid settings:
+- chatModel: the default model for Coop chat (e.g. "gpt-4.1-mini", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250514")
+- scoringModel: model used for job scoring
+- researchModel: model used for company research
+
+When the user asks to switch models, change defaults, or adjust settings, respond with the settings-update block AND a brief confirmation of what will change and the cost impact.`);
+  }
+
+  // Entry update proposals and task creation — always available on bound chats
+  if (!isGlobalChat && !careerOSChat) {
+    tailParts.push(`\n=== ENTRY UPDATE PROPOSALS ===
+When the user asks you to update, change, or fix data about this company/opportunity, respond with your explanation AND a code fence containing the update:
+
+\`\`\`entry-update
+{"field":"status","value":"interviewing","label":"Move to Interviewing"}
+\`\`\`
+
+You can propose multiple updates in one response — use a separate code fence for each.
+
+Valid fields and example values:
+- status: "watching", "applied", "interviewing", "offer", "rejected", "passed", "closed"
+- jobTitle: any string (the role title)
+- jobStage: "interested", "applied", "phone-screen", "interview", "final-round", "offer", "rejected"
+- rating: 1-5 (integer)
+- tags: ["tag1", "tag2"] (replaces all tags)
+- addTags: ["new-tag"] (appends without removing existing)
+- removeTags: ["old-tag"] (removes specific tags)
+- notes: "text to append" (appends to existing notes, does NOT replace)
+- companyWebsite: URL string
+- companyLinkedin: URL string
+
+Always include a "label" field with a short human-readable description of the change.
+Only propose changes when the user explicitly asks. Don't proactively suggest updates unless something is clearly wrong or missing.`);
+  }
+
+  tailParts.push(`\n=== TASK CREATION ===
+When the user asks you to create a task, reminder, or to-do, respond with your confirmation AND a code fence:
+
+\`\`\`create-task
+{"text":"Follow up with Sarah about the interview","company":"Amagi","dueDate":"2026-04-05","priority":"normal","label":"Task: Follow up with Sarah"}
+\`\`\`
+
+Fields:
+- text (required): what needs to be done
+- company (optional): company name if task is related to one
+- dueDate (optional): YYYY-MM-DD format. If the user says "tomorrow", calculate the date. If not specified, use today.
+- priority (optional): "low", "normal" (default), or "high"
+- label (required): short human-readable description for the proposal card
+
+You can create multiple tasks in one response with separate code fences.
+When the user says things like "remind me to", "don't forget to", "I need to", "add a task", "todo" — create a task.`);
+
+  const bindingLine = isGlobalChat
     ? `\n=== CURRENT BINDING ===\nGlobal pipeline chat. No company is bound. All tool calls that take company_name MUST include it explicitly.`
     : `\n=== CURRENT BINDING ===\nThis chat is bound to: ${boundCompany || '(unknown)'}\nTool calls that take company_name can omit it — it will auto-resolve to this entry.`;
+  tailParts.push(bindingLine);
 
+  const tail = tailParts.join('\n');
   return { base, tail };
 }
 
@@ -171,13 +286,14 @@ These are reference patterns. Match the user's question to the closest pattern, 
 // G2 Tool-Use Handler (Haiku + tool loop)
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function handleCoopMessageToolUse({ messages, context, globalChat, chatModel }) {
+async function handleCoopMessageToolUse({ messages, context, globalChat, chatModel, careerOSChat }) {
   context = context || {};
   const today = new Date();
   const todayStr = context.todayDate || today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const boundCompany = context.company || null;
   const boundEntryId = context.entryId || null;
   const isGlobalChat = !!globalChat || !boundCompany;
+  const applicationMode = !!(context._applicationMode && state.coopConfig.automations?.applicationModeDetection !== false);
 
   // Fetch compiled standard-tier docs for inline embedding.
   // Haiku 4.5 cache minimum is 4096 tokens — summaries alone (~400 tokens) aren't enough.
@@ -185,7 +301,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   const { coopProfileStandard, coopPrefsStandard } = await new Promise(r =>
     chrome.storage.local.get(['coopProfileStandard', 'coopPrefsStandard'], r));
   const profileSummary = [coopProfileStandard, coopPrefsStandard].filter(Boolean).join('\n\n');
-  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary });
+  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat: !!careerOSChat });
   const toolCtx = { boundCompany, boundEntryId };
 
   // G2.1 diagnostic: one-shot fingerprint so we can confirm base is (a) above
@@ -198,62 +314,189 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   console.log(`[Coop][ToolUse] prompt base len=${system.base.length} ~tok=${_approxTokens(system.base)} fp=${_fp(system.base)} | tail len=${system.tail.length} ~tok=${_approxTokens(system.tail)} fp=${_fp(system.tail)}`);
 
   let conversation = messages.slice();
+
+  // Screenshot injection — attach pending screenshot to the last user message
+  const screenshotFlag = context._hasScreenshot || context.hasScreenshot;
+  const screenshotData = state._pendingScreenshot || context._screenshotData || null;
+  if (screenshotFlag && screenshotData) {
+    state._pendingScreenshot = null;
+    for (let i = conversation.length - 1; i >= 0; i--) {
+      if (conversation[i].role === 'user') {
+        const textContent = typeof conversation[i].content === 'string' ? conversation[i].content : String(conversation[i].content);
+        conversation[i] = {
+          role: 'user',
+          content: [
+            { type: 'text', text: textContent },
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: screenshotData } }
+          ]
+        };
+        dlog(`[Coop][ToolUse][Screenshot] Injected ${Math.round(screenshotData.length / 1024)}KB into message #${i}`);
+        break;
+      }
+    }
+  }
+
   const totalUsage = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
   const toolCallLog = [];
   let finalReply = null;
-  const model = 'claude-haiku-4-5-20251001'; // v1: Haiku only
+
+  // Model selection: respect user's model picker, fall back to configured default
+  const model = chatModel || getModelForTask('chat');
+  const isOpenAI = model.startsWith('gpt-');
+
+  // Verify we have the right API key for the selected model
+  if (isOpenAI && !state.OPENAI_KEY) {
+    console.warn(`[Coop][ToolUse] OpenAI key missing for ${model}, falling back to Haiku`);
+  }
+  const effectiveModel = (isOpenAI && !state.OPENAI_KEY) ? 'claude-haiku-4-5-20251001'
+    : (!isOpenAI && !state.ANTHROPIC_KEY && state.OPENAI_KEY) ? 'gpt-4.1-mini'
+    : model;
+  const useOpenAI = effectiveModel.startsWith('gpt-');
+  console.log(`[Coop][ToolUse] model=${effectiveModel} (requested=${model}) provider=${useOpenAI ? 'openai' : 'anthropic'}`);
 
   for (let step = 0; step < 5; step++) {
-    const res = await claudeApiCall({
-      model,
-      max_tokens: 2048,
-      system: [
-        { type: 'text', text: system.base, cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: system.tail, cache_control: { type: 'ephemeral' } },
-      ],
-      messages: conversation,
-      tools: COOP_TOOLS,
-    }, 3, 'chat');
-    if (!res || !res.ok) {
-      const errText = res ? await res.text().catch(() => '') : 'no response';
-      console.error('[Coop][ToolUse] API error:', res?.status, errText.slice(0, 300));
-      return { error: `Tool-use API error (${res?.status || 'no response'})`, routed: 'tool-use' };
-    }
-    const data = await res.json();
-    const u = data.usage || {};
-    totalUsage.input         += u.input_tokens                || 0;
-    totalUsage.output        += u.output_tokens               || 0;
-    totalUsage.cacheCreation += u.cache_creation_input_tokens || 0;
-    totalUsage.cacheRead     += u.cache_read_input_tokens     || 0;
+    let data, res;
 
-    console.log(`[Coop][ToolUse] step ${step} stop=${data.stop_reason} in=${u.input_tokens||0} out=${u.output_tokens||0} cacheW=${u.cache_creation_input_tokens||0} cacheR=${u.cache_read_input_tokens||0}`);
-
-    if (data.stop_reason === 'tool_use') {
-      conversation.push({ role: 'assistant', content: data.content });
-      const results = [];
-      for (const block of (data.content || [])) {
-        if (block.type !== 'tool_use') continue;
-        const toolResult = await runCoopTool(block.name, block.input, toolCtx);
-        toolCallLog.push({ name: block.name, input: block.input, resultPreview: JSON.stringify(toolResult).slice(0, 200) });
-        console.log(`[Coop][ToolUse]   → ${block.name}(${JSON.stringify(block.input).slice(0, 120)}) → ${JSON.stringify(toolResult).length} chars`);
-        results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(toolResult) });
+    if (useOpenAI) {
+      // OpenAI tool-use path
+      const oaiMessages = [{ role: 'system', content: system.base + '\n' + system.tail }];
+      for (const m of conversation) {
+        if (m.role === 'user' && Array.isArray(m.content) && m.content[0]?.type === 'tool_result') {
+          // Convert Claude tool_result format to OpenAI tool messages
+          for (const tr of m.content) {
+            oaiMessages.push({ role: 'tool', tool_call_id: tr.tool_use_id, content: tr.content });
+          }
+        } else if (m.role === 'assistant' && Array.isArray(m.content)) {
+          // Convert Claude assistant content blocks to OpenAI format
+          const textParts = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+          const toolCalls = m.content.filter(b => b.type === 'tool_use').map(b => ({
+            id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input) }
+          }));
+          const oaiMsg = { role: 'assistant' };
+          if (textParts) oaiMsg.content = textParts;
+          if (toolCalls.length) oaiMsg.tool_calls = toolCalls;
+          oaiMessages.push(oaiMsg);
+        } else if (Array.isArray(m.content)) {
+          // User message with image blocks
+          const oaiContent = m.content.map(block => {
+            if (block.type === 'image' && block.source?.type === 'base64') {
+              return { type: 'image_url', image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` } };
+            }
+            return block;
+          });
+          oaiMessages.push({ role: m.role, content: oaiContent });
+        } else {
+          oaiMessages.push(m);
+        }
       }
-      conversation.push({ role: 'user', content: results });
-      continue;
-    }
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.OPENAI_KEY}` },
+        body: JSON.stringify({ model: effectiveModel, messages: oaiMessages, max_tokens: 2048, tools: COOP_TOOLS_OPENAI }),
+      });
+      trackApiCall('openai', res.clone(), effectiveModel, 'chat');
+      if (!res || !res.ok) {
+        const errText = res ? await res.text().catch(() => '') : 'no response';
+        console.error('[Coop][ToolUse] OpenAI API error:', res?.status, errText.slice(0, 300));
+        return { error: `Tool-use API error (${res?.status || 'no response'})`, routed: 'tool-use' };
+      }
+      data = await res.json();
+      const u = data.usage || {};
+      totalUsage.input  += u.prompt_tokens     || 0;
+      totalUsage.output += u.completion_tokens  || 0;
 
-    // end_turn, stop_sequence, max_tokens, etc.
-    finalReply = (data.content || []).find(b => b.type === 'text')?.text || '';
-    break;
+      const choice = data.choices?.[0];
+      const finish = choice?.finish_reason;
+      console.log(`[Coop][ToolUse] step ${step} stop=${finish} in=${u.prompt_tokens||0} out=${u.completion_tokens||0} (OpenAI)`);
+
+      if (finish === 'tool_calls' && choice.message?.tool_calls?.length) {
+        // Convert OpenAI tool_calls to Claude format for internal conversation tracking
+        const claudeBlocks = [];
+        if (choice.message.content) claudeBlocks.push({ type: 'text', text: choice.message.content });
+        for (const tc of choice.message.tool_calls) {
+          claudeBlocks.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input: JSON.parse(tc.function.arguments || '{}') });
+        }
+        conversation.push({ role: 'assistant', content: claudeBlocks });
+
+        const results = [];
+        for (const tc of choice.message.tool_calls) {
+          const input = JSON.parse(tc.function.arguments || '{}');
+          const toolResult = await runCoopTool(tc.function.name, input, toolCtx);
+          const serialized = serializeToolResult(toolResult);
+          toolCallLog.push({ name: tc.function.name, input, resultPreview: serialized.slice(0, 200) });
+          console.log(`[Coop][ToolUse]   → ${tc.function.name}(${JSON.stringify(input).slice(0, 120)}) → ${serialized.length} chars`);
+          results.push({ type: 'tool_result', tool_use_id: tc.id, content: serialized });
+        }
+        conversation.push({ role: 'user', content: results });
+        continue;
+      }
+
+      finalReply = choice?.message?.content || '';
+      break;
+
+    } else {
+      // Claude tool-use path (with prompt caching)
+      res = await claudeApiCall({
+        model: effectiveModel,
+        max_tokens: 2048,
+        system: [
+          { type: 'text', text: system.base, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: system.tail, cache_control: { type: 'ephemeral' } },
+        ],
+        messages: conversation,
+        tools: COOP_TOOLS,
+      }, 3, 'chat');
+      if (!res || !res.ok) {
+        const errText = res ? await res.text().catch(() => '') : 'no response';
+        console.error('[Coop][ToolUse] API error:', res?.status, errText.slice(0, 300));
+        return { error: `Tool-use API error (${res?.status || 'no response'})`, routed: 'tool-use' };
+      }
+      data = await res.json();
+      const u = data.usage || {};
+      totalUsage.input         += u.input_tokens                || 0;
+      totalUsage.output        += u.output_tokens               || 0;
+      totalUsage.cacheCreation += u.cache_creation_input_tokens || 0;
+      totalUsage.cacheRead     += u.cache_read_input_tokens     || 0;
+
+      console.log(`[Coop][ToolUse] step ${step} stop=${data.stop_reason} in=${u.input_tokens||0} out=${u.output_tokens||0} cacheW=${u.cache_creation_input_tokens||0} cacheR=${u.cache_read_input_tokens||0}`);
+
+      if (data.stop_reason === 'tool_use') {
+        conversation.push({ role: 'assistant', content: data.content });
+        const results = [];
+        for (const block of (data.content || [])) {
+          if (block.type !== 'tool_use') continue;
+          const toolResult = await runCoopTool(block.name, block.input, toolCtx);
+          const serialized = serializeToolResult(toolResult);
+          toolCallLog.push({ name: block.name, input: block.input, resultPreview: serialized.slice(0, 200) });
+          console.log(`[Coop][ToolUse]   → ${block.name}(${JSON.stringify(block.input).slice(0, 120)}) → ${serialized.length} chars`);
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: serialized });
+        }
+        conversation.push({ role: 'user', content: results });
+        continue;
+      }
+
+      // end_turn, stop_sequence, max_tokens, etc.
+      finalReply = (data.content || []).find(b => b.type === 'text')?.text || '';
+      break;
+    }
   }
 
   if (finalReply === null) {
     finalReply = "I reached the tool-call limit while gathering context. Let me know what specifically you need and I'll try again.";
   }
 
+  // Blocking insight extraction for memory triggers ("remember this", "from now on", etc.)
+  const lastUserMsg = conversation[0] ? (messages[messages.length - 1]?.content || '') : '';
+  const lastUserText = typeof lastUserMsg === 'string' ? lastUserMsg : (Array.isArray(lastUserMsg) ? (lastUserMsg.find(b => b.type === 'text')?.text || '') : '');
+  const hasTrigger = /remember this|remember that|don't forget|from now on|always\s+(?:lead|start|use|mention|include)|never\s+(?:say|mention|use|include)|update my profile|add this to/i.test(lastUserText);
+  if (hasTrigger) {
+    const source = isGlobalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
+    await _doBlockingInsightExtraction(lastUserText, finalReply, source);
+  }
+
   return {
     reply: finalReply,
-    model,
+    model: effectiveModel,
     usage: totalUsage,
     toolCalls: toolCallLog,
     routed: 'tool-use',
@@ -265,15 +508,13 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function handleCoopMessage({ messages, context, globalChat, pipeline, enrichments, chatModel, careerOSChat }) {
-  // G2 tool-use is the default path. Legacy only used for Career OS editor and application-mode
-  // (which have specialized system prompts not yet ported to tool-use).
-  if (!careerOSChat && !context?._applicationMode) {
-    try {
-      return await handleCoopMessageToolUse({ messages, context, globalChat, chatModel });
-    } catch (err) {
-      console.error('[Coop][ToolUse] fatal error, falling back to legacy path:', err);
-      // Fall through to legacy
-    }
+  // G2 tool-use is the ONLY path. All modes (application helper, Career OS editor, company chat,
+  // global chat) now route through tool-use. Legacy path below is kept only as fatal-error fallback.
+  try {
+    return await handleCoopMessageToolUse({ messages, context, globalChat, chatModel, careerOSChat });
+  } catch (err) {
+    console.error('[Coop][ToolUse] fatal error, falling back to legacy path:', err);
+    // Fall through to legacy
   }
   context = context || {};
   const today = new Date();

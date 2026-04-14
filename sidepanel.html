@@ -58,6 +58,19 @@
     .sp-health-dot.red { background: #ef4444; }
     .sp-health-dot.gray { background: var(--ci-text-tertiary); }
 
+    /* Cost badge */
+    .sp-cost-badge {
+      font-size: 10px; font-weight: 600; font-family: var(--ci-font-mono);
+      padding: 2px 7px; border-radius: var(--ci-radius-full);
+      background: rgba(255,255,255,0.07); cursor: pointer;
+      transition: background var(--ci-transition-fast), color var(--ci-transition-fast);
+      white-space: nowrap; line-height: 1.4; letter-spacing: -0.01em;
+    }
+    .sp-cost-badge:hover { background: rgba(255,255,255,0.13); }
+    .sp-cost-badge.cost-green  { color: var(--ci-accent-teal); }
+    .sp-cost-badge.cost-orange { color: var(--ci-accent-amber); }
+    .sp-cost-badge.cost-red    { color: var(--ci-accent-red); }
+
     /* Company bar */
     .company-bar { padding: 10px 16px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-default); display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: 10px; }
     .company-bar-left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
@@ -848,6 +861,7 @@
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-3M10 2h4v4M16 0L8 8"/></svg>
       </a>
       <span class="sp-health-dot" id="sp-health-dot" title="API health — click for details"></span>
+      <span class="sp-cost-badge cost-green" id="sp-cost-badge" title="API spend today">~$0.00</span>
     </div>
     <div class="header-actions">
       <button id="coop-toggle-btn" class="header-coop-toggle" title="Open Coop chat"></button>

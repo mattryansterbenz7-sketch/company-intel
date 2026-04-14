@@ -484,8 +484,8 @@
     </div>
     <div class="stat-card yellow">
       <div class="label">AI Models</div>
-      <div class="value">5</div>
-      <div class="detail">Haiku 4.5, Sonnet 4, Opus 4, GPT-4.1 mini, GPT-4.1</div>
+      <div class="value">6</div>
+      <div class="detail">Haiku 4.5, Sonnet 4, Opus 4, GPT-4.1 nano, GPT-4.1 mini, GPT-4.1</div>
     </div>
   </div>
 
@@ -583,8 +583,8 @@
           <div class="node-detail">Full tier loaded directly: coopProfileFull + coopPrefsFull injected into the scoring prompt.</div>
         </div>
         <div class="flow-node purple">
-          <div class="node-title">4c. Legacy Chat</div>
-          <div class="node-detail">Full tier embedded inline in system prompt. Used for Career OS editor mode and application helper mode.</div>
+          <div class="node-title">4c. Application &amp; Editor Chat</div>
+          <div class="node-detail">Same G2 tool-use path as 4a. Mode-specific instructions (application helper, Career OS editor) injected into the prompt tail.</div>
         </div>
       </div>
     </div>
@@ -592,27 +592,27 @@
 
   <!-- Chat architecture overview -->
   <div class="flow-section">
-    <h2>Chat Architecture: Two Paths</h2>
-    <div class="desc">Coop chat routes through one of two paths depending on the context.</div>
+    <h2>Chat Architecture: Unified Tool-Use</h2>
+    <div class="desc">All Coop chat modes route through a single tool-use path. No more legacy split.</div>
 
     <div class="two-col">
       <div class="info-card green-accent">
-        <div class="card-title"><span class="tag green">DEFAULT</span> G2 Tool-Use Path</div>
+        <div class="card-title"><span class="tag green">ALL MODES</span> G2 Tool-Use Path</div>
         <div class="card-body">
-          <strong>Used for:</strong> All company chat, global pipeline chat, side panel chat.<br><br>
-          <strong>How it works:</strong> Slim system prompt (~3000 tokens) with standard-tier profile/prefs embedded. Model gets 5 tools it can call on demand. Loops up to 5 times: model requests tools, handler executes them, feeds results back. Final text response returned to user.<br><br>
-          <strong>Model:</strong> Haiku 4.5 (hardcoded in v1).<br>
-          <strong>Prompt caching:</strong> System prompt split into base + tail with <code>cache_control: ephemeral</code>. First message in a session writes the cache (~$0.003); follow-up messages read from cache at 90% discount.
+          <strong>Used for:</strong> Company chat, global pipeline chat, side panel chat, application helper mode, Career OS editor mode.<br><br>
+          <strong>How it works:</strong> Slim system prompt (~3000 tokens cached base) with standard-tier profile/prefs embedded. Mode-specific instructions (application helper, Career OS editor, entry updates, task creation) injected into the prompt tail. Model gets 5 tools it can call on demand. Loops up to 5 times: model requests tools, handler executes them, feeds results back.<br><br>
+          <strong>Model:</strong> User-selectable via model picker. Default: Haiku 4.5. Supports all Claude + OpenAI models with tool-use (including GPT-4.1 mini/nano).<br>
+          <strong>Prompt caching:</strong> System prompt split into base (cached) + tail (mode-specific, not cached). First message writes the cache (~$0.003); follow-ups read at 90% discount.<br>
+          <strong>Screenshots:</strong> Attached as base64 image blocks to the last user message when screen sharing is active.
         </div>
       </div>
 
       <div class="info-card blue-accent">
-        <div class="card-title"><span class="tag blue">LEGACY</span> Full-Context Path</div>
+        <div class="card-title"><span class="tag gray">FALLBACK ONLY</span> Legacy Full-Context Path</div>
         <div class="card-body">
-          <strong>Used for:</strong> Career OS editor mode (<code>careerOSChat</code>), Application helper mode (<code>_applicationMode</code>), and as fallback if G2 path throws a fatal error.<br><br>
-          <strong>How it works:</strong> Large system prompt with full-tier profile/prefs, pipeline summary, company context, emails, meetings, transcripts all embedded inline. No tools. Single API call per message.<br><br>
-          <strong>Model:</strong> User-selectable via <code>chatWithFallback()</code>.<br>
-          <strong>Prompt size:</strong> Can reach 15k+ tokens depending on context loaded.
+          <strong>Used for:</strong> Fatal error fallback only. If <code>handleCoopMessageToolUse()</code> throws an unrecoverable error, the system falls through to the legacy path automatically.<br><br>
+          <strong>How it works:</strong> Large system prompt with everything inline (profile, pipeline, company context, emails, meetings). Single API call per message. No tools.<br><br>
+          <strong>When you'd see this:</strong> Essentially never in normal operation. Only activates if the tool-use handler crashes.
         </div>
       </div>
     </div>
@@ -781,10 +781,10 @@
           <td>Loaded directly from storage into scoring prompt</td>
         </tr>
         <tr>
-          <td>Legacy Chat (Career OS / Application mode)</td>
-          <td><span class="tag purple">FULL</span></td>
-          <td><span class="tag purple">FULL</span></td>
-          <td>Embedded inline in system prompt</td>
+          <td>G2 Chat: Application &amp; Editor modes</td>
+          <td><span class="tag blue">STANDARD</span> (inline) / <span class="tag purple">FULL</span> (via tool)</td>
+          <td><span class="tag blue">STANDARD</span> (inline) / <span class="tag purple">FULL</span> (via tool)</td>
+          <td>Standard embedded in cached base; full fetched on demand for drafts &amp; answers</td>
         </tr>
         <tr>
           <td>Pipeline Advisor header</td>
@@ -1026,8 +1026,8 @@
   <div class="summary-grid">
     <div class="stat-card green">
       <div class="label">Cheapest Model</div>
-      <div class="value">GPT-4.1m</div>
-      <div class="detail">$0.40 / $1.60 per MTok (in/out). Default fallback.</div>
+      <div class="value">GPT-4.1n</div>
+      <div class="detail">$0.10 / $0.40 per MTok (in/out). First in fallback chain.</div>
     </div>
     <div class="stat-card blue">
       <div class="label">Default Workhorse</div>
@@ -1043,6 +1043,29 @@
       <div class="label">Expensive</div>
       <div class="value">Opus 4</div>
       <div class="detail">$15.00 / $75.00 per MTok. Not used by default; available in model picker.</div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <h2>Model Cost Comparison</h2>
+    <div class="desc">What each model costs per million tokens. Chat model is user-selectable; other tasks are configurable in Data Pipeline settings.</div>
+
+    <table class="audit-table">
+      <thead>
+        <tr><th>Model</th><th>Input $/MTok</th><th>Output $/MTok</th><th>Relative Cost</th><th>Best For</th></tr>
+      </thead>
+      <tbody>
+        <tr style="background:#e8f5e9"><td>GPT-4.1 nano</td><td>$0.10</td><td>$0.40</td><td>1&times; (baseline)</td><td>Simple commands, tag changes, stage moves</td></tr>
+        <tr style="background:#e8f5e9"><td>GPT-4.1 mini</td><td>$0.40</td><td>$1.60</td><td>4&times;</td><td>General chat, research synthesis, extraction</td></tr>
+        <tr><td>Haiku 4.5</td><td>$1.00</td><td>$5.00</td><td>10&times;</td><td>Chat (default), scoring, tool-use. Supports prompt caching.</td></tr>
+        <tr><td>Sonnet 4</td><td>$3.00</td><td>$15.00</td><td>30&times;</td><td>Memory synthesis, complex reasoning</td></tr>
+        <tr><td>GPT-4.1</td><td>$2.00</td><td>$8.00</td><td>20&times;</td><td>Fallback for Claude rate limits</td></tr>
+        <tr style="color:var(--muted)"><td>Opus 4</td><td>$15.00</td><td>$75.00</td><td>150&times;</td><td>Available in picker but not used by default</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout green">
+      <strong>Savings opportunity:</strong> Switching chat from Haiku ($1/$5) to GPT-4.1 mini ($0.40/$1.60) cuts chat costs by ~60%. Nano ($0.10/$0.40) cuts by ~90% but may struggle with complex drafting. The model picker in each chat header lets you switch per-session.
     </div>
   </div>
 
@@ -1068,11 +1091,11 @@
           <td>1 API call per tool-loop step (up to 5 steps). Prompt caching cuts follow-up cost ~88%.</td>
         </tr>
         <tr>
-          <td>Chat message (legacy path)</td>
+          <td>Chat message (legacy fallback &mdash; crash only)</td>
           <td>Anthropic / OpenAI</td>
           <td>User-selected</td>
           <td>$0.002&ndash;0.02</td>
-          <td>Single call. Cost depends on context size (can be 15k+ tokens).</td>
+          <td>Only fires if G2 tool-use handler throws a fatal error. Single call with everything inline.</td>
         </tr>
         <tr>
           <td>Insight extraction</td>
@@ -1169,19 +1192,23 @@
     <div class="flow-diagram">
       <div class="flow-row">
         <div class="flow-node green">
-          <div class="node-title">1. GPT-4.1 mini</div>
-          <div class="node-detail">$0.40/$1.60 per MTok. Cheapest. First in chain.</div>
+          <div class="node-title">1. GPT-4.1 nano</div>
+          <div class="node-detail">$0.10/$0.40 per MTok. Cheapest. First in chain.</div>
         </div>
         <div class="flow-node green">
-          <div class="node-title">2. Haiku 4.5</div>
+          <div class="node-title">2. GPT-4.1 mini</div>
+          <div class="node-detail">$0.40/$1.60 per MTok. Budget workhorse.</div>
+        </div>
+        <div class="flow-node green">
+          <div class="node-title">3. Haiku 4.5</div>
           <div class="node-detail">$1.00/$5.00 per MTok. Default for most tasks.</div>
         </div>
         <div class="flow-node yellow">
-          <div class="node-title">3. Sonnet 4</div>
+          <div class="node-title">4. Sonnet 4</div>
           <div class="node-detail">$3.00/$15.00 per MTok. Only if allowExpensive=true.</div>
         </div>
         <div class="flow-node red">
-          <div class="node-title">4. GPT-4.1</div>
+          <div class="node-title">5. GPT-4.1</div>
           <div class="node-detail">$2.00/$8.00 per MTok. Only if allowExpensive=true.</div>
         </div>
       </div>
@@ -1234,14 +1261,14 @@
 
   <div class="flow-section">
     <h2>Model Routing by Task</h2>
-    <div class="desc"><code>getModelForTask(taskId)</code> in api.js returns the configured model for each task. All default to Haiku 4.5 except memory synthesis (Sonnet 4).</div>
+    <div class="desc"><code>getModelForTask(taskId)</code> in api.js returns the configured model for each task. All default to Haiku 4.5 except memory synthesis (Sonnet 4). Override via <code>pipelineConfig.aiModels</code> in Data Pipeline settings.</div>
 
     <table class="audit-table">
       <thead>
         <tr><th>Task ID</th><th>Default Model</th><th>Used By</th></tr>
       </thead>
       <tbody>
-        <tr><td class="mono">chat</td><td>Haiku 4.5</td><td>Legacy chat path (chatWithFallback)</td></tr>
+        <tr><td class="mono">chat</td><td>Haiku 4.5</td><td>G2 tool-use path + legacy fallback. Selectable via model picker in chat header.</td></tr>
         <tr><td class="mono">jobMatchScoring</td><td>Haiku 4.5</td><td>scoreOpportunity</td></tr>
         <tr><td class="mono">companyIntelligence</td><td>Haiku 4.5</td><td>Research synthesis</td></tr>
         <tr><td class="mono">firmographicExtraction</td><td>Haiku 4.5</td><td>Apollo result parsing</td></tr>
@@ -1298,17 +1325,17 @@
         </div>
         <div class="conn-node source">
           <div class="conn-label">Block 2: tail</div>
-          Current binding (company name or "global pipeline chat"). ~50 tokens. cache_control: ephemeral.
+          Mode-specific instructions (application helper, Career OS editor, entry updates, task creation) + current binding. Size varies by mode (~200&ndash;800 tokens). cache_control: ephemeral.
         </div>
       </div>
       <div class="conn-arrows">&rarr;</div>
       <div class="conn-column">
         <div class="col-header">API Call</div>
         <div class="conn-node output">
-          <div class="conn-label">claudeApiCall()</div>
-          model: claude-haiku-4-5-20251001<br>
-          system: [base, tail]<br>
-          tools: COOP_TOOLS (5 tools)<br>
+          <div class="conn-label">Claude: claudeApiCall() / OpenAI: fetch()</div>
+          model: user-selected (default Haiku 4.5)<br>
+          system: [base, tail] (Claude cached) or flat string (OpenAI)<br>
+          tools: COOP_TOOLS (Claude) / COOP_TOOLS_OPENAI (OpenAI function format)<br>
           messages: conversation history<br>
           max_tokens: 2048
         </div>
@@ -1403,7 +1430,8 @@
             <li><strong>Standard profile:</strong> coopProfileStandard (~800 tokens)</li>
             <li><strong>Standard preferences:</strong> coopPrefsStandard (~2300 tokens)</li>
             <li><strong>Tool use rules:</strong> 10 rules + patterns + anti-patterns + grounding + discipline</li>
-            <li><strong>Binding context:</strong> Which company this chat is about (or "global")</li>
+            <li><strong>Mode instructions (tail):</strong> Application helper, Career OS editor, entry-update proposals, task creation &mdash; injected per mode</li>
+            <li><strong>Binding context (tail):</strong> Which company this chat is about (or "global")</li>
           </ul>
         </div>
       </div>
@@ -1424,27 +1452,34 @@
   </div>
 
   <div class="flow-section">
-    <h2>Legacy Chat Path</h2>
-    <div class="desc">Used for Career OS editor mode and Application helper mode. Also serves as fallback if the G2 path throws a fatal error.</div>
+    <h2>Chat Modes</h2>
+    <div class="desc">All modes use the same G2 tool-use handler. Mode-specific instructions are injected into the prompt tail (not cached).</div>
 
-    <h3>When It's Used</h3>
+    <h3>Application Helper Mode</h3>
     <ul class="clean">
-      <li><strong>Career OS editor:</strong> <code>careerOSChat: true</code> &mdash; preferences page chat. Has special system prompt for structured profile updates (code fences with <code>career-os-update</code> and <code>settings-update</code> actions).</li>
-      <li><strong>Application mode:</strong> <code>context._applicationMode: true</code> &mdash; detected when user is filling out a job application form. Short, copy-paste-ready answers in the user's voice.</li>
-      <li><strong>G2 fallback:</strong> If <code>handleCoopMessageToolUse()</code> throws a fatal error, falls through to legacy path automatically.</li>
+      <li><strong>Trigger:</strong> <code>context._applicationMode: true</code> &mdash; detected when the user is filling out a job application form.</li>
+      <li><strong>Behavior:</strong> Short, copy-paste-ready answers in the user's voice. On the first application question, Coop auto-fetches <code>get_company_context</code> + <code>get_profile_section(tier: "full")</code> in parallel to draft from full context.</li>
+      <li><strong>Output format:</strong> One clean answer, 2-5 sentences, no preamble, no quotation marks.</li>
     </ul>
 
-    <h3>What It Reads</h3>
-    <p>The legacy path builds a large system prompt with everything inline:</p>
+    <h3>Career OS Editor Mode</h3>
     <ul class="clean">
-      <li><strong>Layer 1:</strong> Coop identity + principles + gap-to-story loop rules + "use your full context" instruction</li>
-      <li><strong>Layer 2:</strong> Mode-specific prompt (application helper or Career OS editor)</li>
-      <li><strong>Layer 3:</strong> Full profile context: coopProfileFull + coopPrefsFull (same compiled .md source of truth)</li>
-      <li><strong>Layer 4:</strong> Pipeline summary (all active entries)</li>
-      <li><strong>Layer 5:</strong> Deep company context &mdash; firmographics, intelligence, leadership, contacts, role brief, job description, match score, reviews, email history, meeting transcripts (with relevance-ranked expansion)</li>
-      <li><strong>Layer 6:</strong> Coop memory block (buildCoopMemoryBlock)</li>
+      <li><strong>Trigger:</strong> <code>careerOSChat: true</code> &mdash; preferences page chat.</li>
+      <li><strong>Behavior:</strong> Can add/update structured profile entries via <code>career-os-update</code> code fences, change system settings via <code>settings-update</code> code fences. Fetches profile via tools when asked about current values.</li>
+      <li><strong>Output format:</strong> Explanation + structured code fence for the UI to parse and apply.</li>
     </ul>
-    <p>Sent via <code>chatWithFallback()</code> which supports the full model fallback chain and user model selection.</p>
+
+    <h3>Company / Pipeline Chat (default)</h3>
+    <ul class="clean">
+      <li><strong>Trigger:</strong> Any chat message that isn't Career OS or application mode.</li>
+      <li><strong>Behavior:</strong> Standard tool-use loop. Can propose entry updates (<code>entry-update</code> code fences) and create tasks (<code>create-task</code> code fences).</li>
+    </ul>
+
+    <h3>Legacy Fallback</h3>
+    <ul class="clean">
+      <li><strong>Trigger:</strong> Only if <code>handleCoopMessageToolUse()</code> throws a fatal error.</li>
+      <li><strong>Behavior:</strong> Falls through to the old monolithic prompt path. Full profile + pipeline + company context + emails + meetings all inline. No tools. Essentially a crash safety net — should never activate in normal operation.</li>
+    </ul>
   </div>
 
   <div class="flow-section">
@@ -1470,7 +1505,7 @@
       <li><strong>Blocking extraction:</strong> If the user says "remember this", "from now on", etc., extraction runs immediately (blocking) before the chat response returns.</li>
       <li><strong>Actions:</strong> The extraction AI returns <code>{ actions: [create/update/delete] }</code>. Applied via <code>applyCoopMemoryActions()</code>.</li>
       <li><strong>Dedup:</strong> Name collision on create converts to update. Entries capped at 200.</li>
-      <li><strong>Injection:</strong> <code>buildCoopMemoryBlock()</code> formats entries into a MEMORY.md-style block grouped by type, injected into legacy chat prompts.</li>
+      <li><strong>Injection:</strong> <code>buildCoopMemoryBlock()</code> formats entries into a MEMORY.md-style block grouped by type. In the G2 path, memory is fetched on demand via the <code>search_memory</code> tool. Legacy fallback injects it inline.</li>
     </ul>
   </div>
 
@@ -1497,9 +1532,9 @@
         <tr><th>Message Type</th><th>Handler</th><th>Purpose</th></tr>
       </thead>
       <tbody>
-        <tr><td class="mono">CHAT_MESSAGE</td><td>handleChatMessage</td><td>Legacy company-scoped chat</td></tr>
-        <tr><td class="mono">GLOBAL_CHAT_MESSAGE</td><td>handleGlobalChatMessage</td><td>Legacy pipeline-wide chat</td></tr>
-        <tr><td class="mono">COOP_CHAT</td><td>handleCoopMessage</td><td>Unified Coop chat (G2 tool-use or legacy)</td></tr>
+        <tr><td class="mono">CHAT_MESSAGE</td><td>handleChatMessage</td><td>Company-scoped chat (thin wrapper &rarr; handleCoopMessage)</td></tr>
+        <tr><td class="mono">GLOBAL_CHAT_MESSAGE</td><td>handleGlobalChatMessage</td><td>Pipeline-wide chat (thin wrapper &rarr; handleCoopMessage)</td></tr>
+        <tr><td class="mono">COOP_CHAT</td><td>handleCoopMessage</td><td>Unified Coop chat — all modes route through G2 tool-use</td></tr>
         <tr><td class="mono">RESEARCH_COMPANY</td><td>researchCompany</td><td>Full research pipeline</td></tr>
         <tr><td class="mono">QUICK_ENRICH_FIRMO</td><td>handleQuickEnrichFirmo</td><td>Fast firmographic lookup</td></tr>
         <tr><td class="mono">SCORE_OPPORTUNITY</td><td>scoreOpportunity</td><td>Unified scoring (5 dimensions)</td></tr>

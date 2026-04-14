@@ -248,14 +248,16 @@
 
   <div id="tab-pipeline" class="tab-panel active">
     <div id="pipeline-body"></div>
-    <div id="usage-container"></div>
   </div>
 
   <div id="tab-usage" class="tab-panel">
+    <!-- API Usage (provider rows with date picker) -->
+    <div id="usage-container"></div>
+
     <!-- Summary cards -->
     <div class="cost-summary-row">
       <div class="cost-summary-card">
-        <div class="cost-summary-card-label">Today's Total</div>
+        <div class="cost-summary-card-label" id="cost-sum-total-label">Today's Total</div>
         <div class="cost-summary-card-value" id="cost-sum-total">$0.00</div>
         <div class="cost-summary-card-detail" id="cost-sum-total-detail"></div>
       </div>

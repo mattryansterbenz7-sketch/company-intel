@@ -44,20 +44,15 @@ function refreshCostBadge() {
   chrome.runtime.sendMessage({ type: 'GET_API_USAGE' }, usage => {
     void chrome.runtime.lastError;
     if (!usage) return;
-    const today = new Date().toISOString().slice(0, 10);
-    let total = 0;
-    for (const provider of ['anthropic', 'openai']) {
-      const pd = usage[provider];
-      if (!pd?.dailyHistory) continue;
-      const day = pd.dailyHistory.find(d => d.date === today);
-      if (day?.estimatedCost) total += day.estimatedCost;
-    }
+    const total = typeof usage.costToday === 'number' ? usage.costToday : 0;
     const badge = document.getElementById('api-cost-badge');
     if (!badge) return;
-    if (total > 0) {
-      badge.textContent = `~$${total.toFixed(3)} today`;
+    if (total >= 0.01) {
+      badge.textContent = `~$${total.toFixed(2)} today`;
       badge.style.display = '';
       badge.style.color = total > 1 ? 'var(--ci-accent-red)' : total > 0.25 ? '#854F0B' : 'var(--ci-text-tertiary)';
+    } else {
+      badge.style.display = 'none';
     }
   });
 }
@@ -4006,10 +4001,16 @@ function initStructuredExperience() {
         seeBtn.classList.toggle('visible', editor.scrollHeight > EXP_COLLAPSED_H + 4);
       }
       let blurTimer = null;
+      let expandedViaClick = false;
       seeBtn.addEventListener('mousedown', e => e.preventDefault()); // prevent stealing focus from editor
-      seeBtn.addEventListener('click', e => { e.preventDefault(); expanded ? collapse() : expand(); });
+      seeBtn.addEventListener('click', e => {
+        e.preventDefault();
+        if (expanded) { expandedViaClick = false; collapse(); }
+        else { expandedViaClick = true; expand(); }
+      });
       editor.addEventListener('focus', expand);
       editor.addEventListener('blur', () => {
+        if (expandedViaClick) return;
         blurTimer = setTimeout(() => {
           if (wrap.contains(document.activeElement)) return;
           collapse();
@@ -5389,11 +5390,18 @@ function initRichTextSeeMore() {
     }
 
     let blurTimer = null;
+    let expandedViaClick = false; // when user clicks "See more", don't auto-collapse on blur
     btn.addEventListener('mousedown', e => e.preventDefault()); // prevent stealing focus from editor
-    btn.addEventListener('click', e => { e.preventDefault(); expanded ? collapse() : expand(); });
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      if (expanded) { expandedViaClick = false; collapse(); }
+      else { expandedViaClick = true; expand(); }
+    });
     editor.addEventListener('focus', () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } expand(); });
     // Delay collapse on blur — don't collapse if focus moved to toolbar or within the editor wrap
+    // Skip collapse entirely if expanded via explicit "See more" click
     editor.addEventListener('blur', () => {
+      if (expandedViaClick) return;
       blurTimer = setTimeout(() => {
         if (wrap.contains(document.activeElement)) return;
         collapse();

@@ -78,6 +78,11 @@ export const DEFAULT_PIPELINE_CONFIG = {
     scoutResultCount: 3,
     scoutCacheDays: 0, // 0 = indefinite — user force-refreshes via Research button
     autoResearch: false,
+  },
+  chatFallback: {
+    enabled: true,             // allow fallback at all
+    allowExpensive: false,     // if false, only cheap models (haiku, gpt-4.1-mini)
+    showIndicator: true,       // show clear indicator when fallback used
   }
 };
 
@@ -138,6 +143,7 @@ export function initPipelineConfig() {
       if (d.pipelineConfig.aiModels) state.pipelineConfig.aiModels = { ...DEFAULT_PIPELINE_CONFIG.aiModels, ...d.pipelineConfig.aiModels };
       if (d.pipelineConfig.photos) state.pipelineConfig.photos = { ...DEFAULT_PIPELINE_CONFIG.photos, ...d.pipelineConfig.photos };
       if (d.pipelineConfig.scoring) state.pipelineConfig.scoring = { ...DEFAULT_PIPELINE_CONFIG.scoring, ...d.pipelineConfig.scoring };
+      if (d.pipelineConfig.chatFallback) state.pipelineConfig.chatFallback = { ...DEFAULT_PIPELINE_CONFIG.chatFallback, ...d.pipelineConfig.chatFallback };
     }
     // One-time migration: reset AI models that still have old defaults
     const oldDefaults = {

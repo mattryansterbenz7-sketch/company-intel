@@ -317,6 +317,9 @@
         </ul>
       </div>
 
+      <h3 class="sub">Sidepanel home — Tasks view</h3>
+      <p class="body">The sidepanel home tab shows a task list across your pipeline entries. <strong>Priority filters</strong> (All / High / Normal / Low) and <strong>date filters</strong> (All dates / Overdue / Today / Upcoming) filter the task list. Both filters work correctly and their state persists at module level for the duration of the sidepanel session — switching tabs and returning will restore the last-used filters.</p>
+
       <div class="callout callout-tip">
         <span class="callout-icon">💡</span>
         <span>The <strong>View in CRM</strong> link appears after you save a company. It opens the full-screen company view for that entry.</span>
@@ -420,7 +423,7 @@
       <p class="body">Stages are fully customizable in Setup. Custom stages persist in <code>chrome.storage.local</code> as <code>opportunityStages</code>.</p>
 
       <h3 class="sub">Job Match scoring</h3>
-      <p class="body">When you save a job posting from the sidepanel, Claude AI scores the role (1–10) against your background, preferred roles, work arrangement, and salary floor set in Career OS. The score and a breakdown (strong fits, red flags, verdict) are saved on the entry and shown on Kanban cards.</p>
+      <p class="body">When you save a job posting, Coop scores the role (1–10) across five weighted dimensions: Qualification Fit, Role Fit, Culture Fit, Company Fit, and Comp Fit. Scoring uses all available profile sources (resume, experience entries, skill tags, Story Time, Role/Co ICP, prefs) plus job description, firmographics, reviews, and interaction context (emails, meetings, notes when present). Scores are displayed to 1 decimal place (e.g. 8.4/10). See <a href="#scoring-system">How Scoring Works</a> for the full breakdown.</p>
 
       <h3 class="sub">Job snapshot — Perks vs Salary</h3>
       <p class="body">When a job posting is saved, LinkedIn chips are scanned and classified: amounts matching salary patterns (<code>$120K</code>, <code>$120,000</code>) go to <strong>Base Salary</strong>; chip text containing words like <em>stipend, allowance, reimbursement,</em> or <em>subsidy</em> is classified as a <strong>Perk</strong> instead. Perks appear as teal chips below the salary row so items like "$50/mo internet stipend" are never confused with base compensation.</p>
@@ -481,7 +484,8 @@
       <h3 class="sub">Apply Queue (default)</h3>
       <div class="info-block">
         <ul>
-          <li><strong>One opportunity at a time</strong> &mdash; full card with score, breakdown, qualifications, and Coop's verdict</li>
+          <li><strong>One opportunity at a time</strong> &mdash; full card with score, 5-dim breakdown, qualification list, flags with evidence, and Coop's verdict</li>
+          <li><strong>Qualification display</strong> &mdash; met (&check; green), partial (~ amber), unmet (&times; red), "not in profile" (&times; red, italic label — treated as unmet, no credit). The <strong>Add to experience ↗</strong> button appears on any unmet/not-in-profile item so you can fill the gap in Career OS and re-score.</li>
           <li><strong>Pass</strong> sends to Closed/DQ; <strong>Interested</strong> moves it forward in the pipeline</li>
           <li><strong>Open Application</strong> opens the original job URL in a new tab and <em>auto-binds Coop in the sidepanel to that opportunity</em>, so when you start filling out the form Coop already has the full context loaded</li>
         </ul>
@@ -819,46 +823,50 @@
     <div class="doc-section">
       <span class="doc-section-anchor" id="qualifications"></span>
       <div class="doc-section-title">Qualification Matching</div>
-      <span class="pill pill-green">New</span>
+      <span class="pill pill-green">Updated Apr 13</span>
 
-      <p class="body">When Coop scores a job, he now extracts up to 10 specific qualifications from the posting and matches each one against your resume, skills, and experience.</p>
+      <p class="body">When Coop scores a job, it extracts every requirement from the posting — from "Requirements", "What We're Looking For", "Nice to Have", and responsibilities that imply skills — and matches each one against all your profile sources: Resume (from uploaded file), structured experience entries, experience section text, skill tags, Story Time career profile summary, Target Role ICP, and Target Company ICP.</p>
 
       <div class="doc-screenshot">
         <div class="doc-screenshot-icon">✅</div>
         Qualification drawer auto-expanded showing met/partial/unmet items with evidence
       </div>
 
-      <h3 class="sub">How it works</h3>
-      <p class="body">Each qualification is classified as:</p>
+      <h3 class="sub">Status values</h3>
+      <p class="body">Each qualification gets one of four statuses:</p>
       <div class="info-block">
-        <ul style="font-size:13px;color:#516f90;line-height:1.8;">
-          <li><strong style="color:#00BDA5;">&#x2713; Met</strong> — clear match found in your background</li>
-          <li><strong style="color:#d97706;">&#x25D0; Partial</strong> — related experience but not exact</li>
-          <li><strong style="color:#f87171;">&#x2717; Unmet</strong> — no evidence in your profile</li>
-          <li><strong style="color:#94a3b8;">? Unknown</strong> — can't determine from available info</li>
+        <ul style="font-size:13px;line-height:1.8;">
+          <li><strong style="color:#16a34a;">&#x2713; Met</strong> (green) — clear evidence found in your profile. Full credit in score.</li>
+          <li><strong style="color:#d97706;">~ Partial</strong> (amber) — related experience but with a gap. Half credit in score.</li>
+          <li><strong style="color:#dc2626;">&#x2717; Unmet</strong> (red) — explicitly not found in your background. No credit.</li>
+          <li><strong style="color:#dc2626;">&#x2717; Not in profile</strong> (red, label shown in italics) — the AI could not find evidence in <em>any</em> profile source. Treated exactly like Unmet: no credit. This is not a neutral state — it counts against you. Fix it by updating your Experience or Skills sections, then re-score.</li>
         </ul>
       </div>
 
-      <p class="body">Each qualification also shows its importance level (<span class="pill pill-coral" style="font-size:10px;">required</span> <span class="pill pill-blue" style="font-size:10px;">preferred</span> <span class="pill pill-gray" style="font-size:10px;">bonus</span>) and evidence from your background.</p>
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ</span>
+        <span><strong>"Not in profile"</strong> means the AI checked your resume, experience entries, experience text, skill tags, Story Time summary, Role ICP, and Company ICP and found no relevant evidence. It is not "unknown" in the neutral sense — it is treated as unmet. Adding the relevant experience or skills to your profile, then re-scoring, will resolve it.</span>
+      </div>
+
+      <h3 class="sub">Score formula</h3>
+      <p class="body">The qualification score is computed deterministically in JavaScript — <strong>not</strong> by the AI:</p>
+      <div class="info-block">
+        <p style="font-family:monospace;font-size:13px;line-height:2;">(met &times; 1 + partial &times; 0.5) / total &times; 10 = qualification score (0–10)</p>
+        <ul style="font-size:13px;line-height:1.8;">
+          <li>Comp-related qualifications (salary, OTE, equity, bonus, stock) are filtered out of this count — comp has its own dedicated dimension.</li>
+          <li>Scores are displayed to 1 decimal place (e.g. 7.3/10).</li>
+          <li>If no qualifications are identified, the AI's raw <code>qualificationFit</code> estimate is used as a fallback.</li>
+        </ul>
+      </div>
 
       <h3 class="sub">Where to find it</h3>
-      <p class="body">In the sidepanel job opportunity section, look for the collapsible <strong>"Qualifications (N/M met)"</strong> section below Green/Red Flags. Also visible on the Opportunity detail page.</p>
+      <p class="body">In the Apply Queue card, click the <strong>Qualifications</strong> tab in the score breakdown toggles. In the sidepanel, look for the collapsible <strong>"Qualifications (N/M met)"</strong> section. Also visible on the Opportunity detail page.</p>
 
       <h3 class="sub">"See why" inline expand</h3>
       <p class="body">Each opportunity card has a <strong>See why</strong> toggle that expands the full qualification list inline &mdash; no modal &mdash; with status icon, importance, and Coop's evidence for each item.</p>
 
       <h3 class="sub">Per-requirement corrections</h3>
-      <p class="body">For any qualification, you can tell Coop:</p>
-      <div class="info-block">
-        <ul style="font-size:13px;line-height:1.8;">
-          <li><strong>I meet this</strong> &mdash; flips to Met and writes the correction to learned insights</li>
-          <li><strong>Not relevant</strong> &mdash; drops the requirement entirely from this role</li>
-          <li><strong>Wrong evidence</strong> &mdash; tells Coop the supporting evidence he found doesn't apply, and asks for the right one</li>
-        </ul>
-      </div>
-
-      <h3 class="sub">Re-score with corrections</h3>
-      <p class="body">After making one or more corrections, hit <strong>Re-score with corrections</strong> on the card. Coop re-runs scoring with your overrides applied, so you can immediately see the updated overall score and breakdown.</p>
+      <p class="body">For any qualification marked as unmet or "not in profile", click the <strong>Add to experience ↗</strong> button to jump directly to the relevant Career OS section where you can fill in the missing detail. After updating your profile, re-score to see the correction reflected.</p>
 
       <h3 class="sub">Curation</h3>
       <p class="body">Click the <strong>&#x00D7;</strong> button on any qualification to dismiss it. Dismissed qualifications show as strikethrough and persist across sessions.</p>
@@ -868,21 +876,21 @@
     <div class="doc-section">
       <span class="doc-section-anchor" id="score-breakdown"></span>
       <div class="doc-section-title">Score Breakdown</div>
-      <span class="pill pill-green">New</span>
+      <span class="pill pill-green">Updated Apr 13</span>
 
-      <p class="body">Every job match score includes a visual breakdown showing the five weighted dimensions. Each is scored 1-10 and displayed as a colored horizontal bar — green (7+), amber (4-6), red (1-3):</p>
+      <p class="body">Every job match score includes a visual breakdown showing the five weighted dimensions. Each is scored 1-10 and displayed to <strong>1 decimal place</strong> (e.g. 8.9/10) as a colored horizontal bar — green (7+), amber (4-6), red (1-3):</p>
 
       <div class="info-block">
         <ul style="font-size:13px;color:#516f90;line-height:1.8;">
-          <li><strong>Qualification (20%)</strong> — deterministic from met/partial/unmet requirement counts</li>
-          <li><strong>Role Fit (20%)</strong> — flag-based: role type, seniority, scope alignment</li>
-          <li><strong>Culture Fit (25%)</strong> — flag-based: leadership style, remote culture, growth signals</li>
-          <li><strong>Company Fit (20%)</strong> — firmographic signals: stage, industry, product-market fit</li>
-          <li><strong>Comp Fit (15%)</strong> — base/OTE vs your floor and strong-offer thresholds</li>
+          <li><strong>Qualification (20%)</strong> — deterministic: <code>(met + partial&times;0.5) / total &times; 10</code>. Comp requirements excluded. Score to 1 decimal.</li>
+          <li><strong>Role Fit (20%)</strong> — flag-based: role type, seniority, scope alignment. Baseline 5.0 &plusmn; severity&times;0.5 per fired flag.</li>
+          <li><strong>Culture Fit (25%)</strong> — flag-based: leadership style, remote culture, growth signals. Uses Glassdoor/RepVue/Reddit reviews. Interaction context (emails, meetings) weighted heavily when available.</li>
+          <li><strong>Company Fit (20%)</strong> — firmographic signals: stage, industry, product-market fit. Baseline 5.0 &plusmn; severity&times;0.5 per fired flag.</li>
+          <li><strong>Comp Fit (15%)</strong> — base/OTE vs your floor and strong-offer thresholds. Fixed structural deltas: above_strong +2.5, above_floor +1.5, below_floor &minus;2.5 (base); above_strong +2.0, above_floor +1.0, below_floor &minus;2.0 (OTE).</li>
         </ul>
       </div>
 
-      <p class="body">The weighted math row at the bottom of queue cards shows the exact formula: <code>Q×20 + R×20 + Cu×25 + Co×20 + Comp×15 = X/100 → 1-10</code>. Find the breakdown in the collapsible <strong>"Score Breakdown"</strong> section in the sidepanel, opportunity detail page, and Apply Queue cards.</p>
+      <p class="body">The weighted math row at the bottom of queue cards shows the exact formula: <code>Q&times;20 + R&times;20 + Cu&times;25 + Co&times;20 + Comp&times;15 = X/100 &rarr; 1-10</code>. Find the breakdown in the collapsible <strong>"Score Breakdown"</strong> section in the sidepanel, opportunity detail page, and Apply Queue cards.</p>
 
       <h3 class="sub">Flag curation</h3>
       <p class="body">Individual red flags can be dismissed in the score modal (Kanban card view). Click <strong>&#x00D7;</strong> on any red flag to mark it as wrong/overblown. Dismissed flags are excluded from re-scoring — Coop learns from your feedback.</p>
@@ -1154,9 +1162,14 @@
     <div class="doc-section">
       <span class="doc-section-anchor" id="scoring-system"></span>
       <div class="doc-section-title">How Scoring Works</div>
-      <span class="pill pill-green">Updated Apr 11</span>
+      <span class="pill pill-green">Updated Apr 13</span>
 
       <p class="body">Coop uses a <strong>deterministic 5-dimension scoring model</strong>. The AI evaluates evidence and identifies which of your configured flags fire; all scoring math happens in JavaScript &mdash; no black-box LLM scores. You can verify every number.</p>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ</span>
+        <span><strong>Default scoring model:</strong> Claude Haiku. Approximate cost: $0.005&ndash;0.015 per score including reviews and scout. Configurable in Data Pipeline &amp; Usage settings.</span>
+      </div>
 
       <!-- Scoring pipeline flow diagram -->
       <div style="margin:24px 0;">
@@ -1169,9 +1182,9 @@
           <text x="120" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#FF7A59" font-family="-apple-system,sans-serif">1. DATA GATHERING</text>
           <text x="35" y="88" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Job Description (page-scraped)</text>
           <text x="35" y="104" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">LinkedIn Firmographics</text>
-          <text x="35" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Resume + Skills + Experience</text>
-          <text x="35" y="136" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Configured Flags (green/red)</text>
-          <text x="35" y="152" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Scout fallback (if context thin)</text>
+          <text x="35" y="120" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Resume + Experience + Skills</text>
+          <text x="35" y="136" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Story Time, Role/Co ICP, prefs</text>
+          <text x="35" y="152" font-size="10" fill="#516f90" font-family="-apple-system,sans-serif">Emails, meetings, notes (if any)</text>
 
           <!-- Arrow 1→2 -->
           <path d="M220 106 L250 106" fill="none" stroke="#FF7A59" stroke-width="2" marker-end="url(#arrow)"/>
@@ -1223,22 +1236,23 @@
       <h3 class="sub">The five dimensions</h3>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Qualification Fit (20%)</strong> &mdash; AI evaluates your resume, skills, and experience against extracted requirements. Returns a <code>qualificationFit</code> score (1&ndash;10) directly. The qualification drawer auto-expands so you always see what was matched.</li>
+          <li><strong>Qualification Fit (20%)</strong> &mdash; <strong>Deterministic</strong>: the AI extracts every requirement from the JD and classifies each as <em>met</em>, <em>partial</em>, <em>unmet</em>, or <em>unknown</em>. The score is computed in JavaScript: <code>(met&times;1 + partial&times;0.5) / total &times; 10</code>, rounded to 1 decimal place. Comp-related qualifications are excluded from this count. The qualification drawer auto-expands so you always see what was matched. Profile sources checked: Resume, structured experience entries, experience text, skill tags, Story Time career profile summary, Target Role ICP, Target Company ICP, and all prefs fields.</li>
           <li><strong>Role Fit (20%)</strong> &mdash; Starts at 5.0 baseline. Each fired green flag adds <code>severity &times; 0.5</code>; each red flag subtracts. Flags are your configured "Attracted to" and "Dealbreakers" assigned to the <code>roleFit</code> dimension. Clamped 1&ndash;10.</li>
-          <li><strong>Culture Fit (25%)</strong> &mdash; Same flag-based formula. Detects signals like leadership style, remote culture, growth mindset from the posting and company context.</li>
+          <li><strong>Culture Fit (25%)</strong> &mdash; Same flag-based formula. Uses Glassdoor, RepVue, Reddit, and Blind review snippets — auto-fetched from Serper if not cached. The AI prompt explicitly requires referencing employee ratings: &ge;4.0 = positive, 3.0&ndash;3.9 = neutral/mixed, &lt;3.0 = risk. Interaction context (emails, meetings, notes) is weighted heavily — "live signals beat posting text."</li>
           <li><strong>Company Fit (20%)</strong> &mdash; Same flag-based formula. Firmographic data (employees, funding, industry) comes from LinkedIn page scraping and the JD's "About us" section. <code>scoutCompany()</code> only runs when this context is thin.</li>
           <li><strong>Comp Fit (15%)</strong> &mdash; Flag-based like the others, plus <strong>structural adjustments</strong>: base and OTE are compared against your floor and strong-offer thresholds, adding fixed deltas (+2.5 for above strong, &minus;2.5 for below floor, etc.).</li>
         </ul>
       </div>
 
       <h3 class="sub">The overall score</h3>
-      <p class="body">Weighted sum: <code>Q&times;20 + R&times;20 + Cu&times;25 + Co&times;20 + Comp&times;15 = X/100 &rarr; 1-10</code>. The math row at the bottom of every queue card shows the exact formula so you can verify the number. After computation, the excitement modifier may nudge the score toward your explicit rating if you've starred the opportunity.</p>
+      <p class="body">Weighted sum: <code>Q&times;20 + R&times;20 + Cu&times;25 + Co&times;20 + Comp&times;15 = X/100 &rarr; 1-10</code>. Dimension scores are displayed to <strong>1 decimal place</strong> (e.g. 8.9/10). The math row at the bottom of every queue card shows the exact formula so you can verify the number. After computation, the excitement modifier may nudge the score toward your explicit rating if you've starred the opportunity.</p>
 
       <h3 class="sub">Job description capture &amp; backfill</h3>
       <p class="body">On LinkedIn and ATS pages, the content script extracts the job description asynchronously (800ms "see more" click, mutation observer, up to 8000 chars). If the description hasn't arrived by the time you save, the sidepanel <strong>re-requests it from the content script</strong> and patches storage before triggering scoring. A second backfill runs if the JD arrives late after save. This eliminates the race condition that previously caused "No requirements identified" on fast saves.</p>
 
       <h3 class="sub">Company intelligence in scoring</h3>
       <p class="body">The scoring prompt receives the full job description plus all LinkedIn-scraped data (employee count, industry, HQ, founded year, seniority level, job function, required skills, applicant count, posted date, repost flag) plus <code>scoutCompany()</code> context &mdash; two quick Serper searches for company overview and employee reviews/culture (Glassdoor, RepVue, Reddit). Scout always runs unless full research intelligence already exists on the entry. Scout results are cached indefinitely per company — subsequent rescores of the same company hit the cache instantly. Cost: ~$0.002 per new company.</p>
+      <p class="body">Reviews are also auto-fetched during scoring: if the entry has no reviews yet, Coop runs a Serper search for <code>"Company" reviews culture glassdoor repvue reddit</code>, extracts up to 5 results with numeric ratings, and persists them on the entry so future rescores don't re-fetch. Numeric ratings are surfaced explicitly (e.g. "4.2/5 (Glassdoor)") so the culture fit AI prompt can reference them directly.</p>
 
       <h3 class="sub" id="icp-flags">ICP → flags auto-sync</h3>
       <p class="body">Coop auto-generates green and red flags from your <strong>Role ICP</strong>, <strong>Company ICP</strong>, and <strong>Work arrangement</strong> settings in Career OS. Every time you save those sections, the generated flags are refreshed in your scoring config. You don't need to manually recreate them.</p>
@@ -1270,16 +1284,16 @@
       </div>
 
       <h3 class="sub">Qualification matching</h3>
-      <p class="body">The AI extracts 3&ndash;8 key requirements from the job description and classifies each against your profile:</p>
+      <p class="body">The AI extracts every requirement mentioned in the job description and classifies each against <strong>all</strong> your profile sources (resume, structured experience entries, experience text, skill tags, Story Time summary, Role ICP, Company ICP, and prefs):</p>
       <div class="info-block">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>Met</strong> (&check;) &mdash; Clear evidence in your profile/resume</li>
-          <li><strong>Partial</strong> (&half;) &mdash; Related experience but with a gap</li>
-          <li><strong>Unmet</strong> (&cross;) &mdash; No evidence in your background</li>
-          <li><strong>Unknown</strong> (?) &mdash; Can't determine from available info (hidden in UI)</li>
+          <li><strong>Met</strong> (&#x2713; green) &mdash; Full credit (1.0). Clear evidence in any profile source.</li>
+          <li><strong>Partial</strong> (~ amber) &mdash; Half credit (0.5). Related experience but with a gap.</li>
+          <li><strong>Unmet</strong> (&#x2717; red) &mdash; No credit. Explicitly absent from your background.</li>
+          <li><strong>Unknown / "not in profile"</strong> (&#x2717; red, labeled in italics) &mdash; No credit. The AI found no evidence in <em>any</em> profile source. Treated identically to unmet. Fix by updating Experience or Skills in Career OS, then re-score.</li>
         </ul>
       </div>
-      <p class="body">Comp-related qualifications (salary, OTE, equity) are filtered out of the qualification drawer since comp has its own dimension.</p>
+      <p class="body">Score formula: <code>(met&times;1 + partial&times;0.5) / total &times; 10</code> — computed deterministically in JavaScript, to 1 decimal place. Comp-related qualifications (salary, OTE, equity, bonus, stock, commission) are filtered out of this count since comp has its own dimension.</p>
 
       <h3 class="sub">Hard disqualification (DQ)</h3>
       <p class="body">A Hard DQ is only honored when a <strong>severity-5 dealbreaker</strong> actually fired with matching evidence. If the AI flags a DQ but no sev-5 dealbreaker matches, the DQ is suppressed &mdash; preventing false disqualifications from hallucinated reasoning. Hard DQ caps the overall score at 4.</p>
@@ -1298,7 +1312,7 @@
       <p class="body">Scoring runs <strong>once on save</strong> (automatic) and <strong>on manual re-score</strong> (scorecard button, score match button, or batch re-score). Three optional auto-rescore triggers can be enabled in <strong>Data Pipeline &amp; Usage</strong> (all OFF by default): profile changes, salary/work pref changes, and new interaction data (emails, meetings, transcripts). Each trigger only re-scores opportunities in stages you select. If interaction data arrives while an entry is in an excluded stage, moving it to an eligible stage later will retroactively trigger a rescore.</p>
 
       <h3 class="sub">Unified scoring model</h3>
-      <p class="body">All scoring goes through a <strong>single path</strong> (<code>scoreOpportunity</code> via <code>SCORE_OPPORTUNITY</code>). One AI call evaluates the job description, company context, your profile, and any interaction data (emails, meetings, notes) in a single pass. The same call produces the score, role brief, conversation insights, job snapshot (salary, work arrangement, equity), and qualification breakdown. No competing functions, no conflicting writes. The scoring model is configurable in <strong>Data Pipeline &amp; Usage</strong> settings (defaults to Haiku for cost efficiency).</p>
+      <p class="body">All scoring goes through a <strong>single path</strong> (<code>scoreOpportunity</code> via <code>SCORE_OPPORTUNITY</code>). One AI call evaluates the job description, company context, your full profile (resume, structured experience entries, experience text, skill tags, Story Time summary, Role ICP, Company ICP, and all prefs), and any interaction data (emails, meetings, notes) in a single pass. When interaction context exists the AI is instructed to weight it heavily — <em>"live signals beat posting text"</em>. The same call produces the score, role brief, conversation insights (when emails/meetings exist), job snapshot (salary, work arrangement, equity), and qualification breakdown. No competing functions, no conflicting writes. The scoring model is configurable in <strong>Data Pipeline &amp; Usage</strong> settings (defaults to Haiku for cost efficiency, approximately $0.005&ndash;0.015 per score).</p>
 
       <!-- Two-layer scoring diagram -->
       <div style="margin:20px 0;">
@@ -1337,9 +1351,9 @@
           <!-- Box: Your profile -->
           <rect x="312" y="50" width="128" height="120" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
           <text x="376" y="69" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ea580c" font-family="-apple-system,sans-serif">YOUR PROFILE</text>
-          <text x="376" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Resume &amp; skills</text>
-          <text x="376" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Salary floors</text>
-          <text x="376" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Work arrangement</text>
+          <text x="376" y="87" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Resume, experience, skills</text>
+          <text x="376" y="101" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Story Time, Role/Co ICP</text>
+          <text x="376" y="115" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Salary floors, work arrang.</text>
           <text x="376" y="129" text-anchor="middle" font-size="9" fill="#64748b" font-family="-apple-system,sans-serif">Green flags + dealbreakers</text>
           <text x="376" y="155" text-anchor="middle" font-size="8.5" fill="#94a3b8" font-style="italic" font-family="-apple-system,sans-serif">from Career OS / Preferences</text>
 
@@ -1375,12 +1389,12 @@
 
       <div class="info-block" style="margin-top:8px;">
         <ul style="font-size:13px;line-height:2;">
-          <li><strong>One unified scoring call.</strong> All context &mdash; job description, firmographics, flags, emails, meetings, transcripts, notes &mdash; feeds into a single AI call. No separate "deep fit" layer.</li>
+          <li><strong>One unified scoring call.</strong> All context &mdash; job description, firmographics, flags, full profile (resume, experience entries, experience text, skill tags, Story Time, Role/Co ICP, prefs), emails, meetings, transcripts, notes &mdash; feeds into a single AI call. No separate "deep fit" layer.</li>
           <li><strong>Scoring runs at save and on stage transitions.</strong> When you move an opportunity to a new pipeline stage, Coop re-scores with all accumulated context. Data from emails and meetings accumulates silently &mdash; the score catches up on the next stage change.</li>
           <li><strong>Manual Rescore always works.</strong> The "Refresh analysis" button fires a rescore using everything available, regardless of stage.</li>
           <li><strong>Rejected entries never auto-rescore.</strong> Moving to rejected skips the rescore trigger.</li>
           <li><strong>Produces role brief + conversation insights + job snapshot.</strong> The same call that scores also generates a structured role summary, extracts structured posting metadata (salary, work arrangement, equity, location), and when interaction data exists, a "From Conversations" narrative citing specifics from emails and meetings.</li>
-          <li><strong>Cost:</strong> ~$0.003&ndash;0.007 per score (one Haiku call). Scout adds ~$0.004 first time if no full research exists (cached indefinitely after).</li>
+          <li><strong>Cost:</strong> ~$0.005&ndash;0.015 per score (one Haiku call, plus review fetch if no cached reviews). Scout adds ~$0.002 first time if no full research exists (cached 7 days after, then re-fetched).</li>
         </ul>
       </div>
     </div>

@@ -739,7 +739,7 @@ function renderPanelBody(pid) {
         html += `
           <div class="p-score-row">
             <div>
-              <div class="p-score-num">${e.jobMatch.score}<span style="font-size:15px;color:#64748b;font-weight:400">/10</span></div>
+              <div class="p-score-num">${Number(e.jobMatch.score).toFixed(1)}<span style="font-size:15px;color:#64748b;font-weight:400">/10</span></div>
               <div class="p-score-sub">Match Score</div>
             </div>
             <span class="p-verdict-badge ${v.cls}">${v.label}</span>
@@ -797,8 +797,8 @@ function renderPanelBody(pid) {
         const metCount = quals.filter(q => q.status === 'met' && !q.dismissed).length;
         const reqCount = quals.filter(q => q.importance === 'required').length;
         const reqMetCount = quals.filter(q => q.importance === 'required' && q.status === 'met' && !q.dismissed).length;
-        const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '?' };
-        const iconColors = { met: '#00BDA5', partial: '#d97706', unmet: '#f87171', unknown: '#94a3b8' };
+        const icons = { met: '✓', partial: '◐', unmet: '✗', unknown: '✗' };
+        const iconColors = { met: '#00BDA5', partial: '#d97706', unmet: '#f87171', unknown: '#f87171' };
         const badgeColors = { required: '#f87171', preferred: '#d97706', bonus: '#94a3b8' };
         const badgeBgs = { required: 'rgba(248,113,113,0.1)', preferred: 'rgba(245,158,11,0.1)', bonus: 'rgba(148,163,184,0.1)' };
         const seeWhyLabel = expanded ? 'Hide details ▴' : 'See why ▾';

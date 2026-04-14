@@ -276,12 +276,12 @@ export async function scoreOpportunity(entryId) {
     entry.company ? `Company: ${entry.company}` : null,
     entry.jobTitle ? `Title: ${entry.jobTitle}` : null,
     entry.jobDescription ? `Job Description:\n${entry.jobDescription.slice(0, 4000)}` : null,
-    entry.jobSnapshot ? `Job Details: ${JSON.stringify(entry.jobSnapshot)}` : null,
+    entry.jobSnapshot ? `Job Details:\n${Object.entries(entry.jobSnapshot).filter(([,v]) => v != null && v !== '').map(([k,v]) => `- ${k}: ${v}`).join('\n')}` : null,
     firmoBlock,
     skillsBlock,
     postingBlock,
     companyContext ? `Company Intel (web search):\n${companyContext}` : null,
-    entry.intelligence ? `Company Intelligence:\n${typeof entry.intelligence === 'string' ? entry.intelligence : JSON.stringify(entry.intelligence)}` : null,
+    entry.intelligence ? `Company Intelligence:\n${typeof entry.intelligence === 'string' ? entry.intelligence : (entry.intelligence.eli5 || entry.intelligence.oneLiner || entry.intelligence.summary || Object.entries(entry.intelligence).filter(([k,v]) => v && typeof v === 'string').map(([k,v]) => `- ${k}: ${v}`).join('\n'))}` : null,
     reviewsBlock,
   ].filter(Boolean).join('\n\n');
 
@@ -294,28 +294,28 @@ export async function scoreOpportunity(entryId) {
   const hasInteractionContext = hasEmails || hasMeetings || hasNotes;
 
   if (hasEmails) {
-    interactionParts.push(`Email Threads (${entry.cachedEmails.length}):\n${entry.cachedEmails.slice(0, 15).map(e =>
-      `[${e.date || ''}] "${e.subject}" — ${e.from}${e.snippet ? '\n  ' + e.snippet.slice(0, 200) : ''}`
-    ).join('\n')}`);
+    interactionParts.push(`## Emails (${entry.cachedEmails.length})\n${entry.cachedEmails.slice(0, 15).map(e =>
+      `### ${e.subject || '(no subject)'}\nFrom: ${(e.from || '').replace(/<[^>]+>/, '').trim()} | Date: ${e.date || 'unknown'}${e.snippet ? '\n' + e.snippet.slice(0, 200) : ''}`
+    ).join('\n\n')}`);
   }
   if (entry.cachedMeetings?.length) {
-    interactionParts.push(`Meeting Transcripts (${entry.cachedMeetings.length} meetings):\n${entry.cachedMeetings.map(m =>
-      `--- ${m.title || 'Meeting'} | ${m.date || ''} ---\n${(m.summaryMarkdown || m.transcript || m.summary || '').slice(0, 3000)}`
+    interactionParts.push(`## Meetings (${entry.cachedMeetings.length})\n${entry.cachedMeetings.map(m =>
+      `### ${m.title || 'Meeting'}\nDate: ${m.date || 'unknown'}${(m.attendees || []).length ? ' | Attendees: ' + m.attendees.slice(0, 6).map(a => typeof a === 'string' ? a : (a.name || a.email || '')).join(', ') : ''}\n${(m.summaryMarkdown || m.transcript || m.summary || '').slice(0, 3000)}`
     ).join('\n\n')}`);
   }
   if (entry.cachedMeetingTranscript) {
-    interactionParts.push(`Meeting Notes:\n${entry.cachedMeetingTranscript.slice(0, 4000)}`);
+    interactionParts.push(`## Meeting Notes\n${entry.cachedMeetingTranscript.slice(0, 4000)}`);
   }
   if (hasNotes) {
-    interactionParts.push(`User Notes:\n${entry.notes.slice(0, 2000)}`);
+    interactionParts.push(`## User Notes\n${entry.notes.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000)}`);
   }
   if (hasContacts) {
-    interactionParts.push(`Known Contacts:\n${entry.knownContacts.map(c =>
-      `${c.name || ''}${c.title ? ' — ' + c.title : ''}${c.email ? ' <' + c.email + '>' : ''}`
+    interactionParts.push(`## Known Contacts\n${entry.knownContacts.map(c =>
+      `- **${c.name || 'Unknown'}**${c.title ? ' — ' + c.title : ''}${c.email ? ' <' + c.email + '>' : ''}`
     ).join('\n')}`);
   }
   const interactionBlock = interactionParts.length
-    ? `\n\n=== INTERACTION CONTEXT (emails, meetings, notes) ===\n${interactionParts.join('\n\n')}`
+    ? `\n\n# Interaction Context\n${interactionParts.join('\n\n')}`
     : '';
 
   // Build flags reference for AI — each configured flag with ID, dimension, severity

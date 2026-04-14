@@ -448,6 +448,24 @@
     @keyframes swipeLeft { to { opacity: 0; transform: translateX(-120%) rotate(-8deg); } }
     @keyframes swipeRight { to { opacity: 0; transform: translateX(120%) rotate(8deg); } }
 
+    /* In overlay (iframe): hide redundant header, fill space, scroll naturally */
+    body.in-overlay .header { display: none; }
+    body.in-overlay { background: var(--ci-bg-page); }
+    body.in-overlay .queue-main { padding: 24px 80px; overflow-y: auto; align-items: flex-start; }
+    .overlay-back-btn {
+      display: none; position: fixed; top: 12px; left: 16px; z-index: 20;
+      padding: 6px 14px; font-size: 13px; font-weight: 600; font-family: inherit;
+      color: var(--ci-text-secondary); background: var(--ci-bg-overlay);
+      border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full);
+      box-shadow: var(--ci-shadow-sm); cursor: pointer; transition: all 0.15s;
+    }
+    .overlay-back-btn:hover { color: var(--ci-accent-primary); border-color: var(--ci-accent-primary); }
+    body.in-overlay .overlay-back-btn { display: flex; align-items: center; gap: 6px; }
+    body.in-overlay .queue-card.swipe-left  { animation: swipeLeftOverlay  0.28s ease forwards; }
+    body.in-overlay .queue-card.swipe-right { animation: swipeRightOverlay 0.28s ease forwards; }
+    @keyframes swipeLeftOverlay  { to { opacity: 0; transform: translateX(-30px) scale(0.88) rotate(-5deg); } }
+    @keyframes swipeRightOverlay { to { opacity: 0; transform: translateX(30px)  scale(0.88) rotate(5deg);  } }
+
     /* Swipe overlay labels */
     .swipe-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
     .swipe-label {
@@ -513,6 +531,7 @@
     <button id="btn-mock-mode" style="margin-left:8px;padding:4px 10px;font-size:11px;font-weight:700;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);cursor:pointer;transition:all 0.15s;" title="Enter mock mode — rescore uses fixture data, no API calls">Dev</button>
   </div>
 
+  <button class="overlay-back-btn" id="overlay-back-btn" onclick="window.parent.postMessage({type:'COOP_QUEUE_CLOSE'},'*')">&#8592; Pipeline</button>
   <div class="queue-main" id="queue-main"></div>
 
   <script src="ui-utils.js"></script>

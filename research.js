@@ -85,7 +85,7 @@ export async function enrichFromWebResearch(company, domain, linkedinUrl) {
           system: 'You are a JSON-only data extractor. Respond with valid JSON only.',
           messages: [{ role: 'user', content: `From these search results about "${company}", extract: industry, employee count, funding, founded year. Return JSON only: {"industry":"...","employees":"...","funding":"...","founded":"..."}\n\n${snippets.slice(0, 2000)}` }],
           max_tokens: 300
-        });
+        }, 'enrich');
         if (aiResult.ok && aiResult.text) {
           let t = aiResult.text.replace(/```json|```/g, '').trim();
           const lastBrace = t.lastIndexOf('}');

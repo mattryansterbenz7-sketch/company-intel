@@ -1069,6 +1069,13 @@ function renderCostDashboard(usage) {
     return d === today;
   });
 
+  // Show the date on "today" section headers so the numbers have context
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  document.querySelectorAll('.cost-section-header').forEach(el => {
+    if (el.textContent.includes('Operation')) el.textContent = `Breakdown by Operation \u2014 ${todayLabel}`;
+    else if (el.textContent.includes('Provider')) el.textContent = `Breakdown by Provider \u2014 ${todayLabel}`;
+  });
+
   renderCostSummary(usage, log);
   renderCostOpBreakdown(log);
   renderCostProviders(usage, log);
@@ -1087,8 +1094,11 @@ function renderCostSummary(usage, todayLog) {
   }
 
   const resetDate = usage.lastDayReset || costTodayStr();
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const totalLabelEl = document.getElementById('cost-sum-total-label');
+  if (totalLabelEl) totalLabelEl.textContent = `Today \u2014 ${todayLabel}`;
   const detailEl = document.getElementById('cost-sum-total-detail');
-  if (detailEl) detailEl.textContent = 'Since ' + resetDate;
+  if (detailEl) detailEl.textContent = totalCalls + ' API calls';
 
   const callsEl = document.getElementById('cost-sum-calls');
   if (callsEl) callsEl.textContent = totalCalls;
@@ -1171,7 +1181,7 @@ function renderCostProviders(usage, todayLog) {
     const name = COST_PROVIDER_NAMES[key] || key;
     const color = COST_PROVIDER_COLORS[key] || '#999';
     const cost = pd.costToday || 0;
-    const requests = pd.totalRequests || 0;
+    const requests = pd.requestsToday || 0;
     const tokensIn = pd.tokensToday?.input || 0;
     const tokensOut = pd.tokensToday?.output || 0;
     const errors = pd.errors || {};
@@ -1194,11 +1204,13 @@ function renderCostProviders(usage, todayLog) {
     if ((errors.count401 || 0) > 0) errorHtml += `<div class="cost-provider-error">Auth error: ${errors.count401} x 401 errors</div>`;
     if ((errors.countOther || 0) > 0) errorHtml += `<div class="cost-provider-error">Other errors: ${errors.countOther}</div>`;
 
+    const totalReqs = pd.totalRequests || 0;
     return `<div class="cost-provider-card">
       <div class="cost-provider-name"><span class="cost-provider-dot" style="background:${color}"></span>${costEscapeHtml(name)}</div>
       <div class="cost-provider-stat"><span class="cost-provider-stat-label">Calls today</span><span class="cost-provider-stat-value">${requests}</span></div>
       <div class="cost-provider-stat"><span class="cost-provider-stat-label">Tokens in / out</span><span class="cost-provider-stat-value">${costFmtTokens(tokensIn)} / ${costFmtTokens(tokensOut)}</span></div>
       <div class="cost-provider-stat"><span class="cost-provider-stat-label">Cost today</span><span class="cost-provider-stat-value">${costFmt(cost)}</span></div>
+      <div class="cost-provider-stat" style="color:var(--ci-text-tertiary);font-size:12px;"><span class="cost-provider-stat-label">All time</span><span class="cost-provider-stat-value">${totalReqs.toLocaleString()} calls</span></div>
       ${modelsHtml}
       ${errorHtml}
     </div>`;

@@ -16,7 +16,7 @@ export async function fetchApolloData(domain, companyName) {
       'x-api-key': state.APOLLO_KEY
     }
   });
-  trackApiCall('apollo', res.clone());
+  trackApiCall('apollo', res.clone(), undefined, 'enrich');
   if (res.status === 429 || res.status === 402 || res.status === 403) {
     console.warn('[Apollo] Credits exhausted (HTTP', res.status, ')');
     state._apolloExhausted = true;
@@ -48,7 +48,7 @@ export async function fetchLeaderPhoto(name, company) {
         headers: { 'Content-Type': 'application/json', 'X-API-KEY': state.SERPER_KEY },
         body: JSON.stringify({ q: name + ' ' + company, num: 1 })
       });
-      trackApiCall('serper', res.clone());
+      trackApiCall('serper', res.clone(), undefined, 'search');
       if (res.status === 429 || res.status === 402 || res.status === 403) {
         console.warn('[Serper] Credits exhausted (HTTP', res.status, ') — photo fetch');
         state._serperExhausted = true;
@@ -85,7 +85,7 @@ export async function fetchSerperResults(query, num = 5) {
     },
     body: JSON.stringify({ q: query, num })
   });
-  trackApiCall('serper', res.clone());
+  trackApiCall('serper', res.clone(), undefined, 'search');
   if (res.status === 429 || res.status === 402 || res.status === 403) {
     console.warn('[Serper] Credits exhausted (HTTP', res.status, ')');
     state._serperExhausted = true;
@@ -137,6 +137,7 @@ export async function fetchClaudeWebSearch(query, num = 5) {
         messages: [{ role: 'user', content: `Search the web for: ${query}\n\nReturn the most relevant results.` }]
       })
     });
+    trackApiCall('anthropic', res.clone(), 'claude-haiku-4-5-20251001', 'search');
     if (!res.ok) { console.warn('[ClaudeSearch] API error:', res.status); return []; }
     const data = await res.json();
     const results = [];
@@ -174,6 +175,7 @@ export async function fetchOpenAIWebSearch(query, num = 5) {
         input: `Search the web for: ${query}\n\nReturn the most relevant results with titles, URLs, and snippets.`
       })
     });
+    trackApiCall('openai', res.clone(), 'gpt-4.1-mini', 'search');
     if (!res.ok) {
       const errBody = await res.text();
       console.warn('[OpenAISearch] API error:', res.status, errBody.slice(0, 300));
@@ -295,7 +297,7 @@ Respond with a JSON object only, no markdown:
     system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.',
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 2000
-  });
+  }, 'research');
 
   if (!aiResult.ok) {
     const fallback = await chatWithFallback({
@@ -303,7 +305,8 @@ Respond with a JSON object only, no markdown:
       system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2000,
-      tag: 'Research'
+      tag: 'Research',
+      opTag: 'research',
     });
     if (fallback.error) throw new Error('AI is busy — too many requests. Try again in a moment.');
     const fbClean = fallback.reply.replace(/```json|```/g, '').trim();
@@ -498,7 +501,8 @@ export async function handleQuickEnrichFirmo(message) {
     system: 'Extract company firmographics from search snippets. Return JSON only.',
     messages: [{ role: 'user', content: `From these search results about "${company}", extract ONLY these fields: ${stillMissing.join(', ')}. Return JSON: {"employees":"e.g. 51-200 or ~150","funding":"e.g. Series B, $30M","industry":"e.g. B2B SaaS","linkedin":"e.g. https://linkedin.com/company/warmly-ai"}. Only include fields you can confidently extract.\n\n${snippets.slice(0, 2000)}` }],
     max_tokens: 200,
-    tag: 'QuickEnrich'
+    tag: 'QuickEnrich',
+    opTag: 'enrich',
   });
 
   if (reply) {

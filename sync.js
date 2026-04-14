@@ -200,7 +200,8 @@ Then write the full role brief below.`;
       system: 'You are a role intelligence analyst. Write structured, factual briefs in markdown.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 3000,
-      tag: 'RoleBrief'
+      tag: 'RoleBrief',
+      opTag: 'scoring',
     });
     if (result.error) return { error: result.error };
     let briefFields = null;
@@ -253,7 +254,7 @@ IMPORTANT: Only extract actions directly related to this job opportunity (interv
 Dates like "Thursday" should be resolved to absolute dates relative to today. The "source" field MUST be the input bucket the answer came from.`,
       messages: [{ role: 'user', content: contextParts.join('\n\n') }],
       max_tokens: 220
-    });
+    }, 'extract');
     const text = result.text || '{}';
     const match = text.match(/\{[\s\S]*?\}/);
     const json = match ? JSON.parse(match[0]) : {};
@@ -313,7 +314,7 @@ ${emailBlocks}`;
       system,
       messages: [{ role: 'user', content: userMsg }],
       max_tokens: 800
-    });
+    }, 'extract');
     const text = result.text || '{}';
     const match = text.match(/\{[\s\S]*\}/);
     const json = match ? JSON.parse(match[0]) : {};

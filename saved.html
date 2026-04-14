@@ -516,22 +516,15 @@
     .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--ci-transition-fast); flex-shrink: 0; }
     .stat-cards-edit-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
 
-    /* ── Cost Summary Card ── */
-    .cost-summary-card { display: flex; align-items: center; gap: 18px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 14px 20px; margin-top: 14px; transition: border-color 0.15s, box-shadow 0.2s; }
-    .cost-summary-card:hover { border-color: var(--ci-border-strong); box-shadow: 0 4px 12px rgba(45,62,80,0.1); }
-    .cost-today-amount { font-size: 22px; font-weight: 800; font-family: var(--ci-font-mono); line-height: 1; }
-    .cost-today-amount.cost-low { color: var(--ci-accent-teal); }
-    .cost-today-amount.cost-mid { color: var(--ci-accent-amber); }
-    .cost-today-amount.cost-high { color: var(--ci-accent-red); }
-    .cost-today-label { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
-    .cost-sparkline { display: flex; align-items: flex-end; gap: 2px; height: 28px; }
-    .cost-spark-bar { width: 4px; border-radius: 2px; background: var(--ci-accent-blue); opacity: 0.55; transition: opacity 0.15s; min-height: 2px; }
+    /* ── Cost Pill (header) ── */
+    .cost-pill-inner { display: flex; align-items: center; gap: 6px; }
+    .cost-sparkline { display: flex; align-items: flex-end; gap: 1.5px; height: 14px; }
+    .cost-spark-bar { width: 3px; border-radius: 1.5px; background: var(--ci-accent-blue); opacity: 0.45; min-height: 2px; }
     .cost-spark-bar.today { opacity: 1; background: var(--ci-accent-primary); }
-    .cost-spark-bar:hover { opacity: 1; }
-    .cost-top-cat { font-size: 12px; color: var(--ci-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-    .cost-top-cat b { color: var(--ci-text-primary); font-weight: 700; }
-    .cost-details-link { font-size: 11px; font-weight: 700; color: var(--ci-text-link); text-decoration: none; white-space: nowrap; margin-left: auto; }
-    .cost-details-link:hover { text-decoration: underline; }
+    .cost-pill-amt { font-family: var(--ci-font-mono); font-weight: 800; }
+    .cost-pill-amt.cost-low { color: var(--ci-accent-teal); }
+    .cost-pill-amt.cost-mid { color: var(--ci-accent-amber); }
+    .cost-pill-amt.cost-high { color: var(--ci-accent-red); }
 
     .sc-editor-overlay { display: none; position: fixed; inset: 0; background: rgba(45,62,80,0.5); z-index: 1001; align-items: center; justify-content: center; }
 
@@ -1024,49 +1017,43 @@
       background: rgba(29,158,117,0.08);
     }
 
-    /* Queue / card overlay — queue card appears on the page, pipeline blurred behind it */
+    /* Queue / card takeover — replaces page content below header */
     .queue-overlay-wrap {
       display: none; position: fixed;
-      top: 52px; left: 0; right: 0; bottom: 0; /* header stays visible above */
+      top: 52px; left: 0; right: 0; bottom: 0;
       z-index: 9998;
-      align-items: flex-start; justify-content: center;
+      background: var(--ci-bg-page);
     }
     .queue-overlay-wrap.open { display: flex; }
     .queue-overlay-backdrop {
-      position: absolute; inset: 0;
-      background: rgba(0,0,0,0.08); /* barely tinted — blur does the work */
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      cursor: pointer;
+      display: none; /* no backdrop — iframe fills the area */
     }
     .queue-overlay-frame {
-      position: relative; z-index: 1;
-      width: 1040px; max-width: calc(100vw - 120px);
-      height: 100%;
-      border: none; border-radius: 0; /* no dialog chrome */
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.07), 0 8px 32px rgba(0,0,0,0.1);
-      background: var(--ci-bg-surface);
+      flex: 1;
+      width: 100%; height: 100%;
+      border: none;
+      background: var(--ci-bg-page);
     }
-    /* Flanking prev/next nav buttons — sit on the blurred backdrop on either side */
+    /* Flanking prev/next nav buttons — pinned to edges */
     .queue-overlay-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
-      width: 52px; height: 52px; border-radius: 50%; z-index: 2;
-      background: rgba(255,255,255,0.88); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.5);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-      cursor: pointer; font-size: 26px; line-height: 1; color: #2d3e50;
+      width: 44px; height: 44px; border-radius: 50%; z-index: 2;
+      background: var(--ci-bg-overlay);
+      border: 1px solid var(--ci-border-default);
+      box-shadow: var(--ci-shadow-lg);
+      cursor: pointer; font-size: 22px; line-height: 1; color: var(--ci-text-secondary);
       display: flex; align-items: center; justify-content: center;
       transition: all 0.15s; font-family: inherit;
     }
     .queue-overlay-nav:hover:not(:disabled) {
-      background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.24);
+      background: var(--ci-bg-surface); box-shadow: var(--ci-shadow-lg);
       transform: translateY(-50%) scale(1.06);
       color: var(--ci-accent-primary);
       border-color: var(--ci-accent-primary);
     }
     .queue-overlay-nav:disabled { opacity: 0.2; cursor: default; }
-    .queue-overlay-nav.prev { left: 24px; }
-    .queue-overlay-nav.next { right: 24px; }
+    .queue-overlay-nav.prev { left: 12px; }
+    .queue-overlay-nav.next { right: 12px; }
   </style>
 </head>
 <body>
@@ -1115,7 +1102,6 @@
 
 
   <div id="activity-section" class="activity-section"></div>
-  <div id="cost-summary-container"></div>
   <div id="color-picker-popover"></div>
 
   <div class="metric-drill-overlay" id="metric-drill-overlay">

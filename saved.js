@@ -2279,32 +2279,18 @@ function createOpportunityFromCompany(companyId) {
 let _storageReloadTimer = null;
 let _storageReloadHits = 0;
 let _storageFirstHitAt = 0;
-// ── Cost pill ────────────────────────────────────────────────────────────────
+// ── Cost pill (header — single consolidated cost display) ─────────────────
 function updateCostPill() {
   chrome.storage.local.get('apiUsage', d => {
     const usage = d.apiUsage || {};
-    const el = document.getElementById('cost-today');
-    if (!el) return;
-    const cost = usage.costToday || 0;
-    el.textContent = cost < 0.01 ? '$' + cost.toFixed(4) : '$' + cost.toFixed(2);
-  });
-}
-updateCostPill();
-
-// ── Cost Summary Card (dashboard) ─────────────────────────────────────────
-function renderCostCard() {
-  chrome.storage.local.get('apiUsage', d => {
-    const usage = d.apiUsage || {};
-    const container = document.getElementById('cost-summary-container');
-    if (!container) return;
+    const pill = document.getElementById('cost-pill');
+    if (!pill) return;
 
     const costToday = usage.costToday || 0;
     const fmtCost = c => c < 0.01 ? '$' + c.toFixed(4) : '$' + c.toFixed(2);
-
-    // Color class based on spend level
     const costClass = costToday >= 1 ? 'cost-high' : costToday >= 0.25 ? 'cost-mid' : 'cost-low';
 
-    // Build 7-day sparkline from dailyHistory (merge anthropic + openai by date)
+    // 7-day sparkline
     const today = new Date();
     const dayKeys = [];
     for (let i = 6; i >= 0; i--) {
@@ -2312,71 +2298,29 @@ function renderCostCard() {
       d.setDate(d.getDate() - i);
       dayKeys.push(d.toISOString().slice(0, 10));
     }
-
     const dailyCosts = {};
     dayKeys.forEach(k => { dailyCosts[k] = 0; });
-
-    const providers = ['anthropic', 'openai'];
-    providers.forEach(p => {
-      const hist = usage[p]?.dailyHistory || [];
-      hist.forEach(entry => {
-        const dateKey = (entry.date || '').slice(0, 10);
-        if (dailyCosts.hasOwnProperty(dateKey)) {
-          dailyCosts[dateKey] += entry.estimatedCost || 0;
-        }
+    ['anthropic', 'openai'].forEach(p => {
+      (usage[p]?.dailyHistory || []).forEach(entry => {
+        const dk = (entry.date || '').slice(0, 10);
+        if (dailyCosts.hasOwnProperty(dk)) dailyCosts[dk] += entry.estimatedCost || 0;
       });
     });
-
-    // For today, prefer the live costToday value (more accurate than dailyHistory)
     const todayKey = dayKeys[dayKeys.length - 1];
     if (costToday > 0) dailyCosts[todayKey] = costToday;
-
     const costValues = dayKeys.map(k => dailyCosts[k]);
-    const maxCost = Math.max(...costValues, 0.01); // avoid div-by-zero
+    const maxCost = Math.max(...costValues, 0.01);
 
     const sparkBars = dayKeys.map((k, i) => {
-      const val = costValues[i];
-      const pct = Math.max((val / maxCost) * 100, 7); // min 7% height for visibility
-      const isToday = i === dayKeys.length - 1;
+      const pct = Math.max((costValues[i] / maxCost) * 100, 7);
       const dayLabel = new Date(k + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-      return `<div class="cost-spark-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${dayLabel}: ${fmtCost(val)}"></div>`;
+      return `<div class="cost-spark-bar${i === dayKeys.length - 1 ? ' today' : ''}" style="height:${pct}%" title="${dayLabel}: ${fmtCost(costValues[i])}"></div>`;
     }).join('');
 
-    // Top cost category today — aggregate by op field from callLog
-    const log = (usage.callLog || []).filter(c => c.ts > Date.now() - 86400000);
-    const byOp = {};
-    log.forEach(c => {
-      const op = c.op || c.provider || 'unknown';
-      byOp[op] = (byOp[op] || 0) + (c.cost || 0);
-    });
-    const topOp = Object.entries(byOp).sort((a, b) => b[1] - a[1])[0];
-    const opNames = {
-      chat: 'Coop Chat', research: 'Research', scoring: 'Scoring',
-      quick_lookup: 'Quick Lookup', enrichment: 'Enrichment',
-      anthropic: 'Anthropic', openai: 'OpenAI', serper: 'Serper',
-      apollo: 'Apollo', granola: 'Granola'
-    };
-    const topCatHtml = topOp
-      ? `<div class="cost-top-cat"><b>${opNames[topOp[0]] || topOp[0]}:</b> ${fmtCost(topOp[1])}</div>`
-      : `<div class="cost-top-cat" style="color:var(--ci-text-tertiary)">No API calls today</div>`;
-
-    container.innerHTML = `
-      <div class="cost-summary-card" style="margin: 0 32px;">
-        <div style="display:flex;flex-direction:column;align-items:flex-start;">
-          <div class="cost-today-amount ${costClass}">${fmtCost(costToday)}</div>
-          <div class="cost-today-label">Today's spend</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-          <div class="cost-sparkline">${sparkBars}</div>
-          <div style="font-size:9px;color:var(--ci-text-tertiary)">7-day trend</div>
-        </div>
-        ${topCatHtml}
-        <a class="cost-details-link" href="pipeline.html#usage">View Details &rarr;</a>
-      </div>
-    `;
+    pill.innerHTML = `<span class="cost-pill-inner"><span class="cost-sparkline">${sparkBars}</span> <span class="cost-pill-amt ${costClass}">${fmtCost(costToday)}</span></span>`;
   });
 }
-renderCostCard();
+updateCostPill();
 
 // Cost breakdown modal
 document.getElementById('cost-pill')?.addEventListener('click', () => {
@@ -2434,13 +2378,16 @@ document.getElementById('cost-pill')?.addEventListener('click', () => {
     });
 
     // Recent calls (last 20)
+    const opLabels = { chat: 'Chat', scoring: 'Score', research: 'Research', insight: 'Insight', profile: 'Profile', rewrite: 'Rewrite', extract: 'Extract', quick_lookup: 'Lookup' };
     let recentRows = '';
     log.slice(-20).reverse().forEach(c => {
       const short = (c.model || '').replace(/^claude-/, '').replace(/^gpt-/, '');
       const ago = Math.round((Date.now() - c.ts) / 60000);
       const agoStr = ago < 1 ? 'now' : ago < 60 ? `${ago}m` : `${Math.round(ago / 60)}h`;
+      const opLabel = opLabels[c.op] || c.op || '';
       recentRows += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10px;color:var(--ci-text-secondary);">
         <span style="width:24px;color:var(--ci-text-tertiary);text-align:right;flex-shrink:0">${agoStr}</span>
+        ${opLabel ? `<span style="font-size:9px;font-weight:600;color:var(--ci-text-tertiary);background:var(--ci-bg-inset);border-radius:3px;padding:1px 4px;flex-shrink:0">${opLabel}</span>` : ''}
         <span style="flex:1;font-family:var(--ci-font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${short}</span>
         <span style="color:var(--ci-text-tertiary)">${c.input || c.output ? fmtTok(c.input) + '/' + fmtTok(c.output) : '—'}</span>
         <span style="font-weight:600;min-width:40px;text-align:right">${c.cost > 0 ? fmtCost(c.cost) : '—'}</span>
@@ -2480,7 +2427,7 @@ document.getElementById('cost-pill')?.addEventListener('click', () => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.apiUsage) { updateCostPill(); renderCostCard(); }
+  if (area === 'local' && changes.apiUsage) { updateCostPill(); }
   if (area === 'local' && (changes.savedCompanies || changes.allTags)) {
     if (_storageReloadHits === 0) _storageFirstHitAt = Date.now();
     _storageReloadHits++;

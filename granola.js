@@ -10,14 +10,14 @@ export async function granolaFetch(path) {
   const res = await fetch('https://public-api.granola.ai' + path, {
     headers: { 'Authorization': 'Bearer ' + state.GRANOLA_KEY }
   });
-  trackApiCall('granola', res.clone()); // non-blocking, no await needed
+  trackApiCall('granola', res.clone(), undefined, 'search'); // non-blocking, no await needed
   if (res.status === 429) {
     // Rate limited — wait and retry once
     await new Promise(r => setTimeout(r, 2000));
     const retry = await fetch('https://public-api.granola.ai' + path, {
       headers: { 'Authorization': 'Bearer ' + state.GRANOLA_KEY }
     });
-    trackApiCall('granola', retry.clone());
+    trackApiCall('granola', retry.clone(), undefined, 'search');
     if (!retry.ok) return null;
     return retry.json();
   }
