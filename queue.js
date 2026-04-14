@@ -329,6 +329,7 @@ function renderCurrent() {
   const flagsFired = jm.flagsFired || {};
   const neutralFlags = jm.neutralFlags || {};
   const dimRationale = jm.dimensionRationale || {};
+  const aiDimScores  = jm.aiDimensionScores  || {};
   const compAssess = jm.compAssessment || {};
   const qualifications = jm.qualifications || [];
 
@@ -594,9 +595,11 @@ function renderCurrent() {
         panelContent = `<div class="queue-math-row"><span class="queue-math-left">${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div>${compParts.length ? `<div class="queue-comp-inline">${compParts.join('<span class="queue-comp-sep">·</span>')}</div>` : ''}${hasFlags ? `<div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>` : ''}`;
       } else {
         const allAdj = allGreens.concat(allReds);
-        const mathParts = ['<span class="qmth-base">5.0</span>'];
+        const aiBase = (aiDimScores[dim.key] >= 1 && aiDimScores[dim.key] <= 10) ? aiDimScores[dim.key] : 5.0;
+        const baseLabel = aiDimScores[dim.key] ? `${aiBase.toFixed(1)}<span style="font-size:9px;color:var(--ci-text-tertiary);margin-left:2px">(AI)</span>` : '5.0';
+        const mathParts = [`<span class="qmth-base">${baseLabel}</span>`];
         allAdj.forEach(a => { const d = a.delta ?? 0; const cls = d > 0 ? 'qmth-pos' : d < 0 ? 'qmth-neg' : 'qmth-base'; mathParts.push(`<span class="${cls}">${d > 0 ? '+' : ''}${d.toFixed(1)}</span>`); });
-        const rawScore = allAdj.reduce((s, a) => s + a.delta, 5.0);
+        const rawScore = allAdj.reduce((s, a) => s + a.delta, aiBase);
         const mathStr = `${mathParts.join(' ')} <span class="qmth-eq">= ${rawScore.toFixed(1)} → <span class="qmth-result">${val}</span></span>`;
         panelContent = `${dimRationale[dim.key] ? `<div class="queue-drawer-rationale">${escHtml(dimRationale[dim.key])}</div>` : ''}<div class="queue-math-row"><span class="queue-math-left">${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>`;
       }

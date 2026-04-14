@@ -1146,4 +1146,11 @@ document.addEventListener('click', e => {
   }
 });
 
+// Re-render job match panel when scoring completes (no page refresh needed)
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'SCORE_COMPLETE' && msg.entryId === entryId) {
+    _b1RefreshEntryAndRender();
+  }
+});
+
 init();

@@ -386,7 +386,7 @@ YOUR TASK:
 2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the JOB DESCRIPTION ONLY — never from the candidate profile or preferences. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown. For "importance": use ONLY "required", "preferred", or "bonus" — never "nice to have", "optional", or any other value. For "sources": list where the candidate evidence comes from — use values like "resume", "experience", "skills", "not in profile", "inferred" — never put job description categories here.
 3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
-5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If no ratings exist, note that.
+5. DIMENSION SCORES + RATIONALE: For roleFit, cultureFit, companyFit — score each 1-10 AND write 1 sentence rationale. Score independently based on what the posting/company signals for that dimension (8+ = clear strong fit, 6-7 = positive lean, 5 = neutral/unknown, 3-4 = concerns). Do NOT factor in configured flags — those adjust scores separately. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If no ratings exist, note that. If interaction context exists, weight it heavily — live signals beat posting text.
 6. COOP TAKE: 1-2 sentence honest bottom line on this opportunity.
 7. QUICK TAKE: 2-4 bullets of the most decisive signals (green or red).
 8. ROLE BRIEF: Summarize the role, why it could be interesting, key concerns, and comp in structured fields.
@@ -415,6 +415,11 @@ Return ONLY valid JSON (no markdown fences):
     "oteAmount": <number|null — if a range is given, use the midpoint>,
     "baseVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown",
     "oteVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown"
+  },
+  "dimensionScores": {
+    "roleFit": <1-10>,
+    "cultureFit": <1-10>,
+    "companyFit": <1-10>
   },
   "dimensionRationale": {
     "roleFit": "<1 sentence>",
@@ -571,9 +576,13 @@ Return ONLY valid JSON (no markdown fences):
     }
   }
 
-  // Per-dimension scores: baseline 5.0 ± flag deltas, clamped [1, 10]
+  // Per-dimension scores: AI baseline (or 5.0 if missing) ± flag deltas, clamped [1, 10]
+  const aiDimScores = parsed.dimensionScores || {};
   function computeDimScore(dim) {
-    let s = BASELINE;
+    const base = (aiDimScores[dim] && aiDimScores[dim] >= 1 && aiDimScores[dim] <= 10)
+      ? aiDimScores[dim]
+      : BASELINE;
+    let s = base;
     (dimFlags[dim]?.green || []).forEach(f => { s += Math.abs(f.delta); });
     (dimFlags[dim]?.red || []).forEach(f => { s -= Math.abs(f.delta); });
     return Math.round(Math.max(1, Math.min(10, s)));
@@ -666,6 +675,7 @@ Return ONLY valid JSON (no markdown fences):
     qualifications: parsed.qualifications || [],
     compAssessment: compAssess,
     dimensionRationale: parsed.dimensionRationale || {},
+    aiDimensionScores: aiDimScores,
     coopTake: parsed.coopTake || '',
     keySignals: parsed.keySignals || [],
     roleBrief,
