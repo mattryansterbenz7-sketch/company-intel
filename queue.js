@@ -583,7 +583,7 @@ function renderCurrent() {
         const allAdj = allGreens.concat(allReds);
         const mathParts = ['<span class="qmth-base">5.0</span>'];
         allAdj.forEach(a => { const d = a.delta ?? 0; const cls = d > 0 ? 'qmth-pos' : d < 0 ? 'qmth-neg' : 'qmth-base'; mathParts.push(`<span class="${cls}">${d > 0 ? '+' : ''}${d.toFixed(1)}</span>`); });
-        const mathStr = mathParts.length > 1 ? `${mathParts.join(' ')} <span class="qmth-eq">= <span class="qmth-result">${val}</span></span>` : `<span class="qmth-result">${val}</span>`;
+        const mathStr = allAdj.length > 0 ? `${mathParts.join(' ')} <span class="qmth-eq">= <span class="qmth-result">${val}</span></span>` : `<span class="qmth-base">5.0</span> <span style="font-size:10px;color:var(--ci-text-tertiary)">(${!compAssess.baseDisclosed && !compAssess.oteDisclosed ? 'undisclosed — neutral' : 'no flags'})</span> <span class="qmth-eq">= <span class="qmth-result">${val}</span></span>`;
         const baseDisplay = compAssess.baseAmount ? '$' + compAssess.baseAmount.toLocaleString() : (baseSalary || null);
         const oteDisplay = compAssess.oteAmount ? '$' + compAssess.oteAmount.toLocaleString() : (totalComp || null);
         const showBase = baseDisplay && compAssess.baseVsFloor !== 'unknown';

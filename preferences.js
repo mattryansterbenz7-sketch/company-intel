@@ -900,10 +900,11 @@ let _icpGreens  = [];
 let _icpReds    = [];
 
 function initICPScoring() {
-  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'scoringWeights', 'compBracketSeverities'], data => {
+  chrome.storage.local.get(['profileAttractedTo', 'profileDealbreakers', 'scoringWeights', 'compBracketSeverities', 'compBracketThresholds'], data => {
     _icpGreens = data.profileAttractedTo || [];
     _icpReds   = data.profileDealbreakers || [];
     _compBracketSeverities = data.compBracketSeverities || { base: {}, ote: {} };
+    _compBracketThresholds = data.compBracketThresholds || { base: {}, ote: {} };
 
     // Validate loaded weights — must have all required keys and sum to 100
     const loaded = data.scoringWeights;
@@ -1058,11 +1059,13 @@ const COMP_BRACKET_TIERS_UI = [
   { key: 'well_below',     label: 'Well below',     type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
 ];
 
-let _compBracketSeverities = { base: {}, ote: {} };
+let _compBracketSeverities  = { base: {}, ote: {} };
+let _compBracketThresholds  = { base: {}, ote: {} };
 
 function loadCompBracketSeverities(cb) {
-  chrome.storage.local.get(['compBracketSeverities'], d => {
+  chrome.storage.local.get(['compBracketSeverities', 'compBracketThresholds'], d => {
     _compBracketSeverities = d.compBracketSeverities || { base: {}, ote: {} };
+    _compBracketThresholds = d.compBracketThresholds || { base: {}, ote: {} };
     cb?.();
   });
 }
@@ -1071,22 +1074,33 @@ function saveCompBracketSeverities() {
   chrome.storage.local.set({ compBracketSeverities: _compBracketSeverities });
 }
 
+function saveCompBracketThresholds() {
+  chrome.storage.local.set({ compBracketThresholds: _compBracketThresholds });
+}
+
 function renderCompBracketEditor() {
   const fmtK = v => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`;
 
   function bracketSection(compType, floor, strong, label) {
     if (!floor) return `<div style="font-size:12px;color:var(--ci-text-tertiary);padding:4px 0;">No ${label} floor set — configure in Compensation above.</div>`;
-    const sevs = _compBracketSeverities[compType] || {};
+    const sevs   = _compBracketSeverities[compType]  || {};
+    const threshs = _compBracketThresholds[compType] || {};
+    const isLast = i => i === COMP_BRACKET_TIERS_UI.length - 1;
     const rows = COMP_BRACKET_TIERS_UI.map((tier, i) => {
-      const threshold = tier.thresholdFn(floor, strong);
-      const threshLabel = i === COMP_BRACKET_TIERS_UI.length - 1 ? `<${fmtK(floor * 0.8)}` : `≥${fmtK(threshold)}`;
+      const computed = tier.thresholdFn(floor, strong);
+      const custom   = threshs[tier.key];
+      const threshVal = custom || computed;
+      const threshK   = Math.round(threshVal / 1000);
       const sev = typeof sevs[tier.key] === 'number' ? sevs[tier.key] : tier.defaultSev;
       const dot = tier.type === 'green' ? '#22c55e' : '#ef4444';
       const sevColor = tier.type === 'green' ? SEV_GREEN_COLORS[sev - 1] : SEV_RED_COLORS[sev - 1];
+      const threshCell = isLast(i)
+        ? `<span style="font-size:11px;color:var(--ci-text-tertiary);min-width:64px;text-align:right;">&lt;${fmtK(threshVal)}</span>`
+        : `<span style="display:inline-flex;align-items:center;gap:1px;font-size:11px;color:var(--ci-text-tertiary);min-width:64px;justify-content:flex-end;">≥$<input type="number" class="comp-thresh-input" data-comp="${compType}" data-tier="${tier.key}" data-default="${Math.round(computed / 1000)}" value="${threshK}" min="1" step="1" style="width:36px;border:none;border-bottom:1px dashed ${custom ? 'var(--ci-accent-blue)' : 'var(--ci-border-subtle)'};background:transparent;font-size:11px;color:${custom ? 'var(--ci-accent-blue)' : 'inherit'};font-family:inherit;outline:none;padding:0;text-align:right;" title="Edit threshold (in $k). Tab or Enter to save.">k</span>`;
       return `<div class="comp-bracket-row" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--ci-border-subtle);">
         <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
         <span style="flex:1;font-size:13px;color:var(--ci-text-primary);">${tier.label}</span>
-        <span style="font-size:11px;color:var(--ci-text-tertiary);min-width:52px;text-align:right;">${threshLabel}</span>
+        ${threshCell}
         <button class="comp-sev-btn" data-comp="${compType}" data-tier="${tier.key}" data-sev="${sev}"
           style="width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${sevColor};flex-shrink:0;"
           title="Click to change severity (1–5)">${sev}</button>
@@ -1098,15 +1112,20 @@ function renderCompBracketEditor() {
     </div>`;
   }
 
-  const salaryFloor  = parseFloat(document.getElementById('pref-salary-floor')?.value) || 0;
-  const salaryStrong = parseFloat(document.getElementById('pref-salary-strong')?.value) || salaryFloor * 1.3;
-  const oteFloor     = parseFloat(document.getElementById('pref-ote-floor')?.value) || 0;
-  const oteStrong    = parseFloat(document.getElementById('pref-ote-strong')?.value) || oteFloor * 1.3;
+  const _parseSalary = id => {
+    const raw = (document.getElementById(id)?.value || '').replace(/[^0-9.]/g, '');
+    const n = parseFloat(raw);
+    return n > 0 ? (n < 1000 ? n * 1000 : n) : 0;
+  };
+  const salaryFloor  = _parseSalary('pref-salary-floor');
+  const salaryStrong = _parseSalary('pref-salary-strong') || salaryFloor * 1.3;
+  const oteFloor     = _parseSalary('pref-ote-floor');
+  const oteStrong    = _parseSalary('pref-ote-strong') || oteFloor * 1.3;
 
   return `<div id="comp-bracket-editor">
     <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:14px;line-height:1.5;">
-      Thresholds are computed from your comp settings. Click a severity badge to cycle it (1–5).
-      <span style="color:var(--ci-text-tertiary);">Higher = more impact on score.</span>
+      Thresholds are computed from your comp settings — click a number to override it. Click a severity badge to cycle it (1–5).
+      <span style="color:var(--ci-text-tertiary);">Higher severity = more score impact.</span>
     </div>
     ${bracketSection('base', salaryFloor, salaryStrong, 'Base')}
     ${bracketSection('ote', oteFloor, oteStrong, 'OTE')}
@@ -1123,12 +1142,37 @@ function bindCompBracketEditorEvents(el) {
       if (!_compBracketSeverities[compType]) _compBracketSeverities[compType] = {};
       _compBracketSeverities[compType][tierKey] = next;
       saveCompBracketSeverities();
-      // Re-render just this button
       btn.dataset.sev = next;
       btn.textContent = next;
       const tier = COMP_BRACKET_TIERS_UI.find(t => t.key === tierKey);
       const colors = tier?.type === 'green' ? SEV_GREEN_COLORS : SEV_RED_COLORS;
       btn.style.background = colors[next - 1];
+    });
+  });
+
+  el.querySelectorAll('.comp-thresh-input').forEach(input => {
+    const commit = () => {
+      const compType = input.dataset.comp;
+      const tierKey  = input.dataset.tier;
+      const defaultK = parseFloat(input.dataset.default);
+      const val = parseFloat(input.value);
+      if (!_compBracketThresholds[compType]) _compBracketThresholds[compType] = {};
+      if (!val || val === defaultK) {
+        // Revert to computed default
+        delete _compBracketThresholds[compType][tierKey];
+        input.style.borderBottomColor = 'var(--ci-border-subtle)';
+        input.style.color = 'inherit';
+      } else {
+        _compBracketThresholds[compType][tierKey] = val * 1000; // store in dollars
+        input.style.borderBottomColor = 'var(--ci-accent-blue)';
+        input.style.color = 'var(--ci-accent-blue)';
+      }
+      saveCompBracketThresholds();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = input.dataset.default; input.blur(); }
     });
   });
 }

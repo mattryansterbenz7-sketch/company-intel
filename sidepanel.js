@@ -3142,7 +3142,7 @@ function renderQualifications(qualifications) {
         ${feedbackNote}
       </div>
       <div class="qual-right">
-        <span class="qual-badge ${q.importance}">${q.importance}</span>
+        <span class="qual-badge ${q.importance}">${(q.sources?.length ? q.sources[0] : q.importance) || q.importance}</span>
         <button class="qual-dismiss" data-qual-id="${q.id}" title="${q.dismissed ? 'Restore' : 'Dismiss'}">${q.dismissed ? '↩' : '×'}</button>
       </div>
     </div>`;

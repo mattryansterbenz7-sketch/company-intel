@@ -841,7 +841,7 @@ function renderPanelBody(pid) {
                 ${corrCaption}
                 ${correctionButtons}
               </div>
-              <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:0.04em;background:${badgeBgs[q.importance] || badgeBgs.bonus};color:${badgeColors[q.importance] || badgeColors.bonus}">${q.importance}</span>
+              <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:0.04em;background:${badgeBgs[q.importance] || badgeBgs.bonus};color:${badgeColors[q.importance] || badgeColors.bonus}">${(q.sources?.length ? q.sources[0] : q.importance) || q.importance}</span>
               <button class="opp-qual-dismiss" data-qual-id="${q.id}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="${q.dismissed ? 'Restore' : 'Dismiss'}">${q.dismissed ? '↩' : '×'}</button>
             </div>`;
           });

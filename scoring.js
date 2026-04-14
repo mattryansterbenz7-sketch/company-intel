@@ -142,24 +142,29 @@ const COMP_BRACKET_TIERS = [
 ];
 
 // compBracket — graduated comp scoring from ICP salary prefs
-// customSevs: optional { well_above: n, meets_target: n, ... } overrides from compBracketSeverities storage
-function compBracket(amount, floor, strong, customSevs) {
+// customSevs: optional { well_above: n, ... } overrides from compBracketSeverities storage
+// customThresholds: optional { well_above: n, ... } dollar-amount overrides from compBracketThresholds storage
+function compBracket(amount, floor, strong, customSevs, customThresholds) {
   if (!amount || !floor) return null;
-  floor = parseFloat(floor);
-  strong = parseFloat(strong) || floor * 1.3;
+  // Strip formatting like "$100,000" or "100K" — store values may be raw user input
+  const _parseSal = v => { const n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return n > 0 ? (n < 1000 ? n * 1000 : n) : 0; };
+  floor = _parseSal(floor);
+  strong = _parseSal(strong) || floor * 1.3;
   if (!floor) return null;
 
   const sev = (tier) => {
     const override = customSevs?.[tier.key];
     return (typeof override === 'number' && override >= 1 && override <= 5) ? override : tier.defaultSev;
   };
+  // Use custom threshold if stored, otherwise fall back to computed default
+  const thresh = (key, computed) => { const ov = customThresholds?.[key]; return (ov && ov > 0) ? ov : computed; };
 
-  if (amount >= strong * 1.15) { const t = COMP_BRACKET_TIERS[0]; return { type: t.type, sev: sev(t), label: 'Well above target' }; }
-  if (amount >= strong)        { const t = COMP_BRACKET_TIERS[1]; return { type: t.type, sev: sev(t), label: 'Meets target' }; }
-  if (amount >= (floor + strong) / 2) { const t = COMP_BRACKET_TIERS[2]; return { type: t.type, sev: sev(t), label: 'Above floor' }; }
-  if (amount >= floor)         { const t = COMP_BRACKET_TIERS[3]; return { type: t.type, sev: sev(t), label: 'Meets floor' }; }
-  if (amount >= floor * 0.9)   { const t = COMP_BRACKET_TIERS[4]; return { type: t.type, sev: sev(t), label: 'Slightly below floor' }; }
-  if (amount >= floor * 0.8)   { const t = COMP_BRACKET_TIERS[5]; return { type: t.type, sev: sev(t), label: 'Below floor' }; }
+  if (amount >= thresh('well_above',    strong * 1.15))      { const t = COMP_BRACKET_TIERS[0]; return { type: t.type, sev: sev(t), label: 'Well above target' }; }
+  if (amount >= thresh('meets_target',  strong))              { const t = COMP_BRACKET_TIERS[1]; return { type: t.type, sev: sev(t), label: 'Meets target' }; }
+  if (amount >= thresh('above_floor',   (floor + strong) / 2)){ const t = COMP_BRACKET_TIERS[2]; return { type: t.type, sev: sev(t), label: 'Above floor' }; }
+  if (amount >= thresh('meets_floor',   floor))               { const t = COMP_BRACKET_TIERS[3]; return { type: t.type, sev: sev(t), label: 'Meets floor' }; }
+  if (amount >= thresh('slightly_below', floor * 0.9))        { const t = COMP_BRACKET_TIERS[4]; return { type: t.type, sev: sev(t), label: 'Slightly below floor' }; }
+  if (amount >= thresh('below_floor',   floor * 0.8))         { const t = COMP_BRACKET_TIERS[5]; return { type: t.type, sev: sev(t), label: 'Below floor' }; }
   const t = COMP_BRACKET_TIERS[6]; return { type: t.type, sev: sev(t), label: 'Well below floor' };
 }
 
@@ -213,7 +218,7 @@ export async function scoreOpportunity(entryId) {
   const localData = await new Promise(resolve =>
     chrome.storage.local.get([
       'profileAttractedTo', 'profileDealbreakers', 'scoringWeights',
-      'coopProfileFull', 'coopPrefsFull', 'compBracketSeverities'
+      'coopProfileFull', 'coopPrefsFull', 'compBracketSeverities', 'compBracketThresholds'
     ], resolve)
   );
   const weights = localData.scoringWeights || {
@@ -378,7 +383,7 @@ ${flagsRef}
 
 YOUR TASK:
 1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting, company data, or interaction context. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. CRITICAL: If you cannot find direct evidence that a flag is triggered, DO NOT include it in firedFlags. "No evidence" or "no direct evidence" means the flag did NOT fire — omit it entirely. Return ONLY flags with real, affirmative evidence.
-2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the job description — be thorough. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown.
+2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the JOB DESCRIPTION ONLY — never from the candidate profile or preferences. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown. For "importance": use ONLY "required", "preferred", or "bonus" — never "nice to have", "optional", or any other value. For "sources": list where the candidate evidence comes from — use values like "resume", "experience", "skills", "not in profile", "inferred" — never put job description categories here.
 3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
 5. DIMENSION RATIONALE: Write 1 sentence each for roleFit, cultureFit, companyFit, compFit. If interaction context exists, weight it heavily — live signals beat posting text. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If no ratings exist, note that.
@@ -401,7 +406,7 @@ Return ONLY valid JSON (no markdown fences):
   ],
   "qualificationFit": <1-10>,
   "qualifications": [
-    {"id": "q0", "requirement": "<extracted from JD>", "status": "met|partial|unmet|unknown", "evidence": "<brief assessment vs candidate>", "importance": "required|preferred", "sources": ["resume","experience","skills"]}
+    {"id": "q0", "requirement": "<extracted from JD only — never from candidate profile>", "status": "met|partial|unmet|unknown", "evidence": "<brief assessment vs candidate — why they meet or don't meet this>", "importance": "required|preferred|bonus — ONLY these three values", "sources": ["resume|experience|skills|not in profile|inferred — where the evidence comes from"]}
   ],
   "compAssessment": {
     "baseDisclosed": true|false,
@@ -516,10 +521,11 @@ Return ONLY valid JSON (no markdown fences):
   const compAssess = parsed.compAssessment || {};
   const prefs = syncData.prefs || {};
 
-  const bracketSevs = localData.compBracketSeverities || {};
+  const bracketSevs   = localData.compBracketSeverities  || {};
+  const bracketThreshs = localData.compBracketThresholds  || {};
 
   // Auto-generate base salary bracket
-  const baseBracket = compBracket(compAssess.baseAmount, prefs.salaryFloor, prefs.salaryStrong, bracketSevs.base);
+  const baseBracket = compBracket(compAssess.baseAmount, prefs.salaryFloor, prefs.salaryStrong, bracketSevs.base, bracketThreshs.base);
   if (baseBracket) {
     const delta = baseBracket.sev * SEV_MUL * (baseBracket.type === 'red' ? -1 : 1);
     dimFlags.compFit[baseBracket.type].push({
@@ -529,13 +535,40 @@ Return ONLY valid JSON (no markdown fences):
   }
 
   // Auto-generate OTE bracket
-  const oteBracket = compBracket(compAssess.oteAmount, prefs.oteFloor, prefs.oteStrong, bracketSevs.ote);
+  const oteBracket = compBracket(compAssess.oteAmount, prefs.oteFloor, prefs.oteStrong, bracketSevs.ote, bracketThreshs.ote);
   if (oteBracket) {
     const delta = oteBracket.sev * SEV_MUL * (oteBracket.type === 'red' ? -1 : 1);
     dimFlags.compFit[oteBracket.type].push({
       type: oteBracket.type, label: `OTE: ${oteBracket.label}`, delta, sev: oteBracket.sev,
       evidence: `Detected OTE $${(compAssess.oteAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.oteFloor)/1000).toFixed(0)}k`
     });
+  }
+
+  // Fallback: when no salary floor is configured, use AI's vsFloor assessment to score comp
+  // This ensures comp score reflects disclosed comp even without explicit prefs set
+  const _vsFloorFallback = { above_strong: { type: 'green', sev: 3 }, above_floor: { type: 'green', sev: 2 }, below_floor: { type: 'red', sev: 3 } };
+  const _vsFloorLabel = { above_strong: 'Above target', above_floor: 'Above floor', below_floor: 'Below floor' };
+  if (!baseBracket && compAssess.baseVsFloor && compAssess.baseVsFloor !== 'unknown' && compAssess.baseVsFloor !== 'at_floor') {
+    const fb = _vsFloorFallback[compAssess.baseVsFloor];
+    if (fb) {
+      const delta = fb.sev * SEV_MUL * (fb.type === 'red' ? -1 : 1);
+      const label = _vsFloorLabel[compAssess.baseVsFloor];
+      dimFlags.compFit[fb.type].push({
+        type: fb.type, label: `Base: ${label}`, delta, sev: fb.sev,
+        evidence: compAssess.baseAmount ? `$${(compAssess.baseAmount/1000).toFixed(0)}k base — ${label.toLowerCase()} vs candidate target` : `AI assessed base as ${label.toLowerCase()}`
+      });
+    }
+  }
+  if (!oteBracket && compAssess.oteVsFloor && compAssess.oteVsFloor !== 'unknown' && compAssess.oteVsFloor !== 'at_floor') {
+    const fb = _vsFloorFallback[compAssess.oteVsFloor];
+    if (fb) {
+      const delta = fb.sev * SEV_MUL * (fb.type === 'red' ? -1 : 1);
+      const label = _vsFloorLabel[compAssess.oteVsFloor];
+      dimFlags.compFit[fb.type].push({
+        type: fb.type, label: `OTE: ${label}`, delta, sev: fb.sev,
+        evidence: compAssess.oteAmount ? `$${(compAssess.oteAmount/1000).toFixed(0)}k OTE — ${label.toLowerCase()} vs candidate target` : `AI assessed OTE as ${label.toLowerCase()}`
+      });
+    }
   }
 
   // Per-dimension scores: baseline 5.0 ± flag deltas, clamped [1, 10]
