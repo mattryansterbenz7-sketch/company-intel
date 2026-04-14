@@ -63,6 +63,14 @@ document.getElementById('back-btn').addEventListener('click', e => {
   _overlayClose();
 });
 
+// Click outside card closes overlay (only in iframe mode)
+if (_inOverlay) {
+  document.getElementById('queue-main')?.addEventListener('click', e => {
+    // Only close if clicking the background, not the card or its children
+    if (e.target === e.currentTarget) _overlayClose();
+  });
+}
+
 // Mock mode button — opens same queue with ?mock=1
 const mockBtn = document.getElementById('btn-mock-mode');
 if (mockBtn) {
@@ -338,7 +346,7 @@ function renderCurrent() {
   // Stage header — shown OUTSIDE the card above it
   const stageHeaderHtml = _active ? `<div class="qc-stage-header">
     <span class="qc-stage-dot" style="background:${_stageColor}"></span>
-    <span class="qc-stage-label" style="color:${_stageColor}">${escHtml(_stageLabel)}</span>
+    <span class="qc-stage-label">${escHtml(_stageLabel)}</span>
     ${_actionLabel ? `<span class="qc-action-badge" style="color:${_actionColor}">${_actionLabel}</span>` : ''}
   </div>` : '';
 
@@ -361,6 +369,13 @@ function renderCurrent() {
     const lastActSource = lastTs === 0 ? '' : lastTs === meetTs ? 'Meeting' : 'Email';
     const lastActStr = lastTs ? new Date(lastTs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (lastActSource ? ` · ${lastActSource}` : '') : '';
 
+    const fmtDate = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    const stageTs = c.stageTimestamps?.[_stage];
+    const savedAt = c.savedAt || c.createdAt;
+    const scoredLine = c.scoredAt ? fmtDate(c.scoredAt) : '';
+    const stageLine = stageTs ? fmtDate(stageTs) : '';
+    const savedLine = savedAt ? fmtDate(savedAt) : '';
+
     return `<div class="qc-pipeline-ctx">
       <div class="qc-pipeline-ctx-rows">
         <div class="qc-pipeline-ctx-row">
@@ -372,6 +387,9 @@ function renderCurrent() {
           <input class="qc-date-input${isOverdue ? ' overdue' : ''}" id="qc-nextdate-input" type="date" value="${escHtml(nextDate)}" title="Next step due date">
         </div>
         ${lastActStr ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last activity</span><span class="qc-pipeline-ctx-val">${escHtml(lastActStr)}</span></div>` : ''}
+        ${stageLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Stage entered</span><span class="qc-pipeline-ctx-val">${stageLine}</span></div>` : ''}
+        ${savedLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Added</span><span class="qc-pipeline-ctx-val">${savedLine}</span></div>` : ''}
+        ${scoredLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last scored</span><span class="qc-pipeline-ctx-val">${scoredLine}</span></div>` : ''}
       </div>
       <div id="qc-tasks-inject"></div>
     </div>`;

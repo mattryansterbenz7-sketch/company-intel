@@ -94,7 +94,7 @@ function updateCostBadge() {
     const usage = d.apiUsage || {};
     const cost = typeof usage.costToday === 'number' ? usage.costToday : 0;
 
-    badge.textContent = `~$${cost.toFixed(2)}`;
+    badge.textContent = cost < 0.01 ? `~$${cost.toFixed(4)}` : `~$${cost.toFixed(2)}`;
 
     // Color code
     badge.classList.remove('cost-green', 'cost-orange', 'cost-red');

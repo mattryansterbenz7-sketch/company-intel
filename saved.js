@@ -2326,7 +2326,8 @@ updateCostPill();
 document.getElementById('cost-pill')?.addEventListener('click', () => {
   chrome.storage.local.get('apiUsage', d => {
     const usage = d.apiUsage || {};
-    const log = (usage.callLog || []).filter(c => c.ts > Date.now() - 86400000);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const log = (usage.callLog || []).filter(c => c.ts && new Date(c.ts).toISOString().slice(0, 10) === todayStr);
     const totalCost = usage.costToday || 0;
     const providers = ['anthropic', 'openai', 'apollo', 'serper', 'granola'];
     const providerNames = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI (GPT)', apollo: 'Apollo', serper: 'Serper', granola: 'Granola' };
@@ -2403,7 +2404,7 @@ document.getElementById('cost-pill')?.addEventListener('click', () => {
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(3px);z-index:9999;display:flex;align-items:center;justify-content:center;';
     overlay.innerHTML = `<div style="background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:14px;box-shadow:var(--ci-shadow-lg);width:480px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;animation:thinkFadeIn 0.2s ease;">
       <div style="padding:16px 20px;border-bottom:1px solid var(--ci-border-subtle);display:flex;align-items:center;gap:12px;">
-        <span style="font-size:15px;font-weight:700;flex:1">Today's API Costs</span>
+        <span style="font-size:15px;font-weight:700;flex:1">API Costs — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
         <span style="font-size:18px;font-weight:800;color:var(--ci-accent-primary)">${fmtCost(totalCost)}</span>
         <button id="cost-modal-close" style="background:none;border:none;font-size:20px;color:var(--ci-text-tertiary);cursor:pointer;padding:0 4px;line-height:1">&times;</button>
       </div>

@@ -146,9 +146,14 @@
     .qc-qual-score.low { background: rgba(232,56,79,0.1); color: #A32D2D; }
 
     /* Stage header — outside / above the card */
-    .qc-stage-header { display: flex; align-items: center; gap: 8px; padding: 0 4px 10px; }
-    .qc-stage-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .qc-stage-label { font-size: 14px; font-weight: 700; }
+    .qc-stage-header {
+      display: flex; align-items: center; gap: 10px; padding: 0 4px 12px;
+    }
+    .qc-stage-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
+    .qc-stage-label {
+      font-size: 15px; font-weight: 800; letter-spacing: 0.01em;
+      color: var(--ci-text-primary); text-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
     .qc-action-badge { font-size: 12px; font-weight: 600; margin-left: auto; }
 
     /* Pipeline context block */
