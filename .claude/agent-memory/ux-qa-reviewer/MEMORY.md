@@ -1,0 +1,3 @@
+- [Queue page patterns](queue_patterns.md) -- Score breakdown UI: bar rows + segmented toggle + detail panels
+- [CSS toggle patterns](css_toggle_patterns.md) -- How segmented toggles are styled across the app
+- [Cost display patterns](css_cost_patterns.md) -- Cost pill data shape, provider coverage, sparkline approach
