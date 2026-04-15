@@ -94,19 +94,21 @@ function saveSyncPrefs(showConfirm = true) {
   // Read existing sync prefs first to preserve any keys we don't manage here
   chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
     void chrome.runtime.lastError;
+    const stalenessRaw = parseInt(document.getElementById('pref-staleness-days')?.value);
     const prefs = Object.assign({}, existing || {}, {
-      name:              document.getElementById('pref-name')?.value.trim() || existing?.name || '',
-      jobMatchEnabled:   document.getElementById('pref-job-match-toggle').checked,
-      linkedinUrl:       document.getElementById('link-linkedin').value.trim(),
-      workArrangement:   [...document.querySelectorAll('input[name="work-arr"]:checked')].map(el => el.value),
-      locationCity:      cityVal,
-      locationState:     stateVal,
-      userLocation:      [cityVal, stateVal].filter(Boolean).join(', '),
-      maxTravel:         document.getElementById('pref-max-travel').value.trim(),
-      salaryFloor:       document.getElementById('pref-salary-floor').value.trim(),
-      salaryStrong:      document.getElementById('pref-salary-strong').value.trim(),
-      oteFloor:          document.getElementById('pref-ote-floor').value.trim(),
-      oteStrong:         document.getElementById('pref-ote-strong').value.trim(),
+      name:                    document.getElementById('pref-name')?.value.trim() || existing?.name || '',
+      jobMatchEnabled:         document.getElementById('pref-job-match-toggle').checked,
+      linkedinUrl:             document.getElementById('link-linkedin').value.trim(),
+      workArrangement:         [...document.querySelectorAll('input[name="work-arr"]:checked')].map(el => el.value),
+      locationCity:            cityVal,
+      locationState:           stateVal,
+      userLocation:            [cityVal, stateVal].filter(Boolean).join(', '),
+      maxTravel:               document.getElementById('pref-max-travel').value.trim(),
+      salaryFloor:             document.getElementById('pref-salary-floor').value.trim(),
+      salaryStrong:            document.getElementById('pref-salary-strong').value.trim(),
+      oteFloor:                document.getElementById('pref-ote-floor').value.trim(),
+      oteStrong:               document.getElementById('pref-ote-strong').value.trim(),
+      stalenessThresholdDays:  isNaN(stalenessRaw) ? 14 : Math.max(0, stalenessRaw),
     });
     chrome.storage.sync.set({ prefs }, () => {
       void chrome.runtime.lastError;
@@ -2781,13 +2783,15 @@ function initCoopChatDrawer() {
   if (!toggle || !drawer) return;
 
   const COOP_MODELS = [
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆', cost: '$', tier: 'Fast & cheap', provider: 'openai' },
-    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆', cost: '$', tier: 'Fastest', provider: 'openai' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', icon: '⚡', cost: '$', tier: 'Fast & cheap', provider: 'anthropic' },
-    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', icon: '✦', cost: '$$', tier: 'Balanced', provider: 'anthropic' },
-    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆', cost: '$$', tier: 'Balanced', provider: 'openai' },
-    { id: 'gpt-5', label: 'GPT-5', icon: '◆', cost: '$$$', tier: 'Most capable', provider: 'openai' },
-    { id: 'claude-opus-4-0-20250514', label: 'Claude Opus', icon: '★', cost: '$$$', tier: 'Most capable', provider: 'anthropic' },
+    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',       icon: '◆', cost: '$',   tier: 'Fastest',       provider: 'openai' },
+    { id: 'gemini-2.0-flash-lite',     label: 'Gemini Flash-Lite',  icon: '✦', cost: '$',   tier: 'Cheapest',      provider: 'gemini' },
+    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',       icon: '◆', cost: '$',   tier: 'Fast & cheap',  provider: 'openai' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku',       icon: '⚡', cost: '$',   tier: 'Fast & cheap',  provider: 'anthropic' },
+    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',       icon: '✦', cost: '$',   tier: 'Fast & cheap',  provider: 'gemini' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',  icon: '✦', cost: '$$',  tier: 'Balanced',      provider: 'anthropic' },
+    { id: 'gpt-4.1',                   label: 'GPT-4.1',            icon: '◆', cost: '$$',  tier: 'Balanced',      provider: 'openai' },
+    { id: 'gpt-5',                     label: 'GPT-5',              icon: '◆', cost: '$$$', tier: 'Most capable',  provider: 'openai' },
+    { id: 'claude-opus-4-0-20250514',  label: 'Claude Opus',        icon: '★', cost: '$$$', tier: 'Most capable',  provider: 'anthropic' },
   ];
   let availableModels = COOP_MODELS;
   let selectedModelIdx = 0;
@@ -2802,6 +2806,7 @@ function initCoopChatDrawer() {
       availableModels = COOP_MODELS.filter(m => {
         if (m.provider === 'openai') return !!status.openai;
         if (m.provider === 'anthropic') return !!status.anthropic;
+        if (m.provider === 'gemini') return !!status.gemini;
         return true;
       });
       if (!availableModels.length) availableModels = COOP_MODELS;
@@ -3150,13 +3155,15 @@ function applyCoopProposal(proposal) {
 function estimateTokenCost(modelId, inputTokens, outputTokens) {
   // Rates per 1M tokens (approximate, as of 2026)
   const rates = {
-    'gpt-4.1-mini':  { input: 0.40,  output: 1.60 },
-    'gpt-4.1-nano':  { input: 0.10,  output: 0.40 },
-    'gpt-4.1':       { input: 2.00,  output: 8.00 },
-    'gpt-5':         { input: 10.00, output: 30.00 },
-    'claude-haiku':  { input: 0.25,  output: 1.25 },
-    'claude-sonnet': { input: 3.00,  output: 15.00 },
-    'claude-opus':   { input: 15.00, output: 75.00 },
+    'gpt-4.1-mini':           { input: 0.40,  output: 1.60 },
+    'gpt-4.1-nano':           { input: 0.10,  output: 0.40 },
+    'gpt-4.1':                { input: 2.00,  output: 8.00 },
+    'gpt-5':                  { input: 10.00, output: 30.00 },
+    'claude-haiku':           { input: 0.25,  output: 1.25 },
+    'claude-sonnet':          { input: 3.00,  output: 15.00 },
+    'claude-opus':            { input: 15.00, output: 75.00 },
+    'gemini-2.0-flash':       { input: 0.10,  output: 0.40 },
+    'gemini-2.0-flash-lite':  { input: 0.05,  output: 0.20 },
   };
   // Match model ID to rates
   const key = Object.keys(rates).find(k => modelId?.toLowerCase().includes(k.replace('claude-', ''))) || 'gpt-4.1-mini';
@@ -4605,7 +4612,8 @@ function initAutoSave() {
   // Sync prefs fields — save on blur/change
   const syncFields = [
     'pref-name', 'pref-location-city', 'pref-location-state', 'pref-max-travel',
-    'pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong'
+    'pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong',
+    'pref-staleness-days'
   ];
   syncFields.forEach(id => {
     const el = document.getElementById(id);
@@ -4704,6 +4712,8 @@ loadPrefsWithMigration(syncPrefs => {
   document.getElementById('pref-salary-strong').value   = syncPrefs.salaryStrong  || '';
   document.getElementById('pref-ote-floor').value       = syncPrefs.oteFloor      || '';
   document.getElementById('pref-ote-strong').value      = syncPrefs.oteStrong     || '';
+  const stalenessEl = document.getElementById('pref-staleness-days');
+  if (stalenessEl) stalenessEl.value = syncPrefs.stalenessThresholdDays != null ? syncPrefs.stalenessThresholdDays : 14;
 
   const arr = syncPrefs.workArrangement || [];
   document.querySelectorAll('input[name="work-arr"]').forEach(cb => {

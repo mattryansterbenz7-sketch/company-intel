@@ -1,7 +1,7 @@
 // memory.js — Coop memory store, insight extraction, profile consolidation.
 
 import { state } from './bg-state.js';
-import { getModelForTask, claudeApiCall } from './api.js';
+import { getModelForTask, claudeApiCall, chatWithFallback } from './api.js';
 
 // ── Story Time: Passive Learning (insight extraction after every chat) ───────
 
@@ -296,17 +296,17 @@ ${rawInput || '(none provided)'}
 ${insights || '(none yet)'}`;
 
   try {
-    const res = await claudeApiCall({
+    const result = await chatWithFallback({
       model: getModelForTask('profileConsolidate'),
       max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }]
-    }, 3, 'profile');
-    if (!res || !res.ok) {
-      const errText = res ? await res.text().catch(() => '') : 'no response';
-      return { error: `API error ${res?.status || 'no response'}: ${errText.slice(0, 200)}` };
+      messages: [{ role: 'user', content: prompt }],
+      tag: 'consolidateProfile',
+      opTag: 'profile'
+    });
+    if (result.error) {
+      return { error: result.error };
     }
-    const data = await res.json();
-    return { profileSummary: data.content?.[0]?.text || '' };
+    return { profileSummary: result.reply || '' };
   } catch (err) {
     return { error: err.message };
   }

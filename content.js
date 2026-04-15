@@ -338,7 +338,24 @@ async function detectLinkedIn() {
 
 function classifyFirmoText(text, result) {
   if (/\d+.*employees?/i.test(text)) {
-    result.employees = text.replace(/\s*employees?/i, '').trim();
+    const cleanedText = text.replace(/\s*employees?/i, '').trim();
+
+    // Parse employee count to detect inflated ranges
+    // Standard LinkedIn employee ranges: "51-200", "1001-5000", etc.
+    // Inflated/incorrect ranges: "500-8,000+", "10,000+" (from JSON-LD structured data)
+    // Only update if we don't have employees yet, or if the new value is more reasonable
+    if (!result.employees) {
+      result.employees = cleanedText;
+    } else {
+      // If we already have an employee count, check if the new one is more reasonable
+      // Prefer smaller, more specific ranges over large/inflated ones
+      const existingNum = parseInt(result.employees.split('-')[0]) || 0;
+      const newNum = parseInt(cleanedText.split('-')[0]) || 0;
+      // Only replace if new value is smaller (more specific) or much closer to standard LinkedIn ranges
+      if (newNum > 0 && newNum < existingNum && newNum < 10000) {
+        result.employees = cleanedText;
+      }
+    }
     return;
   }
   if (/followers?/i.test(text)) {
@@ -358,6 +375,7 @@ function extractLinkedInCompanyFirmo() {
   const result = { employees: null, industry: null, location: null, tagline: null, followers: null };
 
   // Strategy 1: Find subtitle container with structured child elements
+  // LinkedIn's org-top-card contains data in structured divs/spans, typically separated by bullet points
   const subtitleSelectors = [
     '.org-top-card-summary-info-list',
     '.org-top-card-summary__info-list',
@@ -368,9 +386,22 @@ function extractLinkedInCompanyFirmo() {
     const el = document.querySelector(sel);
     if (!el) continue;
     const items = el.querySelectorAll('div, span, li');
+
+    // For employees, get the direct text from items to prefer human-readable text
     for (const item of items) {
       const text = item.textContent?.trim();
       if (!text || text.length > 80) continue;
+
+      // Prioritize employee data found here — this is the main firmographics section
+      if (/\d+.*employees?/i.test(text)) {
+        const cleanedText = text.replace(/\s*employees?/i, '').trim();
+        // Only set employees once from this structured section (prefer the first/most specific one)
+        if (!result.employees) {
+          result.employees = cleanedText;
+        }
+        continue;
+      }
+
       classifyFirmoText(text, result);
     }
     if (result.employees || result.industry) break;
@@ -1947,10 +1978,10 @@ async function injectCoopButton() {
   _scoopIsFloating = mode === 'floating';
   const baseStyle = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    gap: '0', padding: '0 16px', height: '36px',
+    gap: '0', padding: '0 24px', height: '40px',
     border: '1px solid #FF7A59', borderRadius: '24px',
     background: '#fff', color: '#FF7A59',
-    fontSize: '14px', fontWeight: '600', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontSize: '15px', fontWeight: '600', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     cursor: 'pointer', transition: 'all 0.15s',
     lineHeight: '1', whiteSpace: 'nowrap', flexShrink: '0',
   };

@@ -526,7 +526,8 @@ function renderCurrent() {
     const hasFlags = allGreens.length || allReds.length;
     const isQual = dim.key === 'qualificationFit';
     const isComp = dim.key === 'compFit';
-    const hasContent = isNewFormat && (hasFlags || isQual || isComp);
+    const hasAiScore = !isQual && !isComp && (aiDimScores[dim.key] >= 1 && aiDimScores[dim.key] <= 10);
+    const hasContent = isNewFormat && (hasFlags || isQual || isComp || hasAiScore);
 
     // Overview bar row (always visible, click selects matching toggle)
     dimBars.push(`

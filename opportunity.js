@@ -174,12 +174,16 @@ function mergeExtractedContacts(extracted) {
     if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
 
     // Auto-add all non-generic contacts — emails were fetched specifically for this company
-    existing.push({
+    const newContact = {
       name: contact.name,
       email: contact.email,
       source: contact.source || 'auto-extracted',
       addedAt: Date.now(),
-    });
+    };
+    if (contact.phone) newContact.phone = contact.phone;
+    if (contact.title) newContact.title = contact.title;
+    if (contact.linkedinUrl) newContact.linkedinUrl = contact.linkedinUrl;
+    existing.push(newContact);
     existingEmails.add(email);
     added++;
   }

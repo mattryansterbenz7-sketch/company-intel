@@ -65,6 +65,43 @@ function extractEmailBody(payload) {
   return '';
 }
 
+// ── Email signature parsing (zero cost contact enrichment) ────────────────
+
+export function parseEmailSignature(body) {
+  if (!body || body.length < 20) return null;
+  // Focus on the last ~800 chars where signatures live
+  const tail = body.slice(-800);
+  const result = {};
+
+  // Phone numbers: (xxx) xxx-xxxx, xxx-xxx-xxxx, +1xxxxxxxxxx, etc.
+  const phoneMatch = tail.match(/(?:(?:phone|cell|mobile|tel|direct|office)[:\s]*)?(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})\b/i);
+  if (phoneMatch) result.phone = phoneMatch[1].trim();
+
+  // LinkedIn URL
+  const liMatch = tail.match(/(https?:\/\/(?:www\.)?linkedin\.com\/in\/[a-z0-9_-]+)\/?/i);
+  if (liMatch) result.linkedinUrl = liMatch[1];
+
+  // Title extraction: look for common patterns like "Name | Title" or "Title at Company"
+  // Focus on lines near the end that look like signature blocks
+  const lines = tail.split('\n').map(l => l.trim()).filter(l => l.length > 2 && l.length < 80);
+  for (const line of lines.slice(-15)) {
+    // "Name | Title" or "Name — Title" or "Name, Title"
+    const pipeMatch = line.match(/^[A-Z][a-z]+ [A-Z][a-z]+\s*[|–—]\s*(.{5,50})$/);
+    if (pipeMatch && !pipeMatch[1].includes('@') && !pipeMatch[1].match(/^\d/)) {
+      result.title = pipeMatch[1].trim();
+      break;
+    }
+    // Standalone title line (VP Sales, Head of Marketing, etc.)
+    const titleMatch = line.match(/^((?:VP|SVP|EVP|AVP|Director|Head|Manager|Chief|Sr\.|Senior|Lead|Principal|Partner|Founder|Co-Founder|CEO|CTO|CFO|COO|CRO|CMO|President)\b.{3,45})$/i);
+    if (titleMatch && !titleMatch[1].includes('@')) {
+      result.title = titleMatch[1].trim();
+      break;
+    }
+  }
+
+  return Object.keys(result).length ? result : null;
+}
+
 // ── Rejection email detection (regex-only, zero cost) ─────────────────────
 
 export function detectRejectionEmailBg(emails, entry) {
@@ -225,9 +262,16 @@ export async function fetchGmailEmails(domain, companyName, linkedinSlug, knownC
           const fromAddr = (e.from || '').toLowerCase();
           const isBulk = BULK_SENDERS.test(fromAddr);
           if (isBulk) {
-            // Keep bulk/ATS emails only when the company name appears in the subject line.
-            // Body matches are too noisy (e.g. "flex league" in a tennis club email
-            // triggering a false association with a company named "Flex").
+            // If the sender is from the company's own domain, always keep it —
+            // noreply@company.com is still legitimate correspondence (ATS rejections,
+            // status updates, interview confirmations, etc.)
+            const emailMatch = fromAddr.match(/@([a-z0-9.-]+)/);
+            const senderDomain = emailMatch ? emailMatch[1] : '';
+            const targetDomain = (domain || '').toLowerCase().replace(/^www\./, '');
+            if (targetDomain && senderDomain && (senderDomain === targetDomain || senderDomain.endsWith('.' + targetDomain))) {
+              return true;
+            }
+            // Third-party bulk senders: only keep if company name in subject
             return companyInSubject(e);
           }
           // LinkedIn notification senders: keep only when subject mentions company
@@ -273,18 +317,39 @@ export async function fetchGmailEmails(domain, companyName, linkedinSlug, knownC
         };
         const extractedContacts = [];
         const seenEmails = new Set();
+        // Track signature data per sender for enrichment
+        const sigDataByEmail = {};
         for (const thread of allEmails) {
           const fromParts = parseEmailContact(thread.from);
-          if (fromParts && !isBulkAddr(fromParts.email) && !seenEmails.has(fromParts.email.toLowerCase())) {
-            seenEmails.add(fromParts.email.toLowerCase());
-            extractedContacts.push({ ...fromParts, source: 'email', matchedVia: classifyEmailContact(fromParts.email.toLowerCase()) });
+          if (fromParts && !isBulkAddr(fromParts.email)) {
+            const emailLower = fromParts.email.toLowerCase();
+            // Parse signature from this email's body (first time seeing this sender)
+            if (!sigDataByEmail[emailLower] && thread.body) {
+              const sig = parseEmailSignature(thread.body);
+              if (sig) sigDataByEmail[emailLower] = sig;
+            }
+            if (!seenEmails.has(emailLower)) {
+              seenEmails.add(emailLower);
+              const contact = { ...fromParts, source: 'email', matchedVia: classifyEmailContact(emailLower) };
+              if (sigDataByEmail[emailLower]) Object.assign(contact, sigDataByEmail[emailLower]);
+              extractedContacts.push(contact);
+            }
           }
           if (thread.messages) {
             for (const msg of thread.messages) {
               const msgFrom = parseEmailContact(msg.from);
-              if (msgFrom && !isBulkAddr(msgFrom.email) && !seenEmails.has(msgFrom.email.toLowerCase())) {
-                seenEmails.add(msgFrom.email.toLowerCase());
-                extractedContacts.push({ ...msgFrom, source: 'email', matchedVia: classifyEmailContact(msgFrom.email.toLowerCase()) });
+              if (msgFrom && !isBulkAddr(msgFrom.email)) {
+                const emailLower = msgFrom.email.toLowerCase();
+                if (!sigDataByEmail[emailLower] && msg.body) {
+                  const sig = parseEmailSignature(msg.body);
+                  if (sig) sigDataByEmail[emailLower] = sig;
+                }
+                if (!seenEmails.has(emailLower)) {
+                  seenEmails.add(emailLower);
+                  const contact = { ...msgFrom, source: 'email', matchedVia: classifyEmailContact(emailLower) };
+                  if (sigDataByEmail[emailLower]) Object.assign(contact, sigDataByEmail[emailLower]);
+                  extractedContacts.push(contact);
+                }
               }
             }
           }
@@ -302,4 +367,85 @@ export async function fetchGmailEmails(domain, companyName, linkedinSlug, knownC
       }
     });
   });
+}
+
+// ── Google People API: enrich contacts by email ─────────────────────────
+
+export async function enrichContactsFromGoogle(emails) {
+  return new Promise(resolve => {
+    chrome.identity.getAuthToken({ interactive: false }, async token => {
+      void chrome.runtime.lastError;
+      if (!token) { resolve({ error: 'not_connected' }); return; }
+
+      try {
+        const results = {};
+        console.log(`[PeopleAPI] Enriching ${emails.length} contacts:`, emails);
+        for (const email of emails) {
+          try {
+            // Try otherContacts:search first
+            const url1 = `https://people.googleapis.com/v1/otherContacts:search?query=${encodeURIComponent(email)}&readMask=photos,organizations,phoneNumbers,urls&pageSize=1`;
+            console.log(`[PeopleAPI] otherContacts:search for ${email}`);
+            const res = await fetch(url1, { headers: { Authorization: `Bearer ${token}` } });
+            console.log(`[PeopleAPI] otherContacts response: ${res.status}`);
+            if (res.status === 401) throw Object.assign(new Error('token_expired'), { code: 401 });
+            if (res.ok) {
+              const data = await res.json();
+              console.log(`[PeopleAPI] otherContacts data for ${email}:`, JSON.stringify(data).slice(0, 500));
+              const person = data.results?.[0]?.person;
+              if (person) { results[email] = extractPersonFields(person); console.log(`[PeopleAPI] Found via otherContacts:`, results[email]); continue; }
+            } else {
+              const errText = await res.text();
+              console.warn(`[PeopleAPI] otherContacts error ${res.status}:`, errText.slice(0, 300));
+            }
+            // Fallback: people:searchContacts
+            const url2 = `https://people.googleapis.com/v1/people:searchContacts?query=${encodeURIComponent(email)}&readMask=photos,organizations,phoneNumbers,urls&pageSize=1`;
+            console.log(`[PeopleAPI] searchContacts for ${email}`);
+            const res2 = await fetch(url2, { headers: { Authorization: `Bearer ${token}` } });
+            console.log(`[PeopleAPI] searchContacts response: ${res2.status}`);
+            if (res2.ok) {
+              const data2 = await res2.json();
+              console.log(`[PeopleAPI] searchContacts data for ${email}:`, JSON.stringify(data2).slice(0, 500));
+              const person2 = data2.results?.[0]?.person;
+              if (person2) { results[email] = extractPersonFields(person2); console.log(`[PeopleAPI] Found via searchContacts:`, results[email]); }
+            } else {
+              const errText2 = await res2.text();
+              console.warn(`[PeopleAPI] searchContacts error ${res2.status}:`, errText2.slice(0, 300));
+            }
+          } catch (inner) {
+            if (inner.code === 401) throw inner;
+            console.warn(`[PeopleAPI] Failed for ${email}:`, inner.message);
+          }
+        }
+        console.log(`[PeopleAPI] Final results:`, results);
+        resolve(results);
+      } catch (err) {
+        if (err.code === 401) {
+          chrome.identity.removeCachedAuthToken({ token }, () => {});
+          chrome.storage.local.remove('gmailConnected');
+          resolve({ error: 'token_expired' });
+        } else {
+          resolve({ error: err.message });
+        }
+      }
+    });
+  });
+}
+
+function extractPersonFields(person) {
+  const result = {};
+  // Photo — prefer non-default photos
+  const photo = (person.photos || []).find(p => !p.default) || person.photos?.[0];
+  if (photo?.url) result.photoUrl = photo.url;
+  // Title + company from organizations
+  const org = person.organizations?.[0];
+  if (org?.title) result.title = org.title;
+  if (org?.name) result.organization = org.name;
+  if (org?.department) result.department = org.department;
+  // Phone
+  const phone = person.phoneNumbers?.[0];
+  if (phone?.value) result.phone = phone.value;
+  // LinkedIn URL
+  const liUrl = (person.urls || []).find(u => /linkedin\.com/i.test(u.value));
+  if (liUrl?.value) result.linkedinUrl = liUrl.value;
+  return result;
 }

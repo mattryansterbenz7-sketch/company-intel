@@ -98,7 +98,7 @@ ${existingIndex}` }]
 // large enough that tools+base comfortably exceeds 2048 or neither breakpoint
 // writes a cache. The padding in the TOOL PATTERNS / GROUNDING / RESPONSE
 // DISCIPLINE sections below is deliberate — do not trim without remeasuring.
-function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat }) {
+function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat, voiceProfile }) {
   const principles = coopInterp.principlesBlock() +
     (applicationMode ? coopInterp.draftHint?.() || '' : '');
   const base = [
@@ -169,16 +169,35 @@ These are reference patterns. Match the user's question to the closest pattern, 
   const tailParts = [];
 
   if (applicationMode) {
+    const vp = voiceProfile || {};
+    const toneMap = {
+      conversational: 'Conversational, confident, specific. Sound like a smart person talking.',
+      professional: 'Professional but human. Clear and polished without being stiff.',
+      direct: 'Direct and concise. No softening, no hedging. Say exactly what you mean.',
+    };
+    const lengthMap = {
+      brief: '1-2 sentences',
+      standard: '2-5 sentences',
+      detailed: '5-8 sentences',
+    };
+    const toneInstr = toneMap[vp.tone] || toneMap.conversational;
+    const lengthInstr = lengthMap[vp.defaultLength] || lengthMap.standard;
+    const antiPhrases = (vp.antiPhrases || []).slice(0, 15);
+    const maxExcl = Number.isFinite(vp.maxExclamations) ? vp.maxExclamations : 1;
+    const signoffs = (vp.preferredSignoffs || []).filter(Boolean);
+
+    let voiceBlock = `VOICE & TONE:\n- Write as the user in first person. ${toneInstr}\n- Not an AI writing — no dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.`;
+    if (antiPhrases.length) voiceBlock += `\n- AVOID these phrases entirely: ${antiPhrases.join('; ')}.`;
+    if (maxExcl === 0) voiceBlock += `\n- No exclamation points.`;
+    else voiceBlock += `\n- Max ${maxExcl} exclamation point${maxExcl > 1 ? 's' : ''} per answer.`;
+    if (signoffs.length) voiceBlock += `\n- Preferred sign-offs: ${signoffs.join(', ')}.`;
+
     tailParts.push(`\n=== APPLICATION HELPER MODE ===
 SITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.
 
-VOICE & TONE:
-- Write as the user in first person. Conversational, confident, specific.
-- Sound like a smart person talking, not an AI writing.
-- No dramatic framing, no buzzword stacking, no filler.
-- NEVER wrap the answer in quotation marks.
+${voiceBlock}
 
-LENGTH: 2-5 sentences unless the user specifies otherwise.
+LENGTH: ${lengthInstr} unless the user specifies otherwise.
 
 OUTPUT FORMAT:
 - Give ONE clean answer the user can copy-paste directly.
@@ -188,6 +207,22 @@ OUTPUT FORMAT:
 CRITICAL: You have the user's FULL profile available via tools. ALWAYS call get_profile_section(section: "profile", tier: "full") + get_company_context IN PARALLEL on the first application question. DRAFT the answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information you can fetch.
 
 When the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
+
+    // Archetype-specific prompt hints
+    const archetype = context._questionArchetype;
+    if (archetype === 'motivation') {
+      tailParts.push(`\n=== QUESTION TYPE: MOTIVATION ===
+This is a "why" question (why this company, why this role, why this career). Draw from the user's profile AND what you know about the company. Be specific — reference their actual experience and something concrete about the company (industry, stage, product, mission). Generic enthusiasm is worse than no answer. Connect the two: why THEIR background + THIS company = a real match.`);
+    } else if (archetype === 'behavioral') {
+      tailParts.push(`\n=== QUESTION TYPE: BEHAVIORAL ===
+This is a "tell me about a time" question. Use a REAL example from the user's experience (via their profile). Structure naturally — situation, action, result — but conversational, not robotic STAR format. Pick the most relevant story. If multiple could work, pick the strongest and note the alternative in a brief aside.`);
+    } else if (archetype === 'technical') {
+      tailParts.push(`\n=== QUESTION TYPE: TECHNICAL ===
+This is a "describe your approach" or technical question. Pull from the user's skills, project experience, and domain expertise. Be specific about tools, methodologies, and outcomes. Show depth without being pedantic.`);
+    } else if (archetype === 'freeform') {
+      tailParts.push(`\n=== QUESTION TYPE: FREEFORM ===
+This is an open-ended question ("anything else?", "what should we know?"). Use this as an opportunity to surface something compelling from the user's profile that hasn't been covered — a unique project, a relevant insight, or genuine enthusiasm for the company. Keep it tight.`);
+    }
   }
 
   if (careerOSChat) {
@@ -301,10 +336,10 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   // Fetch compiled standard-tier docs for inline embedding.
   // Haiku 4.5 cache minimum is 4096 tokens — summaries alone (~400 tokens) aren't enough.
   // Standard profile (~700 tokens) + standard prefs (~2300 tokens) push base well above threshold.
-  const { coopProfileStandard, coopPrefsStandard } = await new Promise(r =>
-    chrome.storage.local.get(['coopProfileStandard', 'coopPrefsStandard'], r));
+  const { coopProfileStandard, coopPrefsStandard, voiceProfile } = await new Promise(r =>
+    chrome.storage.local.get(['coopProfileStandard', 'coopPrefsStandard', 'voiceProfile'], r));
   const profileSummary = [coopProfileStandard, coopPrefsStandard].filter(Boolean).join('\n\n');
-  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat: !!careerOSChat });
+  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat: !!careerOSChat, voiceProfile });
   const toolCtx = { boundCompany, boundEntryId };
 
   // G2.1 diagnostic: one-shot fingerprint so we can confirm base is (a) above
@@ -397,7 +432,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.OPENAI_KEY}` },
         body: JSON.stringify({ model: effectiveModel, messages: oaiMessages, max_tokens: 2048, tools: COOP_TOOLS_OPENAI }),
       });
-      trackApiCall('openai', res.clone(), effectiveModel, 'chat');
+      trackApiCall('openai', res.clone(), effectiveModel, 'chat', boundCompany || (globalChat ? 'global' : undefined));
       if (!res || !res.ok) {
         const errText = res ? await res.text().catch(() => '') : 'no response';
         console.error('[Coop][ToolUse] OpenAI API error:', res?.status, errText.slice(0, 300));
@@ -448,7 +483,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
         ],
         messages: conversation,
         tools: COOP_TOOLS,
-      }, 3, 'chat');
+      }, 3, 'chat', boundCompany || (globalChat ? 'global' : undefined));
       if (!res || !res.ok) {
         const errText = res ? await res.text().catch(() => '') : 'no response';
         console.error('[Coop][ToolUse] API error:', res?.status, errText.slice(0, 300));
@@ -560,7 +595,25 @@ Then, when the user shares a story in response, acknowledge it concretely ("Got 
 
   // Layer 2: Application helper mode
   if (context._applicationMode && state.coopConfig.automations?.applicationModeDetection !== false) {
-    systemParts.push(`\n=== APPLICATION HELPER MODE ===\nSITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.\n\nVOICE & TONE:\n- Write as the user in first person. Conversational, confident, specific.\n- Sound like a smart person talking, not an AI writing.\n- No dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.\n\nLENGTH: 2-5 sentences unless the user specifies otherwise.\n\nOUTPUT FORMAT:\n- Give ONE clean answer the user can copy-paste directly.\n- No preamble, no alternatives unless asked, no commentary after.\n- NEVER wrap in quotation marks.\n\nWhen the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
+    const _vp = await new Promise(r => chrome.storage.local.get(['voiceProfile'], d => r(d.voiceProfile || {})));
+    const _toneMap = { conversational: 'Conversational, confident, specific. Sound like a smart person talking.', professional: 'Professional but human. Clear and polished without being stiff.', direct: 'Direct and concise. No softening, no hedging. Say exactly what you mean.' };
+    const _lengthMap = { brief: '1-2 sentences', standard: '2-5 sentences', detailed: '5-8 sentences' };
+    const _toneInstr = _toneMap[_vp.tone] || _toneMap.conversational;
+    const _lengthInstr = _lengthMap[_vp.defaultLength] || _lengthMap.standard;
+    const _anti = (_vp.antiPhrases || []).slice(0, 15);
+    const _maxEx = Number.isFinite(_vp.maxExclamations) ? _vp.maxExclamations : 1;
+    const _signoffs = (_vp.preferredSignoffs || []).filter(Boolean);
+    let _voiceBlock = `VOICE & TONE:\n- Write as the user in first person. ${_toneInstr}\n- Not an AI writing — no dramatic framing, no buzzword stacking, no filler.\n- NEVER wrap the answer in quotation marks.`;
+    if (_anti.length) _voiceBlock += `\n- AVOID these phrases entirely: ${_anti.join('; ')}.`;
+    _voiceBlock += _maxEx === 0 ? `\n- No exclamation points.` : `\n- Max ${_maxEx} exclamation point${_maxEx > 1 ? 's' : ''} per answer.`;
+    if (_signoffs.length) _voiceBlock += `\n- Preferred sign-offs: ${_signoffs.join(', ')}.`;
+    systemParts.push(`\n=== APPLICATION HELPER MODE ===\nSITUATION: The user is filling out a job application form. They need short, authentic answers for application text box fields — not cover letters, not essays, not LinkedIn posts.\n\n${_voiceBlock}\n\nLENGTH: ${_lengthInstr} unless the user specifies otherwise.\n\nOUTPUT FORMAT:\n- Give ONE clean answer the user can copy-paste directly.\n- No preamble, no alternatives unless asked, no commentary after.\n- NEVER wrap in quotation marks.\n\nWhen the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
+    // Archetype-specific hints (legacy path)
+    const _arch = context._questionArchetype;
+    if (_arch === 'motivation') systemParts.push(`\n=== QUESTION TYPE: MOTIVATION ===\nThis is a "why" question. Draw from the user's profile AND what you know about the company. Be specific — reference their actual experience and something concrete about the company. Connect the two.`);
+    else if (_arch === 'behavioral') systemParts.push(`\n=== QUESTION TYPE: BEHAVIORAL ===\nThis is a "tell me about a time" question. Use a REAL example from the user's experience. Structure naturally — situation, action, result — but conversational, not robotic.`);
+    else if (_arch === 'technical') systemParts.push(`\n=== QUESTION TYPE: TECHNICAL ===\nDescribe your approach / technical question. Pull from the user's skills and project experience. Be specific about tools and outcomes.`);
+    else if (_arch === 'freeform') systemParts.push(`\n=== QUESTION TYPE: FREEFORM ===\nOpen-ended "anything else?" question. Surface something compelling from the user's profile that hasn't been covered. Keep it tight.`);
   }
 
   // Layer 2b: My Profile editor mode
@@ -933,7 +986,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const slimModel = state.OPENAI_KEY ? 'gpt-4.1-nano' : 'claude-haiku-4-5-20251001';
     console.log(`[Coop] ROUTED → Tier 1 (slim) | ${slimModel} | ${slimSystem.length} chars (${Math.round((1 - slimSystem.length/fullSize) * 100)}% saved)`);
     try {
-      const result = await chatWithFallback({ model: slimModel, system: slimSystem, messages, max_tokens: 1024, tag: 'Chat-Slim', opTag: 'chat' });
+      const result = await chatWithFallback({ model: slimModel, system: slimSystem, messages, max_tokens: 1024, tag: 'Chat-Slim', opTag: 'chat', context: context.company || (globalChat ? 'global' : undefined) });
       if (!result.error) return { reply: result.reply, model: result.usedModel, usage: result.usage, routed: 'slim' };
     } catch (e) { console.warn('[Coop] Tier 1 failed, escalating:', e.message); }
   }
@@ -983,7 +1036,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const visionTotal = baseSystem.length + visionTail.length;
     console.log(`[Coop] ROUTED → Tier 2.5 (vision) | ${visionModel} | base:${baseSystem.length} tail:${visionTail.length} chars (${Math.round((1 - visionTotal/fullSize) * 100)}% saved vs full)`);
     try {
-      const result = await chatWithFallback({ model: visionModel, system: { base: baseSystem, tail: visionTail }, messages, max_tokens: 2048, tag: 'Chat-Vision', opTag: 'chat' });
+      const result = await chatWithFallback({ model: visionModel, system: { base: baseSystem, tail: visionTail }, messages, max_tokens: 2048, tag: 'Chat-Vision', opTag: 'chat', context: context.company || (globalChat ? 'global' : undefined) });
       if (!result.error) {
         const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
         if (hasTrigger) await _doBlockingInsightExtraction(lastUserMsg, result.reply, source);
@@ -1012,7 +1065,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const mediumTotal = baseSystem.length + mediumTail.length;
     console.log(`[Coop] ROUTED → Tier 2 (medium, follow-up #${userMsgCount}) | ${mediumModel} | base:${baseSystem.length} tail:${mediumTail.length} chars (${Math.round((1 - mediumTotal/fullSize) * 100)}% saved)`);
     try {
-      const result = await chatWithFallback({ model: mediumModel, system: { base: baseSystem, tail: mediumTail }, messages, max_tokens: 2048, tag: 'Chat-Medium', opTag: 'chat' });
+      const result = await chatWithFallback({ model: mediumModel, system: { base: baseSystem, tail: mediumTail }, messages, max_tokens: 2048, tag: 'Chat-Medium', opTag: 'chat', context: context.company || (globalChat ? 'global' : undefined) });
       if (!result.error) {
         if (NEEDS_ESCALATION_RE.test(result.reply || '')) {
           console.log('[Coop] Tier 2 → escalating to Tier 3 via [[NEEDS_FULL_CONTEXT]] token');
@@ -1082,7 +1135,7 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
     const tailText = tailParts.join('\n');
     let model = chatModel || getModelForTask('chat');
     console.log(`[Coop] ROUTED → Tier 3 (full) | ${model} | base:${baseSystem.length} tail:${tailText.length} chars | global: ${!!globalChat} | company: ${context.company || '(none)'}`);
-    const result = await chatWithFallback({ model, system: { base: baseSystem, tail: tailText }, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat', opTag: 'chat' });
+    const result = await chatWithFallback({ model, system: { base: baseSystem, tail: tailText }, messages, max_tokens: 2048, tag: globalChat ? 'GlobalChat' : 'Chat', opTag: 'chat', context: context.company || (globalChat ? 'global' : undefined) });
     if (result.error) return result;
     const source = globalChat ? 'global-chat' : `chat:${context.company || 'unknown'}`;
     if (hasTrigger) {
@@ -1110,16 +1163,17 @@ export async function handleCoopAssistRewrite(message) {
   const { text, mode, pageContext } = message;
   if (!text || text.trim().length < 10) return { error: 'Text too short' };
 
-  const { voiceProfile, prefs, storyTime } = await new Promise(r => {
+  const { voiceProfile, coopProfileSummary, prefs } = await new Promise(r => {
     chrome.storage.local.get(['voiceProfile', 'coopProfileSummary'], local => {
       chrome.storage.sync.get(['prefs'], sync => r({ ...local, ...sync }));
     });
   });
   const userName = (prefs && (prefs.name || prefs.fullName)) || getUserName('the user');
   const profileBlurb = coopProfileSummary || '';
-  const antiPhrases = (voiceProfile && voiceProfile.antiPhrases) || [
-    'i hope this email finds you well', 'i wanted to reach out', 'circle back', 'kindly', 'leverage'
-  ];
+  const antiPhrases = (voiceProfile && voiceProfile.antiPhrases && voiceProfile.antiPhrases.length)
+    ? voiceProfile.antiPhrases
+    : ['i hope this email finds you well', 'i wanted to reach out', 'circle back', 'kindly', 'leverage'];
+  const maxExcl = (voiceProfile && Number.isFinite(voiceProfile.maxExclamations)) ? voiceProfile.maxExclamations : 1;
   const modeInstr = ({
     'voice':   'Rewrite this so it sounds authentically like the user — direct, specific, no corporate filler. Keep length similar.',
     'tighten': 'Tighten this. Cut filler, keep meaning. Aim ~30% shorter.',
@@ -1132,7 +1186,7 @@ export async function handleCoopAssistRewrite(message) {
 VOICE RULES:
 - Direct, specific, no corporate filler.
 - Avoid these phrases entirely: ${antiPhrases.slice(0, 12).join('; ')}.
-- Max 1 exclamation point in the whole reply.
+- Max ${maxExcl} exclamation point${maxExcl !== 1 ? 's' : ''} in the whole reply.
 - Sign-offs (only if a sign-off is present in the original): "—${userName}" or just "${userName}".
 - Never invent facts not in the original text.
 - ALWAYS return a rewritten version, even if the input is short, informal, or nonsensical. Never refuse, never ask for clarification, never explain — just rewrite.

@@ -67,7 +67,10 @@ export async function fetchCalendarEvents(domain, companyName, knownContactEmail
               email: (a.email || '').toLowerCase(),
               name: a.displayName || '',
               self: !!a.self,
+              responseStatus: a.responseStatus || null, // accepted, declined, tentative, needsAction
             })),
+            organizer: e.organizer ? { email: (e.organizer.email || '').toLowerCase(), name: e.organizer.displayName || '', self: !!e.organizer.self } : null,
+            location: e.location || null,
             description: e.description || '',
             meetLink: e.hangoutLink || e.conferenceData?.entryPoints?.[0]?.uri || null,
           }));

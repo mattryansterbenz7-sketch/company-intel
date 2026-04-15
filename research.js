@@ -1,8 +1,50 @@
 // research.js — Enrichment pipeline, research cache, company research orchestration.
 
 import { state, DEFAULT_PIPELINE_CONFIG, CACHE_TTL } from './bg-state.js';
-import { aiCall } from './api.js';
+import { aiCall, getApiUsage } from './api.js';
 import { fetchSearchResults, extractDomainFromResults, parseLinkedInCompanySnippet, fetchApolloData, fetchClaudeSummary } from './search.js';
+
+// ── Review result filter ──────────────────────────────────────────────────────
+// Discards results that are about review platforms themselves (e.g. "RepVue alternatives",
+// "best Glassdoor alternatives") rather than reviews of the target company.
+const JUNK_REVIEW_PATTERNS = [
+  /\balternatives?\b/i,
+  /\bvs\.?\s/i,
+  /\bcompare\b/i,
+  /\bbest\s+(?:sites?|tools?|platforms?|apps?)\b/i,
+  /\breviews?\s+of\s+glassdoor\b/i,
+  /\breviews?\s+of\s+indeed\b/i,
+  /\breviews?\s+of\s+repvue\b/i,
+  /\breviews?\s+of\s+comparably\b/i,
+  /\btop\s+\d+\s+(?:sites?|tools?|platforms?)\b/i,
+];
+
+function filterReviewResults(results, company) {
+  const companyLower = company.toLowerCase();
+  // Build a set of significant words from the company name for matching
+  const companyWords = companyLower
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 2);
+
+  return results.filter(r => {
+    const title = (r.title || '').toLowerCase();
+    const snippet = (r.snippet || '').toLowerCase();
+    const url = (r.link || '').toLowerCase();
+    const combined = `${title} ${snippet}`;
+
+    // Drop anything matching a known junk pattern in title or URL
+    if (JUNK_REVIEW_PATTERNS.some(pat => pat.test(title) || pat.test(url))) return false;
+
+    // Drop results where the company name doesn't appear in the title or snippet
+    // (indicates a generic/off-topic page slipped through)
+    const mentionsCompany = companyWords.length === 0
+      || companyWords.some(w => combined.includes(w));
+    if (!mentionsCompany) return false;
+
+    return true;
+  });
+}
 
 // ── Enrichment Pipeline (provider-agnostic with fallback) ────────────────────
 
@@ -28,9 +70,14 @@ export async function enrichFromApollo(company, domain) {
       industry: data.industry || null,
       employees: data.estimated_num_employees ? String(data.estimated_num_employees) : null,
       funding: data.total_funding_printed || null,
+      fundingStage: data.latest_funding_stage || null,
       foundedYear: data.founded_year || null,
       companyWebsite: data.website_url || null,
       companyLinkedin: (data.linkedin_url && !data.linkedin_url.includes('/company/unavailable')) ? data.linkedin_url : null,
+      revenue: data.annual_revenue_printed || null,
+      companyType: data.ownership_type || null,
+      techStack: (data.technologies || []).slice(0, 15),
+      twitterUrl: data.twitter_url || null,
       leaders: [],
       raw: data,
     };
@@ -74,6 +121,25 @@ export async function enrichFromWebResearch(company, domain, linkedinUrl) {
     const linkedinFirmo = parseLinkedInCompanySnippet(linkedinResults);
     console.log('[Enrich] LinkedIn firmo:', linkedinFirmo);
 
+    // Extract knowledge graph data from any Serper response (free structured data)
+    const kg = productResults._knowledgeGraph || websiteResults._knowledgeGraph || linkedinResults._knowledgeGraph || (firmoResults || [])._knowledgeGraph;
+    let kgFirmo = {};
+    if (kg?.attributes) {
+      const attrs = kg.attributes;
+      const empAttr = attrs['Number of employees'] || attrs.Employees || attrs['Employee count'] || '';
+      const foundedAttr = attrs.Founded || attrs['Year founded'] || '';
+      const revenueAttr = attrs.Revenue || attrs['Annual revenue'] || '';
+      const hqAttr = attrs.Headquarters || attrs.HQ || '';
+      kgFirmo = {
+        employees: empAttr ? String(empAttr).replace(/[^\d,\-–~+]/g, '').trim() || empAttr : null,
+        founded: foundedAttr ? String(foundedAttr).match(/\d{4}/)?.[0] || null : null,
+        revenue: revenueAttr || null,
+        headquarters: hqAttr || null,
+        description: kg.description || null,
+      };
+      console.log('[Enrich] Knowledge graph firmo:', kgFirmo);
+    }
+
     const snippets = [...productResults, ...websiteResults, ...(firmoResults || [])].map(r => `${r.title}: ${r.snippet}`).join('\n');
     console.log('[Enrich] Snippets for Haiku:', snippets.length, 'chars');
 
@@ -105,15 +171,18 @@ export async function enrichFromWebResearch(company, domain, linkedinUrl) {
     const result = {
       source: 'Web research',
       company,
-      description: null,
+      description: kgFirmo.description || null,
       industry: clean(linkedinFirmo?.industry) || clean(aiEstimate.industry) || null,
-      employees: clean(linkedinFirmo?.employees) || clean(aiEstimate.employees) || null,
+      employees: clean(linkedinFirmo?.employees) || clean(kgFirmo.employees) || clean(aiEstimate.employees) || null,
       funding: clean(linkedinFirmo?.funding) || clean(aiEstimate.funding) || null,
-      foundedYear: (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
+      fundingStage: null,
+      foundedYear: (linkedinFirmo?.founded ? parseInt(linkedinFirmo.founded) : null) || (kgFirmo.founded ? parseInt(kgFirmo.founded) : null) || (aiEstimate.founded ? parseInt(aiEstimate.founded) : null) || null,
+      revenue: clean(kgFirmo.revenue) || null,
       companyWebsite: discoveredDomain ? `https://${discoveredDomain}` : null,
       companyLinkedin: null,
+      techStack: [],
       leaders: [],
-      raw: { linkedinFirmo, aiEstimate },
+      raw: { linkedinFirmo, aiEstimate, kgFirmo },
     };
     console.log('[Enrich] Web Research final:', { employees: result.employees, industry: result.industry, funding: result.funding, website: result.companyWebsite });
     return result;
@@ -178,6 +247,9 @@ export async function quickLookup(company, domain, companyLinkedin, linkedinFirm
     funding: enrichment.funding,
     industry: enrichment.industry,
     founded: enrichment.foundedYear ? String(enrichment.foundedYear) : null,
+    revenue: enrichment.revenue || null,
+    companyType: enrichment.companyType || null,
+    techStack: enrichment.techStack || [],
     companyWebsite: enrichment.companyWebsite,
     companyLinkedin: enrichment.companyLinkedin,
     enrichmentSource: enrichment.source,
@@ -229,6 +301,10 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
   const cached = await getCached(cacheKey);
   if (cached) return cached;
 
+  // Capture cost before research
+  const usageBefore = await getApiUsage();
+  const costBefore = usageBefore.costToday || 0;
+
   try {
     const q = `"${company}"`;
 
@@ -243,7 +319,10 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
     // Scout-then-drill review search + parallel leader/job/product searches
     // Step 1: Scout query runs in parallel with other searches
     let leaderResults, jobResults, productResults;
-    const scoutPromise = fetchSearchResults(`"${company}" reviews sales culture glassdoor repvue reddit`, state.pipelineConfig.searchCounts?.reviewScout || 3);
+    const scoutPromise = fetchSearchResults(
+      `"${company}" (site:glassdoor.com OR site:indeed.com OR site:comparably.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees`,
+      state.pipelineConfig.searchCounts?.reviewScout || 3
+    );
 
     if (state._serperExhausted) {
       console.warn('[Research] Serper exhausted — running scout + leadership only; skipping jobs & product');
@@ -260,7 +339,9 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
     }
 
     // Step 2: Analyze scout results for known review sources
-    const scoutResults = await scoutPromise;
+    const rawScoutResults = await scoutPromise;
+    const scoutResults = filterReviewResults(rawScoutResults, company);
+    console.log('[Research] Review scout after filter:', scoutResults.length, '/', rawScoutResults.length, 'kept');
     const scoutUrls = scoutResults.map(r => (r.link || '').toLowerCase());
     const hasRepVue = scoutUrls.some(u => u.includes('repvue.com'));
     const hasGlassdoor = scoutUrls.some(u => u.includes('glassdoor.com'));
@@ -276,10 +357,10 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
     if (hasGlassdoor) drillPromises.push(fetchSearchResults(`site:glassdoor.com/Reviews "${company}" ${roleKeywords}`, state.pipelineConfig.searchCounts?.reviewDrill || 2));
     const drillResults = drillPromises.length ? await Promise.all(drillPromises) : [];
 
-    // Step 4: Combine and deduplicate by URL
+    // Step 4: Combine, filter, and deduplicate by URL
     const seenUrls = new Set();
     const reviewResults = [];
-    for (const r of [...scoutResults, ...drillResults.flat()]) {
+    for (const r of [...scoutResults, ...filterReviewResults(drillResults.flat(), company)]) {
       const url = (r.link || '').toLowerCase();
       if (url && !seenUrls.has(url)) { seenUrls.add(url); reviewResults.push(r); }
     }
@@ -287,7 +368,10 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
 
     // Use Apollo raw data for Claude synthesis if available, otherwise pass empty
     const apolloRaw = enrichment.raw?.estimated_num_employees ? enrichment.raw : {};
-    const aiSummary = await fetchClaudeSummary(company, apolloRaw, reviewResults, leaderResults, productResults, domain);
+    // Collect knowledge graph + news from any Serper response for Claude
+    const kg = productResults._knowledgeGraph || reviewResults._knowledgeGraph || leaderResults._knowledgeGraph || jobResults._knowledgeGraph;
+    const news = productResults._news || reviewResults._news || leaderResults._news || [];
+    const aiSummary = await fetchClaudeSummary(company, apolloRaw, reviewResults, leaderResults, productResults, domain, { knowledgeGraph: kg, news });
 
     const claudeFirmo = aiSummary.firmographics || {};
     const src = enrichment.source || 'Unknown';
@@ -297,6 +381,10 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
       funding: enrichment.funding || claudeFirmo.funding || null,
       industry: enrichment.industry || claudeFirmo.industry || null,
       founded: enrichment.foundedYear ? String(enrichment.foundedYear) : (claudeFirmo.founded || null),
+      revenue: enrichment.revenue || claudeFirmo.revenue || null,
+      companyType: enrichment.companyType || claudeFirmo.companyType || null,
+      techStack: (enrichment.techStack?.length ? enrichment.techStack : claudeFirmo.techStack) || [],
+      recentNews: aiSummary.recentNews || [],
       companyWebsite: enrichment.companyWebsite || null,
       companyLinkedin: enrichment.companyLinkedin || null,
       jobListings: jobResults.map(r => ({ title: r.title, url: r.link, snippet: r.snippet })),
@@ -308,6 +396,8 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
         funding: enrichment.funding ? src : claudeFirmo.funding ? 'Claude estimate' : null,
         industry: enrichment.industry ? src : claudeFirmo.industry ? 'Claude estimate' : null,
         founded: enrichment.foundedYear ? src : claudeFirmo.founded ? 'Claude estimate' : null,
+        revenue: enrichment.revenue ? src : claudeFirmo.revenue ? 'Claude estimate' : null,
+        techStack: enrichment.techStack?.length ? src : claudeFirmo.techStack?.length ? 'Claude estimate' : null,
         intelligence: 'Claude synthesis',
         leaders: leaderResults.length ? 'LinkedIn via search' : null,
         reviews: reviewResults.length ? 'Web search' : null,
@@ -325,10 +415,15 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
       if (!result.employees && linkedinFirmo.employees) { result.employees = linkedinFirmo.employees; result.employeesSource = 'LinkedIn (page)'; }
       if (!result.industry && linkedinFirmo.industry) { result.industry = linkedinFirmo.industry; result.industrySource = 'LinkedIn (page)'; }
     }
-    // Track research metadata: APIs used and estimated cost
+    // Track research metadata: APIs used and actual cost
+    const usageAfter = await getApiUsage();
+    const costAfter = usageAfter.costToday || 0;
+    const researchCost = Math.max(0, costAfter - costBefore); // Ensure non-negative
+
     const researchMeta = {
       apisUsed: [],
-      estimatedCost: 'Low (~$0.01)',
+      cost: researchCost,
+      costFormatted: researchCost > 0 ? `$${researchCost.toFixed(4)}` : '$0.0001',
     };
     if (enrichment.source === 'Apollo') researchMeta.apisUsed.push('Apollo');
     if (reviewResults.length || leaderResults.length || jobResults.length || productResults.length) researchMeta.apisUsed.push('Serper');
@@ -367,10 +462,14 @@ export async function scoutCompany(companyName) {
   // Run 2 parallel Serper searches: product overview + culture/reviews
   const numResults = scoringConfig.scoutResultCount || 3;
   console.log('[Scout] Fetching for:', companyName, `(${numResults} results per query)`);
-  const [overviewResults, reviewResults] = await Promise.all([
+  const [overviewResults, rawReviewResults] = await Promise.all([
     fetchSearchResults(`"${companyName}" what does it do product overview`, numResults),
-    fetchSearchResults(`"${companyName}" reviews culture glassdoor repvue reddit`, numResults),
+    fetchSearchResults(
+      `"${companyName}" (site:glassdoor.com OR site:indeed.com OR site:comparably.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees`,
+      numResults
+    ),
   ]);
+  const reviewResults = filterReviewResults(rawReviewResults, companyName);
   if (!overviewResults.length && !reviewResults.length) return null;
   const overviewSnippets = overviewResults.slice(0, numResults).map(r => `${r.title}: ${r.snippet || ''}`).join('\n');
   const reviewSnippets = reviewResults.slice(0, numResults).map(r => `[${r.displayLink || 'review'}] ${r.snippet || ''}`).join('\n');

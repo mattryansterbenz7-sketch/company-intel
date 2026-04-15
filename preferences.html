@@ -890,7 +890,7 @@
 
   <div class="page">
 
-    <!-- ── Job Match toggle ── -->
+    <!-- ── Job Match toggle + Pipeline alerts ── -->
     <div class="card" style="margin-bottom:10px;">
       <div style="padding: 12px 16px;">
         <div class="toggle-row">
@@ -902,6 +902,17 @@
             <input type="checkbox" id="pref-job-match-toggle">
             <span class="toggle-track"></span>
           </label>
+        </div>
+        <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 10px; padding-top: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <div class="toggle-info" style="flex: 1; min-width: 180px;">
+            <div class="toggle-label-text" style="font-size:13px;">Stale pipeline alert</div>
+            <div class="toggle-desc" style="font-size:11px;">Flag active opportunities with no activity after this many days. Set to 0 to disable.</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <input type="number" id="pref-staleness-days" min="0" max="365" step="1" placeholder="14"
+              style="width: 64px; font-size: 13px; font-weight: 600; padding: 5px 8px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-inset); color: var(--ci-text-primary); font-family: inherit; text-align: center; outline: none;">
+            <span style="font-size: 12px; color: var(--ci-text-tertiary);">days</span>
+          </div>
         </div>
       </div>
     </div>

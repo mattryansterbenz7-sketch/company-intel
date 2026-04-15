@@ -4,12 +4,14 @@ import { state, DEFAULT_PIPELINE_CONFIG } from './bg-state.js';
 
 // ── Cost model ─────────────────────────────────────────────────────────────
 export const MODEL_COST_PER_MTok = {
-  'claude-haiku-4-5-20251001': { input: 1.00, output: 5.00 },
-  'claude-sonnet-4-6':         { input: 3.00, output: 15.00 },
-  'claude-opus-4-6':           { input: 15.00, output: 75.00 },
-  'gpt-4.1-nano':              { input: 0.10, output: 0.40 },
-  'gpt-4.1-mini':              { input: 0.40, output: 1.60 },
-  'gpt-4.1':                   { input: 2.00, output: 8.00 },
+  'claude-haiku-4-5-20251001':  { input: 1.00, output: 5.00 },
+  'claude-sonnet-4-6':          { input: 3.00, output: 15.00 },
+  'claude-opus-4-6':            { input: 15.00, output: 75.00 },
+  'gpt-4.1-nano':               { input: 0.10, output: 0.40 },
+  'gpt-4.1-mini':               { input: 0.40, output: 1.60 },
+  'gpt-4.1':                    { input: 2.00, output: 8.00 },
+  'gemini-2.0-flash':           { input: 0.10, output: 0.40 },
+  'gemini-2.0-flash-lite':      { input: 0.05, output: 0.20 },
 };
 
 export function estimateCallCost(model, inputTokens, outputTokens, cacheCreationTokens = 0, cacheReadTokens = 0) {
@@ -39,7 +41,7 @@ export async function saveApiUsage(usage) {
   return new Promise(r => chrome.storage.local.set({ apiUsage: usage }, r));
 }
 
-export async function trackApiCall(provider, response, model, opTag) {
+export async function trackApiCall(provider, response, model, opTag, context) {
   try {
     const usage = await getApiUsage();
     const today = new Date().toISOString().slice(0, 10);
@@ -79,13 +81,20 @@ export async function trackApiCall(provider, response, model, opTag) {
     dayEntry.requests++;
     pd.dailyHistory = pd.dailyHistory.slice(-30);
 
-    if (provider === 'anthropic' || provider === 'openai') {
+    if (provider === 'anthropic' || provider === 'openai' || provider === 'gemini') {
       try {
         const data = await response.json();
-        const inputTokens  = data.usage?.input_tokens || data.usage?.prompt_tokens || 0;
-        const outputTokens = data.usage?.output_tokens || data.usage?.completion_tokens || 0;
-        const cacheCreation = data.usage?.cache_creation_input_tokens || 0;
-        const cacheRead     = data.usage?.cache_read_input_tokens || 0;
+        let inputTokens, outputTokens, cacheCreation = 0, cacheRead = 0;
+        if (provider === 'gemini') {
+          // Gemini uses usageMetadata
+          inputTokens  = data.usageMetadata?.promptTokenCount || 0;
+          outputTokens = data.usageMetadata?.candidatesTokenCount || 0;
+        } else {
+          inputTokens  = data.usage?.input_tokens || data.usage?.prompt_tokens || 0;
+          outputTokens = data.usage?.output_tokens || data.usage?.completion_tokens || 0;
+          cacheCreation = data.usage?.cache_creation_input_tokens || 0;
+          cacheRead     = data.usage?.cache_read_input_tokens || 0;
+        }
         const totalIn = inputTokens + cacheCreation + cacheRead;
         pd.totalInputTokens += totalIn;
         pd.totalOutputTokens += outputTokens;
@@ -104,7 +113,7 @@ export async function trackApiCall(provider, response, model, opTag) {
           : '';
         console.log(`[Cost] ${model || provider} — in:${inputTokens} out:${outputTokens}${cacheNote} → $${callCost.toFixed(4)} (today: $${usage.costToday.toFixed(4)})`);
         if (!usage.callLog) usage.callLog = [];
-        usage.callLog.push({ ts: Date.now(), provider, model: model || provider, input: totalIn, output: outputTokens, cost: callCost, ...(opTag ? { op: opTag } : {}) });
+        usage.callLog.push({ ts: Date.now(), provider, model: model || provider, input: totalIn, output: outputTokens, cost: callCost, ...(opTag ? { op: opTag } : {}), ...(context ? { context } : {}) });
         usage.callLog = usage.callLog.filter(c => c.ts > Date.now() - 86400000).slice(-500);
       } catch (costErr) {
         console.error('[Cost] Failed to track cost:', costErr.message);
@@ -149,7 +158,7 @@ export function getModelForTask(taskId) {
 }
 
 // ── Claude API call with retry ─────────────────────────────────────────────
-export async function claudeApiCall(body, maxRetries = 3, opTag) {
+export async function claudeApiCall(body, maxRetries = 3, opTag, context) {
   if (typeof body.system === 'string' && body.system.length > 500) {
     body = {
       ...body,
@@ -167,7 +176,7 @@ export async function claudeApiCall(body, maxRetries = 3, opTag) {
       },
       body: JSON.stringify(body)
     });
-    trackApiCall('anthropic', res.clone(), body.model, opTag);
+    trackApiCall('anthropic', res.clone(), body.model, opTag, context);
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[Claude] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -179,7 +188,7 @@ export async function claudeApiCall(body, maxRetries = 3, opTag) {
 }
 
 // ── OpenAI API call with retry ─────────────────────────────────────────────
-export async function openAiChatCall({ model, system, messages, max_tokens, opTag }, maxRetries = 3) {
+export async function openAiChatCall({ model, system, messages, max_tokens, opTag, context }, maxRetries = 3) {
   const oaiMessages = [{ role: 'system', content: system }];
   for (const m of messages) {
     if (Array.isArray(m.content)) {
@@ -203,7 +212,7 @@ export async function openAiChatCall({ model, system, messages, max_tokens, opTa
       },
       body: JSON.stringify({ model, messages: oaiMessages, max_tokens })
     });
-    trackApiCall('openai', res.clone(), model, opTag);
+    trackApiCall('openai', res.clone(), model, opTag, context);
     if (res.status === 429 && attempt < maxRetries) {
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[OpenAI] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
@@ -214,8 +223,69 @@ export async function openAiChatCall({ model, system, messages, max_tokens, opTa
   }
 }
 
+// ── Gemini API call with retry ─────────────────────────────────────────────
+export async function geminiApiCall({ model, messages, system, max_tokens, tools, opTag, context }, maxRetries = 3) {
+  // Convert Claude-style messages → Gemini contents format
+  // Gemini uses 'user' and 'model' (not 'assistant')
+  const contents = messages.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: Array.isArray(m.content)
+      ? m.content.flatMap(block => {
+          if (block.type === 'text') return [{ text: block.text }];
+          if (block.type === 'tool_result') return [{ text: typeof block.content === 'string' ? block.content : JSON.stringify(block.content) }];
+          if (block.type === 'tool_use') return [{ text: `[tool_use: ${block.name}(${JSON.stringify(block.input)})]` }];
+          return [];
+        })
+      : [{ text: m.content || '' }],
+  }));
+
+  const body = {
+    contents,
+    generationConfig: { maxOutputTokens: max_tokens || 8192 },
+  };
+
+  // System instruction (optional)
+  if (system) {
+    const sysText = typeof system === 'string' ? system
+      : Array.isArray(system) ? system.map(b => b.text || '').join('\n')
+      : (typeof system === 'object' && system.base) ? (system.base + '\n' + (system.tail || ''))
+      : '';
+    if (sysText) body.systemInstruction = { parts: [{ text: sysText }] };
+  }
+
+  // Tools (function declarations)
+  if (tools && tools.length) {
+    body.tools = [{
+      functionDeclarations: tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema || t.parameters || { type: 'object', properties: {}, required: [] },
+      })),
+    }];
+  }
+
+  const apiKey = state.GEMINI_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    trackApiCall('gemini', res.clone(), model, opTag, context);
+    if (res.status === 429 && attempt < maxRetries) {
+      const delay = Math.pow(2, attempt + 1) * 1000;
+      console.warn(`[Gemini] Rate limited (429), retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return res;
+  }
+}
+
 // ── Unified chat with automatic fallback ───────────────────────────────────
-export async function chatWithFallback({ model, system, messages, max_tokens, tag, opTag }) {
+export async function chatWithFallback({ model, system, messages, max_tokens, tag, opTag, context }) {
   const isSplit = system && typeof system === 'object' && typeof system.base === 'string';
   const claudeSystem = isSplit
     ? [
@@ -226,15 +296,18 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
   const openAiSystem = isSplit ? (system.base + '\n' + system.tail) : system;
 
   const fbConfig = state.pipelineConfig?.chatFallback || { enabled: true, allowExpensive: false, showIndicator: true };
-  const CHEAP_MODELS = new Set(['gpt-4.1-nano', 'gpt-4.1-mini', 'claude-haiku-4-5-20251001']);
+  const CHEAP_MODELS = new Set(['gpt-4.1-nano', 'gemini-2.0-flash-lite', 'gpt-4.1-mini', 'claude-haiku-4-5-20251001', 'gemini-2.0-flash']);
   const fullChain = [
-    { id: 'gpt-4.1-nano', type: 'openai' },
-    { id: 'gpt-4.1-mini', type: 'openai' },
+    { id: 'gpt-4.1-nano',              type: 'openai' },
+    { id: 'gemini-2.0-flash-lite',     type: 'gemini' },
+    { id: 'gpt-4.1-mini',              type: 'openai' },
     { id: 'claude-haiku-4-5-20251001', type: 'claude' },
-    { id: 'claude-sonnet-4-6', type: 'claude' },
-    { id: 'gpt-4.1', type: 'openai' },
+    { id: 'gemini-2.0-flash',          type: 'gemini' },
+    { id: 'claude-sonnet-4-6',         type: 'claude' },
+    { id: 'gpt-4.1',                   type: 'openai' },
   ];
-  const ordered = [{ id: model, type: model.startsWith('gpt-') ? 'openai' : 'claude' }];
+  const modelType = model.startsWith('gpt-') ? 'openai' : model.startsWith('gemini-') ? 'gemini' : 'claude';
+  const ordered = [{ id: model, type: modelType }];
   if (fbConfig.enabled) {
     for (const fb of fullChain) {
       if (fb.id === model) continue;
@@ -248,10 +321,11 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
   for (const candidate of ordered) {
     if (candidate.type === 'openai' && !state.OPENAI_KEY) continue;
     if (candidate.type === 'claude' && !state.ANTHROPIC_KEY) continue;
+    if (candidate.type === 'gemini' && !state.GEMINI_KEY) continue;
 
     try {
       if (candidate.type === 'openai') {
-        const res = await openAiChatCall({ model: candidate.id, system: openAiSystem, messages, max_tokens, opTag });
+        const res = await openAiChatCall({ model: candidate.id, system: openAiSystem, messages, max_tokens, opTag, context });
         const data = await res.json();
         if (res.ok) {
           const reply = data.choices?.[0]?.message?.content || 'No response.';
@@ -267,8 +341,31 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
         }
         lastError = data?.error?.message || `OpenAI error ${res.status}`;
         console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
+      } else if (candidate.type === 'gemini') {
+        const res = await geminiApiCall({ model: candidate.id, messages, system: isSplit ? (system.base + '\n' + system.tail) : system, max_tokens, opTag, context });
+        const data = await res.json();
+        if (res.ok) {
+          // Extract text from Gemini response — may be a functionCall or text part
+          const candidate0 = data.candidates?.[0];
+          const parts = candidate0?.content?.parts || [];
+          const textPart = parts.find(p => typeof p.text === 'string');
+          const reply = textPart?.text || 'No response.';
+          const toolCallPart = parts.find(p => p.functionCall);
+          const toolCalls = toolCallPart ? [{ name: toolCallPart.functionCall.name, input: toolCallPart.functionCall.args }] : undefined;
+          const didFallback = candidate.id !== model;
+          if (didFallback) console.warn(`[${tag}] Fell back from ${model} to ${candidate.id}`);
+          const usage = {
+            input: data.usageMetadata?.promptTokenCount || 0,
+            output: data.usageMetadata?.candidatesTokenCount || 0,
+            cacheCreation: 0,
+            cacheRead: 0,
+          };
+          return { reply, usedModel: candidate.id, usage, fellBack: didFallback, originalModel: didFallback ? model : undefined, ...(toolCalls ? { toolCalls } : {}) };
+        }
+        lastError = data?.error?.message || `Gemini error ${res.status}`;
+        console.warn(`[${tag}] ${candidate.id} failed (${res.status}): ${lastError}, trying next...`);
       } else {
-        const res = await claudeApiCall({ model: candidate.id, max_tokens, system: claudeSystem, messages }, 3, opTag);
+        const res = await claudeApiCall({ model: candidate.id, max_tokens, system: claudeSystem, messages }, 3, opTag, context);
         const data = await res.json();
         if (res.ok) {
           const reply = data.content?.[0]?.text || 'No response.';
@@ -294,18 +391,33 @@ export async function chatWithFallback({ model, system, messages, max_tokens, ta
 }
 
 // ── Generic AI call router ─────────────────────────────────────────────────
-export async function aiCall(taskId, { system, messages, max_tokens }, opTag) {
+export async function aiCall(taskId, { system, messages, max_tokens }, opTag, context) {
   const model = getModelForTask(taskId);
+
+  if (model.startsWith('gemini-')) {
+    if (!state.GEMINI_KEY) {
+      console.warn(`[AI] Gemini key missing for task ${taskId}, falling back to Claude`);
+      const fallback = model.includes('lite') ? 'claude-haiku-4-5-20251001' : 'claude-haiku-4-5-20251001';
+      const res = await claudeApiCall({ model: fallback, system, messages, max_tokens }, 3, opTag, context);
+      const data = await res.json();
+      return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model: fallback };
+    }
+    const res = await geminiApiCall({ model, messages, system, max_tokens, opTag, context });
+    const data = await res.json();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const textPart = parts.find(p => typeof p.text === 'string');
+    return { ok: res.ok, status: res.status, text: textPart?.text || '', raw: data, provider: 'gemini', model };
+  }
 
   if (model.startsWith('gpt-')) {
     if (!state.OPENAI_KEY) {
       console.warn(`[AI] OpenAI key missing for task ${taskId}, falling back to Claude`);
       const fallback = model.includes('mini') ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
-      const res = await claudeApiCall({ model: fallback, system, messages, max_tokens }, 3, opTag);
+      const res = await claudeApiCall({ model: fallback, system, messages, max_tokens }, 3, opTag, context);
       const data = await res.json();
       return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model: fallback };
     }
-    const res = await openAiChatCall({ model, system, messages, max_tokens, opTag });
+    const res = await openAiChatCall({ model, system, messages, max_tokens, opTag, context });
     const data = await res.json();
     return { ok: res.ok, status: res.status, text: data.choices?.[0]?.message?.content || '', raw: data, provider: 'openai', model };
   }
@@ -314,14 +426,14 @@ export async function aiCall(taskId, { system, messages, max_tokens }, opTag) {
     console.warn(`[AI] Anthropic key missing for task ${taskId}, falling back to OpenAI`);
     if (state.OPENAI_KEY) {
       const fallback = model.includes('sonnet') ? 'gpt-4.1' : 'gpt-4.1-mini';
-      const res = await openAiChatCall({ model: fallback, system, messages, max_tokens, opTag });
+      const res = await openAiChatCall({ model: fallback, system, messages, max_tokens, opTag, context });
       const data = await res.json();
       return { ok: res.ok, status: res.status, text: data.choices?.[0]?.message?.content || '', raw: data, provider: 'openai', model: fallback };
     }
     return { ok: false, status: 0, text: '', raw: {}, provider: 'none', model, error: 'No AI keys configured' };
   }
 
-  const res = await claudeApiCall({ model, system, messages, max_tokens }, 3, opTag);
+  const res = await claudeApiCall({ model, system, messages, max_tokens }, 3, opTag, context);
   const data = await res.json();
   return { ok: res.ok, status: res.status, text: data.content?.[0]?.text || '', raw: data, provider: 'anthropic', model };
 }

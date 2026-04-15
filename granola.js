@@ -66,6 +66,9 @@ export async function buildGranolaIndex() {
         const detail = await granolaFetch('/v1/notes/' + note.id);
         if (!detail) continue;
 
+        // Capture any URL the API returns for linking back to Granola
+        const noteUrl = detail.share_url || detail.url || detail.web_url || detail.permalink || detail.app_url || detail.note_url || null;
+
         index.notes[note.id] = {
           id: note.id,
           title: detail.title || note.title || '',
@@ -77,6 +80,7 @@ export async function buildGranolaIndex() {
           calendarTitle: detail.calendar_event?.event_title || '',
           hasSummary: !!(detail.summary_text || detail.summary_markdown),
           hasTranscript: true, // assume true, actual fetch happens on match
+          url: noteUrl,
         };
         totalNotes++;
       }
@@ -234,9 +238,38 @@ export async function searchGranolaNotes(companyName, companyDomain, contactName
       const full = await granolaFetch('/v1/notes/' + note.id + '?include=transcript');
       if (!full) continue;
 
-      const transcriptText = (full.transcript || []).map(t =>
-        (t.speaker?.source || 'Speaker') + ': ' + t.text
-      ).join('\n');
+      // Deep-scan for URL-like fields to find shareable link
+      const urlFields = {};
+      const scanObj = (obj, prefix) => {
+        if (!obj || typeof obj !== 'object') return;
+        for (const [k, v] of Object.entries(obj)) {
+          const path = prefix ? prefix + '.' + k : k;
+          if (typeof v === 'string' && (k.toLowerCase().match(/url|link|share|permalink|slug|href/) || v.startsWith('http'))) {
+            urlFields[path] = v;
+          } else if (typeof v === 'object' && v && !Array.isArray(v) && prefix.split('.').length < 3) {
+            scanObj(v, path);
+          }
+        }
+      };
+      scanObj(full, '');
+      if (Object.keys(urlFields).length) console.log('[Granola] Note URL fields (deep scan):', urlFields);
+      else console.log('[Granola] Note top-level keys:', Object.keys(full).join(', '), '| id:', note.id);
+
+      // Build attendee ID → name lookup for speaker attribution
+      const attendeeById = {};
+      for (const a of (full.attendees || [])) {
+        if (a.id && a.name) attendeeById[a.id] = a.name;
+      }
+
+      const transcriptText = (full.transcript || []).map(t => {
+        // Try to resolve the real speaker name: attendee ID lookup → speaker name field → source tag
+        const speakerLabel =
+          (t.speaker?.attendee_id && attendeeById[t.speaker.attendee_id]) ||
+          t.speaker?.name ||
+          t.speaker?.source ||
+          'Speaker';
+        return speakerLabel + ': ' + t.text;
+      }).join('\n');
 
       const summaryMd = full.summary_markdown || '';
       const summaryText = full.summary_text || '';
@@ -254,6 +287,10 @@ export async function searchGranolaNotes(companyName, companyDomain, contactName
         summaryMarkdown: summaryMd,
         attendees,
         calendarTitle: calEvent.event_title || null,
+        // Prefer API-returned URLs; fall back to index-cached URL; last resort uses
+        // notes.granola.ai/t/ format (correct domain + path for shareable links)
+        url: full.share_url || full.url || full.web_url || full.permalink || full.app_url
+          || note.url || ('https://notes.granola.ai/t/' + note.id),
       });
 
       // Extract attendee contacts. The `reason` captures WHY this meeting was
@@ -269,10 +306,28 @@ export async function searchGranolaNotes(companyName, companyDomain, contactName
           'title-company':  { type: 'granola-title',          detail: `Meeting "${meetingTitle}" — company name in meeting title` },
         };
         const matchedVia = matchedViaMap[reason] || { type: 'granola-meeting', detail: `Meeting "${meetingTitle}"` };
+
+        // Domain guard: for meetings that matched via email-domain, the company connection
+        // is already confirmed by attendee email — trust all attendees.
+        // For other match reasons (folder, title, attendee-name), the meeting was found
+        // heuristically and may include attendees from unrelated companies. Only add
+        // attendees whose email domain matches this company to prevent contact bleed.
+        const domainLower = (companyDomain || '').toLowerCase();
+        const baseDomain = domainLower ? domainLower.split('.')[0] : '';
+        const isCompanyDomainEmail = (emailAddr) => {
+          if (!domainLower) return false;
+          const d = (emailAddr.split('@')[1] || '').toLowerCase();
+          if (d === domainLower) return true;
+          if (baseDomain && d.split('.')[0] === baseDomain) return true;
+          return false;
+        };
+        const requireDomainMatch = reason !== 'email-domain';
+
         for (const att of full.attendees) {
-          if (att.email && att.name) {
-            granolaContacts.push({ name: att.name, email: att.email.toLowerCase(), source: 'meeting', matchedVia });
-          }
+          if (!att.email || !att.name) continue;
+          const attEmail = att.email.toLowerCase();
+          if (requireDomainMatch && !isCompanyDomainEmail(attEmail)) continue;
+          granolaContacts.push({ name: att.name, email: attEmail, source: 'meeting', matchedVia });
         }
       }
 

@@ -6,6 +6,65 @@ function setChatContext(key, context) {
   _chatContextOverrides[key] = context;
 }
 
+// ── Chat history persistence ──────────────────────────────────────────────────
+// Storage key: chatHistory_${entryId}
+// Shape: { sessions: [{ id, startedAt, messages: [{role, content, _usage, _model}] }] }
+// Max 10 sessions per entry; read-only in display — new API calls always start fresh.
+
+const MAX_SESSIONS = 10;
+
+function loadChatHistory(entryId, callback) {
+  const key = `chatHistory_${entryId}`;
+  chrome.storage.local.get([key], data => {
+    const stored = data[key];
+    callback(stored && Array.isArray(stored.sessions) ? stored.sessions : []);
+  });
+}
+
+function saveChatSession(entryId, session) {
+  if (!entryId || !session || !session.messages || session.messages.length === 0) return;
+  const key = `chatHistory_${entryId}`;
+  chrome.storage.local.get([key], data => {
+    const stored = data[key] || { sessions: [] };
+    const sessions = stored.sessions || [];
+    // Replace existing session with same id, or append
+    const idx = sessions.findIndex(s => s.id === session.id);
+    const compact = {
+      id: session.id,
+      startedAt: session.startedAt,
+      messages: session.messages.map(m => {
+        const msg = { role: m.role, content: typeof m.content === 'string' ? m.content : (m.content[0]?.text || '') };
+        if (m._usage) msg._usage = m._usage;
+        if (m._model) msg._model = m._model;
+        return msg;
+      })
+    };
+    if (idx >= 0) {
+      sessions[idx] = compact;
+    } else {
+      sessions.push(compact);
+    }
+    // Keep only last MAX_SESSIONS
+    while (sessions.length > MAX_SESSIONS) sessions.shift();
+    chrome.storage.local.set({ [key]: { sessions } });
+  });
+}
+
+function deleteChatHistory(entryId, callback) {
+  const key = `chatHistory_${entryId}`;
+  chrome.storage.local.remove([key], () => { if (callback) callback(); });
+}
+
+function formatSessionDate(isoStr) {
+  const d = new Date(isoStr);
+  if (isNaN(d)) return isoStr;
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays === 0) return 'Today, ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (diffDays === 1) return 'Yesterday, ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
 function initChatPanels(entry) {
   document.querySelectorAll('[data-chat-panel]').forEach(container => {
     if (container.dataset.chatInit) return;
@@ -20,13 +79,31 @@ function buildChatPanel(container, entry) {
   // This keeps each company's chat isolated and avoids stale context from prior sessions.
   let history = [];
 
+  // Current session object — persisted to storage after each assistant reply
+  const currentSession = {
+    id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    startedAt: new Date().toISOString(),
+    messages: history  // live reference — mutated by push
+  };
+  let _saveTimer = null;
+  function scheduleSave() {
+    if (!entry.id) return;
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      currentSession.messages = history;
+      saveChatSession(entry.id, currentSession);
+    }, 2000);
+  }
+
   // Model switcher — default GPT-4.1 mini, click to cycle
   const CHAT_MODELS = [
-    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆' },
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', icon: '⚡' },
-    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆' },
-    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', icon: '✦' },
+    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',     icon: '◆' },
+    { id: 'gemini-2.0-flash-lite',     label: 'Flash-Lite',       icon: '✦' },
+    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',     icon: '◆' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',        icon: '⚡' },
+    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',     icon: '✦' },
+    { id: 'gpt-4.1',                   label: 'GPT-4.1',          icon: '◆' },
+    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',       icon: '✦' },
   ];
   let chatModelIdx = 0;
 
@@ -34,6 +111,7 @@ function buildChatPanel(container, entry) {
   const placeholder = container.dataset.chatPlaceholder || 'Ask Coop anything...';
   const minimal = container.dataset.chatMinimal === '1';
   container.innerHTML = `
+    <div class="chat-prev-sessions" id="chat-prev-${panelId}" style="display:none"></div>
     <div class="chat-messages" id="chat-msgs-${panelId}"></div>
     <div class="chat-email-status" id="chat-email-status-${panelId}" style="display:none"></div>
     <div class="chat-input-row">
@@ -49,12 +127,110 @@ function buildChatPanel(container, entry) {
     </div>`}
   `;
 
-  const msgsEl    = container.querySelector(`#chat-msgs-${panelId}`);
-  const inputEl   = container.querySelector(`#chat-input-${panelId}`);
-  const sendBtn   = container.querySelector(`#chat-send-${panelId}`);
-  const statusEl  = container.querySelector(`#chat-email-status-${panelId}`);
-  const modelBtn  = container.querySelector(`#chat-model-${panelId}`);
-  const actionsEl = container.querySelector('.chat-actions');
+  const msgsEl        = container.querySelector(`#chat-msgs-${panelId}`);
+  const prevSessionsEl = container.querySelector(`#chat-prev-${panelId}`);
+  const inputEl       = container.querySelector(`#chat-input-${panelId}`);
+  const sendBtn       = container.querySelector(`#chat-send-${panelId}`);
+  const statusEl      = container.querySelector(`#chat-email-status-${panelId}`);
+  const modelBtn      = container.querySelector(`#chat-model-${panelId}`);
+  const actionsEl     = container.querySelector('.chat-actions');
+
+  // Render "Previous sessions" collapsible above current chat
+  function renderPrevSessions(sessions) {
+    if (!prevSessionsEl) return;
+    // Filter out any session that is the current one (shouldn't be in storage yet, but guard)
+    const past = sessions.filter(s => s.id !== currentSession.id && s.messages && s.messages.length > 0);
+    if (past.length === 0) {
+      prevSessionsEl.style.display = 'none';
+      return;
+    }
+    prevSessionsEl.style.display = 'block';
+
+    const sessionsHTML = past.slice().reverse().map((sess, idx) => {
+      const dateLabel = formatSessionDate(sess.startedAt);
+      const msgCount = sess.messages.length;
+      const userCount = sess.messages.filter(m => m.role === 'user').length;
+      const sessionId = `prev-sess-${panelId}-${idx}`;
+      const msgsHTML = sess.messages.map(m => {
+        const text = typeof m.content === 'string' ? m.content : (m.content?.[0]?.text || '');
+        const bubble = m.role === 'assistant'
+          ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escapeHtml(text))
+          : escapeHtml(text);
+        const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
+          const inp = m._usage.input || 0, out = m._usage.output || 0;
+          const total = inp + (m._usage.cacheCreation || 0) + (m._usage.cacheRead || 0) + out;
+          const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
+          return `<div class="chat-usage">${modelShort ? modelShort + ' · ' : ''}${total.toLocaleString()} tok</div>`;
+        })() : '';
+        return `<div class="chat-msg chat-msg-${m.role} chat-msg-readonly">
+          <div class="chat-msg-bubble">${bubble}</div>${usageBadge}
+        </div>`;
+      }).join('');
+      return `<div class="prev-session-item" id="${sessionId}">
+        <button class="prev-session-hdr" data-session="${sessionId}" type="button">
+          <span class="prev-session-date">${escapeHtml(dateLabel)}</span>
+          <span class="prev-session-count">${userCount} message${userCount !== 1 ? 's' : ''}</span>
+          <span class="prev-session-chevron">▶</span>
+        </button>
+        <div class="prev-session-msgs" id="${sessionId}-msgs" style="display:none">${msgsHTML}</div>
+      </div>`;
+    }).join('');
+
+    prevSessionsEl.innerHTML = `
+      <div class="prev-sessions-header">
+        <button class="prev-sessions-toggle" id="prev-toggle-${panelId}" type="button">
+          <span class="prev-sessions-label">Previous sessions (${past.length})</span>
+          <span class="prev-sessions-chevron" id="prev-chev-${panelId}">▶</span>
+        </button>
+        <button class="prev-sessions-clear" id="prev-clear-${panelId}" type="button" title="Delete all saved history for this entry">Clear history</button>
+      </div>
+      <div class="prev-sessions-body" id="prev-body-${panelId}" style="display:none">
+        ${sessionsHTML}
+      </div>
+    `;
+
+    // Toggle entire prev-sessions section
+    const toggleBtn = prevSessionsEl.querySelector(`#prev-toggle-${panelId}`);
+    const bodyEl    = prevSessionsEl.querySelector(`#prev-body-${panelId}`);
+    const chevEl    = prevSessionsEl.querySelector(`#prev-chev-${panelId}`);
+    if (toggleBtn && bodyEl) {
+      toggleBtn.addEventListener('click', () => {
+        const open = bodyEl.style.display !== 'none';
+        bodyEl.style.display = open ? 'none' : 'block';
+        if (chevEl) chevEl.textContent = open ? '▶' : '▼';
+      });
+    }
+
+    // Toggle individual session items
+    prevSessionsEl.querySelectorAll('.prev-session-hdr').forEach(hdr => {
+      hdr.addEventListener('click', () => {
+        const sid = hdr.dataset.session;
+        const msgsContainer = document.getElementById(`${sid}-msgs`);
+        const chev = hdr.querySelector('.prev-session-chevron');
+        if (!msgsContainer) return;
+        const isOpen = msgsContainer.style.display !== 'none';
+        msgsContainer.style.display = isOpen ? 'none' : 'block';
+        if (chev) chev.textContent = isOpen ? '▶' : '▼';
+      });
+    });
+
+    // Clear history button
+    const clearBtn = prevSessionsEl.querySelector(`#prev-clear-${panelId}`);
+    if (clearBtn && entry.id) {
+      clearBtn.addEventListener('click', () => {
+        deleteChatHistory(entry.id, () => {
+          prevSessionsEl.style.display = 'none';
+        });
+      });
+    }
+  }
+
+  // Load and render previous sessions on init
+  if (entry.id) {
+    loadChatHistory(entry.id, sessions => {
+      renderPrevSessions(sessions);
+    });
+  }
   function updateChatModelBtn() {
     if (modelBtn) modelBtn.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
   }
@@ -105,8 +281,29 @@ function buildChatPanel(container, entry) {
             ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
             : '';
           const saveBtn = m.role === 'assistant' ? `<button class="chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern" style="background:none;border:none;font-size:13px;cursor:pointer;opacity:0.4;padding:2px;">💾</button>` : '';
+          const copyBtn = m.role === 'assistant' ? `<button class="chat-copy-answer" data-idx="${idx}" title="Copy to clipboard" style="background:none;border:none;font-size:13px;cursor:pointer;opacity:0.4;padding:2px;">📋</button>` : '';
           const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${saveBtn}${followup}</div>`;
+          const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
+            const inp = m._usage.input || 0, out = m._usage.output || 0;
+            const cacheW = m._usage.cacheCreation || 0, cacheR = m._usage.cacheRead || 0;
+            const totalIn = inp + cacheW + cacheR, total = totalIn + out;
+            const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
+            const isGpt = (m._model || '').startsWith('gpt');
+            const isMini = (m._model || '').includes('mini') || (m._model || '').includes('nano');
+            const isHaiku = (m._model || '').includes('haiku');
+            const inRate = isGpt ? (isMini ? 0.0004 : 0.01) : (isHaiku ? 0.001 : 0.003);
+            const outRate = isGpt ? (isMini ? 0.0016 : 0.03) : (isHaiku ? 0.005 : 0.015);
+            const cost = (inp / 1000) * inRate + (cacheW / 1000) * inRate * 1.25 + (cacheR / 1000) * inRate * 0.10 + (out / 1000) * outRate;
+            const costStr = cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
+            const cacheHint = (cacheW || cacheR) ? ` · <span style="color:#8a8e94;">cache +${cacheW.toLocaleString()}w/${cacheR.toLocaleString()}r</span>` : '';
+            return `<div class="chat-usage">${modelShort} · ${total.toLocaleString()} tok${cacheHint} · ${costStr}</div>`;
+          })() : '';
+          const toolBadge = (m.role === 'assistant' && m._toolCalls?.length) ? (() => {
+            const labels = { get_company_context: 'company context', get_communications: 'emails + meetings', get_profile_section: 'profile', get_pipeline_overview: 'pipeline', search_memory: 'memory' };
+            const unique = [...new Set(m._toolCalls.map(t => labels[t.name] || t.name))];
+            return `<div class="chat-usage" style="color:#7C6EF0;">↳ Coop pulled: ${unique.join(', ')}</div>`;
+          })() : '';
+          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${copyBtn}${saveBtn}${toolBadge}${usageBadge}${followup}</div>`;
         }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
@@ -116,6 +313,30 @@ function buildChatPanel(container, entry) {
         inputEl.value = btn.dataset.followup;
         inputEl.focus();
         send();
+      });
+    });
+
+    // Copy answer buttons
+    msgsEl.querySelectorAll('.chat-copy-answer').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        let text = (typeof history[idx]?.content === 'string' ? history[idx].content : history[idx]?.content?.[0]?.text) || '';
+
+        // Extract only the answer portion, stripping preamble and closing commentary
+        // Remove common opening phrases (case-insensitive)
+        text = text.replace(/^(?:here['\s]*s(?:\s+my)?|i['\s]*d\s+(?:suggest|say|emphasize|highlight|point\s+out)|i\s+think|i\s+would|the\s+answer|my\s+answer|this\s+would\s+be)[:\s]*/i, '').trim();
+
+        // Remove common closing questions/offers (after the answer)
+        text = text.replace(/\n\n(?:does\s+that|what(?:\s+do\s+)?you|feel\s+free|let\s+me|you\s+could|happy\s+to|does\s+this|would\s+that|any\s+other)[\w\s.,?;!-]*/i, '').trim();
+
+        // Strip outer quotation marks if present
+        const clean = text.replace(/^["']|["']$/g, '').trim();
+
+        navigator.clipboard.writeText(clean).then(() => {
+          btn.textContent = '✓';
+          btn.style.color = '#00BDA5';
+          setTimeout(() => { btn.textContent = '📋'; btn.style.color = ''; }, 1500);
+        });
       });
     });
 
@@ -157,7 +378,7 @@ function buildChatPanel(container, entry) {
   }
 
   function saveHistory() {
-    // History is session-only — no-op. Kept for call-site compatibility.
+    scheduleSave();
   }
 
   async function send() {
@@ -208,7 +429,11 @@ function buildChatPanel(container, entry) {
     sendBtn.textContent = 'Send';
 
     if (result?.reply) {
-      history.push({ role: 'assistant', content: [{ type: 'text', text: result.reply }] });
+      const msgEntry = { role: 'assistant', content: [{ type: 'text', text: result.reply }] };
+      if (result.usage) msgEntry._usage = result.usage;
+      if (result.model) msgEntry._model = result.model;
+      if (result.toolCalls) msgEntry._toolCalls = result.toolCalls;
+      history.push(msgEntry);
     } else {
       const errMsg = result?.error || 'Sorry, something went wrong. Try again.';
       history.push({ role: 'assistant', content: [{ type: 'text', text: errMsg }] });
@@ -235,7 +460,7 @@ function buildChatPanel(container, entry) {
 
     if (action === 'clear') {
       history = [];
-      saveHistory();
+      currentSession.messages = history;
       renderHistory();
       return;
     }
@@ -495,7 +720,7 @@ function renderEmailThreads(emails, onDelete) {
     }).join('');
 
     const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${tid}`;
-    const deleteBtn = onDelete ? `<button class="email-delete-btn" data-thread="${tid}" title="Delete from this company's email inbox" style="flex-shrink:0;background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:4px 8px;">×</button>` : '';
+    const deleteBtn = onDelete ? `<button class="email-delete-btn" data-thread="${tid}" title="Delete from this company's email inbox" style="flex-shrink:0;background:none;border:none;color:var(--ci-text-tertiary,#c4c0bc);cursor:pointer;font-size:13px;padding:4px 8px;opacity:0.6;transition:opacity 0.2s;">×</button>` : '';
     return `<div class="thread-item">
       <div class="thread-header" data-thread="${tid}">
         <div style="flex:1;min-width:0">
@@ -535,6 +760,16 @@ function bindThreadToggles(container) {
       e.stopPropagation();
       const msgEl = document.getElementById(hdr.dataset.msg);
       if (msgEl) msgEl.classList.toggle('open');
+    });
+  });
+
+  // Delete button hover effects
+  root.querySelectorAll('.email-delete-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      btn.style.opacity = '1';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.opacity = '0.6';
     });
   });
 

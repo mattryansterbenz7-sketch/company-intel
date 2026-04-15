@@ -243,6 +243,9 @@ export async function scoreOpportunity(entryId) {
   if (entry.hqLocation) firmoLines.push(`HQ: ${entry.hqLocation}`);
   if (entry.funding) firmoLines.push(`Funding: ${entry.funding}`);
   if (entry.founded) firmoLines.push(`Founded: ${entry.founded}`);
+  if (entry.revenue) firmoLines.push(`Revenue: ${entry.revenue}`);
+  if (entry.companyType) firmoLines.push(`Company Type: ${entry.companyType}`);
+  if (entry.techStack?.length) firmoLines.push(`Tech Stack: ${entry.techStack.slice(0, 10).join(', ')}`);
   const firmoBlock = firmoLines.length ? `Company Firmographics:\n${firmoLines.join('\n')}` : null;
 
   // J1: Skills block — structured skill tags from job posting
@@ -333,21 +336,31 @@ export async function scoreOpportunity(entryId) {
   const hasContacts = (entry.knownContacts?.length || 0) > 0;
   const hasInteractionContext = hasEmails || hasMeetings || hasNotes;
 
+  // Include synthesized role brief from a prior research/scoring pass — rich context, few tokens
+  if (entry.roleBrief?.content) {
+    interactionParts.push(`## Role Brief (prior research)\n${entry.roleBrief.content.slice(0, 800)}`);
+  }
   if (hasEmails) {
-    interactionParts.push(`## Emails (${entry.cachedEmails.length})\n${entry.cachedEmails.slice(0, 15).map(e =>
-      `### ${e.subject || '(no subject)'}\nFrom: ${(e.from || '').replace(/<[^>]+>/, '').trim()} | Date: ${e.date || 'unknown'}${e.snippet ? '\n' + e.snippet.slice(0, 200) : ''}`
+    // Cap at 8 most recent emails, 150 chars per snippet — enough signal, low token cost
+    const emailsToShow = entry.cachedEmails.slice(0, 8);
+    interactionParts.push(`## Emails (${entry.cachedEmails.length} total, showing ${emailsToShow.length} most recent)\n${emailsToShow.map(e =>
+      `### ${e.subject || '(no subject)'}\nFrom: ${(e.from || '').replace(/<[^>]+>/, '').trim()} | Date: ${e.date || 'unknown'}${e.snippet ? '\n' + e.snippet.slice(0, 150) : ''}`
     ).join('\n\n')}`);
   }
   if (entry.cachedMeetings?.length) {
-    interactionParts.push(`## Meetings (${entry.cachedMeetings.length})\n${entry.cachedMeetings.map(m =>
-      `### ${m.title || 'Meeting'}\nDate: ${m.date || 'unknown'}${(m.attendees || []).length ? ' | Attendees: ' + m.attendees.slice(0, 6).map(a => typeof a === 'string' ? a : (a.name || a.email || '')).join(', ') : ''}\n${(m.summaryMarkdown || m.transcript || m.summary || '').slice(0, 3000)}`
-    ).join('\n\n')}`);
+    // Use most recent 4 meetings; prefer summaryMarkdown over raw transcript (far more token-efficient)
+    const meetingsToShow = entry.cachedMeetings.slice(0, 4);
+    interactionParts.push(`## Meetings (${entry.cachedMeetings.length} total, showing ${meetingsToShow.length} most recent)\n${meetingsToShow.map(m => {
+      // summaryMarkdown is a structured digest; transcript is raw and can be huge — always prefer summary
+      const body = m.summaryMarkdown || m.summary || (m.transcript ? m.transcript.slice(0, 500) : '');
+      return `### ${m.title || 'Meeting'}\nDate: ${m.date || 'unknown'}${(m.attendees || []).length ? ' | Attendees: ' + m.attendees.slice(0, 6).map(a => typeof a === 'string' ? a : (a.name || a.email || '')).join(', ') : ''}\n${body.slice(0, 500)}`;
+    }).join('\n\n')}`);
   }
   if (entry.cachedMeetingTranscript) {
-    interactionParts.push(`## Meeting Notes\n${entry.cachedMeetingTranscript.slice(0, 4000)}`);
+    interactionParts.push(`## Meeting Notes\n${entry.cachedMeetingTranscript.slice(0, 600)}`);
   }
   if (hasNotes) {
-    interactionParts.push(`## User Notes\n${entry.notes.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000)}`);
+    interactionParts.push(`## User Notes\n${entry.notes.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600)}`);
   }
   if (hasContacts) {
     interactionParts.push(`## Known Contacts\n${entry.knownContacts.map(c =>
@@ -456,6 +469,7 @@ Return ONLY valid JSON (no markdown fences):
     max_tokens: 4000,
     tag: 'QuickFit',
     opTag: 'scoring',
+    context: entry.company || undefined,
   });
 
   if (result.error) throw new Error(result.error);

@@ -207,6 +207,7 @@ function detectScheduledStatus(entry) {
 }
 let customActionStatuses = null; // loaded from storage, falls back to DEFAULT
 let _userWorkArrangement = []; // loaded from chrome.storage.sync prefs
+let _stalenessThresholdDays = 14; // loaded from chrome.storage.sync prefs.stalenessThresholdDays
 const _collapsedCols = new Set(JSON.parse(sessionStorage.getItem('ci_collapsed_cols') || '[]'));
 let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
 let activityCustomRange = JSON.parse(localStorage.getItem('ci_activityCustomRange') || 'null'); // {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} or null
@@ -461,8 +462,10 @@ function renderCompactCard(c) {
       }).join('')}</div>`
     : '';
 
+  const { actionClass: compactActionClass } = computeCardIndicators(c);
+
   return `
-    <div class="compact-card score-${tier}${stateClass}" data-id="${c.id}" draggable="true">
+    <div class="compact-card score-${tier}${stateClass}${compactActionClass ? ' ' + compactActionClass : ''}" data-id="${c.id}" draggable="true">
       <div class="compact-card-score">${scoreHtml}</div>
       <div class="compact-card-body">
         <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtml(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
@@ -1163,9 +1166,10 @@ document.addEventListener('click', () => {
 });
 
 function load() {
-  // Load user prefs for work arrangement mismatch detection
+  // Load user prefs for work arrangement mismatch detection + staleness threshold
   chrome.storage.sync.get(['prefs'], ({ prefs }) => {
     _userWorkArrangement = (prefs?.workArrangement) || [];
+    if (prefs?.stalenessThresholdDays != null) _stalenessThresholdDays = parseInt(prefs.stalenessThresholdDays) || 14;
   });
   chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs', 'actionStatuses'], (data) => {
     const { savedCompanies, allTags } = data;
@@ -2604,6 +2608,41 @@ function renderKanban(filtered) {
 
 }
 
+// Returns { actionClass, isStale, isOverdue } for visual tagging on cards
+function computeCardIndicators(c) {
+  const actionStatus = c.actionStatus || 'my_court';
+  const actionClass = actionStatus === 'my_court' ? 'action-my-court'
+    : actionStatus === 'their_court' ? 'action-their-court'
+    : actionStatus === 'scheduled' ? 'action-scheduled' : '';
+
+  // Staleness: compare last activity timestamp to threshold
+  let isStale = false;
+  if (_stalenessThresholdDays > 0 && c.isOpportunity) {
+    const act = computeLastActivity(c);
+    const stageField = activePipeline === 'opportunity' ? 'jobStage' : 'status';
+    const currentStage = c[stageField] || '';
+    const stageTs = c.stageTimestamps?.[currentStage] || c.savedAt || 0;
+    const lastTs = Math.max(act.timestamp || 0, stageTs);
+    const ageMs = Date.now() - lastTs;
+    const ageDays = ageMs / 86400000;
+    // Skip terminal/waiting stages: rejected, dismissed, offer
+    const skipStages = new Set(['rejected', 'dismissed', 'offer', 'hired', 'co_watchlist', 'needs_review']);
+    if (!skipStages.has(currentStage) && lastTs > 0 && ageDays > _stalenessThresholdDays) {
+      isStale = true;
+    }
+  }
+
+  // Overdue: nextStepDate is in the past
+  let isOverdue = false;
+  if (c.nextStepDate) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const due = new Date(c.nextStepDate + 'T00:00:00');
+    if (due < today) isOverdue = true;
+  }
+
+  return { actionClass, isStale, isOverdue };
+}
+
 function renderKanbanCard(c) {
   const isJob = !!c.isOpportunity;
   const stageField = activePipeline === 'opportunity' ? 'jobStage' : 'status';
@@ -2634,8 +2673,15 @@ function renderKanbanCard(c) {
       </div>
     </details>` : '';
 
+  const { actionClass, isStale, isOverdue } = computeCardIndicators(c);
+  const indicatorsHtml = (isStale || isOverdue) ? `
+    <div class="kanban-card-indicators">
+      ${isOverdue ? `<span class="kanban-overdue-badge" title="Next step is overdue">&#9888; Overdue</span>` : ''}
+      ${isStale ? `<span class="kanban-stale-badge" title="No activity for ${_stalenessThresholdDays}+ days">&#x231B; Stale</span>` : ''}
+    </div>` : '';
+
   return `
-    <div class="kanban-card" draggable="true" data-id="${c.id}" data-type="company" id="kcard-${c.id}" style="border-left: 3px solid ${stageColor(currentStage)};">
+    <div class="kanban-card${actionClass ? ' ' + actionClass : ''}" draggable="true" data-id="${c.id}" data-type="company" id="kcard-${c.id}" style="border-left: 3px solid ${stageColor(currentStage)};">
       <div class="kanban-card-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
         <div style="min-width:0">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
@@ -2651,6 +2697,7 @@ function renderKanbanCard(c) {
         </div>
         <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
       </div>
+      ${indicatorsHtml}
       ${isJob && (c.jobMatch?.scoreBreakdown?.preferenceFit != null || c.jobMatch?.roleBrief?.qualificationScore != null) ? (() => {
         const icpMatch = c.jobMatch?.scoreBreakdown?.preferenceFit;
         const qualMatch = c.jobMatch?.roleBrief?.qualificationScore;
@@ -3666,12 +3713,12 @@ function renderTasksView() {
         return `<div class="task-item ${t.completed ? 'completed' : ''}" data-task-id="${t.id}" style="${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}">
           <div class="task-check">${t.completed ? '✓' : ''}</div>
           <div class="task-content">
-            <div class="task-text">${escHtml(t.text)}</div>
+            <div class="task-text" data-field="text">${escHtml(t.text)}</div>
             <div class="task-meta">
-              ${t.company ? `<span class="task-company-link" data-company="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
-              <span class="task-priority ${t.priority || 'normal'}">${(t.priority || 'normal')}</span>
+              ${t.company ? `<span class="task-company-link" data-company="${escHtml(t.company)}" data-field="company">${escHtml(t.company)}</span>` : `<span class="task-no-company" data-field="company">No company</span>`}
+              <span class="task-priority ${t.priority || 'normal'}" data-field="priority">${(t.priority || 'normal')}</span>
               ${isAuto ? `<span class="task-priority" style="background:#FFF1EC;color:#FF7A59">from email</span>` : ''}
-              ${t.dueDate ? `<span>${t.dueDate}</span>` : ''}
+              ${t.dueDate ? `<span class="task-date-value" data-field="dueDate">${t.dueDate}</span>` : `<span class="task-no-date" data-field="dueDate">No date</span>`}
               ${unreviewed ? `<a href="#" class="task-keep" style="color:#FF7A59;font-weight:600">keep</a> · <a href="#" class="task-dismiss" style="color:#7c98b6">dismiss</a>` : ''}
             </div>
             ${isAuto && t.rationale ? `<div style="font-size:11px;color:#7c98b6;font-style:italic;margin-top:2px">"${escHtml(t.rationale)}"</div>` : ''}
@@ -3723,24 +3770,170 @@ function renderTasksView() {
         });
       });
     });
-    container.querySelectorAll('.task-company-link').forEach(el => {
-      el.addEventListener('click', () => {
-        const name = el.dataset.company;
-        const entry = allCompanies.find(c => c.company === name);
-        if (entry) coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + entry.id);
-      });
-    });
-    container.querySelectorAll('.task-text, .task-priority').forEach(el => {
+    // Inline edit handlers
+    container.querySelectorAll('[data-field]').forEach(el => {
+      const field = el.dataset.field;
       el.style.cursor = 'pointer';
-      el.addEventListener('click', () => {
-        const id = el.closest('.task-item').dataset.taskId;
-        loadTasks(tasks => {
-          const t = tasks.find(t => t.id === id);
-          if (t) showTaskForm(t);
+
+      // For company, allow navigation on double-click, edit on single-click
+      if (field === 'company' && el.classList.contains('task-company-link')) {
+        let lastClickTime = 0;
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          const now = Date.now();
+          if (now - lastClickTime < 300) {
+            // Double-click: navigate
+            const name = el.dataset.company;
+            const entry = allCompanies.find(c => c.company === name);
+            if (entry) coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + entry.id);
+          } else {
+            // Single-click: edit
+            const taskItem = el.closest('.task-item');
+            const taskId = taskItem.dataset.taskId;
+            if (taskItem.querySelector('[data-task-edit]')) return; // Already editing
+
+            loadTasks(tasks => {
+              const t = tasks.find(t => t.id === taskId);
+              if (t) editTaskField(taskId, t, 'company', el, tasks);
+            });
+          }
+          lastClickTime = now;
         });
-      });
+      } else {
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          const taskItem = el.closest('.task-item');
+          const taskId = taskItem.dataset.taskId;
+
+          loadTasks(tasks => {
+            const t = tasks.find(t => t.id === taskId);
+            if (!t) return;
+
+            // Prevent multiple edit widgets on same task
+            if (taskItem.querySelector('[data-task-edit]')) return;
+
+            editTaskField(taskId, t, field, el, tasks);
+          });
+        });
+      }
     });
   });
+}
+
+function editTaskField(taskId, task, field, element, allTasks) {
+  const taskItem = element.closest('.task-item');
+  const originalValue = task[field];
+
+  // Create appropriate edit widget based on field type
+  let editWidget;
+
+  if (field === 'text') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'task-edit-input';
+    input.value = originalValue;
+    input.setAttribute('data-task-edit', '');
+    editWidget = input;
+
+    const saveEdit = () => {
+      const newVal = input.value.trim();
+      if (newVal && newVal !== originalValue) {
+        task.text = newVal;
+        saveTasks(allTasks, () => renderTasksView());
+      } else {
+        renderTasksView();
+      }
+    };
+
+    input.addEventListener('blur', saveEdit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { saveEdit(); e.preventDefault(); }
+      else if (e.key === 'Escape') { renderTasksView(); e.preventDefault(); }
+    });
+
+    element.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+  else if (field === 'priority') {
+    // Cycle: low → normal → high → low
+    const cycles = ['low', 'normal', 'high'];
+    const idx = cycles.indexOf(originalValue || 'normal');
+    const nextIdx = (idx + 1) % cycles.length;
+    task.priority = cycles[nextIdx];
+    saveTasks(allTasks, () => renderTasksView());
+  }
+  else if (field === 'dueDate') {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.className = 'task-edit-date';
+    input.value = originalValue || '';
+    input.setAttribute('data-task-edit', '');
+    editWidget = input;
+
+    const saveEdit = () => {
+      const newVal = input.value || null;
+      const origVal = originalValue || null;
+      if (newVal !== origVal) {
+        task.dueDate = newVal;
+        saveTasks(allTasks, () => renderTasksView());
+      } else {
+        renderTasksView();
+      }
+    };
+
+    input.addEventListener('blur', saveEdit);
+    input.addEventListener('change', saveEdit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { renderTasksView(); e.preventDefault(); }
+    });
+
+    element.replaceWith(input);
+    input.focus();
+    input.click(); // Open date picker
+  }
+  else if (field === 'company') {
+    const container = document.createElement('div');
+    container.className = 'task-edit-company';
+    container.setAttribute('data-task-edit', '');
+
+    const select = document.createElement('select');
+    select.className = 'task-edit-company-select';
+
+    const optNone = document.createElement('option');
+    optNone.value = '';
+    optNone.textContent = 'No company';
+    select.appendChild(optNone);
+
+    allCompanies.filter(c => c.company).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.company;
+      opt.textContent = c.company;
+      opt.selected = (task.company === c.company);
+      select.appendChild(opt);
+    });
+
+    const saveEdit = () => {
+      const newVal = select.value || null;
+      const origVal = originalValue || null;
+      if (newVal !== origVal) {
+        task.company = newVal;
+        saveTasks(allTasks, () => renderTasksView());
+      } else {
+        renderTasksView();
+      }
+    };
+
+    select.addEventListener('blur', saveEdit);
+    select.addEventListener('change', saveEdit);
+    select.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { renderTasksView(); e.preventDefault(); }
+    });
+
+    container.appendChild(select);
+    element.replaceWith(container);
+    select.focus();
+  }
 }
 
 function showTaskForm(editTask) {
@@ -3815,7 +4008,26 @@ document.addEventListener('DOMContentLoaded', () => {}, { once: true });
 // Pipeline UI is initialized via updatePipelineUI() called from load()
 
 // Stage editor
-const STAGE_COLOR_PALETTE = ['#64748b','#22d3ee','#60a5fa','#a78bfa','#fb923c','#a3e635','#4ade80','#f87171','#f59e0b','#e879f9','#34d399','#f472b6'];
+const STAGE_COLOR_PALETTE = [
+  // Grays
+  '#64748b', '#475569', '#1e293b',
+  // Reds & Pinks
+  '#dc2626', '#f87171', '#f472b6', '#ec4899',
+  // Oranges & Ambers
+  '#fb923c', '#f97316', '#f59e0b', '#d97706',
+  // Yellows & Limes
+  '#a3e635', '#84cc16', '#facc15', '#eab308',
+  // Greens
+  '#4ade80', '#22c55e', '#16a34a', '#34d399',
+  // Teals & Cyans
+  '#22d3ee', '#06b6d4', '#0891b2', '#14b8a6',
+  // Blues
+  '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8',
+  // Purples & Violets
+  '#a78bfa', '#8b5cf6', '#7c3aed', '#6d28d9', '#c084fc',
+  // Indigos
+  '#6366f1', '#4f46e5'
+];
 let stageEditorOpen = false;
 let stageEditorTab = 'stages'; // 'stages' | 'celebrations'
 let editingStages = [];
@@ -3983,7 +4195,11 @@ function renderStageEditor() {
   });
 }
 document.getElementById('stage-editor-add').addEventListener('click', () => {
-  editingStages.push({ key: 'stage_' + Date.now(), label: 'New Stage', color: STAGE_COLOR_PALETTE[editingStages.length % STAGE_COLOR_PALETTE.length] });
+  const terminalKeys = activePipeline === 'company' ? ['co_archived'] : ['rejected'];
+  const terminalIdx = editingStages.findIndex(s => terminalKeys.includes(s.key));
+  const insertIdx = terminalIdx === -1 ? editingStages.length : terminalIdx;
+  const newStage = { key: 'stage_' + Date.now(), label: 'New Stage', color: STAGE_COLOR_PALETTE[editingStages.length % STAGE_COLOR_PALETTE.length] };
+  editingStages.splice(insertIdx, 0, newStage);
   renderStageEditor();
 });
 document.getElementById('stage-editor-save').addEventListener('click', () => {
@@ -4712,13 +4928,15 @@ function openStatCardEditor() {
 
   // Model switcher — dropdown picklist, ordered by cost (cheapest first)
   const GC_ALL_MODELS = [
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆', provider: 'openai', cost: '$', tier: 'Fast & cheap' },
-    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆', provider: 'openai', cost: '$', tier: 'Fastest' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', icon: '⚡', provider: 'anthropic', cost: '$', tier: 'Fast & cheap' },
-    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', icon: '✦', provider: 'anthropic', cost: '$$', tier: 'Balanced' },
-    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆', provider: 'openai', cost: '$$', tier: 'Balanced' },
-    { id: 'gpt-5', label: 'GPT-5', icon: '◆', provider: 'openai', cost: '$$$', tier: 'Most capable' },
-    { id: 'claude-opus-4-0-20250514', label: 'Claude Opus', icon: '★', provider: 'anthropic', cost: '$$$', tier: 'Most capable' },
+    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',       icon: '◆', provider: 'openai',    cost: '$',   tier: 'Fastest' },
+    { id: 'gemini-2.0-flash-lite',     label: 'Gemini Flash-Lite',  icon: '✦', provider: 'gemini',    cost: '$',   tier: 'Cheapest' },
+    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',       icon: '◆', provider: 'openai',    cost: '$',   tier: 'Fast & cheap' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku',       icon: '⚡', provider: 'anthropic', cost: '$',   tier: 'Fast & cheap' },
+    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',       icon: '✦', provider: 'gemini',    cost: '$',   tier: 'Fast & cheap' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',  icon: '✦', provider: 'anthropic', cost: '$$',  tier: 'Balanced' },
+    { id: 'gpt-4.1',                   label: 'GPT-4.1',            icon: '◆', provider: 'openai',    cost: '$$',  tier: 'Balanced' },
+    { id: 'gpt-5',                     label: 'GPT-5',              icon: '◆', provider: 'openai',    cost: '$$$', tier: 'Most capable' },
+    { id: 'claude-opus-4-0-20250514',  label: 'Claude Opus',        icon: '★', provider: 'anthropic', cost: '$$$', tier: 'Most capable' },
   ];
   let gcModelIdx = 0;
   let gcAvailableModels = GC_ALL_MODELS; // filtered after key check
@@ -4734,6 +4952,7 @@ function openStatCardEditor() {
       gcAvailableModels = GC_ALL_MODELS.filter(m => {
         if (m.provider === 'openai') return !!status.openai;
         if (m.provider === 'anthropic') return !!status.anthropic;
+        if (m.provider === 'gemini') return !!status.gemini;
         return true;
       });
       if (!gcAvailableModels.length) gcAvailableModels = GC_ALL_MODELS;

@@ -77,11 +77,13 @@ chrome.storage.local.get(['pipelineConfig'], d => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const AI_MODEL_OPTIONS = [
-  { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', provider: 'openai' },
-  { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', provider: 'openai' },
-  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', provider: 'anthropic' },
-  { value: 'gpt-4.1', label: 'GPT-4.1', provider: 'openai' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', provider: 'anthropic' },
+  { value: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',       provider: 'openai' },
+  { value: 'gemini-2.0-flash-lite',     label: 'Gemini Flash-Lite',  provider: 'gemini' },
+  { value: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',       provider: 'openai' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',   provider: 'anthropic' },
+  { value: 'gemini-2.0-flash',          label: 'Gemini Flash',       provider: 'gemini' },
+  { value: 'gpt-4.1',                   label: 'GPT-4.1',            provider: 'openai' },
+  { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',  provider: 'anthropic' },
 ];
 
 function modelProviderBadge(value) {
@@ -329,6 +331,8 @@ const DEFAULT_VOICE_PROFILE = {
   preferredSignoffs: [],
   avoidExclamations: true,
   maxExclamations: 1,
+  tone: 'conversational',       // conversational | professional | direct
+  defaultLength: 'standard',    // brief (1-2 sentences) | standard (2-5) | detailed (5-8)
 };
 
 const DEFAULT_COOP_CONFIG = {
@@ -542,6 +546,8 @@ function initVoiceProfileEditor() {
   const antiEl = document.getElementById('coop-voice-anti-phrases');
   const maxEl = document.getElementById('coop-voice-max-exclamations');
   const signoffEl = document.getElementById('coop-voice-signoffs');
+  const toneEl = document.getElementById('coop-voice-tone');
+  const lengthEl = document.getElementById('coop-voice-length');
   const resetBtn = document.getElementById('coop-voice-reset');
   if (!antiEl || !maxEl || !signoffEl) return;
 
@@ -554,6 +560,8 @@ function initVoiceProfileEditor() {
     signoffEl.value = arrToLines(merged.preferredSignoffs);
     const n = Number.isFinite(merged.maxExclamations) ? merged.maxExclamations : DEFAULT_VOICE_PROFILE.maxExclamations;
     maxEl.value = String(n);
+    if (toneEl) toneEl.value = merged.tone || 'conversational';
+    if (lengthEl) lengthEl.value = merged.defaultLength || 'standard';
   }
 
   function readStored(cb) {
@@ -571,6 +579,8 @@ function initVoiceProfileEditor() {
         preferredSignoffs: linesToArr(signoffEl.value),
         maxExclamations: maxEx,
         avoidExclamations: true,
+        tone: toneEl?.value || 'conversational',
+        defaultLength: lengthEl?.value || 'standard',
       };
       chrome.storage.local.set({ voiceProfile: merged }, () => {
         if (typeof showSaveStatus === 'function') showSaveStatus();
@@ -584,6 +594,8 @@ function initVoiceProfileEditor() {
   signoffEl.addEventListener('blur', save);
   maxEl.addEventListener('blur', save);
   maxEl.addEventListener('change', save);
+  if (toneEl) toneEl.addEventListener('change', save);
+  if (lengthEl) lengthEl.addEventListener('change', save);
 
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
@@ -1289,6 +1301,7 @@ let _usageCustomEnd = null;
 const USAGE_PROVIDERS = [
   { id: 'anthropic', name: 'Anthropic', keyCheck: 'anthropic_key', type: 'ai', billing: 'https://console.anthropic.com/settings/billing' },
   { id: 'openai', name: 'OpenAI', keyCheck: 'openai_key', type: 'ai', billing: 'https://platform.openai.com/settings/organization/billing/overview' },
+  { id: 'gemini', name: 'Gemini', keyCheck: 'gemini_key', type: 'ai', billing: 'https://aistudio.google.com/app/apikey' },
   { id: 'serper', name: 'Serper', keyCheck: 'serper_key', type: 'credit', billing: 'https://serper.dev/dashboard' },
   { id: 'apollo', name: 'Apollo', keyCheck: 'apollo_key', type: 'credit', billing: 'https://app.apollo.io/#/settings/credits/current' },
   { id: 'granola', name: 'Granola', keyCheck: 'granola_key', type: 'data', billing: null },
@@ -1714,6 +1727,7 @@ function renderCostProviders(usage, todayLog) {
   if (!container) return;
 
   const modelsByProvider = {};
+  const contextsByProvider = {};
   todayLog.forEach(c => {
     const p = c.provider || 'unknown';
     const m = c.model || 'unknown';
@@ -1721,6 +1735,14 @@ function renderCostProviders(usage, todayLog) {
     if (!modelsByProvider[p][m]) modelsByProvider[p][m] = { count: 0, cost: 0 };
     modelsByProvider[p][m].count++;
     modelsByProvider[p][m].cost += (c.cost || 0);
+
+    // Group by op+context
+    const ctxKey = c.context ? c.context : (c.op ? `(${COST_OP_LABELS[c.op] || c.op})` : '(unknown)');
+    if (!contextsByProvider[p]) contextsByProvider[p] = {};
+    if (!contextsByProvider[p][ctxKey]) contextsByProvider[p][ctxKey] = { count: 0, cost: 0, tokens: 0, op: c.op };
+    contextsByProvider[p][ctxKey].count++;
+    contextsByProvider[p][ctxKey].cost += (c.cost || 0);
+    contextsByProvider[p][ctxKey].tokens += (c.input || 0) + (c.output || 0);
   });
 
   container.innerHTML = COST_PROVIDERS.map(key => {
@@ -1746,6 +1768,30 @@ function renderCostProviders(usage, todayLog) {
       </div>`;
     }
 
+    // Context drill-down: group by company/context, sorted by cost
+    let detailsHtml = '';
+    const ctxMap = contextsByProvider[key];
+    if (ctxMap && Object.keys(ctxMap).length > 0) {
+      const ctxSorted = Object.entries(ctxMap).sort((a, b) => b[1].cost - a[1].cost);
+      const cardId = `ctx-detail-${key}`;
+      detailsHtml = `
+        <div class="cost-provider-details-toggle" data-target="${cardId}">Details &#9656;</div>
+        <div class="cost-provider-details" id="${cardId}" style="display:none">
+          <div class="cost-ctx-header">
+            <span>Context</span><span>Calls</span><span>Tokens</span><span>Cost</span>
+          </div>
+          ${ctxSorted.map(([ctx, d]) => {
+            const opColor = COST_OP_COLORS[d.op] || 'var(--ci-text-tertiary)';
+            return `<div class="cost-ctx-row">
+              <span class="cost-ctx-name" title="${costEscapeHtml(ctx)}">${costEscapeHtml(ctx)}</span>
+              <span class="cost-ctx-val">${d.count}</span>
+              <span class="cost-ctx-val">${costFmtTokens(d.tokens)}</span>
+              <span class="cost-ctx-val" style="color:${opColor}">${costFmt(d.cost)}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
     let errorHtml = '';
     if ((errors.count429 || 0) > 0) errorHtml += `<div class="cost-provider-error">Rate limited: ${errors.count429} x 429 errors</div>`;
     if ((errors.count401 || 0) > 0) errorHtml += `<div class="cost-provider-error">Auth error: ${errors.count401} x 401 errors</div>`;
@@ -1759,9 +1805,21 @@ function renderCostProviders(usage, todayLog) {
       <div class="cost-provider-stat"><span class="cost-provider-stat-label">Cost today</span><span class="cost-provider-stat-value">${costFmt(cost)}</span></div>
       <div class="cost-provider-stat" style="color:var(--ci-text-tertiary);font-size:12px;"><span class="cost-provider-stat-label">All time</span><span class="cost-provider-stat-value">${totalReqs.toLocaleString()} calls</span></div>
       ${modelsHtml}
+      ${detailsHtml}
       ${errorHtml}
     </div>`;
   }).join('');
+
+  // Wire up toggle clicks
+  container.querySelectorAll('.cost-provider-details-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      const isOpen = target.style.display !== 'none';
+      target.style.display = isOpen ? 'none' : 'block';
+      btn.innerHTML = isOpen ? 'Details &#9656;' : 'Details &#9662;';
+    });
+  });
 }
 
 function renderCostLog(callLog) {
@@ -1780,9 +1838,12 @@ function renderCostLog(callLog) {
     const op = entry.op || 'unknown';
     const label = COST_OP_LABELS[op] || op;
     const color = COST_OP_COLORS[op] || '#999';
+    const ctxHtml = entry.context
+      ? `<div style="font-size:10px;color:var(--ci-text-tertiary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${costEscapeHtml(entry.context)}">${costEscapeHtml(entry.context)}</div>`
+      : '';
     return `<div class="cost-log-row">
       <div class="cost-log-time">${date} ${time}</div>
-      <div><span class="cost-log-op-tag" style="background:${color}15;color:${color}">${costEscapeHtml(label)}</span></div>
+      <div><span class="cost-log-op-tag" style="background:${color}15;color:${color}">${costEscapeHtml(label)}</span>${ctxHtml}</div>
       <div class="cost-log-provider">${costEscapeHtml(entry.provider || '--')}</div>
       <div class="cost-log-model" title="${costEscapeHtml(entry.model || '--')}">${costEscapeHtml(entry.model || '--')}</div>
       <div class="cost-log-tokens">${costFmtTokens(entry.input || 0)} / ${costFmtTokens(entry.output || 0)}</div>

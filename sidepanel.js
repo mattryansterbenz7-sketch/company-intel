@@ -665,6 +665,10 @@ function backfillEntryFromResearch(savedEntry, research) {
   if (!savedEntry.employees && research.employees) updates.employees = research.employees;
   if (!savedEntry.industry && research.industry) updates.industry = research.industry;
   if (!savedEntry.funding && research.funding) updates.funding = research.funding;
+  if (!savedEntry.revenue && research.revenue) updates.revenue = research.revenue;
+  if (!savedEntry.companyType && research.companyType) updates.companyType = research.companyType;
+  if (!savedEntry.techStack?.length && research.techStack?.length) updates.techStack = research.techStack;
+  if (!savedEntry.recentNews?.length && research.recentNews?.length) updates.recentNews = research.recentNews;
   // Backfill intelligence + reviews — used by scorer for culture/company fit
   if (!savedEntry.intelligence && research.intelligence) updates.intelligence = research.intelligence;
   if ((!savedEntry.reviews || !savedEntry.reviews.length) && research.reviews?.length) updates.reviews = research.reviews;
@@ -2327,6 +2331,12 @@ function checkAlreadySaved(company) {
       }
       showCrmLink(match);
 
+      // Clear stale "Navigate to..." empty state — we've found a saved entry
+      const _staleEmpty = contentEl.querySelector(':scope > .empty');
+      if (_staleEmpty && _staleEmpty.textContent.includes('Navigate to')) {
+        _staleEmpty.remove();
+      }
+
       // Use saved research data instead of re-fetching from API.
       // Gate is intentionally loose: any of these fields is enough to render
       // something more useful than the default "Navigate to..." empty state.
@@ -3373,6 +3383,7 @@ function renderContactsSection(el, contacts) {
     'granola-meeting':       '📅 meeting',
     'manual':                '✎ manual',
     'leader-promoted':       '✎ leader · promoted',
+    'calendar':              '📅 calendar',
   };
   const getSourceLabel = c => {
     if (c.matchedVia?.type) return MATCHED_VIA_LABELS[c.matchedVia.type] || c.matchedVia.type;
@@ -4092,16 +4103,56 @@ function renderContactsSection(el, contacts) {
 
   let history = [];
   let isApplicationMode = false;
+  const appModeBadge = document.getElementById('sp-app-mode-badge');
+
+  // Detect application form URLs (not just job listings — actual apply pages)
+  function isApplicationFormUrl(url) {
+    if (!url) return false;
+    try {
+      const u = new URL(url);
+      const path = u.pathname.toLowerCase();
+      const host = u.hostname.toLowerCase();
+      // ATS application form patterns
+      if (host.includes('greenhouse.io') && (path.includes('/application') || path.includes('/apply'))) return true;
+      if (host.includes('lever.co') && path.includes('/apply')) return true;
+      if (host.includes('myworkdayjobs.com') && (path.includes('/apply') || path.includes('/login'))) return true;
+      if (host.includes('ashbyhq.com') && path.includes('/application')) return true;
+      if (host.includes('jobvite.com') && path.includes('/apply')) return true;
+      if (host.includes('smartrecruiters.com') && path.includes('/apply')) return true;
+      if (host.includes('workable.com') && path.includes('/apply')) return true;
+      // Generic patterns on any ATS-like domain
+      if (/\/applications?\//i.test(path) || /\/apply\b/i.test(path)) return true;
+      return false;
+    } catch { return false; }
+  }
+
+  function updateAppModeBadge() {
+    if (appModeBadge) appModeBadge.style.display = isApplicationMode ? '' : 'none';
+  }
+
+  function tryAutoActivateAppMode() {
+    if (isApplicationMode) return; // already active
+    if (_coopConfig.automations?.applicationModeDetection === false) return;
+    if (isApplicationFormUrl(currentUrl)) {
+      isApplicationMode = true;
+      updateAppModeBadge();
+      console.log('[SP] Auto-activated application mode for URL:', currentUrl);
+    }
+  }
+  // Auto-activate on load if we're on an application form
+  tryAutoActivateAppMode();
 
   // Model switcher — dropdown picklist, ordered by cost
   const CHAT_ALL_MODELS = [
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', icon: '◆', provider: 'openai', cost: '$', tier: 'Fast & cheap' },
-    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', icon: '◆', provider: 'openai', cost: '$', tier: 'Fastest' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', icon: '⚡', provider: 'anthropic', cost: '$', tier: 'Fast & cheap' },
-    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', icon: '✦', provider: 'anthropic', cost: '$$', tier: 'Balanced' },
-    { id: 'gpt-4.1', label: 'GPT-4.1', icon: '◆', provider: 'openai', cost: '$$', tier: 'Balanced' },
-    { id: 'gpt-5', label: 'GPT-5', icon: '◆', provider: 'openai', cost: '$$$', tier: 'Most capable' },
-    { id: 'claude-opus-4-0-20250514', label: 'Claude Opus', icon: '★', provider: 'anthropic', cost: '$$$', tier: 'Most capable' },
+    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',        icon: '◆', provider: 'openai',  cost: '$',   tier: 'Fastest' },
+    { id: 'gemini-2.0-flash-lite',     label: 'Gemini Flash-Lite',   icon: '✦', provider: 'gemini',  cost: '$',   tier: 'Cheapest' },
+    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',        icon: '◆', provider: 'openai',  cost: '$',   tier: 'Fast & cheap' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku',        icon: '⚡', provider: 'anthropic', cost: '$', tier: 'Fast & cheap' },
+    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',        icon: '✦', provider: 'gemini',  cost: '$',   tier: 'Fast & cheap' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',   icon: '✦', provider: 'anthropic', cost: '$$', tier: 'Balanced' },
+    { id: 'gpt-4.1',                   label: 'GPT-4.1',             icon: '◆', provider: 'openai',  cost: '$$',  tier: 'Balanced' },
+    { id: 'gpt-5',                     label: 'GPT-5',               icon: '◆', provider: 'openai',  cost: '$$$', tier: 'Most capable' },
+    { id: 'claude-opus-4-0-20250514',  label: 'Claude Opus',         icon: '★', provider: 'anthropic', cost: '$$$', tier: 'Most capable' },
   ];
   let spAvailableModels = CHAT_ALL_MODELS;
   let chatModelIdx = 0;
@@ -4117,6 +4168,7 @@ function renderContactsSection(el, contacts) {
       spAvailableModels = CHAT_ALL_MODELS.filter(m => {
         if (m.provider === 'openai') return !!status.openai;
         if (m.provider === 'anthropic') return !!status.anthropic;
+        if (m.provider === 'gemini') return !!status.gemini;
         return true;
       });
       if (!spAvailableModels.length) spAvailableModels = CHAT_ALL_MODELS;
@@ -4377,6 +4429,7 @@ function renderContactsSection(el, contacts) {
             // Activate application mode when "Help me apply" is clicked
             if (prompt.toLowerCase().includes('application questions')) {
               isApplicationMode = true;
+              updateAppModeBadge();
             }
             inputEl.value = prompt;
             send();
@@ -4596,9 +4649,82 @@ function renderContactsSection(el, contacts) {
       granolaNote: entry.cachedMeetingTranscript || entry.cachedMeetingNotes ||
         ((entry.cachedMeetings || []).map(m => m && (m.transcript || m.summary)).filter(Boolean).join('\n\n---\n\n') || null),
       _applicationMode: isApplicationMode,
+      _questionArchetype: null, // set by send() after classification
       currentTabUrl: tabContextActive ? currentUrl : null,
       tabContext: tabContextActive ? tabContextLabel : null,
     };
+  }
+
+  // ── Question Archetype Classifier (application mode) ────────────────────────
+  const FACTUAL_PATTERNS = [
+    { pattern: /\b(what|which)\s+(city|town|metro|location|state|area)\b|where\s+(are you|do you)\s+(based|located|live)|current\s+(city|location)/i, key: 'location' },
+    { pattern: /linkedin\s*(url|profile|link|page)|your\s+linkedin/i, key: 'linkedin' },
+    { pattern: /github\s*(url|profile|link|page)|your\s+github/i, key: 'github' },
+    { pattern: /portfolio\s*(url|site|link|page|website)|personal\s*(site|website|page)/i, key: 'portfolio' },
+    { pattern: /\b(salary|compensation|pay)\s*(expectation|requirement|range|desire)|expected\s*(salary|comp|pay|ote|base)|desired\s*(salary|comp|pay)|minimum\s*(salary|comp|base)/i, key: 'salary' },
+    { pattern: /your\s*(full\s*)?name\b|first\s+name|last\s+name|legal\s+name|preferred\s+name/i, key: 'name' },
+    { pattern: /email\s*(address)?$|your\s+email|contact\s+email|preferred\s+email/i, key: 'email' },
+    { pattern: /phone\s*(number)?$|your\s+phone|mobile\s*(number)?|contact\s+number/i, key: 'phone' },
+    { pattern: /when\s+can\s+you\s+start|start\s+date|earliest\s+(start|available)|available\s+to\s+(start|begin)|notice\s+period/i, key: 'startDate' },
+    { pattern: /work\s+(authorization|auth)|authorized\s+to\s+work|visa\s+(status|sponsor|require)|citizen|do you\s+require\s+sponsor|immigration/i, key: 'workAuth' },
+    { pattern: /willing\s*to\s*relocate|open\s*to\s*(relocation|relocating)|relocation/i, key: 'relocation' },
+    { pattern: /years?\s+of\s+experience|how\s+(many|long)\s+(years?|have you)/i, key: 'experience' },
+  ];
+
+  const ARCHETYPE_PATTERNS = [
+    { pattern: /why\s+(this|our|the)\s+(company|team|org|role|position|opportunity)|what\s+(excites|interests|attracts|draws|appeals)\s+you|why\s+are\s+you\s+interested/i, archetype: 'motivation' },
+    { pattern: /tell\s+(me|us)\s+about\s+a\s+time|describe\s+a\s+(time|situation|scenario)|give\s+(me|us)\s+an?\s+example|walk\s+(me|us)\s+through/i, archetype: 'behavioral' },
+    { pattern: /describe\s+your\s+(approach|process|method|experience\s+with)|how\s+would\s+you\s+(approach|handle|solve|build|design|implement)|technical\s+(approach|assessment)/i, archetype: 'technical' },
+    { pattern: /why\s+(sales|this\s+career|career\s+change|are\s+you\s+leaving|did\s+you\s+leave)|what\s+motivates\s+you|tell\s+(me|us)\s+about\s+yourself/i, archetype: 'motivation' },
+    { pattern: /anything\s+else|additional\s+information|is\s+there\s+anything|what\s+else\s+should\s+we\s+know/i, archetype: 'freeform' },
+    { pattern: /cover\s+letter/i, archetype: 'motivation' },
+  ];
+
+  function classifyQuestion(text) {
+    const trimmed = text.trim();
+    // Check factual patterns first
+    for (const { pattern, key } of FACTUAL_PATTERNS) {
+      if (pattern.test(trimmed)) return { type: 'factual', key };
+    }
+    // Check narrative archetypes
+    for (const { pattern, archetype } of ARCHETYPE_PATTERNS) {
+      if (pattern.test(trimmed)) return { type: archetype, key: null };
+    }
+    return { type: 'freeform', key: null };
+  }
+
+  async function tryFactualAnswer(key) {
+    const data = await new Promise(r => {
+      chrome.storage.sync.get(['prefs'], sync => {
+        chrome.storage.local.get(['profileLinks'], local => r({ prefs: sync.prefs || {}, links: local.profileLinks || {} }));
+      });
+    });
+    const p = data.prefs;
+    const l = data.links;
+    switch (key) {
+      case 'location': {
+        const parts = [p.locationCity, p.locationState].filter(Boolean);
+        return parts.length ? parts.join(', ') : null;
+      }
+      case 'linkedin': return l.linkedin || p.linkedinUrl || null;
+      case 'github': return l.github || null;
+      case 'portfolio': return l.portfolio || l.website || null;
+      case 'salary': {
+        const floor = p.salaryFloor;
+        const strong = p.salaryStrong;
+        if (floor && strong) return `$${floor} - $${strong}`;
+        if (floor) return `$${floor}+`;
+        return null;
+      }
+      case 'name': return p.name || p.fullName || null;
+      case 'email': return l.email || null;
+      case 'phone': return l.phone || null;
+      case 'startDate': return null; // Not stored in prefs — let LLM handle
+      case 'workAuth': return null; // Not stored — let LLM handle
+      case 'relocation': return null; // Not stored — let LLM handle
+      case 'experience': return null; // Needs profile context — let LLM handle
+      default: return null;
+    }
   }
 
   async function send() {
@@ -4608,6 +4734,7 @@ function renderContactsSection(el, contacts) {
     // Detect application mode from user message
     if (/help me (apply|answer|fill)|application (question|field)/i.test(text)) {
       isApplicationMode = true;
+      updateAppModeBadge();
     }
     inputEl.value = '';
     inputEl.style.height = '';
@@ -4615,6 +4742,22 @@ function renderContactsSection(el, contacts) {
     renderMessages(true);
     sendBtn.disabled = true;
     if (typeof CISounds !== 'undefined') CISounds.send();
+
+    // Application mode: try factual auto-answer before hitting the API
+    if (isApplicationMode) {
+      const classification = classifyQuestion(text);
+      if (classification.type === 'factual' && classification.key) {
+        const factualAnswer = await tryFactualAnswer(classification.key);
+        if (factualAnswer) {
+          history.push({ role: 'assistant', content: factualAnswer });
+          renderMessages();
+          sendBtn.disabled = false;
+          if (typeof CISounds !== 'undefined') CISounds.receive();
+          console.log('[SP Chat] Factual auto-answer for:', classification.key);
+          return;
+        }
+      }
+    }
 
     // If a manual bind is active, refresh currentSavedEntry from storage so we always
     // pull the latest cachedMeetings/cachedEmails/transcripts written by company.js
@@ -4628,6 +4771,13 @@ function renderContactsSection(el, contacts) {
     }
 
     const context = buildChatContext();
+    // Classify question archetype for application mode
+    if (isApplicationMode) {
+      const classification = classifyQuestion(text);
+      if (classification.type !== 'factual') {
+        context._questionArchetype = classification.type; // motivation, behavioral, technical, freeform
+      }
+    }
     console.log('[SP Chat] Context built — bound:', !!boundId, 'meetings:', context.meetings?.length, 'granolaNote:', context.granolaNote ? context.granolaNote.length + ' chars' : 'null');
     // Fetch visible page content from the active tab if tab sharing is on
     if (tabContextActive) {
@@ -4937,6 +5087,7 @@ function renderContactsSection(el, contacts) {
     if (e.target.closest('[data-action="clear"]')) {
       history = [];
       isApplicationMode = false;
+      updateAppModeBadge();
       renderMessages();
     }
   });

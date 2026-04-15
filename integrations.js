@@ -14,6 +14,12 @@ const PROVIDERS = [
     storageKey: 'openai_key', placeholder: 'sk-...',
     status: 'active', docsUrl: 'https://platform.openai.com/api-keys',
   },
+  {
+    id: 'gemini', name: 'Google Gemini', category: 'AI Engine',
+    description: 'Ultra-cheap extraction — Flash-Lite is ~20× cheaper than Haiku ($0.05/M input). Used as fallback in the model chain.',
+    storageKey: 'gemini_key', placeholder: 'AIza...',
+    status: 'active', docsUrl: 'https://aistudio.google.com/app/apikey',
+  },
   // ── Company Data & Enrichment ──
   {
     id: 'apollo', name: 'Apollo.io', category: 'Company Data & Enrichment',
@@ -435,8 +441,10 @@ const SEARCH_META = {
 
 const AI_MODEL_OPTIONS = [
   { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
+  { value: 'gemini-2.0-flash-lite', label: 'Gemini Flash-Lite' },
   { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
   { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  { value: 'gemini-2.0-flash', label: 'Gemini Flash' },
   { value: 'gpt-4.1', label: 'GPT-4.1' },
   { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
 ];

@@ -61,20 +61,20 @@ export async function syncEntryFields(entryId) {
   }
 
   // Salary from brief or snapshot
-  if (!e.baseSalaryRange) {
+  if (isMissing(e.baseSalaryRange)) {
     const m = brief.match(/base[:\s]*\$?([\d,]+[Kk]?\s*[-–]\s*\$?[\d,]+[Kk]?)/i)
       || brief.match(/salary[:\s]*\$?([\d,]+[Kk]?\s*[-–]\s*\$?[\d,]+[Kk]?)/i);
     if (m) updates.baseSalaryRange = m[1].trim();
     else if (snapshot.salary && snapshot.salaryType === 'base') updates.baseSalaryRange = snapshot.salary;
   }
-  if (!e.oteTotalComp) {
+  if (isMissing(e.oteTotalComp)) {
     const m = brief.match(/OTE[:\s]*\$?([\d,]+[Kk]?\s*[-–]\s*\$?[\d,]+[Kk]?)/i);
     if (m) updates.oteTotalComp = m[1].trim();
     else if (snapshot.salary && snapshot.salaryType === 'ote') updates.oteTotalComp = snapshot.salary;
   }
 
   // Work arrangement from snapshot
-  if (!e.workArrangement && snapshot.workArrangement) updates.workArrangement = snapshot.workArrangement;
+  if (isMissing(e.workArrangement) && snapshot.workArrangement) updates.workArrangement = snapshot.workArrangement;
 
   // Company LinkedIn from any URL in known data
   if (!e.companyLinkedin) {
@@ -89,7 +89,7 @@ export async function syncEntryFields(entryId) {
   }
 
   // Equity from brief
-  if (!e.equity) {
+  if (isMissing(e.equity)) {
     const m = brief.match(/equity[:\s]*([\d.]+%?\s*[-–]\s*[\d.]+%?)/i) || brief.match(/([\d.]+%\s*[-–]\s*[\d.]+%)\s*equity/i);
     if (m) updates.equity = m[1].trim();
   }
@@ -103,11 +103,11 @@ export async function syncEntryFields(entryId) {
   }
 
   // Industry from intelligence
-  if (!e.industry && intel.category) updates.industry = intel.category;
+  if (isMissing(e.industry) && intel.category) updates.industry = intel.category;
 
   // Intelligence fields to top level
-  if (intel.oneLiner && !e.oneLiner) updates.oneLiner = intel.oneLiner;
-  if (intel.category && !e.category) updates.category = intel.category;
+  if (intel.oneLiner && isMissing(e.oneLiner)) updates.oneLiner = intel.oneLiner;
+  if (intel.category && isMissing(e.category)) updates.category = intel.category;
 
   if (Object.keys(updates).length) {
     console.log('[SyncFields] Auto-filling for', e.company, ':', Object.keys(updates).join(', '));
@@ -202,6 +202,7 @@ Then write the full role brief below.`;
       max_tokens: 3000,
       tag: 'RoleBrief',
       opTag: 'scoring',
+      context: company || undefined,
     });
     if (result.error) return { error: result.error };
     let briefFields = null;
@@ -221,6 +222,61 @@ Then write the full role brief below.`;
     return { content: result.reply, briefFields };
   } catch (err) {
     return { error: err.message };
+  }
+}
+
+// ── Lightweight Field Extraction (Tier 2 — runs on new content only) ────────
+
+export async function extractFieldsFromNewContent(entryId, newContent, contentType) {
+  if (!newContent || newContent.length < 20) return;
+  const { savedCompanies } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+  const entries = savedCompanies || [];
+  const idx = entries.findIndex(e => e.id === entryId);
+  if (idx === -1) return;
+  const e = entries[idx];
+
+  const isMissing = v => !v || /^\s*(not specified|unknown|n\/a|none|—|–|-)\s*$/i.test(String(v));
+
+  // Build list of fields we still need
+  const needed = [];
+  if (isMissing(e.baseSalaryRange)) needed.push('baseSalaryRange (base salary range, e.g. "$150K-$180K")');
+  if (isMissing(e.oteTotalComp)) needed.push('oteTotalComp (total OTE/comp, e.g. "$250K-$300K")');
+  if (isMissing(e.equity)) needed.push('equity (equity details, e.g. "0.1-0.3%")');
+  if (isMissing(e.employees)) needed.push('employees (employee count, e.g. "50-100")');
+  if (isMissing(e.funding)) needed.push('funding (funding stage/amount, e.g. "Series A — $12M")');
+  if (isMissing(e.workArrangement)) needed.push('workArrangement (remote/hybrid/onsite)');
+  if (!needed.length) return; // all fields populated
+
+  try {
+    const result = await chatWithFallback({
+      model: 'gpt-4.1-nano',
+      system: 'Extract structured data from text. Return ONLY valid JSON, no explanation.',
+      messages: [{ role: 'user', content: `Extract any of these fields from this ${contentType}. Return a JSON object with only fields you find clear evidence for. Use null for anything not mentioned.\n\nFields needed:\n${needed.join('\n')}\n\n--- CONTENT ---\n${newContent.slice(0, 2000)}` }],
+      max_tokens: 200,
+      tag: 'FieldExtract',
+      opTag: 'scoring',
+      context: e.company || undefined,
+    });
+    if (result.error || !result.reply) return;
+    const cleaned = result.reply.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+    let fields;
+    try { fields = JSON.parse(cleaned); } catch { return; }
+
+    const updates = {};
+    let count = 0;
+    for (const [key, val] of Object.entries(fields)) {
+      if (!val || val === 'null') continue;
+      if (['baseSalaryRange', 'oteTotalComp', 'equity', 'employees', 'funding', 'workArrangement'].includes(key) && isMissing(e[key])) {
+        updates[key] = String(val); count++;
+      }
+    }
+    if (count > 0) {
+      Object.assign(entries[idx], updates);
+      await new Promise(r => chrome.storage.local.set({ savedCompanies: entries }, r));
+      console.log(`[FieldExtract] Extracted ${count} fields from ${contentType} for ${e.company}:`, Object.keys(updates));
+    }
+  } catch (err) {
+    console.warn('[FieldExtract] Error:', err.message);
   }
 }
 
@@ -520,6 +576,13 @@ export async function handleSaveOpportunity(message) {
         prev.compAutoExtracted = true;
       }
       if (!prev.equity && jobMeta.equity) prev.equity = jobMeta.equity;
+      // Sync Easy Apply flag + tag for duplicates
+      if (jobMeta.easyApply && !prev.easyApply) {
+        prev.easyApply = true;
+        if (!(prev.tags || []).includes('linkedin easy apply')) {
+          prev.tags = [...(prev.tags || []), 'linkedin easy apply'];
+        }
+      }
     }
 
     existing[dupIdx] = prev;

@@ -9,6 +9,7 @@ export const state = {
   APOLLO_KEY: '',
   SERPER_KEY: '',
   OPENAI_KEY: '',
+  GEMINI_KEY: '',
   GRANOLA_KEY: '',
   GOOGLE_CSE_KEY: '',
   GOOGLE_CSE_CX: '',
@@ -113,11 +114,12 @@ export function initKeysFromStorage() {
     console.log('[Keys] Loading from storage:', Object.keys(integrations).filter(k => !!integrations[k]).join(', '));
     console.log('[Keys] OpenAI key present:', !!integrations.openai_key, '| length:', (integrations.openai_key || '').length);
     const cleanKey = k => (k || '').replace(/[^\x20-\x7E]/g, '').trim();
-    if (integrations.anthropic_key) state.ANTHROPIC_KEY = cleanKey(integrations.anthropic_key);
-    if (integrations.openai_key)    state.OPENAI_KEY = cleanKey(integrations.openai_key);
-    if (integrations.apollo_key)    state.APOLLO_KEY = cleanKey(integrations.apollo_key);
-    if (integrations.serper_key)    state.SERPER_KEY = cleanKey(integrations.serper_key);
-    if (integrations.granola_key)   state.GRANOLA_KEY = cleanKey(integrations.granola_key);
+    if (integrations.anthropic_key)  state.ANTHROPIC_KEY = cleanKey(integrations.anthropic_key);
+    if (integrations.openai_key)     state.OPENAI_KEY = cleanKey(integrations.openai_key);
+    if (integrations.gemini_key)     state.GEMINI_KEY = cleanKey(integrations.gemini_key);
+    if (integrations.apollo_key)     state.APOLLO_KEY = cleanKey(integrations.apollo_key);
+    if (integrations.serper_key)     state.SERPER_KEY = cleanKey(integrations.serper_key);
+    if (integrations.granola_key)    state.GRANOLA_KEY = cleanKey(integrations.granola_key);
     if (integrations.google_cse_key) state.GOOGLE_CSE_KEY = cleanKey(integrations.google_cse_key);
     if (integrations.google_cse_cx)  state.GOOGLE_CSE_CX = cleanKey(integrations.google_cse_cx);
   });

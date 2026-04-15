@@ -3,13 +3,13 @@ import { state, DEFAULT_PIPELINE_CONFIG, QUEUE_AUTO_PROCESS, initKeysFromConfig,
 import { dlog } from './utils.js';
 import { claudeApiCall, getApiUsage } from './api.js';
 import { fetchLeaderPhoto, testApiKey } from './search.js';
-import { gmailAuth, gmailRevoke, fetchGmailEmails, detectRejectionEmailBg } from './gmail.js';
+import { gmailAuth, gmailRevoke, fetchGmailEmails, detectRejectionEmailBg, enrichContactsFromGoogle } from './gmail.js';
 import { fetchCalendarEvents } from './calendar.js';
 import { buildGranolaIndex, searchGranolaNotes } from './granola.js';
 import { researchCompany, quickLookup } from './research.js';
 import { interpretProfileSection, scoreOpportunity, processQueue, computeStructuralMatches, handleDevMockScore } from './scoring.js';
 import { consolidateProfile } from './memory.js';
-import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
+import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, extractFieldsFromNewContent, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
 import { handleQuickEnrichFirmo } from './search.js';
 import { initProfileCompiler } from './profile-compiler.js';
@@ -413,6 +413,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     fetchGmailEmails(message.domain, message.companyName, message.linkedinSlug, message.knownContactEmails).then(sendResponse);
     return true;
   }
+  if (message.type === 'ENRICH_CONTACTS_GOOGLE') {
+    enrichContactsFromGoogle(message.emails).then(sendResponse);
+    return true;
+  }
   if (message.type === 'CLOSE_SIDEPANEL') {
     // Close the sidepanel via Chrome API
     chrome.sidePanel?.setOptions?.({ enabled: false }).then(() => {
@@ -532,6 +536,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     syncEntryFields(message.entryId).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ error: e.message }));
     return true;
   }
+  if (message.type === 'EXTRACT_FIELDS_FROM_CONTENT') {
+    extractFieldsFromNewContent(message.entryId, message.content, message.contentType).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ error: e.message }));
+    return true;
+  }
   if (message.type === 'GENERATE_ROLE_BRIEF') {
     generateRoleBrief(message).then(sendResponse);
     return true;
@@ -593,6 +601,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       apollo: !!state.APOLLO_KEY,
       serper: !!state.SERPER_KEY,
       openai: !!state.OPENAI_KEY,
+      gemini: !!state.GEMINI_KEY,
       granola: !!state.GRANOLA_KEY,
       google_cse: !!(state.GOOGLE_CSE_KEY && state.GOOGLE_CSE_CX),
       apolloExhausted: state._apolloExhausted,

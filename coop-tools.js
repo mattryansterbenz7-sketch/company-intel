@@ -88,6 +88,25 @@ export const COOP_TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'update_coop_setting',
+    description: 'Update a Coop configuration setting. Use this when the user asks to change their chat model, toggle features, or adjust preferences.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        setting: {
+          type: 'string',
+          enum: ['chatModel'],
+          description: 'The setting key to change. Currently supported: chatModel',
+        },
+        value: {
+          type: 'string',
+          description: 'The new value for the setting.',
+        },
+      },
+      required: ['setting', 'value'],
+    },
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -164,7 +183,88 @@ const TOOL_RESULT_SIZE_CAP = 60000; // chars, ~15k tokens
 export function _capToolResult(obj) {
   const s = JSON.stringify(obj);
   if (s.length <= TOOL_RESULT_SIZE_CAP) return obj;
-  return { ...obj, _truncated: true, _note: `Result exceeded ${TOOL_RESULT_SIZE_CAP}-char cap. Some fields may be trimmed.` };
+
+  // Actual trimming: identify large text fields and proportionally reduce them
+  const trimmed = JSON.parse(JSON.stringify(obj)); // Deep clone
+  const trimmedFields = [];
+
+  // Identify and measure large text fields that are candidates for trimming
+  const collectLargeFields = (o, path = '') => {
+    const result = [];
+    if (Array.isArray(o)) {
+      o.forEach((item, i) => {
+        result.push(...collectLargeFields(item, `${path}[${i}]`));
+      });
+    } else if (o && typeof o === 'object') {
+      for (const [key, val] of Object.entries(o)) {
+        const newPath = path ? `${path}.${key}` : key;
+        if (typeof val === 'string' && val.length > 1000) {
+          result.push({ path: newPath, value: val, size: val.length });
+        } else if (val && typeof val === 'object') {
+          result.push(...collectLargeFields(val, newPath));
+        }
+      }
+    }
+    return result;
+  };
+
+  const largeFields = collectLargeFields(trimmed);
+  if (!largeFields.length) {
+    // No large text fields to trim; just mark as truncated
+    return { ...obj, _truncated: true, _note: `Result exceeded ${TOOL_RESULT_SIZE_CAP}-char cap.` };
+  }
+
+  // Sort by size descending; trim largest first
+  largeFields.sort((a, b) => b.size - a.size);
+
+  // Trim iteratively until we're under budget
+  let currentSize = JSON.stringify(trimmed).length;
+  const budgetRemaining = TOOL_RESULT_SIZE_CAP;
+
+  for (const field of largeFields) {
+    if (currentSize <= budgetRemaining) break;
+
+    const overage = currentSize - budgetRemaining;
+    const pathParts = field.path.split(/[\.\[\]]+/).filter(Boolean);
+    let obj_ref = trimmed;
+
+    // Navigate to the parent of the field to trim
+    for (let i = 0; i < pathParts.length - 1; i++) {
+      const key = pathParts[i];
+      if (isNaN(key)) {
+        obj_ref = obj_ref[key];
+      } else {
+        obj_ref = obj_ref[parseInt(key)];
+      }
+    }
+
+    const lastKey = pathParts[pathParts.length - 1];
+    const val = isNaN(lastKey) ? obj_ref[lastKey] : obj_ref[parseInt(lastKey)];
+
+    // Trim proportionally: aim to save ~150% of overage to be safe
+    const targetTrim = Math.ceil(overage * 1.5);
+    const newLen = Math.max(1000, val.length - targetTrim);
+    const trimmedVal = val.slice(0, newLen) + ' …[trimmed]';
+
+    if (isNaN(lastKey)) {
+      obj_ref[lastKey] = trimmedVal;
+    } else {
+      obj_ref[parseInt(lastKey)] = trimmedVal;
+    }
+
+    if (!trimmedFields.includes(field.path)) {
+      trimmedFields.push(field.path);
+    }
+
+    currentSize = JSON.stringify(trimmed).length;
+  }
+
+  return {
+    ...trimmed,
+    _truncated: true,
+    _truncatedFields: trimmedFields,
+    _note: `Result exceeded ${TOOL_RESULT_SIZE_CAP}-char cap. Trimmed ${trimmedFields.length} field(s).`
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -188,6 +288,9 @@ async function _tool_get_company_context({ company_name }, ctx) {
   if (e.employees) firm.push(`- Employees: ${e.employees}`);
   if (e.industry) firm.push(`- Industry: ${e.industry}`);
   if (e.funding) firm.push(`- Funding: ${e.funding}`);
+  if (e.revenue) firm.push(`- Revenue: ${e.revenue}`);
+  if (e.companyType) firm.push(`- Type: ${e.companyType}`);
+  if (e.techStack?.length) firm.push(`- Tech Stack: ${e.techStack.slice(0, 10).join(', ')}`);
   if (e.companyWebsite) firm.push(`- Website: ${e.companyWebsite}`);
   if (e.companyLinkedin) firm.push(`- LinkedIn: ${e.companyLinkedin}`);
   if (firm.length) { lines.push('## Company'); lines.push(...firm); lines.push(''); }
@@ -401,6 +504,49 @@ async function _tool_get_memory_narrative() {
   return { content: md + ageLine };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+async function _tool_update_coop_setting({ setting, value }) {
+  const VALID_CHAT_MODELS = new Set([
+    'gpt-4.1-nano',
+    'gemini-2.0-flash-lite',
+    'gpt-4.1-mini',
+    'claude-haiku-4-5-20251001',
+    'gemini-2.0-flash',
+    'claude-sonnet-4-6',
+    'gpt-4.1',
+  ]);
+
+  if (setting === 'chatModel') {
+    if (!VALID_CHAT_MODELS.has(value)) {
+      return {
+        error: `Invalid chat model: "${value}". Valid options: ${Array.from(VALID_CHAT_MODELS).join(', ')}`,
+      };
+    }
+
+    const { coopConfig } = await new Promise(r => chrome.storage.local.get(['coopConfig'], r));
+    const cfg = { ...coopConfig, chatModel: value };
+    await new Promise(r => chrome.storage.local.set({ coopConfig: cfg }, r));
+
+    const modelNames = {
+      'gpt-4.1-nano':              'GPT-4.1 Nano',
+      'gemini-2.0-flash-lite':     'Gemini Flash-Lite',
+      'gpt-4.1-mini':              'GPT-4.1 Mini',
+      'claude-haiku-4-5-20251001': 'Claude Haiku',
+      'gemini-2.0-flash':          'Gemini Flash',
+      'claude-sonnet-4-6':         'Claude Sonnet',
+      'gpt-4.1':                   'GPT-4.1',
+    };
+
+    return {
+      content: `✓ Chat model switched to ${modelNames[value]}. This applies to new messages.`,
+    };
+  }
+
+  return {
+    error: `Unknown setting: "${setting}". Currently supported: chatModel`,
+  };
+}
+
 // Tool router
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -413,6 +559,7 @@ export async function runCoopTool(name, input, ctx) {
       case 'get_pipeline_overview':  return await _tool_get_pipeline_overview(input || {}, ctx);
       case 'search_memory':          return await _tool_search_memory(input || {}, ctx);
       case 'get_memory_narrative':   return await _tool_get_memory_narrative();
+      case 'update_coop_setting':    return await _tool_update_coop_setting(input || {});
       default: return { error: `Unknown tool: ${name}` };
     }
   } catch (err) {

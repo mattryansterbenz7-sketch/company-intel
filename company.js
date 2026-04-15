@@ -179,6 +179,8 @@ const DEFAULT_FIELD_DEFS = [
   { id: 'funding',         label: 'Funding',   type: 'text' },
   { id: 'founded',         label: 'Founded',   type: 'text' },
   { id: 'industry',        label: 'Industry',  type: 'text' },
+  { id: 'revenue',         label: 'Revenue',   type: 'text' },
+  { id: 'companyType',     label: 'Type',      type: 'text' },
 ];
 
 const DEFAULT_LAYOUT = {
@@ -309,6 +311,10 @@ function init() {
       if (!entry.founded  && cached.founded)  entry = { ...entry, founded:  cached.founded  };
       if (!entry.industry && cached.industry) entry = { ...entry, industry: cached.industry };
       if (!entry.employees && cached.employees) entry = { ...entry, employees: cached.employees };
+      if (!entry.revenue && cached.revenue) entry = { ...entry, revenue: cached.revenue };
+      if (!entry.companyType && cached.companyType) entry = { ...entry, companyType: cached.companyType };
+      if (!entry.techStack?.length && cached.techStack?.length) entry = { ...entry, techStack: cached.techStack };
+      if (!entry.recentNews?.length && cached.recentNews?.length) entry = { ...entry, recentNews: cached.recentNews };
       if (!entry.jobListings?.length && cached.jobListings?.length) entry = { ...entry, jobListings: cached.jobListings };
     }
     // Store cache metadata (timestamp and usage info) for display in Intel tab
@@ -398,29 +404,34 @@ function saveEntry(changes) {
   chrome.storage.local.set({ savedCompanies: allCompanies });
 }
 
-// Replace "microphone:" / "speaker:" with actual names in transcripts
+// Replace "microphone:" with the user's name in transcripts.
+// Other speaker labels (real names resolved in granola.js, or fallback "speaker:") are
+// handled here: "speaker:" is resolved to the other attendee when there is exactly one,
+// or left as-is when the transcript already contains real names.
 function resolveTranscriptSpeakers(transcript, meeting) {
   if (!transcript) return transcript;
-  // "microphone" = the user, "speaker" = the other attendee(s)
+  // "microphone" = the user (device-level label from Granola)
   const userName = (typeof _cachedUserName !== 'undefined' && _cachedUserName) || 'Me';
 
-  // Get the other person's name from meeting attendees
-  let otherName = 'Other';
+  // Only resolve the generic "speaker:" fallback label — real names are already in the
+  // transcript when granola.js could match an attendee ID or name field.
+  let genericSpeakerName = 'Other';
   const attendees = (meeting?.attendeeNames || meeting?.attendees || '').toString();
   if (attendees) {
     const myNameLower = userName.toLowerCase();
     const names = attendees.split(/[,;]/).map(n => n.trim()).filter(n =>
       n && n.length > 1 && !n.toLowerCase().includes(myNameLower)
     );
-    if (names.length === 1) otherName = names[0].split(' ')[0]; // first name
-    else if (names.length > 1) otherName = names.map(n => n.split(' ')[0]).join('/');
+    // Only substitute the generic label when there is exactly one other attendee,
+    // so we don't smear all attendee names onto a single line.
+    if (names.length === 1) genericSpeakerName = names[0].split(' ')[0];
   }
 
   return transcript
     .replace(/^microphone:/gm, `${userName}:`)
-    .replace(/^speaker:/gm, `${otherName}:`)
+    .replace(/^speaker:/gm, `${genericSpeakerName}:`)
     .replace(/\bmicrophone:/g, `${userName}:`)
-    .replace(/\bspeaker:/g, `${otherName}:`);
+    .replace(/\bspeaker:/g, `${genericSpeakerName}:`);
 }
 
 function backfillFromResearchCache() {
@@ -726,6 +737,10 @@ function renderHeader() {
         if (researchResult.funding) updates.funding = researchResult.funding;
         if (researchResult.industry) updates.industry = researchResult.industry;
         if (researchResult.founded) updates.founded = researchResult.founded;
+        if (researchResult.revenue) updates.revenue = researchResult.revenue;
+        if (researchResult.companyType) updates.companyType = researchResult.companyType;
+        if (researchResult.techStack?.length) updates.techStack = researchResult.techStack;
+        if (researchResult.recentNews?.length) updates.recentNews = researchResult.recentNews;
         if (researchResult.companyWebsite) updates.companyWebsite = researchResult.companyWebsite;
         if (researchResult.companyLinkedin) updates.companyLinkedin = researchResult.companyLinkedin;
         if (researchResult.intelligence) {
@@ -1486,21 +1501,22 @@ function renderCompanyTasks() {
           const dl = dateLabel(t.dueDate);
           const isAuto = t.source === 'email';
           const unreviewed = isAuto && !t.reviewed && !t.completed;
-          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #eaf0f6;border-radius:8px;margin-bottom:4px;background:#fff;${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}${t.completed ? 'opacity:0.5;' : ''}" data-task-id="${t.id}">
+          const priColors = { high: { bg: '#FEE2E2', color: '#991b1b' }, low: { bg: '#F0FDF4', color: '#166534' }, normal: { bg: '#eef2f7', color: '#516f90' } };
+          const pc = priColors[t.priority] || priColors.normal;
+          return `<div class="ct-item${t.completed ? ' ct-completed' : ''}" data-task-id="${t.id}" style="${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}">
             <div style="width:18px;height:18px;margin-top:1px;border-radius:50%;border:2px solid ${t.completed ? '#5DCAA5' : '#dfe3eb'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:${t.completed ? '#fff' : 'transparent'};background:${t.completed ? '#5DCAA5' : 'transparent'};flex-shrink:0" class="ct-check">${t.completed ? '✓' : ''}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:#2d3e50;${t.completed ? 'text-decoration:line-through' : ''}">${escapeHtml(t.text)}</div>
-              <div style="font-size:11px;color:#7c98b6;display:flex;gap:6px;margin-top:2px;flex-wrap:wrap;align-items:center">
-                <span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:${t.priority === 'high' ? '#FEE2E2' : t.priority === 'low' ? '#F0FDF4' : '#eef2f7'};color:${t.priority === 'high' ? '#991b1b' : t.priority === 'low' ? '#166534' : '#516f90'}">${t.priority}</span>
+              <div class="ct-text" title="Click to edit" style="font-size:13px;font-weight:600;color:#2d3e50;cursor:pointer;${t.completed ? 'text-decoration:line-through' : ''}">${escapeHtml(t.text)}</div>
+              <div style="font-size:11px;color:#7c98b6;display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
+                <span class="ct-priority" title="Click to change priority" style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;cursor:pointer;background:${pc.bg};color:${pc.color}">${t.priority || 'normal'}</span>
                 ${isAuto ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:#FFF1EC;color:#FF7A59">from email</span>` : ''}
-                ${t.dueDate ? `<span>${t.dueDate}</span>` : ''}
+                <span class="ct-date" title="Click to set due date" style="cursor:pointer;color:${dl.cls === 'overdue' ? '#ef4444' : dl.cls === 'today' ? '#FF7A59' : '#7c98b6'};font-weight:${dl.cls ? '600' : '400'}">${dl.text || (t.dueDate ? t.dueDate : '<span style="opacity:0.5">set date</span>')}</span>
                 ${isAuto && t.sourceEmailId ? `<a href="#" class="ct-jump" data-email-id="${t.sourceEmailId}" style="color:#516f90;text-decoration:underline">view source</a>` : ''}
                 ${unreviewed ? `<a href="#" class="ct-keep" style="color:#FF7A59;font-weight:600">keep</a> · <a href="#" class="ct-dismiss" style="color:#7c98b6">dismiss</a>` : ''}
               </div>
               ${isAuto && t.rationale ? `<div style="font-size:11px;color:#7c98b6;font-style:italic;margin-top:2px">"${escapeHtml(t.rationale)}"</div>` : ''}
             </div>
-            ${dl.text ? `<span style="font-size:11px;font-weight:600;white-space:nowrap;color:${dl.cls === 'overdue' ? '#ef4444' : dl.cls === 'today' ? '#FF7A59' : '#7c98b6'}">${dl.text}</span>` : ''}
-            <button class="ct-del" style="background:none;border:none;cursor:pointer;font-size:14px;color:#ccc;padding:4px" data-task-id="${t.id}">&times;</button>
+            <button class="ct-del" data-task-id="${t.id}">&times;</button>
           </div>`;
         }).join('') : '<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No tasks for this company yet</div>'}
       </div>`;
@@ -1603,6 +1619,90 @@ function renderCompanyTasks() {
         chrome.storage.local.get(['userTasks'], d => {
           const tasks = (d.userTasks || []).filter(t => t.id !== id);
           chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+        });
+      });
+    });
+
+    // Inline edit: text
+    container.querySelectorAll('.ct-text').forEach(el => {
+      el.addEventListener('click', () => {
+        const taskItem = el.closest('[data-task-id]');
+        if (!taskItem || taskItem.querySelector('[data-ct-editing]')) return;
+        const id = taskItem.dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => t.id === id);
+          if (!t) return;
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = t.text;
+          input.className = 'ct-edit-input';
+          input.setAttribute('data-ct-editing', '');
+          let saved = false;
+          const save = () => {
+            if (saved) return; saved = true;
+            const val = input.value.trim();
+            if (val && val !== t.text) { t.text = val; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
+            else renderCompanyTasks();
+          };
+          input.addEventListener('blur', save);
+          input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); save(); }
+            else if (e.key === 'Escape') { e.preventDefault(); saved = true; renderCompanyTasks(); }
+          });
+          el.replaceWith(input);
+          input.focus();
+          input.select();
+        });
+      });
+    });
+
+    // Inline edit: priority (cycle)
+    container.querySelectorAll('.ct-priority').forEach(el => {
+      el.addEventListener('click', () => {
+        const taskItem = el.closest('[data-task-id]');
+        if (!taskItem) return;
+        const id = taskItem.dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => t.id === id);
+          if (!t) return;
+          const cycles = ['normal', 'high', 'low'];
+          const idx = cycles.indexOf(t.priority || 'normal');
+          t.priority = cycles[(idx + 1) % cycles.length];
+          chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+        });
+      });
+    });
+
+    // Inline edit: due date
+    container.querySelectorAll('.ct-date').forEach(el => {
+      el.addEventListener('click', () => {
+        const taskItem = el.closest('[data-task-id]');
+        if (!taskItem || taskItem.querySelector('[data-ct-editing]')) return;
+        const id = taskItem.dataset.taskId;
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => t.id === id);
+          if (!t) return;
+          const input = document.createElement('input');
+          input.type = 'date';
+          input.value = t.dueDate || '';
+          input.className = 'ct-edit-date';
+          input.setAttribute('data-ct-editing', '');
+          let saved = false;
+          const save = () => {
+            if (saved) return; saved = true;
+            const val = input.value || null;
+            if (val !== (t.dueDate || null)) { t.dueDate = val; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
+            else renderCompanyTasks();
+          };
+          input.addEventListener('change', save);
+          input.addEventListener('blur', save);
+          input.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); saved = true; renderCompanyTasks(); } });
+          el.replaceWith(input);
+          input.focus();
+          input.click();
         });
       });
     });
@@ -1771,14 +1871,17 @@ function buildIntelTab() {
       <button class="conflict-reenrich-btn" id="reenrich-btn">Re-enrich \u2192</button>
     </div>` : '';
 
-  // Research metadata (when last researched, APIs used)
+  // Research metadata (when last researched, APIs used, cost)
   const researchMetaHtml = (() => {
     if (!_cacheMetadata?.ts) return '';
     const date = new Date(_cacheMetadata.ts);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
     const apisUsed = _cacheMetadata._usage?.apisUsed || [];
-    const apisStr = apisUsed.length ? ' — ' + apisUsed.join(', ') : '';
-    return `<div style="font-size:11px;color:#a09a94;text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;">Last researched ${dateStr}${apisStr}</div>`;
+    const cost = _cacheMetadata._usage?.costFormatted || '';
+    let metaStr = `Last researched ${dateStr}`;
+    if (apisUsed.length) metaStr += ` — ${apisUsed.join(', ')}`;
+    if (cost) metaStr += ` — ${cost}`;
+    return `<div style="font-size:11px;color:#a09a94;text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;">${metaStr}</div>`;
   })();
 
   return `
@@ -1903,26 +2006,27 @@ function generateRoleBrief() {
       };
       saveEntry({ roleBrief: { content: result.content, generatedAt: Date.now(), sourceVersions } });
 
-      // Backfill empty fields from role brief extraction
+      // Backfill empty or placeholder fields from role brief extraction
       console.log('[RoleBrief] briefFields:', result.briefFields ? JSON.stringify(result.briefFields) : 'null/undefined');
       if (result.briefFields) {
+        const _isBlank = v => !v || /^(not specified|unknown|n\/a|none|null|undefined|-|—)$/i.test((v + '').trim());
         const updates = {};
         let count = 0;
-        if (result.briefFields.jobTitle && (!entry.jobTitle || entry.jobTitle === 'New Opportunity')) {
-          updates.jobTitle = result.briefFields.jobTitle; count++;
+        if (result.briefFields.jobTitle && _isBlank(entry.jobTitle) || entry.jobTitle === 'New Opportunity') {
+          if (result.briefFields.jobTitle) { updates.jobTitle = result.briefFields.jobTitle; count++; }
         }
-        if (result.briefFields.baseSalaryRange && !entry.baseSalaryRange) {
+        if (result.briefFields.baseSalaryRange && _isBlank(entry.baseSalaryRange)) {
           updates.baseSalaryRange = result.briefFields.baseSalaryRange; count++;
         }
-        if (result.briefFields.oteTotalComp && !entry.oteTotalComp) {
+        if (result.briefFields.oteTotalComp && _isBlank(entry.oteTotalComp)) {
           updates.oteTotalComp = result.briefFields.oteTotalComp; count++;
         }
-        if (result.briefFields.equity && !entry.equity) {
+        if (result.briefFields.equity && _isBlank(entry.equity)) {
           updates.equity = result.briefFields.equity; count++;
         }
         if (count > 0) {
           saveEntry(updates);
-          console.log(`[RoleBrief] Backfilled ${count} fields`);
+          console.log(`[RoleBrief] Backfilled ${count} fields:`, Object.keys(updates));
         }
       }
 
@@ -1932,9 +2036,15 @@ function generateRoleBrief() {
         rbBlock.innerHTML = buildRoleBriefSection();
         bindRoleBriefEvents();
       }
-      // Run unified field sync after brief is saved
-      chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, () => void chrome.runtime.lastError);
-      maybeRescore('role_brief_updated');
+      // Run unified field sync after brief is saved, then queue rescore
+      chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, () => {
+        void chrome.runtime.lastError;
+        // Chain into scoring — brief is now persisted, use QUEUE_SCORE to avoid blocking
+        if (entry.isOpportunity && (entry.jobStage || 'needs_review') !== 'rejected') {
+          console.log('[BriefCascade] Brief saved, queuing rescore for', entry.company);
+          chrome.runtime.sendMessage({ type: 'QUEUE_SCORE', entryId: entry.id }, () => void chrome.runtime.lastError);
+        }
+      });
     } else {
       if (btn) { btn.disabled = false; btn.textContent = '\u21bb Refresh brief'; }
     }
@@ -1947,10 +2057,48 @@ function bindRoleBriefEvents() {
   document.getElementById('rb-stale-refresh')?.addEventListener('click', generateRoleBrief);
 }
 
-// maybeRefreshDeepFitAnalysis / maybeRunDeepFit — REMOVED
-// Deep fit analysis has been unified into scoreOpportunity (scoring.js).
-// Emails, meetings, transcripts, and notes are now included in the single scoring call.
-// Rescoring happens on stage transitions and manual Rescore — not on data arrival.
+// ── Auto-refresh role brief when new interaction data arrives ─────────────────
+// Checks if the brief is stale (newer emails or meetings than brief.generatedAt).
+// Only fires for opportunities that already have a brief — does not auto-generate.
+// Guards against looping: timestamp gate prevents re-triggering while generation is in flight.
+let _autoRefreshBriefLastTriggered = 0;
+function maybeAutoRefreshBrief() {
+  if (!entry?.isOpportunity) return;
+  // Debounce: skip if triggered within last 60 seconds (brief generation takes ~15-30s)
+  if (Date.now() - _autoRefreshBriefLastTriggered < 60000) return;
+  const brief = entry.roleBrief;
+  if (!brief?.generatedAt) return; // no brief yet — let user trigger first generation manually
+
+  const sv = brief.sourceVersions || {};
+  const newEmails = (entry.cachedEmails?.length || 0) > (sv.emailCount || 0);
+  const newMeetings = ((entry.cachedMeetings?.length || 0) + (entry.manualMeetings?.length || 0)) > (sv.meetingCount || 0);
+  if (!newEmails && !newMeetings) return;
+
+  const parts = [];
+  if (newMeetings) parts.push('new meetings');
+  if (newEmails) parts.push('new emails');
+  console.log('[BriefCascade] Auto-refreshing role brief —', parts.join(' and '), 'detected for', entry.company);
+  _autoRefreshBriefLastTriggered = Date.now();
+  // Use a short delay so UI renders first and storage is settled
+  setTimeout(generateRoleBrief, 1500);
+}
+
+// ── SCORE_COMPLETE listener — refreshes panel after brief-cascade scoring ─────
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === 'SCORE_COMPLETE' && msg.entryId === entry?.id) {
+    // Pull fresh scoring fields into in-memory entry and re-render the fit section
+    chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+      const fresh = (savedCompanies || []).find(c => c.id === entry.id);
+      if (fresh) {
+        Object.assign(entry, fresh);
+        const fitBlock = document.getElementById('hub-fit-block');
+        if (fitBlock) fitBlock.innerHTML = buildFitSection();
+      }
+    });
+    sendResponse({ ok: true });
+  }
+  return true;
+});
 
 function buildFitSection() {
   // Unified scoring — one source of truth: jobMatch
@@ -1994,10 +2142,14 @@ function buildFitSection() {
     }
   }
 
-  // Refresh button — always available for opportunities
-  html += `<button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-score using latest job data, emails, and meeting notes">
-    ↻ ${score ? 'Refresh analysis' : 'Run fit analysis'}
-  </button>`;
+  // Refresh button + scored timestamp
+  const scoredAtStr = entry.scoredAt ? new Date(entry.scoredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+  html += `<div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+    <button class="fit-refresh-btn" id="fit-refresh-btn" title="Re-score using latest job data, emails, and meeting notes">
+      ↻ ${score ? 'Refresh analysis' : 'Run fit analysis'}
+    </button>
+    ${scoredAtStr ? `<span style="font-size:12px;color:var(--ci-text-secondary);">Last scored ${scoredAtStr}</span>` : ''}
+  </div>`;
 
   // Job summary (from posting)
   if (jobSummary) {
@@ -2014,6 +2166,9 @@ function buildFitSection() {
 
   if (isNewFormat && score) {
     const breakdown = jm.scoreBreakdown || {};
+    const dimRationale = jm.dimensionRationale || {};
+    const qualifications = jm.qualifications || [];
+    const compAssess = jm.compAssessment || {};
     const DIM_DEFS = [
       { key: 'qualificationFit', label: 'Qualification' },
       { key: 'roleFit', label: 'Role fit' },
@@ -2030,15 +2185,69 @@ function buildFitSection() {
       const fired = flagsFired[dim.key] || {};
       const greens = (fired.green || []);
       const reds = (fired.red || []);
-      const flagChips = [...greens.map(f => `<span class="fit-dim-chip green">+ ${escapeHtml(f.text || f.label || '')}</span>`), ...reds.map(f => `<span class="fit-dim-chip red">- ${escapeHtml(f.text || f.label || '')}${f.evidence ? `<span class="fit-dim-chip-ev">${escapeHtml(f.evidence)}</span>` : ''}</span>`)];
-      html += `<div class="fit-dim-row">
-        <span class="fit-dim-label">${dim.label}</span>
-        <div class="fit-dim-bar"><div class="fit-dim-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
-        <span class="fit-dim-val ${tier}">${val}</span>
-      </div>`;
-      if (flagChips.length) {
-        html += `<div class="fit-dim-chips">${flagChips.join('')}</div>`;
+      const rationale = dimRationale[dim.key] || dimRationale[dim.key.replace('Fit', '')] || '';
+
+      // Build detail content for this dimension
+      let detailHtml = '';
+
+      // Rationale
+      if (rationale) {
+        detailHtml += `<div class="fit-dim-rationale">${escapeHtml(rationale)}</div>`;
       }
+
+      // Green + red flags with full text (not truncated)
+      if (greens.length || reds.length) {
+        detailHtml += `<div class="fit-dim-flags">`;
+        greens.forEach(f => {
+          detailHtml += `<div class="fit-dim-flag green"><span class="fit-dim-flag-icon">+</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${escapeHtml(f.evidence)}</span>` : ''}</div>`;
+        });
+        reds.forEach(f => {
+          detailHtml += `<div class="fit-dim-flag red"><span class="fit-dim-flag-icon">-</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${escapeHtml(f.evidence)}</span>` : ''}</div>`;
+        });
+        detailHtml += `</div>`;
+      }
+
+      // Qualification-specific: show requirements table
+      if (dim.key === 'qualificationFit' && qualifications.length) {
+        const statusIcon = s => s === 'met' ? '✓' : s === 'partial' ? '◐' : s === 'unmet' ? '✗' : '?';
+        const statusColor = s => s === 'met' ? '#0F6E56' : s === 'partial' ? '#D97706' : s === 'unmet' ? '#DC2626' : '#9CA3AF';
+        detailHtml += `<div class="fit-dim-quals">`;
+        qualifications.forEach(q => {
+          detailHtml += `<div class="fit-dim-qual-row">
+            <span class="fit-dim-qual-status" style="color:${statusColor(q.status)}">${statusIcon(q.status)}</span>
+            <div class="fit-dim-qual-body">
+              <div class="fit-dim-qual-req">${escapeHtml(q.requirement || '')}</div>
+              ${q.evidence ? `<div class="fit-dim-qual-ev">${escapeHtml(q.evidence)}</div>` : ''}
+            </div>
+            <span class="fit-dim-qual-imp">${q.importance || ''}</span>
+          </div>`;
+        });
+        detailHtml += `</div>`;
+      }
+
+      // Comp-specific: show comp assessment
+      if (dim.key === 'compFit' && (compAssess.baseDisclosed || compAssess.oteDisclosed)) {
+        const fmtAmt = v => v ? `$${(v / 1000).toFixed(0)}k` : 'undisclosed';
+        const vsLabel = v => v === 'above_strong' ? 'Above strong' : v === 'above_floor' ? 'Above floor' : v === 'at_floor' ? 'At floor' : v === 'below_floor' ? 'Below floor' : 'Unknown';
+        const vsColor = v => v === 'above_strong' ? '#0F6E56' : v === 'above_floor' ? '#0F6E56' : v === 'at_floor' ? '#D97706' : v === 'below_floor' ? '#DC2626' : '#9CA3AF';
+        detailHtml += `<div class="fit-dim-comp">`;
+        if (compAssess.baseDisclosed) detailHtml += `<div class="fit-dim-comp-row"><span>Base: ${fmtAmt(compAssess.baseAmount)}</span><span style="color:${vsColor(compAssess.baseVsFloor)};font-weight:600;">${vsLabel(compAssess.baseVsFloor)}</span></div>`;
+        if (compAssess.oteDisclosed) detailHtml += `<div class="fit-dim-comp-row"><span>OTE: ${fmtAmt(compAssess.oteAmount)}</span><span style="color:${vsColor(compAssess.oteVsFloor)};font-weight:600;">${vsLabel(compAssess.oteVsFloor)}</span></div>`;
+        detailHtml += `</div>`;
+      }
+
+      const hasDetail = detailHtml.length > 0;
+      const chevron = hasDetail ? `<span class="fit-dim-chevron">▸</span>` : '';
+
+      html += `<details class="fit-dim-section">
+        <summary class="fit-dim-row${hasDetail ? ' clickable' : ''}">
+          ${chevron}
+          <span class="fit-dim-label">${dim.label}</span>
+          <div class="fit-dim-bar"><div class="fit-dim-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
+          <span class="fit-dim-val ${tier}">${val}</span>
+        </summary>
+        ${hasDetail ? `<div class="fit-dim-detail">${detailHtml}</div>` : ''}
+      </details>`;
     });
     html += `</div>`;
   } else {
@@ -2418,11 +2627,10 @@ function renderEmailsFromData(emails) {
 
   // Bind delete buttons
   listEl.querySelectorAll('.email-delete-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const tid = btn.dataset.thread;
-      if (await ciConfirm('Delete this email thread from the cached inbox?', { confirmLabel: 'Delete' })) {
-        onDelete(tid);
-      }
+      onDelete(tid);
     });
   });
 }
@@ -2470,7 +2678,6 @@ function loadHubEmails(forceRefresh) {
     if (result.extractedContacts?.length) {
       mergeExtractedContacts(result.extractedContacts);
     }
-    // Data accumulates — score catches up on stage transition or manual Rescore
     const activityContainer = document.getElementById('activity-timeline');
     if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
       activityContainer.innerHTML = buildActivityTimeline(entry);
@@ -2480,6 +2687,15 @@ function loadHubEmails(forceRefresh) {
       renderPanel('opportunity');
       bindPanelBodyEvents('opportunity');
     }
+    // Tier 1: free regex field sync on new email data
+    chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, () => void chrome.runtime.lastError);
+    // Tier 2: lightweight AI extraction on new email snippets (Nano, ~$0.0001)
+    if (newEmails.length) {
+      const emailText = newEmails.slice(0, 5).map(e => `[${e.date||''}] "${e.subject}" from ${e.from}\n${e.snippet || ''}`).join('\n\n');
+      chrome.runtime.sendMessage({ type: 'EXTRACT_FIELDS_FROM_CONTENT', entryId: entry.id, content: emailText, contentType: 'emails' }, () => void chrome.runtime.lastError);
+    }
+    // Auto-refresh role brief if new emails arrived since brief was last generated
+    if (newEmails.length) maybeAutoRefreshBrief();
   });
 }
 
@@ -2519,6 +2735,8 @@ function loadHubMeetings(forceRefresh) {
 
     if (calEvents.length) {
       saveEntry({ cachedCalendarEvents: calEvents });
+      // Extract company-domain attendees from calendar events as contacts
+      applyContactsFromCalendar(calEvents);
       if (detectScheduledStatus(entry)) {
         const current = entry.actionStatus || 'my_court';
         if (current === 'my_court' || current === 'their_court') {
@@ -2611,10 +2829,19 @@ function loadHubMeetings(forceRefresh) {
         activityContainer.innerHTML = buildActivityTimeline(entry);
       }
 
-      // Data accumulates — score catches up on stage transition or manual Rescore
-
       // Auto-populate next step + date if not already set
       maybeExtractNextSteps();
+      // Tier 1: free regex field sync on new meeting data
+      chrome.runtime.sendMessage({ type: 'SYNC_ENTRY_FIELDS', entryId: entry.id }, () => void chrome.runtime.lastError);
+      // Tier 2: lightweight AI extraction on meeting content (Nano, ~$0.0001)
+      const meetingText = (granolaMeetings || []).slice(0, 3).map(m =>
+        `${m.title || 'Meeting'} | ${m.date || ''}\n${(m.summaryMarkdown || m.transcript || m.summary || '').slice(0, 1000)}`
+      ).join('\n\n');
+      if (meetingText.length > 30) {
+        chrome.runtime.sendMessage({ type: 'EXTRACT_FIELDS_FROM_CONTENT', entryId: entry.id, content: meetingText, contentType: 'meetings' }, () => void chrome.runtime.lastError);
+      }
+      // Auto-refresh role brief if new meetings arrived since brief was last generated
+      maybeAutoRefreshBrief();
     }
   });
 }
@@ -2724,6 +2951,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
         const manualBadge = m._isManual ? `<span class="mtg-manual-badge">Manual</span>` : '';
         const dismissBtn = !m._isManual ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company" style="font-size:10px;color:#99acc2;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0;transition:opacity 0.15s;">✕</button>` : '';
         const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : dismissBtn;
+        const granolaLink = (!m._isManual && m.url) ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" title="Open in Granola" onclick="event.stopPropagation()">Granola ↗</a>` : '';
         html += `
           <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}" data-is-manual="${m._isManual ? '1' : '0'}">
             <span class="mtg-card-icon">${m._isManual ? '✏️' : '▤'}</span>
@@ -2732,6 +2960,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
               ${m.attendees ? `<div class="mtg-card-meta">${escapeHtml(m.attendees)}</div>` : ''}
             </div>
             ${m.time ? `<span class="mtg-card-time">${escapeHtml(m.time)}</span>` : ''}
+            ${granolaLink}
             ${manualActions}
             <span class="mtg-card-arrow">›</span>
           </div>`;
@@ -3122,11 +3351,15 @@ function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
     setChatContext(`${entry.id}-meeting-${meeting.id}`, resolvedTranscript);
   }
 
+  const granolaUrl = meeting.url || null;
   contentEl.innerHTML = `
     <button class="mtg-detail-back" id="mtg-back">← All meetings</button>
     <div class="mtg-detail-header">
       ${dateLabel ? `<div class="mtg-detail-date">${escapeHtml(dateLabel)}${meeting.time ? ' · ' + meeting.time : ''}</div>` : ''}
-      <div class="mtg-detail-title">${escapeHtml(meeting.title)}</div>
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <div class="mtg-detail-title">${escapeHtml(meeting.title)}</div>
+        ${granolaUrl ? `<a href="${escapeHtml(granolaUrl)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" style="white-space:nowrap">Open in Granola ↗</a>` : ''}
+      </div>
     </div>
     <div class="mtg-detail-chat">
       <div data-chat-panel="${entry.id}"
@@ -3220,7 +3453,7 @@ function buildProperties() {
     const val = (typeof rawVal === 'string' ? rawVal : rawVal != null ? String(rawVal) : '').replace(/"/g, '&quot;');
     // Always show employees and industry; hide other empty metadata fields
     const alwaysShow = ['employees', 'industry'].includes(f.id);
-    const isMetadataField = ['employees', 'funding', 'founded', 'industry'].includes(f.id);
+    const isMetadataField = ['employees', 'funding', 'founded', 'industry', 'revenue', 'companyType'].includes(f.id);
     if (isMetadataField && !val && !alwaysShow) return '';
     const isUrl = f.type === 'url';
     const openLink = isUrl && entry[f.id]
@@ -3242,8 +3475,10 @@ function buildStats() {
   const rows = [
     ['Employees', entry.employees],
     ['Funding',   entry.funding],
+    ['Revenue',   entry.revenue],
     ['Founded',   entry.founded],
     ['Industry',  entry.industry || entry.intelligence?.category || entry.category],
+    ['Type',      entry.companyType],
   ].filter(([, v]) => v);
   if (!rows.length) return '<div class="p-empty">No stats available.</div>';
   return rows.map(([label, val]) => `
@@ -3313,12 +3548,34 @@ function buildIntel() {
         <div class="p-section-label">${label}</div>
         <div class="p-text" style="margin-top:6px;">${text}</div>
       </div>`).join('');
+  // Tech stack pills
+  const techStack = entry.techStack || [];
+  const techHtml = techStack.length ? `
+    <div style="margin-top:14px;">
+      <div class="p-section-label">Tech Stack</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">
+        ${techStack.slice(0, 15).map(t => `<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--ci-bg-inset);color:var(--ci-text-secondary);border:1px solid var(--ci-border-light);">${escapeHtml(t)}</span>`).join('')}
+      </div>
+    </div>` : '';
+
+  // Recent news
+  const news = entry.recentNews || [];
+  const newsHtml = news.length ? `
+    <div style="margin-top:14px;">
+      <div class="p-section-label">Recent News</div>
+      ${news.slice(0, 4).map(n => `<div style="margin-top:6px;font-size:12px;color:var(--ci-text-secondary);">
+        <span style="font-weight:500;color:var(--ci-text-primary);">${escapeHtml(n.headline || '')}</span>
+        ${n.date ? `<span style="color:var(--ci-text-tertiary);margin-left:6px;">${escapeHtml(n.date)}</span>` : ''}
+        ${n.significance ? `<div style="color:var(--ci-text-tertiary);margin-top:2px;">${escapeHtml(n.significance)}</div>` : ''}
+      </div>`).join('')}
+    </div>` : '';
+
   return `<details class="p-section" open>
     <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:8px;padding:6px 0;">
       <span style="font-size:12px;color:#FF7A59;transition:transform 0.15s;display:inline-block;" class="intel-chevron">▾</span>
       <span class="p-section-label" style="margin:0;color:#2d3e50;">Company Intel</span>
     </summary>
-    ${innerHtml}
+    ${innerHtml}${techHtml}${newsHtml}
   </details>`;
 }
 
@@ -3356,8 +3613,19 @@ function mergeExtractedContacts(extracted) {
   // Get the user's own email to exclude
   const userEmail = (entry.gmailUserEmail || gmailUserEmail || '').toLowerCase();
 
-  // Get the company domain to determine auto-add vs suggest
+  // Get the company domain for strict domain filtering
   const companyDomain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+  const companyBaseDomain = companyDomain ? companyDomain.split('.')[0] : '';
+
+  // Returns true if the email domain matches this company (exact or sibling base name)
+  const isCompanyDomainEmail = (emailAddr) => {
+    if (!companyDomain) return false;
+    const senderDomain = (emailAddr.split('@')[1] || '').toLowerCase();
+    if (senderDomain === companyDomain) return true;
+    // Sibling domain: same base name, different TLD (e.g. company.io vs company.ai)
+    if (companyBaseDomain && senderDomain.split('.')[0] === companyBaseDomain) return true;
+    return false;
+  };
 
   let added = 0;
   for (const contact of extracted) {
@@ -3369,14 +3637,31 @@ function mergeExtractedContacts(extracted) {
     // Skip generic/no-reply addresses
     if (/noreply|no-reply|mailer-daemon|postmaster|notifications|support@|info@|hello@|team@/i.test(email)) continue;
 
-    // Auto-add all non-generic contacts — these emails were fetched specifically for this company
-    existing.push({
+    // Domain guard: contacts sourced from bootstrap/name searches (type 'email-sender') may
+    // come from emails that merely mention the company name — their sender could be anyone.
+    // Only add them if their email domain actually matches this company.
+    // Contacts matched via explicit domain search ('email-domain', 'email-sibling-domain',
+    // 'granola-email-domain', 'granola-folder', 'granola-title', 'granola-attendee-name')
+    // are still subject to the domain check below to prevent attendee bleed across meetings.
+    const matchType = (contact.matchedVia?.type || '').toLowerCase();
+    const isDomainMatched = matchType === 'email-domain' || matchType === 'email-sibling-domain';
+    if (!isDomainMatched && !isCompanyDomainEmail(email)) {
+      // Not a domain-confirmed match and not from this company's domain — skip to prevent bleed
+      continue;
+    }
+
+    const newContact = {
       name: contact.name,
       email: contact.email,
       source: contact.source || 'auto-extracted',
       addedAt: Date.now(),
       matchedVia: contact.matchedVia || null,
-    });
+    };
+    // Carry through signature-parsed fields (phone, title, linkedinUrl)
+    if (contact.phone) newContact.phone = contact.phone;
+    if (contact.title) newContact.title = contact.title;
+    if (contact.linkedinUrl) newContact.linkedinUrl = contact.linkedinUrl;
+    existing.push(newContact);
     existingEmails.add(email);
     added++;
   }
@@ -3505,6 +3790,53 @@ function extractContactsFromEmails(emails) {
   return { newContacts, detectedUserEmail };
 }
 
+// Extract company-domain attendees from calendar events and merge into knownContacts
+function applyContactsFromCalendar(calEvents) {
+  const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+  const baseDomain = domain ? domain.split('.')[0] : '';
+  if (!domain) return; // can't filter without a known domain
+
+  const isCompanyEmail = (email) => {
+    const d = (email.split('@')[1] || '').toLowerCase();
+    return d === domain || (baseDomain && d.split('.')[0] === baseDomain);
+  };
+
+  const userEmail = (entry.gmailUserEmail || gmailUserEmail || '').toLowerCase();
+  const blocked = new Set((entry.removedContacts || []).map(e => e.toLowerCase()));
+  const existing = entry.knownContacts || [];
+  const existingEmails = new Set(existing.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+
+  let added = 0;
+  calEvents.forEach(evt => {
+    (evt.attendees || []).forEach(att => {
+      if (att.self) return;
+      const email = (att.email || '').toLowerCase();
+      if (!email || !email.includes('@')) return;
+      if (!isCompanyEmail(email)) return;
+      if (email === userEmail) return;
+      if (blocked.has(email)) return;
+      if (existingEmails.has(email)) return;
+      if (isNonHumanEmail(email)) return;
+      const name = att.name || att.displayName || email.split('@')[0];
+      const eventTitle = evt.title || evt.summary || 'Calendar event';
+      existing.push({
+        name,
+        email,
+        source: 'calendar',
+        detectedAt: Date.now(),
+        matchedVia: { type: 'calendar', detail: `Calendar attendee in "${eventTitle}"` },
+      });
+      existingEmails.add(email);
+      added++;
+    });
+  });
+
+  if (added > 0) {
+    saveEntry({ knownContacts: existing });
+    renderPanel('contacts');
+  }
+}
+
 // Fuzzy name match: both share at least first + last word
 function namesMatch(a, b) {
   const words = s => s.toLowerCase().split(/\s+/).filter(w => w.length > 1);
@@ -3583,6 +3915,7 @@ function buildContacts() {
     'granola-meeting':       { label: '📅 meeting',                    fallback: 'Matched via a Granola meeting associated with the company.' },
     'manual':                { label: '✎ manual',                      fallback: 'Added manually.' },
     'leader-promoted':       { label: '✎ leader · promoted',           fallback: 'Promoted from the leadership card into contacts.' },
+    'calendar':              { label: '📅 calendar',                   fallback: 'Matched as an attendee in a Google Calendar event associated with this company.' },
   };
   const formatMatchedVia = (c) => {
     const mv = c.matchedVia;
@@ -3611,14 +3944,19 @@ function buildContacts() {
           </div>`;
         }).join('');
         const leader = leaders.find(l => namesMatch(l.name || '', c.name));
-        const liUrl = leader?.linkedinUrl || leader?.linkedin || (leader?.newsUrl && /linkedin\.com/i.test(leader.newsUrl) ? leader.newsUrl : null);
+        const liUrl = c.linkedinUrl || leader?.linkedinUrl || leader?.linkedin || (leader?.newsUrl && /linkedin\.com/i.test(leader.newsUrl) ? leader.newsUrl : null);
         const liHtml = liUrl ? `<a class="contact-li-link" href="${liUrl}" target="_blank">LinkedIn</a>` : '';
+        const avatarContent = c.photoUrl
+          ? `<img src="${c.photoUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent='${initials}'">`
+          : initials;
         return `
           <div class="contact-card" data-email="${safeEmail}">
-            <div class="contact-avatar" id="cavatar-${encodeURIComponent(c.email)}">${initials}</div>
+            <div class="contact-avatar" id="cavatar-${encodeURIComponent(c.email)}">${avatarContent}</div>
             <div style="min-width:0;overflow:hidden;flex:1">
               <div class="contact-name">${c.name}</div>
+              ${c.title ? `<div class="contact-title">${c.title}</div>` : ''}
               ${emailsHtml}
+              ${c.phone ? `<div style="font-size:11px;color:var(--ci-text-secondary);margin-top:2px;">${escapeHtml(c.phone)}</div>` : ''}
               ${liHtml}
               <div class="contact-source" title="${sourceTitle}">${sourceLabel}</div>
             </div>
@@ -3635,6 +3973,7 @@ function buildContacts() {
     </div>
     <div class="contact-add-form" id="contact-add-form" style="display:none">
       <input class="contact-add-input" id="contact-add-name" placeholder="Name">
+      <input class="contact-add-input" id="contact-add-title" placeholder="Title / Role (optional)">
       <input class="contact-add-input" id="contact-add-email" placeholder="Email">
       <div class="contact-add-actions">
         <button class="contact-confirm-btn" id="contact-add-save">Add</button>
@@ -3796,29 +4135,73 @@ function loadPhotosForPanel(pid) {
   }
 
   if (pid === 'contacts') {
-    // Only fetch contact photos if pipeline config allows it
-    chrome.storage.local.get(['pipelineConfig'], ({ pipelineConfig: pc }) => {
-      const scope = pc?.photos?.fetchScope || 'leaders_only';
-      if (scope !== 'leaders_contacts') return;
-      const contacts = (entry.knownContacts || []).filter(c => c.name);
-      if (!contacts.length) return;
-      chrome.runtime.sendMessage(
-        { type: 'GET_LEADER_PHOTOS', leaders: contacts.map(c => ({ name: c.name })), company: entry.company || '' },
-        photos => {
-          void chrome.runtime.lastError;
-          if (!photos) return;
-          contacts.forEach((c, i) => {
-            if (!photos[i]) return;
-            const el = document.getElementById('cavatar-' + encodeURIComponent(c.email));
-            if (!el) return;
+    // Enrich contacts from Google People API (photos, title, phone, LinkedIn) — free, uses existing OAuth
+    const contacts = (entry.knownContacts || []).filter(c => c.email);
+    if (!contacts.length) return;
+    const emails = contacts.map(c => c.email);
+    chrome.runtime.sendMessage({ type: 'ENRICH_CONTACTS_GOOGLE', emails }, result => {
+      void chrome.runtime.lastError;
+      if (!result || result.error) {
+        // Fall back to web search photos if Google People API unavailable
+        chrome.storage.local.get(['pipelineConfig'], ({ pipelineConfig: pc }) => {
+          const scope = pc?.photos?.fetchScope || 'leaders_only';
+          if (scope !== 'leaders_contacts') return;
+          chrome.runtime.sendMessage(
+            { type: 'GET_LEADER_PHOTOS', leaders: contacts.map(c => ({ name: c.name })), company: entry.company || '' },
+            photos => {
+              void chrome.runtime.lastError;
+              if (!photos) return;
+              contacts.forEach((c, i) => {
+                if (!photos[i]) return;
+                const el = document.getElementById('cavatar-' + encodeURIComponent(c.email));
+                if (!el) return;
+                const _initials = (c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+                const _img = document.createElement('img');
+                _img.src = photos[i]; _img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
+                _img.addEventListener('error', () => { el.textContent = _initials; });
+                el.innerHTML = ''; el.appendChild(_img);
+              });
+            }
+          );
+        });
+        return;
+      }
+      // Apply enrichment to DOM and persist new data
+      let changed = false;
+      contacts.forEach(c => {
+        const enriched = result[c.email];
+        if (!enriched) return;
+        // Photo
+        if (enriched.photoUrl) {
+          const el = document.getElementById('cavatar-' + encodeURIComponent(c.email));
+          if (el) {
             const _initials = (c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
             const _img = document.createElement('img');
-            _img.src = photos[i]; _img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
+            _img.src = enriched.photoUrl;
+            _img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
             _img.addEventListener('error', () => { el.textContent = _initials; });
             el.innerHTML = ''; el.appendChild(_img);
-          });
+          }
+          if (!c.photoUrl) { c.photoUrl = enriched.photoUrl; changed = true; }
         }
-      );
+        // Title — only backfill if not already set
+        if (enriched.title && !c.title) {
+          c.title = enriched.title; changed = true;
+          const card = document.querySelector(`.contact-card[data-email="${CSS.escape(c.email)}"]`);
+          const nameEl = card?.querySelector('.contact-name');
+          if (nameEl && !nameEl.nextElementSibling?.classList?.contains('contact-title')) {
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'contact-title';
+            titleDiv.textContent = enriched.title;
+            nameEl.insertAdjacentElement('afterend', titleDiv);
+          }
+        }
+        // Phone
+        if (enriched.phone && !c.phone) { c.phone = enriched.phone; changed = true; }
+        // LinkedIn
+        if (enriched.linkedinUrl && !c.linkedinUrl) { c.linkedinUrl = enriched.linkedinUrl; changed = true; }
+      });
+      if (changed) saveEntry({ knownContacts: entry.knownContacts });
     });
     return;
   }
@@ -3894,6 +4277,7 @@ function bindPanelBodyEvents(pid) {
           <div class="contact-avatar">${initials}</div>
           <div class="contact-edit-form">
             <input class="contact-edit-input" id="ced-name" value="${contact.name.replace(/"/g,'&quot;')}" placeholder="Name">
+            <input class="contact-edit-input" id="ced-title" value="${(contact.title || '').replace(/"/g,'&quot;')}" placeholder="Title / Role (optional)">
             <div class="contact-edit-emails">${emailRowsHtml}</div>
             <button class="contact-add-email-btn">+ Add email</button>
             <div class="contact-add-actions" style="margin-top:6px">
@@ -3922,11 +4306,12 @@ function bindPanelBodyEvents(pid) {
 
         const save = () => {
           const newName = card.querySelector('#ced-name').value.trim();
+          const newTitle = card.querySelector('#ced-title').value.trim();
           const emails = [...card.querySelectorAll('.email-val')]
             .map(i => i.value.trim().toLowerCase()).filter(e => e.includes('@'));
           if (!emails.length) return;
           saveEntry({ knownContacts: (entry.knownContacts || []).map(c =>
-            c.email === email ? { ...c, name: newName || c.name, email: emails[0], aliases: emails.slice(1) } : c
+            c.email === email ? { ...c, name: newName || c.name, title: newTitle || undefined, email: emails[0], aliases: emails.slice(1) } : c
           )});
           renderPanel('contacts'); bindPanelBodyEvents('contacts');
         };
@@ -3947,11 +4332,14 @@ function bindPanelBodyEvents(pid) {
     });
     const doAdd = () => {
       const name = document.getElementById('contact-add-name')?.value.trim();
+      const title = document.getElementById('contact-add-title')?.value.trim();
       const email = document.getElementById('contact-add-email')?.value.trim().toLowerCase();
       if (!email || !email.includes('@')) return;
       const existing = entry.knownContacts || [];
       if (existing.some(c => c.email === email)) return;
-      saveEntry({ knownContacts: [...existing, { name: name || email.split('@')[0], email, source: 'manual', detectedAt: Date.now(), matchedVia: { type: 'manual', detail: 'Added manually via the Add contact form' } }] });
+      const newContact = { name: name || email.split('@')[0], email, source: 'manual', detectedAt: Date.now(), matchedVia: { type: 'manual', detail: 'Added manually via the Add contact form' } };
+      if (title) newContact.title = title;
+      saveEntry({ knownContacts: [...existing, newContact] });
       renderPanel('contacts'); bindPanelBodyEvents('contacts');
     };
     document.getElementById('contact-add-save')?.addEventListener('click', doAdd);
@@ -4617,6 +5005,12 @@ function renderNotesEditor() {
     } else {
       document.execCommand('insertText', false, text);
     }
+  });
+
+  // Auto-save compose area on blur so content isn't lost if the user navigates away
+  editable.addEventListener('blur', () => {
+    if (!editable.textContent.trim()) return;
+    saveBtn.click();
   });
 
   // Bind edit/delete on existing note cards

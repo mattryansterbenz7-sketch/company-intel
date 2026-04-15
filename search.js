@@ -92,7 +92,13 @@ export async function fetchSerperResults(query, num = 5) {
     return [];
   }
   const data = await res.json();
-  return data.organic || [];
+  const results = data.organic || [];
+  // Attach rich Serper fields that callers can optionally use
+  if (data.knowledgeGraph) results._knowledgeGraph = data.knowledgeGraph;
+  if (data.news) results._news = data.news;
+  if (data.answerBox) results._answerBox = data.answerBox;
+  if (data.relatedSearches) results._relatedSearches = data.relatedSearches;
+  return results;
 }
 
 // ── Google Custom Search ───────────────────────────────────────────────────
@@ -247,10 +253,27 @@ export async function fetchSearchResults(query, num = 5) {
 }
 
 // ── Claude research summary ────────────────────────────────────────────────
-export async function fetchClaudeSummary(company, apolloData, searchResults, leaderResults, productResults, domain) {
+export async function fetchClaudeSummary(company, apolloData, searchResults, leaderResults, productResults, domain, extras = {}) {
   const searchSnippets = searchResults.map(r => `${r.title} (${r.link}): ${r.snippet}`).join('\n');
   const leaderSnippets = leaderResults.map(r => `${r.title} (${r.link}): ${r.snippet}`).join('\n');
   const productSnippets = productResults.map(r => `${r.title} (${r.link}): ${r.snippet}`).join('\n');
+
+  // Build knowledge graph section if available
+  const kg = extras.knowledgeGraph;
+  let kgSection = '';
+  if (kg) {
+    const attrs = kg.attributes || {};
+    const attrLines = Object.entries(attrs).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+    kgSection = `\nGoogle Knowledge Graph:
+- Title: ${kg.title || 'N/A'}
+- Type: ${kg.type || 'N/A'}
+- Description: ${kg.description || 'N/A'}
+${attrLines ? `- Attributes:\n${attrLines}` : ''}`;
+  }
+
+  // Build news section if available
+  const newsItems = extras.news || [];
+  const newsSection = newsItems.length ? `\nRecent News:\n${newsItems.slice(0, 5).map(n => `- ${n.title} (${n.date || 'recent'}): ${n.snippet || ''}`).join('\n')}` : '';
 
   const prompt = `You are a research assistant helping people quickly understand and evaluate companies. Use the data provided below.
 
@@ -262,6 +285,9 @@ Apollo Data:
 - Founded: ${apolloData.founded_year || null}
 - Funding Stage: ${apolloData.latest_funding_stage || null}
 - Total Funding: ${apolloData.total_funding_printed || null}
+- Annual Revenue: ${apolloData.annual_revenue_printed || null}
+- Company Type: ${apolloData.ownership_type || null}
+- Tech Stack: ${(apolloData.technologies || []).slice(0, 15).join(', ') || null}${kgSection}${newsSection}
 
 Product/Company Search Results:
 ${productSnippets || 'None'}
@@ -287,8 +313,12 @@ Respond with a JSON object only, no markdown:
     "employees": "<headcount or range extracted from search results, e.g. '50-200' or '~500' — null if truly unknown>",
     "founded": "<year founded from any source — null if truly unknown>",
     "funding": "<total funding or stage from any source, e.g. 'Series B, $24M' — null if truly unknown>",
-    "industry": "<industry/category from context — null if truly unknown>"
+    "industry": "<industry/category from context — null if truly unknown>",
+    "revenue": "<annual revenue if found from any source, e.g. '$10M-$50M' — null if truly unknown>",
+    "companyType": "<private, public, acquired, or null if unknown>",
+    "techStack": ["<up to 10 key technologies used by the company from any source — empty array if unknown>"]
   },
+  "recentNews": [{"headline": "<news headline>", "date": "<date if available>", "significance": "<one-line summary of why it matters — funding, acquisition, product launch, layoff, etc.>"}],
   "reviews": [{"snippet": "<key insight about culture, employee experience, or company reputation. If Glassdoor rating or 'would recommend' percentage is visible in the snippet, include it (e.g. '4.4★ rating, 82% would recommend. Employees praise...'). Extract actual review content, not job listing titles.>", "source": "<site name, e.g. Glassdoor, Blind, RepVue, Reddit>", "rating": "<star rating if found, e.g. '4.4' — null if not in snippet>", "url": "<exact URL>"}],
   "leaders": [{"name": "<full name>", "title": "<role at this company>", "newsUrl": "<URL or null>"}]
 }`;
@@ -297,7 +327,7 @@ Respond with a JSON object only, no markdown:
     system: 'You are a JSON-only research assistant. Respond with valid JSON only, no markdown fences.',
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 2000
-  }, 'research');
+  }, 'research', company);
 
   if (!aiResult.ok) {
     const fallback = await chatWithFallback({
@@ -307,6 +337,7 @@ Respond with a JSON object only, no markdown:
       max_tokens: 2000,
       tag: 'Research',
       opTag: 'research',
+      context: company,
     });
     if (fallback.error) throw new Error('AI is busy — too many requests. Try again in a moment.');
     const fbClean = fallback.reply.replace(/```json|```/g, '').trim();
@@ -395,7 +426,7 @@ export function parseLinkedInCompanySnippet(results) {
 // ── API key testing ────────────────────────────────────────────────────────
 export async function testApiKey(provider, key) {
   if (key === '__USE_ACTIVE_KEY__') {
-    const keys = { anthropic: state.ANTHROPIC_KEY, openai: state.OPENAI_KEY, serper: state.SERPER_KEY, apollo: state.APOLLO_KEY, granola: state.GRANOLA_KEY };
+    const keys = { anthropic: state.ANTHROPIC_KEY, openai: state.OPENAI_KEY, serper: state.SERPER_KEY, apollo: state.APOLLO_KEY, granola: state.GRANOLA_KEY, gemini: state.GEMINI_KEY };
     key = keys[provider] || '';
     if (!key) return { ok: false, reason: 'No key configured' };
   }
@@ -448,6 +479,20 @@ export async function testApiKey(provider, key) {
         headers: { 'Authorization': `Bearer ${key}` }
       });
       return { ok: res.ok, status: res.status };
+    }
+    if (provider === 'gemini') {
+      // Test with a minimal generateContent call using Flash-Lite
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 5 } })
+      });
+      if (res.ok) return { ok: true, status: res.status };
+      if (res.status === 400) return { ok: false, status: res.status, reason: 'Invalid API key' };
+      if (res.status === 403) return { ok: false, status: res.status, reason: 'Invalid API key or project not enabled' };
+      if (res.status === 429) return { ok: false, status: res.status, reason: 'Key valid — rate limited' };
+      return { ok: false, status: res.status };
     }
     return { ok: false, error: 'Unknown provider' };
   } catch (e) {
@@ -503,6 +548,7 @@ export async function handleQuickEnrichFirmo(message) {
     max_tokens: 200,
     tag: 'QuickEnrich',
     opTag: 'enrich',
+    context: company,
   });
 
   if (reply) {
