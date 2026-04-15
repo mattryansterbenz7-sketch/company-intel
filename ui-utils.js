@@ -2,6 +2,13 @@
 // Loaded as a plain <script> before page-specific JS in all HTML pages.
 // Attaches to window so every page script can call them without imports.
 
+// ── Auto-close side panel on full-page extension views ──────────────────────
+// When a full-page view (saved, company, opportunity, etc.) loads, close the
+// side panel so it doesn't redundantly consume screen space.
+if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && !location.pathname.includes('sidepanel')) {
+  chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL' });
+}
+
 // ── HTML escaping ────────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
