@@ -45,6 +45,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/coop.html)",
       "Bash(cat .github/workflows/*.yml)",
       "Bash(gh api:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh project:*)",
       "Bash(ls:*)",
       "Bash(qlmanage -t -s 128 -o /tmp icon.svg)",
       "Bash(rm -f /tmp/icon.svg.png)",

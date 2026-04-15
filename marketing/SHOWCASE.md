@@ -19,7 +19,7 @@ Coop.ai collapses that stack into one surface. Land on a company page, get the r
 - **Coop has memory.** A passive insight extractor watches the chat with a 60-second debounce and stores typed memories (about you, feedback, projects, references). Future conversations surface relevant ones automatically.
 - **Operating principles as user-editable config.** A single textarea in settings carries every interpretation Coop applies to the user's data. Floors, dealbreakers, draft-vs-evaluate behavior — all of it lives in plain text the user can rewrite. Code carries mechanics; settings carry opinions.
 - **Strict no-auto-fire discipline.** No API call ever runs without an explicit click. Detection is free; enrichment is not.
-- **Coop Assist is a content script, not a panel.** Ambient writing assistance runs local heuristics first against Matt's voice profile (anti-phrases, exclamation ceiling, sign-off rules, LLM-slop detection), then merges in cached LLM proofread suggestions on idle. Rewrites go through the same chat fallback chain. Blocklisted on banking, auth, health, and gov domains.
+- **Coop Assist (shelved).** An ambient writing assistant was built as a content script — local heuristics against a voice profile, LLM rewrites in four modes. Currently disabled (not loaded in manifest) due to cost/value ratio. Architecture preserved for future revisit.
 - **Unified data model.** Companies and opportunities share one record (`isOpportunity: true`). Eliminates the sync bugs that come with parallel stores.
 - **Generic stage timestamps.** No hardcoded `appliedAt`/`introAt` fields — a `stageTimestamps` map keyed by stage ID scales to any custom pipeline.
 
@@ -38,7 +38,7 @@ Coop.ai collapses that stack into one surface. Land on a company page, get the r
 - Stat-card drill-downs on the dashboard — every count is clickable and opens the underlying list
 - Cover letter and follow-up draft journeys that route through Coop with a production-mode hint, so drafting requests get drafts, not fit lectures
 - Inbox surface that pulls Gmail threads tagged to opportunities into a single review pane
-- Coop Assist: ambient writing assistant that runs on every page (minus a privacy blocklist), flags anti-phrases and LLM slop against your voice profile, and rewrites fields in four modes — In my voice, Tighten, Punchier, Warmer
+- ~~Coop Assist~~ (shelved): ambient writing assistant concept — local heuristics + LLM rewrites in your voice. Built but disabled pending cost/value improvements
 
 <!-- screenshot: sidepanel research view on a LinkedIn job -->
 <!-- screenshot: company detail view, three columns -->

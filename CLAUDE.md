@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
+For product vision, roadmap, and strategic direction, see [STRATEGY.md](STRATEGY.md).
+
 ## What this is
 
 **Coop.ai** (formerly CompanyIntel) — a Chrome Extension (Manifest V3) that functions as a personal CRM for job searching. It auto-detects companies from any website, enriches them with multi-source research, scores job postings against user preferences, manages a pipeline with Kanban workflow, and provides AI-powered chat with full context (emails, meetings, notes, transcripts).
@@ -161,7 +163,32 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 | `ui-utils.js` | Consolidated shared functions — `escapeHtml`, `scoreToVerdict`, `defaultActionStatus` |
 | `design-tokens.css` | 38 CSS custom properties controlling all visual styling |
 
-### Dev / reference (not part of the extension)
+### PRDs (`prds/`)
+
+Product requirement docs. Some shipped, some draft/future. Check status line at top of each file.
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `S4-scoring-overhaul.md` | Shipped | Deterministic 5-dimension scoring model |
+| `S3-scoring-quality-pass.md` | Shipped | Scoring quality & cost visibility fixes |
+| `H1-save-flow-consolidation.md` | Shipped | Unified save path across all surfaces |
+| `G2-coop-tool-use.md` | Shipped | Coop tool-use architecture (on-demand context) |
+| `G5-profile-md-compilation.md` | Shipped | Profile .md compilation + legacy removal |
+| `J1-linkedin-data-capture-expansion.md` | Shipped | LinkedIn job posting data capture |
+| `APP-MODE-application-experience.md` | Draft | Application mode as dedicated Coop experience |
+| `AUTO-APPLY-autonomous-apply-queue.md` | Future | Autonomous apply queue (depends on voice profile + app mode) |
+
+### Marketing (`marketing/`)
+
+| File | Purpose |
+|------|---------|
+| `NARRATIVE.md` | Origin story — why Coop exists, told from Matt's perspective |
+| `SHOWCASE.md` | Product overview with feature highlights |
+| `DEMO_SCRIPT.md` | 90-second demo recording script |
+| `SOCIAL_THREAD.md` | LinkedIn/social launch posts |
+| `landing.html` | Public-facing landing page |
+
+### Dev / reference
 
 | File | Purpose |
 |------|---------|
@@ -169,7 +196,7 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 | `generate-icons.html` | Canvas-based icon generator for Coop logo at various sizes |
 | `icon-preview.html` | Design reference previewing icon options at multiple sizes |
 | `system-audit.html` | Architecture reference with tabbed navigation |
-| `marketing/landing.html` | Public-facing landing page |
+| `context-for-prd.md` | Scoring system context dump for PRD design sessions |
 | `archive/` | Preserved design work from removed features (e.g. widget floating button CSS/animations) |
 
 ## Architecture
