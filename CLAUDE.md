@@ -170,7 +170,7 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 | `icon-preview.html` | Design reference previewing icon options at multiple sizes |
 | `system-audit.html` | Architecture reference with tabbed navigation |
 | `marketing/landing.html` | Public-facing landing page |
-| `_archive/` | Preserved design work from removed features (e.g. widget floating button CSS/animations) |
+| `archive/` | Preserved design work from removed features (e.g. widget floating button CSS/animations) |
 
 ## Architecture
 
