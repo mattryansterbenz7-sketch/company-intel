@@ -1019,8 +1019,8 @@ function renderICPDimRow(dim) {
   const wasOpen = document.getElementById(`dim-body-${dim.key}`)?.classList.contains('open');
   const scrollY = window.scrollY;
 
-  const greens = _icpGreens.filter(f => (f.dimension || 'roleFit') === dim.key);
-  const reds   = _icpReds.filter(f => (f.dimension || 'roleFit') === dim.key);
+  const greens = _icpGreens.filter(f => (f.dimension || 'roleFit') === dim.key).sort((a, b) => (typeof b.severity === 'number' ? b.severity : 2) - (typeof a.severity === 'number' ? a.severity : 2));
+  const reds   = _icpReds.filter(f => (f.dimension || 'roleFit') === dim.key).sort((a, b) => (typeof b.severity === 'number' ? b.severity : 2) - (typeof a.severity === 'number' ? a.severity : 2));
 
   const countsHtml = dim.noFlags
     ? `<span class="icp-dim-auto-note">auto-scored from resume</span>`
