@@ -398,7 +398,6 @@ function renderCurrent() {
         </div>
         ${lastActStr ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last activity</span><span class="qc-pipeline-ctx-val">${escHtml(lastActStr)}</span></div>` : ''}
         ${stageLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Stage entered</span><span class="qc-pipeline-ctx-val">${stageLine}</span></div>` : ''}
-        ${savedLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Added</span><span class="qc-pipeline-ctx-val">${savedLine}</span></div>` : ''}
         ${scoredLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last scored</span><span class="qc-pipeline-ctx-val">${scoredLine}</span></div>` : ''}
       </div>
       <div id="qc-tasks-inject"></div>
@@ -693,6 +692,10 @@ function renderCurrent() {
             return text ? `<div class="qc-company-blurb">${escHtml(text)}</div>` : '';
           })()}
           ${linksHtml}
+          <div class="qc-tags-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;">
+            ${(c.tags || []).map(t => { const cl = tagColor(t); return `<span class="qc-tag" style="font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid ${cl.border};color:${cl.color};background:${cl.bg};display:inline-flex;align-items:center;gap:3px;">${escHtml(t)}<button class="qc-tag-remove" data-tag="${escHtml(t)}" data-id="${c.id}" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;font-size:10px;padding:0;line-height:1;">&times;</button></span>`; }).join('')}
+            <button class="qc-tag-add-btn" data-id="${c.id}" style="font-size:11px;color:var(--ci-text-tertiary);background:none;border:1px dashed var(--ci-border-default, #ccc);border-radius:12px;padding:2px 10px;cursor:pointer;line-height:1.4;white-space:nowrap;font-family:inherit;">+ Tag</button>
+          </div>
         </div>
         ${factsHtml}
       </div>
@@ -902,6 +905,77 @@ function renderCurrent() {
 
   document.getElementById('qc-more').addEventListener('click', () => {
     _overlayNavigate(chrome.runtime.getURL('company.html') + '?id=' + c.id);
+  });
+
+  // ── Tag remove ──
+  document.querySelectorAll('.qc-tag-remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const tag = btn.dataset.tag, id = btn.dataset.id;
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const companies = savedCompanies || [];
+        const idx = companies.findIndex(x => x.id === id);
+        if (idx === -1) return;
+        companies[idx].tags = (companies[idx].tags || []).filter(t => t !== tag);
+        chrome.storage.local.set({ savedCompanies: companies }, () => {
+          const mem = queue.find(x => x.id === id);
+          if (mem) mem.tags = companies[idx].tags;
+          renderCurrent();
+        });
+      });
+    });
+  });
+
+  // ── Tag add ──
+  document.querySelector('.qc-tag-add-btn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    const btn = e.currentTarget, id = btn.dataset.id;
+    const row = btn.closest('.qc-tags-row');
+    btn.style.display = 'none';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block;';
+    const input = document.createElement('input');
+    input.type = 'text'; input.placeholder = 'tag name';
+    input.style.cssText = 'font-size:11px;padding:3px 8px;border:1px solid #E8E5E0;border-radius:10px;outline:none;font-family:inherit;width:90px;';
+    const sugg = document.createElement('div');
+    sugg.style.cssText = 'position:absolute;z-index:999;background:#fff;border:1px solid #E0DDD8;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:120px;overflow:auto;display:none;';
+    wrap.appendChild(input); wrap.appendChild(sugg); row.appendChild(wrap);
+    input.focus();
+    // Build known tags from current queue entries
+    const knownTags = [...new Set(queue.flatMap(x => x.tags || []))].sort();
+    const curTags = c.tags || [];
+    input.addEventListener('input', () => {
+      const val = input.value.toLowerCase();
+      const matches = knownTags.filter(t => t.toLowerCase().includes(val) && !curTags.includes(t));
+      if (!val || !matches.length) { sugg.style.display = 'none'; return; }
+      sugg.innerHTML = matches.slice(0, 6).map(t => `<div class="qc-tag-sugg" data-tag="${escHtml(t)}" style="padding:5px 10px;cursor:pointer;font-size:11px;white-space:nowrap;">${escHtml(t)}</div>`).join('');
+      sugg.style.display = 'block';
+      sugg.querySelectorAll('.qc-tag-sugg').forEach(s => {
+        s.addEventListener('mousedown', ev => { ev.preventDefault(); _addTag(id, s.dataset.tag); });
+      });
+    });
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); const val = input.value.trim(); if (val) _addTag(id, val); }
+      if (ev.key === 'Escape') { wrap.remove(); btn.style.display = ''; }
+    });
+    input.addEventListener('blur', () => setTimeout(() => { if (wrap.parentElement) { wrap.remove(); btn.style.display = ''; } }, 200));
+
+    function _addTag(entryId, tag) {
+      const clean = tag.trim(); if (!clean) return;
+      chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+        const companies = savedCompanies || [];
+        const idx = companies.findIndex(x => x.id === entryId);
+        if (idx === -1) return;
+        const tags = companies[idx].tags || [];
+        if (!tags.includes(clean)) tags.push(clean);
+        companies[idx].tags = tags;
+        chrome.storage.local.set({ savedCompanies: companies }, () => {
+          const mem = queue.find(x => x.id === entryId);
+          if (mem) mem.tags = tags;
+          renderCurrent();
+        });
+      });
+    }
   });
 
   // Dimension toggle — switch which detail panel is visible
