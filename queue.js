@@ -519,8 +519,8 @@ function renderCurrent() {
     if (val == null) return;
     const tier = dimTier(val);
     const fired = isNewFormat ? (flagsFired[dim.key] || {}) : {};
-    const allGreens = fired.green || [];
-    const allReds   = fired.red   || [];
+    const allGreens = (fired.green || []).sort((a, b) => (b.sev || 0) - (a.sev || 0));
+    const allReds   = (fired.red   || []).sort((a, b) => (b.sev || 0) - (a.sev || 0));
 
     const w = weights[dim.key] || 0;
     const hasFlags = allGreens.length || allReds.length;

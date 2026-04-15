@@ -2183,8 +2183,8 @@ function buildFitSection() {
       if (val == null) return;
       const tier = dimTier(val);
       const fired = flagsFired[dim.key] || {};
-      const greens = (fired.green || []);
-      const reds = (fired.red || []);
+      const greens = (fired.green || []).sort((a, b) => (b.sev || 0) - (a.sev || 0));
+      const reds = (fired.red || []).sort((a, b) => (b.sev || 0) - (a.sev || 0));
       const rationale = dimRationale[dim.key] || dimRationale[dim.key.replace('Fit', '')] || '';
 
       // Build detail content for this dimension
