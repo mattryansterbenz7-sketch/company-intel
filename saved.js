@@ -556,7 +556,7 @@ function openScoreModal(entry) {
   </div>` : '';
   const flagsHtml = (greenCol || redCol) ? `${greenCol}${redCol}` : '';
 
-  // Tags
+  // Tags (with remove × and + Tag button)
   const tagsHtml = (entry.tags || []).map(t => {
     const cl = tagColor(t);
     return `<span class="score-modal-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}<button class="modal-tag-remove" data-id="${entry.id}" data-tag="${escHtml(t)}" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;font-size:10px;padding:0 0 0 4px;line-height:1;">&times;</button></span>`;
@@ -593,6 +593,7 @@ function openScoreModal(entry) {
         })()}${jm.lastUpdatedBy ? ' · ' + jm.lastUpdatedBy.replace(/_/g, ' ') : ''}</div>` : ''}
       </div>
     </div>
+    <div class="score-modal-tags" style="padding:0 20px 6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">${tagsHtml}</div>
     ${(() => {
       const linkStyle = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;text-decoration:none;padding:3px 10px;border-radius:14px;transition:all 0.12s;';
       const links = [];
@@ -659,7 +660,6 @@ function openScoreModal(entry) {
       ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtml(rb.concerns)}</div>` : ''}
       ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/10)` : ''}</strong><br>${escHtml(rb.qualificationMatch)}</div>` : ''}
       ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtml(rb.compSummary)}</div>` : ''}
-      <div class="score-modal-tags">${tagsHtml}</div>
       <div style="display:flex;gap:8px;">
         <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" style="flex:1">See full breakdown</a>
         ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtml(entry.jobUrl)}" target="_blank" style="flex:1">View posting</a>` : ''}
