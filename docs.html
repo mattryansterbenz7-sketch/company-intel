@@ -271,37 +271,37 @@
         <thead><tr style="text-align:left;border-bottom:2px solid var(--ci-border-default);">
           <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">View</th>
           <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">Description</th>
-          <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">File</th>
+          <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">Where you see it</th>
         </tr></thead>
         <tbody>
-          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Side Panel</td><td style="padding:8px 10px;">Chrome side panel overlay on any page</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">sidepanel.js</td></tr>
-          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Compact Card</td><td style="padding:8px 10px;">Small card in Kanban column (score + name + tags)</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
-          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Expanded Card</td><td style="padding:8px 10px;">Full card in Kanban column (action on, next step, last activity)</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
-          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Preview Card</td><td style="padding:8px 10px;">Large modal overlay with score breakdown</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
-          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Company Detail</td><td style="padding:8px 10px;">Full-screen three-column CRM page</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">company.js</td></tr>
-          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Grid Row</td><td style="padding:8px 10px;">Table row in grid/list view</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
-          <tr><td style="padding:8px 10px;font-weight:600;">Queue Card</td><td style="padding:8px 10px;">Tinder-style swipe triage card</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">queue.js</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Side Panel</td><td style="padding:8px 10px;">Chrome side panel overlay on any page</td><td style="padding:8px 10px;">Right side of your browser on any website</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Compact Card</td><td style="padding:8px 10px;">Small card showing score, company name, and tags</td><td style="padding:8px 10px;">Kanban columns on the dashboard</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Expanded Card</td><td style="padding:8px 10px;">Larger card with action status, next step, and last activity</td><td style="padding:8px 10px;">Kanban columns (click the expand icon)</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Preview Card</td><td style="padding:8px 10px;">Full score breakdown overlay with qualifications and flags</td><td style="padding:8px 10px;">Click any scored card on the Kanban board</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Company Detail</td><td style="padding:8px 10px;">Full CRM record with tabs for activity, emails, meetings, notes</td><td style="padding:8px 10px;">Click &ldquo;View full details&rdquo; on any card</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Grid Row</td><td style="padding:8px 10px;">Spreadsheet-style row with sortable columns</td><td style="padding:8px 10px;">Dashboard &rarr; Table view toggle</td></tr>
+          <tr><td style="padding:8px 10px;font-weight:600;">Queue Card</td><td style="padding:8px 10px;">Tinder-style swipe card for quick triage decisions</td><td style="padding:8px 10px;">Apply Queue (header link)</td></tr>
         </tbody>
       </table>
 
       <h3 class="sub">Dashboard modes</h3>
       <ul>
-        <li><strong>Kanban</strong> &mdash; Column board with Compact or Expanded Cards per column</li>
-        <li><strong>Grid</strong> &mdash; Table layout with Grid Rows</li>
-        <li><strong>Tasks</strong> &mdash; Task list (not a company/opportunity view)</li>
+        <li><strong>Kanban</strong> &mdash; Column board organized by pipeline stage</li>
+        <li><strong>Grid</strong> &mdash; Spreadsheet-style table with sortable columns</li>
+        <li><strong>Tasks</strong> &mdash; Personal task list across all companies</li>
       </ul>
 
       <h3 class="sub">Pages</h3>
       <ul>
-        <li><strong>Company Detail</strong> &mdash; company.html</li>
-        <li><strong>Opportunity Detail</strong> &mdash; opportunity.html</li>
-        <li><strong>Side Panel</strong> &mdash; sidepanel.html</li>
-        <li><strong>My Profile</strong> &mdash; preferences.html (settings, prefs, Story Time, scoring config)</li>
-        <li><strong>Coop Settings</strong> &mdash; coop-settings.html (voice, cost dashboard, pipeline config)</li>
-        <li><strong>Integrations</strong> &mdash; integrations.html (API keys)</li>
-        <li><strong>Queue</strong> &mdash; queue.html (triage swipe view)</li>
-        <li><strong>Inbox</strong> &mdash; inbox.html (email threads by company)</li>
-        <li><strong>Docs</strong> &mdash; docs.html</li>
+        <li><strong>Dashboard</strong> &mdash; Pipeline overview, Kanban/Grid/Tasks views, stats, and global chat</li>
+        <li><strong>Company Detail</strong> &mdash; Full CRM record for a single company</li>
+        <li><strong>Opportunity Detail</strong> &mdash; Job-focused variant of company detail</li>
+        <li><strong>My Profile</strong> &mdash; Resume, job preferences, salary, Story Time profile, and scoring config</li>
+        <li><strong>Coop Settings</strong> &mdash; Coop personality, cost dashboard, pipeline stage configuration</li>
+        <li><strong>Integrations</strong> &mdash; API keys and connection status for all providers</li>
+        <li><strong>Apply Queue</strong> &mdash; Swipe-style triage for scoring queue opportunities</li>
+        <li><strong>Inbox</strong> &mdash; Email threads grouped by company with stage and direction filters</li>
+        <li><strong>Docs</strong> &mdash; This page</li>
       </ul>
     </div>
 
