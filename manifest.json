@@ -31,7 +31,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["coop.js", "content.js", "coop-assist.js"]
+      "js": ["coop.js", "content.js"]
     }
   ],
   "side_panel": {

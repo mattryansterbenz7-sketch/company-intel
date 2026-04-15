@@ -342,7 +342,7 @@ function renderCurrent() {
   const _active     = _stage && !_triageStgs.has(_stage);
   const _actionSt   = c.actionStatus || '';
   const _actionLabel = _actionSt === 'my_court' ? '🏀 My Court' : _actionSt === 'their_court' ? '⏳ Their Court' : _actionSt === 'scheduled' ? '📅 Scheduled' : '';
-  const _actionColor = _actionSt === 'my_court' ? '#FF7A59' : _actionSt === 'their_court' ? '#0ea5e9' : '#a78bfa';
+  const _actionColor = _actionSt === 'my_court' ? '#ef4444' : _actionSt === 'their_court' ? '#eab308' : '#3b82f6';
 
   // Stage header — shown OUTSIDE the card above it
   const stageHeaderHtml = _active ? `<div class="qc-stage-header">

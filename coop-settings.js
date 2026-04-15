@@ -90,6 +90,7 @@ function modelProviderBadge(value) {
   const opt = AI_MODEL_OPTIONS.find(o => o.value === value);
   if (!opt) return '';
   if (opt.provider === 'anthropic') return '<span class="model-badge model-badge--anthropic" title="Anthropic Claude">&#10038;</span>';
+  if (opt.provider === 'gemini') return '<span class="model-badge model-badge--gemini" title="Google Gemini">&#9830;</span>';
   return '<span class="model-badge model-badge--openai" title="OpenAI GPT">&#9670;</span>';
 }
 
@@ -130,14 +131,16 @@ function savePipelineConfig(config) {
 
 // ── AI Models rendering ──────────────────────────────────────────────────────
 
-function buildModelDropdown(taskKey, models) {
+// configuredProviders: Set of provider strings with valid API keys (e.g. 'openai', 'anthropic', 'gemini')
+function buildModelDropdown(taskKey, models, configuredProviders) {
   const current = models[taskKey] || AI_MODEL_DEFAULTS[taskKey] || AI_MODEL_OPTIONS[0].value;
-  return AI_MODEL_OPTIONS.map(o =>
-    `<option value="${o.value}" ${o.value === current ? 'selected' : ''}>${o.label}</option>`
-  ).join('');
+  return AI_MODEL_OPTIONS.map(o => {
+    const disabled = configuredProviders && !configuredProviders.has(o.provider);
+    return `<option value="${o.value}" ${o.value === current ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${o.label}${disabled ? ' (no key)' : ''}</option>`;
+  }).join('');
 }
 
-function renderAIModels(config) {
+function renderAIModels(config, configuredProviders) {
   const models = config.aiModels || {};
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">AI Models</div>';
   html += '<div class="pipeline-sub-desc">Choose which model handles each task.</div>';
@@ -148,7 +151,7 @@ function renderAIModels(config) {
       <div><div class="pipeline-count-label" style="font-weight:600">${task.label}</div><div style="font-size:10px;color:#7c98b6">${task.desc}</div></div>
       <div style="display:flex;align-items:center;gap:6px;">
         <span class="model-badge-slot" data-for="${task.key}">${modelProviderBadge(currentVal)}</span>
-        <select class="pipeline-model-select" data-model-key="${task.key}">${buildModelDropdown(task.key, models)}</select>
+        <select class="pipeline-model-select" data-model-key="${task.key}">${buildModelDropdown(task.key, models, configuredProviders)}</select>
       </div>
     </div>`;
   });
@@ -223,8 +226,15 @@ async function loadAIModelsSection() {
   const body = document.getElementById('ai-models-section');
   if (!body) return;
 
+  // Check which providers have API keys configured
+  const integrations = await new Promise(r => chrome.storage.local.get('integrations', d => r(d.integrations || {})));
+  const configuredProviders = new Set();
+  if (integrations.anthropic_key) configuredProviders.add('anthropic');
+  if (integrations.openai_key) configuredProviders.add('openai');
+  if (integrations.gemini_key) configuredProviders.add('gemini');
+
   body.innerHTML =
-    renderAIModels(config) +
+    renderAIModels(config, configuredProviders) +
     renderChatFallbackSection(config);
 
   // ── All model dropdowns ──

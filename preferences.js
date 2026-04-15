@@ -108,7 +108,7 @@ function saveSyncPrefs(showConfirm = true) {
       salaryStrong:            document.getElementById('pref-salary-strong').value.trim(),
       oteFloor:                document.getElementById('pref-ote-floor').value.trim(),
       oteStrong:               document.getElementById('pref-ote-strong').value.trim(),
-      stalenessThresholdDays:  isNaN(stalenessRaw) ? 14 : Math.max(0, stalenessRaw),
+      stalenessThresholdDays:  isNaN(stalenessRaw) ? 7 : Math.max(0, stalenessRaw),
     });
     chrome.storage.sync.set({ prefs }, () => {
       void chrome.runtime.lastError;
@@ -4713,7 +4713,7 @@ loadPrefsWithMigration(syncPrefs => {
   document.getElementById('pref-ote-floor').value       = syncPrefs.oteFloor      || '';
   document.getElementById('pref-ote-strong').value      = syncPrefs.oteStrong     || '';
   const stalenessEl = document.getElementById('pref-staleness-days');
-  if (stalenessEl) stalenessEl.value = syncPrefs.stalenessThresholdDays != null ? syncPrefs.stalenessThresholdDays : 14;
+  if (stalenessEl) stalenessEl.value = syncPrefs.stalenessThresholdDays != null ? syncPrefs.stalenessThresholdDays : 7;
 
   const arr = syncPrefs.workArrangement || [];
   document.querySelectorAll('input[name="work-arr"]').forEach(cb => {

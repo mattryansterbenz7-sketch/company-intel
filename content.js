@@ -1,12 +1,40 @@
 // Re-injection guard: content.js can be injected twice (once via manifest match,
 // once via chrome.scripting.executeScript from background/sidepanel). Without this
 // guard, the `let` declarations below throw "Identifier already declared" SyntaxErrors.
+//
+// After an extension reload, the OLD content script persists with an invalid
+// chrome.runtime. Chrome injects a NEW script, but it must supersede the old one.
+// We use a per-instance ID on window so old observers detect they've been replaced.
+var __ciInstanceId = Math.random().toString(36).slice(2);
+var __ciPrevInstanceId = window.__companyIntelInstanceId;
+
+// Skip if already loaded AND the existing instance's extension context is still valid
 if (window.__companyIntelContentLoaded) {
-  // Already loaded — skip the entire file body
+  try {
+    chrome.runtime.getURL('');
+    // Extension context is valid — this is a true double-injection, skip.
+  } catch {
+    // Extension was reloaded — old script is stale. Fall through to take over.
+    window.__companyIntelContentLoaded = false;
+  }
+}
+
+// Set our instance ID. If we're skipping (valid double-injection), restore the previous ID.
+window.__companyIntelInstanceId = window.__companyIntelContentLoaded ? __ciPrevInstanceId : __ciInstanceId;
+
+if (window.__companyIntelContentLoaded) {
+  // Already loaded with valid context — skip entire file body
 } else {
   window.__companyIntelContentLoaded = true;
 
+// Returns false if the extension context was invalidated OR a newer instance has taken over
+function _extValid() {
+  if (window.__companyIntelInstanceId !== __ciInstanceId) return false;
+  try { chrome.runtime.getURL(''); return true; } catch { return false; }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!_extValid()) return;
   if (message.type === 'GET_COMPANY') {
     detectCompanyAndJob()
       .then(sendResponse)
@@ -1505,12 +1533,24 @@ function _findActionBar() {
       const el = document.querySelector(sel);
       if (el) return { container: el, mode: 'inline' };
     }
+    // Fallback: find the Apply/Save button and walk up to the flex row that holds all action buttons
     const applyEl = document.querySelector(
       'button[aria-label*="Apply"], a[aria-label*="Apply"], button.jobs-apply-button, .jobs-apply-button--top-card button, a.jobs-apply-button'
     );
-    if (applyEl?.parentElement) return { container: applyEl.parentElement, mode: 'inline' };
-    const saveEl = document.querySelector('button[aria-label*="Save"], button[aria-label*="Saved"]');
-    if (saveEl?.parentElement) return { container: saveEl.parentElement, mode: 'inline' };
+    const anchorEl = applyEl || document.querySelector('button[aria-label*="Save"], button[aria-label*="Saved"]');
+    if (anchorEl) {
+      // Walk up to find the flex container with multiple children (the button row)
+      let el = anchorEl.parentElement;
+      for (let i = 0; i < 4 && el; i++) {
+        const cs = window.getComputedStyle(el);
+        if ((cs.display === 'flex' || cs.display === 'inline-flex') && el.children.length >= 2) {
+          return { container: el, mode: 'inline' };
+        }
+        el = el.parentElement;
+      }
+      // Last resort: use direct parent
+      if (anchorEl.parentElement) return { container: anchorEl.parentElement, mode: 'inline' };
+    }
     return null;
   }
 
@@ -1947,6 +1987,7 @@ async function extractLinkedInJobPosting() {
 
 async function injectCoopButton() {
   if (_scoopInjected) return;
+  if (!_extValid()) return;
 
   // Don't inject on extension pages
   if (window.location.protocol === 'chrome-extension:') return;
@@ -2132,20 +2173,25 @@ function watchForCoopInjection() {
   // Re-inject on SPA navigation
   let lastUrl = window.location.href;
   let _scoopRetryTimer = null;
+  let _scoopRetryCount = 0;
+  const MAX_RETRIES = 10; // Stop retrying after 10 failed attempts (~5s)
   _scoopObserver = new MutationObserver(() => {
+    if (!_extValid()) { _scoopObserver.disconnect(); return; }
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       _scoopInjected = false;
       _scoopIsFloating = false;
+      _scoopRetryCount = 0; // Reset on navigation
       const old = document.getElementById('coop-scoop-btn');
       if (old) old.remove();
       clearTimeout(_scoopRetryTimer);
       setTimeout(injectCoopButton, 1500);
     }
     // Throttled re-try if button container appeared but our button isn't there yet
-    if (!_scoopInjected && !_scoopRetryTimer) {
+    if (!_scoopInjected && !_scoopRetryTimer && _scoopRetryCount < MAX_RETRIES) {
       _scoopRetryTimer = setTimeout(() => {
         _scoopRetryTimer = null;
+        _scoopRetryCount++;
         injectCoopButton();
       }, 500);
     }

@@ -195,9 +195,9 @@ let customCompanyStages = [...DEFAULT_COMPANY_STAGES];
 let activePipeline = localStorage.getItem('ci_activePipeline') || 'opportunity'; // 'all' | 'opportunity' | 'company'
 let stageCelebrations = {}; // { [stageKey]: { confetti, sound } } — loaded from storage
 const DEFAULT_ACTION_STATUSES = [
-  { key: 'my_court', label: '🏀 My Court', color: '#FF7A59' },
-  { key: 'their_court', label: '⏳ Their Court', color: '#0ea5e9' },
-  { key: 'scheduled', label: '📅 Scheduled', color: '#a78bfa' },
+  { key: 'my_court', label: '🏀 My Court', color: '#ef4444' },
+  { key: 'their_court', label: '⏳ Their Court', color: '#eab308' },
+  { key: 'scheduled', label: '📅 Scheduled', color: '#3b82f6' },
 ];
 
 function detectScheduledStatus(entry) {
@@ -207,7 +207,7 @@ function detectScheduledStatus(entry) {
 }
 let customActionStatuses = null; // loaded from storage, falls back to DEFAULT
 let _userWorkArrangement = []; // loaded from chrome.storage.sync prefs
-let _stalenessThresholdDays = 14; // loaded from chrome.storage.sync prefs.stalenessThresholdDays
+let _stalenessThresholdDays = 7; // loaded from chrome.storage.sync prefs.stalenessThresholdDays
 const _collapsedCols = new Set(JSON.parse(sessionStorage.getItem('ci_collapsed_cols') || '[]'));
 let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
 let activityCustomRange = JSON.parse(localStorage.getItem('ci_activityCustomRange') || 'null'); // {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} or null
@@ -462,13 +462,15 @@ function renderCompactCard(c) {
       }).join('')}</div>`
     : '';
 
-  const { actionClass: compactActionClass } = computeCardIndicators(c);
+  const { actionClass: compactActionClass, isStale, isOverdue } = computeCardIndicators(c);
+  const compactIndicators = (isStale || isOverdue) ? `<div class="kanban-card-indicators" style="margin-top:4px;">${isOverdue ? `<span class="kanban-overdue-badge">&#9888; Overdue</span>` : ''}${isStale ? `<span class="kanban-stale-badge">&#x231B; Stale</span>` : ''}</div>` : '';
 
   return `
     <div class="compact-card score-${tier}${stateClass}${compactActionClass ? ' ' + compactActionClass : ''}" data-id="${c.id}" draggable="true">
       <div class="compact-card-score">${scoreHtml}</div>
       <div class="compact-card-body">
         <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtml(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
+        ${compactIndicators}
         ${c.jobUrl ? `<a class="compact-title" href="${escHtml(c.jobUrl)}" target="_blank" title="Open job posting">${escHtml(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtml(c.jobTitle || '')}</div>`}
         ${(() => {
           // Filter meta: remove job title echo from salary/arrangement line
@@ -1169,7 +1171,7 @@ function load() {
   // Load user prefs for work arrangement mismatch detection + staleness threshold
   chrome.storage.sync.get(['prefs'], ({ prefs }) => {
     _userWorkArrangement = (prefs?.workArrangement) || [];
-    if (prefs?.stalenessThresholdDays != null) _stalenessThresholdDays = parseInt(prefs.stalenessThresholdDays) || 14;
+    if (prefs?.stalenessThresholdDays != null) _stalenessThresholdDays = parseInt(prefs.stalenessThresholdDays) || 7;
   });
   chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs', 'actionStatuses'], (data) => {
     const { savedCompanies, allTags } = data;
@@ -2943,7 +2945,17 @@ function bindKanbanEvents(board) {
 
   board.querySelectorAll('.kanban-action-status').forEach(sel => {
     sel.addEventListener('mousedown', e => e.stopPropagation());
-    sel.addEventListener('change', () => updateCompany(sel.dataset.id, { actionStatus: sel.value }));
+    // Color the select to match the selected action status
+    const colorActionSelect = (s) => {
+      const statuses = customActionStatuses || DEFAULT_ACTION_STATUSES;
+      const match = statuses.find(st => st.key === s.value);
+      if (match) s.style.color = match.color;
+    };
+    colorActionSelect(sel);
+    sel.addEventListener('change', () => {
+      colorActionSelect(sel);
+      updateCompany(sel.dataset.id, { actionStatus: sel.value });
+    });
   });
 
   board.querySelectorAll('.kanban-next-step-input').forEach(inp => {

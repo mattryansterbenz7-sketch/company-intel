@@ -408,18 +408,18 @@
     .kanban-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 13px; display: flex; flex-direction: column; gap: 8px; cursor: grab; transition: box-shadow 0.15s, border-color 0.15s; user-select: none; box-shadow: var(--ci-shadow-sm); }
     .kanban-card:hover { border-color: var(--ci-accent-primary); box-shadow: var(--ci-shadow-md); }
     /* ── Action-on border tints ── */
-    .kanban-card.action-my-court { border-left-color: #FF7A59 !important; }
-    .kanban-card.action-their-court { border-left-color: #0ea5e9 !important; }
-    .kanban-card.action-scheduled { border-left-color: #a78bfa !important; }
+    .kanban-card.action-my-court { border-color: #ef4444 !important; }
+    .kanban-card.action-their-court { border-color: #eab308 !important; }
+    .kanban-card.action-scheduled { border-color: #3b82f6 !important; }
     /* ── Staleness indicator ── */
     .kanban-stale-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; color: #92400e; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
     /* ── Overdue next-step indicator ── */
     .kanban-overdue-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; color: #991b1b; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
     .kanban-card-indicators { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
     /* ── Compact card action-on tints ── */
-    .compact-card.action-my-court { border-left: 3px solid #FF7A59 !important; }
-    .compact-card.action-their-court { border-left: 3px solid #0ea5e9 !important; }
-    .compact-card.action-scheduled { border-left: 3px solid #a78bfa !important; }
+    .compact-card.action-my-court { border: 1px solid #ef4444 !important; }
+    .compact-card.action-their-court { border: 1px solid #eab308 !important; }
+    .compact-card.action-scheduled { border: 1px solid #3b82f6 !important; }
     .kanban-card.dragging { opacity: 0.35; cursor: grabbing; }
     /* Swipe-to-triage */
     .kanban-card.swiping, .compact-card.swiping { transition: none !important; cursor: grabbing; z-index: 100; }
