@@ -543,8 +543,8 @@ function buildChatPanel(container, entry) {
     }
   });
 
-  // Add journey buttons for opportunities
-  if (entry.isOpportunity && actionsEl) {
+  // Add journey buttons for opportunities (not meetings chat)
+  if (entry.isOpportunity && actionsEl && !chatKey.includes('-meetings')) {
     const journeyHtml = `<button class="chat-action-btn" data-action="journey-coverletter" style="background-color:rgba(255, 122, 89, 0.08);color:#FF7A59;font-weight:600;">✎ Cover letter</button>`;
     actionsEl.insertAdjacentHTML('afterbegin', journeyHtml);
   }
@@ -715,7 +715,7 @@ function renderEmailThreads(emails, onDelete) {
           <span class="thread-msg-date">${mDate}</span>
         </div>
         <div class="thread-msg-preview">${escapeHtml(preview)}</div>
-        <div class="thread-msg-body">${escapeHtml(bodyText)}</div>
+        <div class="thread-msg-body">${escapeHtml(bodyText).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>').replace(/^/, '<p>').replace(/$/, '</p>')}</div>
       </div>`;
     }).join('');
 
@@ -747,10 +747,9 @@ function bindThreadToggles(container) {
     hdr.addEventListener('click', () => {
       const tid = hdr.dataset.thread;
       const msgsEl = document.getElementById('thread-msgs-' + tid);
-      const chevron = hdr.querySelector('.thread-chevron');
       if (!msgsEl) return;
       const isOpen = msgsEl.classList.toggle('open');
-      if (chevron) chevron.textContent = isOpen ? '▲' : '▼';
+      hdr.classList.toggle('open', isOpen);
     });
   });
 

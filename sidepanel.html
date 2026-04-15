@@ -44,6 +44,7 @@
     [data-tooltip] { position: relative; }
     [data-tooltip]::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ci-text-primary); color: var(--ci-border-default); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 200px; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--ci-border-default); box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; text-transform: none; letter-spacing: normal; }
     [data-tooltip]:hover::after { opacity: 1; }
+    .header [data-tooltip]::after { bottom: auto; top: calc(100% + 8px); }
     .pref-hint { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--ci-bg-inset); color: var(--ci-text-tertiary); font-size: 9px; font-weight: 700; text-align: center; line-height: 14px; cursor: default; margin-left: 5px; vertical-align: middle; position: relative; flex-shrink: 0; }
     .pref-hint::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ci-text-primary); color: var(--ci-border-default); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 220px; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--ci-border-default); box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; }
     .pref-hint:hover::after { opacity: 1; }

@@ -3883,7 +3883,10 @@ function editTaskField(taskId, task, field, element, allTasks) {
     input.setAttribute('data-task-edit', '');
     editWidget = input;
 
+    let saved = false;
     const saveEdit = () => {
+      if (saved) return;
+      saved = true;
       const newVal = input.value || null;
       const origVal = originalValue || null;
       if (newVal !== origVal) {
@@ -3894,15 +3897,16 @@ function editTaskField(taskId, task, field, element, allTasks) {
       }
     };
 
-    input.addEventListener('blur', saveEdit);
+    // Use change as primary save trigger; delay blur to avoid premature close
+    // when the native date picker opens (steals focus → fires blur immediately)
     input.addEventListener('change', saveEdit);
+    input.addEventListener('blur', () => setTimeout(() => { if (!saved) saveEdit(); }, 200));
     input.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { renderTasksView(); e.preventDefault(); }
+      if (e.key === 'Escape') { saved = true; renderTasksView(); e.preventDefault(); }
     });
 
     element.replaceWith(input);
     input.focus();
-    input.click(); // Open date picker
   }
   else if (field === 'company') {
     const container = document.createElement('div');

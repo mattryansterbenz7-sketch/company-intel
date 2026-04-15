@@ -308,7 +308,7 @@ function renderCurrent() {
     const rows = [];
     if (f.configuredEntry) rows.push(`<div class="qc-detail-row"><span class="qc-detail-label">Configured rule</span><span class="qc-detail-val">${escHtml(f.configuredEntry)}</span></div>`);
     if (f.source) rows.push(`<div class="qc-detail-row"><span class="qc-detail-label">Source</span><span class="qc-detail-val">${escHtml(sourceLabel(f.source))}</span></div>`);
-    if (f.evidence) rows.push(`<div class="qc-detail-row"><span class="qc-detail-label">Evidence</span><span class="qc-detail-val qc-detail-quote">"${escHtml(f.evidence)}"</span></div>`);
+    if (f.evidence) rows.push(`<div class="qc-detail-row"><span class="qc-detail-label">Evidence</span><span class="qc-detail-val qc-detail-quote">"${linkReviewSources(escHtml(f.evidence), c.reviews)}"</span></div>`);
     if (!rows.length) {
       rows.push(`<div class="qc-detail-row"><span class="qc-detail-val" style="color:var(--ci-text-tertiary)">No trace data — this flag was saved before red flag sources were tracked. Re-score to get an explainable flag, or if this keeps appearing, dismiss it.</span></div>`);
     }
@@ -464,7 +464,7 @@ function renderCurrent() {
           <a class="queue-flag-settings-link" href="${settingsHref}" target="_blank" title="${escHtml(DIM_LABELS[dimKey] || dimKey)} settings">↗</a>
           <button class="queue-flag-dismiss-btn" data-flag-text="${escHtml(flagText)}" data-flag-type="${color}" title="Dismiss">✕</button>
         </div>
-        ${adj.evidence ? `<div class="queue-flag-evidence">${escHtml(adj.evidence)}</div>` : ''}
+        ${adj.evidence ? `<div class="queue-flag-evidence">${linkReviewSources(escHtml(adj.evidence), c.reviews)}</div>` : ''}
       </div>`;
   }
 
@@ -602,10 +602,10 @@ function renderCurrent() {
         allAdj.forEach(a => { const d = a.delta ?? 0; const cls = d > 0 ? 'qmth-pos' : d < 0 ? 'qmth-neg' : 'qmth-base'; mathParts.push(`<span class="${cls}">${d > 0 ? '+' : ''}${d.toFixed(1)}</span>`); });
         const rawScore = allAdj.reduce((s, a) => s + a.delta, aiBase);
         const mathStr = `${mathParts.join(' ')} <span class="qmth-eq">= ${rawScore.toFixed(1)} → <span class="qmth-result">${val}</span></span>`;
-        panelContent = `${dimRationale[dim.key] ? `<div class="queue-drawer-rationale">${escHtml(dimRationale[dim.key])}</div>` : ''}<div class="queue-math-row"><span class="queue-math-left">${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>`;
+        panelContent = `${dimRationale[dim.key] ? `<div class="queue-drawer-rationale">${linkReviewSources(escHtml(dimRationale[dim.key]), c.reviews)}</div>` : ''}<div class="queue-math-row"><span class="queue-math-left">${mathStr}</span><span class="queue-math-right">${val}×${w}% = ${contribution}</span></div><div class="queue-flag-cols horizontal">${allGreens.length ? `<div>${buildFlagList(allGreens, 'green', dim.key)}</div>` : ''}${allReds.length ? `<div>${buildFlagList(allReds, 'red', dim.key)}</div>` : ''}</div>`;
       }
     } else if (isNewFormat && !hasContent) {
-      const note = dimRationale[dim.key] ? escHtml(dimRationale[dim.key]) : 'No flags configured for this dimension';
+      const note = dimRationale[dim.key] ? linkReviewSources(escHtml(dimRationale[dim.key]), c.reviews) : 'No flags configured for this dimension';
       panelContent = `<div class="queue-dim-detail-note">${note}</div>`;
     }
 

@@ -2192,17 +2192,17 @@ function buildFitSection() {
 
       // Rationale
       if (rationale) {
-        detailHtml += `<div class="fit-dim-rationale">${escapeHtml(rationale)}</div>`;
+        detailHtml += `<div class="fit-dim-rationale">${linkReviewSources(escapeHtml(rationale), entry.reviews)}</div>`;
       }
 
       // Green + red flags with full text (not truncated)
       if (greens.length || reds.length) {
         detailHtml += `<div class="fit-dim-flags">`;
         greens.forEach(f => {
-          detailHtml += `<div class="fit-dim-flag green"><span class="fit-dim-flag-icon">+</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${escapeHtml(f.evidence)}</span>` : ''}</div>`;
+          detailHtml += `<div class="fit-dim-flag green"><span class="fit-dim-flag-icon">+</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${linkReviewSources(escapeHtml(f.evidence), entry.reviews)}</span>` : ''}</div>`;
         });
         reds.forEach(f => {
-          detailHtml += `<div class="fit-dim-flag red"><span class="fit-dim-flag-icon">-</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${escapeHtml(f.evidence)}</span>` : ''}</div>`;
+          detailHtml += `<div class="fit-dim-flag red"><span class="fit-dim-flag-icon">-</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${linkReviewSources(escapeHtml(f.evidence), entry.reviews)}</span>` : ''}</div>`;
         });
         detailHtml += `</div>`;
       }
@@ -3588,6 +3588,7 @@ function buildReviews() {
       <div class="p-review-src">${r.source ? `<a href="${r.url||'#'}" target="_blank">${r.source}</a>` : ''}</div>
     </div>`).join('');
 }
+
 
 // ── Auto-extraction: merge contacts from background.js extractedContacts ─────
 function parseEmailContactLocal(fromStr) {
