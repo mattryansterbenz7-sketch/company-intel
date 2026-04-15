@@ -73,6 +73,25 @@ function initChatPanels(entry) {
   });
 }
 
+// Quick prompts — loaded once from storage, shared across all chat panels
+const _defaultQuickPrompts = [
+  { id: 'cover-letter', label: 'Cover letter', prompt: 'Help me write a custom cover letter for this role. Use what you know about me and the company to make it specific and compelling.' },
+  { id: 'interview-prep', label: 'Interview prep', prompt: 'Prep me for an interview here — what should I know about the company, what questions will they likely ask, and how should I position myself?' },
+  { id: 'why-this-role', label: 'Why this role', prompt: 'Help me articulate why I\'m genuinely interested in this role in a way that\'s specific and authentic, not generic.' },
+  { id: 'draft-followup', label: 'Draft follow-up', prompt: 'Draft a follow-up message I can send after my last touch with this company. Make it brief and natural.' },
+];
+let _chatQuickPrompts = _defaultQuickPrompts;
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.get(['coopQuickPrompts'], d => {
+    if (Array.isArray(d.coopQuickPrompts)) _chatQuickPrompts = d.coopQuickPrompts;
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.coopQuickPrompts) {
+      _chatQuickPrompts = Array.isArray(changes.coopQuickPrompts.newValue) ? changes.coopQuickPrompts.newValue : _defaultQuickPrompts;
+    }
+  });
+}
+
 function buildChatPanel(container, entry) {
   const chatKey = container.dataset.chatKey || entry.id;
   // History is session-only — starts fresh each time this panel is built.
@@ -263,9 +282,12 @@ function buildChatPanel(container, entry) {
   let meetingsContext = (entry.cachedMeetings?.length) ? entry.cachedMeetings : null;
 
   function renderHistory(showThinking) {
+    const qpHTML = (!chatKey.includes('-meetings') && _chatQuickPrompts.length)
+      ? `<div class="chat-quick-prompts">${_chatQuickPrompts.map(p => `<button class="chat-qp-btn" data-qp-prompt="${escapeHtml(p.prompt)}">${escapeHtml(p.label)}</button>`).join('')}</div>`
+      : '';
     const emptyHTML = typeof COOP !== 'undefined'
-      ? `<div class="chat-empty">${COOP.emptyStateHTML('company')}</div>`
-      : `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.</div>`;
+      ? `<div class="chat-empty">${COOP.emptyStateHTML('company')}${qpHTML}</div>`
+      : `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.${qpHTML}</div>`;
     const thinkingHTML = showThinking
       ? (typeof COOP !== 'undefined' ? `<div class="chat-msg chat-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="chat-msg chat-msg-assistant"><div class="chat-msg-bubble chat-thinking"><span class="chat-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>')
       : '';
@@ -543,8 +565,8 @@ function buildChatPanel(container, entry) {
     }
   });
 
-  // Add journey buttons for opportunities
-  if (entry.isOpportunity && actionsEl) {
+  // Add journey buttons for opportunities (not meetings chat)
+  if (entry.isOpportunity && actionsEl && !chatKey.includes('-meetings')) {
     const journeyHtml = `<button class="chat-action-btn" data-action="journey-coverletter" style="background-color:rgba(255, 122, 89, 0.08);color:#FF7A59;font-weight:600;">✎ Cover letter</button>`;
     actionsEl.insertAdjacentHTML('afterbegin', journeyHtml);
   }
@@ -557,6 +579,15 @@ function buildChatPanel(container, entry) {
   }
 
   renderHistory();
+
+  // Quick prompt click handler (delegated on messages area)
+  msgsEl.addEventListener('click', e => {
+    const btn = e.target.closest('[data-qp-prompt]');
+    if (!btn) return;
+    inputEl.value = btn.dataset.qpPrompt;
+    inputEl.focus();
+    send();
+  });
 
   // Listen for INSIGHTS_CAPTURED broadcasts and annotate the last assistant message
   chrome.runtime.onMessage.addListener((msg) => {
@@ -715,7 +746,7 @@ function renderEmailThreads(emails, onDelete) {
           <span class="thread-msg-date">${mDate}</span>
         </div>
         <div class="thread-msg-preview">${escapeHtml(preview)}</div>
-        <div class="thread-msg-body">${escapeHtml(bodyText)}</div>
+        <div class="thread-msg-body">${escapeHtml(bodyText).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>').replace(/^/, '<p>').replace(/$/, '</p>')}</div>
       </div>`;
     }).join('');
 
@@ -747,10 +778,9 @@ function bindThreadToggles(container) {
     hdr.addEventListener('click', () => {
       const tid = hdr.dataset.thread;
       const msgsEl = document.getElementById('thread-msgs-' + tid);
-      const chevron = hdr.querySelector('.thread-chevron');
       if (!msgsEl) return;
       const isOpen = msgsEl.classList.toggle('open');
-      if (chevron) chevron.textContent = isOpen ? '▲' : '▼';
+      hdr.classList.toggle('open', isOpen);
     });
   });
 

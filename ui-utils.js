@@ -2,6 +2,13 @@
 // Loaded as a plain <script> before page-specific JS in all HTML pages.
 // Attaches to window so every page script can call them without imports.
 
+// ── Auto-close side panel on full-page extension views ──────────────────────
+// When a full-page view (saved, company, opportunity, etc.) loads, close the
+// side panel so it doesn't redundantly consume screen space.
+if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && !location.pathname.includes('sidepanel')) {
+  chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL' });
+}
+
 // ── HTML escaping ────────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
@@ -82,6 +89,24 @@ function parseLocalDate(d) {
 function truncLabel(str, max = 40) {
   if (!str) return '';
   return str.length > max ? str.slice(0, max - 1) + '\u2026' : str;
+}
+
+// ── Review source linking ────────────────────────────────────────────────────
+
+/** Turn escaped text mentioning review sources (Glassdoor, RepVue, etc.) into clickable links */
+function linkReviewSources(escapedText, reviews) {
+  if (!escapedText || !reviews?.length) return escapedText;
+  const sources = ['Glassdoor', 'RepVue', 'Reddit', 'Blind', 'Indeed'];
+  let result = escapedText;
+  for (const src of sources) {
+    const review = reviews.find(r => r.source === src && r.url);
+    if (!review) continue;
+    const re = new RegExp(`\\b(${src})\\b`, 'gi');
+    if (re.test(result)) {
+      result = result.replace(re, `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px;">$1</a>`);
+    }
+  }
+  return result;
 }
 
 // ── Flag display ─────────────────────────────────────────────────────────────

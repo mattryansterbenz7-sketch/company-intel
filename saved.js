@@ -455,12 +455,10 @@ function renderCompactCard(c) {
     : '';
 
   // Tags
-  const tagsHtml = (c.tags || []).length
-    ? `<div class="compact-tags">${(c.tags || []).map(t => {
-        const cl = tagColor(t);
-        return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}</span>`;
-      }).join('')}</div>`
-    : '';
+  const tagsHtml = `<div class="compact-tags">${(c.tags || []).map(t => {
+      const cl = tagColor(t);
+      return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}<button class="tag-remove" data-id="${c.id}" data-tag="${escHtml(t)}" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;font-size:10px;padding:0 0 0 3px;line-height:1;">&times;</button></span>`;
+    }).join('')}<button class="compact-add-tag-btn" data-id="${c.id}" title="Add tag" style="font-size:10px;color:var(--ci-text-tertiary);background:none;border:1px dashed var(--ci-border-default);border-radius:3px;padding:1px 6px;cursor:pointer;line-height:1.4;">+</button></div>`;
 
   const { actionClass: compactActionClass, isStale, isOverdue } = computeCardIndicators(c);
   const compactIndicators = (isStale || isOverdue) ? `<div class="kanban-card-indicators" style="margin-top:4px;">${isOverdue ? `<span class="kanban-overdue-badge">&#9888; Overdue</span>` : ''}${isStale ? `<span class="kanban-stale-badge">&#x231B; Stale</span>` : ''}</div>` : '';
@@ -561,8 +559,8 @@ function openScoreModal(entry) {
   // Tags
   const tagsHtml = (entry.tags || []).map(t => {
     const cl = tagColor(t);
-    return `<span class="score-modal-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}</span>`;
-  }).join('');
+    return `<span class="score-modal-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}<button class="modal-tag-remove" data-id="${entry.id}" data-tag="${escHtml(t)}" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;font-size:10px;padding:0 0 0 4px;line-height:1;">&times;</button></span>`;
+  }).join('') + `<button class="modal-add-tag-btn" data-id="${entry.id}" style="font-size:11px;color:var(--ci-text-tertiary);background:none;border:1px dashed var(--ci-border-default);border-radius:12px;padding:2px 10px;cursor:pointer;line-height:1.4;white-space:nowrap;">+ Tag</button>`;
 
   // Favicon
   const favDomain = entry.companyWebsite ? entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
@@ -661,7 +659,7 @@ function openScoreModal(entry) {
       ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtml(rb.concerns)}</div>` : ''}
       ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/10)` : ''}</strong><br>${escHtml(rb.qualificationMatch)}</div>` : ''}
       ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtml(rb.compSummary)}</div>` : ''}
-      ${tagsHtml ? `<div class="score-modal-tags">${tagsHtml}</div>` : ''}
+      <div class="score-modal-tags">${tagsHtml}</div>
       <div style="display:flex;gap:8px;">
         <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" style="flex:1">See full breakdown</a>
         ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtml(entry.jobUrl)}" target="_blank" style="flex:1">View posting</a>` : ''}
@@ -869,6 +867,66 @@ function openScoreModal(entry) {
         }
       }
     );
+  });
+
+  // ── Modal tag remove ──
+  content.querySelectorAll('.modal-tag-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ent = allCompanies.find(c => c.id === btn.dataset.id);
+      if (!ent) return;
+      updateCompany(btn.dataset.id, { tags: (ent.tags || []).filter(t => t !== btn.dataset.tag) });
+      const updated = allCompanies.find(c => c.id === btn.dataset.id);
+      if (updated) openScoreModal(updated);
+    });
+  });
+
+  // ── Modal tag add ──
+  content.querySelector('.modal-add-tag-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const id = btn.dataset.id;
+    const tagsRow = btn.closest('.score-modal-tags');
+    if (!tagsRow || tagsRow.querySelector('.modal-tag-input')) return;
+    btn.style.display = 'none';
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'position:relative;display:inline-block;';
+    wrap.innerHTML = `<input class="modal-tag-input" style="font-size:11px;width:100px;padding:3px 8px;border:1px solid var(--ci-accent-primary);border-radius:12px;outline:none;background:var(--ci-bg-raised);color:var(--ci-text-primary);" placeholder="tag name" autocomplete="off"><div class="modal-tag-sugg" style="display:none;position:absolute;top:100%;left:0;z-index:60;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:120px;max-height:140px;overflow-y:auto;margin-top:4px;"></div>`;
+    tagsRow.insertBefore(wrap, btn);
+    const input = wrap.querySelector('input');
+    const sugg = wrap.querySelector('.modal-tag-sugg');
+    input.focus();
+    input.addEventListener('input', () => {
+      const val = input.value.trim().toLowerCase();
+      const ent = allCompanies.find(c => c.id === id);
+      const existing = ent?.tags || [];
+      if (!val) { sugg.style.display = 'none'; return; }
+      const matches = allKnownTags.filter(t => t.toLowerCase().includes(val) && !existing.includes(t));
+      if (!matches.length) { sugg.style.display = 'none'; return; }
+      sugg.innerHTML = matches.slice(0, 5).map(t => `<div style="padding:5px 10px;cursor:pointer;font-size:12px;" data-tag="${escHtml(t)}">${escHtml(t)}</div>`).join('');
+      sugg.style.display = 'block';
+      sugg.querySelectorAll('[data-tag]').forEach(s => {
+        s.addEventListener('mousedown', ev => { ev.preventDefault(); addModalTag(id, s.dataset.tag); });
+        s.addEventListener('mouseenter', () => { s.style.background = 'var(--ci-bg-inset)'; });
+        s.addEventListener('mouseleave', () => { s.style.background = ''; });
+      });
+    });
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); const val = input.value.trim(); if (val) addModalTag(id, val); }
+      if (ev.key === 'Escape') { const updated = allCompanies.find(c => c.id === id); if (updated) openScoreModal(updated); }
+    });
+    input.addEventListener('blur', () => setTimeout(() => {
+      const updated = allCompanies.find(c => c.id === id);
+      if (updated && tagsRow.querySelector('.modal-tag-input')) openScoreModal(updated);
+    }, 200));
+
+    function addModalTag(entId, tag) {
+      commitTag(entId, tag);
+      setTimeout(() => {
+        const updated = allCompanies.find(c => c.id === entId);
+        if (updated) openScoreModal(updated);
+      }, 100);
+    }
   });
 
   // ── Swipe gesture ──
@@ -3280,6 +3338,45 @@ function bindKanbanEvents(board) {
     });
   });
 
+  // Compact card inline tag add
+  board.querySelectorAll('.compact-add-tag-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      // Replace the + button with an inline input
+      const tagsDiv = btn.closest('.compact-tags');
+      if (!tagsDiv || tagsDiv.querySelector('.tag-inline-input')) return;
+      btn.style.display = 'none';
+      const wrap = document.createElement('span');
+      wrap.style.cssText = 'position:relative;display:inline-block;';
+      wrap.innerHTML = `<input class="tag-inline-input" style="font-size:10px;width:80px;padding:1px 5px;border:1px solid var(--ci-accent-primary);border-radius:3px;outline:none;background:var(--ci-bg-raised);color:var(--ci-text-primary);" placeholder="tag name" autocomplete="off"><div class="compact-tag-sugg" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:100px;max-height:120px;overflow-y:auto;"></div>`;
+      tagsDiv.insertBefore(wrap, btn);
+      const input = wrap.querySelector('input');
+      const sugg = wrap.querySelector('.compact-tag-sugg');
+      input.focus();
+      input.addEventListener('input', () => {
+        const val = input.value.trim().toLowerCase();
+        const entry = allCompanies.find(c => c.id === id);
+        const existing = entry?.tags || [];
+        if (!val) { sugg.style.display = 'none'; return; }
+        const matches = allKnownTags.filter(t => t.toLowerCase().includes(val) && !existing.includes(t));
+        if (!matches.length) { sugg.style.display = 'none'; return; }
+        sugg.innerHTML = matches.slice(0, 5).map(t => `<div style="padding:4px 8px;cursor:pointer;font-size:11px;" data-tag="${escHtml(t)}">${escHtml(t)}</div>`).join('');
+        sugg.style.display = 'block';
+        sugg.querySelectorAll('[data-tag]').forEach(s => {
+          s.addEventListener('mousedown', ev => { ev.preventDefault(); commitTag(id, s.dataset.tag); });
+          s.addEventListener('mouseenter', () => { s.style.background = 'var(--ci-bg-inset)'; });
+          s.addEventListener('mouseleave', () => { s.style.background = ''; });
+        });
+      });
+      input.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter') { ev.preventDefault(); const val = input.value.trim(); if (val) commitTag(id, val); }
+        if (ev.key === 'Escape') render();
+      });
+      input.addEventListener('blur', () => setTimeout(() => render(), 200));
+    });
+  });
+
   // Swipe-to-triage for ALL scoring queue cards
   if (activePipeline === 'opportunity') {
     const stages = currentStages();
@@ -3883,7 +3980,10 @@ function editTaskField(taskId, task, field, element, allTasks) {
     input.setAttribute('data-task-edit', '');
     editWidget = input;
 
+    let saved = false;
     const saveEdit = () => {
+      if (saved) return;
+      saved = true;
       const newVal = input.value || null;
       const origVal = originalValue || null;
       if (newVal !== origVal) {
@@ -3894,15 +3994,16 @@ function editTaskField(taskId, task, field, element, allTasks) {
       }
     };
 
-    input.addEventListener('blur', saveEdit);
+    // Use change as primary save trigger; delay blur to avoid premature close
+    // when the native date picker opens (steals focus → fires blur immediately)
     input.addEventListener('change', saveEdit);
+    input.addEventListener('blur', () => setTimeout(() => { if (!saved) saveEdit(); }, 200));
     input.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { renderTasksView(); e.preventDefault(); }
+      if (e.key === 'Escape') { saved = true; renderTasksView(); e.preventDefault(); }
     });
 
     element.replaceWith(input);
     input.focus();
-    input.click(); // Open date picker
   }
   else if (field === 'company') {
     const container = document.createElement('div');

@@ -44,6 +44,7 @@
     [data-tooltip] { position: relative; }
     [data-tooltip]::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ci-text-primary); color: var(--ci-border-default); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 200px; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--ci-border-default); box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; text-transform: none; letter-spacing: normal; }
     [data-tooltip]:hover::after { opacity: 1; }
+    .header [data-tooltip]::after { bottom: auto; top: calc(100% + 8px); left: auto; right: 0; transform: none; }
     .pref-hint { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--ci-bg-inset); color: var(--ci-text-tertiary); font-size: 9px; font-weight: 700; text-align: center; line-height: 14px; cursor: default; margin-left: 5px; vertical-align: middle; position: relative; flex-shrink: 0; }
     .pref-hint::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ci-text-primary); color: var(--ci-border-default); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: normal; width: 220px; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--ci-border-default); box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100; }
     .pref-hint:hover::after { opacity: 1; }
@@ -1128,7 +1129,7 @@
         <button class="sp-chat-bind-btn" id="sp-chat-bind-btn" title="Bind Coop to a saved company or opportunity">📎 Bind</button>
         <a class="sp-chat-bind-view" id="sp-chat-bind-view" href="#" style="display:none;font-size:11px;font-weight:600;color:var(--ci-accent-primary);text-decoration:none;padding:3px 6px;border:1px solid rgba(255,122,89,0.35);border-radius:6px;white-space:nowrap;" title="Open in full CRM">View →</a>
         <div class="sp-chat-header-btns">
-          <button class="sp-chat-popout" id="sp-chat-popout" title="Pop out to window">
+          <button class="sp-chat-popout" id="sp-chat-popout" title="View CRM">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 2h5v5M14 2L8 8M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <button class="sp-chat-detach" id="sp-chat-detach" title="Full-screen chat">

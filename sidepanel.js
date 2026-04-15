@@ -5090,36 +5090,11 @@ function renderContactsSection(el, contacts) {
     }
   });
 
-  // ── Pop-out chat window ──
+  // ── View CRM button — navigate to full-page dashboard ──
   if (popoutBtn) {
     popoutBtn.addEventListener('click', (e) => {
       e.stopPropagation(); // Prevent bubbling to chatHeader minimize handler
-      const chatState = JSON.stringify(history);
-      const popoutContext = {
-        company: companyNameEl?.textContent || '',
-        entryId: currentSavedEntry?.id || null,
-        jobTitle: currentJobTitle || null,
-        tabUrl: currentUrl || null,
-      };
-      chrome.storage.local.set({ _coopPopoutHistory: chatState, _coopPopoutModel: chatModelIdx, _coopPopoutContext: popoutContext }, () => {
-        chrome.windows.create({
-          url: chrome.runtime.getURL('sidepanel.html?popout=1'),
-          type: 'popup',
-          width: 420,
-          height: 620,
-          focused: true
-        });
-        // Minimize chat in sidepanel so user isn't seeing it in two places
-        if (document.body.classList.contains('chat-mode')) {
-          // Exit full chat mode back to normal intel view
-          document.body.classList.remove('chat-mode');
-          chatSizeState = 'minimized';
-          applyChatSize();
-        } else {
-          chatSizeState = 'minimized';
-          applyChatSize();
-        }
-      });
+      chrome.tabs.create({ url: chrome.runtime.getURL('saved.html') });
     });
   }
 
