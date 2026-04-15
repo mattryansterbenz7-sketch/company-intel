@@ -57,7 +57,9 @@
       "Bash(awk 'NR==801,/^[0-9]+:\\\\{.*\"type\":\"user\".*PRD/ {if \\(/^[0-9]+:\\\\{.*\"type\":\"user\".*PRD/ && NR>801\\) exit; print}' /Users/mattsterbenz/.claude/projects/-Users-mattsterbenz-Desktop-Coding-company-intel/1151b891-0f56-4a25-b129-4b775d02f92f.jsonl)",
       "Bash(awk:*)",
       "Bash(find:*)",
-      "mcp__Claude_in_Chrome__tabs_context_mcp"
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:docs.granola.ai)"
     ]
   }
 }
