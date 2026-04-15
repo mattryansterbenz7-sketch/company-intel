@@ -1463,8 +1463,8 @@ function renderHomeState() {
                 return `<div class="sp-home-action-item" style="display:flex;align-items:center;gap:8px;" data-task-id="${t.id}">
                   <div class="sp-task-check" data-task-id="${t.id}" style="width:18px;height:18px;border-radius:50%;border:2px solid #dfe3eb;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" title="Complete task"></div>
                   <div style="flex:1;min-width:0;cursor:pointer;padding:2px 4px;border-radius:4px;transition:background 0.15s;" class="sp-task-click" data-task-id="${t.id}" data-task-text="${(t.text||'').replace(/"/g,'&quot;')}" data-task-company="${(t.company||'').replace(/"/g,'&quot;')}" data-task-date="${t.dueDate||''}" data-task-pri="${t.priority||'normal'}" title="Click to edit">
-                    <div class="sp-home-action-company">${t.company || 'Task'}</div>
-                    <div class="sp-home-action-step">${(t.text || '').slice(0, 50)}</div>
+                    <div class="sp-home-action-company">${t.company || (t.text || '').slice(0, 50) || 'Task'}</div>
+                    ${t.company ? `<div class="sp-home-action-step">${(t.text || '').slice(0, 50)}</div>` : ''}
                   </div>
                   <span class="sp-task-pri-badge" data-task-id="${t.id}" data-pri="${pri}" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;cursor:pointer;" title="Click to change priority">${pri}</span>
                   <span class="sp-task-date-edit ${dateClass}" data-task-id="${t.id}" data-date="${t.dueDate || ''}" title="Click to change date" style="cursor:pointer;flex-shrink:0;${t.daysUntil===null?'color:#A09A94;font-size:10px;':''}">${dateLabel}</span>
