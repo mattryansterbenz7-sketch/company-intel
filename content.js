@@ -56,11 +56,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
-  if (message.type === 'OPEN_FLOATING_CHAT') {
-    // Floating chat removed — chat lives inline in sidebar only
-    sendResponse({ ok: true });
-    return true;
-  }
   if (message.type === '_SIDEPANEL_OPENED') {
     // Side panel is open — hide floating trigger, it's redundant
     const strip = document.getElementById('ci-sb-strip');
@@ -2208,162 +2203,10 @@ if (_coopInjectHosts.test(window.location.hostname)) {
   setTimeout(injectCoopButton, 2500);
 }
 
-(function initFloatingSidebar() {
-  // Don't inject on extension pages
-  if (window.location.protocol === 'chrome-extension:') return;
-  // Remove the old floating widget if present
+// Clean up old floating widget if present
+(function() {
   const oldWidget = document.getElementById('ci-widget-host');
   if (oldWidget) oldWidget.remove();
-  // Floating trigger not ready for prod — skip injection entirely
-  return;
-
-  let retractTimer = null;
-  let sidepanelOpen = false;
-
-  const container = document.createElement('div');
-  container.id = 'ci-sidebar-host';
-  container.innerHTML = `
-    <style>
-      #ci-sidebar-host {
-        position: fixed; top: 0; right: 0; height: 100vh; z-index: 2147483646;
-        pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      }
-
-      /* Compact trigger button — vertically draggable, width driven by JS proximity */
-      .ci-sb-trigger {
-        display: none; /* hidden — set to flex in JS when ready to enable */
-        position: absolute; right: 0;
-        pointer-events: auto; cursor: pointer;
-        transition: width 0.15s ease-out, opacity 0.2s ease-out, background 0.2s ease, box-shadow 0.2s ease;
-        opacity: 0; width: 0; height: 48px; overflow: hidden;
-        align-items: center; gap: 8px; padding: 0 12px 0 6px;
-        background: #fff; border-radius: 24px 0 0 24px;
-        box-shadow: -2px 2px 12px rgba(0,0,0,0.1);
-      }
-      .ci-sb-trigger:hover {
-        background: #fff;
-        box-shadow: -4px 2px 20px rgba(0,0,0,0.15);
-      }
-      .ci-sb-trigger-icon {
-        opacity: 0; transition: opacity 0.15s ease;
-        display: flex; align-items: center; gap: 6px;
-        font-size: 12px; font-weight: 600; color: #2d3e50; white-space: nowrap; line-height: 1;
-      }
-      .ci-sb-trigger-icon svg { flex-shrink: 0; border-radius: 50%; }
-      .ci-sb-trigger.ci-sb-dragging { transition: none !important; cursor: grabbing; }
-    </style>
-
-    <div class="ci-sb-trigger" id="ci-sb-strip">
-      <span class="ci-sb-trigger-icon">${typeof COOP !== 'undefined' ? COOP.avatar(32) : '<svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="ct"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#ct)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M28 43Q28 27 39 21Q50 16 61 21Q72 27 72 43Q72 53 68 58L63 64L56 68L50 70L44 68L37 64Q32 58 28 53Q28 48 28 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/><path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/><path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/><path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/><path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/></g></svg>'}<span style="margin-left:2px">Chat with Coop</span></span>
-    </div>
-  `;
-  document.body.appendChild(container);
-
-  const strip = container.querySelector('#ci-sb-strip');
-
-  // Set initial vertical position from localStorage or center
-  const savedY = localStorage.getItem('ci_sidebar_y');
-  strip.style.top = savedY ? savedY + 'px' : '50%';
-  if (!savedY) strip.style.transform = 'translateY(-50%)';
-
-  // Vertical drag to reposition
-  let isDragging = false, dragStartY, dragStartTop;
-  strip.addEventListener('mousedown', e => {
-    isDragging = false;
-    dragStartY = e.clientY;
-    dragStartTop = strip.getBoundingClientRect().top;
-    const onMove = ev => {
-      if (Math.abs(ev.clientY - dragStartY) > 4) isDragging = true;
-      if (isDragging) {
-        strip.classList.add('ci-sb-dragging');
-        strip.style.top = Math.max(20, Math.min(window.innerHeight - 70, dragStartTop + (ev.clientY - dragStartY))) + 'px';
-        strip.style.transform = 'none';
-      }
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      strip.classList.remove('ci-sb-dragging');
-      if (isDragging) { localStorage.setItem('ci_sidebar_y', parseInt(strip.style.top)); isDragging = false; }
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-
-  // Click → open Chrome side panel (the only action this trigger performs)
-  strip.addEventListener('click', () => {
-    if (isDragging) return;
-    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }, () => void chrome.runtime.lastError);
-    strip.style.display = 'none';
-    sidepanelOpen = true;
-  });
-
-  // Register global toggle for extension icon click
-  _ciSidebarToggle = () => {
-    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }, () => void chrome.runtime.lastError);
-    strip.style.display = 'none';
-    sidepanelOpen = true;
-  };
-
-  // Mouse proximity detection — reveal trigger as mouse approaches right edge
-  const MAX_DIST = 480;
-  const MAX_WIDTH = 170;
-
-  document.addEventListener('mousemove', e => {
-    if (sidepanelOpen || isDragging) return;
-    const distFromRight = window.innerWidth - e.clientX;
-    clearTimeout(retractTimer);
-
-    if (distFromRight <= MAX_DIST) {
-      const rawProgress = (MAX_DIST - distFromRight) / MAX_DIST;
-      const SNAP_THRESHOLD = 0.85;
-      const PLATEAU_WIDTH = MAX_WIDTH * 0.33;
-      let w, op;
-      if (rawProgress < SNAP_THRESHOLD) {
-        const phase1 = rawProgress / SNAP_THRESHOLD;
-        w = phase1 * PLATEAU_WIDTH;
-        op = Math.min(0.7, phase1 * 0.9);
-      } else {
-        w = MAX_WIDTH;
-        op = 1;
-      }
-      strip.style.width = w + 'px';
-      strip.style.opacity = op;
-      const sp = w / MAX_WIDTH;
-      strip.style.boxShadow = `-${Math.round(sp * 3)}px 0 ${Math.round(sp * 12)}px rgba(0,0,0,${(sp * 0.18).toFixed(2)})`;
-      const icon = strip.querySelector('.ci-sb-trigger-icon');
-      if (icon) icon.style.opacity = rawProgress >= SNAP_THRESHOLD ? 1 : 0;
-    } else {
-      retractTimer = setTimeout(() => {
-        if (!sidepanelOpen) {
-          strip.style.width = '0px';
-          strip.style.opacity = '0';
-          const icon = strip.querySelector('.ci-sb-trigger-icon');
-          if (icon) icon.style.opacity = '0';
-        }
-      }, 400);
-    }
-  });
-
-  // Hover: fully reveal
-  strip.addEventListener('mouseenter', () => {
-    if (sidepanelOpen) return;
-    clearTimeout(retractTimer);
-    strip.style.width = MAX_WIDTH + 'px';
-    strip.style.opacity = '1';
-    strip.style.boxShadow = '-3px 0 12px rgba(0,0,0,0.18)';
-    const icon = strip.querySelector('.ci-sb-trigger-icon');
-    if (icon) icon.style.opacity = '1';
-  });
-  strip.addEventListener('mouseleave', () => {
-    if (sidepanelOpen) return;
-    retractTimer = setTimeout(() => {
-      strip.style.width = '0px';
-      strip.style.opacity = '0';
-      const icon = strip.querySelector('.ci-sb-trigger-icon');
-      if (icon) icon.style.opacity = '0';
-    }, 400);
-  });
 })();
 
 } // end re-injection guard (window.__companyIntelContentLoaded)

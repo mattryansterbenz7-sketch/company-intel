@@ -95,30 +95,89 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 
 ## File structure
 
+### Service worker & core modules
+
 | File | Purpose |
 |------|---------|
-| `background.js` | Service worker. All API calls, research pipeline, chat handling, scoring, caching, fallback chain |
-| `saved.js` | Dashboard — Kanban/grid views, stage columns, drag-drop, filtering, stat cards, global chat |
-| `company.js` | Full-screen company detail — three-column layout, meetings tab, emails tab, floating chat |
-| `sidepanel.js` | Side panel UI — company detection, research display, save flow, inline chat, settings |
-| `content.js` | Runs on all pages. Detects company/job from LinkedIn, Greenhouse, Lever, Workday, Ashby, generic sites |
-| `chat.js` | Shared AI chat panel component, used by company.js and opportunity.js |
-| `opportunity.js` | Opportunity detail view (job-focused variant of company.js). `opportunity.html` is live — opened from company.js "View Opportunity" buttons |
-| `integrations.js` | Integrations config page — API key CRUD, test connection, provider status |
-| `preferences.js` | Settings page — job match prefs, Story Time profile, salary/OTE, Coop operating principles |
-| `queue.js` | Apply Queue — Tinder-style swipe triage over pipeline opportunities |
-| `coop-assist.js` | Ambient Grammarly-style writing assistant. Content script on all pages. Watches focused text fields, runs local voice heuristics + cached LLM proofread, surfaces a floating pill → suggestions + rewrite modes (In my voice / Tighten / Punchier / Warmer). Domain blocklist for banking/auth/gov |
-| `onboarding.js` / `onboardingSteps.js` | Self-serve Coop onboarding (G1 Phase 1). Static step manifest + persistent state, injected as first-message in side panel chat when an unmet step exists |
-| `widget.js` | Floating button (dead code — disabled at line 3, removed from manifest. File kept for reference) |
+| `background.js` | Service worker entry point. Message router, startup logic, migration guards |
+| `api.js` | API call wrappers for all providers with fallback chain, cost tracking per model, usage monitoring |
+| `bg-state.js` | Shared mutable state container — API keys, pipeline config, caches, feature flags |
+| `research.js` | Enrichment pipeline orchestrating company research across providers with caching |
+| `scoring.js` | Job match scoring engine — profile interpretation, structural matching, queue-based processing |
+| `search.js` | Search provider implementations (Apollo enrichment, Serper image search), photo fetching |
+| `sync.js` | Field synchronization across entries, role brief extraction, data backfill |
+| `profile-compiler.js` | Compiles user profile + preferences into tiered markdown docs (Summary/Standard/Full) |
+| `utils.js` | Pure utilities — debug logging, company name matching, email parsing, hash functions |
 
-HTML pages: `sidepanel.html`, `saved.html`, `company.html`, `opportunity.html`, `preferences.html`, `integrations.html`
+### Integration modules
+
+| File | Purpose |
+|------|---------|
+| `calendar.js` | Google Calendar event fetching, attendee filtering by company |
+| `gmail.js` | Gmail OAuth, token management, email body extraction, rejection detection, contact parsing |
+| `granola.js` | Granola REST API — note fetching, meeting search, index building with rate-limiting |
+
+### Coop AI system
+
+| File | Purpose |
+|------|---------|
+| `coop.js` | Coop agent identity and avatar SVG rendering |
+| `coop-chat.js` | Unified chat handler — message routing, tool-use loop, insight extraction triggers |
+| `coop-context.js` | Pipeline summary generation, intent detection, cross-company aggregation (meetings, emails, contacts) |
+| `coop-tools.js` | Tool-use definitions and handlers for Claude model integration |
+| `coop-settings.js` | Coop config UI — models, personality, memory, behavior, usage tracking |
+| `memory.js` | Persistent memory store — passive insight extraction from conversations, profile consolidation |
+| `navigate.js` | Navigation helper for extension pages — side-panel tab reuse, in-place navigation |
+| `sounds.js` | Procedural audio via Web Audio API for subtle UI feedback, mute toggle |
+
+### UI pages (each has `.js` + `.html`)
+
+| Page | Purpose |
+|------|---------|
+| `saved` | Dashboard — Kanban/grid views, stage columns, drag-drop, filtering, stat cards, global chat |
+| `company` | Full-screen company detail — three-column layout, meetings tab, emails tab, floating chat |
+| `opportunity` | Opportunity detail view (job-focused variant of company page) |
+| `sidepanel` | Side panel — company detection, research display, save flow, inline chat |
+| `preferences` | Settings — job match prefs, Story Time profile, salary/OTE, Coop operating principles |
+| `integrations` | API key CRUD, test connection, provider status |
+| `queue` | Apply Queue — Tinder-style swipe triage over pipeline opportunities |
+| `inbox` | Email inbox with stage/direction filtering, read status, company grouping |
+| `docs` | Documentation page with scroll-nav and full-text search |
+| `coop-settings` | Coop-specific configuration (separate from main preferences) |
+
+### Content scripts
+
+| File | Purpose |
+|------|---------|
+| `content.js` | Runs on all pages. Detects company/job from LinkedIn, Greenhouse, Lever, Workday, Ashby, generic sites |
+| `coop-assist.js` | Ambient writing assistant. Watches text fields, voice heuristics + LLM rewrite modes (In my voice / Tighten / Punchier / Warmer) |
+| `onboarding.js` / `onboardingSteps.js` | Self-serve onboarding — static step manifest + persistent state, injected into side panel chat |
+
+### Shared UI
+
+| File | Purpose |
+|------|---------|
+| `chat.js` | Shared AI chat panel component, used by company.js and opportunity.js |
+| `ui-utils.js` | Consolidated shared functions — `escapeHtml`, `scoreToVerdict`, `defaultActionStatus` |
+| `design-tokens.css` | 38 CSS custom properties controlling all visual styling |
+
+### Dev / reference (not part of the extension)
+
+| File | Purpose |
+|------|---------|
+| `config.example.js` | Template config with placeholder API key structure |
+| `generate-icons.html` | Canvas-based icon generator for Coop logo at various sizes |
+| `icon-preview.html` | Design reference previewing icon options at multiple sizes |
+| `system-audit.html` | Architecture reference with tabbed navigation |
+| `marketing/landing.html` | Public-facing landing page |
+| `_archive/` | Preserved design work from removed features (e.g. widget floating button CSS/animations) |
 
 ## Architecture
 
 ### Platform
 - **Chrome Extension, Manifest V3** — service worker background, content scripts, side panel
 - **No backend** — all data in `chrome.storage.local` / `chrome.storage.sync`
-- **No module system** — standalone JS files, shared functions duplicated where needed
+- **ES modules for service worker** — background.js imports from ~15 modules; UI pages use standalone JS files
 - **No build step** — raw HTML/JS/CSS, load directly as unpacked extension
 
 ### Message-based IPC
@@ -236,8 +295,7 @@ Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No w
 - LinkedIn selectors change frequently and have no wait/retry for dynamic React content. Needs URL-structure signals + auth-vs-public DOM handling. Falls back to domain name today.
 
 **Data**
-- ~~Dirty `jobTitle` data~~ — migrated via `_migratedLegacyFields` in background.js.
-- ~~Legacy `appliedAt` / `introAt` / `interviewedAt`~~ — migrated to `stageTimestamps` via `_migratedLegacyFields` in background.js.
+- Legacy migrations (`_migratedLegacyFields`, `_migratedPunctuation2`, `jobMigrationV1Done`) still run on startup behind guard flags. Safe to remove after 6+ months once all users have upgraded.
 
 **Watch out for**
 - The user's own name appears in all Granola meeting titles — matching filters names that appear in >60% of notes.

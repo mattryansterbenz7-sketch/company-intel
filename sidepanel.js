@@ -3853,8 +3853,6 @@ function renderContactsSection(el, contacts) {
     });
   }
 
-  // Share border removed — for entire-screen/window shares, a per-tab border is misleading.
-  function injectShareBorder(_show) { /* no-op */ }
 
   // ── Snip tool: select a region on the active tab to send to Coop ──
   const snipBtn = document.getElementById('sp-snip-btn');
