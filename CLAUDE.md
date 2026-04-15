@@ -165,18 +165,16 @@ Granola uses a REST API key (set in Integrations). Gmail/Calendar uses Chrome's 
 
 ### PRDs (`prds/`)
 
-Product requirement docs. Some shipped, some draft/future. Check status line at top of each file.
+Shipped PRDs live in `prds/shipped/` as historical records. Draft/future PRDs live as GitHub issues (source of truth — not duplicated as files).
 
-| File | Status | Purpose |
-|------|--------|---------|
-| `S4-scoring-overhaul.md` | Shipped | Deterministic 5-dimension scoring model |
-| `S3-scoring-quality-pass.md` | Shipped | Scoring quality & cost visibility fixes |
-| `H1-save-flow-consolidation.md` | Shipped | Unified save path across all surfaces |
-| `G2-coop-tool-use.md` | Shipped | Coop tool-use architecture (on-demand context) |
-| `G5-profile-md-compilation.md` | Shipped | Profile .md compilation + legacy removal |
-| `J1-linkedin-data-capture-expansion.md` | Shipped | LinkedIn job posting data capture |
-| `APP-MODE-application-experience.md` | Draft | Application mode as dedicated Coop experience |
-| `AUTO-APPLY-autonomous-apply-queue.md` | Future | Autonomous apply queue (depends on voice profile + app mode) |
+| File | Purpose |
+|------|---------|
+| `shipped/S4-scoring-overhaul.md` | Deterministic 5-dimension scoring model |
+| `shipped/S3-scoring-quality-pass.md` | Scoring quality & cost visibility fixes |
+| `shipped/H1-save-flow-consolidation.md` | Unified save path across all surfaces |
+| `shipped/G2-coop-tool-use.md` | Coop tool-use architecture (on-demand context) |
+| `shipped/G5-profile-md-compilation.md` | Profile .md compilation + legacy removal |
+| `shipped/J1-linkedin-data-capture-expansion.md` | LinkedIn job posting data capture |
 
 ### Marketing (`marketing/`)
 
