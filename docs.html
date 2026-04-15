@@ -181,6 +181,7 @@
       <div class="doc-nav-title">Documentation</div>
       <div class="doc-search"><input type="text" id="doc-search" placeholder="Search docs..." autocomplete="off"></div>
       <a href="#overview" class="active">Overview</a>
+      <a href="#views">Views & Pages</a>
       <a href="#sidepanel">Sidepanel & Coop</a>
       <a href="#company-view">Company View</a>
       <a href="#opportunity">Opportunity Pipeline</a>
@@ -257,6 +258,51 @@
           <p>If one AI model hits a rate limit, Coop automatically tries the next. Click the model badge to switch manually.</p>
         </div>
       </div>
+    </div>
+
+    <!-- ════════════════════════════════ Views & Pages ════════════════════════════════ -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="views"></span>
+      <div class="doc-section-title">Views & Pages</div>
+      <p class="doc-section-lead">Every opportunity can appear in multiple surfaces. Here's the canonical name for each view and where it lives.</p>
+
+      <h3 class="sub">Opportunity views</h3>
+      <table class="doc-table" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">
+        <thead><tr style="text-align:left;border-bottom:2px solid var(--ci-border-default);">
+          <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">View</th>
+          <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">Description</th>
+          <th style="padding:8px 10px;color:var(--ci-text-secondary);font-weight:600;">File</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Side Panel</td><td style="padding:8px 10px;">Chrome side panel overlay on any page</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">sidepanel.js</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Compact Card</td><td style="padding:8px 10px;">Small card in Kanban column (score + name + tags)</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Expanded Card</td><td style="padding:8px 10px;">Full card in Kanban column (action on, next step, last activity)</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Preview Card</td><td style="padding:8px 10px;">Large modal overlay with score breakdown</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Company Detail</td><td style="padding:8px 10px;">Full-screen three-column CRM page</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">company.js</td></tr>
+          <tr style="border-bottom:1px solid var(--ci-border-subtle);"><td style="padding:8px 10px;font-weight:600;">Grid Row</td><td style="padding:8px 10px;">Table row in grid/list view</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">saved.js</td></tr>
+          <tr><td style="padding:8px 10px;font-weight:600;">Queue Card</td><td style="padding:8px 10px;">Tinder-style swipe triage card</td><td style="padding:8px 10px;font-family:var(--ci-font-mono);font-size:12px;">queue.js</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="sub">Dashboard modes</h3>
+      <ul>
+        <li><strong>Kanban</strong> &mdash; Column board with Compact or Expanded Cards per column</li>
+        <li><strong>Grid</strong> &mdash; Table layout with Grid Rows</li>
+        <li><strong>Tasks</strong> &mdash; Task list (not a company/opportunity view)</li>
+      </ul>
+
+      <h3 class="sub">Pages</h3>
+      <ul>
+        <li><strong>Company Detail</strong> &mdash; company.html</li>
+        <li><strong>Opportunity Detail</strong> &mdash; opportunity.html</li>
+        <li><strong>Side Panel</strong> &mdash; sidepanel.html</li>
+        <li><strong>My Profile</strong> &mdash; preferences.html (settings, prefs, Story Time, scoring config)</li>
+        <li><strong>Coop Settings</strong> &mdash; coop-settings.html (voice, cost dashboard, pipeline config)</li>
+        <li><strong>Integrations</strong> &mdash; integrations.html (API keys)</li>
+        <li><strong>Queue</strong> &mdash; queue.html (triage swipe view)</li>
+        <li><strong>Inbox</strong> &mdash; inbox.html (email threads by company)</li>
+        <li><strong>Docs</strong> &mdash; docs.html</li>
+      </ul>
     </div>
 
     <!-- ════════════════════════════════ Sidepanel ════════════════════════════════ -->

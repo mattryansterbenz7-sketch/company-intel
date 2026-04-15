@@ -455,12 +455,10 @@ function renderCompactCard(c) {
     : '';
 
   // Tags
-  const tagsHtml = (c.tags || []).length
-    ? `<div class="compact-tags">${(c.tags || []).map(t => {
-        const cl = tagColor(t);
-        return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}</span>`;
-      }).join('')}</div>`
-    : '';
+  const tagsHtml = `<div class="compact-tags">${(c.tags || []).map(t => {
+      const cl = tagColor(t);
+      return `<span class="compact-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}">${escHtml(t)}<button class="tag-remove" data-id="${c.id}" data-tag="${escHtml(t)}" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;font-size:10px;padding:0 0 0 3px;line-height:1;">&times;</button></span>`;
+    }).join('')}<button class="compact-add-tag-btn" data-id="${c.id}" title="Add tag" style="font-size:10px;color:var(--ci-text-tertiary);background:none;border:1px dashed var(--ci-border-default);border-radius:3px;padding:1px 6px;cursor:pointer;line-height:1.4;">+</button></div>`;
 
   const { actionClass: compactActionClass, isStale, isOverdue } = computeCardIndicators(c);
   const compactIndicators = (isStale || isOverdue) ? `<div class="kanban-card-indicators" style="margin-top:4px;">${isOverdue ? `<span class="kanban-overdue-badge">&#9888; Overdue</span>` : ''}${isStale ? `<span class="kanban-stale-badge">&#x231B; Stale</span>` : ''}</div>` : '';
@@ -3277,6 +3275,45 @@ function bindKanbanEvents(board) {
         if (e.key === 'Escape') { render(); }
       });
       input.addEventListener('blur', () => setTimeout(() => { if (document.getElementById(`tag-input-${id}`)) render(); }, 200));
+    });
+  });
+
+  // Compact card inline tag add
+  board.querySelectorAll('.compact-add-tag-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      // Replace the + button with an inline input
+      const tagsDiv = btn.closest('.compact-tags');
+      if (!tagsDiv || tagsDiv.querySelector('.tag-inline-input')) return;
+      btn.style.display = 'none';
+      const wrap = document.createElement('span');
+      wrap.style.cssText = 'position:relative;display:inline-block;';
+      wrap.innerHTML = `<input class="tag-inline-input" style="font-size:10px;width:80px;padding:1px 5px;border:1px solid var(--ci-accent-primary);border-radius:3px;outline:none;background:var(--ci-bg-raised);color:var(--ci-text-primary);" placeholder="tag name" autocomplete="off"><div class="compact-tag-sugg" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:100px;max-height:120px;overflow-y:auto;"></div>`;
+      tagsDiv.insertBefore(wrap, btn);
+      const input = wrap.querySelector('input');
+      const sugg = wrap.querySelector('.compact-tag-sugg');
+      input.focus();
+      input.addEventListener('input', () => {
+        const val = input.value.trim().toLowerCase();
+        const entry = allCompanies.find(c => c.id === id);
+        const existing = entry?.tags || [];
+        if (!val) { sugg.style.display = 'none'; return; }
+        const matches = allKnownTags.filter(t => t.toLowerCase().includes(val) && !existing.includes(t));
+        if (!matches.length) { sugg.style.display = 'none'; return; }
+        sugg.innerHTML = matches.slice(0, 5).map(t => `<div style="padding:4px 8px;cursor:pointer;font-size:11px;" data-tag="${escHtml(t)}">${escHtml(t)}</div>`).join('');
+        sugg.style.display = 'block';
+        sugg.querySelectorAll('[data-tag]').forEach(s => {
+          s.addEventListener('mousedown', ev => { ev.preventDefault(); commitTag(id, s.dataset.tag); });
+          s.addEventListener('mouseenter', () => { s.style.background = 'var(--ci-bg-inset)'; });
+          s.addEventListener('mouseleave', () => { s.style.background = ''; });
+        });
+      });
+      input.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter') { ev.preventDefault(); const val = input.value.trim(); if (val) commitTag(id, val); }
+        if (ev.key === 'Escape') render();
+      });
+      input.addEventListener('blur', () => setTimeout(() => render(), 200));
     });
   });
 
