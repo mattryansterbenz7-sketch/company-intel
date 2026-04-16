@@ -2140,7 +2140,7 @@ function initICPAutofill() {
       const result = await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({
           type: 'COOP_CHAT',
-          messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Role ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal role", "targetFunction": ["GTM", "Sales"], "seniority": "e.g. VP, Director", "scope": "e.g. Full P&L, Regional", "sellingMotion": "e.g. Enterprise, PLG", "teamSizePreference": "e.g. 5-15 direct reports"}. targetFunction must be an array of strings.` }],
+          messages: [{ role: 'user', content: `Based on everything you know about me — my story, experience, motivators, green lights, red lights, skills, and all our past conversations — fill in my Role ICP. Respond ONLY in JSON with these exact keys: {"text": "2-3 sentence freeform description of my ideal role", "targetFunction": ["array of job functions based on my background, e.g. Engineering, Product, Sales, Marketing"], "seniority": "e.g. VP, Director, IC", "scope": "e.g. Full P&L, Regional, Team of 10", "sellingMotion": "e.g. Enterprise, PLG, Mid-market (or leave blank if not applicable)", "teamSizePreference": "e.g. 5-15 direct reports"}. targetFunction must be an array of strings derived from my actual background — do not default to sales functions unless my profile clearly indicates that.` }],
           globalChat: true,
           careerOSChat: true,
           chatModel: _coopModels.coopAutofill
