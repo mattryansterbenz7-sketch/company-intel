@@ -403,7 +403,12 @@ ${flagsRef}
 YOUR TASK:
 1. FIRED FLAGS: For each configured flag above, decide if it fires based on DIRECT EVIDENCE in the job posting, company data, or interaction context. A green flag fires when its positive signal is present. A red flag fires when its negative signal is triggered. CRITICAL: If you cannot find direct evidence that a flag is triggered, DO NOT include it in firedFlags. "No evidence" or "no direct evidence" means the flag did NOT fire — omit it entirely. Return ONLY flags with real, affirmative evidence.
 2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the JOB DESCRIPTION ONLY — never from the candidate profile or preferences. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown. For "importance": use ONLY "required", "preferred", or "bonus" — never "nice to have", "optional", or any other value. For "sources": list where the candidate evidence comes from — use values like "resume", "experience", "skills", "not in profile", "inferred" — never put job description categories here. EXPERIENCE MATCHING: Check the Experience section thoroughly — accomplishments, titles held, skills/exposures, and domain expertise all count as evidence for meeting qualifications. A requirement can be met by experience entries even if the resume doesn't spell it out. EDUCATION MATCHING: recognize standard equivalences — "B.S." and "B.A." both satisfy "Bachelor's degree", "M.S." and "M.A." both satisfy "Master's degree", "MBA" satisfies both "Master's degree" and "MBA". A degree in any field satisfies a general degree requirement unless the posting specifies a particular field. Check the Education section of the resume carefully.
-3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
+3. COMP ASSESSMENT: Extract any disclosed comp from the job posting AND conversation context. Classify carefully:
+   - Explicitly labeled "base salary" or "base pay" → baseDisclosed=true, baseAmount=midpoint, oteAmount=null.
+   - Explicitly labeled "OTE", "on-target earnings", "total comp", or "total compensation" → oteDisclosed=true, oteAmount=midpoint, baseAmount=null.
+   - Range given WITHOUT a clear base/OTE label → baseDisclosed=false, oteDisclosed=false, compAmbiguous=true. Do NOT guess which it is.
+   - No comp mentioned → baseDisclosed=false, oteDisclosed=false, compAmbiguous=false.
+   Ambiguous or undisclosed comp is never a red flag and must not be scored against salary brackets.
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
 5. DIMENSION SCORES + RATIONALE: For roleFit, cultureFit, companyFit — score each 1-10 AND write 1 sentence rationale. Score independently based on what the posting/company signals for that dimension (8+ = clear strong fit, 6-7 = positive lean, 5 = neutral/unknown, 3-4 = concerns). Do NOT factor in configured flags — those adjust scores separately. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If NO reviews or ratings exist, score cultureFit as 5 (neutral) and state "No employee reviews or culture data available — score reflects insufficient signal, not a negative assessment." NEVER speculate about culture from company size, headcount, or funding stage alone — those are not culture signals. If interaction context exists (meetings, emails), weight it heavily as actual culture signal — live signals beat posting text.
 6. COOP TAKE: 1-2 sentence honest bottom line on this opportunity.
@@ -429,9 +434,10 @@ Return ONLY valid JSON (no markdown fences):
   ],
   "compAssessment": {
     "baseDisclosed": true|false,
-    "baseAmount": <number|null — if a range is given (e.g. '$90k-$140k'), use the midpoint>,
+    "baseAmount": <number|null — midpoint if explicitly labeled as base salary>,
     "oteDisclosed": true|false,
-    "oteAmount": <number|null — if a range is given, use the midpoint>,
+    "oteAmount": <number|null — midpoint if explicitly labeled as OTE/total comp>,
+    "compAmbiguous": true|false,
     "baseVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown",
     "oteVsFloor": "above_strong|above_floor|at_floor|below_floor|unknown"
   },
@@ -456,8 +462,8 @@ Return ONLY valid JSON (no markdown fences):
     "qualificationMatch": "<X of Y requirements met>"
   },
   "jobSnapshot": {
-    "salary": "<base salary range as written in the posting, e.g. '$125,000' or '$133,500 - $200,500' — null if not mentioned>",
-    "salaryType": "<'base' if base pay, 'ote' if OTE/total comp only, null if no salary>",
+    "salary": "<comp range as written in the posting — null if not mentioned>",
+    "salaryType": "<'base' if explicitly labeled base pay, 'ote' if explicitly labeled OTE/total comp, 'ambiguous' if a range exists but label is unclear, null if no salary mentioned>",
     "baseSalaryRange": "<base salary range ONLY if explicitly stated as base, e.g. '$130,000 - $160,000' — null if not separated from OTE>",
     "oteTotalComp": "<OTE or total comp if stated, e.g. '$200,000 - $250,000 OTE' — null if not mentioned>",
     "equity": "<equity/stock info if mentioned — null if not>",
@@ -549,31 +555,38 @@ Return ONLY valid JSON (no markdown fences):
   const bracketSevs   = localData.compBracketSeverities  || {};
   const bracketThreshs = localData.compBracketThresholds  || {};
 
-  // Auto-generate base salary bracket
-  const baseBracket = compBracket(compAssess.baseAmount, prefs.salaryFloor, prefs.salaryStrong, bracketSevs.base, bracketThreshs.base);
-  if (baseBracket) {
-    const delta = baseBracket.sev * SEV_MUL * (baseBracket.type === 'red' ? -1 : 1);
-    dimFlags.compFit[baseBracket.type].push({
-      type: baseBracket.type, label: `Base: ${baseBracket.label}`, delta, sev: baseBracket.sev,
-      evidence: `Detected base $${(compAssess.baseAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.salaryFloor)/1000).toFixed(0)}k`
-    });
-  }
+  // Skip bracket scoring entirely when comp is ambiguous (unlabeled range) — avoids
+  // scoring OTE-style ranges against base thresholds or vice versa.
+  let baseBracket = null;
+  let oteBracket = null;
+  if (!compAssess.compAmbiguous) {
+    // Auto-generate base salary bracket
+    baseBracket = compBracket(compAssess.baseAmount, prefs.salaryFloor, prefs.salaryStrong, bracketSevs.base, bracketThreshs.base);
+    if (baseBracket) {
+      const delta = baseBracket.sev * SEV_MUL * (baseBracket.type === 'red' ? -1 : 1);
+      dimFlags.compFit[baseBracket.type].push({
+        type: baseBracket.type, label: `Base: ${baseBracket.label}`, delta, sev: baseBracket.sev,
+        evidence: `Detected base $${(compAssess.baseAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.salaryFloor)/1000).toFixed(0)}k`
+      });
+    }
 
-  // Auto-generate OTE bracket
-  const oteBracket = compBracket(compAssess.oteAmount, prefs.oteFloor, prefs.oteStrong, bracketSevs.ote, bracketThreshs.ote);
-  if (oteBracket) {
-    const delta = oteBracket.sev * SEV_MUL * (oteBracket.type === 'red' ? -1 : 1);
-    dimFlags.compFit[oteBracket.type].push({
-      type: oteBracket.type, label: `OTE: ${oteBracket.label}`, delta, sev: oteBracket.sev,
-      evidence: `Detected OTE $${(compAssess.oteAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.oteFloor)/1000).toFixed(0)}k`
-    });
+    // Auto-generate OTE bracket
+    oteBracket = compBracket(compAssess.oteAmount, prefs.oteFloor, prefs.oteStrong, bracketSevs.ote, bracketThreshs.ote);
+    if (oteBracket) {
+      const delta = oteBracket.sev * SEV_MUL * (oteBracket.type === 'red' ? -1 : 1);
+      dimFlags.compFit[oteBracket.type].push({
+        type: oteBracket.type, label: `OTE: ${oteBracket.label}`, delta, sev: oteBracket.sev,
+        evidence: `Detected OTE $${(compAssess.oteAmount/1000).toFixed(0)}k vs floor $${(parseFloat(prefs.oteFloor)/1000).toFixed(0)}k`
+      });
+    }
   }
 
   // Fallback: when no salary floor is configured, use AI's vsFloor assessment to score comp
-  // This ensures comp score reflects disclosed comp even without explicit prefs set
+  // This ensures comp score reflects disclosed comp even without explicit prefs set.
+  // Also skipped when comp is ambiguous — AI vsFloor assessment is unreliable for unlabeled ranges.
   const _vsFloorFallback = { above_strong: { type: 'green', sev: 3 }, above_floor: { type: 'green', sev: 2 }, below_floor: { type: 'red', sev: 3 } };
   const _vsFloorLabel = { above_strong: 'Above target', above_floor: 'Above floor', below_floor: 'Below floor' };
-  if (!baseBracket && compAssess.baseVsFloor && compAssess.baseVsFloor !== 'unknown' && compAssess.baseVsFloor !== 'at_floor') {
+  if (!compAssess.compAmbiguous && !baseBracket && compAssess.baseVsFloor && compAssess.baseVsFloor !== 'unknown' && compAssess.baseVsFloor !== 'at_floor') {
     const fb = _vsFloorFallback[compAssess.baseVsFloor];
     if (fb) {
       const delta = fb.sev * SEV_MUL * (fb.type === 'red' ? -1 : 1);
@@ -584,7 +597,7 @@ Return ONLY valid JSON (no markdown fences):
       });
     }
   }
-  if (!oteBracket && compAssess.oteVsFloor && compAssess.oteVsFloor !== 'unknown' && compAssess.oteVsFloor !== 'at_floor') {
+  if (!compAssess.compAmbiguous && !oteBracket && compAssess.oteVsFloor && compAssess.oteVsFloor !== 'unknown' && compAssess.oteVsFloor !== 'at_floor') {
     const fb = _vsFloorFallback[compAssess.oteVsFloor];
     if (fb) {
       const delta = fb.sev * SEV_MUL * (fb.type === 'red' ? -1 : 1);
