@@ -1052,13 +1052,16 @@ function renderICPDimRow(dim) {
 
 // Bracket tier definitions mirroring scoring.js COMP_BRACKET_TIERS
 const COMP_BRACKET_TIERS_UI = [
-  { key: 'well_above',     label: 'Well above',     type: 'green', defaultSev: 5, thresholdFn: (f, s) => s * 1.15 },
-  { key: 'meets_target',   label: 'Meets target',   type: 'green', defaultSev: 4, thresholdFn: (f, s) => s },
-  { key: 'above_floor',    label: 'Above floor',    type: 'green', defaultSev: 2, thresholdFn: (f, s) => (f + s) / 2 },
-  { key: 'meets_floor',    label: 'Meets floor',    type: 'green', defaultSev: 1, thresholdFn: (f, s) => f },
-  { key: 'slightly_below', label: 'Slightly below', type: 'red',   defaultSev: 2, thresholdFn: (f, s) => f * 0.9 },
-  { key: 'below_floor',    label: 'Below floor',    type: 'red',   defaultSev: 3, thresholdFn: (f, s) => f * 0.8 },
-  { key: 'well_below',     label: 'Well below',     type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
+  { key: 'well_above',     label: 'Well above',       type: 'green', defaultSev: 5, thresholdFn: (f, s) => s * 1.15 },
+  { key: 'above_target',   label: 'Above target',     type: 'green', defaultSev: 4, thresholdFn: (f, s) => s * 1.07 },
+  { key: 'meets_target',   label: 'Meets target',     type: 'green', defaultSev: 3, thresholdFn: (f, s) => s },
+  { key: 'above_floor',    label: 'Above floor',      type: 'green', defaultSev: 2, thresholdFn: (f, s) => (f + s) / 2 },
+  { key: 'meets_floor',    label: 'Meets floor',      type: 'green', defaultSev: 1, thresholdFn: (f, s) => f },
+  { key: 'slightly_below', label: 'Slightly below',   type: 'red',   defaultSev: 1, thresholdFn: (f, s) => f * 0.9 },
+  { key: 'below_floor',    label: 'Below floor',      type: 'red',   defaultSev: 2, thresholdFn: (f, s) => f * 0.8 },
+  { key: 'well_below',     label: 'Well below',       type: 'red',   defaultSev: 3, thresholdFn: (f, s) => f * 0.65 },
+  { key: 'far_below',      label: 'Far below',        type: 'red',   defaultSev: 4, thresholdFn: (f, s) => f * 0.5 },
+  { key: 'critically_low', label: 'Critically low',   type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
 ];
 
 let _compBracketSeverities  = { base: {}, ote: {} };
@@ -1131,6 +1134,10 @@ function renderCompBracketEditor() {
     </div>
     ${bracketSection('base', salaryFloor, salaryStrong, 'Base')}
     ${bracketSection('ote', oteFloor, oteStrong, 'OTE')}
+    <div style="font-size:11px;color:var(--ci-text-tertiary);line-height:1.6;margin-top:4px;padding:8px 10px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);">
+      <div style="margin-bottom:4px;"><strong style="color:var(--ci-text-secondary);">Undisclosed comp</strong> — If comp is not listed in the posting, no flag fires (score impact: 0).</div>
+      <div><strong style="color:var(--ci-text-secondary);">Dedup</strong> — Only the single highest-severity green and red flag fire per comp type. Flags don't stack.</div>
+    </div>
   </div>`;
 }
 

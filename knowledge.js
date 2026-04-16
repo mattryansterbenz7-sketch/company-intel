@@ -188,6 +188,19 @@ export async function getKnowledgeManifest() {
   return coopKnowledge?.manifest || [];
 }
 
+/**
+ * Build a compact manifest string listing all available knowledge sections
+ * with token estimates. Designed for system prompt embedding (~150 tokens)
+ * so the model knows what's available via get_profile_section without
+ * loading all content upfront.
+ */
+export async function buildProfileManifestString() {
+  const manifest = await getKnowledgeManifest();
+  if (!manifest.length) return '';
+  const lines = manifest.map(m => `- ${m.title} [${m.id}] (~${m.tokenEstimate} tok)`);
+  return `Available profile/preferences sections (use get_profile_section to load):\n${lines.join('\n')}`;
+}
+
 // ── Initialization ───────────────────────────────────────────────────────────
 
 let _knowledgeTimer = null;

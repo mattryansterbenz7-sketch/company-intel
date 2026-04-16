@@ -163,9 +163,9 @@ function updateCount() {
 
 // ── Interactive task helpers (shared with saved.js pattern) ──────────────────
 const SMT_PRIORITY_COLORS = {
-  high: { bg: '#FEE2E2', color: '#991b1b' },
-  low: { bg: '#F0FDF4', color: '#166534' },
-  normal: { bg: '#eef2f7', color: '#516f90' }
+  high: { bg: '#FEE2E2', color: '#991B1B' },
+  normal: { bg: '#FEF3C7', color: '#92400E' },
+  low: { bg: '#DBEAFE', color: '#1D4ED8' }
 };
 
 function smtDateLabel(dateStr) {

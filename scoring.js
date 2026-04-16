@@ -132,13 +132,16 @@ const SEV_MUL = 0.5; // severity multiplier: sev 2 → ±1.0, sev 3 → ±1.5, s
 const BASELINE = 5.0;
 // Canonical bracket tier keys — shared between scoring.js and preferences.js
 const COMP_BRACKET_TIERS = [
-  { key: 'well_above',     label: 'Well above',     type: 'green', defaultSev: 5, thresholdFn: (f, s) => s * 1.15 },
-  { key: 'meets_target',   label: 'Meets target',   type: 'green', defaultSev: 4, thresholdFn: (f, s) => s },
-  { key: 'above_floor',    label: 'Above floor',    type: 'green', defaultSev: 2, thresholdFn: (f, s) => (f + s) / 2 },
-  { key: 'meets_floor',    label: 'Meets floor',    type: 'green', defaultSev: 1, thresholdFn: (f, s) => f },
-  { key: 'slightly_below', label: 'Slightly below', type: 'red',   defaultSev: 2, thresholdFn: (f, s) => f * 0.9 },
-  { key: 'below_floor',    label: 'Below floor',    type: 'red',   defaultSev: 3, thresholdFn: (f, s) => f * 0.8 },
-  { key: 'well_below',     label: 'Well below',     type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
+  { key: 'well_above',     label: 'Well above',       type: 'green', defaultSev: 5, thresholdFn: (f, s) => s * 1.15 },
+  { key: 'above_target',   label: 'Above target',     type: 'green', defaultSev: 4, thresholdFn: (f, s) => s * 1.07 },
+  { key: 'meets_target',   label: 'Meets target',     type: 'green', defaultSev: 3, thresholdFn: (f, s) => s },
+  { key: 'above_floor',    label: 'Above floor',      type: 'green', defaultSev: 2, thresholdFn: (f, s) => (f + s) / 2 },
+  { key: 'meets_floor',    label: 'Meets floor',      type: 'green', defaultSev: 1, thresholdFn: (f, s) => f },
+  { key: 'slightly_below', label: 'Slightly below',   type: 'red',   defaultSev: 1, thresholdFn: (f, s) => f * 0.9 },
+  { key: 'below_floor',    label: 'Below floor',      type: 'red',   defaultSev: 2, thresholdFn: (f, s) => f * 0.8 },
+  { key: 'well_below',     label: 'Well below',       type: 'red',   defaultSev: 3, thresholdFn: (f, s) => f * 0.65 },
+  { key: 'far_below',      label: 'Far below',        type: 'red',   defaultSev: 4, thresholdFn: (f, s) => f * 0.5 },
+  { key: 'critically_low', label: 'Critically low',   type: 'red',   defaultSev: 5, thresholdFn: () => 0 },
 ];
 
 // compBracket — graduated comp scoring from ICP salary prefs
@@ -159,13 +162,16 @@ function compBracket(amount, floor, strong, customSevs, customThresholds) {
   // Use custom threshold if stored, otherwise fall back to computed default
   const thresh = (key, computed) => { const ov = customThresholds?.[key]; return (ov && ov > 0) ? ov : computed; };
 
-  if (amount >= thresh('well_above',    strong * 1.15))      { const t = COMP_BRACKET_TIERS[0]; return { type: t.type, sev: sev(t), label: 'Well above target' }; }
-  if (amount >= thresh('meets_target',  strong))              { const t = COMP_BRACKET_TIERS[1]; return { type: t.type, sev: sev(t), label: 'Meets target' }; }
-  if (amount >= thresh('above_floor',   (floor + strong) / 2)){ const t = COMP_BRACKET_TIERS[2]; return { type: t.type, sev: sev(t), label: 'Above floor' }; }
-  if (amount >= thresh('meets_floor',   floor))               { const t = COMP_BRACKET_TIERS[3]; return { type: t.type, sev: sev(t), label: 'Meets floor' }; }
-  if (amount >= thresh('slightly_below', floor * 0.9))        { const t = COMP_BRACKET_TIERS[4]; return { type: t.type, sev: sev(t), label: 'Slightly below floor' }; }
-  if (amount >= thresh('below_floor',   floor * 0.8))         { const t = COMP_BRACKET_TIERS[5]; return { type: t.type, sev: sev(t), label: 'Below floor' }; }
-  const t = COMP_BRACKET_TIERS[6]; return { type: t.type, sev: sev(t), label: 'Well below floor' };
+  if (amount >= thresh('well_above',     strong * 1.15))       { const t = COMP_BRACKET_TIERS[0]; return { type: t.type, sev: sev(t), label: 'Well above target' }; }
+  if (amount >= thresh('above_target',  strong * 1.07))       { const t = COMP_BRACKET_TIERS[1]; return { type: t.type, sev: sev(t), label: 'Above target' }; }
+  if (amount >= thresh('meets_target',  strong))              { const t = COMP_BRACKET_TIERS[2]; return { type: t.type, sev: sev(t), label: 'Meets target' }; }
+  if (amount >= thresh('above_floor',   (floor + strong) / 2)){ const t = COMP_BRACKET_TIERS[3]; return { type: t.type, sev: sev(t), label: 'Above floor' }; }
+  if (amount >= thresh('meets_floor',   floor))               { const t = COMP_BRACKET_TIERS[4]; return { type: t.type, sev: sev(t), label: 'Meets floor' }; }
+  if (amount >= thresh('slightly_below', floor * 0.9))        { const t = COMP_BRACKET_TIERS[5]; return { type: t.type, sev: sev(t), label: 'Slightly below floor' }; }
+  if (amount >= thresh('below_floor',   floor * 0.8))         { const t = COMP_BRACKET_TIERS[6]; return { type: t.type, sev: sev(t), label: 'Below floor' }; }
+  if (amount >= thresh('well_below',    floor * 0.65))        { const t = COMP_BRACKET_TIERS[7]; return { type: t.type, sev: sev(t), label: 'Well below floor' }; }
+  if (amount >= thresh('far_below',     floor * 0.5))         { const t = COMP_BRACKET_TIERS[8]; return { type: t.type, sev: sev(t), label: 'Far below floor' }; }
+  const t = COMP_BRACKET_TIERS[9]; return { type: t.type, sev: sev(t), label: 'Critically low' };
 }
 
 // Map legacy category field to dimension — mirrors preferences.js CATEGORY_TO_DIMENSION
@@ -399,7 +405,7 @@ YOUR TASK:
 2. QUALIFICATIONS: Extract EVERY requirement, skill, and qualification mentioned in the JOB DESCRIPTION ONLY — never from the candidate profile or preferences. Include items from "Requirements", "What We're Looking For", "Nice to Have", "Key Responsibilities" that imply skills, etc. For each, assess against the candidate: met, partial, unmet, or unknown. For "importance": use ONLY "required", "preferred", or "bonus" — never "nice to have", "optional", or any other value. For "sources": list where the candidate evidence comes from — use values like "resume", "experience", "skills", "not in profile", "inferred" — never put job description categories here. EXPERIENCE MATCHING: Check the Experience section thoroughly — accomplishments, titles held, skills/exposures, and domain expertise all count as evidence for meeting qualifications. A requirement can be met by experience entries even if the resume doesn't spell it out. EDUCATION MATCHING: recognize standard equivalences — "B.S." and "B.A." both satisfy "Bachelor's degree", "M.S." and "M.A." both satisfy "Master's degree", "MBA" satisfies both "Master's degree" and "MBA". A degree in any field satisfies a general degree requirement unless the posting specifies a particular field. Check the Education section of the resume carefully.
 3. COMP ASSESSMENT: Extract any disclosed base salary and OTE/total comp from job posting AND conversation context. Compare against the candidate's floor and strong numbers. Undisclosed = unknown (neutral).
 4. QUALIFICATION SCORE: Score qualificationFit 1-10 (8+ = core skills align, 5-6 = adjacent/transferable, 3-4 = significant gaps).
-5. DIMENSION SCORES + RATIONALE: For roleFit, cultureFit, companyFit — score each 1-10 AND write 1 sentence rationale. Score independently based on what the posting/company signals for that dimension (8+ = clear strong fit, 6-7 = positive lean, 5 = neutral/unknown, 3-4 = concerns). Do NOT factor in configured flags — those adjust scores separately. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If no ratings exist, note that. If interaction context exists, weight it heavily — live signals beat posting text.
+5. DIMENSION SCORES + RATIONALE: For roleFit, cultureFit, companyFit — score each 1-10 AND write 1 sentence rationale. Score independently based on what the posting/company signals for that dimension (8+ = clear strong fit, 6-7 = positive lean, 5 = neutral/unknown, 3-4 = concerns). Do NOT factor in configured flags — those adjust scores separately. For cultureFit: you MUST reference any Glassdoor/employee ratings in the context (ratings ≥4.0 = culture positive; 3.0–3.9 = neutral/mixed; <3.0 = culture risk). If NO reviews or ratings exist, score cultureFit as 5 (neutral) and state "No employee reviews or culture data available — score reflects insufficient signal, not a negative assessment." NEVER speculate about culture from company size, headcount, or funding stage alone — those are not culture signals. If interaction context exists (meetings, emails), weight it heavily as actual culture signal — live signals beat posting text.
 6. COOP TAKE: 1-2 sentence honest bottom line on this opportunity.
 7. QUICK TAKE: 2-4 bullets of the most decisive signals (green or red).
 8. ROLE BRIEF: Summarize the role, why it could be interesting, key concerns, and comp in structured fields.

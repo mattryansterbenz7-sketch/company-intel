@@ -1501,7 +1501,7 @@ function renderCompanyTasks() {
           const dl = dateLabel(t.dueDate);
           const isAuto = t.source === 'email';
           const unreviewed = isAuto && !t.reviewed && !t.completed;
-          const priColors = { high: { bg: '#FEE2E2', color: '#991b1b' }, low: { bg: '#F0FDF4', color: '#166534' }, normal: { bg: '#eef2f7', color: '#516f90' } };
+          const priColors = { high: { bg: '#FEE2E2', color: '#991B1B' }, normal: { bg: '#FEF3C7', color: '#92400E' }, low: { bg: '#DBEAFE', color: '#1D4ED8' } };
           const pc = priColors[t.priority] || priColors.normal;
           return `<div class="ct-item${t.completed ? ' ct-completed' : ''}" data-task-id="${t.id}" style="${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}">
             <div style="width:18px;height:18px;margin-top:1px;border-radius:50%;border:2px solid ${t.completed ? '#5DCAA5' : '#dfe3eb'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:${t.completed ? '#fff' : 'transparent'};background:${t.completed ? '#5DCAA5' : 'transparent'};flex-shrink:0" class="ct-check">${t.completed ? '✓' : ''}</div>
@@ -1573,8 +1573,8 @@ function renderCompanyTasks() {
             <div style="display:flex;gap:8px">
               <input type="date" class="mtg-add-input" id="ct-date" style="width:auto">
               <select class="mtg-add-input" id="ct-priority" style="width:auto">
-                <option value="normal">Normal</option>
                 <option value="high">High</option>
+                <option value="normal" selected>Normal</option>
                 <option value="low">Low</option>
               </select>
             </div>

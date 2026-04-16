@@ -505,9 +505,9 @@ function renderCompactCard(c) {
 // ── Score Preview Modal ──────────────────────────────────────────────────────
 
 const SMT_PRIORITY_COLORS = {
-  high: { bg: '#FEE2E2', color: '#991b1b' },
-  low: { bg: '#F0FDF4', color: '#166534' },
-  normal: { bg: '#eef2f7', color: '#516f90' }
+  high: { bg: '#FEE2E2', color: '#991B1B' },
+  normal: { bg: '#FEF3C7', color: '#92400E' },
+  low: { bg: '#DBEAFE', color: '#1D4ED8' }
 };
 
 function smtDateLabel(dateStr) {
@@ -4180,9 +4180,9 @@ function showTaskForm(editTask) {
         </select>
         <input type="date" class="task-form-input" id="task-input-date" style="max-width:160px" value="${editTask?.dueDate || ''}">
         <div class="task-priority-group" id="task-input-priority">
-          <button type="button" class="task-priority-btn ${editTask?.priority === 'low' ? 'active' : ''}" data-pri="low">Low</button>
-          <button type="button" class="task-priority-btn ${(!editTask || editTask?.priority === 'normal') ? 'active' : ''}" data-pri="normal">Normal</button>
           <button type="button" class="task-priority-btn ${editTask?.priority === 'high' ? 'active' : ''}" data-pri="high">High</button>
+          <button type="button" class="task-priority-btn ${(!editTask || editTask?.priority === 'normal') ? 'active' : ''}" data-pri="normal">Normal</button>
+          <button type="button" class="task-priority-btn ${editTask?.priority === 'low' ? 'active' : ''}" data-pri="low">Low</button>
         </div>
       </div>
       <div class="task-form-actions">
