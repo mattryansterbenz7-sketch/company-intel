@@ -5243,6 +5243,8 @@ function openStatCardEditor() {
       }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
+    // Bind context manifest expand/collapse
+    if (typeof bindContextManifestEvents === 'function') bindContextManifestEvents(msgsEl);
   }
 
   async function send() {
