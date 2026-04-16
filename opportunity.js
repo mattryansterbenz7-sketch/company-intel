@@ -548,9 +548,15 @@ function renderSidebarNotes() {
     }
   }
 
-  container.innerHTML = `<div class="sb-notes-editable" id="sb-notes-editable" contenteditable="true" style="font-size:13px;color:#33475b;line-height:1.6;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa;outline:none">${htmlContent || ''}</div>`;
+  container.innerHTML = `
+    <div class="sb-notes-wrap" id="sb-notes-wrap">
+      <div class="sb-notes-editable" id="sb-notes-editable" contenteditable="true" style="font-size:13px;color:#33475b;line-height:1.6;min-height:60px;padding:10px 12px;border:1px solid #dfe3eb;border-radius:8px;background:#f5f8fa;outline:none">${htmlContent || ''}</div>
+    </div>
+    <button class="sb-notes-toggle" id="sb-notes-toggle" style="display:none">Show more</button>`;
 
   const editable = container.querySelector('#sb-notes-editable');
+  const notesWrap = container.querySelector('#sb-notes-wrap');
+  const notesToggle = container.querySelector('#sb-notes-toggle');
 
   // Placeholder
   function updatePlaceholder() {
@@ -569,13 +575,36 @@ function renderSidebarNotes() {
   editable.addEventListener('input', updatePlaceholder);
   updatePlaceholder();
 
+  // Expand/collapse
+  const COLLAPSE_HEIGHT = 120;
+  function applyCollapse() {
+    if (!notesWrap || !notesToggle) return;
+    notesWrap.classList.remove('sb-notes-collapsed');
+    const full = notesWrap.scrollHeight;
+    if (full > COLLAPSE_HEIGHT) {
+      notesWrap.classList.add('sb-notes-collapsed');
+      notesToggle.style.display = 'block';
+    } else {
+      notesToggle.style.display = 'none';
+    }
+  }
+  // Defer so DOM is painted before measuring
+  requestAnimationFrame(applyCollapse);
+
+  if (notesToggle) {
+    notesToggle.addEventListener('click', () => {
+      const collapsed = notesWrap.classList.toggle('sb-notes-collapsed');
+      notesToggle.textContent = collapsed ? 'Show more' : 'Show less';
+    });
+  }
+
   // Auto-save
   let _sbSaveTimer = null;
   function saveSbNotes() {
     const html = editable.innerHTML;
     if (html !== (entry.notes || '')) saveEntry({ notes: html });
   }
-  editable.addEventListener('blur', () => { clearTimeout(_sbSaveTimer); saveSbNotes(); });
+  editable.addEventListener('blur', () => { clearTimeout(_sbSaveTimer); saveSbNotes(); applyCollapse(); });
   editable.addEventListener('input', () => { clearTimeout(_sbSaveTimer); _sbSaveTimer = setTimeout(saveSbNotes, 3000); });
 
   // Ctrl+B / Ctrl+I
@@ -584,7 +613,12 @@ function renderSidebarNotes() {
     if ((e.metaKey || e.ctrlKey) && e.key === 'i') { e.preventDefault(); document.execCommand('italic', false, null); }
   });
 
-  editable.addEventListener('focus', () => { editable.style.borderColor = '#7c98b6'; });
+  editable.addEventListener('focus', () => {
+    editable.style.borderColor = '#7c98b6';
+    // Expand while editing so no content is hidden
+    if (notesWrap) notesWrap.classList.remove('sb-notes-collapsed');
+    if (notesToggle) notesToggle.textContent = 'Show less';
+  });
   editable.addEventListener('blur', () => { editable.style.borderColor = '#dfe3eb'; });
 }
 

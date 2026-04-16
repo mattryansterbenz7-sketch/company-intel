@@ -107,6 +107,17 @@
     }
     .sb-notes:focus { outline: none; border-color: var(--ci-accent-primary); }
     .sb-notes::placeholder { color: var(--ci-text-tertiary); }
+    .sb-notes-wrap { position: relative; }
+    .sb-notes-wrap.sb-notes-collapsed { max-height: 120px; overflow: hidden; }
+    .sb-notes-wrap.sb-notes-collapsed::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px;
+      background: linear-gradient(transparent, var(--ci-bg-base)); pointer-events: none;
+    }
+    .sb-notes-toggle {
+      margin-top: 4px; background: none; border: none; font-size: 12px; font-weight: 600;
+      color: var(--ci-accent-primary); cursor: pointer; padding: 2px 0; font-family: inherit;
+    }
+    .sb-notes-toggle:hover { text-decoration: underline; }
     .sb-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
     .s-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; border: 1px solid; cursor: default; }
     .s-tag .stag-rm { cursor: pointer; font-size: 12px; margin-left: 4px; opacity: 0.7; font-weight: 700; line-height: 1; }

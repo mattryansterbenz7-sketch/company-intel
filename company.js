@@ -5031,7 +5031,10 @@ function renderNoteCard(n) {
           <button class="note-del-btn" data-note-id="${n.id}" title="Delete">✕</button>
         </span>
       </div>
-      <div class="note-card-body" data-note-id="${n.id}">${n.content}</div>
+      <div class="note-card-body-wrap collapsed" data-note-id="${n.id}">
+        <div class="note-card-body" data-note-id="${n.id}">${n.content}</div>
+      </div>
+      <button class="note-card-toggle" data-note-id="${n.id}" style="display:none">Show more</button>
     </div>`;
 }
 
@@ -5049,12 +5052,35 @@ function bindNoteCardEvents() {
   const container = document.getElementById('hub-notes-container');
   if (!container) return;
 
+  // Show/hide toggle based on whether content overflows collapsed height
+  container.querySelectorAll('.note-card-body-wrap').forEach(wrap => {
+    const toggle = wrap.nextElementSibling;
+    if (!toggle || !toggle.classList.contains('note-card-toggle')) return;
+    // Temporarily measure full height vs collapsed max-height
+    wrap.classList.remove('collapsed');
+    const full = wrap.scrollHeight;
+    wrap.classList.add('collapsed');
+    if (full > 120) {
+      toggle.style.display = 'block';
+    }
+  });
+
+  // Toggle expand/collapse
+  container.querySelectorAll('.note-card-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const id = toggle.dataset.noteId;
+      const wrap = container.querySelector(`.note-card-body-wrap[data-note-id="${id}"]`);
+      if (!wrap) return;
+      const collapsed = wrap.classList.toggle('collapsed');
+      toggle.textContent = collapsed ? 'Show more' : 'Show less';
+    });
+  });
+
   // Delete
   container.querySelectorAll('.note-del-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.noteId;
       entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== id);
-      // Update legacy notes to most recent
       const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
       saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
       renderNotesFeed();
@@ -5065,8 +5091,11 @@ function bindNoteCardEvents() {
   container.querySelectorAll('.note-edit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.noteId;
+      const wrap = container.querySelector(`.note-card-body-wrap[data-note-id="${id}"]`);
       const bodyEl = container.querySelector(`.note-card-body[data-note-id="${id}"]`);
       if (!bodyEl || bodyEl.contentEditable === 'true') return;
+      // Expand while editing so nothing is clipped
+      if (wrap) wrap.classList.remove('collapsed');
       bodyEl.contentEditable = 'true';
       bodyEl.classList.add('note-card-editing');
       bodyEl.focus();
@@ -5084,6 +5113,18 @@ function bindNoteCardEvents() {
           note.updatedAt = Date.now();
           saveEntry({ notesFeed: entry.notesFeed, notes: note.content });
         }
+        // Re-evaluate overflow after edit
+        if (wrap) {
+          wrap.classList.add('collapsed');
+          const toggle = wrap.nextElementSibling;
+          if (toggle && toggle.classList.contains('note-card-toggle')) {
+            wrap.classList.remove('collapsed');
+            const full = wrap.scrollHeight;
+            wrap.classList.add('collapsed');
+            toggle.style.display = full > 120 ? 'block' : 'none';
+            toggle.textContent = 'Show more';
+          }
+        }
       };
 
       bodyEl.addEventListener('blur', (e) => {
@@ -5091,7 +5132,6 @@ function bindNoteCardEvents() {
         finishEdit();
       }, { once: true });
 
-      // Click the same button again to save
       btn.addEventListener('click', finishEdit, { once: true });
     });
   });
