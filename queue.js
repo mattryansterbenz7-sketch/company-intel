@@ -161,6 +161,138 @@ function updateCount() {
   document.getElementById('queue-count').textContent = `${remaining} remaining`;
 }
 
+// ── Interactive task helpers (shared with saved.js pattern) ──────────────────
+const SMT_PRIORITY_COLORS = {
+  high: { bg: '#FEE2E2', color: '#991b1b' },
+  low: { bg: '#F0FDF4', color: '#166534' },
+  normal: { bg: '#eef2f7', color: '#516f90' }
+};
+
+function smtDateLabel(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0);
+  const diff = Math.round((d - today) / 86400000);
+  if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, color: '#dc2626' };
+  if (diff === 0) return { text: 'Today', color: '#d97706' };
+  if (diff === 1) return { text: 'Tomorrow', color: '#516f90' };
+  return { text: `in ${diff}d`, color: '#516f90' };
+}
+
+function renderModalTasks(entry, tasks) {
+  const companyTasks = tasks.filter(t => t.company === entry.company || t.companyId === entry.id);
+  const active = companyTasks.filter(t => !t.completed);
+  const completed = companyTasks.filter(t => t.completed);
+  const hasAny = companyTasks.length > 0;
+
+  const itemHtml = (t) => {
+    const pc = SMT_PRIORITY_COLORS[t.priority] || SMT_PRIORITY_COLORS.normal;
+    const dl = smtDateLabel(t.dueDate);
+    return `<div class="smt-item ${t.completed ? 'smt-done' : ''}" data-task-id="${t.id}">
+      <div class="smt-check ${t.completed ? 'checked' : ''}">${t.completed ? '✓' : ''}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="smt-text">${escHtml(t.text)}</div>
+        <div style="display:flex;gap:5px;margin-top:3px;align-items:center;">
+          <span class="smt-priority" style="background:${pc.bg};color:${pc.color}">${t.priority || 'normal'}</span>
+          ${dl ? `<span class="smt-date" style="color:${dl.color}">${dl.text}</span>` : ''}
+        </div>
+      </div>
+      <button class="smt-del" title="Delete task">&times;</button>
+    </div>`;
+  };
+
+  return `<div class="smt-section" id="smt-section">
+    <div class="smt-header" id="smt-toggle">
+      <span class="smt-chevron ${hasAny ? 'open' : ''}" id="smt-chevron">&#x25B6;</span>
+      Tasks ${active.length ? `<span class="smt-count">${active.length}</span>` : ''}
+    </div>
+    <div class="smt-body" id="smt-body" style="${hasAny ? '' : 'display:none'}">
+      ${active.map(itemHtml).join('')}
+      ${completed.length ? `<div style="font-size:10px;color:#A09A94;margin-top:4px;cursor:pointer;" id="smt-show-done">+ ${completed.length} completed</div><div id="smt-done-list" style="display:none">${completed.map(itemHtml).join('')}</div>` : ''}
+      <div class="smt-add">
+        <input type="text" id="smt-input" placeholder="Add a task...">
+        <select id="smt-priority">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+        <input type="date" id="smt-date">
+        <button class="smt-add-btn" id="smt-save">Add</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function attachModalTaskHandlers(entry) {
+  document.getElementById('smt-toggle')?.addEventListener('click', () => {
+    const body = document.getElementById('smt-body');
+    const chev = document.getElementById('smt-chevron');
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : '';
+    if (chev) chev.classList.toggle('open', !open);
+  });
+
+  document.getElementById('smt-show-done')?.addEventListener('click', () => {
+    const list = document.getElementById('smt-done-list');
+    const toggle = document.getElementById('smt-show-done');
+    if (list) { list.style.display = list.style.display === 'none' ? '' : 'none'; }
+    if (toggle && list) { toggle.textContent = list.style.display === 'none' ? toggle.textContent : '– hide completed'; }
+  });
+
+  const saveTask = () => {
+    const input = document.getElementById('smt-input');
+    const text = input?.value.trim();
+    if (!text) return;
+    const priority = document.getElementById('smt-priority')?.value || 'normal';
+    const dueDate = document.getElementById('smt-date')?.value || null;
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      tasks.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        text, company: entry.company, companyId: entry.id,
+        dueDate, priority, completed: false, createdAt: Date.now()
+      });
+      chrome.storage.local.set({ userTasks: tasks }, () => {
+        const section = document.getElementById('smt-section');
+        if (section) {
+          section.outerHTML = renderModalTasks(entry, tasks);
+          attachModalTaskHandlers(entry);
+        }
+      });
+    });
+  };
+  document.getElementById('smt-save')?.addEventListener('click', saveTask);
+  document.getElementById('smt-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveTask(); }
+  });
+
+  document.getElementById('smt-section')?.addEventListener('click', e => {
+    const check = e.target.closest('.smt-check');
+    const del = e.target.closest('.smt-del');
+    if (!check && !del) return;
+    const item = e.target.closest('.smt-item');
+    const taskId = item?.dataset.taskId;
+    if (!taskId) return;
+    chrome.storage.local.get(['userTasks'], d => {
+      let tasks = d.userTasks || [];
+      if (check) {
+        const task = tasks.find(t => t.id === taskId);
+        if (task) task.completed = !task.completed;
+      } else if (del) {
+        tasks = tasks.filter(t => t.id !== taskId);
+      }
+      chrome.storage.local.set({ userTasks: tasks }, () => {
+        const section = document.getElementById('smt-section');
+        if (section) {
+          section.outerHTML = renderModalTasks(entry, tasks);
+          attachModalTaskHandlers(entry);
+        }
+      });
+    });
+  });
+}
+
 function renderCurrent() {
   const main = document.getElementById('queue-main');
   if (!queue.length || currentIdx >= queue.length) {
@@ -400,7 +532,7 @@ function renderCurrent() {
         ${stageLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Stage entered</span><span class="qc-pipeline-ctx-val">${stageLine}</span></div>` : ''}
         ${scoredLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last scored</span><span class="qc-pipeline-ctx-val">${scoredLine}</span></div>` : ''}
       </div>
-      <div id="qc-tasks-inject"></div>
+      <div id="smt-placeholder"></div>
     </div>`;
   })();
 
@@ -864,16 +996,12 @@ function renderCurrent() {
     _saveEntryField(c.id, 'actionStatus', e.target.value);
   });
 
-  // Inject tasks linked to this entry
+  // Inject interactive tasks section
   chrome.storage.local.get(['userTasks'], ({ userTasks }) => {
-    const tasks = (userTasks || []).filter(t => !t.completed && t.company && t.company.toLowerCase() === c.company.toLowerCase());
-    const el = document.getElementById('qc-tasks-inject');
-    if (!el || !tasks.length) return;
-    el.innerHTML = `<div class="qc-tasks-row">${tasks.map(t => {
-      const due = t.dueDate ? new Date(t.dueDate + 'T00:00:00') : null;
-      const isOverdue = due && due < new Date();
-      return `<span class="qc-task-chip${isOverdue ? ' overdue' : ''}" title="${escHtml(t.dueDate ? 'Due ' + t.dueDate : '')}">${escHtml(t.text)}</span>`;
-    }).join('')}</div>`;
+    const placeholder = document.getElementById('smt-placeholder');
+    if (!placeholder) return;
+    placeholder.outerHTML = renderModalTasks(c, userTasks || []);
+    attachModalTaskHandlers(c);
   });
 
   document.getElementById('qc-apply-cta')?.addEventListener('click', (e) => {
