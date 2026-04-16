@@ -98,7 +98,7 @@ ${existingIndex}` }]
 // large enough that tools+base comfortably exceeds 2048 or neither breakpoint
 // writes a cache. The padding in the TOOL PATTERNS / GROUNDING / RESPONSE
 // DISCIPLINE sections below is deliberate — do not trim without remeasuring.
-function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat, voiceProfile }) {
+function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, questionArchetype, careerOSChat, voiceProfile }) {
   const principles = coopInterp.principlesBlock() +
     (applicationMode ? coopInterp.draftHint?.() || '' : '');
   const base = [
@@ -227,7 +227,7 @@ CRITICAL: You have the user's FULL profile available via tools. ALWAYS call get_
 When the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
 
     // Archetype-specific prompt hints
-    const archetype = context._questionArchetype;
+    const archetype = questionArchetype;
     if (archetype === 'motivation') {
       tailParts.push(`\n=== QUESTION TYPE: MOTIVATION ===
 This is a "why" question (why this company, why this role, why this career). Draw from the user's profile AND what you know about the company. Be specific — reference their actual experience and something concrete about the company (industry, stage, product, mission). Generic enthusiasm is worse than no answer. Connect the two: why THEIR background + THIS company = a real match.`);
@@ -387,7 +387,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
     embeddedDocs = ['manifest'];
   }
 
-  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, careerOSChat: !!careerOSChat, voiceProfile });
+  const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, questionArchetype: context._questionArchetype, careerOSChat: !!careerOSChat, voiceProfile });
   const toolCtx = { boundCompany, boundEntryId };
 
   const _approxTokens = (s) => Math.round(s.length / 4);
