@@ -216,7 +216,17 @@ function renderContextManifest(manifest, toolCalls, prefix) {
 
     // Profile: show what sections were loaded
     if (meta.type === 'profile' && meta.loadedSections?.length) {
-      const sectionNames = meta.loadedSections.map(s => s.replace(/^(profile|prefs):/, '')).join(', ');
+      const _sectionLabels = {
+        'profile': 'profile', 'preferences': 'preferences',
+        'profile:story': 'Story', 'profile:experience': 'Experience', 'profile:skills': 'Skills',
+        'profile:principles': 'Operating Principles', 'profile:voice': 'Voice', 'profile:faq': 'FAQ',
+        'profile:resume': 'Resume', 'profile:education': 'Education', 'profile:links': 'Links',
+        'prefs:roleICP': 'Role ICP', 'prefs:companyICP': 'Company ICP',
+        'prefs:greenFlags': 'Green Flags', 'prefs:redFlags': 'Red Flags',
+        'prefs:compensation': 'Compensation', 'prefs:location': 'Location',
+        'prefs:learnings': 'Learnings',
+      };
+      const sectionNames = meta.loadedSections.map(s => _sectionLabels[s] || s.replace(/^(profile|prefs):/, '')).join(', ');
       const suffix = meta.embedded ? ' (always loaded)' : '';
       subRows += `<div class="${p}-ctx-sub">${escapeHtml(sectionNames + suffix)}</div>`;
     } else if (meta.type === 'profile' && meta.sectionHeaders?.length) {

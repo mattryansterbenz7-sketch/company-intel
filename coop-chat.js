@@ -604,7 +604,19 @@ function _buildContextManifest(toolCallLog, embeddedDocs) {
 
   for (const t of toolCallLog) {
     const meta = t._meta || {};
-    const label = _TOOL_LABELS[t.name] || t.name;
+    let label = _TOOL_LABELS[t.name] || t.name;
+
+    // For profile tool calls, use a more specific label based on what was loaded
+    if (t.name === 'get_profile_section' && meta.type === 'profile') {
+      if (meta.section === 'granular' && meta.loadedSections?.length) {
+        label = 'Your Preferences';
+      } else if (meta.section === 'preferences') {
+        label = 'Your Preferences';
+      } else if (meta.section === 'learnings') {
+        label = 'Your Learnings';
+      }
+    }
+
     const target = meta.company || t.input?.company_name || null;
 
     tools.push({ name: t.name, label, target, meta });
