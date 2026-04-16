@@ -504,6 +504,142 @@ function renderCompactCard(c) {
 
 // ── Score Preview Modal ──────────────────────────────────────────────────────
 
+const SMT_PRIORITY_COLORS = {
+  high: { bg: '#FEE2E2', color: '#991b1b' },
+  low: { bg: '#F0FDF4', color: '#166534' },
+  normal: { bg: '#eef2f7', color: '#516f90' }
+};
+
+function smtDateLabel(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0);
+  const diff = Math.round((d - today) / 86400000);
+  if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, color: '#dc2626' };
+  if (diff === 0) return { text: 'Today', color: '#d97706' };
+  if (diff === 1) return { text: 'Tomorrow', color: '#516f90' };
+  return { text: `in ${diff}d`, color: '#516f90' };
+}
+
+function renderModalTasks(entry, tasks) {
+  const companyTasks = tasks.filter(t => t.company === entry.company || t.companyId === entry.id);
+  const active = companyTasks.filter(t => !t.completed);
+  const completed = companyTasks.filter(t => t.completed);
+  const hasAny = companyTasks.length > 0;
+
+  const itemHtml = (t) => {
+    const pc = SMT_PRIORITY_COLORS[t.priority] || SMT_PRIORITY_COLORS.normal;
+    const dl = smtDateLabel(t.dueDate);
+    return `<div class="smt-item ${t.completed ? 'smt-done' : ''}" data-task-id="${t.id}">
+      <div class="smt-check ${t.completed ? 'checked' : ''}">${t.completed ? '✓' : ''}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="smt-text">${escHtml(t.text)}</div>
+        <div style="display:flex;gap:5px;margin-top:3px;align-items:center;">
+          <span class="smt-priority" style="background:${pc.bg};color:${pc.color}">${t.priority || 'normal'}</span>
+          ${dl ? `<span class="smt-date" style="color:${dl.color}">${dl.text}</span>` : ''}
+        </div>
+      </div>
+      <button class="smt-del" title="Delete task">&times;</button>
+    </div>`;
+  };
+
+  return `<div class="smt-section" id="smt-section">
+    <div class="smt-header" id="smt-toggle">
+      <span class="smt-chevron ${hasAny ? 'open' : ''}" id="smt-chevron">&#x25B6;</span>
+      Tasks ${active.length ? `<span class="smt-count">${active.length}</span>` : ''}
+    </div>
+    <div class="smt-body" id="smt-body" style="${hasAny ? '' : 'display:none'}">
+      ${active.map(itemHtml).join('')}
+      ${completed.length ? `<div style="font-size:10px;color:#A09A94;margin-top:4px;cursor:pointer;" id="smt-show-done">+ ${completed.length} completed</div><div id="smt-done-list" style="display:none">${completed.map(itemHtml).join('')}</div>` : ''}
+      <div class="smt-add">
+        <input type="text" id="smt-input" placeholder="Add a task...">
+        <select id="smt-priority">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+        <input type="date" id="smt-date">
+        <button class="smt-add-btn" id="smt-save">Add</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function attachModalTaskHandlers(entry) {
+  // Toggle expand/collapse
+  document.getElementById('smt-toggle')?.addEventListener('click', () => {
+    const body = document.getElementById('smt-body');
+    const chev = document.getElementById('smt-chevron');
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : '';
+    if (chev) chev.classList.toggle('open', !open);
+  });
+
+  // Show completed tasks
+  document.getElementById('smt-show-done')?.addEventListener('click', () => {
+    const list = document.getElementById('smt-done-list');
+    const toggle = document.getElementById('smt-show-done');
+    if (list) { list.style.display = list.style.display === 'none' ? '' : 'none'; }
+    if (toggle && list) { toggle.textContent = list.style.display === 'none' ? toggle.textContent : '– hide completed'; }
+  });
+
+  // Add task
+  const saveTask = () => {
+    const input = document.getElementById('smt-input');
+    const text = input?.value.trim();
+    if (!text) return;
+    const priority = document.getElementById('smt-priority')?.value || 'normal';
+    const dueDate = document.getElementById('smt-date')?.value || null;
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      tasks.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        text, company: entry.company, companyId: entry.id,
+        dueDate, priority, completed: false, createdAt: Date.now()
+      });
+      chrome.storage.local.set({ userTasks: tasks }, () => {
+        const section = document.getElementById('smt-section');
+        if (section) {
+          section.outerHTML = renderModalTasks(entry, tasks);
+          attachModalTaskHandlers(entry);
+        }
+      });
+    });
+  };
+  document.getElementById('smt-save')?.addEventListener('click', saveTask);
+  document.getElementById('smt-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveTask(); }
+  });
+
+  // Toggle complete / Delete — delegate from section
+  document.getElementById('smt-section')?.addEventListener('click', e => {
+    const check = e.target.closest('.smt-check');
+    const del = e.target.closest('.smt-del');
+    if (!check && !del) return;
+    const item = e.target.closest('.smt-item');
+    const taskId = item?.dataset.taskId;
+    if (!taskId) return;
+
+    chrome.storage.local.get(['userTasks'], d => {
+      let tasks = d.userTasks || [];
+      if (check) {
+        const task = tasks.find(t => t.id === taskId);
+        if (task) task.completed = !task.completed;
+      } else if (del) {
+        tasks = tasks.filter(t => t.id !== taskId);
+      }
+      chrome.storage.local.set({ userTasks: tasks }, () => {
+        const section = document.getElementById('smt-section');
+        if (section) {
+          section.outerHTML = renderModalTasks(entry, tasks);
+          attachModalTaskHandlers(entry);
+        }
+      });
+    });
+  });
+}
+
 function openScoreModal(entry) {
   const overlay = document.getElementById('score-modal-overlay');
   const content = document.getElementById('score-modal-content');
@@ -621,6 +757,7 @@ function openScoreModal(entry) {
         ${eli5 ? `<div style="font-size:12px;color:#6B6560;line-height:1.5;">${escHtml(eli5)}</div>` : ''}
       </div>`;
     })()}
+    <div id="smt-placeholder"></div>
     <div class="score-modal-body">
       ${(() => {
         // Pipeline context — only when entry is in the active pipeline (past triage)
@@ -674,6 +811,14 @@ function openScoreModal(entry) {
   `;
 
   overlay.classList.add('open');
+
+  // Load and render tasks asynchronously
+  chrome.storage.local.get(['userTasks'], d => {
+    const placeholder = document.getElementById('smt-placeholder');
+    if (!placeholder) return;
+    placeholder.outerHTML = renderModalTasks(entry, d.userTasks || []);
+    attachModalTaskHandlers(entry);
+  });
 
   // Action handlers
   document.getElementById('score-modal-apply-btn').addEventListener('click', () => {
@@ -1136,43 +1281,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// scoreToVerdict, applyExcitementModifier — provided by ui-utils.js
+// scoreToVerdict, applyExcitementModifier, TAG_PALETTE, tagColorIndex, tagColor — provided by ui-utils.js
 
-// Tag color palette
-const TAG_PALETTE = [
-  { border: '#6366f1', color: '#4338ca', bg: 'rgba(99,102,241,0.15)' },   // Indigo
-  { border: '#10b981', color: '#047857', bg: 'rgba(16,185,129,0.15)' },   // Emerald
-  { border: '#f97316', color: '#c2410c', bg: 'rgba(249,115,22,0.15)' },   // Orange
-  { border: '#ec4899', color: '#be185d', bg: 'rgba(236,72,153,0.15)' },   // Pink
-  { border: '#0ea5e9', color: '#0369a1', bg: 'rgba(14,165,233,0.15)' },   // Sky
-  { border: '#a855f7', color: '#7e22ce', bg: 'rgba(168,85,247,0.15)' },   // Purple
-  { border: '#22c55e', color: '#15803d', bg: 'rgba(34,197,94,0.15)' },    // Green
-  { border: '#eab308', color: '#a16207', bg: 'rgba(234,179,8,0.15)' },    // Yellow
-  { border: '#ef4444', color: '#b91c1c', bg: 'rgba(239,68,68,0.15)' },    // Red
-  { border: '#14b8a6', color: '#0f766e', bg: 'rgba(20,184,166,0.15)' },   // Teal
-];
 let customTagColors = {}; // { tagName: paletteIndex }
-
-const SEMANTIC_TAG_COLORS = {
-  'application rejected': 8, 'rejected': 8, "didn't apply": 8,
-  'job posted': 2, 'linkedin easy apply': 4,
-  'vc-backed': 1, 'bootstrapped': 6, 'founding team': 5,
-  'co-founding interest': 5, 'intro request': 0, 'intro requested': 0,
-  'referral': 9, 'referral agreement': 9, 'recruiter': 3,
-  '***action required***': 8,
-};
-
-function tagColorIndex(tag) {
-  const semantic = SEMANTIC_TAG_COLORS[tag.toLowerCase()];
-  if (semantic !== undefined) return semantic;
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff;
-  return Math.abs(hash) % TAG_PALETTE.length;
-}
-function tagColor(tag) {
-  const idx = (customTagColors[tag] !== undefined) ? customTagColors[tag] : tagColorIndex(tag);
-  return TAG_PALETTE[idx % TAG_PALETTE.length];
-}
 function saveTagColor(tag, idx) {
   customTagColors[tag] = idx;
   chrome.storage.local.set({ tagColors: customTagColors }, () => { updateTagsToolbar(); render(); });
@@ -2764,7 +2875,7 @@ function renderKanbanCard(c) {
         const renderBadge = (label, score) => {
           if (score == null) return '';
           const color = score >= 7 ? '#00897b' : score >= 5 ? '#d97706' : '#e5483b';
-          return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${score}</span>`;
+          return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${Number(score).toFixed(1)}</span>`;
         };
         const uc = c.jobMatch?.userCorrections;
         const ucCount = uc?.pendingRescore ? Object.keys(uc.requirements || {}).length + (uc.overall ? 1 : 0) : 0;
@@ -4714,17 +4825,6 @@ function renderActivitySection() {
     return { ...card, count, goal: goals[card.key] || 0, tooltip };
   });
 
-  const funnelStages = customOpportunityStages
-    .filter(s => s.key !== 'rejected')
-    .map(s => ({ key: s.key, label: s.label, color: s.color, count: opps.filter(c => (c.jobStage || 'needs_review') === s.key).length }));
-
-  const funnelHtml = funnelStages.map((s, i) => `
-    <div class="funnel-stage" data-stage-key="${s.key}" style="cursor:pointer" title="View ${s.label}">
-      <div class="funnel-count" style="${s.count > 0 ? `color:${s.color}` : 'color:#b0c1d4'}">${s.count || '—'}</div>
-      <div class="funnel-label">${s.label}</div>
-    </div>${i < funnelStages.length - 1 ? '<div class="funnel-arrow">›</div>' : ''}
-  `).join('');
-
   const goalCardsHtml = goalDefs.map(g => {
     const showGoal = g.hasGoal !== false && g.goal > 0;
     return `
@@ -4774,25 +4874,11 @@ function renderActivitySection() {
         </div>
       </div>
     </div>
-    <div class="activity-funnel">${funnelHtml}</div>
     <div class="activity-goals-row">
       ${goalCardsHtml}
       <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
     </div>
   `;
-
-  // Funnel stage click → scroll kanban column into view
-  section.querySelectorAll('.funnel-stage[data-stage-key]').forEach(el => {
-    el.addEventListener('click', () => {
-      const key = el.dataset.stageKey;
-      const col = document.querySelector(`.kanban-col[data-col-key="${key}"]`);
-      if (col) {
-        col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        col.style.outline = `2px solid ${funnelStages.find(s => s.key === key)?.color || '#FF7A59'}`;
-        setTimeout(() => { col.style.outline = ''; }, 1200);
-      }
-    });
-  });
 
   section.querySelectorAll('.period-tab').forEach(btn => {
     btn.addEventListener('click', () => {
