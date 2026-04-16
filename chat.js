@@ -66,6 +66,8 @@ function formatSessionDate(isoStr) {
 }
 
 function initChatPanels(entry) {
+  // Inject context manifest CSS once
+  if (typeof injectContextManifestStyles === 'function') injectContextManifestStyles('chat');
   document.querySelectorAll('[data-chat-panel]').forEach(container => {
     if (container.dataset.chatInit) return;
     container.dataset.chatInit = '1';
@@ -320,11 +322,11 @@ function buildChatPanel(container, entry) {
             const cacheHint = (cacheW || cacheR) ? ` · <span style="color:#8a8e94;">cache +${cacheW.toLocaleString()}w/${cacheR.toLocaleString()}r</span>` : '';
             return `<div class="chat-usage">${modelShort} · ${total.toLocaleString()} tok${cacheHint} · ${costStr}</div>`;
           })() : '';
-          const toolBadge = (m.role === 'assistant' && m._toolCalls?.length) ? (() => {
-            const labels = { get_company_context: 'company context', get_communications: 'emails + meetings', get_profile_section: 'profile', get_pipeline_overview: 'pipeline', search_memory: 'memory' };
-            const unique = [...new Set(m._toolCalls.map(t => labels[t.name] || t.name))];
-            return `<div class="chat-usage" style="color:#7C6EF0;">↳ Coop pulled: ${unique.join(', ')}</div>`;
-          })() : '';
+          const toolBadge = (m.role === 'assistant' && m._toolCalls?.length)
+            ? (typeof renderContextManifest === 'function'
+              ? renderContextManifest(m._contextManifest, m._toolCalls, 'chat')
+              : `<div class="chat-usage" style="color:#7C6EF0;">↳ Coop pulled: ${[...new Set(m._toolCalls.map(t => t.name))].join(', ')}</div>`)
+            : '';
           return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${copyBtn}${saveBtn}${toolBadge}${usageBadge}${followup}</div>`;
         }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
@@ -455,6 +457,7 @@ function buildChatPanel(container, entry) {
       if (result.usage) msgEntry._usage = result.usage;
       if (result.model) msgEntry._model = result.model;
       if (result.toolCalls) msgEntry._toolCalls = result.toolCalls;
+      if (result.contextManifest) msgEntry._contextManifest = result.contextManifest;
       history.push(msgEntry);
     } else {
       const errMsg = result?.error || 'Sorry, something went wrong. Try again.';

@@ -175,6 +175,65 @@ export function buildCoopMemoryBlock(coopMemory) {
   return `\n=== COOP MEMORY (persistent, typed) ===\nThese are things you've learned about the user across past conversations. Treat as authoritative unless contradicted by current context.\n\n${sections.join('\n\n')}\n=== END COOP MEMORY ===\n`;
 }
 
+// ── Learnings document builder ──────────────────────────────────────────────
+
+/**
+ * Build a compiled learnings document from memory entries.
+ * Groups entries by type, sorts by recency, produces structured markdown.
+ * Called by knowledge.js during recompilation.
+ */
+export function buildLearningsDocument(entries) {
+  if (!entries?.length) {
+    return { content: '', compiledAt: Date.now(), entryCount: 0 };
+  }
+
+  const sorted = [...entries].sort((a, b) =>
+    (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')
+  );
+
+  const groups = { user: [], feedback: [], project: [], reference: [] };
+  for (const e of sorted) {
+    if (groups[e.type]) groups[e.type].push(e);
+  }
+
+  const sections = ['# What Coop Has Learned'];
+
+  if (groups.user.length) {
+    sections.push('## Experience & Background');
+    sections.push(groups.user.map(e => {
+      const body = (e.body || '').slice(0, 500);
+      return `- **${e.name}**: ${body}`;
+    }).join('\n'));
+  }
+
+  if (groups.feedback.length) {
+    sections.push('## Behavioral Preferences');
+    sections.push(groups.feedback.map(e => {
+      const body = (e.body || '').slice(0, 500);
+      return `- **${e.name}**: ${body}`;
+    }).join('\n'));
+  }
+
+  if (groups.project.length) {
+    sections.push('## Active Projects & Opportunities');
+    sections.push(groups.project.map(e => {
+      const body = (e.body || '').slice(0, 500);
+      return `- **${e.name}**: ${body}`;
+    }).join('\n'));
+  }
+
+  if (groups.reference.length) {
+    sections.push('## Reference & Resources');
+    sections.push(groups.reference.map(e => {
+      const body = (e.body || '').slice(0, 300);
+      return `- **${e.name}**: ${body}`;
+    }).join('\n'));
+  }
+
+  const content = sections.join('\n\n');
+  return { content, compiledAt: Date.now(), entryCount: entries.length };
+}
+
 // ── Insight routing ─────────────────────────────────────────────────────────
 
 export async function routeInsights(insights, source) {

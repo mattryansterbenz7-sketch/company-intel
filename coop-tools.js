@@ -4,6 +4,7 @@
 
 import { getUserName } from './utils.js';
 import { buildCoopMemoryBlock } from './memory.js';
+import { getKnowledgeDoc } from './knowledge.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tool definitions (sent to Claude as `tools` array)
@@ -37,19 +38,24 @@ export const COOP_TOOLS = [
   },
   {
     name: 'get_profile_section',
-    description: "Returns the user's compiled My Profile data or preferences as markdown. Use 'profile' for background/story/experience/skills, 'preferences' for job search criteria/flags/comp/ICP. Use 'full' tier for scoring, cover letters, deep career questions; 'standard' for general chat.",
+    description: "Returns the user's profile data, preferences, or learnings as markdown. Use 'profile' for background/story/experience/skills, 'preferences' for job search criteria/flags/comp/ICP, 'learnings' for accumulated insights from past conversations. For targeted access, pass specific section IDs via the 'sections' parameter (e.g. 'profile:experience', 'prefs:compensation'). Use 'full' tier for scoring, cover letters, deep career questions; 'standard' for general chat.",
     input_schema: {
       type: 'object',
       properties: {
         section: {
           type: 'string',
-          enum: ['profile', 'preferences'],
-          description: "'profile' = who the user is (story, experience, skills, voice). 'preferences' = what they want (ICP, flags, comp, location, learnings).",
+          enum: ['profile', 'preferences', 'learnings'],
+          description: "'profile' = who the user is (story, experience, skills, voice). 'preferences' = what they want (ICP, flags, comp, location, learnings). 'learnings' = accumulated insights from past conversations.",
         },
         tier: {
           type: 'string',
           enum: ['standard', 'full'],
           description: "Detail level. 'standard' (~800 tokens) for most questions. 'full' (~2000 tokens) for scoring, applications, cover letters.",
+        },
+        sections: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "Optional. Specific knowledge doc IDs for targeted access (e.g. ['profile:experience', 'prefs:compensation', 'profile:story']). Returns only those sections instead of full tier docs. Available IDs: profile:story, profile:experience, profile:skills, profile:principles, profile:voice, profile:faq, profile:resume, profile:links, prefs:roleICP, prefs:companyICP, prefs:greenFlags, prefs:redFlags, prefs:compensation, prefs:location, prefs:learnings.",
         },
       },
       required: ['section'],
@@ -330,7 +336,27 @@ async function _tool_get_company_context({ company_name }, ctx) {
   const notes = (e.notes || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   if (notes) { lines.push('## Notes'); lines.push(notes.slice(0, 1200)); }
 
-  return { content: lines.join('\n') };
+  // Build _meta for context manifest
+  const _sections = [];
+  if (firm.length) _sections.push('firmographics');
+  if (intel) _sections.push('intelligence');
+  if (leaders.length) _sections.push('leadership');
+  if (e.isOpportunity || e.jobTitle) _sections.push('role');
+  if (e.nextStep || e.stageTimestamps || (e.tags || []).length) _sections.push('pipeline');
+  if (notes) _sections.push('notes');
+
+  const content = lines.join('\n');
+  return {
+    content,
+    _meta: {
+      type: 'company',
+      company: e.company,
+      sections: _sections,
+      leaderCount: leaders.length,
+      hasJobDescription: !!(e.jobDescription),
+      hasScore: e.jobMatch?.score != null,
+    },
+  };
 }
 
 async function _tool_get_communications({ company_name, types, limit, keywords }, ctx) {
@@ -385,10 +411,83 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
   }
 
   const md = lines.join('\n');
-  return { content: md.length > TOOL_RESULT_SIZE_CAP ? md.slice(0, TOOL_RESULT_SIZE_CAP) + '\n\n[truncated]' : md };
+
+  // Build _meta for context manifest
+  const emailSources = wantEmails ? (e.cachedEmails || []).slice(0, lim).map(em => ({
+    kind: 'email',
+    subject: em.subject || '(no subject)',
+    from: (em.from || '').replace(/<[^>]+>/, '').trim(),
+    date: em.date || 'unknown',
+  })) : [];
+  const mtgList = wantMeetings ? [...(e.cachedMeetings || []), ...(e.manualMeetings || [])].slice(0, lim) : [];
+  const meetingSources = mtgList.map(m => ({
+    kind: 'meeting',
+    title: m.title || 'Untitled',
+    date: m.date || 'unknown',
+  }));
+
+  return {
+    content: md.length > TOOL_RESULT_SIZE_CAP ? md.slice(0, TOOL_RESULT_SIZE_CAP) + '\n\n[truncated]' : md,
+    _meta: {
+      type: 'communications',
+      company: e.company,
+      emailCount: emailSources.length,
+      meetingCount: meetingSources.length,
+      sources: [...emailSources, ...meetingSources],
+    },
+  };
 }
 
-async function _tool_get_profile_section({ section, tier }) {
+async function _tool_get_profile_section({ section, tier, sections: sectionIds }) {
+  // Granular access: fetch specific knowledge doc sections by ID
+  if (sectionIds && sectionIds.length) {
+    const parts = [];
+    const loadedSections = [];
+    for (const id of sectionIds) {
+      const doc = await getKnowledgeDoc(id);
+      if (doc) {
+        parts.push(`## ${doc.title}\n${doc.content}`);
+        loadedSections.push(id);
+      }
+    }
+    if (!parts.length) {
+      return { error: `No knowledge docs found for: ${sectionIds.join(', ')}. Knowledge docs may not be compiled yet.` };
+    }
+    const content = parts.join('\n\n');
+    return {
+      section: 'granular',
+      content,
+      _meta: {
+        type: 'profile',
+        section: 'granular',
+        tier: 'granular',
+        loadedSections,
+        charCount: content.length,
+        tokenEstimate: Math.round(content.length / 4),
+      },
+    };
+  }
+
+  // Learnings section: return compiled learnings from memory
+  if (section === 'learnings') {
+    const doc = await getKnowledgeDoc('learnings:compiled');
+    if (doc && doc.content) {
+      return {
+        section: 'learnings',
+        content: doc.content,
+        _meta: {
+          type: 'learnings',
+          section: 'learnings',
+          entryCount: doc.entryCount || 0,
+          charCount: doc.content.length,
+          tokenEstimate: Math.round(doc.content.length / 4),
+        },
+      };
+    }
+    return { section: 'learnings', content: 'No learnings have been accumulated yet. Coop learns from conversations over time.' };
+  }
+
+  // Standard tier access (backward compatible)
   const t = tier || 'standard';
   const keys = t === 'full'
     ? ['coopProfileFull', 'coopPrefsFull']
@@ -397,22 +496,36 @@ async function _tool_get_profile_section({ section, tier }) {
 
   if (section === 'profile') {
     const content = t === 'full' ? d.coopProfileFull : d.coopProfileStandard;
-    if (content) return { section, tier: t, content };
+    if (content) return {
+      section, tier: t, content,
+      _meta: { type: 'profile', section, tier: t, charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
+    };
     // Fallback: compile on-demand if not yet compiled
     const { compileProfile } = await import('./profile-compiler.js');
     const compiled = await compileProfile();
-    return { section, tier: t, content: t === 'full' ? compiled.coopProfileFull : compiled.coopProfileStandard };
+    const fallbackContent = t === 'full' ? compiled.coopProfileFull : compiled.coopProfileStandard;
+    return {
+      section, tier: t, content: fallbackContent,
+      _meta: { type: 'profile', section, tier: t, charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
+    };
   }
 
   if (section === 'preferences') {
     const content = t === 'full' ? d.coopPrefsFull : d.coopPrefsStandard;
-    if (content) return { section, tier: t, content };
+    if (content) return {
+      section, tier: t, content,
+      _meta: { type: 'profile', section, tier: t, charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
+    };
     const { compileProfile } = await import('./profile-compiler.js');
     const compiled = await compileProfile();
-    return { section, tier: t, content: t === 'full' ? compiled.coopPrefsFull : compiled.coopPrefsStandard };
+    const fallbackContent = t === 'full' ? compiled.coopPrefsFull : compiled.coopPrefsStandard;
+    return {
+      section, tier: t, content: fallbackContent,
+      _meta: { type: 'profile', section, tier: t, charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
+    };
   }
 
-  return { error: `Unknown section: ${section}. Use 'profile' or 'preferences'.` };
+  return { error: `Unknown section: ${section}. Use 'profile', 'preferences', or 'learnings'.` };
 }
 
 async function _tool_get_pipeline_overview({ filter, stage }) {
@@ -452,7 +565,16 @@ async function _tool_get_pipeline_overview({ filter, stage }) {
     lines.push('');
   }
 
-  return { content: lines.join('\n') };
+  const content = lines.join('\n');
+  return {
+    content,
+    _meta: {
+      type: 'pipeline',
+      filter: filter || 'active',
+      entryCount: entries.length,
+      stages: Object.keys(byStage),
+    },
+  };
 }
 
 async function _tool_search_memory({ query, limit }) {
@@ -478,7 +600,11 @@ async function _tool_search_memory({ query, limit }) {
     lines.push('');
   });
 
-  return { content: lines.join('\n') };
+  const content = lines.join('\n');
+  return {
+    content,
+    _meta: { type: 'memory', query, matchCount: matches.length },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -501,7 +627,10 @@ async function _tool_get_memory_narrative() {
   const generatedAt = coopContextWindow.generatedAt;
   const age = generatedAt ? Math.floor((Date.now() - new Date(generatedAt).getTime()) / 86400000) : null;
   const ageLine = age !== null ? `\n\n_(Last synthesized ${age === 0 ? 'today' : age === 1 ? '1 day ago' : `${age} days ago`})_` : '';
-  return { content: md + ageLine };
+  return {
+    content: md + ageLine,
+    _meta: { type: 'narrative', ageInDays: age },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -539,6 +668,7 @@ async function _tool_update_coop_setting({ setting, value }) {
 
     return {
       content: `✓ Chat model switched to ${modelNames[value]}. This applies to new messages.`,
+      _meta: { type: 'setting', setting, value },
     };
   }
 
