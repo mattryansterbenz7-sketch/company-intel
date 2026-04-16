@@ -1055,8 +1055,7 @@ function initKnowledgeDocsViewer() {
         const preview = (section?.content || '').slice(0, 200).replace(/\n/g, ' ').trim();
         const previewId = 'kd_' + doc.id.replace(/[^a-zA-Z0-9]/g, '_');
 
-        return `<div style="border:1px solid var(--ci-border);border-radius:6px;padding:8px 10px;background:var(--ci-bg-page);cursor:pointer;"
-          onclick="(function(el){var d=document.getElementById('${previewId}');d.style.display=d.style.display==='none'?'block':'none';el.querySelector('.kd-chevron').textContent=d.style.display==='none'?'▸':'▾';})(this)">
+        return `<div class="kd-row" data-kd-preview="${previewId}" style="border:1px solid var(--ci-border);border-radius:6px;padding:8px 10px;background:var(--ci-bg-page);cursor:pointer;">
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${cat.border};flex-shrink:0;"></span>
             <span style="font-size:12px;font-weight:600;color:var(--ci-text-primary);flex:1;">${escapeHtml(doc.title)}</span>
@@ -1069,6 +1068,18 @@ function initKnowledgeDocsViewer() {
       });
 
       listEl.innerHTML = rows.join('');
+
+      // Bind click handlers (CSP blocks inline onclick in extensions)
+      listEl.querySelectorAll('.kd-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const previewEl = document.getElementById(row.dataset.kdPreview);
+          const chevron = row.querySelector('.kd-chevron');
+          if (!previewEl) return;
+          const isHidden = previewEl.style.display === 'none';
+          previewEl.style.display = isHidden ? 'block' : 'none';
+          if (chevron) chevron.textContent = isHidden ? '▾' : '▸';
+        });
+      });
 
       const ago = knowledge.compiledAt
         ? Math.floor((Date.now() - knowledge.compiledAt) / 60000)
