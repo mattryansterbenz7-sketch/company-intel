@@ -1136,43 +1136,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// scoreToVerdict, applyExcitementModifier — provided by ui-utils.js
+// scoreToVerdict, applyExcitementModifier, TAG_PALETTE, tagColorIndex, tagColor — provided by ui-utils.js
 
-// Tag color palette
-const TAG_PALETTE = [
-  { border: '#6366f1', color: '#4338ca', bg: 'rgba(99,102,241,0.15)' },   // Indigo
-  { border: '#10b981', color: '#047857', bg: 'rgba(16,185,129,0.15)' },   // Emerald
-  { border: '#f97316', color: '#c2410c', bg: 'rgba(249,115,22,0.15)' },   // Orange
-  { border: '#ec4899', color: '#be185d', bg: 'rgba(236,72,153,0.15)' },   // Pink
-  { border: '#0ea5e9', color: '#0369a1', bg: 'rgba(14,165,233,0.15)' },   // Sky
-  { border: '#a855f7', color: '#7e22ce', bg: 'rgba(168,85,247,0.15)' },   // Purple
-  { border: '#22c55e', color: '#15803d', bg: 'rgba(34,197,94,0.15)' },    // Green
-  { border: '#eab308', color: '#a16207', bg: 'rgba(234,179,8,0.15)' },    // Yellow
-  { border: '#ef4444', color: '#b91c1c', bg: 'rgba(239,68,68,0.15)' },    // Red
-  { border: '#14b8a6', color: '#0f766e', bg: 'rgba(20,184,166,0.15)' },   // Teal
-];
 let customTagColors = {}; // { tagName: paletteIndex }
-
-const SEMANTIC_TAG_COLORS = {
-  'application rejected': 8, 'rejected': 8, "didn't apply": 8,
-  'job posted': 2, 'linkedin easy apply': 4,
-  'vc-backed': 1, 'bootstrapped': 6, 'founding team': 5,
-  'co-founding interest': 5, 'intro request': 0, 'intro requested': 0,
-  'referral': 9, 'referral agreement': 9, 'recruiter': 3,
-  '***action required***': 8,
-};
-
-function tagColorIndex(tag) {
-  const semantic = SEMANTIC_TAG_COLORS[tag.toLowerCase()];
-  if (semantic !== undefined) return semantic;
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff;
-  return Math.abs(hash) % TAG_PALETTE.length;
-}
-function tagColor(tag) {
-  const idx = (customTagColors[tag] !== undefined) ? customTagColors[tag] : tagColorIndex(tag);
-  return TAG_PALETTE[idx % TAG_PALETTE.length];
-}
 function saveTagColor(tag, idx) {
   customTagColors[tag] = idx;
   chrome.storage.local.set({ tagColors: customTagColors }, () => { updateTagsToolbar(); render(); });
@@ -2764,7 +2730,7 @@ function renderKanbanCard(c) {
         const renderBadge = (label, score) => {
           if (score == null) return '';
           const color = score >= 7 ? '#00897b' : score >= 5 ? '#d97706' : '#e5483b';
-          return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${score}</span>`;
+          return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${Number(score).toFixed(1)}</span>`;
         };
         const uc = c.jobMatch?.userCorrections;
         const ucCount = uc?.pendingRescore ? Object.keys(uc.requirements || {}).length + (uc.overall ? 1 : 0) : 0;
