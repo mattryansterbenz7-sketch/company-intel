@@ -1358,7 +1358,18 @@ function triageAction(action, fromDrag) {
   const card = document.getElementById('queue-card');
 
   // Animate out (skip if already animated by drag gesture)
-  if (!fromDrag) card?.classList.add(action === 'pass' ? 'swipe-left' : 'swipe-right');
+  if (!fromDrag && card) {
+    const goLeft = action === 'pass';
+    const rot = goLeft ? -12 : 12;
+    if (_inOverlay) {
+      card.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.8,0.6), opacity 0.35s cubic-bezier(0.4,0,0.8,0.6)';
+      card.style.transform = `translateX(${goLeft ? -60 : 60}px) scale(0.82) rotate(${rot}deg)`;
+    } else {
+      card.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.8,0.6), opacity 0.35s cubic-bezier(0.4,0,0.8,0.6)';
+      card.style.transform = `translateX(${goLeft ? '-140%' : '140%'}) rotate(${rot}deg) scale(0.88)`;
+    }
+    card.style.opacity = '0';
+  }
 
   // Sound
   if (typeof CISounds !== 'undefined') {
@@ -1416,7 +1427,7 @@ function triageAction(action, fromDrag) {
     if (currentIdx >= queue.length) currentIdx = 0;
     updateCount();
     renderCurrent();
-  }, 300);
+  }, 380);
 }
 
 // ── Coop thinking overlay helper ──────────────────────────────────────────────
@@ -1620,16 +1631,16 @@ function initCardSwipe() {
 
     const passLabel = overlay.querySelector('.swipe-label.pass');
     if (Math.abs(currentX) >= THRESHOLD) {
-      // Trigger action
-      card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
       const direction = currentX < 0 ? 'pass' : 'interested';
+      const rot = currentX < 0 ? -12 : 12;
+      card.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.8,0.6), opacity 0.35s cubic-bezier(0.4,0,0.8,0.6)';
       if (_inOverlay) {
-        card.style.transform = `translateX(${currentX < 0 ? -30 : 30}px) scale(0.88) rotate(${currentX < 0 ? -5 : 5}deg)`;
+        card.style.transform = `translateX(${currentX < 0 ? -60 : 60}px) scale(0.82) rotate(${rot}deg)`;
       } else {
-        card.style.transform = `translateX(${currentX < 0 ? '-120%' : '120%'}) rotate(${currentX < 0 ? '-12' : '12'}deg)`;
+        card.style.transform = `translateX(${currentX < 0 ? '-140%' : '140%'}) rotate(${rot}deg) scale(0.88)`;
       }
       card.style.opacity = '0';
-      setTimeout(() => triageAction(direction, true), 150);
+      setTimeout(() => triageAction(direction, true), 320);
     } else {
       resetState();
     }
