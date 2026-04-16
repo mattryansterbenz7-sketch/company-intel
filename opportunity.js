@@ -781,13 +781,13 @@ function renderPanelBody(pid) {
       const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
       const fitsCol  = fits.length  ? `<div><div class="p-label">Green Flags</div><ul class="p-bullets">${fits.map((f, i) => {
         const color = greenShades[Math.min(i, greenShades.length - 1)];
-        return `<li class="fit" title="${_flagTip(f)}" style="cursor:help;"><span style="color:${color};font-size:16px;">&#x2714;</span><span>${f.text} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></span></li>`;
+        return `<li class="fit" title="${_flagTip(f)}" style="cursor:help;"><span style="color:${color};font-size:16px;">&#x2714;</span><span>${linkReviewSources(escapeHtml(f.text), e.reviews)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></span></li>`;
       }).join('')}</ul></div>`  : '';
       // Red gradient: worst first (dark red → light red)
       const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
       const flagsCol = flags.length ? `<div><div class="p-label">Red Flags</div><ul  class="p-bullets">${flags.map((f, i) => {
         const color = redShades[Math.min(i, redShades.length - 1)];
-        return `<li class="flag" title="${_flagTip(f)}" style="cursor:help;"><span style="color:${color};font-size:16px;">&#x25CF;</span><span>${f.text} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></span></li>`;
+        return `<li class="flag" title="${_flagTip(f)}" style="cursor:help;"><span style="color:${color};font-size:16px;">&#x25CF;</span><span>${linkReviewSources(escapeHtml(f.text), e.reviews)} <span style="opacity:0.5;font-size:10px;">${_flagSrcIcon(f.source)}</span></span></li>`;
       }).join('')}</ul></div>` : '';
       let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">${fitsCol}${flagsCol}</div>`;
 

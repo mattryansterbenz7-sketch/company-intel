@@ -4680,17 +4680,6 @@ function renderActivitySection() {
     return { ...card, count, goal: goals[card.key] || 0, tooltip };
   });
 
-  const funnelStages = customOpportunityStages
-    .filter(s => s.key !== 'rejected')
-    .map(s => ({ key: s.key, label: s.label, color: s.color, count: opps.filter(c => (c.jobStage || 'needs_review') === s.key).length }));
-
-  const funnelHtml = funnelStages.map((s, i) => `
-    <div class="funnel-stage" data-stage-key="${s.key}" style="cursor:pointer" title="View ${s.label}">
-      <div class="funnel-count" style="${s.count > 0 ? `color:${s.color}` : 'color:#b0c1d4'}">${s.count || '—'}</div>
-      <div class="funnel-label">${s.label}</div>
-    </div>${i < funnelStages.length - 1 ? '<div class="funnel-arrow">›</div>' : ''}
-  `).join('');
-
   const goalCardsHtml = goalDefs.map(g => {
     const showGoal = g.hasGoal !== false && g.goal > 0;
     return `
@@ -4740,25 +4729,11 @@ function renderActivitySection() {
         </div>
       </div>
     </div>
-    <div class="activity-funnel">${funnelHtml}</div>
     <div class="activity-goals-row">
       ${goalCardsHtml}
       <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
     </div>
   `;
-
-  // Funnel stage click → scroll kanban column into view
-  section.querySelectorAll('.funnel-stage[data-stage-key]').forEach(el => {
-    el.addEventListener('click', () => {
-      const key = el.dataset.stageKey;
-      const col = document.querySelector(`.kanban-col[data-col-key="${key}"]`);
-      if (col) {
-        col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        col.style.outline = `2px solid ${funnelStages.find(s => s.key === key)?.color || '#FF7A59'}`;
-        setTimeout(() => { col.style.outline = ''; }, 1200);
-      }
-    });
-  });
 
   section.querySelectorAll('.period-tab').forEach(btn => {
     btn.addEventListener('click', () => {
