@@ -555,7 +555,11 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   }
 
   // Build context manifest from tool call metadata
-  const contextManifest = _buildContextManifest(toolCallLog);
+  // Include the always-embedded profile/prefs as a synthetic entry so transparency UI reflects it
+  const embeddedDocs = [];
+  if (coopProfileStandard) embeddedDocs.push('profile');
+  if (coopPrefsStandard) embeddedDocs.push('preferences');
+  const contextManifest = _buildContextManifest(toolCallLog, embeddedDocs);
 
   return {
     reply: finalReply,
@@ -579,11 +583,24 @@ const _TOOL_LABELS = {
   update_coop_setting: 'Settings',
 };
 
-function _buildContextManifest(toolCallLog) {
-  if (!toolCallLog.length) return null;
+function _buildContextManifest(toolCallLog, embeddedDocs) {
+  const hasToolCalls = toolCallLog.length > 0;
+  const hasEmbedded = embeddedDocs && embeddedDocs.length > 0;
+  if (!hasToolCalls && !hasEmbedded) return null;
 
   const sourceCount = { emails: 0, meetings: 0, profiles: 0, companies: 0, memories: 0, pipeline: 0 };
   const tools = [];
+
+  // Add synthetic entries for always-embedded docs (profile/prefs in system prompt)
+  if (hasEmbedded) {
+    sourceCount.profiles++;
+    tools.push({
+      name: '_embedded',
+      label: 'Your Profile',
+      target: null,
+      meta: { type: 'profile', section: 'embedded', tier: 'standard', embedded: true, loadedSections: embeddedDocs },
+    });
+  }
 
   for (const t of toolCallLog) {
     const meta = t._meta || {};

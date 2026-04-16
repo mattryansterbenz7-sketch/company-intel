@@ -217,7 +217,8 @@ function renderContextManifest(manifest, toolCalls, prefix) {
     // Profile: show what sections were loaded
     if (meta.type === 'profile' && meta.loadedSections?.length) {
       const sectionNames = meta.loadedSections.map(s => s.replace(/^(profile|prefs):/, '')).join(', ');
-      subRows += `<div class="${p}-ctx-sub">${escapeHtml(sectionNames)}</div>`;
+      const suffix = meta.embedded ? ' (always loaded)' : '';
+      subRows += `<div class="${p}-ctx-sub">${escapeHtml(sectionNames + suffix)}</div>`;
     } else if (meta.type === 'profile' && meta.sectionHeaders?.length) {
       subRows += `<div class="${p}-ctx-sub">${escapeHtml(meta.sectionHeaders.join(', '))}</div>`;
     } else if (meta.type === 'profile' && meta.tier) {
