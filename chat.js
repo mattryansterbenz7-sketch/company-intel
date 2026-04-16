@@ -331,6 +331,9 @@ function buildChatPanel(container, entry) {
         }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
+    // Bind context manifest expand/collapse
+    if (typeof bindContextManifestEvents === 'function') bindContextManifestEvents(msgsEl);
+
     // Bind follow-up chip clicks
     msgsEl.querySelectorAll('.chat-followup-btn').forEach(btn => {
       btn.addEventListener('click', () => {

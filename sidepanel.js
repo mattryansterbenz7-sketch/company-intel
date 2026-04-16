@@ -4521,6 +4521,9 @@ function renderContactsSection(el, contacts) {
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
+    // Bind context manifest expand/collapse
+    if (typeof bindContextManifestEvents === 'function') bindContextManifestEvents(msgsEl);
+
     // Bind proposal accept/dismiss buttons
     msgsEl.querySelectorAll('.sp-chat-proposal-accept').forEach(btn => {
       btn.addEventListener('click', () => {

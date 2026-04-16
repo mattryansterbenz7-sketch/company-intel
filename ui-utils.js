@@ -248,14 +248,41 @@ function renderContextManifest(manifest, toolCalls, prefix) {
     </div>${subRows}`;
   }).join('');
 
+  // If no meaningful data was loaded, show a simpler line
+  const summaryText = manifest.summary === 'no context loaded'
+    ? 'no additional context loaded'
+    : manifest.summary;
+
+  // Use data-ctx-toggle instead of inline onclick (CSP blocks inline handlers in extensions)
   return `<div class="${p}-ctx-manifest">
-    <div class="${p}-ctx-header" onclick="(function(el){var d=el.parentElement.querySelector('.${p}-ctx-detail');var c=el.querySelector('.${p}-ctx-chevron');if(d.style.display==='none'){d.style.display='block';c.textContent='▾';}else{d.style.display='none';c.textContent='▸';}})(this)">
+    <div class="${p}-ctx-header" data-ctx-toggle>
       <span style="color:#7C6EF0;">↳</span>
-      <span class="${p}-ctx-summary">Loaded ${escapeHtml(manifest.summary)}</span>
-      <span class="${p}-ctx-chevron">▸</span>
+      <span class="${p}-ctx-summary">${detailRows ? 'Loaded ' : ''}${escapeHtml(summaryText)}</span>
+      ${detailRows ? `<span class="${p}-ctx-chevron">▸</span>` : ''}
     </div>
-    <div class="${p}-ctx-detail" style="display:none;">${detailRows}</div>
+    ${detailRows ? `<div class="${p}-ctx-detail" style="display:none;">${detailRows}</div>` : ''}
   </div>`;
+}
+
+/**
+ * Bind click handlers for context manifest expand/collapse.
+ * Must be called after rendering messages into the DOM.
+ * Safe to call multiple times — re-binds only new unbound elements.
+ */
+function bindContextManifestEvents(container) {
+  if (!container) return;
+  container.querySelectorAll('[data-ctx-toggle]').forEach(header => {
+    if (header._ctxBound) return;
+    header._ctxBound = true;
+    header.addEventListener('click', () => {
+      const detail = header.parentElement.querySelector('[class$="-ctx-detail"]');
+      const chevron = header.querySelector('[class$="-ctx-chevron"]');
+      if (!detail) return;
+      const isHidden = detail.style.display === 'none';
+      detail.style.display = isHidden ? 'block' : 'none';
+      if (chevron) chevron.textContent = isHidden ? '▾' : '▸';
+    });
+  });
 }
 
 // ── Context manifest CSS (injected once per page) ────────────────────────────
