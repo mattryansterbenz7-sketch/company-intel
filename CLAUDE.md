@@ -333,3 +333,125 @@ Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No w
 - `stageColor()` consolidation into ui-utils.js
 - Export/import backup
 - Analytics dashboard (funnel conversion, response rate)
+
+## GitHub Board Management
+
+All issues live on the [Coop.ai project board](https://github.com/users/mattryansterbenz7-sketch/projects/1).
+
+### GraphQL IDs
+
+| Resource | ID |
+|----------|----|
+| Project | `PVT_kwHOEA1iCM4BTJyy` |
+| Status field | `PVTSSF_lAHOEA1iCM4BTJyyzhAegdY` |
+| Priority field | `PVTSSF_lAHOEA1iCM4BTJyyzhAekQU` |
+
+| Column | Option ID |
+|--------|-----------|
+| Needs Spec | `227f3e8b` |
+| Backlog | `43f0ed97` |
+| Up Next | `2cee5689` |
+| In Progress | `7556d12e` |
+| Monitoring | `2eea7b72` |
+| Done | `c24e13e2` |
+
+| Priority | Option ID |
+|----------|-----------|
+| P1 | `d1b218cb` |
+| P2 | `7f7a7752` |
+| P3 | `78404ef6` |
+
+### Column assignment
+
+- **Needs Spec** — idea without a clear implementation path; needs design or PRD before coding starts
+- **Backlog** — well-defined, no urgency; ready to pick up whenever
+- **Up Next** — prioritized for the near term; next in line to be picked up
+- **In Progress** — actively being coded; move here before writing any code
+- **Monitoring** — shipped, watching for regressions or awaiting Matt's confirmation
+- **Done** — confirmed complete; GitHub issue must be closed when moved here
+
+### Priority assignment
+
+- **P1** — blocking, regression, data loss, or active-roadmap feature on a deadline
+- **P2** — meaningful bug or improvement that degrades UX; should ship soon
+- **P3** — nice-to-have, cosmetic, low urgency
+
+### Workflow rules
+
+1. Move issue to **In Progress** before writing any code — never after.
+2. When code is pushed: move to **Monitoring**.
+3. When Matt confirms it works: move to **Done** and close the GitHub issue.
+4. Never leave an issue open if it is in the Done column.
+
+### Adding issues to the board
+
+Every new issue must be added to the board immediately after creation — the `/issue` skill handles this automatically. For manual additions, use `addProjectV2ItemById` to get the item ID, then call `updateProjectV2ItemFieldValue` twice (Status, Priority).
+
+```bash
+# 1. Add to project, capture item ID
+ITEM_ID=$(gh api graphql -f query='
+  mutation {
+    addProjectV2ItemById(input: {
+      projectId: "PVT_kwHOEA1iCM4BTJyy"
+      contentId: "ISSUE_NODE_ID"
+    }) { item { id } }
+  }' --jq '.data.addProjectV2ItemById.item.id')
+
+# 2. Set Status column
+gh api graphql -f query="
+  mutation {
+    updateProjectV2ItemFieldValue(input: {
+      projectId: \"PVT_kwHOEA1iCM4BTJyy\"
+      itemId: \"$ITEM_ID\"
+      fieldId: \"PVTSSF_lAHOEA1iCM4BTJyyzhAegdY\"
+      value: { singleSelectOptionId: \"COLUMN_OPTION_ID\" }
+    }) { projectV2Item { id } }
+  }"
+
+# 3. Set Priority
+gh api graphql -f query="
+  mutation {
+    updateProjectV2ItemFieldValue(input: {
+      projectId: \"PVT_kwHOEA1iCM4BTJyy\"
+      itemId: \"$ITEM_ID\"
+      fieldId: \"PVTSSF_lAHOEA1iCM4BTJyyzhAekQU\"
+      value: { singleSelectOptionId: \"PRIORITY_OPTION_ID\" }
+    }) { projectV2Item { id } }
+  }"
+```
+
+### Board hygiene
+
+- **Never** use `updateProjectV2Field` — it mutates field definitions and wipes all item assignments. Always use `updateProjectV2ItemFieldValue`.
+- Before creating a new issue, scan open issues for duplicates. Close exact duplicates with a comment pointing to the canonical issue.
+- Don't touch issues in the Done column — they are historical records.
+- Always hyperlink issue references as `[#123](https://github.com/mattryansterbenz7-sketch/company-intel/issues/123)` — never bare `#123`.
+
+## Model Assignment
+
+Every issue must be labeled with the most efficient Claude model to action it. Apply the label at issue creation; respect it when picking up work.
+
+### Labels
+
+| Label | Model | Use when |
+|-------|-------|----------|
+| `model:haiku` | Claude Haiku 4.5 | Task is isolated, well-defined, and fits in one file. Small bugs with obvious causes, copy/text changes, CSS tweaks, adding a simple field to existing UI. |
+| `model:sonnet` | Claude Sonnet 4.6 | Standard feature development (1–3 files), moderate debugging, API integration following an existing pattern, most board tasks. Default when uncertain. |
+| `model:opus` | Claude Opus 4.7 | Complex architecture spanning many files/systems, bugs with unclear root cause, Needs Spec issues requiring design thinking, P1s with high stakes, performance/cost analysis. |
+
+### Assignment heuristics
+
+Ask: *If I described this task to a capable engineer in one sentence, how much would they need to think?*
+
+- **No thinking needed** (mechanical execution) → Haiku
+- **Some judgment required** (moderate complexity) → Sonnet
+- **Deep reasoning required** (ambiguous, high-stakes, cross-system) → Opus
+
+When in doubt, assign Sonnet. Upgrade to Opus only for genuinely hard problems — it's slower and more expensive.
+
+### Respecting the label
+
+When picking up an issue to work on:
+1. Check its model label: `gh issue view NUMBER --json labels --jq '.labels[].name'`
+2. If the label differs from the current model, flag it to the user: *"This issue is tagged `model:opus` — consider switching models before we start."*
+3. Don't override the label silently — surface it and let Matt decide.
