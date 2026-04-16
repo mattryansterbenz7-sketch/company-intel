@@ -3186,7 +3186,7 @@ function renderScoreBreakdown(breakdown) {
     return `<div class="breakdown-row" style="position:relative;cursor:help;">
       <span class="breakdown-label"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};margin-right:5px;vertical-align:middle;"></span>${c.label} <span style="opacity:0.4;font-size:10px;">ⓘ</span></span>
       <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%;background:${barColor}"></div></div>
-      <span class="breakdown-val" style="color:${barColor}">${val}</span>
+      <span class="breakdown-val" style="color:${barColor}">${Number(val).toFixed(1)}</span>
       <div class="breakdown-tooltip">${c.tip}</div>
     </div>`;
   }).join('');

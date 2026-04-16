@@ -2244,7 +2244,7 @@ function buildFitSection() {
           ${chevron}
           <span class="fit-dim-label">${dim.label}</span>
           <div class="fit-dim-bar"><div class="fit-dim-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
-          <span class="fit-dim-val ${tier}">${val}</span>
+          <span class="fit-dim-val ${tier}">${Number(val).toFixed(1)}</span>
         </summary>
         ${hasDetail ? `<div class="fit-dim-detail">${detailHtml}</div>` : ''}
       </details>`;

@@ -881,7 +881,7 @@ function renderPanelBody(pid) {
           html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <span style="font-size:11px;color:#6B6560;width:110px;flex-shrink:0;font-weight:500">${c.label}</span>
             <div style="flex:1;height:6px;background:#e8e5e0;border-radius:3px;overflow:hidden"><div style="height:100%;border-radius:3px;width:${pct}%;background:${color}"></div></div>
-            <span style="font-size:11px;font-weight:700;width:20px;text-align:right;color:${color}">${val}</span>
+            <span style="font-size:11px;font-weight:700;width:20px;text-align:right;color:${color}">${Number(val).toFixed(1)}</span>
           </div>`;
         });
         html += `</div></div>`;

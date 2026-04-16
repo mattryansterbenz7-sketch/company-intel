@@ -534,12 +534,12 @@ function renderCurrent() {
         <span class="queue-dim-dot ${dim.dot}"></span>
         <span class="queue-dim-name">${dim.label}</span>
         <div class="queue-bar-track"><div class="queue-bar-fill ${tier}" style="width:${val * 10}%"></div></div>
-        <span class="queue-dim-score ${tier}">${val}</span>
+        <span class="queue-dim-score ${tier}">${Number(val).toFixed(1)}</span>
       </div>`);
 
     // Toggle button
     dimToggles.push(`<button class="queue-dim-toggle-btn${isQual ? ' active' : ''}" data-dim="${dim.key}" data-dot="${dim.dot}">
-      <span class="queue-dim-dot ${dim.dot}"></span>${DIM_SHORT[dim.key] || dim.label}<span class="queue-dim-toggle-score ${tier}">${val}</span>
+      <span class="queue-dim-dot ${dim.dot}"></span>${DIM_SHORT[dim.key] || dim.label}<span class="queue-dim-toggle-score ${tier}">${Number(val).toFixed(1)}</span>
     </button>`);
 
     // Build detail panel content

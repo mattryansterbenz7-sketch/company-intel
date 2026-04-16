@@ -4630,55 +4630,6 @@ function initAutoSave() {
   // Job match toggle
   document.getElementById('pref-job-match-toggle').addEventListener('change', () => saveSyncPrefs(true));
 
-  // Comp bracket preview — update live as user types
-  const compFields = ['pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong'];
-  compFields.forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', renderCompBracketPreview);
-  });
-  renderCompBracketPreview();
-}
-
-function renderCompBracketPreview() {
-  const container = document.getElementById('comp-bracket-preview');
-  const rowsEl = document.getElementById('comp-bracket-rows');
-  if (!container || !rowsEl) return;
-
-  const parse = id => {
-    const raw = (document.getElementById(id)?.value || '').replace(/[^0-9.]/g, '');
-    const n = parseFloat(raw);
-    return n > 0 ? (n < 1000 ? n * 1000 : n) : 0;  // treat "120" as 120k
-  };
-
-  const salaryFloor = parse('pref-salary-floor');
-  const salaryStrong = parse('pref-salary-strong');
-  const oteFloor = parse('pref-ote-floor');
-  const oteStrong = parse('pref-ote-strong');
-
-  if (!salaryFloor && !oteFloor) { container.style.display = 'none'; return; }
-  container.style.display = '';
-
-  const fmt = n => '$' + Math.round(n / 1000) + 'k';
-
-  function bracketRow(color, label, threshold, sev) {
-    return `<div style="display:flex;align-items:center;gap:4px;line-height:1.3;"><span style="color:${color};font-size:8px;">&#9679;</span><span style="color:var(--ci-text-secondary);flex:1;white-space:nowrap;">${label}</span><span style="color:var(--ci-text-tertiary);font-size:10px;">${threshold}</span><span style="color:var(--ci-text-tertiary);font-size:9px;opacity:0.6;">s${sev}</span></div>`;
-  }
-  function bracketRows(floor, strong, label) {
-    if (!floor) return '';
-    const s = strong || floor * 1.3;
-    const mid = (floor + s) / 2;
-    return `<div style="font-size:9px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;margin-top:3px;margin-bottom:1px;">${label}</div>`
-      + bracketRow('#22c55e', 'Well above', '\u2265' + fmt(s * 1.15), 5)
-      + bracketRow('#22c55e', 'Meets target', '\u2265' + fmt(s), 4)
-      + bracketRow('#22c55e', 'Above floor', '\u2265' + fmt(mid), 2)
-      + bracketRow('#22c55e', 'Meets floor', '\u2265' + fmt(floor), 1)
-      + bracketRow('#ef4444', 'Slightly below', '\u2265' + fmt(floor * 0.9), 2)
-      + bracketRow('#ef4444', 'Below floor', '\u2265' + fmt(floor * 0.8), 3)
-      + bracketRow('#ef4444', 'Well below', '<' + fmt(floor * 0.8), 5);
-  }
-
-  rowsEl.innerHTML = bracketRows(salaryFloor, salaryStrong, 'Base') + bracketRows(oteFloor, oteStrong, 'OTE');
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
