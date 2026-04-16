@@ -27,6 +27,9 @@ function filterReviewResults(results, company) {
     .split(/\s+/)
     .filter(w => w.length > 2);
 
+  // Common English words that shouldn't be used for substring matching
+  const COMMON_WORDS = new Set(['the','and','for','that','this','with','from','have','are','was','will','can','all','one','new','get','but','not','been','out','into','your','our','more','also','just','over','how','its','may','use','well','way','any','set','run','let','own','now','key','top','part','open','go','back','take','long','made','turn','good','work','best','much','most','last','look','help','line','end','close','play','move','live','real','lead','free','note','rise','side','find','high','plan','grow','gain','edge','push','pull','mark','shift','point','scale','share','drive','build','clear','level','prime','spark','reach','track','launch','target','impact','signal','bridge','insight','upside','notion','harbor','forge','lever','relay','flow','ramp','sail','beam','hive','bolt','pulse','drift','grove','arc','dash','stride','ripple','ample','rally','sift','crisp','loop','blend','gist','glow','mesh','snap','link','flux','apex','meld','tilt','warp','pivot','craft','nexus','slate','scout','vault','layer','amplify','cascade','elevate','integrate']);
+
   return results.filter(r => {
     const title = (r.title || '').toLowerCase();
     const snippet = (r.snippet || '').toLowerCase();
@@ -36,11 +39,29 @@ function filterReviewResults(results, company) {
     // Drop anything matching a known junk pattern in title or URL
     if (JUNK_REVIEW_PATTERNS.some(pat => pat.test(title) || pat.test(url))) return false;
 
-    // Drop results where the company name doesn't appear in the title or snippet
-    // (indicates a generic/off-topic page slipped through)
-    const mentionsCompany = companyWords.length === 0
-      || companyWords.some(w => combined.includes(w));
-    if (!mentionsCompany) return false;
+    // For review-platform URLs, check that the company name appears in the URL slug
+    // (e.g. glassdoor.com/Reviews/Upside-Reviews). Platform URLs always encode the company name.
+    const isReviewSite = /glassdoor\.com|indeed\.com|comparably\.com|repvue\.com/.test(url);
+    if (isReviewSite) {
+      const slug = url.replace(/[^a-z0-9]/g, ' ');
+      const nameInSlug = companyWords.some(w => slug.includes(w));
+      if (nameInSlug) return true;
+      // URL doesn't contain company name — likely a wrong company's page
+      return false;
+    }
+
+    // For non-review-site results (Reddit, Blind, etc.): use word-boundary matching
+    // to avoid common English word false positives
+    const hasCommonWord = companyWords.length > 0 && companyWords.every(w => COMMON_WORDS.has(w));
+    if (hasCommonWord) {
+      // All company name words are common English — require the full company name as a phrase
+      const mentionsCompany = combined.includes(companyLower);
+      if (!mentionsCompany) return false;
+    } else {
+      const mentionsCompany = companyWords.length === 0
+        || companyWords.some(w => combined.includes(w));
+      if (!mentionsCompany) return false;
+    }
 
     return true;
   });
@@ -320,7 +341,7 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
     // Step 1: Scout query runs in parallel with other searches
     let leaderResults, jobResults, productResults;
     const scoutPromise = fetchSearchResults(
-      `"${company}" (site:glassdoor.com OR site:indeed.com OR site:comparably.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees`,
+      `${qd} (site:glassdoor.com OR site:indeed.com OR site:comparably.com OR site:repvue.com OR site:blind.app OR site:reddit.com) reviews employees`,
       state.pipelineConfig.searchCounts?.reviewScout || 3
     );
 
@@ -353,8 +374,8 @@ export async function researchCompany(company, domain, prefs, companyLinkedin, l
     const roleKeywords = (_drillPrefs?.roles || '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 2).slice(0, 3).join(' OR ') || 'sales OR GTM OR revenue OR leadership';
 
     const drillPromises = [];
-    if (hasRepVue) drillPromises.push(fetchSearchResults(`site:repvue.com "${company}" sales quota culture`, state.pipelineConfig.searchCounts?.reviewDrill || 2));
-    if (hasGlassdoor) drillPromises.push(fetchSearchResults(`site:glassdoor.com/Reviews "${company}" ${roleKeywords}`, state.pipelineConfig.searchCounts?.reviewDrill || 2));
+    if (hasRepVue) drillPromises.push(fetchSearchResults(`site:repvue.com ${qd} sales quota culture`, state.pipelineConfig.searchCounts?.reviewDrill || 2));
+    if (hasGlassdoor) drillPromises.push(fetchSearchResults(`site:glassdoor.com/Reviews ${qd} ${roleKeywords}`, state.pipelineConfig.searchCounts?.reviewDrill || 2));
     const drillResults = drillPromises.length ? await Promise.all(drillPromises) : [];
 
     // Step 4: Combine, filter, and deduplicate by URL

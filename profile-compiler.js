@@ -116,6 +116,13 @@ function compileProfileFull(d, prefs) {
   const resume = d.profileResume?.content || prefs.resumeText || '';
   if (resume) {
     sections.push(`## Resume\n${truncate(resume, 6000)}`);
+    // Extract education section separately so truncation doesn't clip it
+    if (resume.length > 5500) {
+      const eduMatch = resume.match(/\b(EDUCATION|Education|ACADEMIC|Academic|DEGREES?|Degrees?|CERTIFICATIONS?\s*(?:&|AND)\s*EDUCATION)\b[\s\S]{0,1500}/i);
+      if (eduMatch && resume.indexOf(eduMatch[0]) >= 5000) {
+        sections.push(`## Education (from resume)\n${eduMatch[0].trim()}`);
+      }
+    }
   }
 
   // Links

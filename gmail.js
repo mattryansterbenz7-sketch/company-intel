@@ -282,6 +282,30 @@ export async function fetchGmailEmails(domain, companyName, linkedinSlug, knownC
           return true;
         });
 
+        // Post-filter: emails matched ONLY by company-name bootstrap (not by domain)
+        // must have stronger evidence. If no sender/recipient is on the target domain
+        // or a known sibling, require company name in subject. Prevents cross-contact
+        // leak where a common-word name (e.g. "Integrate") matches unrelated emails.
+        if (isBootstrap) {
+          const allRelevantDomains = new Set([domain, ...siblingDomains]);
+          if (typeof newSiblings !== 'undefined') newSiblings.forEach(d => allRelevantDomains.add(d));
+          const knownEmailSet = new Set((knownContactEmails || []).map(e => e.toLowerCase()));
+          allEmails = allEmails.filter(e => {
+            const participants = [e.from, e.to, e.cc].filter(Boolean).join(', ');
+            const addrs = [...participants.matchAll(/<([^>]+)>/g)].map(m => m[1].toLowerCase());
+            if (!addrs.length) {
+              const bare = participants.match(/[\w.+-]+@[\w.-]+/g);
+              if (bare) addrs.push(...bare.map(a => a.toLowerCase()));
+            }
+            const hasDomainMatch = addrs.some(addr => {
+              const d = (addr.split('@')[1] || '');
+              return allRelevantDomains.has(d) || knownEmailSet.has(addr);
+            });
+            if (hasDomainMatch) return true;
+            return companyInSubject(e);
+          });
+        }
+
         // Get user's own email for contact deduplication
         let userEmail = null;
         try {
