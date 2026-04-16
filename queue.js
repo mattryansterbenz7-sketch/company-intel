@@ -212,8 +212,8 @@ function renderModalTasks(entry, tasks) {
       <div class="smt-add">
         <input type="text" id="smt-input" placeholder="Add a task...">
         <select id="smt-priority">
-          <option value="normal">Normal</option>
           <option value="high">High</option>
+          <option value="normal" selected>Normal</option>
           <option value="low">Low</option>
         </select>
         <input type="date" id="smt-date">
