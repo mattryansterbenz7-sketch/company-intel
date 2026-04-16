@@ -343,6 +343,10 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function handleCoopMessageToolUse({ messages, context, globalChat, chatModel, careerOSChat }) {
+  if (!messages || !Array.isArray(messages)) {
+    console.error('[Coop][ToolUse] messages is missing or not an array');
+    return { reply: 'Chat error: no messages provided.', error: 'No messages' };
+  }
   context = context || {};
   const today = new Date();
   const todayStr = context.todayDate || today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

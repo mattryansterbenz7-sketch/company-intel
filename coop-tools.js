@@ -38,27 +38,26 @@ export const COOP_TOOLS = [
   },
   {
     name: 'get_profile_section',
-    description: "Returns the user's profile data, preferences, or learnings as markdown. Use 'profile' for background/story/experience/skills, 'preferences' for job search criteria/flags/comp/ICP, 'learnings' for accumulated insights from past conversations. For targeted access, pass specific section IDs via the 'sections' parameter (e.g. 'profile:experience', 'prefs:compensation'). Use 'full' tier for scoring, cover letters, deep career questions; 'standard' for general chat.",
+    description: "Returns the user's profile data, preferences, or learnings as markdown. PREFERRED: use the 'sections' parameter with specific doc IDs for targeted access — this is more efficient and shows the user exactly what you loaded. Only fall back to 'section' + 'tier' when you need the full document. Use 'full' tier only for scoring, cover letters, deep career questions.",
     input_schema: {
       type: 'object',
       properties: {
+        sections: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "PREFERRED. Specific knowledge doc IDs for targeted access. Request only what you need. Available IDs: profile:story, profile:experience, profile:skills, profile:principles, profile:voice, profile:faq, profile:resume, profile:links, prefs:roleICP, prefs:companyICP, prefs:greenFlags, prefs:redFlags, prefs:compensation, prefs:location, prefs:learnings. Example: ['prefs:compensation', 'prefs:roleICP'] for a salary question.",
+        },
         section: {
           type: 'string',
           enum: ['profile', 'preferences', 'learnings'],
-          description: "'profile' = who the user is (story, experience, skills, voice). 'preferences' = what they want (ICP, flags, comp, location, learnings). 'learnings' = accumulated insights from past conversations.",
+          description: "Fallback: load an entire section. 'profile' = who the user is. 'preferences' = what they want. 'learnings' = accumulated insights. Prefer 'sections' array for targeted access.",
         },
         tier: {
           type: 'string',
           enum: ['standard', 'full'],
-          description: "Detail level. 'standard' (~800 tokens) for most questions. 'full' (~2000 tokens) for scoring, applications, cover letters.",
-        },
-        sections: {
-          type: 'array',
-          items: { type: 'string' },
-          description: "Optional. Specific knowledge doc IDs for targeted access (e.g. ['profile:experience', 'prefs:compensation', 'profile:story']). Returns only those sections instead of full tier docs. Available IDs: profile:story, profile:experience, profile:skills, profile:principles, profile:voice, profile:faq, profile:resume, profile:links, prefs:roleICP, prefs:companyICP, prefs:greenFlags, prefs:redFlags, prefs:compensation, prefs:location, prefs:learnings.",
+          description: "Detail level when using 'section'. 'standard' (~800 tokens) for most questions. 'full' (~2000 tokens) for scoring, applications, cover letters.",
         },
       },
-      required: ['section'],
     },
   },
   {
@@ -438,6 +437,12 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
   };
 }
 
+// Extract ## headings from markdown content for transparency display
+function _extractSectionHeaders(content) {
+  if (!content) return [];
+  return (content.match(/^##\s+.+$/gm) || []).map(h => h.replace(/^##\s+/, '').trim());
+}
+
 async function _tool_get_profile_section({ section, tier, sections: sectionIds }) {
   // Granular access: fetch specific knowledge doc sections by ID
   if (sectionIds && sectionIds.length) {
@@ -498,7 +503,7 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
     const content = t === 'full' ? d.coopProfileFull : d.coopProfileStandard;
     if (content) return {
       section, tier: t, content,
-      _meta: { type: 'profile', section, tier: t, charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(content), charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
     };
     // Fallback: compile on-demand if not yet compiled
     const { compileProfile } = await import('./profile-compiler.js');
@@ -506,7 +511,7 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
     const fallbackContent = t === 'full' ? compiled.coopProfileFull : compiled.coopProfileStandard;
     return {
       section, tier: t, content: fallbackContent,
-      _meta: { type: 'profile', section, tier: t, charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(fallbackContent), charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
     };
   }
 
@@ -514,14 +519,14 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
     const content = t === 'full' ? d.coopPrefsFull : d.coopPrefsStandard;
     if (content) return {
       section, tier: t, content,
-      _meta: { type: 'profile', section, tier: t, charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(content), charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
     };
     const { compileProfile } = await import('./profile-compiler.js');
     const compiled = await compileProfile();
     const fallbackContent = t === 'full' ? compiled.coopPrefsFull : compiled.coopPrefsStandard;
     return {
       section, tier: t, content: fallbackContent,
-      _meta: { type: 'profile', section, tier: t, charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(fallbackContent), charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
     };
   }
 

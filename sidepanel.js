@@ -4890,15 +4890,10 @@ function renderContactsSection(el, contacts) {
     // Ask the model for 2-3 short follow-up questions based on the last reply
     const context = history.slice(-4).map(m => `${m.role}: ${(m.content || '').slice(0, 400)}`).join('\n');
     chrome.runtime.sendMessage({
-      type: 'CHAT_MESSAGE',
-      payload: {
-        message: `Based on this conversation, suggest exactly 3 very short follow-up questions the user might want to ask next. Return ONLY a JSON array of strings, no explanation. Each question max 8 words.\n\n${context}`,
-        history: [],
-        model: 'gpt-4.1-nano',
-        systemPrompt: 'You generate follow-up question suggestions. Return only a JSON array of 3 short strings.',
-        isGlobalChat: true,
-        _internal: true,
-      }
+      type: 'COOP_CHAT',
+      messages: [{ role: 'user', content: `Based on this conversation, suggest exactly 3 very short follow-up questions the user might want to ask next. Return ONLY a JSON array of strings, no explanation. Each question max 8 words.\n\n${context}` }],
+      globalChat: true,
+      chatModel: 'gpt-4.1-nano',
     }, result => {
       if (!result?.reply) return;
       let chips;
