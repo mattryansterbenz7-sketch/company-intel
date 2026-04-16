@@ -54,9 +54,21 @@ function filterReviewResults(results, company) {
     // to avoid common English word false positives
     const hasCommonWord = companyWords.length > 0 && companyWords.every(w => COMMON_WORDS.has(w));
     if (hasCommonWord) {
-      // All company name words are common English — require the full company name as a phrase
-      const mentionsCompany = combined.includes(companyLower);
-      if (!mentionsCompany) return false;
+      // All company name words are common English (e.g. "Upside", "Lever", "Notion")
+      // Require strong signals that the result is about the COMPANY, not the English word:
+      // 1) Title contains the company name (titles are more specific than snippets)
+      // 2) OR company name appears in a company-referencing pattern in title/snippet
+      // 3) OR the URL path contains the company name as a slug segment
+      const nameInTitle = title.includes(companyLower);
+      const esc = companyLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const companyPattern = new RegExp(
+        `((?:at|about|@|join|joining|left|leaving|interview(?:ing)?\\s+(?:at|with))\\s+${esc}|${esc}\\s+(?:company|reviews|employees|culture|salary|glassdoor|rating|interview|hiring|jobs|careers|team|workplace|work.life|comp|ote|quota))`,
+        'i'
+      );
+      const hasCompanyContext = companyPattern.test(combined);
+      const urlPath = url.replace(/^https?:\/\/[^/]+/, '');
+      const nameInUrl = urlPath.includes(companyLower);
+      if (!nameInTitle && !hasCompanyContext && !nameInUrl) return false;
     } else {
       const mentionsCompany = companyWords.length === 0
         || companyWords.some(w => combined.includes(w));

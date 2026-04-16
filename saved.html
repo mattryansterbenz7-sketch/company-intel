@@ -1029,6 +1029,63 @@
     }
     .score-modal-close:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
 
+    /* Score modal tasks */
+    .smt-section { border-top: 1px solid #f0eeeb; padding: 10px 20px 6px; }
+    .smt-header {
+      display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 2px 0;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #A09A94;
+      user-select: none;
+    }
+    .smt-header:hover { color: #6B6560; }
+    .smt-chevron { font-size: 9px; transition: transform 0.15s; }
+    .smt-chevron.open { transform: rotate(90deg); }
+    .smt-count { font-weight: 600; font-size: 10px; color: var(--ci-accent-primary); }
+    .smt-body { padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .smt-item {
+      display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px;
+      border: 1px solid #eaf0f6; border-radius: 6px; font-size: 12px; transition: border-color 0.1s;
+    }
+    .smt-item:hover { border-color: var(--ci-border-strong); }
+    .smt-item:hover .smt-del { opacity: 1; }
+    .smt-item.smt-done { opacity: 0.45; }
+    .smt-item.smt-done .smt-text { text-decoration: line-through; }
+    .smt-check {
+      width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #c4c0bc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;
+      font-size: 10px; color: transparent; transition: all 0.1s;
+    }
+    .smt-check:hover { border-color: var(--ci-accent-primary); }
+    .smt-check.checked { border-color: #86efac; color: #16a34a; background: #f0fdf4; }
+    .smt-text { flex: 1; font-weight: 600; color: #33475b; line-height: 1.4; }
+    .smt-priority {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 5px;
+      border-radius: 3px; white-space: nowrap; line-height: 1.4;
+    }
+    .smt-date { font-size: 10px; color: #A09A94; white-space: nowrap; }
+    .smt-del {
+      background: none; border: none; cursor: pointer; font-size: 13px; color: #c4c0bc;
+      opacity: 0; padding: 0 2px; flex-shrink: 0; transition: opacity 0.1s;
+    }
+    .smt-del:hover { color: var(--ci-accent-red, #f87171); }
+    .smt-add {
+      display: flex; gap: 6px; align-items: center; padding-top: 6px;
+    }
+    .smt-add input[type="text"] {
+      flex: 1; font-size: 12px; padding: 5px 8px; border: 1px solid #E0DDD8; border-radius: 6px;
+      outline: none; font-family: inherit; background: var(--ci-bg-raised, #fff); color: var(--ci-text-primary);
+    }
+    .smt-add input[type="text"]:focus { border-color: var(--ci-accent-primary); }
+    .smt-add select, .smt-add input[type="date"] {
+      font-size: 11px; padding: 4px 6px; border: 1px solid #E0DDD8; border-radius: 6px;
+      outline: none; font-family: inherit; background: var(--ci-bg-raised, #fff); color: var(--ci-text-secondary);
+    }
+    .smt-add-btn {
+      font-size: 11px; font-weight: 600; padding: 5px 12px; border: none; border-radius: 6px;
+      background: var(--ci-accent-primary); color: #fff; cursor: pointer; font-family: inherit;
+      white-space: nowrap;
+    }
+    .smt-add-btn:hover { opacity: 0.9; }
+
     /* Swipe indicators */
     .score-modal { position: relative; transition: none; touch-action: pan-y; user-select: none; }
     .score-modal.swiping { cursor: grabbing; }

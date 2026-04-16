@@ -63,9 +63,11 @@ function compileProfileFull(d, prefs) {
         const parts = [`**${e.company || 'Unknown'}**`];
         if (e.titles) parts[0] += ` — ${e.titles}`;
         if (e.dateRange) parts.push(`(${e.dateRange})`);
-        if (e.summary) parts.push(`\n  ${e.summary}`);
+        if (e.description) parts.push(`\n  ${stripHtml(e.description)}`);
+        if (e.accomplishments) parts.push(`\n  Accomplishments: ${stripHtml(e.accomplishments)}`);
+        if (e.exposures) parts.push(`\n  Skills/Exposures: ${stripHtml(e.exposures)}`);
         const tags = (e.tags || []).join(', ');
-        if (tags) parts.push(`\n  Skills: ${tags}`);
+        if (tags) parts.push(`\n  Tags: ${tags}`);
         return `- ${parts.join(' ')}`;
       }).join('\n');
     }

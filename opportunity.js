@@ -919,7 +919,7 @@ function renderPanelBody(pid) {
         <div class="p-review">
           "${r.snippet}"
           <div class="p-review-src">
-            ${r.source || ''}${r.url ? ` · <a href="${r.url}" target="_blank">View source</a>` : ''}
+            ${r.source ? `<a href="${r.url || '#'}" target="_blank">${r.source}</a>` : ''}
           </div>
         </div>`).join('');
     }

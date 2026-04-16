@@ -300,6 +300,8 @@ ${leaderSnippets || 'None'}
 
 CRITICAL: Search results may contain information about MULTIPLE companies with similar names. Before writing your response, identify which company matches the domain "${domain || company}" and ONLY use information about THAT specific company. If the search results describe two different products/businesses, pick the one that matches the domain. ALL fields in "intelligence" must describe the SAME company — if oneLiner says "staffing", then whosBuyingIt and howItWorks must also be about staffing, NOT about a different product.
 
+REVIEW VALIDATION: For the "reviews" array, ONLY include results that are clearly about the company "${company}" — not generic uses of the word. A Reddit post saying "the upside of remote work" is NOT a review of a company called "Upside". Each review must be an employee/candidate experience or reputation signal specifically about this company. If a search result is ambiguous or uses the company name as a common English word, exclude it.
+
 Respond with a JSON object only, no markdown:
 {
   "intelligence": {
