@@ -349,7 +349,15 @@ function buildChatPanel(container, entry) {
         const idx = parseInt(btn.dataset.idx);
         let text = (typeof history[idx]?.content === 'string' ? history[idx].content : history[idx]?.content?.[0]?.text) || '';
 
-        // Extract only the answer portion, stripping preamble and closing commentary
+        // Extract draft between --- delimiters if exactly two separators exist (Coop draft format)
+        const delimCount = (text.match(/^[\s]*---[\s]*$/gm) || []).length;
+        if (delimCount === 2) {
+          const match = text.match(/^[\s]*---[\s]*$([\s\S]*?)^[\s]*---[\s]*$/m);
+          if (match && match[1]) {
+            text = match[1].trim();
+          }
+        }
+
         // Remove common opening phrases (case-insensitive)
         text = text.replace(/^(?:here['\s]*s(?:\s+my)?|i['\s]*d\s+(?:suggest|say|emphasize|highlight|point\s+out)|i\s+think|i\s+would|the\s+answer|my\s+answer|this\s+would\s+be)[:\s]*/i, '').trim();
 
