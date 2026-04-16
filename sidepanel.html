@@ -541,12 +541,33 @@
     body.chat-mode .sp-chat-messages { flex: 1 1 0 !important; max-height: none !important; min-height: 0 !important; height: auto !important; overflow-y: auto !important; }
     body.chat-mode .sp-chat-input-row { flex-shrink: 0; }
     body.chat-mode .sp-chat-resize-handle { display: none; }
-    /* detach button stays visible in chat-mode as exit button */
     body.chat-mode .sp-chat-header { display: flex; }
-    /* Back button for chat mode */
+    /* Back button — only shown in full mode */
     .sp-chat-back { display: none; background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer; padding: 4px 6px; border-radius: var(--ci-radius-sm); transition: all 0.12s; line-height: 1; font-size: 18px; }
     .sp-chat-back:hover { color: var(--ci-text-primary); background: var(--ci-bg-inset); }
     body.chat-mode .sp-chat-back { display: flex; align-items: center; justify-content: center; }
+
+    /* Half mode — 50/50 split: intel top, chat bottom */
+    body.chat-half #sp-main-scroll { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; }
+    body.chat-half #sp-chat { flex: 1 1 0 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; margin-top: 0 !important; height: auto !important; max-height: none !important; }
+    body.chat-half .sp-inline-chat { flex: 1 1 0 !important; min-height: 0 !important; height: auto !important; overflow: hidden !important; display: flex !important; flex-direction: column !important; }
+    body.chat-half .sp-chat-messages { flex: 1 1 0 !important; max-height: none !important; min-height: 0 !important; height: auto !important; overflow-y: auto !important; }
+    body.chat-half .sp-chat-input-row { flex-shrink: 0; }
+    body.chat-half .sp-chat-resize-handle { display: none; }
+    body.chat-half .sp-chat-header { display: flex; }
+    body.chat-half .sp-chat-back { display: none; }
+
+    /* Minimized bar — slim input bar pinned at bottom, intel fills panel */
+    body.chat-minimized #sp-main-scroll { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; }
+    body.chat-minimized #sp-chat { flex: 0 0 auto !important; display: flex !important; flex-direction: column !important; margin-top: 0 !important; }
+    body.chat-minimized .sp-chat-resize-handle { display: none; }
+    body.chat-minimized .sp-chat-header { display: flex; }
+    body.chat-minimized .sp-chat-messages { display: none !important; }
+    body.chat-minimized .sp-chat-input-row { flex-shrink: 0; display: flex !important; }
+    body.chat-minimized .sp-chat-back { display: none; }
+    /* Size buttons — dim when at limit */
+    .sp-chat-size-btn { opacity: 1; transition: opacity 0.15s; }
+    .sp-chat-size-btn:disabled { opacity: 0.25 !important; cursor: default; }
 
     /* Sticky AI Chat — distinct layer from main content */
     #sp-chat { z-index: 50; background: var(--ci-bg-raised); margin-top: auto; flex-shrink: 0; }
@@ -1129,11 +1150,14 @@
         <button class="sp-chat-bind-btn" id="sp-chat-bind-btn" title="Bind Coop to a saved company or opportunity">📎 Bind</button>
         <a class="sp-chat-bind-view" id="sp-chat-bind-view" href="#" style="display:none;font-size:11px;font-weight:600;color:var(--ci-accent-primary);text-decoration:none;padding:3px 6px;border:1px solid rgba(255,122,89,0.35);border-radius:6px;white-space:nowrap;" title="Open in full CRM">View →</a>
         <div class="sp-chat-header-btns">
+          <button class="sp-chat-header-btn sp-chat-size-btn" id="sp-chat-size-down" title="Shrink chat">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="sp-chat-header-btn sp-chat-size-btn" id="sp-chat-size-up" title="Expand chat">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 10l-5-5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <button class="sp-chat-popout" id="sp-chat-popout" title="View CRM">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 2h5v5M14 2L8 8M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button class="sp-chat-detach" id="sp-chat-detach" title="Full-screen chat">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 10v4h-4M2 6V2h4M14 14L10 10M2 2l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
       </div>

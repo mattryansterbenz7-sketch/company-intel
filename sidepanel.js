@@ -159,38 +159,65 @@ if (coopToggleBtn && typeof COOP !== 'undefined') {
   coopToggleBtn.innerHTML = COOP.avatar(24);
 }
 
-function enterChatMode() {
-  document.body.classList.add('chat-mode');
+// SIZE_ORDER: minimized → half → full
+const CHAT_SIZES = ['minimized', 'half', 'full'];
+
+function _applyTopLevelChatSize(size) {
+  document.body.classList.remove('chat-mode', 'chat-half', 'chat-minimized');
   const chatEl = document.getElementById('sp-chat');
-  if (chatEl) chatEl.style.display = 'flex';
-  // Ensure messages and input are visible (undo minimized state). Clear ALL inline
-  // height constraints — chat-mode CSS handles sizing via flex:1, and any leftover
-  // inline maxHeight (e.g. from a prior resize stored in localStorage) would cap the
-  // messages container and prevent scrolling.
   const msgs = document.getElementById('sp-chat-messages');
   const inputRow = chatEl?.querySelector('.sp-chat-input-row');
-  if (msgs) { msgs.style.display = ''; msgs.style.maxHeight = ''; msgs.style.minHeight = ''; msgs.style.height = ''; }
-  if (inputRow) inputRow.style.display = '';
-  localStorage.setItem('ci_sp_mode', 'chat');
+  if (size === 'full') {
+    document.body.classList.add('chat-mode');
+    if (chatEl) chatEl.style.display = 'flex';
+    if (msgs) { msgs.style.display = ''; msgs.style.maxHeight = ''; msgs.style.minHeight = ''; msgs.style.height = ''; }
+    if (inputRow) inputRow.style.display = '';
+    localStorage.setItem('ci_sp_chat_size', 'full');
+  } else if (size === 'half') {
+    document.body.classList.add('chat-half');
+    if (chatEl) chatEl.style.display = 'flex';
+    if (msgs) { msgs.style.display = ''; msgs.style.maxHeight = ''; msgs.style.minHeight = ''; msgs.style.height = ''; }
+    if (inputRow) inputRow.style.display = '';
+    localStorage.setItem('ci_sp_chat_size', 'half');
+  } else if (size === 'minimized') {
+    document.body.classList.add('chat-minimized');
+    if (chatEl) chatEl.style.display = 'flex';
+    if (msgs) msgs.style.display = 'none';
+    if (inputRow) inputRow.style.display = '';
+    localStorage.setItem('ci_sp_chat_size', 'minimized');
+  } else {
+    // null — hide chat entirely
+    if (chatEl) chatEl.style.display = '';
+    localStorage.removeItem('ci_sp_chat_size');
+  }
+}
+
+function enterChatMode() {
+  const saved = localStorage.getItem('ci_sp_chat_size');
+  const size = CHAT_SIZES.includes(saved) ? saved : 'half';
+  _applyTopLevelChatSize(size);
 }
 
 function exitChatMode() {
-  document.body.classList.remove('chat-mode');
+  document.body.classList.remove('chat-mode', 'chat-half', 'chat-minimized');
   const chatEl = document.getElementById('sp-chat');
-  if (chatEl) chatEl.style.display = '';  // clear inline display set by enterChatMode
-  localStorage.setItem('ci_sp_mode', 'intel');
+  if (chatEl) chatEl.style.display = '';
+  localStorage.removeItem('ci_sp_chat_size');
 }
 
 if (coopToggleBtn) {
   coopToggleBtn.addEventListener('click', enterChatMode);
 }
 if (chatBackBtn) {
-  chatBackBtn.addEventListener('click', exitChatMode);
+  // Back button (visible in full mode) — shrink to half
+  chatBackBtn.addEventListener('click', () => _applyTopLevelChatSize('half'));
 }
 
-// Restore last mode
-if (localStorage.getItem('ci_sp_mode') === 'chat') {
-  enterChatMode();
+// Restore last size (also accept legacy 'chat' value)
+const _savedSize = localStorage.getItem('ci_sp_chat_size');
+const _legacyChat = localStorage.getItem('ci_sp_mode') === 'chat';
+if (CHAT_SIZES.includes(_savedSize) || _legacyChat) {
+  _applyTopLevelChatSize(CHAT_SIZES.includes(_savedSize) ? _savedSize : 'half');
 }
 const savedBtn = document.getElementById('saved-btn'); // may be null if removed
 const companyNameEl = document.getElementById('company-name');
@@ -5090,81 +5117,88 @@ function renderContactsSection(el, contacts) {
     });
   }
 
-  // Chat size states: 'normal' → 'expanded' → 'minimized' → 'normal'
-  let chatSizeState = 'minimized'; // start minimized — user clicks to expand
   const inputRow = chatEl.querySelector('.sp-chat-input-row');
+  const sizeUpBtn = document.getElementById('sp-chat-size-up');
+  const sizeDownBtn = document.getElementById('sp-chat-size-down');
 
-  // Outward arrows = "expand", Inward arrows = "collapse/shrink"
-  const SVG_EXPAND = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 10v4h-4M2 6V2h4M14 14L10 10M2 2l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const SVG_COLLAPSE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l-2 2m0 0h4m-4 0V8M12 6l2-2m0 0h-4m4 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const SVG_MINIMIZE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  function getCurrentChatSize() {
+    if (document.body.classList.contains('chat-mode')) return 'full';
+    if (document.body.classList.contains('chat-half')) return 'half';
+    if (document.body.classList.contains('chat-minimized')) return 'minimized';
+    return null;
+  }
 
-  function applyChatSize() {
-    // In full-screen chat-mode, sizing is handled entirely by CSS (flex:1 + overflow:auto).
-    // Inline display/maxHeight overrides here would break scrolling.
-    if (document.body.classList.contains('chat-mode')) {
+  function setChatSize(size) {
+    // size: 'full' | 'half' | 'minimized' | null (close)
+    _applyTopLevelChatSize(size); // sets body class + localStorage
+    // Reconcile inline styles — CSS handles full/half sizing, inline handles minimized
+    if (size === 'full' || size === 'half') {
       msgsEl.style.display = '';
       msgsEl.style.maxHeight = '';
       msgsEl.style.minHeight = '';
+      msgsEl.style.height = '';
       if (inputRow) inputRow.style.display = '';
-      return;
-    }
-    const tabInd = document.getElementById('sp-tab-indicator');
-    if (chatSizeState === 'expanded') {
-      msgsEl.style.maxHeight = '70vh';
-      msgsEl.style.minHeight = '200px';
-      msgsEl.style.display = '';
-      if (inputRow) inputRow.style.display = '';
-      if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
-      if (detachBtn) { detachBtn.innerHTML = SVG_COLLAPSE; detachBtn.title = 'Shrink chat'; }
-    } else if (chatSizeState === 'minimized') {
+      setTimeout(() => { msgsEl.scrollTop = msgsEl.scrollHeight; }, 50);
+    } else if (size === 'minimized') {
       msgsEl.style.display = 'none';
-      if (inputRow) inputRow.style.display = 'none';
-      if (tabInd) tabInd.style.display = 'none';
-      if (detachBtn) { detachBtn.innerHTML = SVG_EXPAND; detachBtn.title = 'Expand chat'; }
-    } else {
-      msgsEl.style.maxHeight = localStorage.getItem('ci_sp_chat_height') ? localStorage.getItem('ci_sp_chat_height') + 'px' : '300px';
-      msgsEl.style.minHeight = '60px';
-      msgsEl.style.display = '';
       if (inputRow) inputRow.style.display = '';
-      if (tabInd) tabInd.style.display = tabContextActive && tabContextLabel ? '' : 'none';
-      if (detachBtn) { detachBtn.innerHTML = SVG_EXPAND; detachBtn.title = 'Expand chat'; }
-    }
-    if (chatSizeState !== 'minimized') {
-      msgsEl.scrollTop = msgsEl.scrollHeight;
-    }
-  }
-  applyChatSize(); // apply initial state (minimized)
-
-  detachBtn?.addEventListener('click', (e) => {
-    e.stopPropagation(); // Prevent bubbling to chatHeader minimize handler
-    if (document.body.classList.contains('chat-mode')) {
-      // Already in full chat mode — exit back to intel
-      exitChatMode();
-      detachBtn.innerHTML = SVG_EXPAND;
-      detachBtn.title = 'Full-screen chat';
     } else {
-      // Enter full-panel chat mode
-      enterChatMode();
-      detachBtn.innerHTML = SVG_COLLAPSE;
-      detachBtn.title = 'Back to Intel view';
+      chatEl.style.display = '';
     }
+    updateSizeBtns();
+  }
+
+  function updateSizeBtns() {
+    const size = getCurrentChatSize();
+    if (sizeUpBtn) sizeUpBtn.disabled = size === 'full';
+    if (sizeDownBtn) sizeDownBtn.disabled = size === null;
+  }
+
+  // Initial state: if body class was set by _applyTopLevelChatSize before IIFE ran,
+  // reconcile inline styles now.
+  const _initSize = getCurrentChatSize();
+  if (_initSize === 'full' || _initSize === 'half') {
+    msgsEl.style.display = '';
+    msgsEl.style.maxHeight = '';
+    msgsEl.style.minHeight = '';
+    msgsEl.style.height = '';
+    if (inputRow) inputRow.style.display = '';
+  } else if (_initSize === 'minimized') {
+    msgsEl.style.display = 'none';
+    if (inputRow) inputRow.style.display = '';
+  }
+  updateSizeBtns();
+
+  sizeUpBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cur = getCurrentChatSize();
+    const idx = CHAT_SIZES.indexOf(cur);
+    if (idx < CHAT_SIZES.length - 1) setChatSize(CHAT_SIZES[idx + 1]);
   });
 
-  // Click header title to toggle minimize/normal
+  sizeDownBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cur = getCurrentChatSize();
+    const idx = CHAT_SIZES.indexOf(cur);
+    if (idx > 0) setChatSize(CHAT_SIZES[idx - 1]);
+    else setChatSize(null); // close chat from minimized
+  });
+
+  // Click header title to cycle size
   const chatHeader = chatEl.querySelector('.sp-chat-header');
   chatHeader?.addEventListener('click', (e) => {
-    if (document.body.classList.contains('chat-mode')) return; // no minimize in full chat mode
     if (e.target.closest('button') || e.target.closest('.sp-model-toggle')) return;
-    chatSizeState = chatSizeState === 'minimized' ? 'normal' : 'minimized';
-    applyChatSize();
+    const cur = getCurrentChatSize();
+    const idx = CHAT_SIZES.indexOf(cur);
+    // cycle forward, wrap around
+    setChatSize(CHAT_SIZES[(idx + 1) % CHAT_SIZES.length]);
   });
 
-  // Show chat when company is detected. Use 'flex' in chat-mode (full-screen) so that
+  // Show chat when company is detected. Use 'flex' for full/half modes so that
   // .sp-inline-chat remains a flex item and the messages container can scroll via flex:1.
-  // Using 'block' here would collapse the flex chain and break scrolling.
   const showChatEl = () => {
-    chatEl.style.display = document.body.classList.contains('chat-mode') ? 'flex' : 'block';
+    const size = getCurrentChatSize();
+    chatEl.style.display = (size === 'full' || size === 'half') ? 'flex' : (size === 'minimized' ? 'flex' : 'block');
   };
   const observer = new MutationObserver(() => {
     if (companyNameEl.textContent && companyNameEl.textContent !== 'Detecting…') {
@@ -5182,15 +5216,8 @@ function renderContactsSection(el, contacts) {
 
   // Handle popout mode — if opened as ?popout=1, restore history and show full chat
   if (new URLSearchParams(window.location.search).get('popout') === '1') {
-    document.body.classList.add('chat-mode');
+    setChatSize('full');
     chatEl.style.display = 'flex';
-    // Undo the initial 'minimized' applyChatSize() — popout must always show messages + input.
-    // chat-mode CSS handles sizing, so clear the inline overrides applyChatSize set.
-    chatSizeState = 'expanded';
-    msgsEl.style.display = '';
-    msgsEl.style.maxHeight = '';
-    msgsEl.style.minHeight = '';
-    if (inputRow) inputRow.style.display = '';
     // Hide back + pop-out buttons in pop-out window
     if (popoutBtn) popoutBtn.style.display = 'none';
     const backBtn = document.getElementById('sp-chat-back');
