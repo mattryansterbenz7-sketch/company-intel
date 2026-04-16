@@ -61,7 +61,8 @@
       "Bash(find:*)",
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:docs.granola.ai)"
+      "WebFetch(domain:docs.granola.ai)",
+      "Bash(gh repo *)"
     ]
   }
 }
