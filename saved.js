@@ -5221,6 +5221,7 @@ function openStatCardEditor() {
   // escHtml — provided by ui-utils.js
 
   function renderMessages(showThinking) {
+    if (typeof injectContextManifestStyles === 'function') injectContextManifestStyles('gc');
     if (history.length === 0) {
       msgsEl.innerHTML = typeof COOP !== 'undefined'
         ? `<div class="gc-empty">${COOP.emptyStateHTML('global')}</div>`
@@ -5235,7 +5236,10 @@ function openStatCardEditor() {
           ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escHtml(text))
           : escHtml(text);
         const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-        return `<div class="gc-msg gc-msg-${m.role}">${prefix}<div class="gc-bubble">${bubble}</div></div>`;
+        const toolBadge = (m.role === 'assistant' && m._toolCalls?.length && typeof renderContextManifest === 'function')
+          ? renderContextManifest(m._contextManifest, m._toolCalls, 'gc')
+          : '';
+        return `<div class="gc-msg gc-msg-${m.role}">${prefix}<div class="gc-bubble">${bubble}</div>${toolBadge}</div>`;
       }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;
@@ -5349,7 +5353,12 @@ function openStatCardEditor() {
       const fallbackNote = (result.model && result.model !== gcAvailableModels[gcModelIdx].id)
         ? `\n\n*— answered by ${result.model.startsWith('gpt') ? result.model : result.model.replace('claude-', '').replace(/-\d+$/, '')} (fallback)*`
         : '';
-      history.push({ role: 'assistant', content: result.reply + fallbackNote });
+      const msgEntry = { role: 'assistant', content: result.reply + fallbackNote };
+      if (result.toolCalls) msgEntry._toolCalls = result.toolCalls;
+      if (result.contextManifest) msgEntry._contextManifest = result.contextManifest;
+      if (result.usage) msgEntry._usage = result.usage;
+      if (result.model) msgEntry._model = result.model;
+      history.push(msgEntry);
     } else {
       history.push({ role: 'assistant', content: result?.error || 'Something went wrong. Try again.' });
     }

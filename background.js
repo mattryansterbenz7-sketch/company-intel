@@ -13,6 +13,7 @@ import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
 import { handleQuickEnrichFirmo } from './search.js';
 import { initProfileCompiler } from './profile-compiler.js';
+import { initKnowledge } from './knowledge.js';
 
 // Floating sidebar is the primary UI — icon click toggles it
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -193,6 +194,7 @@ initCachedUserName();
 
 initPipelineConfig();
 initProfileCompiler();
+initKnowledge();
 
 // Live-update pipeline config
 chrome.storage.onChanged.addListener((changes, area) => {

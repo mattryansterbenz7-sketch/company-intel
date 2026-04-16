@@ -1021,6 +1021,71 @@ function migrateLegacyMemoryIfNeeded(callback) {
   });
 }
 
+// ── Knowledge Documents Viewer ──────────────────────────────────────────────
+
+function initKnowledgeDocsViewer() {
+  const listEl = document.getElementById('knowledge-docs-list');
+  const metaEl = document.getElementById('knowledge-docs-meta');
+  if (!listEl) return;
+
+  function render() {
+    chrome.storage.local.get(['coopKnowledge'], d => {
+      const knowledge = d.coopKnowledge;
+      if (!knowledge?.manifest?.length) {
+        listEl.innerHTML = '<div style="font-size:12px;color:var(--ci-text-tertiary);padding:8px 0;">No knowledge documents compiled yet. Fill in your profile and preferences to generate them.</div>';
+        metaEl.textContent = '';
+        return;
+      }
+
+      // Category colors
+      const catColors = {
+        profile: { bg: 'rgba(124,110,240,0.12)', border: '#7C6EF0', text: '#7C6EF0' },
+        preferences: { bg: 'rgba(91,141,239,0.12)', border: '#5B8DEF', text: '#5B8DEF' },
+        learnings: { bg: 'rgba(54,179,126,0.12)', border: '#36B37E', text: '#36B37E' },
+      };
+
+      let totalChars = 0;
+      let totalTokens = 0;
+
+      const rows = knowledge.manifest.map(doc => {
+        totalChars += doc.charCount || 0;
+        totalTokens += doc.tokenEstimate || 0;
+        const cat = catColors[doc.category] || catColors.profile;
+        const section = knowledge.sections?.[doc.id] || knowledge.learnings;
+        const preview = (section?.content || '').slice(0, 200).replace(/\n/g, ' ').trim();
+        const previewId = 'kd_' + doc.id.replace(/[^a-zA-Z0-9]/g, '_');
+
+        return `<div style="border:1px solid var(--ci-border);border-radius:6px;padding:8px 10px;background:var(--ci-bg-page);cursor:pointer;"
+          onclick="(function(el){var d=document.getElementById('${previewId}');d.style.display=d.style.display==='none'?'block':'none';el.querySelector('.kd-chevron').textContent=d.style.display==='none'?'▸':'▾';})(this)">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${cat.border};flex-shrink:0;"></span>
+            <span style="font-size:12px;font-weight:600;color:var(--ci-text-primary);flex:1;">${escapeHtml(doc.title)}</span>
+            <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${cat.bg};color:${cat.text};font-weight:500;">${escapeHtml(doc.category)}</span>
+            <span style="font-size:9px;color:var(--ci-text-tertiary);">${(doc.charCount || 0).toLocaleString()} chars · ~${doc.tokenEstimate || 0} tok</span>
+            <span class="kd-chevron" style="font-size:8px;color:var(--ci-text-tertiary);">▸</span>
+          </div>
+          <div id="${previewId}" style="display:none;margin-top:6px;padding:6px 8px;font-size:10px;line-height:1.5;color:var(--ci-text-tertiary);background:var(--ci-bg-inset);border-radius:4px;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:var(--ci-font-mono,monospace);">${escapeHtml(preview)}${(section?.content || '').length > 200 ? '…' : ''}</div>
+        </div>`;
+      });
+
+      listEl.innerHTML = rows.join('');
+
+      const ago = knowledge.compiledAt
+        ? Math.floor((Date.now() - knowledge.compiledAt) / 60000)
+        : null;
+      const agoStr = ago === null ? '' : ago < 1 ? 'Just now' : ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`;
+      metaEl.textContent = `${knowledge.manifest.length} documents · ${totalChars.toLocaleString()} chars · ~${totalTokens.toLocaleString()} tokens${agoStr ? ' · Compiled ' + agoStr : ''}`;
+    });
+  }
+
+  render();
+
+  // Re-render when knowledge docs change
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.coopKnowledge) render();
+  });
+}
+
 function initCoopMemory() {
   migrateLegacyMemoryIfNeeded(() => renderCoopMemory());
 }
@@ -1988,6 +2053,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Section 3: Memory
   initCompiledProfileViewer();
   initCoopContextWindow();
+  initKnowledgeDocsViewer();
   initCoopMemory();
 
   // Section 4: Behavior — quick prompts

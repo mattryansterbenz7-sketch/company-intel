@@ -4416,6 +4416,8 @@ function renderContactsSection(el, contacts) {
   }
 
   function renderMessages(showThinking) {
+    // Inject context manifest CSS once
+    if (typeof injectContextManifestStyles === 'function') injectContextManifestStyles('sp-chat');
     if (history.length === 0) {
       msgsEl.innerHTML = `<div class="sp-chat-empty">${buildEmptyStateHTML()}</div>`;
       injectOnboardingStep();
@@ -4508,21 +4510,12 @@ function renderContactsSection(el, contacts) {
             : '';
           return `<div class="sp-chat-usage">${modelShort} &middot; ${total.toLocaleString()} tokens (${totalIn.toLocaleString()} in, ${out.toLocaleString()} out)${cacheHint} &middot; ${costStr}</div>`;
         })() : '';
-        // G2 tool-use badge — shows which tools Coop called for this reply.
-        const toolBadge = (m.role === 'assistant' && m._toolCalls && m._toolCalls.length) ? (() => {
-          const labels = {
-            get_company_context: 'company context',
-            get_communications: 'emails + meetings',
-            get_profile_section: 'profile',
-            get_pipeline_overview: 'pipeline',
-            search_memory: 'memory',
-          };
-          const pretty = m._toolCalls.map(t => labels[t.name] || t.name);
-          const unique = [...new Set(pretty)];
-          const detail = m._toolCalls.map(t => `${t.name}(${JSON.stringify(t.input || {})})`).join('\n')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-          return `<div class="sp-chat-usage" title="${detail}" style="color:#7C6EF0;">↳ Coop pulled: ${unique.join(', ')}</div>`;
-        })() : '';
+        // G2 tool-use badge — collapsible context manifest (transparency "show your work" panel).
+        const toolBadge = (m.role === 'assistant' && m._toolCalls && m._toolCalls.length)
+          ? (typeof renderContextManifest === 'function'
+            ? renderContextManifest(m._contextManifest, m._toolCalls, 'sp-chat')
+            : `<div class="sp-chat-usage" style="color:#7C6EF0;">↳ Coop pulled: ${[...new Set(m._toolCalls.map(t => t.name))].join(', ')}</div>`)
+          : '';
         return `<div class="sp-chat-msg sp-chat-msg-${m.role}">${prefix}<div class="sp-chat-bubble">${bubble}</div>${proposalHTML}${copyBtn}${saveAnswerBtn}${toolBadge}${usageBadge}</div>`;
       }).join('') + thinkingHTML;
     }
@@ -4880,6 +4873,7 @@ function renderContactsSection(el, contacts) {
     if (result?.model) msgEntry._model = result.model;
     if (result?.routed) msgEntry._routed = result.routed;
     if (result?.toolCalls) msgEntry._toolCalls = result.toolCalls;
+    if (result?.contextManifest) msgEntry._contextManifest = result.contextManifest;
     history.push(msgEntry);
     renderMessages();
     generateFollowUpChips(replyText);

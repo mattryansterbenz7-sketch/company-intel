@@ -141,6 +141,9 @@ These are reference patterns. Match the user's question to the closest pattern, 
 - "What do you know about me?" → get_memory_narrative
 - "Give me your honest take on my job search" → get_memory_narrative + get_pipeline_overview IN PARALLEL
 - "How well do you know me?" → get_memory_narrative
+- "What have you learned from our conversations?" → get_profile_section(section: "learnings")
+- "What's my salary requirement?" → get_profile_section(sections: ["prefs:compensation"])
+- "What's my experience in healthcare?" → get_profile_section(sections: ["profile:experience"]) + search_memory(query: "healthcare")
 
 === ANTI-PATTERNS (do not do these) ===
 - Do NOT ask the user to paste transcript content you can fetch with get_communications.
@@ -157,6 +160,21 @@ These are reference patterns. Match the user's question to the closest pattern, 
 - If after calling tools you still don't have the answer, say so explicitly: "I don't see that in your emails/transcripts/profile." Never fabricate quotes, dates, names, or numbers.
 - Quoted lines from transcripts/emails must come verbatim from tool results. If you can't find an exact quote, paraphrase and note it's a paraphrase.
 - If the user asks a follow-up that refers to "they" or "it" or "that", resolve the reference from earlier in THIS conversation first. Only re-fetch if the referent is ambiguous or the prior context is thin.
+
+=== SOURCE ATTRIBUTION ===
+When your answer draws on specific data from tool results, weave the source naturally into your response:
+- For emails: "Sarah mentioned in her March 12 email..." or "Based on the recruiting thread from last week..."
+- For meetings: "In your call with the Acme team on March 15..." or "During the intro conversation..."
+- For reviews: "A Glassdoor reviewer noted..." or "Employee reviews mention..."
+- For profile data: "Your experience at [company]..." or "Given your background in..."
+Do NOT use formal citation brackets or footnotes. Reference sources conversationally so the user knows where each claim comes from.
+
+=== MISSING DATA TRANSPARENCY ===
+If a question clearly needs data you haven't loaded or that doesn't exist, mention it briefly:
+- "I don't have meeting transcripts for this company — want me to check?"
+- "No emails found for [company]. Have you corresponded with them through a different channel?"
+- "Your profile doesn't include [specific area] — adding it in preferences would help me answer this better."
+Do NOT over-explain gaps. One sentence, then answer with what you have.
 
 === RESPONSE DISCIPLINE ===
 - Match the length rules in your identity block: default 1-3 sentences; go longer only for drafts, comparisons, lists, or when the user explicitly asks for depth.
@@ -461,7 +479,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
           const input = JSON.parse(tc.function.arguments || '{}');
           const toolResult = await runCoopTool(tc.function.name, input, toolCtx);
           const serialized = serializeToolResult(toolResult);
-          toolCallLog.push({ name: tc.function.name, input, resultPreview: serialized.slice(0, 200) });
+          toolCallLog.push({ name: tc.function.name, input, resultPreview: serialized.slice(0, 200), _meta: toolResult?._meta || null });
           console.log(`[Coop][ToolUse]   → ${tc.function.name}(${JSON.stringify(input).slice(0, 120)}) → ${serialized.length} chars`);
           results.push({ type: 'tool_result', tool_use_id: tc.id, content: serialized });
         }
@@ -505,7 +523,7 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
           if (block.type !== 'tool_use') continue;
           const toolResult = await runCoopTool(block.name, block.input, toolCtx);
           const serialized = serializeToolResult(toolResult);
-          toolCallLog.push({ name: block.name, input: block.input, resultPreview: serialized.slice(0, 200) });
+          toolCallLog.push({ name: block.name, input: block.input, resultPreview: serialized.slice(0, 200), _meta: toolResult?._meta || null });
           console.log(`[Coop][ToolUse]   → ${block.name}(${JSON.stringify(block.input).slice(0, 120)}) → ${serialized.length} chars`);
           results.push({ type: 'tool_result', tool_use_id: block.id, content: serialized });
         }
@@ -532,12 +550,69 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
     await _doBlockingInsightExtraction(lastUserText, finalReply, source);
   }
 
+  // Build context manifest from tool call metadata
+  const contextManifest = _buildContextManifest(toolCallLog);
+
   return {
     reply: finalReply,
     model: effectiveModel,
     usage: totalUsage,
     toolCalls: toolCallLog,
+    contextManifest,
     routed: 'tool-use',
+  };
+}
+
+// ── Context Manifest Builder ─────────────────────────────────────────────────
+
+const _TOOL_LABELS = {
+  get_company_context: 'Company Context',
+  get_communications: 'Communications',
+  get_profile_section: 'Your Profile',
+  get_pipeline_overview: 'Pipeline Overview',
+  search_memory: 'Memory Search',
+  get_memory_narrative: 'Memory Narrative',
+  update_coop_setting: 'Settings',
+};
+
+function _buildContextManifest(toolCallLog) {
+  if (!toolCallLog.length) return null;
+
+  const sourceCount = { emails: 0, meetings: 0, profiles: 0, companies: 0, memories: 0, pipeline: 0 };
+  const tools = [];
+
+  for (const t of toolCallLog) {
+    const meta = t._meta || {};
+    const label = _TOOL_LABELS[t.name] || t.name;
+    const target = meta.company || t.input?.company_name || null;
+
+    tools.push({ name: t.name, label, target, meta });
+
+    // Aggregate source counts
+    if (meta.type === 'company') sourceCount.companies++;
+    if (meta.type === 'communications') {
+      sourceCount.emails += meta.emailCount || 0;
+      sourceCount.meetings += meta.meetingCount || 0;
+    }
+    if (meta.type === 'profile' || meta.type === 'learnings') sourceCount.profiles++;
+    if (meta.type === 'memory') sourceCount.memories += meta.matchCount || 0;
+    if (meta.type === 'narrative') sourceCount.memories++;
+    if (meta.type === 'pipeline') sourceCount.pipeline++;
+  }
+
+  // Build human-readable summary
+  const parts = [];
+  if (sourceCount.companies) parts.push('company profile');
+  if (sourceCount.emails) parts.push(`${sourceCount.emails} email${sourceCount.emails > 1 ? 's' : ''}`);
+  if (sourceCount.meetings) parts.push(`${sourceCount.meetings} meeting${sourceCount.meetings > 1 ? 's' : ''}`);
+  if (sourceCount.profiles) parts.push('your profile');
+  if (sourceCount.pipeline) parts.push('pipeline overview');
+  if (sourceCount.memories) parts.push('memory');
+
+  return {
+    summary: parts.join(', ') || 'no context loaded',
+    tools,
+    sourceCount,
   };
 }
 

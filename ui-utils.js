@@ -147,6 +147,194 @@ function tagColor(tag) {
   return TAG_PALETTE[idx % TAG_PALETTE.length];
 }
 
+// ── Context manifest renderer (transparency "show your work" panel) ──────────
+
+/**
+ * Render a collapsible context manifest panel below a Coop chat message.
+ * Shows what data sources Coop loaded, with expandable detail.
+ *
+ * @param {Object|null} manifest  - The contextManifest from the response ({ summary, tools, sourceCount })
+ * @param {Array}       toolCalls - The _toolCalls array from the message (fallback for old messages)
+ * @param {string}      prefix    - CSS class prefix: 'chat' or 'sp-chat'
+ * @returns {string} HTML string
+ */
+function renderContextManifest(manifest, toolCalls, prefix) {
+  // Nothing to show
+  if (!toolCalls?.length) return '';
+
+  const p = prefix || 'chat';
+  const id = 'ctx_' + Math.random().toString(36).slice(2, 8);
+
+  // Fallback for old messages without manifest — show flat tool badge
+  if (!manifest) {
+    const labels = {
+      get_company_context: 'company context',
+      get_communications: 'emails + meetings',
+      get_profile_section: 'profile',
+      get_pipeline_overview: 'pipeline',
+      search_memory: 'memory',
+      get_memory_narrative: 'memory narrative',
+    };
+    const unique = [...new Set(toolCalls.map(t => labels[t.name] || t.name))];
+    return `<div class="${p}-usage" style="color:#7C6EF0;">↳ Coop pulled: ${unique.join(', ')}</div>`;
+  }
+
+  // Tool type → dot color
+  const dotColors = {
+    company: '#5B8DEF',
+    communications: '#36B37E',
+    profile: '#7C6EF0',
+    learnings: '#7C6EF0',
+    pipeline: '#F5A623',
+    memory: '#8A8E94',
+    narrative: '#8A8E94',
+    setting: '#8A8E94',
+  };
+
+  // Build detail rows
+  const detailRows = manifest.tools.map(t => {
+    const meta = t.meta || {};
+    const dotColor = dotColors[meta.type] || '#8A8E94';
+    const targetStr = t.target ? ` — ${escapeHtml(t.target)}` : '';
+    let subRows = '';
+
+    // Communications: show email/meeting sources
+    if (meta.type === 'communications' && meta.sources?.length) {
+      const emailSources = meta.sources.filter(s => s.kind === 'email');
+      const meetingSources = meta.sources.filter(s => s.kind === 'meeting');
+      if (emailSources.length) {
+        subRows += emailSources.map(s =>
+          `<div class="${p}-ctx-sub">📧 ${escapeHtml(s.subject)} <span class="${p}-ctx-date">${escapeHtml(s.from)}, ${escapeHtml(s.date)}</span></div>`
+        ).join('');
+      }
+      if (meetingSources.length) {
+        subRows += meetingSources.map(s =>
+          `<div class="${p}-ctx-sub">📅 ${escapeHtml(s.title)} <span class="${p}-ctx-date">${escapeHtml(s.date)}</span></div>`
+        ).join('');
+      }
+    }
+
+    // Profile: show what sections were loaded
+    if (meta.type === 'profile' && meta.loadedSections?.length) {
+      const sectionNames = meta.loadedSections.map(s => s.replace(/^(profile|prefs):/, '')).join(', ');
+      subRows += `<div class="${p}-ctx-sub">Sections: ${escapeHtml(sectionNames)}</div>`;
+    } else if (meta.type === 'profile' && meta.tier) {
+      subRows += `<div class="${p}-ctx-sub">${escapeHtml(meta.section || 'profile')} (${meta.tier} tier)</div>`;
+    }
+
+    // Company: show what data was included
+    if (meta.type === 'company' && meta.sections?.length) {
+      subRows += `<div class="${p}-ctx-sub">${escapeHtml(meta.sections.join(', '))}</div>`;
+    }
+
+    // Pipeline: show filter and count
+    if (meta.type === 'pipeline') {
+      subRows += `<div class="${p}-ctx-sub">${meta.entryCount} entries (${escapeHtml(meta.filter || 'active')})</div>`;
+    }
+
+    // Memory: show match count
+    if (meta.type === 'memory' && meta.matchCount != null) {
+      subRows += `<div class="${p}-ctx-sub">${meta.matchCount} match${meta.matchCount !== 1 ? 'es' : ''} for "${escapeHtml(meta.query || '')}"</div>`;
+    }
+
+    // Learnings: show entry count
+    if (meta.type === 'learnings') {
+      subRows += `<div class="${p}-ctx-sub">${meta.entryCount || 0} accumulated insight${(meta.entryCount || 0) !== 1 ? 's' : ''}</div>`;
+    }
+
+    return `<div class="${p}-ctx-row">
+      <span class="${p}-ctx-dot" style="background:${dotColor};"></span>
+      <strong>${escapeHtml(t.label)}</strong>${targetStr}
+    </div>${subRows}`;
+  }).join('');
+
+  return `<div class="${p}-ctx-manifest">
+    <div class="${p}-ctx-header" onclick="(function(el){var d=el.parentElement.querySelector('.${p}-ctx-detail');var c=el.querySelector('.${p}-ctx-chevron');if(d.style.display==='none'){d.style.display='block';c.textContent='▾';}else{d.style.display='none';c.textContent='▸';}})(this)">
+      <span style="color:#7C6EF0;">↳</span>
+      <span class="${p}-ctx-summary">Loaded ${escapeHtml(manifest.summary)}</span>
+      <span class="${p}-ctx-chevron">▸</span>
+    </div>
+    <div class="${p}-ctx-detail" style="display:none;">${detailRows}</div>
+  </div>`;
+}
+
+// ── Context manifest CSS (injected once per page) ────────────────────────────
+
+function injectContextManifestStyles(prefix) {
+  const p = prefix || 'chat';
+  const styleId = `${p}-ctx-manifest-styles`;
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    .${p}-ctx-manifest {
+      margin-top: 6px;
+      font-family: var(--ci-font-mono, 'SF Mono', Monaco, monospace);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    .${p}-ctx-header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      color: #7C6EF0;
+      padding: 2px 0;
+      user-select: none;
+    }
+    .${p}-ctx-header:hover {
+      opacity: 0.8;
+    }
+    .${p}-ctx-summary {
+      flex: 1;
+    }
+    .${p}-ctx-chevron {
+      font-size: 8px;
+      opacity: 0.6;
+      transition: transform 0.15s ease;
+    }
+    .${p}-ctx-detail {
+      background: var(--ci-bg-inset, #F5F6F8);
+      border: 1px solid var(--ci-border-subtle, #E4E7EB);
+      border-radius: var(--ci-radius-sm, 6px);
+      padding: 8px 10px;
+      margin-top: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 10px;
+      color: var(--ci-text-secondary, #6F7782);
+    }
+    .${p}-ctx-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 0;
+    }
+    .${p}-ctx-row strong {
+      color: var(--ci-text-primary, #0A0B0D);
+      font-weight: 600;
+    }
+    .${p}-ctx-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .${p}-ctx-sub {
+      padding-left: 18px;
+      font-size: 9px;
+      color: var(--ci-text-tertiary, #8A8E94);
+      line-height: 1.6;
+    }
+    .${p}-ctx-date {
+      opacity: 0.7;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 // ── Flag display ─────────────────────────────────────────────────────────────
 
 function boldKeyPhrase(text) {
