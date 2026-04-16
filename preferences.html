@@ -930,8 +930,8 @@
         <button class="cos-sub-link" data-anchor="section-role-icp">Role ICP</button>
         <button class="cos-sub-link" data-anchor="section-company-icp">Company ICP</button>
         <button class="cos-sub-link" data-anchor="section-comp">Compensation</button>
-        <button class="cos-sub-link" data-anchor="icp-scoring-section">Scoring Weights</button>
       </div>
+      <button class="cos-tab" data-tab="weights">Scoring Weights</button>
     </div>
     <div class="cos-content">
 
@@ -1394,11 +1394,25 @@
       </div>
     </div>
 
+    <!-- Hidden legacy containers (backward-compat for autofill functions) -->
+    <div id="attracted-to-entries" style="display:none;"></div>
+    <div id="dealbreaker-entries" style="display:none;"></div>
+    <textarea class="field-input" id="profile-green-lights" style="display:none;"></textarea>
+    <textarea class="field-input" id="profile-red-lights" style="display:none;"></textarea>
+    <div class="ai-toggle" data-ai="greenLights" style="display:none"></div>
+    <div class="ai-panel" data-ai-panel="greenLights" style="display:none"></div>
+    <div class="ai-toggle" data-ai="redLights" style="display:none"></div>
+    <div class="ai-panel" data-ai-panel="redLights" style="display:none"></div>
 
+    </div><!-- end ICP tab panel -->
 
-    <!-- ICP & Scoring (replaces separate Green / Red flags cards) -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 4: SCORING WEIGHTS                                              -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="cos-tab-panel" data-panel="weights">
+
+    <!-- Scoring weights card -->
     <div id="icp-scoring-section">
-      <!-- Scoring weights card -->
       <div class="scoring-weights-card">
         <div class="scoring-weights-top">
           <span class="scoring-weights-title">Scoring weights</span>
@@ -1417,17 +1431,7 @@
       <div id="icp-dim-compFit" class="icp-dim-row"></div>
     </div>
 
-    <!-- Hidden legacy containers (backward-compat for autofill functions) -->
-    <div id="attracted-to-entries" style="display:none;"></div>
-    <div id="dealbreaker-entries" style="display:none;"></div>
-    <textarea class="field-input" id="profile-green-lights" style="display:none;"></textarea>
-    <textarea class="field-input" id="profile-red-lights" style="display:none;"></textarea>
-    <div class="ai-toggle" data-ai="greenLights" style="display:none"></div>
-    <div class="ai-panel" data-ai-panel="greenLights" style="display:none"></div>
-    <div class="ai-toggle" data-ai="redLights" style="display:none"></div>
-    <div class="ai-panel" data-ai-panel="redLights" style="display:none"></div>
-
-    </div><!-- end ICP tab panel -->
+    </div><!-- end Scoring Weights tab panel -->
 
 
 
