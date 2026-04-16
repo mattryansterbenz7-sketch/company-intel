@@ -200,6 +200,7 @@
       <a href="#contacts">Known Contacts</a>
       <a href="#ai-chat">Coop (AI Chat)</a>
       <a href="#coop-memory">Coop Memory</a>
+      <a href="#knowledge-docs">Knowledge Documents</a>
       <a href="#operating-principles">Operating Principles</a>
       <a href="#screen-share">Screen Share</a>
       <a href="#inbox">Inbox</a>
@@ -1186,6 +1187,19 @@
 
       <h3 class="sub">Where to manage it</h3>
       <p class="body"><a href="coop-settings.html">Coop settings</a> > Memory shows all entries. Delete anything that's wrong or stale. The memory model is configurable separately from the chat model.</p>
+
+      <span class="doc-section-anchor" id="knowledge-docs"></span>
+      <h3 class="sub">Knowledge documents</h3>
+      <p class="body">Your profile, preferences, and conversation learnings are auto-compiled into granular knowledge documents that Coop can selectively access via tools. Instead of loading your entire profile every time, Coop requests only the sections relevant to the question (e.g. just Compensation and Role ICP for a salary question).</p>
+      <div class="info-block">
+        <ul>
+          <li><strong>When they refresh</strong> -- on extension startup, and reactively whenever you edit your profile/preferences or Coop learns something new from a conversation (2-second debounce)</li>
+          <li><strong>Cost</strong> -- zero. Pure local text parsing, no API calls</li>
+          <li><strong>What's extracted</strong> -- Story, Experience, Skills, Operating Principles, Voice, FAQ, Resume, Education, Links, Role ICP, Company ICP, Green/Red Flags, Compensation, Location, and accumulated Learnings</li>
+          <li><strong>Transparency</strong> -- after each chat response, a collapsible panel shows exactly which sections Coop loaded</li>
+        </ul>
+      </div>
+      <p class="body">View all compiled documents and their token counts in <a href="coop-settings.html">Coop settings</a> > Memory > Knowledge documents.</p>
     </div>
 
     <!-- ════════════════════════════════ Operating Principles ════════════════════════════════ -->
