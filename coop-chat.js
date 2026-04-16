@@ -580,6 +580,7 @@ const _TOOL_LABELS = {
   get_pipeline_overview: 'Pipeline Overview',
   search_memory: 'Memory Search',
   get_memory_narrative: 'Memory Narrative',
+  fetch_url: 'Web Page',
   update_coop_setting: 'Settings',
 };
 

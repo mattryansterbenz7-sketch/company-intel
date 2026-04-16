@@ -188,6 +188,7 @@ function renderContextManifest(manifest, toolCalls, prefix) {
     pipeline: '#F5A623',
     memory: '#8A8E94',
     narrative: '#8A8E94',
+    url: '#E06C75',
     setting: '#8A8E94',
   };
 
@@ -253,6 +254,11 @@ function renderContextManifest(manifest, toolCalls, prefix) {
     // Learnings: show entry count
     if (meta.type === 'learnings') {
       subRows += `<div class="${p}-ctx-sub">${meta.entryCount || 0} accumulated insight${(meta.entryCount || 0) !== 1 ? 's' : ''}</div>`;
+    }
+
+    // URL: show the fetched URL
+    if (meta.type === 'url' && meta.url) {
+      subRows += `<div class="${p}-ctx-sub">${escapeHtml(meta.url.slice(0, 80))}</div>`;
     }
 
     return `<div class="${p}-ctx-row">

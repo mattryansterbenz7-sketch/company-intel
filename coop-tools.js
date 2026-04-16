@@ -94,6 +94,17 @@ export const COOP_TOOLS = [
     },
   },
   {
+    name: 'fetch_url',
+    description: 'Fetch text content from a URL. Use when the user pastes a URL or asks about a web page. Returns the extracted text from the page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The URL to fetch' },
+      },
+      required: ['url'],
+    },
+  },
+  {
     name: 'update_coop_setting',
     description: 'Update a Coop configuration setting. Use this when the user asks to change their chat model, toggle features, or adjust preferences.',
     input_schema: {
@@ -358,6 +369,14 @@ async function _tool_get_company_context({ company_name }, ctx) {
   };
 }
 
+// Sort items by date descending (newest first). Handles various date formats.
+function _sortByDateDesc(items) {
+  return [...items].sort((a, b) => {
+    const da = new Date(a.date || 0), db = new Date(b.date || 0);
+    return (isNaN(db) ? 0 : db) - (isNaN(da) ? 0 : da);
+  });
+}
+
 async function _tool_get_communications({ company_name, types, limit, keywords }, ctx) {
   const r = await _coopResolveCompany(company_name, ctx);
   if (r.error) return r;
@@ -369,24 +388,26 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
   const lines = [`# Communications — ${e.company}`];
 
   if (wantEmails) {
-    const ems = (e.cachedEmails || []).slice(0, lim);
+    const ems = _sortByDateDesc(e.cachedEmails || []).slice(0, lim);
     lines.push('');
     lines.push(`## Emails (${ems.length})`);
     if (!ems.length) { lines.push('No emails found.'); }
-    ems.forEach(em => {
+    ems.forEach((em, idx) => {
       const from = (em.from || '').replace(/<[^>]+>/, '').trim();
       lines.push(`### ${em.subject || '(no subject)'}`);
       lines.push(`From: ${from} | Date: ${em.date || 'unknown'}${em.matchedVia ? ` | Via: ${em.matchedVia}` : ''}`);
-      lines.push(((em.snippet || em.body || '').slice(0, 400)));
+      // Most recent email gets full text; older emails get snippets
+      const cap = idx === 0 ? 2000 : 400;
+      lines.push(((em.body || em.snippet || '').slice(0, cap)));
       lines.push('');
     });
   }
 
   if (wantMeetings) {
-    const mtgs = [...(e.cachedMeetings || []), ...(e.manualMeetings || [])].slice(0, lim);
+    const mtgs = _sortByDateDesc([...(e.cachedMeetings || []), ...(e.manualMeetings || [])]).slice(0, lim);
     lines.push(`## Meetings (${mtgs.length})`);
     if (!mtgs.length) { lines.push('No meetings found.'); }
-    mtgs.forEach(m => {
+    mtgs.forEach((m, idx) => {
       const transcript = m.transcript || m.notes || '';
       const summary = m.summaryMarkdown || m.summary || '';
       const haystack = (transcript + ' ' + summary + ' ' + (m.title || '')).toLowerCase();
@@ -395,7 +416,11 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
       lines.push(`### ${m.title || 'Untitled'}`);
       lines.push(`Date: ${m.date || 'unknown'}${attendees ? ` | Attendees: ${attendees}` : ''}`);
       if (summary) { lines.push('**Summary:**'); lines.push(summary.slice(0, 800)); }
-      if (kwHit) {
+      // Most recent meeting gets full transcript; older meetings follow keyword/preview rules
+      if (idx === 0 && transcript) {
+        lines.push('**Transcript (most recent — full):**');
+        lines.push(transcript.slice(0, 20000));
+      } else if (kwHit) {
         lines.push('**Transcript (keyword match — expanded):**');
         lines.push(transcript.slice(0, 20000));
       } else if (transcript.length > 500) {
@@ -411,15 +436,16 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
 
   const md = lines.join('\n');
 
-  // Build _meta for context manifest
-  const emailSources = wantEmails ? (e.cachedEmails || []).slice(0, lim).map(em => ({
+  // Build _meta for context manifest (also sorted newest-first)
+  const sortedEmails = wantEmails ? _sortByDateDesc(e.cachedEmails || []).slice(0, lim) : [];
+  const emailSources = sortedEmails.map(em => ({
     kind: 'email',
     subject: em.subject || '(no subject)',
     from: (em.from || '').replace(/<[^>]+>/, '').trim(),
     date: em.date || 'unknown',
-  })) : [];
-  const mtgList = wantMeetings ? [...(e.cachedMeetings || []), ...(e.manualMeetings || [])].slice(0, lim) : [];
-  const meetingSources = mtgList.map(m => ({
+  }));
+  const sortedMtgs = wantMeetings ? _sortByDateDesc([...(e.cachedMeetings || []), ...(e.manualMeetings || [])]).slice(0, lim) : [];
+  const meetingSources = sortedMtgs.map(m => ({
     kind: 'meeting',
     title: m.title || 'Untitled',
     date: m.date || 'unknown',
@@ -682,6 +708,31 @@ async function _tool_update_coop_setting({ setting, value }) {
   };
 }
 
+// ── fetch_url ────────────────────────────────────────────────────────────────
+
+async function _tool_fetch_url({ url }) {
+  if (!url) return { error: 'No URL provided' };
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { error: `HTTP ${res.status}`, url };
+    const html = await res.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 6000);
+    if (text.length < 50) return { content: '(Page returned very little text content)', url, _meta: { type: 'url', url, charCount: 0 } };
+    return { content: text, url, _meta: { type: 'url', url, charCount: text.length } };
+  } catch (err) {
+    return { error: `Failed to fetch: ${err.message}`, url };
+  }
+}
+
 // Tool router
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -694,6 +745,7 @@ export async function runCoopTool(name, input, ctx) {
       case 'get_pipeline_overview':  return await _tool_get_pipeline_overview(input || {}, ctx);
       case 'search_memory':          return await _tool_search_memory(input || {}, ctx);
       case 'get_memory_narrative':   return await _tool_get_memory_narrative();
+      case 'fetch_url':              return await _tool_fetch_url(input || {});
       case 'update_coop_setting':    return await _tool_update_coop_setting(input || {});
       default: return { error: `Unknown tool: ${name}` };
     }

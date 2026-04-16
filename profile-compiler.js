@@ -52,26 +52,27 @@ function compileProfileFull(d, prefs) {
     sections.push(`## Story\n${stripHtml(story)}`);
   }
 
-  // Experience
-  const exp = stripHtml(d.profileExperience || '');
+  // Experience — use structured entries when available (source of truth).
+  // The legacy profileExperience blob contains ## headers per company which
+  // break knowledge.js section extraction (creates empty ## Experience body).
   const entries = d.profileExperienceEntries || [];
-  if (exp || entries.length) {
-    let text = exp;
-    if (entries.length) {
-      if (text) text += '\n\n';
-      text += entries.map(e => {
-        const parts = [`**${e.company || 'Unknown'}**`];
-        if (e.titles) parts[0] += ` — ${e.titles}`;
-        if (e.dateRange) parts.push(`(${e.dateRange})`);
-        if (e.description) parts.push(`\n  ${stripHtml(e.description)}`);
-        if (e.accomplishments) parts.push(`\n  Accomplishments: ${stripHtml(e.accomplishments)}`);
-        if (e.exposures) parts.push(`\n  Skills/Exposures: ${stripHtml(e.exposures)}`);
-        const tags = (e.tags || []).join(', ');
-        if (tags) parts.push(`\n  Tags: ${tags}`);
-        return `- ${parts.join(' ')}`;
-      }).join('\n');
-    }
+  if (entries.length) {
+    const text = entries.map(e => {
+      const parts = [`**${e.company || 'Unknown'}**`];
+      if (e.titles) parts[0] += ` — ${e.titles}`;
+      if (e.dateRange) parts.push(`(${e.dateRange})`);
+      if (e.description) parts.push(`\n  ${stripHtml(e.description)}`);
+      if (e.accomplishments) parts.push(`\n  Accomplishments: ${stripHtml(e.accomplishments)}`);
+      if (e.exposures) parts.push(`\n  Skills/Exposures: ${stripHtml(e.exposures)}`);
+      const tags = (e.tags || []).join(', ');
+      if (tags) parts.push(`\n  Tags: ${tags}`);
+      return `- ${parts.join(' ')}`;
+    }).join('\n');
     sections.push(`## Experience\n${text}`);
+  } else {
+    // Fallback: legacy text blob — strip any ## headers to prevent nested header issues
+    const exp = stripHtml(d.profileExperience || '').replace(/^##\s+.+$/gm, '').trim();
+    if (exp) sections.push(`## Experience\n${exp}`);
   }
 
   // Skills
@@ -154,21 +155,18 @@ function compileProfileStandard(d, prefs) {
     sections.push(`## Story\n${truncate(stripHtml(story), 1500)}`);
   }
 
-  // Experience — key points only
-  const exp = stripHtml(d.profileExperience || '');
+  // Experience — key points only (entries are source of truth)
   const entries = d.profileExperienceEntries || [];
-  if (exp || entries.length) {
-    let text = '';
-    if (entries.length) {
-      text = entries.slice(0, 5).map(e => {
-        const line = `- **${e.company || 'Unknown'}**${e.titles ? ` — ${e.titles}` : ''}`;
-        const tags = (e.tags || []).slice(0, 5).join(', ');
-        return tags ? `${line} (${tags})` : line;
-      }).join('\n');
-    } else {
-      text = truncate(exp, 1200);
-    }
+  if (entries.length) {
+    const text = entries.slice(0, 5).map(e => {
+      const line = `- **${e.company || 'Unknown'}**${e.titles ? ` — ${e.titles}` : ''}`;
+      const tags = (e.tags || []).slice(0, 5).join(', ');
+      return tags ? `${line} (${tags})` : line;
+    }).join('\n');
     sections.push(`## Experience\n${text}`);
+  } else {
+    const exp = stripHtml(d.profileExperience || '').replace(/^##\s+.+$/gm, '').trim();
+    if (exp) sections.push(`## Experience\n${truncate(exp, 1200)}`);
   }
 
   // Skills — tags only
