@@ -83,6 +83,17 @@ const _defaultQuickPrompts = [
   { id: 'why-this-role', label: 'Why this role', prompt: 'Help me articulate why I\'m genuinely interested in this role in a way that\'s specific and authentic, not generic.' },
   { id: 'draft-followup', label: 'Draft follow-up', prompt: 'Draft a follow-up message I can send after my last touch with this company. Make it brief and natural.' },
 ];
+// Meeting-scoped chips — shown on the Meetings tab and single-meeting detail
+const _meetingQuickPrompts = [
+  { id: 'mtg-summarize', label: 'Summarize', prompt: 'Summarize this meeting in a few tight bullet points.' },
+  { id: 'mtg-takeaways', label: 'Key takeaways', prompt: 'What were the most important takeaways from this conversation?' },
+  { id: 'mtg-actions', label: 'Action items', prompt: 'List the action items and anything I committed to following up on.' },
+  { id: 'mtg-followup', label: 'Draft follow-up', prompt: 'Draft a follow-up note I can send after this conversation. Keep it brief and natural.' },
+  { id: 'mtg-prep', label: 'Prep for next', prompt: 'Based on this meeting, what should I prep for the next conversation with this company?' },
+];
+function isMeetingChatKey(key) {
+  return typeof key === 'string' && (key.includes('-meetings') || key.includes('-meeting-'));
+}
 let _chatQuickPrompts = _defaultQuickPrompts;
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
   chrome.storage.local.get(['coopQuickPrompts'], d => {
@@ -285,8 +296,10 @@ function buildChatPanel(container, entry) {
   let meetingsContext = (entry.cachedMeetings?.length) ? entry.cachedMeetings : null;
 
   function renderHistory(showThinking) {
-    const qpHTML = (!chatKey.includes('-meetings') && _chatQuickPrompts.length)
-      ? `<div class="chat-quick-prompts">${_chatQuickPrompts.map(p => `<button class="chat-qp-btn" data-qp-prompt="${escapeHtml(p.prompt)}">${escapeHtml(p.label)}</button>`).join('')}</div>`
+    const isMeetingChat = isMeetingChatKey(chatKey);
+    const promptSet = isMeetingChat ? _meetingQuickPrompts : _chatQuickPrompts;
+    const qpHTML = promptSet.length
+      ? `<div class="chat-quick-prompts">${promptSet.map(p => `<button class="chat-qp-btn" data-qp-prompt="${escapeHtml(p.prompt)}">${escapeHtml(p.label)}</button>`).join('')}</div>`
       : '';
     const emptyHTML = typeof COOP !== 'undefined'
       ? `<div class="chat-empty">${COOP.emptyStateHTML('company')}${qpHTML}</div>`
@@ -600,7 +613,7 @@ function buildChatPanel(container, entry) {
   });
 
   // Add journey buttons for opportunities (not meetings chat)
-  if (entry.isOpportunity && actionsEl && !chatKey.includes('-meetings')) {
+  if (entry.isOpportunity && actionsEl && !isMeetingChatKey(chatKey)) {
     const journeyHtml = `<button class="chat-action-btn" data-action="journey-coverletter" style="background-color:rgba(255, 122, 89, 0.08);color:#FF7A59;font-weight:600;">✎ Cover letter</button>`;
     actionsEl.insertAdjacentHTML('afterbegin', journeyHtml);
   }
