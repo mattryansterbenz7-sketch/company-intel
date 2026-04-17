@@ -903,12 +903,16 @@ function renderEmailThreads(emails, onDelete) {
       const fromName = (m.from || '').replace(/<.*>/, '').replace(/"/g, '').trim() || fromAddr || '';
       const isSent = userEmailLower && (fromAddr === userEmailLower);
 
-      // Render body: prefer sanitized HTML, fall back to plain text
+      // Render body: prefer htmlBody, detect HTML in plain body, fall back to pre-wrapped text
       let bodyHtml = '';
+      const rawBody = m.body || m.snippet || '';
       if (m.htmlBody) {
         bodyHtml = sanitizeEmailHtml(m.htmlBody);
+      } else if (/<\w[\s\S]*?>/i.test(rawBody)) {
+        // body field contains HTML markup — sanitize rather than escape (XSS guard)
+        bodyHtml = sanitizeEmailHtml(rawBody);
       } else {
-        const bodyText = stripQuotedContent(m.body || m.snippet || '');
+        const bodyText = stripQuotedContent(rawBody);
         bodyHtml = `<p>${escapeHtml(bodyText).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
       }
 
