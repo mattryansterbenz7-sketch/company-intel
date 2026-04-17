@@ -339,6 +339,20 @@ When the user says things like "remind me to", "don't forget to", "I need to", "
   return { base, tail };
 }
 
+// ── Missed-tool nudge helper ─────────────────────────────────────────────────
+// Detects when a model narrates that it will fetch data (or claims it has none)
+// without actually calling any tools — a known failure mode where the model
+// returns a text-only turn instead of emitting tool_use blocks.
+const _FAKE_FETCH_RE = /give me a moment|let me (?:check|look|fetch|pull|grab|search|find)|i'?ll (?:check|look|fetch|pull|grab|search|find)|one (?:moment|sec(?:ond)?)|hold on while i|stand by/i;
+const _DATA_DENIAL_RE = /don'?t have (?:any |recent )?(?:emails?|meetings?|notes|transcripts?)|no (?:emails?|meetings?|notes|transcripts?) (?:for|on|from)|i don'?t see any (?:emails?|meetings?|notes|transcripts?)/i;
+
+function _shouldNudgeForMissedTool(responseText, toolCallLog) {
+  if (toolCallLog.length > 0) return null; // tools already ran this message — no nudge
+  if (_FAKE_FETCH_RE.test(responseText)) return 'fake-fetch';
+  if (_DATA_DENIAL_RE.test(responseText)) return 'data-denial';
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // G2 Tool-Use Handler (Haiku + tool loop)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -422,6 +436,8 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   const toolCallLog = [];
   let finalReply = null;
 
+  let nudgedOnce = false; // guard: fire the missed-tool nudge at most once per message
+
   for (let step = 0; step < 5; step++) {
     let data, res;
 
@@ -499,7 +515,17 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
         continue;
       }
 
-      finalReply = choice?.message?.content || '';
+      const oaiReplyText = choice?.message?.content || '';
+      const nudgeReason = !nudgedOnce ? _shouldNudgeForMissedTool(oaiReplyText, toolCallLog) : null;
+      if (nudgeReason) {
+        nudgedOnce = true;
+        console.log('[Coop][ToolUse] nudge fired:', nudgeReason);
+        // Preserve the model's narration turn in the conversation, then inject a corrective user turn
+        conversation.push({ role: 'assistant', content: oaiReplyText });
+        conversation.push({ role: 'user', content: "You said you would fetch or that you don't have data, but you didn't call any tools. Call the relevant tool now (`get_communications` for emails/meetings, `get_company_context` for company facts, `get_profile_section` for user background) before answering. Do not narrate — just call the tool." });
+        continue;
+      }
+      finalReply = oaiReplyText;
       break;
 
     } else {
@@ -544,7 +570,17 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
       }
 
       // end_turn, stop_sequence, max_tokens, etc.
-      finalReply = (data.content || []).find(b => b.type === 'text')?.text || '';
+      const claudeReplyText = (data.content || []).find(b => b.type === 'text')?.text || '';
+      const claudeNudgeReason = !nudgedOnce ? _shouldNudgeForMissedTool(claudeReplyText, toolCallLog) : null;
+      if (claudeNudgeReason) {
+        nudgedOnce = true;
+        console.log('[Coop][ToolUse] nudge fired:', claudeNudgeReason);
+        // Preserve the model's narration turn in the conversation, then inject a corrective user turn
+        conversation.push({ role: 'assistant', content: data.content });
+        conversation.push({ role: 'user', content: "You said you would fetch or that you don't have data, but you didn't call any tools. Call the relevant tool now (`get_communications` for emails/meetings, `get_company_context` for company facts, `get_profile_section` for user background) before answering. Do not narrate — just call the tool." });
+        continue;
+      }
+      finalReply = claudeReplyText;
       break;
     }
   }
