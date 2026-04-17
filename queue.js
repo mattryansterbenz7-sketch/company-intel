@@ -509,29 +509,26 @@ function renderCurrent() {
     const stageLine = stageTs ? fmtDate(stageTs) : '';
     const savedLine = savedAt ? fmtDate(savedAt) : '';
 
+    const hasMeta = lastActStr || stageLine || scoredLine;
     return `<div class="qc-pipeline-ctx">
-      <div class="qc-pipeline-ctx-rows">
-        <div class="qc-pipeline-ctx-row">
-          <span class="qc-pipeline-ctx-key">Next step</span>
-          <input class="qc-nextstep-input" id="qc-nextstep-input" type="text" value="${escHtml(nextStep)}" placeholder="Add next step…">
-        </div>
-        <div class="qc-pipeline-ctx-row">
-          <span class="qc-pipeline-ctx-key">Next Step Date</span>
-          <input class="qc-date-input${isOverdue ? ' overdue' : ''}" id="qc-nextdate-input" type="date" value="${escHtml(nextDate)}" title="Next step due date">
-        </div>
-        <div class="qc-pipeline-ctx-row">
-          <span class="qc-pipeline-ctx-key">Action on</span>
-          <select class="qc-action-select" id="qc-action-select">
-            <option value="">—</option>
-            <option value="my_court" ${_actionSt === 'my_court' ? 'selected' : ''}>🏀 My Court</option>
-            <option value="their_court" ${_actionSt === 'their_court' ? 'selected' : ''}>⏳ Their Court</option>
-            <option value="scheduled" ${_actionSt === 'scheduled' ? 'selected' : ''}>📅 Scheduled</option>
-          </select>
-        </div>
-        ${lastActStr ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last activity</span><span class="qc-pipeline-ctx-val">${escHtml(lastActStr)}</span></div>` : ''}
-        ${stageLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Stage entered</span><span class="qc-pipeline-ctx-val">${stageLine}</span></div>` : ''}
-        ${scoredLine ? `<div class="qc-pipeline-ctx-row"><span class="qc-pipeline-ctx-key">Last scored</span><span class="qc-pipeline-ctx-val">${scoredLine}</span></div>` : ''}
+      <div class="qc-pipeline-ctx-edit">
+        <span class="qc-k">Next Step</span>
+        <span class="qc-v"><input class="qc-nextstep-input qc-input" id="qc-nextstep-input" type="text" value="${escHtml(nextStep)}" placeholder="Add next step\u2026"></span>
+        <span class="qc-k">Next Step Date</span>
+        <span class="qc-v"><input class="qc-date-input qc-input${isOverdue ? ' overdue' : ''}${nextDate ? ' has-value' : ''}" id="qc-nextdate-input" type="date" value="${escHtml(nextDate)}" title="Next step due date"></span>
+        <span class="qc-k">Action</span>
+        <span class="qc-v"><span class="qc-select-wrap"><select class="qc-action-select qc-select ${(_actionSt || '').replace(/_/g, '-')}" id="qc-action-select">
+          <option value="">—</option>
+          <option value="my_court" ${_actionSt === 'my_court' ? 'selected' : ''}>My Court</option>
+          <option value="their_court" ${_actionSt === 'their_court' ? 'selected' : ''}>Their Court</option>
+          <option value="scheduled" ${_actionSt === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+        </select></span></span>
       </div>
+      ${hasMeta ? `<div class="qc-pipeline-ctx-meta">
+        ${lastActStr ? `<div class="qc-pipeline-ctx-meta-row"><span class="qc-k">Last Activity</span><span class="qc-v qc-muted">${escHtml(lastActStr)}</span></div>` : ''}
+        ${stageLine ? `<div class="qc-pipeline-ctx-meta-row"><span class="qc-k">Stage Entered</span><span class="qc-v qc-muted">${stageLine}</span></div>` : ''}
+        ${scoredLine ? `<div class="qc-pipeline-ctx-meta-row"><span class="qc-k">Last Scored</span><span class="qc-v qc-muted">${scoredLine}</span></div>` : ''}
+      </div>` : ''}
       <div id="smt-placeholder"></div>
     </div>`;
   })();
