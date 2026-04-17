@@ -1087,32 +1087,34 @@ function renderCompBracketEditor() {
   const fmtK = v => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`;
 
   function bracketSection(compType, floor, strong, label) {
-    if (!floor) return `<div style="font-size:12px;color:var(--ci-text-tertiary);padding:4px 0;">No ${label} floor set — configure in Compensation above.</div>`;
+    if (!floor) return `<div class="comp-bracket-empty">No ${label} floor set — configure in Compensation above.</div>`;
     const sevs   = _compBracketSeverities[compType]  || {};
     const threshs = _compBracketThresholds[compType] || {};
     const isLast = i => i === COMP_BRACKET_TIERS_UI.length - 1;
+    let prevType = null;
     const rows = COMP_BRACKET_TIERS_UI.map((tier, i) => {
       const computed = tier.thresholdFn(floor, strong);
       const custom   = threshs[tier.key];
       const threshVal = custom || computed;
       const threshK   = Math.round(threshVal / 1000);
       const sev = typeof sevs[tier.key] === 'number' ? sevs[tier.key] : tier.defaultSev;
-      const dot = tier.type === 'green' ? '#22c55e' : '#ef4444';
       const sevColor = tier.type === 'green' ? SEV_GREEN_COLORS[sev - 1] : SEV_RED_COLORS[sev - 1];
+      const groupBreak = prevType && prevType !== tier.type ? ' comp-bracket-row--group-break' : '';
+      prevType = tier.type;
       const threshCell = isLast(i)
-        ? `<span style="font-size:13px;color:var(--ci-text-secondary);min-width:64px;text-align:right;">&lt;${fmtK(threshVal)}</span>`
-        : `<span style="display:inline-flex;align-items:center;gap:1px;font-size:13px;color:var(--ci-text-secondary);min-width:64px;justify-content:flex-end;">≥$<input type="number" class="comp-thresh-input" data-comp="${compType}" data-tier="${tier.key}" data-default="${Math.round(computed / 1000)}" value="${threshK}" min="1" step="1" style="width:40px;border:none;border-bottom:1px dashed ${custom ? 'var(--ci-accent-blue)' : 'var(--ci-border-subtle)'};background:transparent;font-size:13px;color:${custom ? 'var(--ci-accent-blue)' : 'var(--ci-text-primary)'};font-family:inherit;outline:none;padding:0;text-align:right;" title="Edit threshold (in $k). Tab or Enter to save.">k</span>`;
-      return `<div class="comp-bracket-row" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--ci-border-subtle);">
-        <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
-        <span style="flex:1;font-size:13px;color:var(--ci-text-primary);">${tier.label}</span>
+        ? `<span class="comp-bracket-thresh">&lt;${fmtK(threshVal)}</span>`
+        : `<span class="comp-bracket-thresh"><span class="comp-thresh-lbl">\u2265$</span><input type="number" class="comp-thresh-input${custom ? ' custom' : ''}" data-comp="${compType}" data-tier="${tier.key}" data-default="${Math.round(computed / 1000)}" value="${threshK}" min="1" step="1" title="Edit threshold (in $k). Tab or Enter to save.">k</span>`;
+      return `<div class="comp-bracket-row comp-bracket-row--${tier.type}${groupBreak}">
+        <span class="comp-bracket-dot comp-bracket-dot--${tier.type}"></span>
+        <span class="comp-bracket-label">${tier.label}</span>
         ${threshCell}
         <button class="comp-sev-btn" data-comp="${compType}" data-tier="${tier.key}" data-sev="${sev}"
-          style="width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${sevColor};flex-shrink:0;"
-          title="Click to change severity (1–5)">${sev}</button>
+          style="background:${sevColor};"
+          title="Click to change severity (1\u20135)">${sev}</button>
       </div>`;
     }).join('');
-    return `<div style="margin-bottom:16px;">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--ci-text-tertiary);text-transform:uppercase;margin-bottom:6px;">${label}</div>
+    return `<div class="comp-bracket-section">
+      <div class="comp-bracket-section-title">${label}</div>
       ${rows}
     </div>`;
   }
@@ -1128,15 +1130,14 @@ function renderCompBracketEditor() {
   const oteStrong    = _parseSalary('pref-ote-strong') || oteFloor * 1.3;
 
   return `<div id="comp-bracket-editor">
-    <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:14px;line-height:1.5;">
-      Thresholds are computed from your comp settings — click a number to override it. Click a severity badge to cycle it (1–5).
-      <span style="color:var(--ci-text-tertiary);">Higher severity = more score impact.</span>
+    <div class="comp-bracket-intro">
+      Thresholds are computed from your comp settings — click a number to override it. Click a severity badge to cycle it (1\u20135). <span class="comp-bracket-intro-muted">Higher severity = more score impact.</span>
     </div>
     ${bracketSection('base', salaryFloor, salaryStrong, 'Base')}
     ${bracketSection('ote', oteFloor, oteStrong, 'OTE')}
-    <div style="font-size:11px;color:var(--ci-text-tertiary);line-height:1.6;margin-top:4px;padding:8px 10px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);">
-      <div style="margin-bottom:4px;"><strong style="color:var(--ci-text-secondary);">Undisclosed comp</strong> — If comp is not listed in the posting, no flag fires (score impact: 0).</div>
-      <div><strong style="color:var(--ci-text-secondary);">Dedup</strong> — Only the single highest-severity green and red flag fire per comp type. Flags don't stack.</div>
+    <div class="comp-bracket-footnote">
+      <div><strong>Undisclosed comp</strong> — If comp is not listed in the posting, no flag fires (score impact: 0).</div>
+      <div><strong>Dedup</strong> — Only the single highest-severity green and red flag fire per comp type. Flags don't stack.</div>
     </div>
   </div>`;
 }

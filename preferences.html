@@ -473,6 +473,102 @@
     }
     .entry-severity-badge.soft { background: #FFF3E0; color: #e65100; }
     .entry-severity-badge.hard { background: #FFEBEE; color: #c62828; }
+
+    /* ═══ Comp bracket editor — DESIGN.md-compliant rework (#154) ═══ */
+    .comp-bracket-intro {
+      font-size: 12px; color: var(--ci-text-secondary);
+      margin-bottom: 12px; line-height: 1.5;
+    }
+    .comp-bracket-intro-muted { color: var(--ci-text-tertiary); }
+    .comp-bracket-empty {
+      font-size: 12px; color: var(--ci-text-tertiary); padding: 4px 0;
+    }
+    .comp-bracket-section {
+      margin-bottom: 14px;
+    }
+    .comp-bracket-section-title {
+      font-size: 12px; font-weight: 600;
+      color: var(--ci-text-secondary);
+      margin-bottom: 4px;
+    }
+    .comp-bracket-row {
+      display: grid;
+      grid-template-columns: 8px 1fr auto 22px;
+      column-gap: 10px;
+      align-items: center;
+      padding: 3px 0;
+      font-size: 12.5px;
+    }
+    .comp-bracket-row.comp-bracket-row--group-break {
+      border-top: 1px solid var(--ci-border-subtle);
+      padding-top: 6px;
+      margin-top: 4px;
+    }
+    .comp-bracket-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .comp-bracket-dot.comp-bracket-dot--green { background: var(--ci-accent-teal); }
+    .comp-bracket-dot.comp-bracket-dot--red { background: var(--ci-accent-red); }
+    .comp-bracket-label {
+      color: var(--ci-text-primary);
+      font-size: 12.5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .comp-bracket-thresh {
+      font-variant-numeric: tabular-nums;
+      color: var(--ci-text-secondary);
+      font-size: 12px;
+      justify-self: end;
+      white-space: nowrap;
+    }
+    .comp-thresh-lbl { color: var(--ci-text-secondary); }
+    .comp-thresh-input {
+      width: 40px;
+      border: none;
+      border-bottom: 1px dashed transparent;
+      background: transparent;
+      font-size: 12px;
+      color: var(--ci-text-primary);
+      font-family: inherit;
+      outline: none;
+      padding: 0;
+      text-align: right;
+      transition: border-color var(--motion-xs) var(--ease-out),
+                  color var(--motion-xs) var(--ease-out);
+    }
+    .comp-thresh-input:hover { border-bottom-color: var(--ci-border-default); }
+    .comp-thresh-input:focus { border-bottom-color: var(--ci-border-strong); }
+    .comp-thresh-input.custom {
+      color: var(--ci-accent-blue);
+      border-bottom-color: var(--ci-accent-blue);
+    }
+    .comp-sev-btn {
+      width: 22px; height: 22px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      font-family: inherit;
+      line-height: 1;
+      padding: 0;
+      transition: transform var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out);
+    }
+    .comp-sev-btn:hover {
+      transform: scale(1.08);
+    }
+    .comp-bracket-footnote {
+      font-size: 11px; color: var(--ci-text-tertiary); line-height: 1.6;
+      margin-top: 4px; padding: 8px 10px;
+      background: var(--ci-bg-inset);
+      border-radius: var(--ci-radius-sm);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .comp-bracket-footnote strong {
+      color: var(--ci-text-secondary);
+      font-weight: 600;
+    }
     .entry-text { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; }
     .entry-keywords { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
     .keyword-pill {
