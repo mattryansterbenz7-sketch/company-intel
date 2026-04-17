@@ -5128,8 +5128,7 @@ function renderContactsSection(el, contacts) {
   }
 
   const inputRow = chatEl.querySelector('.sp-chat-input-row');
-  const sizeUpBtn = document.getElementById('sp-chat-size-up');
-  const sizeDownBtn = document.getElementById('sp-chat-size-down');
+  const sizeButtons = Array.from(document.querySelectorAll('[data-chat-size]'));
 
   function getCurrentChatSize() {
     if (document.body.classList.contains('chat-mode')) return 'full';
@@ -5159,9 +5158,10 @@ function renderContactsSection(el, contacts) {
   }
 
   function updateSizeBtns() {
-    const size = getCurrentChatSize();
-    if (sizeUpBtn) sizeUpBtn.disabled = size === 'full';
-    if (sizeDownBtn) sizeDownBtn.disabled = size === null;
+    const cur = getCurrentChatSize();
+    sizeButtons.forEach(b => {
+      b.classList.toggle('active', b.dataset.chatSize === cur);
+    });
   }
 
   // Initial state: if body class was set by _applyTopLevelChatSize before IIFE ran,
@@ -5179,19 +5179,11 @@ function renderContactsSection(el, contacts) {
   }
   updateSizeBtns();
 
-  sizeUpBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const cur = getCurrentChatSize();
-    const idx = CHAT_SIZES.indexOf(cur);
-    if (idx < CHAT_SIZES.length - 1) setChatSize(CHAT_SIZES[idx + 1]);
-  });
-
-  sizeDownBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const cur = getCurrentChatSize();
-    const idx = CHAT_SIZES.indexOf(cur);
-    if (idx > 0) setChatSize(CHAT_SIZES[idx - 1]);
-    else setChatSize(null); // close chat from minimized
+  sizeButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setChatSize(btn.dataset.chatSize);
+    });
   });
 
   // Click header title to cycle size
