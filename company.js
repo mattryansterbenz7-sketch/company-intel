@@ -5030,7 +5030,6 @@ function renderNoteCard(n) {
       <div class="note-card-header">
         <span class="note-card-date">${dateStr} · ${timeStr}</span>
         <span class="note-card-actions">
-          <button class="note-edit-btn" data-note-id="${n.id}" title="Edit">✏️</button>
           <button class="note-del-btn" data-note-id="${n.id}" title="Delete">✕</button>
         </span>
       </div>
@@ -5091,25 +5090,26 @@ function bindNoteCardEvents() {
   });
 
   // Edit — make card body contenteditable inline
-  container.querySelectorAll('.note-edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.noteId;
+  container.querySelectorAll('.note-card-body').forEach(bodyEl => {
+    bodyEl.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;
+      const id = bodyEl.dataset.noteId;
+      if (bodyEl.contentEditable === 'true') return;
       const wrap = container.querySelector(`.note-card-body-wrap[data-note-id="${id}"]`);
-      const bodyEl = container.querySelector(`.note-card-body[data-note-id="${id}"]`);
-      if (!bodyEl || bodyEl.contentEditable === 'true') return;
       // Expand while editing so nothing is clipped
       if (wrap) wrap.classList.remove('collapsed');
       bodyEl.contentEditable = 'true';
       bodyEl.classList.add('note-card-editing');
       bodyEl.focus();
-      btn.textContent = '✓';
-      btn.title = 'Save';
 
+      let done = false;
       const finishEdit = () => {
+        if (done) return;
+        done = true;
+        bodyEl.removeEventListener('blur', finishEdit);
+        bodyEl.removeEventListener('keydown', onKeydown);
         bodyEl.contentEditable = 'false';
         bodyEl.classList.remove('note-card-editing');
-        btn.textContent = '✏️';
-        btn.title = 'Edit';
         const note = (entry.notesFeed || []).find(n => n.id === id);
         if (note) {
           note.content = sanitizeNotesHtml(bodyEl.innerHTML);
@@ -5130,12 +5130,15 @@ function bindNoteCardEvents() {
         }
       };
 
-      bodyEl.addEventListener('blur', (e) => {
-        if (e.relatedTarget === btn) return;
-        finishEdit();
-      }, { once: true });
+      const onKeydown = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          bodyEl.blur();
+        }
+      };
 
-      btn.addEventListener('click', finishEdit, { once: true });
+      bodyEl.addEventListener('blur', finishEdit);
+      bodyEl.addEventListener('keydown', onKeydown);
     });
   });
 }

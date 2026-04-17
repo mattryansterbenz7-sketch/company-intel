@@ -220,14 +220,16 @@
     }
     .note-card-date { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; }
     .note-card-actions { display: flex; gap: 4px; }
-    .note-edit-btn, .note-del-btn {
+    .note-del-btn {
       background: none; border: none; font-size: 12px; cursor: pointer; padding: 2px 4px;
       color: var(--ci-text-tertiary); border-radius: 4px;
     }
-    .note-edit-btn:hover { color: var(--ci-accent-primary); }
     .note-del-btn:hover { color: var(--ci-accent-red); }
     .note-card-body {
       padding: 12px; font-size: 14px; color: var(--ci-text-primary); line-height: 1.7; outline: none;
+    }
+    .note-card-body:not(.note-card-editing):hover {
+      cursor: text; background: var(--ci-bg-inset);
     }
     .note-card-body h2 { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); margin: 10px 0 6px; }
     .note-card-body strong, .note-card-body b { color: var(--ci-text-primary); font-weight: 700; }
