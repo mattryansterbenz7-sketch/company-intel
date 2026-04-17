@@ -499,10 +499,20 @@
       padding: 3px 0;
       font-size: 12.5px;
     }
-    .comp-bracket-row.comp-bracket-row--group-break {
-      border-top: 1px solid var(--ci-border-subtle);
-      padding-top: 6px;
-      margin-top: 4px;
+    .comp-bracket-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 24px;
+      row-gap: 0;
+    }
+    .comp-bracket-col {
+      display: flex;
+      flex-direction: column;
+    }
+    .comp-bracket-col--red {
+      border-left: 1px solid var(--ci-border-subtle);
+      padding-left: 16px;
+      margin-left: -16px;
     }
     .comp-bracket-dot {
       width: 7px; height: 7px; border-radius: 50%;

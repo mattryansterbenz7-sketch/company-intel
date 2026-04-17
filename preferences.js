@@ -1090,21 +1090,22 @@ function renderCompBracketEditor() {
     if (!floor) return `<div class="comp-bracket-empty">No ${label} floor set — configure in Compensation above.</div>`;
     const sevs   = _compBracketSeverities[compType]  || {};
     const threshs = _compBracketThresholds[compType] || {};
-    const isLast = i => i === COMP_BRACKET_TIERS_UI.length - 1;
-    let prevType = null;
-    const rows = COMP_BRACKET_TIERS_UI.map((tier, i) => {
+
+    const greens = COMP_BRACKET_TIERS_UI.filter(t => t.type === 'green');
+    const reds   = COMP_BRACKET_TIERS_UI.filter(t => t.type === 'red');
+
+    const renderRow = (tier, redIndex) => {
       const computed = tier.thresholdFn(floor, strong);
       const custom   = threshs[tier.key];
       const threshVal = custom || computed;
       const threshK   = Math.round(threshVal / 1000);
       const sev = typeof sevs[tier.key] === 'number' ? sevs[tier.key] : tier.defaultSev;
       const sevColor = tier.type === 'green' ? SEV_GREEN_COLORS[sev - 1] : SEV_RED_COLORS[sev - 1];
-      const groupBreak = prevType && prevType !== tier.type ? ' comp-bracket-row--group-break' : '';
-      prevType = tier.type;
-      const threshCell = isLast(i)
+      const isLastRed = tier.type === 'red' && redIndex === reds.length - 1;
+      const threshCell = isLastRed
         ? `<span class="comp-bracket-thresh">&lt;${fmtK(threshVal)}</span>`
         : `<span class="comp-bracket-thresh"><span class="comp-thresh-lbl">\u2265$</span><input type="number" class="comp-thresh-input${custom ? ' custom' : ''}" data-comp="${compType}" data-tier="${tier.key}" data-default="${Math.round(computed / 1000)}" value="${threshK}" min="1" step="1" title="Edit threshold (in $k). Tab or Enter to save.">k</span>`;
-      return `<div class="comp-bracket-row comp-bracket-row--${tier.type}${groupBreak}">
+      return `<div class="comp-bracket-row comp-bracket-row--${tier.type}">
         <span class="comp-bracket-dot comp-bracket-dot--${tier.type}"></span>
         <span class="comp-bracket-label">${tier.label}</span>
         ${threshCell}
@@ -1112,10 +1113,17 @@ function renderCompBracketEditor() {
           style="background:${sevColor};"
           title="Click to change severity (1\u20135)">${sev}</button>
       </div>`;
-    }).join('');
+    };
+
+    const greenCol = greens.map((t, i) => renderRow(t, i)).join('');
+    const redCol   = reds.map((t, i) => renderRow(t, i)).join('');
+
     return `<div class="comp-bracket-section">
       <div class="comp-bracket-section-title">${label}</div>
-      ${rows}
+      <div class="comp-bracket-cols">
+        <div class="comp-bracket-col comp-bracket-col--green">${greenCol}</div>
+        <div class="comp-bracket-col comp-bracket-col--red">${redCol}</div>
+      </div>
     </div>`;
   }
 
