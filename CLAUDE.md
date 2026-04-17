@@ -354,8 +354,11 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 | Backlog | `43f0ed97` |
 | Up Next | `2cee5689` |
 | In Progress | `7556d12e` |
+| Blocked / Needs Matt | `TBD_MANUAL_ADD` |
 | Monitoring | `2eea7b72` |
 | Done | `c24e13e2` |
+
+**Note:** The "Blocked / Needs Matt" column must be added manually in the GitHub UI (per `feedback_never_modify_board_fields` — the API mutation wipes item assignments). After adding it, paste its option ID into this table and into `.claude/commands/doer.md` + `pm.md`.
 
 | Priority | Option ID |
 |----------|-----------|
@@ -363,14 +366,25 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 | P2 | `7f7a7752` |
 | P3 | `78404ef6` |
 
+### Labels
+
+**Type:** `bug`, `feature`, `polish`, `strategy`, `concern`
+**Size:** `small`, `medium`, `large`
+**Model tier:** `model:haiku`, `model:sonnet`, `model:opus` (see Model Assignment section)
+**Area (filterable surface):** `area:chat`, `area:scoring`, `area:research`, `area:side-panel`, `area:board-ui`, `area:company-view`, `area:onboarding`, `area:integrations`, `area:preferences`, `area:design-system`
+**Blocked state (optional):** `blocked:strategy` (PM needs Matt's direction), `blocked:execution` (Doer hit mid-execution fork)
+
+Every new issue should have type + size + model + area labels. `/issue` applies these automatically.
+
 ### Column assignment
 
 - **Needs Spec** — idea without a clear implementation path; needs design or PRD before coding starts
-- **Backlog** — well-defined, no urgency; ready to pick up whenever
-- **Up Next** — prioritized for the near term; next in line to be picked up
-- **In Progress** — actively being coded; move here before writing any code
-- **Monitoring** — shipped, watching for regressions or awaiting Matt's confirmation
-- **Done** — confirmed complete; GitHub issue must be closed when moved here
+- **Backlog** — well-defined, no urgency; ready to pick up whenever. Also the home of parent/tracker issues (Tasks-checkbox bodies).
+- **Up Next** — prioritized, executable leaves ready for Doer. Must pass the Up Next gate (PRD + acceptance criteria + `model:` label + `area:*` label + single-session scope + not a tracker).
+- **In Progress** — actively being coded; Doer moves here before writing any code.
+- **Blocked / Needs Matt** — paused waiting on Matt's input. PM moves issues here when it needs strategy/design direction to spec; Doer moves issues here when it hits a mid-execution fork. Each item has a `**PM → Matt (strategize):**` or `**Doer → Matt (unblock):**` comment with the specific question.
+- **Monitoring** — Doer-finished, closed, awaiting Matt's verification. Must have a `## How to verify` comment with reload reminder + checklist.
+- **Done** — Matt-verified; issue already closed (closure happens at Monitoring transition, not here).
 
 ### Priority assignment
 
@@ -381,9 +395,12 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 ### Workflow rules
 
 1. Move issue to **In Progress** before writing any code — never after.
-2. When code is pushed: move to **Monitoring**.
-3. When Matt confirms it works: move to **Done** and close the GitHub issue.
-4. Never leave an issue open if it is in the Done column.
+2. When code is pushed to `origin/main`: move to **Monitoring**, close the GitHub issue, and post a `## How to verify` comment with reload reminder + markdown checklist. Closed + Monitoring = "Doer says done, awaiting Matt's verification."
+3. The Doer never moves issues to the **Done** column. Matt drags to Done after verifying.
+4. Never leave an issue open if it is in the Done column (Done is a terminal, verified state — the issue should already be closed when it lands there).
+5. **Refinement routing: Matt → PM → Doer, never Matt → Doer directly.** Feedback on Monitoring items goes to the PM thread. PM decides: tweak (reopen + re-spec + promote via Up Next) or rethink (close + new scoped issue). Doer only accepts work that comes through Up Next.
+6. **Up Next gate.** PM must not promote an issue to Up Next unless it passes: (a) concrete PRD with acceptance criteria, (b) `model:*` label, (c) `area:*` label, (d) single-session scope (not `large` + `strategy`), (e) not a parent/tracker (Tasks-checkbox bodies stay in Backlog as navigation aids).
+7. **Blocked routing.** If PM can't spec without Matt's direction, move to **Blocked / Needs Matt** with a `**PM → Matt (strategize):**` comment. If Doer hits a mid-execution fork, same column with `**Doer → Matt (unblock):**`. When Matt answers, the responsible thread pulls it back to the appropriate stage.
 
 ### Adding issues to the board
 
