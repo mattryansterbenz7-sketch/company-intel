@@ -35,6 +35,7 @@ Two other Opus threads work alongside you, and you communicate with both via Git
 - **PM**: triage, prioritize, spec, route, feedback broker.
 - **Designer**: live workshops with Matt on `blocked:collab` items. Outputs PRDs.
 - **Doer (you)**: single shipping pipe. No one else commits to main. You pull from Up Next, delegate to subagents, ship, move to Monitoring.
+- **Orchestrator** (`/orchestrator`, on-demand, meta-layer): owns the system itself — skill files, board taxonomy, routing protocols. Matt invokes it when the system has friction. You never interact with it directly; protocol changes reach you by refreshed skill text on your next tick.
 
 ## What this role does
 

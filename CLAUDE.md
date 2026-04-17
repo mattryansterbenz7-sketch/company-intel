@@ -336,6 +336,24 @@ Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No w
 - Export/import backup
 - Analytics dashboard (funnel conversion, response rate)
 
+## Agent architecture (four roles)
+
+Coop.ai's development workflow runs on four coordinated Claude roles. Each has a distinct job and a skill file that defines its protocol. The roles only communicate via GitHub issue comments (never directly thread-to-thread).
+
+| Role | Skill | Mode | Touches product code? | Job |
+|------|-------|------|----------------------|-----|
+| **PM** | `/pm` | Autonomous `/loop /pm` | No | Triage, prioritize, spec, route, broker Matt feedback |
+| **Doer** | `/doer` | Autonomous `/loop /doer` | **Yes — only shipping pipe** | Pull from Up Next, delegate to subagents, ship to main, move to Monitoring |
+| **Designer** | `/designer` | On-demand with Matt | No | Live strategy + design pair sessions on `blocked:collab` items; outputs detailed PRDs back to Up Next |
+| **Orchestrator** | `/orchestrator` | On-demand | No (system files only) | Meta-layer — evolves skill files, designs protocols, troubleshoots system-level breakage, audits architecture |
+
+**Communication rules:**
+- Agents talk via `**PM →**`, `**Doer →**`, `**Designer →**` comments on issues.
+- Matt → PM → Doer/Designer for refinements. Matt never routes directly to Doer or Designer.
+- Orchestrator is invoked by Matt only. No agent talks to Orchestrator; the Orchestrator updates skill files, and changes propagate via next-tick skill re-read.
+
+**Single shipping pipe:** only the Doer commits product code to `origin/main`. PM and Designer never touch source. The Orchestrator commits system files (`.claude/commands/*.md`, `CLAUDE.md`, label/column changes) — never product code.
+
 ## GitHub Board Management
 
 All issues live on the [Coop.ai project board](https://github.com/users/mattryansterbenz7-sketch/projects/1).
