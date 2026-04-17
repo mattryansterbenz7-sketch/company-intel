@@ -581,7 +581,8 @@
     .sp-chat-resize-handle::after { content: ''; width: 36px; height: 3px; border-radius: 2px; background: var(--ci-border-default); transition: background 0.15s; }
     .sp-chat-resize-handle:hover::after { background: var(--ci-accent-primary); }
     .sp-chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-subtle); }
-    .sp-chat-header-title { font-size: 14px; font-weight: 700; color: var(--ci-accent-primary); flex: 1; min-width: 0; letter-spacing: -0.01em; overflow: hidden; }
+    .sp-chat-header-title { font-size: 14px; font-weight: 700; color: var(--ci-accent-primary); min-width: 0; letter-spacing: -0.01em; overflow: hidden; flex-shrink: 0; }
+    .sp-chat-header-btns { margin-left: auto; display: flex; align-items: center; gap: 6px; }
     /* Pipeline stats */
     .sp-pipeline-stats { display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: var(--ci-bg-inset); border-bottom: 1px solid var(--ci-border-default); cursor: pointer; overflow-x: auto; }
     .sp-pipeline-stats:hover { background: var(--ci-bg-inset); }
@@ -1154,9 +1155,9 @@
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 2h5v5M14 2L8 8M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <span class="sp-chat-header-title" id="sp-chat-header-title" style="display:flex;align-items:center;gap:8px;">Coop</span>
-        <span class="sp-app-mode-badge" id="sp-app-mode-badge" style="display:none;font-size:10px;font-weight:700;color:var(--ci-accent-primary);background:rgba(255,122,89,0.10);padding:2px 8px;border-radius:10px;letter-spacing:0.03em;white-space:nowrap;">Apply mode</span>
         <button class="sp-chat-bind-btn" id="sp-chat-bind-btn" title="Bind Coop to a saved company or opportunity">📎 Bind</button>
         <a class="sp-chat-bind-view" id="sp-chat-bind-view" href="#" style="display:none;font-size:11px;font-weight:600;color:var(--ci-accent-primary);text-decoration:none;padding:3px 6px;border:1px solid rgba(255,122,89,0.35);border-radius:6px;white-space:nowrap;" title="Open in full CRM">View →</a>
+        <span class="sp-app-mode-badge" id="sp-app-mode-badge" style="display:none;font-size:10px;font-weight:700;color:var(--ci-accent-primary);background:rgba(255,122,89,0.10);padding:2px 8px;border-radius:10px;letter-spacing:0.03em;white-space:nowrap;">Apply mode</span>
         <div class="sp-chat-header-btns">
           <div class="sp-chat-size-group" role="group" aria-label="Chat size">
             <button class="sp-chat-size-btn" data-chat-size="minimized" title="Minimized">
