@@ -39,17 +39,21 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // ── Notify content script that side panel is open/closed ────────────────────
+let _sidePanelTabId = null;
 (async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: '_SIDEPANEL_OPENED' }).catch(() => {});
+    if (tab?.id) {
+      _sidePanelTabId = tab.id;
+      chrome.tabs.sendMessage(tab.id, { type: '_SIDEPANEL_OPENED' }).catch(() => {});
+    }
   } catch {}
 })();
-window.addEventListener('beforeunload', async () => {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: '_SIDEPANEL_CLOSED' }).catch(() => {});
-  } catch {}
+// beforeunload must fire synchronously; async chrome.tabs.query wouldn't resolve in time
+window.addEventListener('pagehide', () => {
+  if (_sidePanelTabId != null) {
+    chrome.tabs.sendMessage(_sidePanelTabId, { type: '_SIDEPANEL_CLOSED' }).catch(() => {});
+  }
 });
 
 // ── API Health Dot ──────────────────────────────────────────────────────────
