@@ -1360,14 +1360,9 @@ function triageAction(action, fromDrag) {
   // Animate out (skip if already animated by drag gesture)
   if (!fromDrag && card) {
     const goLeft = action === 'pass';
-    const rot = goLeft ? -12 : 12;
-    if (_inOverlay) {
-      card.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.8,0.6), opacity 0.35s cubic-bezier(0.4,0,0.8,0.6)';
-      card.style.transform = `translateX(${goLeft ? -60 : 60}px) scale(0.82) rotate(${rot}deg)`;
-    } else {
-      card.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.8,0.6), opacity 0.35s cubic-bezier(0.4,0,0.8,0.6)';
-      card.style.transform = `translateX(${goLeft ? '-140%' : '140%'}) rotate(${rot}deg) scale(0.88)`;
-    }
+    const rot = goLeft ? -22 : 22;
+    card.style.transition = 'transform var(--motion-md) var(--ease-in), opacity var(--motion-md) var(--ease-in)';
+    card.style.transform = `translateX(${goLeft ? '-180%' : '180%'}) rotate(${rot}deg) scale(0.7)`;
     card.style.opacity = '0';
   }
 
@@ -1420,14 +1415,14 @@ function triageAction(action, fromDrag) {
     chrome.storage.local.set({ savedCompanies: companies });
   });
 
-  // Next card after animation
+  // Next card after animation (aligned with --motion-md fling duration)
   setTimeout(() => {
     if (SINGLE_ID) { _overlayClose(); return; }
     queue.splice(currentIdx, 1);
     if (currentIdx >= queue.length) currentIdx = 0;
     updateCount();
     renderCurrent();
-  }, 380);
+  }, 300);
 }
 
 // ── Coop thinking overlay helper ──────────────────────────────────────────────
@@ -1567,7 +1562,8 @@ function initCardSwipe() {
     mouseDown = false;
     scrolling = false;
     currentX = 0;
-    card.style.transition = 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)';
+    // Spring snap-back — tactile bounce back to rest
+    card.style.transition = 'transform var(--motion-sm) var(--ease-spring)';
     card.style.transform = '';
     const pl = overlay.querySelector('.swipe-label.pass');
     const il = overlay.querySelector('.swipe-label.interested');
@@ -1608,7 +1604,8 @@ function initCardSwipe() {
     currentX = dx;
 
     const progress = Math.min(Math.abs(currentX) / THRESHOLD, 1);
-    const rotation = (currentX / window.innerWidth) * 12;
+    // Rotation tied to drag distance for momentum feel — ~8° at threshold, 16° at 2× threshold, capped
+    const rotation = Math.max(-24, Math.min(24, (currentX / THRESHOLD) * 10));
     card.style.transform = `translateX(${currentX}px) rotate(${rotation}deg)`;
 
     // Show overlay labels
@@ -1632,15 +1629,15 @@ function initCardSwipe() {
     const passLabel = overlay.querySelector('.swipe-label.pass');
     if (Math.abs(currentX) >= THRESHOLD) {
       const direction = currentX < 0 ? 'pass' : 'interested';
-      const rot = currentX < 0 ? -12 : 12;
-      card.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.8,0.6), opacity 0.35s cubic-bezier(0.4,0,0.8,0.6)';
-      if (_inOverlay) {
-        card.style.transform = `translateX(${currentX < 0 ? -60 : 60}px) scale(0.82) rotate(${rot}deg)`;
-      } else {
-        card.style.transform = `translateX(${currentX < 0 ? '-140%' : '140%'}) rotate(${rot}deg) scale(0.88)`;
-      }
+      // Rotation amplified with how far past threshold the drag went
+      const overshoot = Math.min(Math.abs(currentX) / THRESHOLD, 2.2);
+      const rot = (currentX < 0 ? -1 : 1) * (12 + (overshoot - 1) * 12);
+      card.style.transition = 'transform var(--motion-md) var(--ease-in), opacity var(--motion-md) var(--ease-in)';
+      card.style.transform = `translateX(${currentX < 0 ? '-180%' : '180%'}) rotate(${rot}deg) scale(0.7)`;
       card.style.opacity = '0';
-      setTimeout(() => triageAction(direction, true), 320);
+      // Fire the action immediately — fromDrag=true skips re-animating; triageAction
+      // schedules next-card render in --motion-md so old card exit + next card entrance align.
+      triageAction(direction, true);
     } else {
       resetState();
     }
