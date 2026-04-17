@@ -306,10 +306,19 @@
     details.p-section > summary::marker { display: none; content: ''; }
     .p-category { display: inline-flex; font-size: 12px; font-weight: 700; color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); border: 1px solid rgba(255,122,89,0.25); border-radius: var(--ci-radius-full); padding: 4px 12px; align-self: flex-start; }
     .p-oneliner { font-size: 15px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.6; }
-    .p-review { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.7; font-style: italic; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 12px; }
+    .p-review { position: relative; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.7; font-style: italic; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 12px; }
     .p-review:last-child { border-bottom: none; padding-bottom: 0; }
     .p-review-src { font-size: 12px; color: var(--ci-text-tertiary); font-style: normal; margin-top: 4px; }
     .p-review-src a { color: var(--ci-accent-primary); text-decoration: none; }
+    .p-review-dismiss { position: absolute; top: 4px; right: 4px; background: none; border: none; color: var(--ci-text-tertiary); font-size: 11px; cursor: pointer; opacity: 0; padding: 2px 6px; border-radius: var(--ci-radius-sm); transition: opacity var(--ci-transition-fast), color var(--ci-transition-fast); }
+    .p-review:hover .p-review-dismiss { opacity: 1; }
+    .p-review-dismiss:hover { color: var(--ci-accent-red); background: var(--ci-bg-inset); }
+    .p-review-hidden { font-size: 11px; color: var(--ci-text-tertiary); padding-top: 8px; border-top: 1px solid var(--ci-border-subtle); margin-top: 8px; }
+    .p-review-hidden button { background: none; border: none; color: var(--ci-accent-primary); font-size: 11px; cursor: pointer; padding: 0; font-family: inherit; }
+    .p-review-hidden button:hover { text-decoration: underline; }
+    .p-review-undo { background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 6px 10px; margin-bottom: 8px; font-size: 12px; color: var(--ci-text-secondary); display: flex; align-items: center; justify-content: space-between; }
+    .p-review-undo-btn { background: none; border: none; color: var(--ci-accent-primary); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; font-family: inherit; }
+    .p-review-undo-btn:hover { text-decoration: underline; }
 
     /* Notes textarea */
     .p-notes {

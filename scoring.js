@@ -305,17 +305,21 @@ export async function scoreOpportunity(entryId) {
   }
 
   // Employee reviews — from full research or auto-fetched above
+  // Filter dismissed reviews before feeding into scoring
+  const _dismissedSet = new Set(entry.dismissedReviews || []);
+  const _getRevId = r => r.url || `${r.source || 'Web'}|${(r.snippet || '').slice(0, 80)}`;
+  const _activeReviews = (entry.reviews || []).filter(r => !_dismissedSet.has(_getRevId(r)));
   // Pull out numeric ratings explicitly so they're not buried in snippet text
-  const _reviewRatings = (entry.reviews || [])
+  const _reviewRatings = _activeReviews
     .map(r => ({ source: r.source || 'Web', rating: parseFloat(r.rating) }))
     .filter(r => !isNaN(r.rating));
   const _ratingLine = _reviewRatings.length
     ? `Employee Ratings: ${_reviewRatings.map(r => `${r.rating}/5 (${r.source})`).join(', ')}`
     : null;
-  const reviewsBlock = entry.reviews?.length
+  const reviewsBlock = _activeReviews.length
     ? [
         _ratingLine,
-        `Employee Reviews (Glassdoor / RepVue / Reddit):\n${entry.reviews.slice(0, 6).map(r =>
+        `Employee Reviews (Glassdoor / RepVue / Reddit):\n${_activeReviews.slice(0, 6).map(r =>
           `- ${r.rating ? r.rating + '★ ' : ''}${r.snippet || r.title || ''}${r.source ? ` (${r.source})` : ''}`
         ).join('\n')}`
       ].filter(Boolean).join('\n')

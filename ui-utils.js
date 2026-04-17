@@ -103,12 +103,16 @@ function truncLabel(str, max = 40) {
 // ── Review source linking ────────────────────────────────────────────────────
 
 /** Turn escaped text mentioning review sources (Glassdoor, RepVue, etc.) into clickable links */
-function linkReviewSources(escapedText, reviews) {
+function linkReviewSources(escapedText, reviews, dismissedIds = []) {
   if (!escapedText || !reviews?.length) return escapedText;
+  const dismissed = new Set(dismissedIds);
+  const active = dismissed.size
+    ? reviews.filter(r => !dismissed.has(r.url || `${r.source || 'Web'}|${(r.snippet || '').slice(0, 80)}`))
+    : reviews;
   const sources = ['Glassdoor', 'RepVue', 'Reddit', 'Blind', 'Indeed'];
   let result = escapedText;
   for (const src of sources) {
-    const review = reviews.find(r => r.source === src && r.url);
+    const review = active.find(r => r.source === src && r.url);
     if (!review) continue;
     const re = new RegExp(`\\b(${src})\\b`, 'gi');
     if (re.test(result)) {

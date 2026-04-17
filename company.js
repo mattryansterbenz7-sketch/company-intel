@@ -1854,6 +1854,54 @@ function buildRoleBriefSection() {
     <div class="rb-empty-msg">No role data yet. Save a job posting or record meetings to generate a brief.</div>`;
 }
 
+// Bind dismiss/restore handlers for reviews displayed in the Intel tab hub block
+function bindHubReviews() {
+  const block = document.getElementById('hub-reviews-block');
+  if (!block) return;
+  let _undoTimer = null;
+
+  const rerenderHub = () => {
+    if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+    block.innerHTML = `<div class="hub-section-label">Employee Reviews</div>${buildReviews()}`;
+    bindHubReviews();
+  };
+
+  const showUndoHub = (rid) => {
+    if (_undoTimer) clearTimeout(_undoTimer);
+    block.querySelector('.p-review-undo')?.remove();
+    const banner = document.createElement('div');
+    banner.className = 'p-review-undo';
+    banner.innerHTML = `Review dismissed · <button class="p-review-undo-btn">undo</button>`;
+    const firstReview = block.querySelector('.hub-section-label + *') || block.querySelector('.p-review') || block.querySelector('.p-empty');
+    if (firstReview) block.insertBefore(banner, firstReview);
+    else block.appendChild(banner);
+    banner.querySelector('.p-review-undo-btn').addEventListener('click', () => {
+      clearTimeout(_undoTimer);
+      _undoTimer = null;
+      const ids = entry.dismissedReviews || [];
+      const idx = ids.lastIndexOf(rid);
+      if (idx !== -1) saveEntry({ dismissedReviews: [...ids.slice(0, idx), ...ids.slice(idx + 1)] });
+      rerenderHub();
+    });
+    _undoTimer = setTimeout(() => { banner.remove(); _undoTimer = null; }, 6000);
+  };
+
+  block.querySelectorAll('.p-review-dismiss').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = btn.dataset.rid;
+      saveEntry({ dismissedReviews: [...(entry.dismissedReviews || []), rid] });
+      block.innerHTML = `<div class="hub-section-label">Employee Reviews</div>${buildReviews()}`;
+      bindHubReviews();
+      showUndoHub(rid);
+    });
+  });
+
+  block.querySelector('.p-review-restore')?.addEventListener('click', () => {
+    saveEntry({ dismissedReviews: [] });
+    rerenderHub();
+  });
+}
+
 function buildIntelTab() {
   const overview = buildOverview();
   const intel    = buildIntel();
@@ -1921,11 +1969,13 @@ function initIntelTab() {
       saveEntry(updates);
       // Re-render only the sections that changed
       const reviewsEl = document.getElementById('hub-reviews-block');
-      if (reviewsEl && updates.reviews) reviewsEl.innerHTML = `<div class="hub-section-label">Employee Reviews</div>${buildReviews()}`;
+      if (reviewsEl && updates.reviews) { reviewsEl.innerHTML = `<div class="hub-section-label">Employee Reviews</div>${buildReviews()}`; bindHubReviews(); }
       const hiringEl  = document.getElementById('hub-hiring-block');
       if (hiringEl  && updates.jobListings) hiringEl.innerHTML  = `<div class="hub-section-label">Hiring Signals</div>${buildHiring()}`;
     });
   }
+
+  bindHubReviews();
 
   // Bind re-enrich button for data conflict banner
   document.getElementById('reenrich-btn')?.addEventListener('click', () => {
@@ -2192,17 +2242,17 @@ function buildFitSection() {
 
       // Rationale
       if (rationale) {
-        detailHtml += `<div class="fit-dim-rationale">${linkReviewSources(escapeHtml(rationale), entry.reviews)}</div>`;
+        detailHtml += `<div class="fit-dim-rationale">${linkReviewSources(escapeHtml(rationale), entry.reviews, entry.dismissedReviews)}</div>`;
       }
 
       // Green + red flags with full text (not truncated)
       if (greens.length || reds.length) {
         detailHtml += `<div class="fit-dim-flags">`;
         greens.forEach(f => {
-          detailHtml += `<div class="fit-dim-flag green"><span class="fit-dim-flag-icon">+</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${linkReviewSources(escapeHtml(f.evidence), entry.reviews)}</span>` : ''}</div>`;
+          detailHtml += `<div class="fit-dim-flag green"><span class="fit-dim-flag-icon">+</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${linkReviewSources(escapeHtml(f.evidence), entry.reviews, entry.dismissedReviews)}</span>` : ''}</div>`;
         });
         reds.forEach(f => {
-          detailHtml += `<div class="fit-dim-flag red"><span class="fit-dim-flag-icon">-</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${linkReviewSources(escapeHtml(f.evidence), entry.reviews)}</span>` : ''}</div>`;
+          detailHtml += `<div class="fit-dim-flag red"><span class="fit-dim-flag-icon">-</span><span class="fit-dim-flag-text">${escapeHtml(f.text || f.label || '')}</span>${f.evidence ? `<span class="fit-dim-flag-evidence">${linkReviewSources(escapeHtml(f.evidence), entry.reviews, entry.dismissedReviews)}</span>` : ''}</div>`;
         });
         detailHtml += `</div>`;
       }
@@ -3579,14 +3629,37 @@ function buildIntel() {
   </details>`;
 }
 
+function _getReviewId(r) {
+  return r.url || `${r.source || 'Web'}|${(r.snippet || '').slice(0, 80)}`;
+}
+
 function buildReviews() {
-  const reviews = entry.reviews || [];
-  if (!reviews.length) return '<div class="p-empty">No reviews saved.</div>';
-  return reviews.slice(0, 5).map(r => `
+  const allReviews = (entry.reviews || []).slice(0, 5);
+  if (!allReviews.length) return '<div class="p-empty">No reviews saved.</div>';
+  const dismissed = new Set(entry.dismissedReviews || []);
+  const visible = allReviews.filter(r => !dismissed.has(_getReviewId(r)));
+  const hiddenCount = allReviews.length - visible.length;
+
+  const reviewsHtml = visible.map(r => {
+    const rid = _getReviewId(r).replace(/"/g, '&quot;');
+    const snippet = escapeHtml(r.snippet || '');
+    const source = escapeHtml(r.source || '');
+    return `
     <div class="p-review">
-      "${r.snippet}"
-      <div class="p-review-src">${r.source ? (r.url ? `<a href="${safeUrl(r.url)}" target="_blank">${r.source}</a>` : r.source) : ''}</div>
-    </div>`).join('');
+      <button class="p-review-dismiss" data-rid="${rid}" title="Dismiss">×</button>
+      "${snippet}"
+      <div class="p-review-src">${source ? (r.url ? `<a href="${safeUrl(r.url)}" target="_blank">${source}</a>` : source) : ''}</div>
+    </div>`;
+  }).join('');
+
+  const hiddenFooter = hiddenCount > 0
+    ? `<div class="p-review-hidden">${hiddenCount} review${hiddenCount === 1 ? '' : 's'} hidden · <button class="p-review-restore">show</button></div>`
+    : '';
+
+  if (!visible.length && hiddenCount > 0) {
+    return `<div class="p-empty">All reviews dismissed.</div>${hiddenFooter}`;
+  }
+  return (reviewsHtml + hiddenFooter) || '<div class="p-empty">No reviews saved.</div>';
 }
 
 
@@ -4403,6 +4476,57 @@ function bindPanelBodyEvents(pid) {
     });
 
     loadPhotosForPanel('leadership');
+  }
+
+  if (pid === 'reviews') {
+    const body = document.getElementById('pbody-reviews');
+    if (!body) return;
+
+    let _undoTimer = null;
+
+    // Re-render reviews list and re-bind all handlers
+    const rebind = () => {
+      if (_undoTimer) clearTimeout(_undoTimer);
+      _undoTimer = null;
+      body.innerHTML = buildReviews();
+      attachReviewHandlers();
+    };
+
+    const showUndo = (rid) => {
+      if (_undoTimer) clearTimeout(_undoTimer);
+      body.querySelector('.p-review-undo')?.remove();
+      const banner = document.createElement('div');
+      banner.className = 'p-review-undo';
+      banner.innerHTML = `Review dismissed · <button class="p-review-undo-btn">undo</button>`;
+      body.insertBefore(banner, body.firstChild);
+      banner.querySelector('.p-review-undo-btn').addEventListener('click', () => {
+        clearTimeout(_undoTimer);
+        _undoTimer = null;
+        const ids = entry.dismissedReviews || [];
+        const idx = ids.lastIndexOf(rid);
+        if (idx !== -1) saveEntry({ dismissedReviews: [...ids.slice(0, idx), ...ids.slice(idx + 1)] });
+        rebind();
+      });
+      _undoTimer = setTimeout(() => { banner.remove(); _undoTimer = null; }, 6000);
+    };
+
+    function attachReviewHandlers() {
+      body.querySelectorAll('.p-review-dismiss').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const rid = btn.dataset.rid;
+          saveEntry({ dismissedReviews: [...(entry.dismissedReviews || []), rid] });
+          body.innerHTML = buildReviews();
+          attachReviewHandlers();
+          showUndo(rid);
+        });
+      });
+      body.querySelector('.p-review-restore')?.addEventListener('click', () => {
+        saveEntry({ dismissedReviews: [] });
+        rebind();
+      });
+    }
+
+    attachReviewHandlers();
   }
 
   if (pid === 'notes') {
