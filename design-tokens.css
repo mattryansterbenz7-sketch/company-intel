@@ -191,3 +191,195 @@ input, textarea, select { transition: border-color var(--ci-transition-fast), ba
   0% { background-position: 0% 0; }
   100% { background-position: 300% 0; }
 }
+
+/* ── Date Picker ────────────────────────────────────────────────────────────
+   Replaces every <input type="date"> with a styled calendar popover.
+   All color values reference existing tokens only — no new hardcoded colors.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Trigger button — reads as a styled input */
+.coop-date-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 120px;
+  padding: 6px 10px;
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  font-family: var(--ci-font-family);
+  font-size: 13px;
+  color: var(--ci-text-tertiary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+}
+.coop-date-trigger.has-value {
+  color: var(--ci-text-primary);
+}
+.coop-date-trigger:hover {
+  border-color: var(--ci-border-strong);
+  background: var(--ci-bg-inset);
+}
+.coop-date-trigger:focus-visible {
+  outline: 2px solid var(--ci-accent-primary);
+  outline-offset: 2px;
+  border-color: var(--ci-accent-primary);
+}
+
+/* Popover container */
+.coop-date-popover {
+  position: fixed;
+  z-index: 99999;
+  width: 288px;
+  padding: 14px;
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: 12px;
+  box-shadow: var(--ci-shadow-lg);
+  user-select: none;
+}
+
+/* Header row */
+.coop-date-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 4px 12px;
+}
+
+/* Month/year title */
+.coop-date-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ci-text-primary);
+  letter-spacing: 0.01em;
+}
+
+/* Prev/next nav buttons */
+.coop-date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--ci-text-secondary);
+  cursor: pointer;
+  transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+}
+.coop-date-nav:hover {
+  background: var(--ci-bg-inset);
+  color: var(--ci-text-primary);
+}
+.coop-date-nav:focus-visible {
+  outline: 2px solid var(--ci-accent-primary);
+  outline-offset: -2px;
+}
+
+/* Day-of-week label row */
+.coop-date-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 4px 0 8px;
+}
+.coop-date-dow span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ci-text-tertiary);
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+/* Day grid */
+.coop-date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  transition: opacity var(--motion-xs) var(--ease-out);
+}
+
+/* Individual day cell */
+.coop-date-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ci-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--motion-xs) ease, color var(--motion-xs) ease;
+}
+.coop-date-day:hover:not(.selected) {
+  background: var(--ci-bg-inset);
+}
+.coop-date-day:focus-visible {
+  outline: 2px solid var(--ci-accent-primary);
+  outline-offset: -2px;
+}
+
+/* Outside-month days */
+.coop-date-day.outside {
+  color: var(--ci-text-tertiary);
+  opacity: 0.5;
+}
+
+/* Today — amber tint */
+.coop-date-day.today:not(.selected) {
+  color: var(--ci-accent-amber);
+  font-weight: 700;
+  background: rgba(245, 166, 35, 0.14);
+}
+
+/* Selected — coral fill; supersedes today styling */
+.coop-date-day.selected {
+  background: var(--ci-accent-primary);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(252, 99, 107, 0.32);
+}
+.coop-date-day.selected:hover {
+  background: var(--ci-accent-primary-hover);
+}
+
+/* Footer */
+.coop-date-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 4px 2px;
+  margin-top: 10px;
+  border-top: 1px solid var(--ci-border-subtle);
+}
+.coop-date-footer button {
+  font-family: var(--ci-font-family);
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-radius: var(--ci-radius-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--ci-text-secondary);
+  transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+}
+.coop-date-footer button:hover {
+  color: var(--ci-text-primary);
+  background: var(--ci-bg-inset);
+}
+.coop-date-footer button:focus-visible {
+  outline: 2px solid var(--ci-accent-primary);
+  outline-offset: 2px;
+}
+.coop-date-footer button.clear {
+  color: var(--ci-accent-primary);
+}
+.coop-date-footer button.clear:hover {
+  background: rgba(252, 99, 107, 0.10);
+  color: var(--ci-accent-primary);
+}
