@@ -82,6 +82,32 @@ export function getUserName(fallback = 'the user') {
   return state.cachedUserName || fallback;
 }
 
+// ── Relative date label — pre-computes human labels so the model never does date math ─
+export function relativeLabel(dateStr, now = new Date()) {
+  try {
+    if (!dateStr || dateStr === 'unknown') return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    // Strip time-of-day by comparing calendar-day strings to avoid DST drift
+    const todayDay = new Date(now.toDateString());
+    const targetDay = new Date(d.toDateString());
+    const diffMs = todayDay - targetDay;
+    const diffDays = Math.round(diffMs / 86400000);
+    if (diffDays < 0) return 'upcoming';
+    if (diffDays === 0) return 'earlier today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays <= 3) return `${diffDays} days ago`;
+    if (diffDays <= 6) return 'earlier this week';
+    if (diffDays <= 13) return 'last week';
+    if (diffDays <= 27) return 'a couple weeks ago';
+    if (diffDays <= 59) return 'last month';
+    if (diffDays <= 179) return 'a few months ago';
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  } catch (_) {
+    return '';
+  }
+}
+
 // ── Text truncation ────────────────────────────────────────────────────────
 export function truncateToTokenBudget(text, maxChars) {
   if (!text || text.length <= maxChars) return text;

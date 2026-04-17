@@ -2,7 +2,7 @@
 // PRD: prds/G2-coop-tool-use.md
 // Flag: state.coopConfig.useToolUse
 
-import { getUserName } from './utils.js';
+import { getUserName, relativeLabel } from './utils.js';
 import { buildCoopMemoryBlock } from './memory.js';
 import { getKnowledgeDoc } from './knowledge.js';
 
@@ -395,7 +395,9 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
     ems.forEach((em, idx) => {
       const from = (em.from || '').replace(/<[^>]+>/, '').trim();
       lines.push(`### ${em.subject || '(no subject)'}`);
-      lines.push(`From: ${from} | Date: ${em.date || 'unknown'}${em.matchedVia ? ` | Via: ${em.matchedVia}` : ''}`);
+      const emRel = relativeLabel(em.date);
+      const emDateStr = `${em.date || 'unknown'}${emRel ? ` (${emRel})` : ''}`;
+      lines.push(`From: ${from} | Date: ${emDateStr}${em.matchedVia ? ` | Via: ${em.matchedVia}` : ''}`);
       // Most recent email gets full text; older emails get snippets
       const cap = idx === 0 ? 2000 : 400;
       lines.push(((em.body || em.snippet || '').slice(0, cap)));
@@ -414,7 +416,9 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
       const kwHit = kwList.length && kwList.some(k => haystack.includes(k));
       const attendees = (m.attendees || []).slice(0, 8).map(a => typeof a === 'string' ? a : (a.name || a.email || '')).join(', ');
       lines.push(`### ${m.title || 'Untitled'}`);
-      lines.push(`Date: ${m.date || 'unknown'}${attendees ? ` | Attendees: ${attendees}` : ''}`);
+      const mtgRel = relativeLabel(m.date);
+      const mtgDateStr = `${m.date || 'unknown'}${mtgRel ? ` (${mtgRel})` : ''}`;
+      lines.push(`Date: ${mtgDateStr}${attendees ? ` | Attendees: ${attendees}` : ''}`);
       if (summary) { lines.push('**Summary:**'); lines.push(summary.slice(0, 800)); }
       // Most recent meeting gets full transcript; older meetings follow keyword/preview rules
       if (idx === 0 && transcript) {

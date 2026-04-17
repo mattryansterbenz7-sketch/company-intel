@@ -103,7 +103,7 @@ function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, prof
     (applicationMode ? coopInterp.draftHint?.() || '' : '');
   const base = [
     buildIdentityPrompt(state.coopConfig, { globalChat: isGlobalChat, contextType: 'company', userName: getUserName() }),
-    `\n=== TODAY ===\n${todayStr}`,
+    `\n=== TODAY ===\n${todayStr}\n\n=== TEMPORAL LANGUAGE ===\nWhen referencing past events, use precise relative language:\n- Same day: "earlier today"\n- 1 day ago: "yesterday"\n- 2–3 days ago: "<N> days ago" or the day name ("on Tuesday")\n- 4–6 days ago: "earlier this week"\n- 7–13 days ago: "last week"\n- 14+ days ago: "a couple weeks ago" or the specific date\nTool results already include relative labels like "(2 days ago)" next to each date — USE those labels. Never guess; never compute.`,
     principles,
     profileSummary ? `\n=== USER AT A GLANCE ===\n${profileSummary}` : '',
     `\n=== TOOL USE ===
