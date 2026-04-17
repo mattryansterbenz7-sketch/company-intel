@@ -343,7 +343,7 @@ function renderHeader() {
       ${statusOptions}
     </select>
     <div class="hdr-stars" id="hdr-stars">${stars}</div>
-    ${entry.url ? `<a class="hdr-ext-link" href="${entry.url}" target="_blank">↗ Job Posting</a>` : ''}
+    ${entry.url ? `<a class="hdr-ext-link" href="${safeUrl(entry.url)}" target="_blank">↗ Job Posting</a>` : ''}
     ${entry.jobUrl && /linkedin\.com\/jobs\/view\//i.test(entry.jobUrl)
       ? `<button class="hdr-rescrape-btn" id="hdr-rescrape-btn" title="Re-fetch all LinkedIn data (firmographics, skills, recruiter, etc.) and rescore">↺ Refresh LinkedIn data</button>`
       : ''}
@@ -462,10 +462,10 @@ function renderSidebar() {
 
     <div class="sb-section">
       <div class="sb-title">Links</div>
-      ${e.url ? `<a class="sb-link opp" href="${e.url}" target="_blank">↗ Job Posting</a>` : ''}
-      <a class="sb-link li" href="${linkedInUrl}" target="_blank">🔗 LinkedIn</a>
+      ${e.url ? `<a class="sb-link opp" href="${safeUrl(e.url)}" target="_blank">↗ Job Posting</a>` : ''}
+      <a class="sb-link li" href="${safeUrl(linkedInUrl)}" target="_blank">🔗 LinkedIn</a>
       ${e.companyWebsite
-        ? `<a class="sb-link web" href="${e.companyWebsite}" target="_blank">🌐 ${e.companyWebsite.replace(/^https?:\/\//,'').replace(/\/$/,'')}</a>`
+        ? `<a class="sb-link web" href="${safeUrl(e.companyWebsite)}" target="_blank">🌐 ${e.companyWebsite.replace(/^https?:\/\//,'').replace(/\/$/,'')}</a>`
         : `<div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:12px;color:#b0c1d4">🌐</span>
             <input id="sb-website-input" placeholder="Add website URL…" style="flex:1;font-size:12px;font-weight:600;border:none;border-bottom:1px dashed #b0c1d4;outline:none;background:transparent;color:#33475b;padding:2px 0;font-family:inherit;" autocomplete="off">
@@ -631,7 +631,7 @@ function renderRightSidebar() {
   if (!leaders.length) {
     const listings = entry.jobListings || [];
     const hiringHtml = listings.length
-      ? listings.map(j => `<div class="p-hiring-item"><span style="color:#3d5468;font-size:14px">•</span><span style="font-size:13px">${j.title || 'Open Role'}${j.url ? ` <a href="${j.url}" target="_blank" class="p-hiring-link">↗</a>` : ''}${j.location ? `<span style="color:#64748b;font-size:12px"> · ${j.location}</span>` : ''}</span></div>`).join('')
+      ? listings.map(j => `<div class="p-hiring-item"><span style="color:#3d5468;font-size:14px">•</span><span style="font-size:13px">${j.title || 'Open Role'}${j.url ? ` <a href="${safeUrl(j.url)}" target="_blank" class="p-hiring-link">↗</a>` : ''}${j.location ? `<span style="color:#64748b;font-size:12px"> · ${j.location}</span>` : ''}</span></div>`).join('')
       : `<div class="rs-empty">No additional open roles found.</div>`;
     right.innerHTML = `
       <div class="rs-title">Leadership</div>
@@ -652,8 +652,8 @@ function renderRightSidebar() {
           <div class="leader-name">${l.name}</div>
           <div class="leader-role">${l.title || ''}</div>
           <div class="leader-links">
-            <a class="leader-link li" href="${liUrl}" target="_blank">LinkedIn</a>
-            ${l.newsUrl ? `<a class="leader-link news" href="${l.newsUrl}" target="_blank">News</a>` : ''}
+            <a class="leader-link li" href="${safeUrl(liUrl)}" target="_blank">LinkedIn</a>
+            ${l.newsUrl ? `<a class="leader-link news" href="${safeUrl(l.newsUrl)}" target="_blank">News</a>` : ''}
           </div>
         </div>
       </div>`;
@@ -668,7 +668,7 @@ function renderRightSidebar() {
             <span style="color:#3d5468;font-size:14px">•</span>
             <span style="font-size:13px">
               ${j.title || 'Open Role'}
-              ${j.url ? `<a href="${j.url}" target="_blank" class="p-hiring-link">↗</a>` : ''}
+              ${j.url ? `<a href="${safeUrl(j.url)}" target="_blank" class="p-hiring-link">↗</a>` : ''}
               ${j.location ? `<span style="color:#64748b;font-size:12px"> · ${j.location}</span>` : ''}
             </span>
           </div>`).join('')
@@ -723,10 +723,10 @@ function renderPanels() {
       ? `<div style="display:flex;flex-direction:column;gap:2px">
            <span class="panel-title">${def.title}</span>
            ${entry.jobTitle && entry.url
-             ? `<a class="panel-subtitle-link" href="${entry.url}" target="_blank">${entry.jobTitle} ↗</a>`
+             ? `<a class="panel-subtitle-link" href="${safeUrl(entry.url)}" target="_blank">${entry.jobTitle} ↗</a>`
              : entry.jobTitle
                ? `<span class="panel-subtitle-link">${entry.jobTitle}</span>`
-               : `<a class="panel-subtitle-link" href="${entry.url}" target="_blank">View Job Posting ↗</a>`}
+               : `<a class="panel-subtitle-link" href="${safeUrl(entry.url)}" target="_blank">View Job Posting ↗</a>`}
          </div>`
       : `<span class="panel-title">${def.title}</span>`;
     return `
@@ -953,7 +953,7 @@ function renderPanelBody(pid) {
         <div class="p-review">
           "${r.snippet}"
           <div class="p-review-src">
-            ${r.source ? `<a href="${r.url || '#'}" target="_blank">${r.source}</a>` : ''}
+            ${r.source ? (r.url ? `<a href="${safeUrl(r.url)}" target="_blank">${r.source}</a>` : r.source) : ''}
           </div>
         </div>`).join('');
     }
@@ -966,7 +966,7 @@ function renderPanelBody(pid) {
           <span style="color:#3d5468;font-size:16px">•</span>
           <span>
             ${j.title || 'Open Role'}
-            ${j.url ? `<a href="${j.url}" target="_blank" class="p-hiring-link">↗</a>` : ''}
+            ${j.url ? `<a href="${safeUrl(j.url)}" target="_blank" class="p-hiring-link">↗</a>` : ''}
             ${j.location ? `<span style="color:#64748b;font-size:13px"> · ${j.location}</span>` : ''}
           </span>
         </div>`).join('');

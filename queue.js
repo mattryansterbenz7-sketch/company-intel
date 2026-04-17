@@ -782,16 +782,16 @@ function renderCurrent() {
   // Links
   const linkStyle = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;text-decoration:none;padding:3px 10px;border-radius:14px;transition:all 0.12s;';
   const links = [];
-  if (c.jobUrl) links.push(`<a href="${escHtml(c.jobUrl)}" target="_blank" style="${linkStyle}color:#FC636B;background:rgba(252,99,107,0.08);border:1px solid rgba(252,99,107,0.2);">📋 Job Posting</a>`);
+  if (c.jobUrl) links.push(`<a href="${safeUrl(c.jobUrl)}" target="_blank" style="${linkStyle}color:#FC636B;background:rgba(252,99,107,0.08);border:1px solid rgba(252,99,107,0.2);">📋 Job Posting</a>`);
   if (c.companyWebsite) {
     const domain = c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    links.push(`<a href="${escHtml(c.companyWebsite)}" target="_blank" style="${linkStyle}color:#5C5854;background:rgba(92,88,84,0.06);border:1px solid rgba(92,88,84,0.12);">↗ ${escHtml(domain)}</a>`);
+    links.push(`<a href="${safeUrl(c.companyWebsite)}" target="_blank" style="${linkStyle}color:#5C5854;background:rgba(92,88,84,0.06);border:1px solid rgba(92,88,84,0.12);">↗ ${escHtml(domain)}</a>`);
   }
-  if (c.companyLinkedin) links.push(`<a href="${escHtml(c.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
+  if (c.companyLinkedin) links.push(`<a href="${safeUrl(c.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
   const linksHtml = links.length ? `<div class="qc-links">${links.join('')}</div>` : '';
 
   // Apply-mode CTA: prominent "Open Application" button (does NOT auto-advance)
-  const ctaHtml = (CFG.showCta) ? `<div style="padding:0 24px 12px;">${c.jobUrl ? `<a href="${escHtml(c.jobUrl)}" target="_blank" id="qc-apply-cta" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;background:var(--ci-accent-primary);color:#fff;text-decoration:none;border-radius:var(--ci-radius-md);font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(252,99,107,0.25);transition:all 0.15s;">📋 Open Application ↗</a>` : `<div style="padding:12px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);font-size:12px;color:var(--ci-text-tertiary);text-align:center;">No application link saved for this opportunity</div>`}</div>` : '';
+  const ctaHtml = (CFG.showCta) ? `<div style="padding:0 24px 12px;">${c.jobUrl ? `<a href="${safeUrl(c.jobUrl)}" target="_blank" id="qc-apply-cta" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;background:var(--ci-accent-primary);color:#fff;text-decoration:none;border-radius:var(--ci-radius-md);font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(252,99,107,0.25);transition:all 0.15s;">📋 Open Application ↗</a>` : `<div style="padding:12px;background:var(--ci-bg-inset);border-radius:var(--ci-radius-sm);font-size:12px;color:var(--ci-text-tertiary);text-align:center;">No application link saved for this opportunity</div>`}</div>` : '';
 
   main.innerHTML = `
     <div class="queue-card-shell">
@@ -809,7 +809,7 @@ function renderCurrent() {
         </div>
         <div class="qc-info">
           <a class="qc-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}" target="_blank" style="text-decoration:none;color:inherit;">${favHtml} ${escHtml(c.company)}</a>
-          <div class="qc-title">${c.jobUrl ? `<a href="${escHtml(c.jobUrl)}" target="_blank" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,0.15);">${escHtml(c.jobTitle || '')}</a>` : escHtml(c.jobTitle || '')}</div>
+          <div class="qc-title">${c.jobUrl ? `<a href="${safeUrl(c.jobUrl)}" target="_blank" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,0.15);">${escHtml(c.jobTitle || '')}</a>` : escHtml(c.jobTitle || '')}</div>
           <div class="qc-meta">
             ${meta.map(m => `<span class="qc-meta-chip">${escHtml(m)}</span>`).join('')}
           </div>

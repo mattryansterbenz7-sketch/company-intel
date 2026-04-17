@@ -3085,8 +3085,8 @@ function renderQuickData(data) {
 
   // Company links
   const links = [];
-  if (data.companyWebsite) links.push(`<a class="company-link" href="${data.companyWebsite}" target="_blank">↗ Website</a>`);
-  if (data.companyLinkedin) links.push(`<a class="company-link" href="${data.companyLinkedin}" target="_blank">in LinkedIn</a>`);
+  if (data.companyWebsite) links.push(`<a class="company-link" href="${safeUrl(data.companyWebsite)}" target="_blank">↗ Website</a>`);
+  if (data.companyLinkedin) links.push(`<a class="company-link" href="${safeUrl(data.companyLinkedin)}" target="_blank">in LinkedIn</a>`);
   companyLinksEl.innerHTML = links.length > 0 ? `<div class="company-links">${links.join('')}</div>` : '';
 
   // Stats
@@ -3101,7 +3101,7 @@ function renderQuickData(data) {
 
   const statsHtml = statDefs.map(s => {
     const inner = `<div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div>`;
-    return s.url ? `<a class="stat" href="${s.url}" target="_blank">${inner}</a>` : `<div class="stat">${inner}</div>`;
+    return s.url ? `<a class="stat" href="${safeUrl(s.url)}" target="_blank">${inner}</a>` : `<div class="stat">${inner}</div>`;
   }).join('');
 
   const sourceTag = data.enrichmentSource ? `<div style="font-size:10px;color:#4a6580;margin-top:6px">Source: ${data.enrichmentSource}</div>` : '';
@@ -3251,8 +3251,8 @@ function renderResults(data) {
 
   // Company links bar
   const links = [];
-  if (data.companyWebsite) links.push(`<a class="company-link" href="${data.companyWebsite}" target="_blank">↗ Website</a>`);
-  if (data.companyLinkedin) links.push(`<a class="company-link" href="${data.companyLinkedin}" target="_blank">in LinkedIn</a>`);
+  if (data.companyWebsite) links.push(`<a class="company-link" href="${safeUrl(data.companyWebsite)}" target="_blank">↗ Website</a>`);
+  if (data.companyLinkedin) links.push(`<a class="company-link" href="${safeUrl(data.companyLinkedin)}" target="_blank">in LinkedIn</a>`);
   companyLinksEl.innerHTML = links.length > 0 ? `<div class="company-links">${links.join('')}</div>` : '';
 
   // Stats
@@ -3271,7 +3271,7 @@ function renderResults(data) {
         const srcTag = s.src ? `<div class="stat-src">${s.src}</div>` : '';
         const inner = `<div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div>${srcTag}`;
         return s.url
-          ? `<a class="stat" href="${s.url}" target="_blank">${inner}</a>`
+          ? `<a class="stat" href="${safeUrl(s.url)}" target="_blank">${inner}</a>`
           : `<div class="stat">${inner}</div>`;
       }).join('')
     : '<div class="stat"><div class="stat-value" style="color:#555">No firmographic data available</div></div>';
@@ -3297,7 +3297,7 @@ function renderResults(data) {
     ? data.reviews.map(r => {
         const inner = `${r.rating ? `<span style="color:#fbbf24;font-weight:700">${r.rating}★</span> ` : ''}${r.snippet}<div class="review-source">${r.source}</div>`;
         return r.url
-          ? `<a class="review-item" href="${r.url}" target="_blank">${inner}</a>`
+          ? `<a class="review-item" href="${safeUrl(r.url)}" target="_blank">${inner}</a>`
           : `<div class="review-item">${inner}</div>`;
       }).join('')
     : '<div class="review-item" style="color:#555">No reviews found</div>';
@@ -3315,8 +3315,8 @@ function renderResults(data) {
               <div class="leader-title">${l.title}</div>
             </div>
             <div class="leader-links">
-              <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
-              ${l.newsUrl ? `<a class="leader-link" href="${l.newsUrl}" target="_blank">News</a>` : ''}
+              <a class="leader-link" href="${safeUrl(liUrl)}" target="_blank">LinkedIn</a>
+              ${l.newsUrl ? `<a class="leader-link" href="${safeUrl(l.newsUrl)}" target="_blank">News</a>` : ''}
             </div>
           </div>`;
       }).join('')
@@ -3330,7 +3330,7 @@ function renderResults(data) {
   const allListings = [...currentPosting, ...otherListings];
   const jobsHtml = allListings.length > 0
     ? allListings.map(j => `
-        <a class="job-item${j.current ? ' current-posting' : ''}" href="${j.url}" target="_blank">
+        <a class="job-item${j.current ? ' current-posting' : ''}" href="${safeUrl(j.url)}" target="_blank">
           <div class="job-title">${j.title}${j.current ? ' <span style="font-size:10px;color:#6366f1;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Viewing</span>' : ''}</div>
           <div class="job-snippet">${j.snippet || ''}</div>
         </a>`).join('')
@@ -3351,7 +3351,7 @@ function renderResults(data) {
             <div class="leader-title" style="color:#0077b5;display:flex;align-items:center;gap:4px;">${c.email}<button class="copy-email-btn" data-copy-email="${c.email.replace(/"/g,'&quot;')}">⎘</button></div>
           </div>
           <div class="leader-links">
-            <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
+            <a class="leader-link" href="${safeUrl(liUrl)}" target="_blank">LinkedIn</a>
           </div>
         </div>`;
       }).join('')
@@ -3432,7 +3432,7 @@ function renderContactsSection(el, contacts) {
         <div style="font-size:10px;color:#7c98b6;margin-top:2px" title="${sourceTitle}">${sourceLabel}</div>
       </div>
       <div class="leader-links">
-        <a class="leader-link" href="${liUrl}" target="_blank">LinkedIn</a>
+        <a class="leader-link" href="${safeUrl(liUrl)}" target="_blank">LinkedIn</a>
       </div>
     </div>`;
   }).join('');

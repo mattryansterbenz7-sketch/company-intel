@@ -21,6 +21,15 @@ function escapeHtml(str) {
 }
 const escHtml = escapeHtml;
 
+// ── URL sanitization for href/src attributes ────────────────────────────────
+
+function safeUrl(str) {
+  if (str == null || str === '') return '';
+  const trimmed = String(str).trim();
+  if (!/^https?:\/\//i.test(trimmed)) return '';
+  return escapeHtml(trimmed);
+}
+
 // ── Score verdict mapping ────────────────────────────────────────────────────
 
 function scoreToVerdict(score) {
@@ -103,7 +112,7 @@ function linkReviewSources(escapedText, reviews) {
     if (!review) continue;
     const re = new RegExp(`\\b(${src})\\b`, 'gi');
     if (re.test(result)) {
-      result = result.replace(re, `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px;">$1</a>`);
+      result = result.replace(re, `<a href="${safeUrl(review.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px;">$1</a>`);
     }
   }
   return result;

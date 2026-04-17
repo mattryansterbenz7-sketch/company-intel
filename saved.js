@@ -60,7 +60,7 @@ const TABLE_COLUMNS = [
     key: 'jobTitle', label: 'Role', defaultOn: true, sortable: true, defaultSortDir: 'asc',
     sortVal: c => (c.jobTitle || '').toLowerCase(),
     renderCell: c => c.isOpportunity && c.jobTitle
-      ? (c.jobUrl ? `<a class="tbl-job-link" href="${escapeHtml(c.jobUrl)}" target="_blank">${escapeHtml(c.jobTitle)}</a>` : `<span style="font-size:12px;color:var(--ci-text-secondary)">${escapeHtml(c.jobTitle)}</span>`)
+      ? (c.jobUrl ? `<a class="tbl-job-link" href="${safeUrl(c.jobUrl)}" target="_blank">${escapeHtml(c.jobTitle)}</a>` : `<span style="font-size:12px;color:var(--ci-text-secondary)">${escapeHtml(c.jobTitle)}</span>`)
       : '<span class="tbl-muted">—</span>'
   },
   {
@@ -469,7 +469,7 @@ function renderCompactCard(c) {
       <div class="compact-card-body">
         <div class="compact-company-row">${favHtml}<span class="compact-company">${escHtml(c.company)}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</span></div>
         ${compactIndicators}
-        ${c.jobUrl ? `<a class="compact-title" href="${escHtml(c.jobUrl)}" target="_blank" title="Open job posting">${escHtml(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtml(c.jobTitle || '')}</div>`}
+        ${c.jobUrl ? `<a class="compact-title" href="${safeUrl(c.jobUrl)}" target="_blank" title="Open job posting">${escHtml(c.jobTitle || '')}</a>` : `<div class="compact-title">${escHtml(c.jobTitle || '')}</div>`}
         ${(() => {
           // Filter meta: remove job title echo from salary/arrangement line
           if (meta && c.jobTitle && meta.toLowerCase().startsWith(c.jobTitle.toLowerCase())) return '';
@@ -724,7 +724,7 @@ function openScoreModal(entry) {
       </div>
       <div class="score-modal-identity">
         <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}">${favHtml}<span>${escHtml(entry.company)}</span></a>
-        <div class="score-modal-title">${entry.jobUrl ? `<a href="${escHtml(entry.jobUrl)}" target="_blank">${escHtml(entry.jobTitle || '')}</a>` : escHtml(entry.jobTitle || '')}</div>
+        <div class="score-modal-title">${entry.jobUrl ? `<a href="${safeUrl(entry.jobUrl)}" target="_blank">${escHtml(entry.jobTitle || '')}</a>` : escHtml(entry.jobTitle || '')}</div>
         ${meta ? `<div class="score-modal-meta">${escHtml(meta)}</div>` : ''}
         ${scoredAgo ? `<div class="score-modal-scored">Scored ${scoredAgo}${jm.lastUpdatedBy ? ' · ' + jm.lastUpdatedBy.replace(/_/g, ' ') : ''}</div>` : ''}
       </div>
@@ -734,16 +734,16 @@ function openScoreModal(entry) {
       const links = [];
       if (entry.companyWebsite) {
         const domain = entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-        links.push(`<a class="score-modal-link" href="${escHtml(entry.companyWebsite)}" target="_blank">${escHtml(domain)}</a>`);
+        links.push(`<a class="score-modal-link" href="${safeUrl(entry.companyWebsite)}" target="_blank">${escHtml(domain)}</a>`);
       }
-      if (entry.companyLinkedin) links.push(`<a class="score-modal-link" href="${escHtml(entry.companyLinkedin)}" target="_blank">LinkedIn</a>`);
+      if (entry.companyLinkedin) links.push(`<a class="score-modal-link" href="${safeUrl(entry.companyLinkedin)}" target="_blank">LinkedIn</a>`);
       const reviews = entry.reviews || entry.intelligence?.reviews || [];
       if (reviews.length) {
         const glassdoor = reviews.find(r => /glassdoor/i.test(r.source || r.url || ''));
-        if (glassdoor?.url) links.push(`<a class="score-modal-link" href="${escHtml(glassdoor.url)}" target="_blank">Glassdoor</a>`);
+        if (glassdoor?.url) links.push(`<a class="score-modal-link" href="${safeUrl(glassdoor.url)}" target="_blank">Glassdoor</a>`);
         reviews.filter(r => r.url && !/glassdoor/i.test(r.source || r.url || '')).slice(0, 2).forEach(r => {
           const name = (r.source || 'Review').replace(/https?:\/\/(www\.)?/, '').split('/')[0];
-          links.push(`<a class="score-modal-link" href="${escHtml(r.url)}" target="_blank">${escHtml(name)}</a>`);
+          links.push(`<a class="score-modal-link" href="${safeUrl(r.url)}" target="_blank">${escHtml(name)}</a>`);
         });
       }
       const industry = entry.industry || entry.intelligence?.industry || '';
@@ -791,7 +791,7 @@ function openScoreModal(entry) {
       ${rb.compSummary ? `<div class="score-modal-section"><div class="score-modal-section-label">Comp</div><div class="score-modal-section-body">${escHtml(rb.compSummary)}</div></div>` : ''}
       <div class="score-modal-quick-actions">
         <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}">See full breakdown</a>
-        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtml(entry.jobUrl)}" target="_blank">View posting</a>` : ''}
+        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${safeUrl(entry.jobUrl)}" target="_blank">View posting</a>` : ''}
       </div>
       <button class="score-modal-rescore" id="score-modal-rescore-btn">Re-score with latest criteria</button>
     </div>
@@ -2842,13 +2842,13 @@ function renderKanbanCard(c) {
   // Job title (hyperlinked to jobUrl when present)
   const jobTitleHtml = isJob && c.jobTitle
     ? (c.jobUrl
-      ? `<a class="kc-job card-job-link" href="${c.jobUrl}" target="_blank">${escapeHtml(c.jobTitle)}</a>`
+      ? `<a class="kc-job card-job-link" href="${safeUrl(c.jobUrl)}" target="_blank">${escapeHtml(c.jobTitle)}</a>`
       : `<span class="kc-job">${escapeHtml(c.jobTitle)}</span>`)
     : '';
 
   // External links
   const extLinksHtml = (c.companyLinkedin || c.companyWebsite)
-    ? `<div class="kc-ext-links">${c.companyLinkedin ? `<a class="card-link card-link-li" href="${c.companyLinkedin}" target="_blank">LinkedIn</a>` : ''}${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}</div>`
+    ? `<div class="kc-ext-links">${c.companyLinkedin ? `<a class="card-link card-link-li" href="${safeUrl(c.companyLinkedin)}" target="_blank">LinkedIn</a>` : ''}${c.companyWebsite ? `<a class="card-link card-link-web" href="${safeUrl(c.companyWebsite)}" target="_blank">Website</a>` : ''}</div>`
     : '';
 
   // Indicator pills (overdue/stale only — no Hard DQ)
@@ -2885,7 +2885,7 @@ function renderKanbanCard(c) {
     const src = ratingReview.source || 'Glassdoor';
     const txt = `${rating} ${escapeHtml(src)}`;
     metaParts.push(ratingReview.url
-      ? `<a class="kc-review${warnCls}" href="${escapeHtml(ratingReview.url)}" target="_blank" rel="noopener">${txt}</a>`
+      ? `<a class="kc-review${warnCls}" href="${safeUrl(ratingReview.url)}" target="_blank" rel="noopener">${txt}</a>`
       : `<span class="${warnCls.trim()}">${txt}</span>`);
   }
 

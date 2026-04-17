@@ -1016,7 +1016,7 @@ function buildOpportunity() {
       <span class="prop-label">Role</span>
       <div class="prop-val-wrap">
         ${title && entry.jobUrl
-          ? `<a href="${entry.jobUrl}" target="_blank" class="prop-link-display" id="opp-title-link" style="font-weight:600;font-size:13px">${title}</a><button class="prop-link-edit" id="opp-title-edit-btn" title="Edit">✎</button>`
+          ? `<a href="${safeUrl(entry.jobUrl)}" target="_blank" class="prop-link-display" id="opp-title-link" style="font-weight:600;font-size:13px">${title}</a><button class="prop-link-edit" id="opp-title-edit-btn" title="Edit">✎</button>`
           : `<input class="prop-input ${!title ? 'prop-empty' : ''}" id="opp-title-input" value="${title}" placeholder="Add job title…">`}
       </div>
     </div>
@@ -2951,7 +2951,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
         const manualBadge = m._isManual ? `<span class="mtg-manual-badge">Manual</span>` : '';
         const dismissBtn = !m._isManual ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company" style="font-size:10px;color:#99acc2;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0;transition:opacity 0.15s;">✕</button>` : '';
         const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : dismissBtn;
-        const granolaLink = (!m._isManual && m.url) ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" title="Open in Granola" onclick="event.stopPropagation()">Granola ↗</a>` : '';
+        const granolaLink = (!m._isManual && m.url) ? `<a href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" title="Open in Granola" onclick="event.stopPropagation()">Granola ↗</a>` : '';
         html += `
           <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}" data-is-manual="${m._isManual ? '1' : '0'}">
             <span class="mtg-card-icon">${m._isManual ? '✏️' : '▤'}</span>
@@ -3358,7 +3358,7 @@ function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
       ${dateLabel ? `<div class="mtg-detail-date">${escapeHtml(dateLabel)}${meeting.time ? ' · ' + meeting.time : ''}</div>` : ''}
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         <div class="mtg-detail-title">${escapeHtml(meeting.title)}</div>
-        ${granolaUrl ? `<a href="${escapeHtml(granolaUrl)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" style="white-space:nowrap">Open in Granola ↗</a>` : ''}
+        ${granolaUrl ? `<a href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" style="white-space:nowrap">Open in Granola ↗</a>` : ''}
       </div>
     </div>
     <div class="mtg-detail-chat">
@@ -3442,7 +3442,7 @@ function buildProperties() {
       const placeholder = f.id === 'companyWebsite' ? 'Add website URL…' : 'Add LinkedIn URL…';
       return `<div class="prop-row prop-link-row" data-field="${f.id}">
         ${entry[f.id]
-          ? `<a class="prop-link-display" href="${entry[f.id]}" target="_blank">${icon} ${displayText}</a>
+          ? `<a class="prop-link-display" href="${safeUrl(entry[f.id])}" target="_blank">${icon} ${displayText}</a>
              <button class="prop-link-edit" data-field="${f.id}" title="Edit">✎</button>`
           : `<span class="prop-link-icon">${icon}</span>
              <input class="prop-input prop-empty prop-link-input" data-field="${f.id}" value="" placeholder="${placeholder}" type="url">`}
@@ -3457,7 +3457,7 @@ function buildProperties() {
     if (isMetadataField && !val && !alwaysShow) return '';
     const isUrl = f.type === 'url';
     const openLink = isUrl && entry[f.id]
-      ? `<a class="prop-open-link" href="${entry[f.id]}" target="_blank">↗</a>` : '';
+      ? `<a class="prop-open-link" href="${safeUrl(entry[f.id])}" target="_blank">↗</a>` : '';
     return `<div class="prop-row" data-field="${f.id}">
       <span class="prop-label">${f.label}</span>
       <div class="prop-val-wrap">
@@ -3491,9 +3491,9 @@ function buildStats() {
 function buildLinks() {
   const li = entry.companyLinkedin || `https://www.linkedin.com/company/${encodeURIComponent((entry.company||'').toLowerCase().replace(/\s+/g,'-'))}`;
   return `
-    ${entry.companyWebsite ? `<a class="p-link web" href="${entry.companyWebsite}" target="_blank">🌐 ${entry.companyWebsite.replace(/^https?:\/\//,'')}</a>` : ''}
-    <a class="p-link li" href="${li}" target="_blank">in LinkedIn</a>
-    ${entry.url ? `<a class="p-link" style="color:#FF7A59" href="${entry.url}" target="_blank">↗ Source Page</a>` : ''}
+    ${entry.companyWebsite ? `<a class="p-link web" href="${safeUrl(entry.companyWebsite)}" target="_blank">🌐 ${entry.companyWebsite.replace(/^https?:\/\//,'')}</a>` : ''}
+    <a class="p-link li" href="${safeUrl(li)}" target="_blank">in LinkedIn</a>
+    ${entry.url ? `<a class="p-link" style="color:#FF7A59" href="${safeUrl(entry.url)}" target="_blank">↗ Source Page</a>` : ''}
   `.trim() || '<div class="p-empty">No links saved.</div>';
 }
 
@@ -3585,7 +3585,7 @@ function buildReviews() {
   return reviews.slice(0, 5).map(r => `
     <div class="p-review">
       "${r.snippet}"
-      <div class="p-review-src">${r.source ? `<a href="${r.url||'#'}" target="_blank">${r.source}</a>` : ''}</div>
+      <div class="p-review-src">${r.source ? (r.url ? `<a href="${safeUrl(r.url)}" target="_blank">${r.source}</a>` : r.source) : ''}</div>
     </div>`).join('');
 }
 
@@ -3887,8 +3887,8 @@ function buildLeadership() {
           <div class="leader-role">${l.title||''}</div>
           ${matched ? `<div class="leader-email">${matched.email}</div>` : ''}
           <div class="leader-links">
-            ${l.linkedinUrl||l.linkedin ? `<a class="leader-link li" href="${l.linkedinUrl||l.linkedin}" target="_blank">LinkedIn</a>` : ''}
-            ${l.newsUrl ? `<a class="leader-link news" href="${l.newsUrl}" target="_blank">${/linkedin\.com/i.test(l.newsUrl) ? 'LinkedIn' : 'News'}</a>` : ''}
+            ${l.linkedinUrl||l.linkedin ? `<a class="leader-link li" href="${safeUrl(l.linkedinUrl||l.linkedin)}" target="_blank">LinkedIn</a>` : ''}
+            ${l.newsUrl ? `<a class="leader-link news" href="${safeUrl(l.newsUrl)}" target="_blank">${/linkedin\.com/i.test(l.newsUrl) ? 'LinkedIn' : 'News'}</a>` : ''}
             ${contactAction}
           </div>
           <div class="leader-email-form" style="display:none">
@@ -3949,9 +3949,9 @@ function buildContacts() {
         }).join('');
         const leader = leaders.find(l => namesMatch(l.name || '', c.name));
         const liUrl = c.linkedinUrl || leader?.linkedinUrl || leader?.linkedin || (leader?.newsUrl && /linkedin\.com/i.test(leader.newsUrl) ? leader.newsUrl : null);
-        const liHtml = liUrl ? `<a class="contact-li-link" href="${liUrl}" target="_blank">LinkedIn</a>` : '';
+        const liHtml = liUrl ? `<a class="contact-li-link" href="${safeUrl(liUrl)}" target="_blank">LinkedIn</a>` : '';
         const avatarContent = c.photoUrl
-          ? `<img src="${c.photoUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent='${initials}'">`
+          ? `<img src="${safeUrl(c.photoUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent='${initials}'">`
           : initials;
         return `
           <div class="contact-card" data-email="${safeEmail}">
@@ -4032,7 +4032,7 @@ function buildHiring() {
       <span style="color:#3d5468;font-size:14px;flex-shrink:0">•</span>
       <span style="font-size:13px;color:#33475b">
         ${j.title || 'Open Role'}
-        ${j.url ? `<a href="${j.url}" target="_blank" style="color:#0077b5;text-decoration:none;margin-left:4px">↗</a>` : ''}
+        ${j.url ? `<a href="${safeUrl(j.url)}" target="_blank" style="color:#0077b5;text-decoration:none;margin-left:4px">↗</a>` : ''}
         ${j.location ? `<span style="color:#64748b;font-size:12px"> · ${j.location}</span>` : ''}
       </span>
     </div>`).join('');
