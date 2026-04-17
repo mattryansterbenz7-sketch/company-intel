@@ -372,7 +372,7 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 **Size:** `small`, `medium`, `large`
 **Model tier:** `model:haiku`, `model:sonnet`, `model:opus` (see Model Assignment section)
 **Area (filterable surface):** `area:chat`, `area:scoring`, `area:research`, `area:side-panel`, `area:board-ui`, `area:company-view`, `area:onboarding`, `area:integrations`, `area:preferences`, `area:design-system`
-**Blocked state (optional):** `blocked:strategy` (PM needs Matt's direction), `blocked:execution` (Doer hit mid-execution fork)
+**Blocked state (optional):** `blocked:strategy` (PM needs Matt's direction), `blocked:execution` (Doer hit mid-execution fork), `blocked:collab` (design/exploratory — pair with Matt interactively, Doer skips)
 
 Every new issue should have type + size + model + area labels. `/issue` applies these automatically.
 

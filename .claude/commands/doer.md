@@ -36,6 +36,7 @@ A separate Opus thread (`/pm`) keeps Up Next sharp and deep. You and the PM comm
    - Has Task-style checkbox lists (`- [ ] #123`) — it's a **parent/tracker**, not a unit of work. Leave a `**Doer →**` note for PM ("this is a tracker, should be in Backlog") and skip.
    - Has **no `model:` label** — leave a `**Doer →**` note ("missing model label, can't delegate") and skip.
    - Is labeled `strategy + large` with no clear single-session scope — same treatment.
+   - Has the **`blocked:collab`** label — this is design/exploratory work meant for a pair session with Matt. **Never execute autonomously.** Skip silently (no comment needed — the label is the signal).
 3. **Apply judgment within ready items.** Default to priority order, but use intelligence:
    - If two items are interdependent, do the prerequisite first.
    - If several touch the same file or feature, batch them thoughtfully (separate commits, one session).

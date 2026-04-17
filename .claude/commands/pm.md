@@ -87,6 +87,17 @@ When you hit an issue you CAN'T spec without Matt's direction (strategy calls, d
 
 When Matt answers, pull it back to **Backlog**, finish the spec, and run it through the Up Next gate.
 
+### Collab items (design riffs, exploratory UX)
+
+Some work can't be pre-specced because it's generative — "show me a few approaches for X," interactive design passes, UX flows that need Matt's reaction to shape. These are NOT for the Doer's autonomous loop.
+
+**When you identify one:**
+1. Label the issue **`blocked:collab`**.
+2. Move it to **Blocked / Needs Matt**.
+3. Post a `**PM → Matt (collab):**` comment with the question or starting point — so when Matt opens a pair session, he has the frame loaded.
+
+**The Doer's loop will skip any issue with `blocked:collab` automatically.** Matt picks these up in a separate interactive thread when he's ready. Once the pair session ships to main, you'll see the commit on your next tick — move to Monitoring per the normal flow.
+
 ## What this role does NOT do
 
 - **Never write application code.** Implementation is the Doer's job. Draft technical hints in the PRD, but never edit source files.
