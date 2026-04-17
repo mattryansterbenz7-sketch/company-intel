@@ -202,7 +202,10 @@
   .a-title-row { display: flex; align-items: center; gap: 8px; }
   .a-favicon {
     width: 16px; height: 16px; border-radius: 3px;
-    background: #d4d4d8; flex-shrink: 0;
+    flex-shrink: 0; object-fit: contain;
+  }
+  .a-favicon.placeholder {
+    background: #d4d4d8;
   }
   .a-company {
     font-size: 14px;
@@ -218,6 +221,26 @@
     font-weight: 400;
     line-height: 1.35;
   }
+  a.a-job {
+    text-decoration: none;
+    transition: color var(--motion-xs) var(--ease-out);
+  }
+  a.a-job:hover {
+    color: var(--ci-text-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--ci-border-strong);
+  }
+  .a-ext-links {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; margin-top: 2px;
+  }
+  .a-ext-links a {
+    color: var(--ci-accent-blue);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .a-ext-links a:hover { text-decoration: underline; }
   .a-score {
     font-variant-numeric: tabular-nums;
     font-size: 15px;
@@ -228,8 +251,11 @@
     padding-top: 1px;
   }
   .a-score .d { color: var(--ci-text-tertiary); font-weight: 400; }
-  .a-score.warn { color: #b45309; }
-  .a-score.bad { color: #b91c1c; }
+  /* Score spectrum: ≥7.5 green · 6.0–7.4 amber · 4.5–5.9 orange · <4.5 red */
+  .a-score.s-green  { color: #047857; }
+  .a-score.s-amber  { color: #b45309; }
+  .a-score.s-orange { color: #c2410c; }
+  .a-score.s-red    { color: #b91c1c; }
   .a-meta {
     display: flex;
     flex-wrap: wrap;
@@ -278,20 +304,63 @@
   .a-pill.bad { color: #b91c1c; }
   .a-next {
     display: grid;
-    grid-template-columns: 56px 1fr;
-    row-gap: 4px;
+    grid-template-columns: 94px 1fr;
+    row-gap: 6px;
     column-gap: 10px;
     font-size: 12px;
     color: var(--ci-text-secondary);
     border-top: 1px solid var(--ci-border-subtle);
     padding-top: 10px;
     margin-top: 2px;
+    align-items: center;
   }
-  .a-next .k { color: var(--ci-text-tertiary); font-size: 11px; font-weight: 500; padding-top: 2px; }
-  .a-next .v { color: var(--ci-text-primary); font-size: 12px; line-height: 1.35; }
-  .a-next .v.my-court { color: var(--ci-accent-red); font-weight: 500; }
-  .a-next .v.their-court { color: #b45309; font-weight: 500; }
+  .a-next .k {
+    color: var(--ci-text-tertiary);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .a-next .v { color: var(--ci-text-primary); font-size: 12px; line-height: 1.35; min-width: 0; }
+  .a-next .v.muted { color: var(--ci-text-tertiary); }
   .a-next .v.due-overdue { color: var(--ci-accent-red); font-weight: 500; }
+  /* Inline-editable fields: read like text, reveal affordance on hover/focus */
+  .a-next input[type="text"],
+  .a-next input[type="date"],
+  .a-next select {
+    font: inherit; color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    width: calc(100% + 12px);
+    transition: background var(--motion-xs) var(--ease-out),
+                border-color var(--motion-xs) var(--ease-out);
+  }
+  .a-next input[type="text"]:hover,
+  .a-next input[type="date"]:hover,
+  .a-next select:hover {
+    background: var(--ci-bg-inset);
+  }
+  .a-next input[type="text"]:focus,
+  .a-next input[type="date"]:focus,
+  .a-next select:focus {
+    outline: none;
+    background: var(--ci-bg-raised);
+    border-color: var(--ci-border-strong);
+  }
+  .a-next input[type="text"]::placeholder { color: var(--ci-text-tertiary); }
+  .a-next select { appearance: none; cursor: pointer; padding-right: 18px; }
+  .a-next .select-wrap { position: relative; }
+  .a-next .select-wrap::after {
+    content: '›'; position: absolute; right: 4px; top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    color: var(--ci-text-tertiary); font-size: 12px; pointer-events: none;
+  }
+  .a-next select.my-court { color: var(--ci-accent-red); font-weight: 500; }
+  .a-next select.their-court { color: #b45309; font-weight: 500; }
+  .a-next select.scheduled { color: var(--ci-accent-blue); font-weight: 500; }
   .a-tags { display: flex; gap: 6px; flex-wrap: wrap; }
   .a-tag {
     font-size: 11px; font-weight: 500;
@@ -300,6 +369,24 @@
     border: 1px solid var(--ci-border-default);
     border-radius: 4px;
     padding: 1px 7px;
+  }
+  .a-tag-add {
+    font-size: 13px; line-height: 1;
+    color: var(--ci-text-tertiary);
+    background: transparent;
+    border: 1px dashed var(--ci-border-default);
+    border-radius: 4px;
+    padding: 0 6px 2px;
+    cursor: pointer;
+    transition: color var(--motion-xs) var(--ease-out),
+                border-color var(--motion-xs) var(--ease-out),
+                background var(--motion-xs) var(--ease-out);
+  }
+  .a-tag-add:hover {
+    color: var(--ci-text-primary);
+    border-color: var(--ci-border-strong);
+    border-style: solid;
+    background: var(--ci-bg-inset);
   }
   .a-score-btn {
     font-size: 12px; font-weight: 500;
@@ -539,19 +626,23 @@
           <div class="a-header">
             <div class="a-ident">
               <div class="a-title-row">
-                <div class="a-favicon"></div>
+                <img class="a-favicon" src="https://www.google.com/s2/favicons?domain=ramp.com&sz=64" alt="">
                 <a class="a-company" href="#">Ramp</a>
               </div>
-              <div class="a-job">Senior Product Manager, GTM</div>
+              <a class="a-job" href="#" target="_blank">Senior Product Manager, GTM</a>
+              <div class="a-ext-links">
+                <a href="#">LinkedIn</a>
+                <a href="#">Website</a>
+              </div>
             </div>
-            <div class="a-score warn">7.0<span class="d">/10</span></div>
+            <div class="a-score s-amber">7.0<span class="d">/10</span></div>
           </div>
           <div class="a-meta">
             <span>$220–260K OTE</span>
             <span class="sep"></span>
             <span>Remote</span>
             <span class="sep"></span>
-            <span>4.1 Glassdoor</span>
+            <a href="#" target="_blank" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">4.1 Glassdoor</a>
             <span class="sep"></span>
             <span class="a-stars">
               <svg class="a-star on" viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>
@@ -567,18 +658,19 @@
             <div class="a-flag neg"><span class="dot"></span><span>Likely requires senior-IC latitude</span></div>
           </div>
           <div class="a-next">
-            <span class="k">Stage</span>
-            <span class="v"><span class="a-stage"><span class="a-stage-dot" style="background:#6366f1"></span>Intro Call</span></span>
             <span class="k">Action</span>
-            <span class="v my-court">My Court</span>
-            <span class="k">Next</span>
-            <span class="v">Respond to Rachel re: intro call · Apr 21</span>
-            <span class="k">Last</span>
-            <span class="v">Apr 14 — email from Rachel</span>
+            <span class="v"><span class="select-wrap"><select class="my-court"><option selected>My Court</option><option>Their Court</option><option>Scheduled</option></select></span></span>
+            <span class="k">Next Step</span>
+            <span class="v"><input type="text" value="Respond to Rachel re: intro call"></span>
+            <span class="k">Next Step Date</span>
+            <span class="v"><input type="date" value="2026-04-21"></span>
+            <span class="k">Last Activity</span>
+            <span class="v muted">Apr 14 — email from Rachel</span>
           </div>
           <div class="a-tags">
             <span class="a-tag">GTM</span>
             <span class="a-tag">Series D</span>
+            <button class="a-tag-add" title="Add tag">+</button>
           </div>
         </div>
 
@@ -588,20 +680,27 @@
           <div class="a-header">
             <div class="a-ident">
               <div class="a-title-row">
-                <div class="a-favicon"></div>
+                <img class="a-favicon" src="https://www.google.com/s2/favicons?domain=notion.so&sz=64" alt="">
                 <a class="a-company" href="#">Notion</a>
               </div>
-              <div class="a-job">Head of GTM Strategy</div>
+              <a class="a-job" href="#" target="_blank">Head of GTM Strategy</a>
+              <div class="a-ext-links">
+                <a href="#">LinkedIn</a>
+                <a href="#">Website</a>
+              </div>
             </div>
           </div>
           <button class="a-score-btn">Score match</button>
           <div class="a-next">
-            <span class="k">Stage</span>
-            <span class="v"><span class="a-stage"><span class="a-stage-dot" style="background:#8b5cf6"></span>Saved</span></span>
             <span class="k">Action</span>
-            <span class="v my-court">My Court</span>
-            <span class="k">Next</span>
-            <span class="v" style="color:var(--ci-text-tertiary)">—</span>
+            <span class="v"><span class="select-wrap"><select class="my-court"><option selected>My Court</option><option>Their Court</option><option>Scheduled</option></select></span></span>
+            <span class="k">Next Step</span>
+            <span class="v"><input type="text" placeholder="Add next step…"></span>
+            <span class="k">Next Step Date</span>
+            <span class="v"><input type="date" value=""></span>
+          </div>
+          <div class="a-tags">
+            <button class="a-tag-add" title="Add tag">+</button>
           </div>
         </div>
 
@@ -611,37 +710,44 @@
           <div class="a-header">
             <div class="a-ident">
               <div class="a-title-row">
-                <div class="a-favicon"></div>
+                <img class="a-favicon" src="https://www.google.com/s2/favicons?domain=scale.com&sz=64" alt="">
                 <a class="a-company" href="#">Scale AI</a>
                 <span class="a-pill bad">Hard DQ</span>
               </div>
-              <div class="a-job">VP of Product, Enterprise</div>
+              <a class="a-job" href="#" target="_blank">VP of Product, Enterprise</a>
+              <div class="a-ext-links">
+                <a href="#">LinkedIn</a>
+                <a href="#">Website</a>
+              </div>
             </div>
-            <div class="a-score">8.0<span class="d">/10</span></div>
+            <div class="a-score s-green">8.0<span class="d">/10</span></div>
           </div>
           <div class="a-meta">
             <span>$340K OTE</span>
             <span class="sep"></span>
             <span class="mismatch">Hybrid</span>
             <span class="sep"></span>
-            <span class="warn">2.8 Glassdoor</span>
+            <a href="#" target="_blank" class="warn" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">2.8 Glassdoor</a>
           </div>
           <div class="a-flags">
             <div class="a-flag pos"><span class="dot"></span><span>Strong AI-infra tailwind</span></div>
             <div class="a-flag neg"><span class="dot"></span><span>Reports consistent burnout culture</span></div>
           </div>
           <div class="a-next">
-            <span class="k">Stage</span>
-            <span class="v"><span class="a-stage"><span class="a-stage-dot" style="background:#10b981"></span>Interview</span></span>
             <span class="k">Action</span>
-            <span class="v their-court">Their Court</span>
-            <span class="k">Next</span>
-            <span class="v due-overdue">Wait on recruiter feedback · overdue 18d</span>
+            <span class="v"><span class="select-wrap"><select class="their-court"><option>My Court</option><option selected>Their Court</option><option>Scheduled</option></select></span></span>
+            <span class="k">Next Step</span>
+            <span class="v"><input type="text" value="Wait on recruiter feedback"></span>
+            <span class="k">Next Step Date</span>
+            <span class="v due-overdue"><input type="date" value="2026-03-30"> <span style="font-size:11px;">overdue 18d</span></span>
+            <span class="k">Last Activity</span>
+            <span class="v muted">Mar 27 — email to Dana</span>
             <span class="k">Status</span>
             <span class="v"><span class="a-pill">Stale 21d</span></span>
           </div>
           <div class="a-tags">
             <span class="a-tag">AI</span>
+            <button class="a-tag-add" title="Add tag">+</button>
           </div>
         </div>
 
