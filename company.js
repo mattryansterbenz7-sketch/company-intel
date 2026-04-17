@@ -2896,6 +2896,57 @@ function loadHubMeetings(forceRefresh) {
   });
 }
 
+// ── Avatar / date helpers (used by renderMeetingsTimeline + renderMeetingDetail) ──
+
+const _MTG_AVATAR_COLORS = ['#FC636B', '#3B82F6', '#36B37E', '#F5A623', '#7C6EF0'];
+function _mtgHashColor(name) {
+  if (!name) return _MTG_AVATAR_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h << 5) - h + name.charCodeAt(i);
+  return _MTG_AVATAR_COLORS[Math.abs(h) % _MTG_AVATAR_COLORS.length];
+}
+function _mtgInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
+function _mtgAvatarHtml(names) {
+  if (!names || !names.length) return '';
+  const list = names.slice(0, 3);
+  const overflow = Math.max(0, names.length - 3);
+  const avatars = list.map(name => {
+    const color = name === 'Me' ? '#36B37E' : _mtgHashColor(name);
+    return `<span class="mtg-avatar" style="background:${color}" title="${escapeHtml(name)}">${escapeHtml(_mtgInitials(name))}</span>`;
+  }).join('');
+  const plus = overflow ? `<span class="mtg-avatar mtg-avatar-overflow">+${overflow}</span>` : '';
+  return `<div class="mtg-avatar-row">${avatars}${plus}</div>`;
+}
+function _mtgNamesHtml(names) {
+  if (!names || !names.length) return '';
+  return escapeHtml(names.slice(0, 4).join(', ') + (names.length > 4 ? ` +${names.length - 4}` : ''));
+}
+function _mtgParseAttendees(attendeesVal) {
+  if (Array.isArray(attendeesVal)) return attendeesVal.map(a => (typeof a === 'string' ? a : a.name || a.email || '').trim()).filter(Boolean);
+  if (typeof attendeesVal === 'string' && attendeesVal.trim()) return attendeesVal.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+function _dateGroupLabel(dateKey) {
+  if (!dateKey) return 'Unknown date';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(dateKey + 'T12:00:00'); if (isNaN(d)) return dateKey;
+  d.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today - d) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  const startOfWeek = new Date(today); startOfWeek.setDate(today.getDate() - today.getDay());
+  const startOfLastWeek = new Date(startOfWeek); startOfLastWeek.setDate(startOfWeek.getDate() - 7);
+  if (d >= startOfWeek) return 'This week';
+  if (d >= startOfLastWeek) return 'Last week';
+  const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  if (d >= thisMonth) return 'Earlier this month';
+  return d.toLocaleDateString('en-US', { month: 'long', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+}
+
 function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   const contentEl = document.getElementById('act-meetings-content');
   if (!contentEl) return;
@@ -2962,7 +3013,6 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
     html += `
       <div class="mtg-ask-all">
         <div class="mtg-ask-all-header">
-          <span class="mtg-folder-icon">▤</span>
           <div>
             <div class="mtg-ask-all-title">${escapeHtml(entry.company)}</div>
             <div class="mtg-ask-all-sub">${meetings.length ? meetings.length + ' meeting' + (meetings.length === 1 ? '' : 's') : 'All meetings'}</div>
@@ -2983,36 +3033,73 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
 
   // ── Combined meeting list (Granola + Manual, sorted by date desc) ──────────
   if (meetings.length) {
-    const byDate = {};
+    // Group by date key, preserving sort order
+    const groups = [];
+    const groupMap = {};
     meetings.forEach(m => {
-      const key = m.date || '';
-      if (!byDate[key]) byDate[key] = [];
-      byDate[key].push(m);
+      const label = _dateGroupLabel(m.date || '');
+      if (!groupMap[label]) { groupMap[label] = { label, items: [] }; groups.push(groupMap[label]); }
+      groupMap[label].items.push(m);
     });
 
     html += '<div class="mtg-list">';
-    for (const [dateKey, dayMeetings] of Object.entries(byDate)) {
-      const d = dateKey ? new Date(dateKey + 'T12:00:00') : null;
-      const dateLabel = (d && !isNaN(d))
-        ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-        : 'Unknown date';
-      html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
-      for (const m of dayMeetings) {
-        const manualBadge = m._isManual ? `<span class="mtg-manual-badge">Manual</span>` : '';
-        const dismissBtn = !m._isManual ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company" style="font-size:10px;color:#99acc2;background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0;transition:opacity 0.15s;">✕</button>` : '';
-        const manualActions = m._isManual ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>` : dismissBtn;
-        const granolaLink = (!m._isManual && m.url) ? `<a href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" title="Open in Granola" onclick="event.stopPropagation()">Granola ↗</a>` : '';
+    for (const group of groups) {
+      html += `<div class="mtg-date-group">${escapeHtml(group.label)}</div>`;
+      for (const m of group.items) {
+        const d = m.date ? new Date(m.date + 'T12:00:00') : null;
+        const dayNum = (d && !isNaN(d)) ? d.getDate() : '';
+        const monShort = (d && !isNaN(d)) ? d.toLocaleDateString('en-US', { month: 'short' }) : '';
+        const timeShort = m.time ? m.time.replace(':00', '').replace(' ', '').toLowerCase() : '';
+        const attendeeNames = _mtgParseAttendees(m.attendees);
+        const avatarHtml = _mtgAvatarHtml(attendeeNames);
+        const namesHtml = _mtgNamesHtml(attendeeNames);
+
+        // Takeaways: parse from summaryMarkdown bullet lines if available
+        let takeaways = [];
+        if (m.summaryMarkdown) {
+          takeaways = m.summaryMarkdown.split('\n').filter(l => /^[-*•]\s/.test(l.trim())).map(l => l.replace(/^[-*•]\s+/, '').trim()).filter(Boolean).slice(0, 3);
+        }
+        const summary = m.summary || '';
+
+        let contentHtml;
+        if (takeaways.length) {
+          contentHtml = `<ul class="mtg-takeaways">${takeaways.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`;
+        } else if (summary) {
+          contentHtml = `<p class="mtg-summary">${escapeHtml(summary)}</p>`;
+        } else {
+          contentHtml = `<p class="mtg-summary"><em>No notes yet</em></p>`;
+        }
+
+        const granolaChip = (!m._isManual && m.url)
+          ? `<a class="mtg-granola-link" href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><span class="granola-glyph"></span>Granola ↗</a>`
+          : '';
+
+        const dismissBtn = !m._isManual
+          ? `<button class="mtg-card-dismiss" data-dismiss-id="${escapeHtml(m.id)}" title="Not related to this company">✕</button>`
+          : '';
+        const manualActions = m._isManual
+          ? `<button class="mtg-card-edit" data-mm-edit="${escapeHtml(m.id)}" title="Edit">✎</button><button class="mtg-card-del" data-mm-del="${escapeHtml(m.id)}" title="Delete">✕</button>`
+          : dismissBtn;
+
         html += `
           <div class="mtg-card" data-meeting-id="${escapeHtml(m.id)}" data-is-manual="${m._isManual ? '1' : '0'}">
-            <span class="mtg-card-icon">${m._isManual ? '✏️' : '▤'}</span>
-            <div class="mtg-card-body">
-              <div class="mtg-card-title">${escapeHtml(m.title || 'Untitled')}${manualBadge}</div>
-              ${m.attendees ? `<div class="mtg-card-meta">${escapeHtml(m.attendees)}</div>` : ''}
+            <div class="mtg-date">
+              <div class="mtg-date-day">${dayNum}</div>
+              <div class="mtg-date-mon">${monShort}</div>
+              ${timeShort ? `<div class="mtg-date-time">${escapeHtml(timeShort)}</div>` : ''}
             </div>
-            ${m.time ? `<span class="mtg-card-time">${escapeHtml(m.time)}</span>` : ''}
-            ${granolaLink}
-            ${manualActions}
-            <span class="mtg-card-arrow">›</span>
+            <div class="mtg-body">
+              <div class="mtg-title-row">
+                <div class="mtg-title">${escapeHtml(m.title || 'Untitled')}</div>
+                ${m._isManual ? '<span class="mtg-manual-badge">Manual</span>' : ''}
+              </div>
+              ${(avatarHtml || namesHtml) ? `<div class="mtg-participants">${avatarHtml}<span class="mtg-names">${namesHtml}</span></div>` : ''}
+              ${contentHtml}
+            </div>
+            <div class="mtg-card-actions">
+              ${granolaChip}
+              ${manualActions}
+            </div>
           </div>`;
       }
     }
@@ -3020,40 +3107,47 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
 
   } else if (events.length) {
     // Fallback: calendar-only view
-    const byDate = {};
+    const groups = [];
+    const groupMap2 = {};
     [...events].reverse().forEach(ev => {
-      const d = new Date(ev.start);
-      const key = isNaN(d) ? ev.start : d.toISOString().slice(0, 10);
-      if (!byDate[key]) byDate[key] = [];
-      byDate[key].push(ev);
+      const evD = new Date(ev.start);
+      const key = isNaN(evD) ? ev.start : evD.toISOString().slice(0, 10);
+      const label = _dateGroupLabel(key);
+      if (!groupMap2[label]) { groupMap2[label] = { label, items: [] }; groups.push(groupMap2[label]); }
+      groupMap2[label].items.push(ev);
     });
 
     html += '<div class="mtg-list">';
-    for (const [dateKey, dayEvs] of Object.entries(byDate)) {
-      const d = new Date(dateKey + 'T12:00:00');
-      const dateLabel = isNaN(d) ? dateKey : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      html += `<div class="mtg-date-group">${escapeHtml(dateLabel)}</div>`;
-      for (const ev of dayEvs) {
+    for (const group of groups) {
+      html += `<div class="mtg-date-group">${escapeHtml(group.label)}</div>`;
+      for (const ev of group.items) {
         const evD = new Date(ev.start);
+        const dayNum = isNaN(evD) ? '' : evD.getDate();
+        const monShort = isNaN(evD) ? '' : evD.toLocaleDateString('en-US', { month: 'short' });
         const timeStr = (ev.start.includes('T') && !isNaN(evD))
-          ? evD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          ? evD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '').replace(' ', '').toLowerCase()
           : '';
-        const attendees = (ev.attendees || []).filter(a => !a.self).map(a => a.name || a.email).join(', ');
+        const attendeeNames = (ev.attendees || []).filter(a => !a.self).map(a => a.name || a.email).filter(Boolean);
+        const avatarHtml = _mtgAvatarHtml(attendeeNames);
+        const namesHtml = _mtgNamesHtml(attendeeNames);
         html += `
           <div class="mtg-card mtg-card-cal">
-            <span class="mtg-card-icon mtg-card-icon-cal">◷</span>
-            <div class="mtg-card-body">
-              <div class="mtg-card-title">${escapeHtml(ev.title)}</div>
-              ${attendees ? `<div class="mtg-card-meta">${escapeHtml(attendees)}</div>` : ''}
+            <div class="mtg-date">
+              <div class="mtg-date-day">${dayNum}</div>
+              <div class="mtg-date-mon">${monShort}</div>
+              ${timeStr ? `<div class="mtg-date-time">${escapeHtml(timeStr)}</div>` : ''}
             </div>
-            ${timeStr ? `<span class="mtg-card-time">${timeStr}</span>` : ''}
+            <div class="mtg-body">
+              <div class="mtg-title-row"><div class="mtg-title">${escapeHtml(ev.title)}</div></div>
+              ${(avatarHtml || namesHtml) ? `<div class="mtg-participants">${avatarHtml}<span class="mtg-names">${namesHtml}</span></div>` : ''}
+            </div>
           </div>`;
       }
     }
     html += '</div>';
   }
 
-  if (!html) html = '<div class="p-empty">No meetings found.</div>';
+  if (!meetings.length && !events.length) html += '<div class="p-empty">No meetings found.</div>';
 
   contentEl.innerHTML = html;
 
@@ -3349,84 +3443,164 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
 }
 
 function renderManualMeetingDetail(contentEl, meeting, events, granolaNotes) {
-  const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
-  const dateLabel = (d && !isNaN(d))
-    ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-    : (meeting.date || '');
-
-  // Set context for this meeting's chat before rendering (with resolved speaker names)
+  // Set context for this meeting's chat before rendering
   if (typeof setChatContext === 'function') {
     const ctx = meeting.transcript ? resolveTranscriptSpeakers(meeting.transcript, meeting) : (meeting.notes || '');
     setChatContext(`${entry.id}-meeting-${meeting.id}`, ctx);
   }
-
-  const bodyText = meeting.notes || '';
-  contentEl.innerHTML = `
-    <button class="mtg-detail-back" id="mtg-back">← All meetings</button>
-    <div class="mtg-detail-header">
-      ${dateLabel ? `<div class="mtg-detail-date">${escapeHtml(dateLabel)}${meeting.time ? ' · ' + meeting.time : ''}</div>` : ''}
-      <div class="mtg-detail-title">${escapeHtml(meeting.title || 'Untitled')}<span class="mtg-manual-badge">Manual</span></div>
-      ${meeting.attendees ? `<div class="mtg-card-meta" style="margin-top:4px">${escapeHtml(meeting.attendees)}</div>` : ''}
-    </div>
-    ${bodyText ? `<div style="font-size:13px;color:#33475b;line-height:1.7;margin:12px 0;white-space:pre-wrap">${escapeHtml(bodyText)}</div>` : ''}
-    <div class="mtg-detail-chat">
-      <div data-chat-panel="${entry.id}"
-           data-chat-key="${entry.id}-meeting-${meeting.id}"
-           data-chat-placeholder="Ask about this meeting…"
-           data-chat-minimal="1"></div>
-    </div>
-    ${meeting.transcript ? `
-      <details class="mtg-transcript-wrap">
-        <summary class="mtg-transcript-label">Full transcript</summary>
-        <div class="mtg-transcript">${typeof renderMarkdown === 'function' ? renderMarkdown(resolveTranscriptSpeakers(meeting.transcript, meeting)) : escapeHtml(resolveTranscriptSpeakers(meeting.transcript, meeting))}</div>
-      </details>` : ''}
-  `;
-
-  if (typeof initChatPanels === 'function') initChatPanels(entry);
-
-  document.getElementById('mtg-back').addEventListener('click', () => {
-    renderMeetingsTimeline(events, granolaNotes);
-  });
+  _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes);
 }
 
 function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
-  const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
-  const dateLabel = (d && !isNaN(d))
-    ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-    : (meeting.date || '');
-
-  // Set context for this meeting's chat before rendering (with resolved speaker names)
+  // Set context for this meeting's chat before rendering
   const resolvedTranscript = meeting.transcript ? resolveTranscriptSpeakers(meeting.transcript, meeting) : '';
   if (typeof setChatContext === 'function' && resolvedTranscript) {
     setChatContext(`${entry.id}-meeting-${meeting.id}`, resolvedTranscript);
   }
+  _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes);
+}
 
+function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
+  const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
+  const dateStr = (d && !isNaN(d))
+    ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : (meeting.date || '');
+  const timeStr = meeting.time || '';
   const granolaUrl = meeting.url || null;
+  const attendeeNames = _mtgParseAttendees(meeting.attendees);
+  const avatarHtml = _mtgAvatarHtml(attendeeNames);
+  const namesHtml = _mtgNamesHtml(attendeeNames);
+
+  // Takeaways from summaryMarkdown bullets
+  let takeaways = [];
+  if (meeting.summaryMarkdown) {
+    takeaways = meeting.summaryMarkdown.split('\n').filter(l => /^[-*•]\s/.test(l.trim())).map(l => l.replace(/^[-*•]\s+/, '').trim()).filter(Boolean);
+  }
+
+  // Notes body (manual: meeting.notes; Granola: summaryMarkdown or summary)
+  const notesSource = meeting._isManual
+    ? (meeting.notes || '')
+    : (meeting.summaryMarkdown || meeting.summary || '');
+
+  // Transcript
+  const resolvedTranscript = meeting.transcript ? resolveTranscriptSpeakers(meeting.transcript, meeting) : '';
+
+  // Render notes with markdown helper
+  const notesHtml = notesSource
+    ? `<div class="detail-notes">${typeof renderMarkdown === 'function' ? renderMarkdown(notesSource) : escapeHtml(notesSource)}</div>`
+    : '';
+
+  // Transcript body: try to detect speaker-diarized format ("Speaker Name: utterance").
+  // The same pattern is used for both detection and parsing so mid-sentence colons
+  // in utterance text don't accidentally start a new speaker block. Require two or
+  // more matching lines before treating the transcript as diarized.
+  const SPEAKER_LINE = /^([A-Z][A-Za-z .'-]{0,40}):\s(.*)$/;
+  let transcriptBodyHtml = '';
+  if (resolvedTranscript) {
+    const lines = resolvedTranscript.split('\n');
+    const speakerLineCount = lines.reduce((n, l) => n + (SPEAKER_LINE.test(l) ? 1 : 0), 0);
+    if (speakerLineCount >= 2) {
+      const blocks = [];
+      let current = null;
+      lines.forEach(line => {
+        const m = line.match(SPEAKER_LINE);
+        if (m) {
+          if (current) blocks.push(current);
+          current = { speaker: m[1], utterance: m[2] };
+        } else if (current) {
+          current.utterance += ' ' + line;
+        }
+      });
+      if (current) blocks.push(current);
+      transcriptBodyHtml = blocks.map(b =>
+        `<div class="tx-block"><span class="tx-speaker">${escapeHtml(b.speaker)}</span><span class="tx-utterance"> ${escapeHtml(b.utterance.trim())}</span></div>`
+      ).join('');
+    } else {
+      transcriptBodyHtml = resolvedTranscript.split('\n').filter(Boolean).map(p => `<p>${escapeHtml(p)}</p>`).join('');
+    }
+  }
+
+  // Coop layer: read notes from entry if available (no persistent per-meeting storage yet)
+  const coopNote = '';
+  const coopNextStep = '';
+
   contentEl.innerHTML = `
-    <button class="mtg-detail-back" id="mtg-back">← All meetings</button>
-    <div class="mtg-detail-header">
-      ${dateLabel ? `<div class="mtg-detail-date">${escapeHtml(dateLabel)}${meeting.time ? ' · ' + meeting.time : ''}</div>` : ''}
-      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-        <div class="mtg-detail-title">${escapeHtml(meeting.title)}</div>
-        ${granolaUrl ? `<a href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer" class="mtg-card-granola-link" style="white-space:nowrap">Open in Granola ↗</a>` : ''}
+    <button class="panel-back" id="mtg-back">← Meetings</button>
+    <div class="detail-head">
+      <div class="detail-title-row">
+        <div class="detail-title">${escapeHtml(meeting.title || 'Untitled')}</div>
+        ${granolaUrl ? `<a class="detail-granola-btn" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer"><span class="granola-logo-lg"></span>Open in Granola</a>` : ''}
+      </div>
+      <div class="detail-meta">
+        ${avatarHtml}
+        ${namesHtml ? `<span>${namesHtml}</span>` : ''}
+        ${(avatarHtml || namesHtml) && (dateStr || timeStr) ? `<span class="detail-meta-sep">·</span>` : ''}
+        ${dateStr ? `<span>${escapeHtml(dateStr)}${timeStr ? ' at ' + escapeHtml(timeStr) : ''}</span>` : ''}
+        ${meeting._isManual ? `<span class="detail-meta-sep">·</span><span class="mtg-manual-badge">Manual</span>` : ''}
       </div>
     </div>
+
+    ${takeaways.length ? `
+    <div class="detail-section">
+      <div class="detail-section-head"><h3>Key takeaways</h3></div>
+      <ul class="detail-takeaways">${takeaways.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    ${notesHtml ? `
+    <div class="detail-section">
+      <div class="detail-section-head">
+        <h3>Notes</h3>
+        ${granolaUrl ? `<a class="edit-link" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer">Edit in Granola ↗</a>` : ''}
+      </div>
+      ${notesHtml}
+    </div>` : ''}
+
     <div class="mtg-detail-chat">
       <div data-chat-panel="${entry.id}"
            data-chat-key="${entry.id}-meeting-${meeting.id}"
            data-chat-placeholder="Ask about this meeting…"
            data-chat-minimal="1"></div>
     </div>
+
     ${resolvedTranscript ? `
-      <details class="mtg-transcript-wrap">
-        <summary class="mtg-transcript-label">Full transcript</summary>
-        <div class="mtg-transcript">${renderMarkdown(resolvedTranscript)}</div>
-      </details>` : ''}
+    <div class="detail-transcript" id="mtg-transcript-collapse">
+      <div class="detail-transcript-head" id="mtg-transcript-toggle-btn">
+        <h3>Full transcript</h3>
+        <span class="detail-transcript-chevron">›</span>
+      </div>
+      <div class="detail-transcript-body">
+        <div class="detail-transcript-inner">${transcriptBodyHtml}</div>
+      </div>
+    </div>` : ''}
+
+    <div class="detail-coop">
+      <div class="detail-coop-head">
+        <h3>My notes</h3>
+        <span class="coop-label"><span class="coop-dot"></span>Coop</span>
+      </div>
+      ${coopNote
+        ? `<p class="detail-coop-note">${escapeHtml(coopNote)}</p>`
+        : `<p class="detail-coop-empty">Per-meeting notes coming soon.</p>`}
+      ${coopNextStep ? `
+      <div class="detail-coop-next">
+        <span class="detail-coop-next-label">Next step</span>
+        <span class="detail-coop-next-text">${escapeHtml(coopNextStep)}</span>
+      </div>` : ''}
+    </div>
   `;
 
   if (typeof initChatPanels === 'function') initChatPanels(entry);
 
-  document.getElementById('mtg-back').addEventListener('click', () => {
+  // Transcript toggle (styled collapse, not <details>)
+  const transcriptCollapse = contentEl.querySelector('#mtg-transcript-collapse');
+  const transcriptToggleBtn = contentEl.querySelector('#mtg-transcript-toggle-btn');
+  if (transcriptCollapse && transcriptToggleBtn) {
+    transcriptToggleBtn.addEventListener('click', () => {
+      transcriptCollapse.classList.toggle('open');
+    });
+  }
+
+  contentEl.querySelector('#mtg-back').addEventListener('click', () => {
     renderMeetingsTimeline(events, granolaNotes);
   });
 }

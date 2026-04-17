@@ -629,49 +629,125 @@
     .thread-gmail-link { font-size: 11px; color: var(--ci-accent-primary); text-decoration: none; font-weight: 600; display: block; text-align: right; padding: 8px 14px; border-top: 1px solid var(--ci-border-subtle); background: var(--ci-bg-inset); }
     .thread-gmail-link:hover { color: var(--ci-accent-primary-hover); }
     /* ── Meetings UI ─────────────────────────────────────────────────────── */
+    /* "Ask all meetings" panel */
     .mtg-ask-all { border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 14px 14px 10px; margin-bottom: 18px; background: var(--ci-bg-raised); }
     .mtg-ask-all-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .mtg-folder-icon { font-size: 20px; color: var(--ci-text-tertiary); flex-shrink: 0; }
     .mtg-ask-all-title { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.2; }
     .mtg-ask-all-sub { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 1px; }
     .mtg-quick-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-    .mtg-quick-btn { font-size: 11px; color: var(--ci-text-secondary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full); padding: 4px 11px; cursor: pointer; font-family: inherit; transition: all var(--ci-transition-fast); }
-    .mtg-quick-btn:hover { background: var(--ci-bg-base); border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
-    .mtg-refresh-btn { font-size: 11px; color: var(--ci-text-tertiary); background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full); padding: 4px 11px; cursor: pointer; font-family: inherit; transition: all var(--ci-transition-fast); margin-left: auto; }
+    .mtg-quick-btn { font-size: 11px; color: var(--ci-text-secondary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full); padding: 4px 11px; cursor: pointer; font-family: inherit; transition: all var(--motion-xs) var(--ease-out); }
+    .mtg-quick-btn:hover { background: var(--ci-bg-raised); border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+    .mtg-refresh-btn { font-size: 11px; color: var(--ci-text-tertiary); background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full); padding: 4px 11px; cursor: pointer; font-family: inherit; transition: all var(--motion-xs) var(--ease-out); margin-left: auto; }
     .mtg-refresh-btn:hover { background: var(--ci-accent-primary-soft); border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
     .mtg-refresh-btn:disabled { opacity: 0.5; cursor: default; }
-    .mtg-list { }
-    .mtg-date-group { font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: 0.05em; padding: 14px 0 5px; border-bottom: 1px solid var(--ci-border-subtle); margin-bottom: 2px; }
-    .mtg-card { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-radius: 8px; cursor: pointer; transition: background 0.1s; }
-    .mtg-card:hover { background: var(--ci-bg-inset); }
+    /* Date group dividers */
+    .mtg-date-group { font-size: 12px; font-weight: 600; color: var(--ci-text-tertiary); padding: 16px 0 6px; border-bottom: 1px solid var(--ci-border-subtle); margin-bottom: 4px; }
+    /* Meeting card — 3-column grid */
+    .mtg-card { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: start; padding: 12px 8px; border-radius: var(--ci-radius-md); cursor: pointer; transition: background var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out); position: relative; }
+    .mtg-card:hover { background: var(--ci-bg-inset); box-shadow: inset 0 0 0 1px var(--ci-border-subtle); }
     .mtg-card:hover .mtg-card-dismiss { opacity: 0.5 !important; }
     .mtg-card:hover .mtg-card-dismiss:hover { opacity: 1 !important; color: #e24b4a; }
-    .mtg-card-cal { cursor: default; }
-    .mtg-card-cal:hover { background: transparent; }
-    .mtg-card-icon { font-size: 17px; color: var(--ci-text-on-dark-muted); flex-shrink: 0; line-height: 1; }
-    .mtg-card-icon-cal { font-size: 14px; }
-    .mtg-card-body { flex: 1; min-width: 0; }
-    .mtg-card-title { font-size: 13px; font-weight: 500; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mtg-card-meta { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mtg-card-time { font-size: 11px; color: var(--ci-text-on-dark-muted); flex-shrink: 0; }
-    .mtg-card-arrow { font-size: 18px; color: #c8d6e0; flex-shrink: 0; line-height: 1; }
-    .mtg-card-granola-link { font-size: 12px; color: var(--ci-text-secondary); text-decoration: none; flex-shrink: 0; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--ci-border-light); background: var(--ci-bg-inset); transition: all 0.15s; }
-    .mtg-card-granola-link:hover { color: var(--ci-accent-primary); border-color: var(--ci-accent-primary); }
-    /* Meeting detail */
-    .mtg-detail-back { font-size: 12px; color: var(--ci-text-tertiary); background: none; border: none; cursor: pointer; padding: 0 0 14px; font-family: inherit; display: block; }
-    .mtg-detail-back:hover { color: var(--ci-text-primary); }
-    .mtg-detail-date { font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 4px; }
-    .mtg-detail-title { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 14px; line-height: 1.3; }
+    .mtg-card:hover .mtg-granola-link { opacity: 1; }
+    /* Calendar-only cards are not clickable */
+    .mtg-card-cal { cursor: default; grid-template-columns: 52px 1fr; }
+    .mtg-card-cal:hover { background: transparent; box-shadow: none; }
+    /* Date column */
+    .mtg-date { display: flex; flex-direction: column; align-items: center; padding-top: 2px; }
+    .mtg-date-day { font-size: 22px; font-weight: 700; color: var(--ci-text-primary); line-height: 1; }
+    .mtg-date-mon { font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary); margin-top: 1px; }
+    .mtg-date-time { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; }
+    /* Body column */
+    .mtg-body { min-width: 0; }
+    .mtg-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 4px; }
+    .mtg-title { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.3; }
+    .mtg-kind { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 1px 6px; white-space: nowrap; }
+    .mtg-manual-badge { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 1px 6px; }
+    /* Participants */
+    .mtg-participants { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .mtg-avatar-row { display: flex; }
+    .mtg-avatar { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--ci-bg-raised); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: #fff; flex-shrink: 0; margin-left: -5px; }
+    .mtg-avatar:first-child { margin-left: 0; }
+    .mtg-avatar-overflow { background: var(--ci-bg-inset); color: var(--ci-text-tertiary); font-size: 8px; border: 2px solid var(--ci-bg-raised); }
+    .mtg-names { font-size: 12px; color: var(--ci-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Takeaways (amber dot bullets) */
+    .mtg-takeaways { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+    .mtg-takeaways li { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55; padding-left: 14px; position: relative; }
+    .mtg-takeaways li::before { content: ''; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-amber); }
+    /* Summary fallback (2-line clamp) */
+    .mtg-summary { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55; margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .mtg-summary em { color: var(--ci-text-tertiary); font-style: italic; }
+    /* Per-card action buttons (discreet corner) */
+    .mtg-card-actions { display: flex; align-items: center; gap: 2px; padding-top: 2px; }
+    .mtg-card-dismiss, .mtg-card-edit, .mtg-card-del { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--ci-text-tertiary); padding: 3px 5px; border-radius: var(--ci-radius-sm); transition: color var(--motion-xs) var(--ease-out), opacity var(--motion-xs) var(--ease-out); }
+    .mtg-card-dismiss { opacity: 0; }
+    .mtg-card-edit:hover { color: var(--ci-accent-primary); }
+    .mtg-card-del:hover { color: #e24b4a; }
+    /* Granola link chip (hover-revealed) */
+    .mtg-granola-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); text-decoration: none; padding: 3px 8px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); opacity: 0; transition: opacity var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out); white-space: nowrap; }
+    .mtg-granola-link:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+    .granola-glyph { display: inline-block; width: 12px; height: 12px; background: var(--ci-accent-amber); border-radius: 3px; flex-shrink: 0; position: relative; }
+    .granola-glyph::after { content: ''; position: absolute; top: 2.5px; left: 2.5px; right: 2.5px; bottom: 2.5px; background: #fff; border-radius: 1.5px; }
+    /* ── Detail view ─────────────────────────────────────────────────────── */
+    .panel-back { font-size: 13px; color: var(--ci-text-tertiary); background: none; border: none; cursor: pointer; padding: 0 0 16px; font-family: inherit; display: block; transition: color var(--motion-xs) var(--ease-out); }
+    .panel-back:hover { color: var(--ci-text-primary); }
+    .detail-head { margin-bottom: 16px; }
+    .detail-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .detail-title { font-size: 22px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.25; flex: 1; }
+    .detail-granola-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); text-decoration: none; padding: 6px 12px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); flex-shrink: 0; transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); margin-top: 4px; }
+    .detail-granola-btn:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+    .granola-logo-lg { display: inline-block; width: 14px; height: 14px; background: var(--ci-accent-amber); border-radius: 3px; flex-shrink: 0; position: relative; }
+    .granola-logo-lg::after { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; background: #fff; border-radius: 1.5px; }
+    .detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--ci-text-secondary); }
+    .detail-meta-sep { color: var(--ci-border-strong); }
+    .detail-meta .mtg-avatar-row { display: flex; }
+    /* Detail sections */
+    .detail-section { margin-bottom: 20px; }
+    .detail-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 6px; }
+    .detail-section-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; letter-spacing: 0.01em; }
+    .edit-link { font-size: 12px; color: var(--ci-text-tertiary); text-decoration: none; transition: color var(--motion-xs) var(--ease-out); }
+    .edit-link:hover { color: var(--ci-accent-primary); }
+    .detail-takeaways { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+    .detail-takeaways li { font-size: 14px; color: var(--ci-text-primary); line-height: 1.6; padding-left: 18px; position: relative; }
+    .detail-takeaways li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-amber); }
+    .detail-notes { font-size: 13px; color: var(--ci-text-primary); line-height: 1.7; }
+    .detail-notes h4 { font-size: 13px; font-weight: 700; color: var(--ci-text-secondary); margin: 12px 0 4px; }
+    .detail-notes p { margin: 0 0 0.7em; }
+    .detail-notes ul { padding-left: 18px; margin: 4px 0; }
+    .detail-notes li { margin-bottom: 3px; }
+    .detail-notes strong { color: var(--ci-text-primary); font-weight: 700; }
+    /* Styled transcript collapse */
+    .detail-transcript { border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-md); overflow: hidden; margin-bottom: 20px; }
+    .detail-transcript-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; background: var(--ci-bg-inset); user-select: none; transition: background var(--motion-xs) var(--ease-out); }
+    .detail-transcript-head:hover { background: var(--ci-bg-raised); }
+    .detail-transcript-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; }
+    .detail-transcript-chevron { font-size: 13px; color: var(--ci-text-tertiary); transition: transform var(--motion-sm) var(--ease-out); display: inline-block; }
+    .detail-transcript.open .detail-transcript-chevron { transform: rotate(90deg); }
+    .detail-transcript-body { max-height: 0; overflow: hidden; transition: max-height var(--motion-sm) var(--ease-out); }
+    .detail-transcript.open .detail-transcript-body { max-height: 800px; }
+    .detail-transcript-inner { padding: 14px; font-size: 12px; color: var(--ci-text-secondary); line-height: 1.75; }
+    /* Speaker-diarized transcript */
+    .tx-block { margin-bottom: 12px; }
+    .tx-speaker { font-size: 11px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 1px; }
+    .tx-timestamp { font-size: 10px; color: var(--ci-text-tertiary); margin-left: 6px; font-weight: 400; }
+    .tx-utterance { color: var(--ci-text-secondary); }
+    /* Coop layer */
+    .detail-coop { border-top: 1px dashed var(--ci-border-default); padding-top: 16px; margin-top: 4px; }
+    .detail-coop-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .detail-coop-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; }
+    .coop-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); }
+    .coop-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary); }
+    .detail-coop-note { font-size: 13px; color: var(--ci-text-primary); line-height: 1.65; margin-bottom: 10px; }
+    .detail-coop-empty { font-size: 12px; color: var(--ci-text-tertiary); font-style: italic; margin-bottom: 10px; }
+    .detail-coop-next { background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.25); border-radius: var(--ci-radius-sm); padding: 10px 12px; }
+    .detail-coop-next-label { font-size: 11px; font-weight: 700; color: var(--ci-accent-amber); display: block; margin-bottom: 3px; }
+    .detail-coop-next-text { font-size: 13px; color: var(--ci-text-primary); }
+    /* Meeting detail chat panel (keep class for backward compat) */
     .mtg-detail-chat { border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 10px; background: var(--ci-bg-raised); margin-bottom: 14px; }
-    .mtg-transcript-wrap { margin-top: 4px; }
-    .mtg-transcript-label { font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; padding: 6px 0; list-style: none; }
-    .mtg-transcript-label::-webkit-details-marker { display: none; }
-    .mtg-transcript { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.75; padding-top: 8px; }
     /* ── Manual Meeting Form ── */
     .mtg-add-btn {
       font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-raised);
       border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 6px 14px;
-      cursor: pointer; font-family: inherit; margin-bottom: 12px; transition: all var(--ci-transition-fast);
+      cursor: pointer; font-family: inherit; margin-bottom: 12px; transition: all var(--motion-xs) var(--ease-out);
     }
     .mtg-add-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
     .mtg-add-form {
@@ -696,6 +772,8 @@
       border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 8px 18px; cursor: pointer; font-family: inherit;
     }
     .mtg-add-cancel:hover { border-color: var(--ci-border-strong); }
+    .mtg-transcript-toggle { font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-weight: 600; }
+    .mtg-transcript-toggle:hover { color: var(--ci-accent-primary); }
     /* ── Company Tasks ── */
     .ct-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid #eaf0f6; border-radius: 8px; margin-bottom: 4px; background: var(--ci-bg-raised); transition: border-color 0.15s; }
     .ct-item:hover { border-color: var(--ci-border-strong); }
@@ -708,21 +786,6 @@
     .ct-del:hover { color: var(--ci-accent-red, #f87171); }
     .ct-edit-input { font-size: 13px; font-weight: 600; font-family: inherit; color: #2d3e50; border: 1px solid var(--ci-accent-primary); border-radius: 4px; padding: 2px 6px; width: 100%; box-sizing: border-box; outline: none; background: var(--ci-bg-raised); }
     .ct-edit-date { font-size: 11px; font-family: inherit; color: var(--ci-text-secondary); border: 1px solid var(--ci-accent-primary); border-radius: 4px; padding: 1px 4px; outline: none; background: var(--ci-bg-raised); }
-    .mtg-transcript-toggle {
-      font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-weight: 600;
-    }
-    .mtg-transcript-toggle:hover { color: var(--ci-accent-primary); }
-    .mtg-manual-badge {
-      font-size: 9px; font-weight: 700; color: var(--ci-text-tertiary); background: var(--ci-bg-inset);
-      border-radius: 4px; padding: 1px 5px; margin-left: 6px; text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .mtg-card-edit, .mtg-card-del {
-      background: none; border: none; color: var(--ci-text-tertiary); font-size: 12px;
-      cursor: pointer; padding: 2px 4px;
-    }
-    .mtg-card-edit:hover { color: var(--ci-accent-primary); }
-    .mtg-card-del:hover { color: var(--ci-accent-red); }
     /* ── Fit Analysis ── */
     .fit-score-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .fit-score { font-size: 26px; font-weight: 800; color: var(--ci-text-primary); line-height: 1; }

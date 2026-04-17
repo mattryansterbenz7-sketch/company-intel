@@ -1047,10 +1047,127 @@ function bindActivityPanel() {
     const contentEl = document.getElementById('act-meetings-content');
     if (!statusEl || !contentEl) return;
     if (result?.error === 'not_connected') { statusEl.textContent = 'Connect Granola in Setup to see meeting notes.'; return; }
-    if (!result?.notes) { statusEl.textContent = 'No meeting notes found for this company.'; return; }
+    const granolaMeetings = result?.meetings || [];
+    const granolaNotes = result?.notes || null;
+    if (granolaMeetings.length) {
+      saveEntry({ cachedMeetings: granolaMeetings, cachedMeetingNotes: granolaNotes, cachedMeetingNotesAt: Date.now() });
+    }
     statusEl.style.display = 'none';
-    contentEl.innerHTML = `<div class="meeting-note">${escapeHtml(result.notes)}</div>`;
+    _oppRenderMeetingsTimeline(contentEl, granolaMeetings);
   });
+}
+
+// ── Avatar / date helpers for opportunity.js meetings ───────────────────────
+const _OPP_AVATAR_COLORS = ['#FC636B', '#3B82F6', '#36B37E', '#F5A623', '#7C6EF0'];
+function _oppHashColor(name) {
+  if (!name) return _OPP_AVATAR_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h << 5) - h + name.charCodeAt(i);
+  return _OPP_AVATAR_COLORS[Math.abs(h) % _OPP_AVATAR_COLORS.length];
+}
+function _oppInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
+function _oppAvatarHtml(names) {
+  if (!names || !names.length) return '';
+  const list = names.slice(0, 3);
+  const overflow = Math.max(0, names.length - 3);
+  const avatars = list.map(name => {
+    const color = name === 'Me' ? '#36B37E' : _oppHashColor(name);
+    return `<span class="mtg-avatar" style="background:${color}" title="${escapeHtml(name)}">${escapeHtml(_oppInitials(name))}</span>`;
+  }).join('');
+  const plus = overflow ? `<span class="mtg-avatar mtg-avatar-overflow">+${overflow}</span>` : '';
+  return `<div class="mtg-avatar-row">${avatars}${plus}</div>`;
+}
+function _oppNamesHtml(names) {
+  if (!names || !names.length) return '';
+  return escapeHtml(names.slice(0, 4).join(', ') + (names.length > 4 ? ` +${names.length - 4}` : ''));
+}
+function _oppParseAttendees(val) {
+  if (Array.isArray(val)) return val.map(a => (typeof a === 'string' ? a : a.name || a.email || '').trim()).filter(Boolean);
+  if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+function _oppDateGroupLabel(dateKey) {
+  if (!dateKey) return 'Unknown date';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(dateKey + 'T12:00:00'); if (isNaN(d)) return dateKey;
+  d.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today - d) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  const startOfWeek = new Date(today); startOfWeek.setDate(today.getDate() - today.getDay());
+  const startOfLastWeek = new Date(startOfWeek); startOfLastWeek.setDate(startOfWeek.getDate() - 7);
+  if (d >= startOfWeek) return 'This week';
+  if (d >= startOfLastWeek) return 'Last week';
+  const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  if (d >= thisMonth) return 'Earlier this month';
+  return d.toLocaleDateString('en-US', { month: 'long', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+}
+
+function _oppRenderMeetingsTimeline(contentEl, meetings) {
+  if (!meetings || !meetings.length) {
+    contentEl.innerHTML = '<div class="p-empty">No meetings found.</div>';
+    return;
+  }
+
+  const groups = [];
+  const groupMap = {};
+  meetings.forEach(m => {
+    const label = _oppDateGroupLabel(m.date || '');
+    if (!groupMap[label]) { groupMap[label] = { label, items: [] }; groups.push(groupMap[label]); }
+    groupMap[label].items.push(m);
+  });
+
+  let html = '<div class="mtg-list">';
+  for (const group of groups) {
+    html += `<div class="mtg-date-group">${escapeHtml(group.label)}</div>`;
+    for (const m of group.items) {
+      const d = m.date ? new Date(m.date + 'T12:00:00') : null;
+      const dayNum = (d && !isNaN(d)) ? d.getDate() : '';
+      const monShort = (d && !isNaN(d)) ? d.toLocaleDateString('en-US', { month: 'short' }) : '';
+      const timeShort = m.time ? m.time.replace(':00', '').replace(' ', '').toLowerCase() : '';
+      const attendeeNames = _oppParseAttendees(m.attendees);
+      const avatarHtml = _oppAvatarHtml(attendeeNames);
+      const namesHtml = _oppNamesHtml(attendeeNames);
+      let takeaways = [];
+      if (m.summaryMarkdown) {
+        takeaways = m.summaryMarkdown.split('\n').filter(l => /^[-*•]\s/.test(l.trim())).map(l => l.replace(/^[-*•]\s+/, '').trim()).filter(Boolean).slice(0, 3);
+      }
+      const summary = m.summary || '';
+      let contentHtml;
+      if (takeaways.length) {
+        contentHtml = `<ul class="mtg-takeaways">${takeaways.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`;
+      } else if (summary) {
+        contentHtml = `<p class="mtg-summary">${escapeHtml(summary)}</p>`;
+      } else {
+        contentHtml = `<p class="mtg-summary"><em>No notes yet</em></p>`;
+      }
+      const granolaChip = m.url
+        ? `<a class="mtg-granola-link" href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><span class="granola-glyph"></span>Granola ↗</a>`
+        : '';
+      html += `
+        <div class="mtg-card" data-opp-meeting-id="${escapeHtml(m.id)}">
+          <div class="mtg-date">
+            <div class="mtg-date-day">${dayNum}</div>
+            <div class="mtg-date-mon">${monShort}</div>
+            ${timeShort ? `<div class="mtg-date-time">${escapeHtml(timeShort)}</div>` : ''}
+          </div>
+          <div class="mtg-body">
+            <div class="mtg-title-row"><div class="mtg-title">${escapeHtml(m.title || 'Untitled')}</div></div>
+            ${(avatarHtml || namesHtml) ? `<div class="mtg-participants">${avatarHtml}<span class="mtg-names">${namesHtml}</span></div>` : ''}
+            ${contentHtml}
+          </div>
+          <div class="mtg-card-actions">${granolaChip}</div>
+        </div>`;
+    }
+  }
+  html += '</div>';
+  contentEl.innerHTML = html;
+
+  if (typeof initChatPanels === 'function') initChatPanels(entry);
 }
 
 // ── Panel drag & drop ─────────────────────────────────────────────────────────
