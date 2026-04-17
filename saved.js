@@ -515,10 +515,10 @@ function smtDateLabel(dateStr) {
   const today = new Date(); today.setHours(0,0,0,0);
   const d = new Date(dateStr + 'T00:00:00'); d.setHours(0,0,0,0);
   const diff = Math.round((d - today) / 86400000);
-  if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, color: '#dc2626' };
-  if (diff === 0) return { text: 'Today', color: '#d97706' };
-  if (diff === 1) return { text: 'Tomorrow', color: '#516f90' };
-  return { text: `in ${diff}d`, color: '#516f90' };
+  if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, color: 'var(--ci-accent-red)' };
+  if (diff === 0) return { text: 'Today', color: 'var(--ci-accent-amber)' };
+  if (diff === 1) return { text: 'Tomorrow', color: 'var(--ci-text-secondary)' };
+  return { text: `in ${diff}d`, color: 'var(--ci-text-tertiary)' };
 }
 
 function renderModalTasks(entry, tasks) {
@@ -550,7 +550,7 @@ function renderModalTasks(entry, tasks) {
     </div>
     <div class="smt-body" id="smt-body" style="${hasAny ? '' : 'display:none'}">
       ${active.map(itemHtml).join('')}
-      ${completed.length ? `<div style="font-size:10px;color:#A09A94;margin-top:4px;cursor:pointer;" id="smt-show-done">+ ${completed.length} completed</div><div id="smt-done-list" style="display:none">${completed.map(itemHtml).join('')}</div>` : ''}
+      ${completed.length ? `<div style="font-size:10px;color:var(--ci-text-tertiary);margin-top:4px;cursor:pointer;" id="smt-show-done">+ ${completed.length} completed</div><div id="smt-done-list" style="display:none">${completed.map(itemHtml).join('')}</div>` : ''}
       <div class="smt-add">
         <input type="text" id="smt-input" placeholder="Add a task...">
         <select id="smt-priority">
@@ -657,38 +657,33 @@ function openScoreModal(entry) {
   // Hard DQ — only show if score is genuinely low (3 or below) to avoid false positives
   const hardDQ = jm.hardDQ || entry.hardDQ;
   const dqHtml = hardDQ?.flagged && score != null && score <= 3
-    ? `<div class="score-modal-dq">\u{1F6AB} Hard Disqualifier${hardDQ.reasons?.length ? ': ' + hardDQ.reasons.join('; ') : ''}</div>`
+    ? `<div class="score-modal-dq"><span class="score-modal-dq-label">Hard disqualifier</span>${hardDQ.reasons?.length ? `<span class="score-modal-dq-body">${escHtml(hardDQ.reasons.join('; '))}</span>` : ''}</div>`
     : '';
 
-  // Flags — side by side with gradient colors. Normalize legacy strings
+  // Flags — semantic single-shade, typographic hierarchy (no rainbow gradient, no emoji source icons)
   const _normFlag = f => typeof f === 'string' ? { text: f, source: null, evidence: null } : { text: f?.text || '', source: f?.source || null, evidence: f?.evidence || null };
   const _flagSrcLabel = s => ({ job_posting: 'From job posting', company_data: 'From company research', preferences: 'From your preferences', candidate_profile: 'From your profile', dealbreaker_keyword: 'From your dealbreaker keywords' }[s] || (s ? `Source: ${s}` : 'No source linked'));
-  const _flagSrcIcon = s => ({ job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' }[s] || 'ⓘ');
   const _flagTip = f => (_flagSrcLabel(f.source) + (f.evidence ? ` — "${f.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
   const strongFits = (jm.strongFits || []).map(_normFlag).filter(f => f.text);
   const redFlags = (jm.redFlags || jm.watchOuts || []).map(_normFlag).filter(f => f.text);
-  const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
-  const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
   const dismissedFlags = jm.dismissedFlags || [];
-  const greenCol = strongFits.length ? `<div class="score-modal-flag-col green">
-    <div class="score-modal-flag-heading green">Green Flags</div>
-    ${strongFits.map((f, i) => {
-      const isDismissed = dismissedFlags.includes(f.text);
-      const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
-      const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
-      const tip = _flagTip(f);
-      return `<div class="score-modal-flag" style="${dimOpacity}"><span class="score-modal-flag-icon" style="color:${greenShades[Math.min(i, greenShades.length - 1)]}">&#x2714;</span><span${strikeStyle}>${escHtml(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtml(f.text)}" data-entry-id="${entry.id}" data-flag-type="green" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
-    }).join('')}
+  const _renderFlag = (f, kind) => {
+    const isDismissed = dismissedFlags.includes(f.text);
+    const tip = _flagTip(f);
+    return `<div class="score-modal-flag${isDismissed ? ' is-dismissed' : ''}"${kind === 'red' ? ` data-flag-text="${escHtml(f.text)}"` : ''}>
+      <span class="score-modal-flag-bullet ${kind}">${kind === 'green' ? '&#x2714;' : '&#x2013;'}</span>
+      <span class="score-modal-flag-text">${escHtml(f.text)}</span>
+      <span class="score-modal-flag-info" title="${tip}">i</span>
+      <button class="flag-dismiss-btn" data-flag="${escHtml(f.text)}" data-entry-id="${entry.id}" data-flag-type="${kind}" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}">${isDismissed ? '\u21A9' : '\u00D7'}</button>
+    </div>`;
+  };
+  const greenCol = strongFits.length ? `<div class="score-modal-flag-col">
+    <div class="score-modal-flag-heading green">Green flags</div>
+    ${strongFits.map(f => _renderFlag(f, 'green')).join('')}
   </div>` : '';
-  const redCol = redFlags.length ? `<div class="score-modal-flag-col red">
-    <div class="score-modal-flag-heading red">Red Flags</div>
-    ${redFlags.map((f, i) => {
-      const isDismissed = dismissedFlags.includes(f.text);
-      const dimOpacity = isDismissed ? 'opacity:0.35;' : '';
-      const strikeStyle = isDismissed ? ' style="text-decoration:line-through"' : '';
-      const tip = _flagTip(f);
-      return `<div class="score-modal-flag" style="${dimOpacity}" data-flag-text="${escHtml(f.text)}"><span class="score-modal-flag-icon" style="color:${redShades[Math.min(i, redShades.length - 1)]}">&#x25CF;</span><span${strikeStyle}>${escHtml(f.text)}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${_flagSrcIcon(f.source)}</span><button class="flag-dismiss-btn" data-flag="${escHtml(f.text)}" data-entry-id="${entry.id}" data-flag-type="red" title="${isDismissed ? 'Restore flag' : 'Dismiss — this is wrong'}" style="background:none;border:none;color:#c4c0bc;cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;flex-shrink:0;">${isDismissed ? '↩' : '×'}</button></div>`;
-    }).join('')}
+  const redCol = redFlags.length ? `<div class="score-modal-flag-col">
+    <div class="score-modal-flag-heading red">Red flags</div>
+    ${redFlags.map(f => _renderFlag(f, 'red')).join('')}
   </div>` : '';
   const flagsHtml = (greenCol || redCol) ? `${greenCol}${redCol}` : '';
 
@@ -706,55 +701,59 @@ function openScoreModal(entry) {
   const summary = jm.jobSummary || jm.roleBrief?.roleSummary || jm.verdict || '';
   const rb = jm.roleBrief || {};
 
+  const verdict = (typeof score === 'number' && typeof scoreToVerdict === 'function') ? scoreToVerdict(score) : null;
+  const scoredAgo = jm.lastUpdatedAt ? (() => {
+    const mins = Math.floor((Date.now() - jm.lastUpdatedAt) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ' + (mins % 60) + 'm ago';
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return 'yesterday';
+    if (days < 7) return days + 'd ago';
+    return new Date(jm.lastUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  })() : '';
+
   content.innerHTML = `
     <div class="score-modal-header">
-      <div class="score-modal-score ${tier}">
-        <div class="score-modal-score-num" style="color:${tier === 'green' ? '#0F6E56' : tier === 'amber' ? '#854F0B' : '#A32D2D'}">${typeof score === 'number' ? score.toFixed(1) : score}</div>
-        <div class="score-modal-score-den">/10</div>
+      <div class="score-modal-score-wrap">
+        <div class="score-modal-score-line">
+          <span class="score-modal-score-num ${tier}">${typeof score === 'number' ? score.toFixed(1) : (score ?? '—')}</span><span class="score-modal-score-den">/10</span>
+        </div>
+        ${verdict ? `<div class="score-modal-score-label ${tier}">${verdict.label}</div>` : ''}
       </div>
-      <div>
-        <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit">${favHtml} ${escHtml(entry.company)}</a>
+      <div class="score-modal-identity">
+        <a class="score-modal-company" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}">${favHtml}<span>${escHtml(entry.company)}</span></a>
         <div class="score-modal-title">${entry.jobUrl ? `<a href="${escHtml(entry.jobUrl)}" target="_blank">${escHtml(entry.jobTitle || '')}</a>` : escHtml(entry.jobTitle || '')}</div>
         ${meta ? `<div class="score-modal-meta">${escHtml(meta)}</div>` : ''}
-        ${jm.lastUpdatedAt ? `<div style="font-size:10px;color:#9CA0A6;margin-top:4px;">Scored ${(() => {
-          const mins = Math.floor((Date.now() - jm.lastUpdatedAt) / 60000);
-          if (mins < 1) return 'just now';
-          if (mins < 60) return mins + 'm ago';
-          const hrs = Math.floor(mins / 60);
-          if (hrs < 24) return hrs + 'h ' + (mins % 60) + 'm ago';
-          const days = Math.floor(hrs / 24);
-          if (days === 1) return 'yesterday';
-          if (days < 7) return days + 'd ago';
-          return new Date(jm.lastUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        })()}${jm.lastUpdatedBy ? ' · ' + jm.lastUpdatedBy.replace(/_/g, ' ') : ''}</div>` : ''}
+        ${scoredAgo ? `<div class="score-modal-scored">Scored ${scoredAgo}${jm.lastUpdatedBy ? ' · ' + jm.lastUpdatedBy.replace(/_/g, ' ') : ''}</div>` : ''}
       </div>
     </div>
-    <div class="score-modal-tags" style="padding:0 20px 6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">${tagsHtml}</div>
+    <div class="score-modal-tags">${tagsHtml}</div>
     ${(() => {
-      const linkStyle = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;text-decoration:none;padding:3px 10px;border-radius:14px;transition:all 0.12s;';
       const links = [];
       if (entry.companyWebsite) {
         const domain = entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-        links.push(`<a href="${escHtml(entry.companyWebsite)}" target="_blank" style="${linkStyle}color:#516f90;background:rgba(81,111,144,0.08);border:1px solid rgba(81,111,144,0.15);">↗ ${escHtml(domain)}</a>`);
+        links.push(`<a class="score-modal-link" href="${escHtml(entry.companyWebsite)}" target="_blank">${escHtml(domain)}</a>`);
       }
-      if (entry.companyLinkedin) links.push(`<a href="${escHtml(entry.companyLinkedin)}" target="_blank" style="${linkStyle}color:#0a66c2;background:rgba(10,102,194,0.06);border:1px solid rgba(10,102,194,0.15);">in LinkedIn</a>`);
+      if (entry.companyLinkedin) links.push(`<a class="score-modal-link" href="${escHtml(entry.companyLinkedin)}" target="_blank">LinkedIn</a>`);
       const reviews = entry.reviews || entry.intelligence?.reviews || [];
       if (reviews.length) {
         const glassdoor = reviews.find(r => /glassdoor/i.test(r.source || r.url || ''));
-        if (glassdoor?.url) links.push(`<a href="${escHtml(glassdoor.url)}" target="_blank" style="${linkStyle}color:#0caa41;background:rgba(12,170,65,0.06);border:1px solid rgba(12,170,65,0.15);">★ Glassdoor</a>`);
+        if (glassdoor?.url) links.push(`<a class="score-modal-link" href="${escHtml(glassdoor.url)}" target="_blank">Glassdoor</a>`);
         reviews.filter(r => r.url && !/glassdoor/i.test(r.source || r.url || '')).slice(0, 2).forEach(r => {
           const name = (r.source || 'Review').replace(/https?:\/\/(www\.)?/, '').split('/')[0];
-          links.push(`<a href="${escHtml(r.url)}" target="_blank" style="${linkStyle}color:#6B6560;background:rgba(107,101,96,0.06);border:1px solid rgba(107,101,96,0.12);">★ ${escHtml(name)}</a>`);
+          links.push(`<a class="score-modal-link" href="${escHtml(r.url)}" target="_blank">${escHtml(name)}</a>`);
         });
       }
       const industry = entry.industry || entry.intelligence?.industry || '';
       const eli5 = entry.intelligence?.eli5 || entry.intelligence?.whatItDoes || '';
       const hasContext = links.length || industry || eli5;
       if (!hasContext) return '';
-      return `<div style="padding:0 20px 8px;border-bottom:1px solid #f0eeeb;margin-bottom:4px;">
-        ${links.length ? `<div style="display:flex;gap:12px;align-items:center;margin-bottom:${industry || eli5 ? '6' : '0'}px;">${links.join('')}</div>` : ''}
-        ${industry ? `<div style="font-size:11px;font-weight:600;color:#A09A94;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">${escHtml(industry)}</div>` : ''}
-        ${eli5 ? `<div style="font-size:12px;color:#6B6560;line-height:1.5;">${escHtml(eli5)}</div>` : ''}
+      return `<div class="score-modal-context">
+        ${links.length ? `<div class="score-modal-links">${links.join('')}</div>` : ''}
+        ${industry ? `<div class="score-modal-industry">${escHtml(industry)}</div>` : ''}
+        ${eli5 ? `<div class="score-modal-eli5">${escHtml(eli5)}</div>` : ''}
       </div>`;
     })()}
     <div id="smt-placeholder"></div>
@@ -772,37 +771,29 @@ function openScoreModal(entry) {
         const fmtDate  = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
         if (!nextStep && !nextDate && !notes && !actStr) return '';
         const stageDef = customOpportunityStages.find(s => s.key === stage);
-        const stageColorVal = stageDef?.color || '#FF7A59';
+        const stageColorVal = stageDef?.color || 'var(--ci-accent-primary)';
         const stageLabel = stageDef?.label || stage;
-        const row = (label, value, valueColor) => value ? `
-          <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;font-size:12px;">
-            <span style="color:#A09A94;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:10px;min-width:88px;padding-top:2px;flex-shrink:0;">${label}</span>
-            <span style="color:${valueColor || '#33475b'};line-height:1.5;flex:1;word-wrap:break-word;">${value}</span>
-          </div>` : '';
-        return `<div style="margin-bottom:14px;padding:12px 14px;background:#fafaf8;border:1px solid #ECE7E1;border-radius:10px;border-left:3px solid ${stageColorVal};">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${stageColorVal};"></span>
-            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${stageColorVal};">${escHtml(stageLabel)}</span>
-          </div>
+        const row = (label, value) => value ? `<div class="score-modal-pipe-row"><span class="score-modal-pipe-k">${label}</span><span class="score-modal-pipe-v">${value}</span></div>` : '';
+        return `<div class="score-modal-pipe">
+          <div class="score-modal-pipe-stage" style="color:${stageColorVal}">${escHtml(stageLabel)}</div>
           ${row('Next step', nextStep ? escHtml(nextStep) : '')}
           ${row('Step date', fmtDate(nextDate))}
           ${row('Last activity', actStr ? escHtml(actStr) : '')}
-          ${row('Notes', notes ? escHtml(notes).replace(/\n/g, '<br>') : '', '#6B6560')}
+          ${row('Notes', notes ? escHtml(notes).replace(/\n/g, '<br>') : '')}
         </div>`;
       })()}
       ${dqHtml}
-      ${summary ? `<div class="score-modal-verdict">${escHtml(summary)}</div>` : ''}
+      ${summary ? `<div class="score-modal-section"><div class="score-modal-section-label">Summary</div><div class="score-modal-section-body">${escHtml(summary)}</div></div>` : ''}
       ${flagsHtml ? `<div class="score-modal-flags">${flagsHtml}</div>` : ''}
-      ${rb.whyInteresting ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#1D9E75;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Why interesting</strong><br>${escHtml(rb.whyInteresting)}</div>` : ''}
-      ${rb.concerns ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#854F0B;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Open questions</strong><br>${escHtml(rb.concerns)}</div>` : ''}
-      ${rb.qualificationMatch ? `<div style="font-size:13px;color:#33475b;line-height:1.55;margin-bottom:10px;"><strong style="color:#516f90;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qualification match ${rb.qualificationScore ? `(${rb.qualificationScore}/10)` : ''}</strong><br>${escHtml(rb.qualificationMatch)}</div>` : ''}
-      ${rb.compSummary ? `<div style="font-size:12px;color:#516f90;margin-bottom:10px;">Comp: ${escHtml(rb.compSummary)}</div>` : ''}
-      <div style="display:flex;gap:8px;">
-        <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}" style="flex:1">See full breakdown</a>
-        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtml(entry.jobUrl)}" target="_blank" style="flex:1">View posting</a>` : ''}
+      ${rb.whyInteresting ? `<div class="score-modal-section"><div class="score-modal-section-label">Why interesting</div><div class="score-modal-section-body">${escHtml(rb.whyInteresting)}</div></div>` : ''}
+      ${rb.concerns ? `<div class="score-modal-section"><div class="score-modal-section-label">Open questions</div><div class="score-modal-section-body">${escHtml(rb.concerns)}</div></div>` : ''}
+      ${rb.qualificationMatch ? `<div class="score-modal-section"><div class="score-modal-section-label">Qualification match${rb.qualificationScore ? ` <span class="score-modal-section-qual">${rb.qualificationScore}/10</span>` : ''}</div><div class="score-modal-section-body">${escHtml(rb.qualificationMatch)}</div></div>` : ''}
+      ${rb.compSummary ? `<div class="score-modal-section"><div class="score-modal-section-label">Comp</div><div class="score-modal-section-body">${escHtml(rb.compSummary)}</div></div>` : ''}
+      <div class="score-modal-quick-actions">
+        <a class="score-modal-details-btn" href="${chrome.runtime.getURL('company.html')}?id=${entry.id}">See full breakdown</a>
+        ${entry.jobUrl ? `<a class="score-modal-posting-btn" href="${escHtml(entry.jobUrl)}" target="_blank">View posting</a>` : ''}
       </div>
       <button class="score-modal-rescore" id="score-modal-rescore-btn">Re-score with latest criteria</button>
-      ${entry.jobMatchScoredAt ? `<div style="text-align:center;font-size:11px;color:#A09A94;margin-top:4px;">Scored ${new Date(entry.jobMatchScoredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>` : ''}
     </div>
     <div class="score-modal-actions">
       <button class="score-modal-dismiss" id="score-modal-dismiss-btn">${(() => { const s = customOpportunityStages.find(s => s.key === DISMISS_STAGE); return s ? s.label : 'Pass'; })()}</button>
@@ -858,12 +849,8 @@ function openScoreModal(entry) {
           companies[idx].jobMatch = jm;
           chrome.storage.local.set({ savedCompanies: companies }, () => {
             const flagEl = btn.closest('.score-modal-flag');
-            if (flagEl) {
-              flagEl.style.opacity = '';
-              const textSpan = flagEl.querySelector('span:nth-child(2)');
-              if (textSpan) textSpan.style.textDecoration = '';
-            }
-            btn.textContent = '×'; btn.title = 'Dismiss — this is wrong';
+            if (flagEl) flagEl.classList.remove('is-dismissed');
+            btn.textContent = '\u00D7'; btn.title = 'Dismiss — this is wrong';
             // Remove reason input if present
             const reasonRow = flagEl?.querySelector('.flag-reason-row');
             if (reasonRow) reasonRow.remove();
@@ -877,21 +864,17 @@ function openScoreModal(entry) {
           // Dismiss — show reason input
           const flagEl = btn.closest('.score-modal-flag');
           if (flagEl) {
-            flagEl.style.opacity = '0.35';
-            // Apply strikethrough only to the text span, not the whole flag (so reason input isn't struck)
-            const textSpan = flagEl.querySelector('span:nth-child(2)');
-            if (textSpan) textSpan.style.textDecoration = 'line-through';
-            btn.textContent = '↩'; btn.title = 'Restore flag';
+            flagEl.classList.add('is-dismissed');
+            btn.textContent = '\u21A9'; btn.title = 'Restore flag';
             // Add reason input row if not already present
             if (!flagEl.querySelector('.flag-reason-row')) {
               const row = document.createElement('div');
               row.className = 'flag-reason-row';
-              row.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:8px;opacity:1;text-decoration:none;padding:10px 12px;background:#fff;border:1px solid #E0DDD8;border-radius:8px;';
-              row.innerHTML = `<div style="font-size:11px;font-weight:600;color:#6B6F76;">Tell Coop why this is wrong — he'll learn from it</div>
-                <textarea class="flag-reason-input" placeholder="e.g., This role is actually remote. Comp is disclosed in the posting." style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;background:#FAF9F8;color:#1A1A1A;outline:none;resize:vertical;min-height:50px;line-height:1.5;"></textarea>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                  <button class="flag-reason-skip" style="font-size:11px;padding:5px 12px;border:1px solid #E0DDD8;border-radius:6px;background:#fff;color:#6B6F76;cursor:pointer;font-family:inherit;font-weight:600;">Skip</button>
-                  <button class="flag-reason-save" style="font-size:11px;padding:5px 14px;border:none;border-radius:6px;background:#FC636B;color:#fff;cursor:pointer;font-family:inherit;font-weight:600;">Save Feedback</button>
+              row.innerHTML = `<div class="flag-reason-prompt">Tell Coop why this is wrong — he'll learn from it</div>
+                <textarea class="flag-reason-input" placeholder="e.g., This role is actually remote. Comp is disclosed in the posting."></textarea>
+                <div class="flag-reason-actions">
+                  <button class="flag-reason-skip">Skip</button>
+                  <button class="flag-reason-save">Save feedback</button>
                 </div>`;
               flagEl.appendChild(row);
               const textarea = row.querySelector('.flag-reason-input');
@@ -928,7 +911,7 @@ function openScoreModal(entry) {
                     chrome.storage.local.set({ coopMemory: mem });
                   });
                 }
-                row.innerHTML = `<span style="font-size:11px;color:#8B8680;">✓ ${reason ? 'Feedback saved — Coop will remember this' : 'Dismissed'}</span>`;
+                row.innerHTML = `<span class="flag-reason-ack">${reason ? 'Feedback saved — Coop will remember this' : 'Dismissed'}</span>`;
                 setTimeout(() => row.remove(), 2000);
               };
               row.querySelector('.flag-reason-save').addEventListener('click', saveFn);
