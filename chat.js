@@ -731,7 +731,103 @@ function stripQuotedContent(body) {
   return out.join('\n').trim();
 }
 
+// ── Email HTML sanitizer (allowlist-based, no deps) ──────────────────────────
+// Parses raw HTML from email bodies and strips anything not in the allowlist.
+// Keeps structure tags, inline formatting, links. Drops script, iframe, style,
+// event handlers, and javascript: URLs.
+function sanitizeEmailHtml(raw) {
+  if (!raw) return '';
+  const doc = new DOMParser().parseFromString(raw, 'text/html');
+
+  const ALLOWED_TAGS = new Set([
+    'a','b','strong','em','i','u','s','strike','br','p','div','span',
+    'ul','ol','li','blockquote','pre','code','h1','h2','h3','h4','h5','h6',
+    'table','thead','tbody','tr','th','td','hr','img',
+  ]);
+  const ALLOWED_ATTRS = new Set(['href','src','alt','title','style','class']);
+  const SAFE_STYLE_PROPS = new Set([
+    'color','background-color','font-size','font-weight','font-style',
+    'text-decoration','padding','margin','border','border-radius',
+    'width','max-width','height','line-height','text-align','display','vertical-align',
+  ]);
+
+  function sanitizeNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) return;
+    if (node.nodeType !== Node.ELEMENT_NODE) { node.parentNode?.removeChild(node); return; }
+
+    const tag = node.tagName.toLowerCase();
+
+    // Strip these entirely (with content)
+    if (['script','style','iframe','object','embed','form','input','button','select','textarea','meta','link','head'].includes(tag)) {
+      node.parentNode?.removeChild(node);
+      return;
+    }
+
+    if (!ALLOWED_TAGS.has(tag)) {
+      // Unwrap — keep children, remove element
+      while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+      node.parentNode?.removeChild(node);
+      return;
+    }
+
+    // Remove disallowed attributes
+    const attrsToRemove = [];
+    for (const attr of node.attributes) {
+      const name = attr.name.toLowerCase();
+      if (!ALLOWED_ATTRS.has(name) || /^on/.test(name)) {
+        attrsToRemove.push(attr.name);
+      }
+    }
+    attrsToRemove.forEach(a => node.removeAttribute(a));
+
+    // Sanitize href: block javascript: URLs
+    if (node.hasAttribute('href')) {
+      const href = (node.getAttribute('href') || '').trim().toLowerCase();
+      if (href.startsWith('javascript:') || href.startsWith('vbscript:') || href.startsWith('data:')) {
+        node.removeAttribute('href');
+      } else {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+
+    // Sanitize src: only allow http/https
+    if (node.hasAttribute('src')) {
+      const src = (node.getAttribute('src') || '').trim().toLowerCase();
+      if (!src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('cid:')) {
+        node.removeAttribute('src');
+      }
+    }
+
+    // Sanitize style: only allow known safe properties
+    if (node.hasAttribute('style')) {
+      const safeStyles = [];
+      for (const prop of node.style) {
+        if (SAFE_STYLE_PROPS.has(prop)) safeStyles.push(`${prop}:${node.style.getPropertyValue(prop)}`);
+      }
+      if (safeStyles.length) node.setAttribute('style', safeStyles.join(';'));
+      else node.removeAttribute('style');
+    }
+
+    // Recurse into children (iterate copy since we may mutate)
+    for (const child of [...node.childNodes]) sanitizeNode(child);
+  }
+
+  for (const child of [...doc.body.childNodes]) sanitizeNode(child);
+  return doc.body.innerHTML;
+}
+
+function _emailAddrFrom(fromStr) {
+  if (!fromStr) return '';
+  const m = fromStr.match(/<([^>]+)>/);
+  return (m ? m[1] : fromStr).trim().toLowerCase();
+}
+
 function renderEmailThreads(emails, onDelete) {
+  // Detect user's own email from the dataset (set by gmail.js)
+  // We check the first email's "to" field patterns, or use the stored value
+  const userEmailLower = (typeof gmailUserEmail !== 'undefined' ? gmailUserEmail : '') || '';
+
   // Group by threadId, preserving newest-first order
   const threads = new Map();
   emails.forEach(e => {
@@ -749,18 +845,41 @@ function renderEmailThreads(emails, onDelete) {
     const msgsHTML = msgs.map((m, idx) => {
       const md = new Date(m.date);
       const mDate = isNaN(md) ? (m.date || '') : md.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const fromName = (m.from || '').replace(/<.*>/, '').trim() || m.from || '';
-      const bodyText = stripQuotedContent(m.body || m.snippet || '');
-      const preview = bodyText.replace(/\n/g, ' ').slice(0, 80) + (bodyText.length > 80 ? '…' : '');
+      const mTime = isNaN(md) ? '' : md.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const fromAddr = _emailAddrFrom(m.from);
+      const fromName = (m.from || '').replace(/<.*>/, '').replace(/"/g, '').trim() || fromAddr || '';
+      const isSent = userEmailLower && (fromAddr === userEmailLower);
+
+      // Render body: prefer sanitized HTML, fall back to plain text
+      let bodyHtml = '';
+      if (m.htmlBody) {
+        bodyHtml = sanitizeEmailHtml(m.htmlBody);
+      } else {
+        const bodyText = stripQuotedContent(m.body || m.snippet || '');
+        bodyHtml = `<p>${escapeHtml(bodyText).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
+      }
+
+      // Preview from plain text
+      const plainForPreview = m.body || m.snippet || '';
+      const previewText = stripQuotedContent(plainForPreview).replace(/\n/g, ' ').slice(0, 100);
+      const preview = escapeHtml(previewText) + (previewText.length >= 100 ? '…' : '');
+
       const msgId = `tmsg-${tid}-${idx}`;
+      const sentClass = isSent ? ' thread-msg-sent' : '';
       // Latest message (idx=0) starts expanded
-      return `<div class="thread-msg ${idx === 0 ? 'open' : ''}" id="${msgId}">
+      return `<div class="thread-msg${sentClass} ${idx === 0 ? 'open' : ''}" id="${msgId}">
         <div class="thread-msg-hdr" data-msg="${msgId}">
-          <span class="thread-msg-from">${escapeHtml(fromName)}</span>
-          <span class="thread-msg-date">${mDate}</span>
+          <div class="thread-msg-sender">
+            <span class="thread-msg-from">${escapeHtml(fromName)}</span>
+            ${isSent ? '<span class="thread-msg-sent-badge">Sent</span>' : ''}
+          </div>
+          <div class="thread-msg-ts">
+            <span class="thread-msg-date">${mDate}</span>
+            ${mTime ? `<span class="thread-msg-time">${mTime}</span>` : ''}
+          </div>
         </div>
-        <div class="thread-msg-preview">${escapeHtml(preview)}</div>
-        <div class="thread-msg-body">${escapeHtml(bodyText).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>').replace(/^/, '<p>').replace(/$/, '</p>')}</div>
+        <div class="thread-msg-preview">${preview}</div>
+        <div class="thread-msg-body email-html-body">${bodyHtml}</div>
       </div>`;
     }).join('');
 

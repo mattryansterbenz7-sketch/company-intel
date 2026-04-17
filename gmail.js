@@ -65,6 +65,25 @@ function extractEmailBody(payload) {
   return '';
 }
 
+function extractHtmlBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/html' && payload.body?.data) {
+    const h = decodeBase64Utf8(payload.body.data);
+    if (h) return h;
+  }
+  for (const part of payload.parts || []) {
+    if (part.mimeType === 'text/html' && part.body?.data) {
+      const h = decodeBase64Utf8(part.body.data);
+      if (h) return h;
+    }
+  }
+  for (const part of payload.parts || []) {
+    const nested = extractHtmlBody(part);
+    if (nested) return nested;
+  }
+  return '';
+}
+
 // ── Email signature parsing (zero cost contact enrichment) ────────────────
 
 export function parseEmailSignature(body) {
@@ -200,7 +219,8 @@ export async function fetchGmailEmails(domain, companyName, linkedinSlug, knownC
           const h = d.payload?.headers || [];
           const get = n => h.find(x => x.name === n)?.value || '';
           const body = extractEmailBody(d.payload);
-          return { id: msgId, from: get('From'), to: get('To'), cc: get('Cc'), subject: get('Subject'), date: get('Date'), snippet: d.snippet || '', body, threadId: d.threadId };
+          const htmlBody = extractHtmlBody(d.payload);
+          return { id: msgId, from: get('From'), to: get('To'), cc: get('Cc'), subject: get('Subject'), date: get('Date'), snippet: d.snippet || '', body, htmlBody, threadId: d.threadId };
         };
 
         let msgList = await fetchMessages(query);
