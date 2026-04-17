@@ -5448,14 +5448,44 @@ function openStatCardEditor() {
   renderMessages();
 })();
 
-// Action On filter
-document.getElementById('action-filter-btns')?.addEventListener('click', e => {
-  const btn = e.target.closest('[data-action-filter]');
-  if (!btn) return;
-  activeActionFilter = btn.dataset.actionFilter;
-  document.querySelectorAll('#action-filter-btns .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.actionFilter === activeActionFilter));
-  render();
-});
+// Action On dropdown
+(function() {
+  const ddBtn = document.getElementById('action-dd-btn');
+  const ddMenu = document.getElementById('action-dd-menu');
+  const labelEl = document.getElementById('action-dd-label');
+  const labels = { all: 'All', my_court: 'My Court', their_court: 'Their Court', scheduled: 'Scheduled' };
+  if (!ddBtn) return;
+
+  ddBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = ddMenu.classList.toggle('open');
+    ddBtn.classList.toggle('open', open);
+    if (open) {
+      const r = ddBtn.getBoundingClientRect();
+      ddMenu.style.top = (r.bottom + 6) + 'px';
+      ddMenu.style.left = r.left + 'px';
+    }
+  });
+
+  ddMenu.querySelectorAll('.action-dd-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      activeActionFilter = opt.dataset.actionFilter;
+      labelEl.textContent = labels[activeActionFilter] || 'All';
+      ddBtn.classList.toggle('filtered', activeActionFilter !== 'all');
+      ddMenu.querySelectorAll('.action-dd-opt').forEach(o => o.classList.toggle('active', o.dataset.actionFilter === activeActionFilter));
+      ddMenu.classList.remove('open');
+      ddBtn.classList.remove('open');
+      render();
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('action-dd')?.contains(e.target)) {
+      ddMenu.classList.remove('open');
+      ddBtn.classList.remove('open');
+    }
+  });
+})();
 
 load();
 
