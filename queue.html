@@ -161,11 +161,19 @@
        ═══════════════════════════════════════════════════════════════════ */
 
     .qc-pipeline-ctx {
-      display: flex; flex-direction: column; gap: 10px;
+      display: flex; flex-direction: column;
       padding: 12px 0 10px;
       border-top: 1px solid var(--ci-border-subtle);
       border-bottom: 1px solid var(--ci-border-subtle);
       margin: 10px 0;
+    }
+    .qc-pipeline-ctx-fields {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    .qc-pipeline-ctx-fields:has(.qc-pipeline-ctx-meta) {
+      grid-template-columns: 1fr 1fr;
     }
     .qc-pipeline-ctx-edit,
     .qc-pipeline-ctx-meta {
@@ -176,8 +184,8 @@
       font-size: 12px;
     }
     .qc-pipeline-ctx-meta {
-      padding-top: 9px;
-      border-top: 1px dashed var(--ci-border-subtle);
+      padding-left: 20px;
+      border-left: 1px dashed var(--ci-border-subtle);
     }
     .qc-pipeline-ctx-meta-row {
       display: contents;
