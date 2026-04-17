@@ -36,6 +36,7 @@ function saveChatSession(entryId, session) {
         const msg = { role: m.role, content: typeof m.content === 'string' ? m.content : (m.content[0]?.text || '') };
         if (m._usage) msg._usage = m._usage;
         if (m._model) msg._model = m._model;
+        if (m._fellBackFrom) msg._fellBackFrom = m._fellBackFrom;
         return msg;
       })
     };
@@ -327,7 +328,12 @@ function buildChatPanel(container, entry) {
               ? renderContextManifest(m._contextManifest, m._toolCalls, 'chat')
               : `<div class="chat-usage" style="color:#7C6EF0;">↳ Coop pulled: ${[...new Set(m._toolCalls.map(t => t.name))].join(', ')}</div>`)
             : '';
-          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${copyBtn}${saveBtn}${toolBadge}${usageBadge}${followup}</div>`;
+          const fallbackNote = (m.role === 'assistant' && m._fellBackFrom) ? (() => {
+            const origLabel = CHAT_MODELS.find(x => x.id === m._fellBackFrom)?.label || m._fellBackFrom;
+            const newLabel  = CHAT_MODELS.find(x => x.id === m._model)?.label || m._model;
+            return `<div class="chat-fallback-note">Answered by ${escapeHtml(newLabel)} — ${escapeHtml(origLabel)} unavailable</div>`;
+          })() : '';
+          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${copyBtn}${saveBtn}${toolBadge}${fallbackNote}${usageBadge}${followup}</div>`;
         }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
@@ -466,7 +472,21 @@ function buildChatPanel(container, entry) {
     if (result?.reply) {
       const msgEntry = { role: 'assistant', content: [{ type: 'text', text: result.reply }] };
       if (result.usage) msgEntry._usage = result.usage;
-      if (result.model) msgEntry._model = result.model;
+      if (result.model) {
+        msgEntry._model = result.model;
+        // If the model that answered differs from the one the user selected, a
+        // fallback fired somewhere in the chain. Record the original model and
+        // update the footer toggle so the user sees what actually worked.
+        const requestedId = CHAT_MODELS[chatModelIdx]?.id;
+        if (requestedId && result.model !== requestedId) {
+          msgEntry._fellBackFrom = requestedId;
+          const newIdx = CHAT_MODELS.findIndex(m => m.id === result.model);
+          if (newIdx >= 0) {
+            chatModelIdx = newIdx;
+            updateChatModelBtn();
+          }
+        }
+      }
       if (result.toolCalls) msgEntry._toolCalls = result.toolCalls;
       if (result.contextManifest) msgEntry._contextManifest = result.contextManifest;
       history.push(msgEntry);
