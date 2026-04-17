@@ -1539,41 +1539,43 @@ function updateTagsToolbar() {
 function updateStatusToolbar() {
   const toolbar = document.getElementById('status-toolbar');
   if (activePipeline === 'all') { toolbar.style.display = 'none'; return; }
+  toolbar.style.display = '';
+
+  const menu = document.getElementById('status-dd-menu');
+  const btn = document.getElementById('status-dd-btn');
+  const labelEl = document.getElementById('status-dd-label');
+  const dotEl = document.getElementById('status-dd-dot');
+  if (!menu || !btn) return;
+
   const statuses = stageMap();
+  const options = [{ val: 'all', label: 'All', color: null }]
+    .concat(Object.entries(statuses).map(([val, label]) => ({ val, label, color: stageColor(val) })));
 
-  const currentStatus = activeStatus;
-  toolbar.innerHTML = '<span class="filter-label">Status:</span>';
+  menu.innerHTML = options.map(opt => {
+    const dot = opt.color
+      ? `<span class="status-opt-dot" style="background:${opt.color}"></span>`
+      : '<span class="status-opt-dot" style="background:transparent;border:1px dashed var(--ci-border-default)"></span>';
+    return `<div class="action-dd-opt status-dd-opt${opt.val === activeStatus ? ' active' : ''}" data-status="${opt.val}">${dot}<span>${escHtml(opt.label)}</span></div>`;
+  }).join('');
 
-  const allBtn = document.createElement('button');
-  allBtn.className = 'status-filter-btn' + (currentStatus === 'all' ? ' active' : '');
-  allBtn.dataset.status = 'all';
-  allBtn.textContent = 'All';
-  allBtn.addEventListener('click', () => { activeStatus = 'all'; updateStatusToolbar(); render(); });
-  toolbar.appendChild(allBtn);
+  const current = options.find(o => o.val === activeStatus) || options[0];
+  labelEl.textContent = current.label;
+  if (current.color) {
+    dotEl.style.display = 'inline-block';
+    dotEl.style.background = current.color;
+  } else {
+    dotEl.style.display = 'none';
+  }
+  btn.classList.toggle('filtered', activeStatus !== 'all');
 
-  Object.entries(statuses).forEach(([val, label]) => {
-    const btn = document.createElement('button');
-    btn.className = 'status-filter-btn' + (currentStatus === val ? ' active' : '');
-    btn.dataset.status = val;
-    btn.style.display = 'inline-flex';
-    btn.style.alignItems = 'center';
-    btn.style.gap = '6px';
-
-    const dot = document.createElement('span');
-    dot.className = 'stage-swatch-dot';
-    dot.style.background = stageColor(val);
-    dot.title = 'Change stage color';
-    dot.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const currColor = stageColor(val);
-      const currIdx = STAGE_COLOR_PALETTE.indexOf(currColor);
-      showColorPicker(dot, STAGE_COLOR_PALETTE, currIdx === -1 ? 0 : currIdx, (idx) => saveStageColor(val, STAGE_COLOR_PALETTE[idx]));
+  menu.querySelectorAll('.action-dd-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      activeStatus = opt.dataset.status;
+      updateStatusToolbar();
+      menu.classList.remove('open');
+      btn.classList.remove('open');
+      render();
     });
-
-    btn.appendChild(dot);
-    btn.appendChild(document.createTextNode(label));
-    btn.addEventListener('click', () => { activeStatus = val; updateStatusToolbar(); render(); });
-    toolbar.appendChild(btn);
   });
 }
 
@@ -5551,6 +5553,31 @@ function openStatCardEditor() {
 
   document.addEventListener('click', (e) => {
     if (!document.getElementById('action-dd')?.contains(e.target)) {
+      ddMenu.classList.remove('open');
+      ddBtn.classList.remove('open');
+    }
+  });
+})();
+
+// Status dropdown (mirrors Action On pattern)
+(function() {
+  const ddBtn = document.getElementById('status-dd-btn');
+  const ddMenu = document.getElementById('status-dd-menu');
+  if (!ddBtn) return;
+
+  ddBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = ddMenu.classList.toggle('open');
+    ddBtn.classList.toggle('open', open);
+    if (open) {
+      const r = ddBtn.getBoundingClientRect();
+      ddMenu.style.top = (r.bottom + 6) + 'px';
+      ddMenu.style.left = r.left + 'px';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('status-dd')?.contains(e.target)) {
       ddMenu.classList.remove('open');
       ddBtn.classList.remove('open');
     }

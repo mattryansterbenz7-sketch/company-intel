@@ -89,9 +89,8 @@
     .rating-option-divider { height: 1px; background: var(--ci-border-subtle); margin: 4px 0; }
     .rating-clear-btn { display: block; width: 100%; text-align: left; padding: 7px 14px; font-size: 12px; color: var(--ci-text-tertiary); background: none; border: none; cursor: pointer; font-family: inherit; transition: color 0.15s; }
     .rating-clear-btn:hover { color: var(--ci-accent-red); }
-    .status-filter-btn { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-secondary); font-size: 12px; padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: all var(--ci-transition-fast); }
-    .status-filter-btn.active { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }
-    .status-filter-btn:hover:not(.active) { color: var(--ci-text-primary); }
+    .status-dd-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 4px; }
+    .status-opt-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 10px; }
 
     /* ── View toggle bar ── */
     .view-toggle-bar { padding: 10px 32px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-default); display: flex; align-items: center; gap: 10px; }
@@ -1858,7 +1857,14 @@
   </div>
   <div class="toolbar toolbar-status" id="status-toolbar">
     <span class="filter-label">Status:</span>
-    <button class="status-filter-btn active" data-status="all">All</button>
+    <div class="action-dd" id="status-dd">
+      <button class="action-dd-btn" id="status-dd-btn">
+        <span class="status-dd-dot" id="status-dd-dot" style="display:none"></span>
+        <span id="status-dd-label">All</span>
+        <span class="action-dd-arrow">▾</span>
+      </button>
+      <div class="action-dd-menu" id="status-dd-menu"></div>
+    </div>
   </div>
   <div class="toolbar toolbar-tags" id="tags-toolbar" style="display:none">
     <span class="filter-label">Tags:</span>
