@@ -4872,6 +4872,9 @@ function renderActivitySection() {
           <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
           <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
         </div>
+      </div>
+      <div class="activity-head-right">
+        <div class="activity-tasks-list" id="activity-tasks-list"><span class="activity-tasks-empty">Loading…</span></div>
         <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">📅 ${label}${range.custom ? '' : ' <span class="act-auto-badge">auto</span>'}</span>
         <div class="act-date-picker" id="act-date-picker" style="display:none">
           <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
@@ -4885,10 +4888,6 @@ function renderActivitySection() {
     <div class="activity-goals-row">
       ${goalCardsHtml}
       <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
-    </div>
-    <div class="activity-tasks-panel" id="activity-tasks-panel">
-      <span class="activity-tasks-label">Tasks</span>
-      <div class="activity-tasks-list" id="activity-tasks-list"><span class="activity-tasks-empty">Loading…</span></div>
     </div>
   `;
 
@@ -4974,6 +4973,21 @@ function renderActivitySection() {
 
   // Tasks panel — load async after the rest of the section is already rendered
   populateActivityTasksPanel(section, start, end);
+
+  // Event delegation for task check toggle (now inside activity-head-right within activity-head)
+  section.addEventListener('click', e => {
+    const checkBtn = e.target.closest('[data-check]');
+    if (checkBtn) {
+      e.stopPropagation();
+      const id = checkBtn.dataset.check;
+      loadTasks(all => {
+        const idx = all.findIndex(t => t.id === id);
+        if (idx === -1) return;
+        all[idx].completed = !all[idx].completed;
+        saveTasks(all, () => renderActivitySection());
+      });
+    }
+  });
 }
 
 function populateActivityTasksPanel(section, start, end) {
@@ -5023,20 +5037,6 @@ function populateActivityTasksPanel(section, start, end) {
         </div>
       </div>`;
     }).join('');
-
-    // Checkbox click — toggle completed and re-render
-    list.querySelectorAll('[data-check]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const id = btn.dataset.check;
-        loadTasks(all => {
-          const idx = all.findIndex(t => t.id === id);
-          if (idx === -1) return;
-          all[idx].completed = !all[idx].completed;
-          saveTasks(all, () => renderActivitySection());
-        });
-      });
-    });
   });
 }
 

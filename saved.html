@@ -747,11 +747,12 @@
     /* ── Stage editor modal ── */
     /* ── Activity & Goals ── */
     .activity-section { padding: 20px 32px 22px; border-bottom: 2px solid var(--ci-border-default); background: var(--ci-bg-inset); }
-    .activity-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
-    .activity-head-left { display: flex; flex-direction: column; gap: 3px; }
+    .activity-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+    .activity-head-left { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; }
+    .activity-head-right { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
     .activity-section-title { font-size: 10px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: 0.07em; text-transform: uppercase; }
-    .activity-period-label { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
-    .period-toggle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .activity-period-label { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); white-space: nowrap; }
+    .period-toggle { display: flex; align-items: center; justify-content: center; gap: 0; flex: 0 0 auto; }
     .period-tabs { display: flex; gap: 2px; background: var(--ci-border-default); border-radius: 8px; padding: 3px; flex-shrink: 0; }
     .period-tab { font-size: 13px; font-weight: 700; color: var(--ci-text-tertiary); border: none; background: none; border-radius: var(--ci-radius-sm); padding: 6px 16px; cursor: pointer; font-family: inherit; transition: all 0.12s; }
     .period-tab:hover:not(.active) { color: var(--ci-text-secondary); background: rgba(255,255,255,0.5); }
@@ -792,9 +793,8 @@
     .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--ci-transition-fast); flex-shrink: 0; }
     .stat-cards-edit-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
     /* ── Activity Tasks Panel ── */
-    .activity-tasks-panel { display: flex; align-items: flex-start; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ci-border-subtle); }
-    .activity-tasks-label { font-size: 10px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; padding-top: 2px; min-width: 36px; }
-    .activity-tasks-list { display: flex; gap: 8px; overflow-x: auto; flex: 1; padding-bottom: 4px; }
+    .activity-tasks-label { display: none; }
+    .activity-tasks-list { display: flex; gap: 8px; overflow-x: auto; flex: 1; padding-bottom: 4px; min-width: 0; }
     .activity-tasks-list::-webkit-scrollbar { height: 4px; }
     .activity-tasks-list::-webkit-scrollbar-track { background: transparent; }
     .activity-tasks-list::-webkit-scrollbar-thumb { background: var(--ci-border-default); border-radius: 2px; }
