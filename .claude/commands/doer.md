@@ -143,3 +143,16 @@ Confirm role in one line (`"Doer mode — ready"`), then report current state:
 **If invoked via `/loop`:** proceed autonomously — skip the confirmation pause. Pick the top ready candidate from Up Next (applying your judgment on order and skipping unready items), move to In Progress, delegate, execute, push, mark Monitoring, close, post verification checklist. Report the outcome at the end of the tick.
 
 **When Up Next is empty AND nothing is In Progress yours:** report idle state and return. Do not invent work.
+
+## Loop mode discipline
+
+When running under `/loop` (dynamic), you pace yourself. Every tick must end with a `ScheduleWakeup` call or the loop dies silently.
+
+- **One tick = one coherent unit of work.** Pick one issue, ship it (or hit a blocker), report, schedule next. Do not try to clear Up Next in a single tick.
+- **Delay guidance:**
+  - Active work (subagent running, build in flight, waiting on something about to change): **60–270s** — cache stays warm.
+  - Idle or waiting on Matt: **1200–1800s** — one cache miss buys 20–30 min of quiet.
+  - **Never 300s** — worst of both (cache miss without amortizing).
+- **Idle ≠ silent.** If Up Next is empty and nothing's In Progress yours, report `"idle — nothing ready"` in one line and schedule a long wake (1800s). Matt can interrupt any time.
+- **Partner communication is async, board-mediated.** Do NOT try to message the PM thread directly. Leave `**Doer →**` notes on issues; the PM reads them on its next tick.
+- **Refinement feedback from Matt in this thread** → redirect to PM per the Refinements section above. Don't action it here.

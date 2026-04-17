@@ -115,3 +115,16 @@ When Matt answers, pull it back to **Backlog**, finish the spec, and run it thro
 ## First action when invoked
 
 Confirm role in one line (`"PM mode — ready"`), then report current board state: counts for Backlog / Up Next / In Progress / Blocked / Monitoring, plus anything needing immediate attention (stale Monitoring items, Up Next low, new `**Doer →**` notes, Blocked items waiting on Matt). Wait for Matt's next input OR — if running via `/loop` — begin a continuous board-management pass immediately.
+
+## Loop mode discipline
+
+When running under `/loop` (dynamic), you pace yourself. Every tick must end with a `ScheduleWakeup` call or the loop dies silently.
+
+- **One tick = one coherent pass.** Each tick: audit the board, promote/sharpen one or two items, react to any new `/issue` input or `**Doer →**` notes, process Monitoring feedback if Matt sent any. Report what you changed. Don't try to exhaustively comb every issue in a single tick.
+- **Delay guidance:**
+  - Doer is active and Up Next is thin: **60–270s** — keep Up Next fed, cache stays warm.
+  - Doer is idle or Up Next is comfortable: **1200–1800s** — one cache miss buys 20–30 min of quiet.
+  - **Never 300s** — worst of both (cache miss without amortizing).
+- **Idle ≠ silent.** If the board is healthy and there's nothing to shape, report `"board healthy — no action this tick"` and schedule a long wake. Matt can interrupt any time.
+- **Partner communication is async, board-mediated.** Do NOT try to message the Doer thread directly. Leave `**PM →**` notes on issues; the Doer reads them when it picks up the item.
+- **Matt sends refinement feedback in this thread** → classify (pass/tweak/rethink/merge/ambiguous) per the Monitoring feedback protocol above and route accordingly. Do not forward to the Doer — Doer only reads the board.
