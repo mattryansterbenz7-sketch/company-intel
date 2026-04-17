@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tier 1A — Kanban card before/after (#194)</title>
+<style>
+  /* Inlined from ../design-tokens.css so this file renders standalone (no server). */
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-hover: #E04E56;
+    --ci-accent-primary-soft: rgba(252, 99, 107, 0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-blue: #4573D2;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232, 56, 79, 0.07);
+    --ci-shadow-sm: 0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --ci-shadow-md: 0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+    --ci-radius-md: 10px;
+    --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    background: var(--ci-bg-base);
+    padding: 32px 40px;
+    font-family: var(--ci-font-family);
+    color: var(--ci-text-primary);
+  }
+  .frame {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub { font-size: 13px; color: var(--ci-text-secondary); margin: 0 0 28px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  .col h2 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--ci-text-tertiary);
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .col.before h2 { color: #991b1b; }
+  .col.after h2 { color: #047857; }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .label {
+    font-size: 11px;
+    color: var(--ci-text-tertiary);
+    margin: 18px 0 6px;
+    font-weight: 500;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     BEFORE — current card styles (lifted from saved.html)
+     ═══════════════════════════════════════════════════════════════════════ */
+  .b-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: var(--ci-shadow-sm);
+    border-left: 3px solid #6366f1;
+    width: 320px;
+  }
+  .b-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+  .b-favicon-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .b-favicon { width: 18px; height: 18px; border-radius: 4px; background: #ccc; }
+  .b-type {
+    display: inline-flex; align-items: center; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    border-radius: 4px; padding: 2px 7px;
+    color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft);
+    border: 1px solid rgba(255,122,89,0.25);
+  }
+  .b-company { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
+  .b-job { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }
+  .b-top-links { display: flex; gap: 10px; margin-top: 4px; }
+  .b-link { font-size: 11px; text-decoration: none; font-weight: 600; }
+  .b-link.li { color: var(--ci-accent-blue); }
+  .b-link.web { color: #00897b; }
+  .b-delete { border: none; background: transparent; color: var(--ci-text-tertiary); cursor: pointer; font-size: 13px; }
+  .b-indicators { display: flex; gap: 5px; flex-wrap: wrap; }
+  .b-stale { font-size: 10px; font-weight: 600; color: #92400e; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); border-radius: 4px; padding: 1px 6px; }
+  .b-overdue { font-size: 10px; font-weight: 600; color: #991b1b; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); border-radius: 4px; padding: 1px 6px; }
+  .b-submatch-row { display: flex; gap: 6px; padding: 4px 0; font-size: 11px; }
+  .b-submatch {
+    font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+  }
+  .b-submatch.hi { background: #00897b15; color: #00897b; }
+  .b-submatch.mid { background: #d9770615; color: #d97706; }
+  .b-submatch.lo { background: #e5483b15; color: #e5483b; }
+  .b-score-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .b-score-num { font-size: 18px; font-weight: 800; line-height: 1; }
+  .b-score-denom { font-size: 12px; font-weight: 600; opacity: 0.6; }
+  .b-verdict {
+    font-size: 11px; font-weight: 700; border-radius: 20px;
+    padding: 3px 10px; border: 1px solid;
+  }
+  .b-verdict.hi  { background: rgba(0,189,165,0.1);  color: #00897b; border-color: rgba(0,189,165,0.35); }
+  .b-verdict.mid { background: rgba(99,102,241,0.1); color: #6366f1; border-color: rgba(99,102,241,0.35); }
+  .b-verdict.mixed { background: rgba(245,158,11,0.1); color: #d97706; border-color: rgba(245,158,11,0.35); }
+  .b-verdict.lo  { background: rgba(232,56,79,0.07); color: var(--ci-accent-red); border-color: rgba(229,72,59,0.3); }
+  .b-score-ago { font-size: 10px; color: var(--ci-text-tertiary); margin-left: auto; }
+  .b-dq {
+    font-size: 10px; font-weight: 700; color: #b91c1c;
+    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 12px; padding: 2px 8px;
+  }
+  .b-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .b-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 600; border-radius: 6px; padding: 3px 10px;
+  }
+  .b-chip.salary { color: #00897b; background: rgba(0,189,165,0.08); border: 1px solid rgba(0,189,165,0.25); }
+  .b-chip.remote { color: #2563eb; background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.2); }
+  .b-chip.hybrid { color: #d97706; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); }
+  .b-qt { display: flex; flex-direction: column; gap: 2px; margin: 2px 0; }
+  .b-qt-bullet { font-size: 11px; line-height: 1.4; color: var(--ci-text-primary); }
+  .b-review {
+    font-size: 10px; color: var(--ci-text-secondary); background: var(--ci-bg-inset);
+    border: 1px solid var(--ci-border-default); border-radius: 10px; padding: 1px 7px;
+    align-self: flex-start;
+  }
+  .b-review.warn { color: #a16207; background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.3); }
+  .b-oneliner { font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.5; }
+  .b-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .b-tag {
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid #6366f1; color: #6366f1; background: #6366f115;
+  }
+  .b-tag-add {
+    font-size: 11px; color: var(--ci-text-tertiary); border: 1px dashed var(--ci-border-default);
+    background: transparent; padding: 3px 8px; border-radius: 20px; cursor: pointer;
+  }
+  .b-next {
+    background: var(--ci-bg-inset); border-radius: 6px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .b-next-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .b-next-lbl { color: var(--ci-text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; min-width: 88px; font-size: 9px; }
+  .b-next-input { flex: 1; font-size: 11px; padding: 2px 6px; border: 1px solid var(--ci-border-default); border-radius: 4px; background: var(--ci-bg-raised); }
+  .b-details-fold {
+    border: 1px solid var(--ci-border-default); border-radius: 8px; overflow: hidden;
+  }
+  .b-details-sum {
+    padding: 8px 12px; font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary);
+    background: var(--ci-bg-inset); text-transform: uppercase; letter-spacing: 0.07em;
+    display: flex; justify-content: space-between;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     AFTER — proposed card styles
+     ═══════════════════════════════════════════════════════════════════════ */
+  :root {
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --motion-md: 300ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .a-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 320px;
+    transition: border-color var(--motion-xs) var(--ease-out),
+                transform var(--motion-xs) var(--ease-out);
+  }
+  .a-card:hover {
+    border-color: var(--ci-border-strong);
+    transform: translateY(-1px);
+  }
+  .a-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .a-ident { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .a-title-row { display: flex; align-items: center; gap: 8px; }
+  .a-favicon {
+    width: 16px; height: 16px; border-radius: 3px;
+    flex-shrink: 0; object-fit: contain;
+  }
+  .a-favicon.placeholder {
+    background: #d4d4d8;
+  }
+  .a-company {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--ci-text-primary);
+    text-decoration: none;
+  }
+  .a-company:hover { color: var(--ci-accent-blue); }
+  .a-job {
+    font-size: 13px;
+    color: var(--ci-text-secondary);
+    font-weight: 400;
+    line-height: 1.35;
+  }
+  a.a-job {
+    text-decoration: none;
+    transition: color var(--motion-xs) var(--ease-out);
+  }
+  a.a-job:hover {
+    color: var(--ci-text-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--ci-border-strong);
+  }
+  .a-ext-links {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; margin-top: 2px;
+  }
+  .a-ext-links a {
+    color: var(--ci-accent-blue);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .a-ext-links a:hover { text-decoration: underline; }
+  .a-score {
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ci-text-primary);
+    white-space: nowrap;
+    line-height: 1;
+    padding-top: 1px;
+  }
+  .a-score .d { color: var(--ci-text-tertiary); font-weight: 400; }
+  /* Score spectrum: ≥7.5 green · 6.0–7.4 amber · 4.5–5.9 orange · <4.5 red */
+  .a-score.s-green  { color: #047857; }
+  .a-score.s-amber  { color: #b45309; }
+  .a-score.s-orange { color: #c2410c; }
+  .a-score.s-red    { color: #b91c1c; }
+  .a-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 8px;
+    font-size: 12px;
+    color: var(--ci-text-secondary);
+    line-height: 1.5;
+  }
+  .a-meta > * { white-space: nowrap; }
+  .a-meta .sep {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: var(--ci-text-tertiary); opacity: 0.55;
+    display: inline-block;
+  }
+  .a-meta .mismatch { color: #b91c1c; font-weight: 500; }
+  .a-meta .warn     { color: #b45309; }
+  .a-stage {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--ci-text-secondary); font-weight: 500;
+  }
+  .a-stage-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .a-flags { display: flex; flex-direction: column; gap: 3px; }
+  .a-flag { display: flex; align-items: baseline; gap: 8px; font-size: 12px; line-height: 1.45; color: var(--ci-text-primary); }
+  .a-flag .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    flex-shrink: 0; position: relative; top: -1px;
+    display: inline-block;
+  }
+  .a-flag.pos .dot { background: var(--ci-accent-teal); }
+  .a-flag.neg .dot { background: var(--ci-accent-red); }
+  .a-oneliner {
+    font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.5;
+    font-style: normal;
+  }
+  .a-status-row {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px;
+    font-size: 12px;
+  }
+  .a-pill {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 1px 7px;
+    border-radius: 4px;
+    color: #92400e;
+    background: rgba(245,158,11,0.1);
+    line-height: 1.5;
+  }
+  .a-pill.bad {
+    color: #991b1b;
+    background: rgba(239,68,68,0.08);
+  }
+  .a-indicators { display: flex; gap: 6px; flex-wrap: wrap; }
+  .a-next {
+    display: grid;
+    grid-template-columns: 94px 1fr;
+    row-gap: 6px;
+    column-gap: 10px;
+    font-size: 12px;
+    color: var(--ci-text-secondary);
+    border-top: 1px solid var(--ci-border-subtle);
+    padding-top: 10px;
+    margin-top: 2px;
+    align-items: center;
+  }
+  .a-next .k {
+    color: var(--ci-text-tertiary);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .a-next .v { color: var(--ci-text-primary); font-size: 12px; line-height: 1.35; min-width: 0; }
+  .a-next .v.muted { color: var(--ci-text-tertiary); }
+  .a-next .v.due-overdue { color: var(--ci-accent-red); font-weight: 500; }
+  /* Inline-editable fields: read like text, reveal affordance on hover/focus */
+  .a-next input[type="text"],
+  .a-next input[type="date"],
+  .a-next select {
+    font: inherit; color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    width: calc(100% + 12px);
+    transition: background var(--motion-xs) var(--ease-out),
+                border-color var(--motion-xs) var(--ease-out);
+  }
+  .a-next input[type="text"]:hover,
+  .a-next input[type="date"]:hover,
+  .a-next select:hover {
+    background: var(--ci-bg-inset);
+  }
+  .a-next input[type="text"]:focus,
+  .a-next input[type="date"]:focus,
+  .a-next select:focus {
+    outline: none;
+    background: var(--ci-bg-raised);
+    border-color: var(--ci-border-strong);
+  }
+  .a-next input[type="text"]::placeholder { color: var(--ci-text-tertiary); }
+  .a-next select { appearance: none; cursor: pointer; padding-right: 18px; }
+  .a-next .select-wrap { position: relative; }
+  .a-next .select-wrap::after {
+    content: '›'; position: absolute; right: 4px; top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    color: var(--ci-text-tertiary); font-size: 12px; pointer-events: none;
+  }
+  .a-next select.my-court { color: var(--ci-accent-red); font-weight: 500; }
+  .a-next select.their-court { color: #b45309; font-weight: 500; }
+  .a-next select.scheduled { color: var(--ci-accent-blue); font-weight: 500; }
+  .a-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .a-tag {
+    font-size: 11px; font-weight: 500;
+    color: var(--ci-text-secondary);
+    background: transparent;
+    border: 1px solid var(--ci-border-default);
+    border-radius: 4px;
+    padding: 1px 7px;
+  }
+  .a-tag-add {
+    font-size: 13px; line-height: 1;
+    color: var(--ci-text-tertiary);
+    background: transparent;
+    border: 1px dashed var(--ci-border-default);
+    border-radius: 4px;
+    padding: 0 6px 2px;
+    cursor: pointer;
+    transition: color var(--motion-xs) var(--ease-out),
+                border-color var(--motion-xs) var(--ease-out),
+                background var(--motion-xs) var(--ease-out);
+  }
+  .a-tag-add:hover {
+    color: var(--ci-text-primary);
+    border-color: var(--ci-border-strong);
+    border-style: solid;
+    background: var(--ci-bg-inset);
+  }
+  .a-score-btn {
+    font-size: 12px; font-weight: 500;
+    color: var(--ci-text-secondary);
+    background: transparent;
+    border: 1px solid var(--ci-border-default);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  .a-score-btn:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+  .a-del {
+    border: none; background: transparent;
+    color: var(--ci-text-tertiary);
+    opacity: 0;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+    transition: opacity var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .a-card:hover .a-del { opacity: 0.6; }
+  .a-del:hover { opacity: 1; color: var(--ci-accent-red); }
+
+  /* Stars */
+  .a-stars { display: inline-flex; gap: 2px; }
+  .a-star {
+    width: 10px; height: 10px;
+    color: var(--ci-border-strong);
+    fill: none;
+    stroke: currentColor; stroke-width: 1.4;
+  }
+  .a-star.on { color: var(--ci-accent-amber); fill: currentColor; }
+
+  /* Hover lift — applied via JS demo; here we preserve the transform */
+  .hint {
+    font-size: 11px; color: var(--ci-text-tertiary); margin-top: 4px;
+    font-style: italic;
+  }
+  footer {
+    margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--ci-border-subtle);
+    font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.6;
+  }
+  footer code { background: var(--ci-bg-inset); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <h1>Tier 1A — Kanban card rework</h1>
+  <p class="sub">Before/after proposal for <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/194">#194</a> · Every change maps to a numbered principle in <a href="../DESIGN.md">DESIGN.md</a>.</p>
+
+  <div class="grid">
+    <!-- ═══════════════════════════ BEFORE ═══════════════════════════ -->
+    <div class="col before">
+      <h2>Before — current card</h2>
+      <div class="stack">
+
+        <!-- STATE 1: Scored opportunity, full data -->
+        <div class="label">State 1 · Scored opportunity · mid score · remote · comp present · flags · rating</div>
+        <div class="b-card">
+          <div class="b-header">
+            <div style="min-width:0">
+              <div class="b-favicon-row">
+                <div class="b-favicon"></div>
+                <span class="b-type">Opp</span>
+                <span class="b-company">Ramp</span>
+              </div>
+              <div class="b-job">Senior Product Manager, GTM</div>
+              <div class="b-top-links">
+                <a class="b-link li" href="#">LinkedIn</a>
+                <a class="b-link web" href="#">Website</a>
+              </div>
+            </div>
+            <button class="b-delete">✕</button>
+          </div>
+          <div class="b-submatch-row">
+            <span class="b-submatch hi">ICP Match 7.8</span>
+            <span class="b-submatch mid">Qual Match 6.2</span>
+          </div>
+          <div class="b-score-row">
+            <span class="b-score-num" style="color:#d97706">7<span class="b-score-denom">/10</span></span>
+            <span class="b-verdict mid">Good Fit</span>
+            <span class="b-score-ago">3d ago</span>
+          </div>
+          <div class="b-chips">
+            <span class="b-chip salary">💰 OTE: $220K – $260K</span>
+            <span class="b-chip remote">🌐 Remote</span>
+          </div>
+          <div class="b-qt">
+            <div class="b-qt-bullet">🟢 Series D, $8B valuation, profitable</div>
+            <div class="b-qt-bullet">🟢 PM role explicitly GTM-focused</div>
+            <div class="b-qt-bullet">🔴 Likely requires senior-IC latitude</div>
+          </div>
+          <span class="b-review">⭐ 4.1 Glassdoor</span>
+          <div class="b-oneliner">Corporate card + spend management platform for modern finance teams.</div>
+          <div class="b-tags">
+            <span class="b-tag">GTM</span>
+            <span class="b-tag">Series D</span>
+            <button class="b-tag-add">+ tag</button>
+          </div>
+          <div class="b-next">
+            <div class="b-next-row">
+              <span class="b-next-lbl">Action On</span>
+              <span style="color:#ef4444;font-weight:600">My Court</span>
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Next Step</span>
+              <input class="b-next-input" type="text" value="Respond to Rachel re: intro call">
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Next Step Date</span>
+              <input class="b-next-input" type="date" value="2026-04-21">
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Last Activity</span>
+              <span style="color:var(--ci-text-secondary)">Apr 14 · email from Rachel</span>
+            </div>
+          </div>
+          <div class="b-details-fold">
+            <div class="b-details-sum"><span>Company Intel</span><span>›</span></div>
+          </div>
+        </div>
+
+        <!-- STATE 2: Unscored new opp -->
+        <div class="label">State 2 · New opportunity · unscored · partial data</div>
+        <div class="b-card" style="border-left-color:#8b5cf6">
+          <div class="b-header">
+            <div style="min-width:0">
+              <div class="b-favicon-row">
+                <div class="b-favicon"></div>
+                <span class="b-type">Opp</span>
+                <span class="b-company">Notion</span>
+              </div>
+              <div class="b-job">Head of GTM Strategy</div>
+              <div class="b-top-links">
+                <a class="b-link li" href="#">LinkedIn</a>
+                <a class="b-link web" href="#">Website</a>
+              </div>
+            </div>
+            <button class="b-delete">✕</button>
+          </div>
+          <div class="b-score-row">
+            <button class="a-score-btn" style="font-size:11px">Score match</button>
+          </div>
+          <div class="b-tags">
+            <button class="b-tag-add">+ tag</button>
+          </div>
+          <div class="b-next">
+            <div class="b-next-row">
+              <span class="b-next-lbl">Action On</span>
+              <span style="color:#ef4444;font-weight:600">My Court</span>
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Next Step</span>
+              <input class="b-next-input" type="text" placeholder="">
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Next Step Date</span>
+              <input class="b-next-input" type="date" value="">
+            </div>
+          </div>
+        </div>
+
+        <!-- STATE 3: High score + stale + overdue + bad review + hard DQ -->
+        <div class="label">State 3 · High score · stale · overdue · weak review</div>
+        <div class="b-card" style="border-left-color:#10b981">
+          <div class="b-header">
+            <div style="min-width:0">
+              <div class="b-favicon-row">
+                <div class="b-favicon"></div>
+                <span class="b-type">Opp</span>
+                <span class="b-company">Scale AI</span>
+              </div>
+              <div class="b-job">VP of Product, Enterprise</div>
+              <div class="b-top-links">
+                <a class="b-link li" href="#">LinkedIn</a>
+                <a class="b-link web" href="#">Website</a>
+              </div>
+            </div>
+            <button class="b-delete">✕</button>
+          </div>
+          <div class="b-indicators">
+            <span class="b-overdue">⚠ Overdue</span>
+            <span class="b-stale">⌛ Stale</span>
+          </div>
+          <div class="b-submatch-row">
+            <span class="b-submatch hi">ICP Match 8.4</span>
+            <span class="b-submatch hi">Qual Match 8.1</span>
+          </div>
+          <div class="b-score-row">
+            <span class="b-score-num" style="color:#00897b">8<span class="b-score-denom">/10</span></span>
+            <span class="b-verdict hi">Strong Fit</span>
+            <span class="b-dq">🚫 Hard DQ</span>
+            <span class="b-score-ago">18d ago</span>
+          </div>
+          <div class="b-chips">
+            <span class="b-chip salary" style="color:#7c3aed;background:rgba(124,58,237,0.08);border-color:rgba(124,58,237,0.25)">💰 OTE: $340K</span>
+            <span class="b-chip hybrid">🏠 Hybrid</span>
+          </div>
+          <div class="b-qt">
+            <div class="b-qt-bullet">🟢 Strong AI-infra tailwind</div>
+            <div class="b-qt-bullet">🔴 Reports consistent burnout culture</div>
+          </div>
+          <span class="b-review warn">⚠️ 2.8 Glassdoor</span>
+          <div class="b-tags">
+            <span class="b-tag">AI</span>
+            <button class="b-tag-add">+ tag</button>
+          </div>
+          <div class="b-next">
+            <div class="b-next-row">
+              <span class="b-next-lbl">Action On</span>
+              <span style="color:#eab308;font-weight:600">Their Court</span>
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Next Step</span>
+              <input class="b-next-input" type="text" value="Wait on recruiter feedback">
+            </div>
+            <div class="b-next-row">
+              <span class="b-next-lbl">Next Step Date</span>
+              <input class="b-next-input" type="date" value="2026-03-30">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════ AFTER ═══════════════════════════ -->
+    <div class="col after">
+      <h2>After — proposed</h2>
+      <div class="stack">
+
+        <!-- STATE 1 -->
+        <div class="label">State 1 · Scored opportunity · mid score · remote · comp present · flags · rating</div>
+        <div class="a-card">
+          <div class="a-header">
+            <div class="a-ident">
+              <div class="a-title-row">
+                <img class="a-favicon" src="https://www.google.com/s2/favicons?domain=ramp.com&sz=64" alt="">
+                <a class="a-company" href="#">Ramp</a>
+              </div>
+              <a class="a-job" href="#" target="_blank">Senior Product Manager, GTM</a>
+              <div class="a-ext-links">
+                <a href="#">LinkedIn</a>
+                <a href="#">Website</a>
+              </div>
+            </div>
+            <div class="a-score s-amber">7.0<span class="d">/10</span></div>
+          </div>
+          <div class="a-meta">
+            <span>$220–260K OTE</span>
+            <span class="sep"></span>
+            <span>Remote</span>
+            <span class="sep"></span>
+            <a href="#" target="_blank" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">4.1 Glassdoor</a>
+            <span class="sep"></span>
+            <span class="a-stars">
+              <svg class="a-star on" viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>
+              <svg class="a-star on" viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>
+              <svg class="a-star on" viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>
+              <svg class="a-star on" viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>
+              <svg class="a-star" viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>
+            </span>
+          </div>
+          <div class="a-flags">
+            <div class="a-flag pos"><span class="dot"></span><span>Series D, $8B valuation, profitable</span></div>
+            <div class="a-flag pos"><span class="dot"></span><span>PM role explicitly GTM-focused</span></div>
+            <div class="a-flag neg"><span class="dot"></span><span>Likely requires senior-IC latitude</span></div>
+          </div>
+          <div class="a-next">
+            <span class="k">Action</span>
+            <span class="v"><span class="select-wrap"><select class="my-court"><option selected>My Court</option><option>Their Court</option><option>Scheduled</option></select></span></span>
+            <span class="k">Next Step</span>
+            <span class="v"><input type="text" value="Respond to Rachel re: intro call"></span>
+            <span class="k">Next Step Date</span>
+            <span class="v"><input type="date" value="2026-04-21"></span>
+            <span class="k">Last Activity</span>
+            <span class="v muted">Apr 14 — email from Rachel</span>
+          </div>
+          <div class="a-tags">
+            <span class="a-tag">GTM</span>
+            <span class="a-tag">Series D</span>
+            <button class="a-tag-add" title="Add tag">+</button>
+          </div>
+        </div>
+
+        <!-- STATE 2 -->
+        <div class="label">State 2 · New opportunity · unscored · partial data</div>
+        <div class="a-card">
+          <div class="a-header">
+            <div class="a-ident">
+              <div class="a-title-row">
+                <img class="a-favicon" src="https://www.google.com/s2/favicons?domain=notion.so&sz=64" alt="">
+                <a class="a-company" href="#">Notion</a>
+              </div>
+              <a class="a-job" href="#" target="_blank">Head of GTM Strategy</a>
+              <div class="a-ext-links">
+                <a href="#">LinkedIn</a>
+                <a href="#">Website</a>
+              </div>
+            </div>
+          </div>
+          <button class="a-score-btn">Score match</button>
+          <div class="a-next">
+            <span class="k">Action</span>
+            <span class="v"><span class="select-wrap"><select class="my-court"><option selected>My Court</option><option>Their Court</option><option>Scheduled</option></select></span></span>
+            <span class="k">Next Step</span>
+            <span class="v"><input type="text" placeholder="Add next step…"></span>
+            <span class="k">Next Step Date</span>
+            <span class="v"><input type="date" value=""></span>
+          </div>
+          <div class="a-tags">
+            <button class="a-tag-add" title="Add tag">+</button>
+          </div>
+        </div>
+
+        <!-- STATE 3 -->
+        <div class="label">State 3 · High score · stale · overdue · weak review</div>
+        <div class="a-card">
+          <div class="a-header">
+            <div class="a-ident">
+              <div class="a-title-row">
+                <img class="a-favicon" src="https://www.google.com/s2/favicons?domain=scale.com&sz=64" alt="">
+                <a class="a-company" href="#">Scale AI</a>
+              </div>
+              <a class="a-job" href="#" target="_blank">VP of Product, Enterprise</a>
+              <div class="a-ext-links">
+                <a href="#">LinkedIn</a>
+                <a href="#">Website</a>
+              </div>
+            </div>
+            <div class="a-score s-green">8.0<span class="d">/10</span></div>
+          </div>
+          <div class="a-indicators">
+            <span class="a-pill bad">Overdue 18d</span>
+            <span class="a-pill">Stale 21d</span>
+          </div>
+          <div class="a-meta">
+            <span>$340K OTE</span>
+            <span class="sep"></span>
+            <span class="mismatch">Hybrid</span>
+            <span class="sep"></span>
+            <a href="#" target="_blank" class="warn" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">2.8 Glassdoor</a>
+          </div>
+          <div class="a-flags">
+            <div class="a-flag pos"><span class="dot"></span><span>Strong AI-infra tailwind</span></div>
+            <div class="a-flag neg"><span class="dot"></span><span>Reports consistent burnout culture</span></div>
+          </div>
+          <div class="a-next">
+            <span class="k">Action</span>
+            <span class="v"><span class="select-wrap"><select class="their-court"><option>My Court</option><option selected>Their Court</option><option>Scheduled</option></select></span></span>
+            <span class="k">Next Step</span>
+            <span class="v"><input type="text" value="Wait on recruiter feedback"></span>
+            <span class="k">Next Step Date</span>
+            <span class="v"><input type="date" value="2026-03-30"></span>
+            <span class="k">Last Activity</span>
+            <span class="v muted">Mar 27 — email to Dana</span>
+          </div>
+          <div class="a-tags">
+            <span class="a-tag">AI</span>
+            <button class="a-tag-add" title="Add tag">+</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p><strong>What's removed</strong> · Opp/Co. type badge · ICP/Qual Match sub-score pills · verdict pills (High/Mid/Mixed/Low) · gradient-adjacent decorative chip fills · 💰 🌐 🏠 🏢 ⭐ ⚠️ ⏳ 🚫 🟢 🔴 emoji-as-icons · stacked decorative borders (card border + stage stripe + chip borders) · "Company Intel" nested collapsibles (moved to detail page) · dashed "+tag" affordance (hover-only) · LinkedIn/Website top-line links (available on detail page) · oversized 18px bold score · three distinct border-color families on action states.</p>
+    <p><strong>What's kept, refined</strong> · Company + job title hierarchy · score as data · green/red flag bullets · comp / arrangement / review / rating in a single tertiary meta row · tags · next step + action + due date + last activity, reorganized as a labelled grid instead of stacked input rows · stale/overdue as semantic text, not decorated badges.</p>
+    <p><strong>Motion tokens</strong> added to <code>design-tokens.css</code>: <code>--motion-xs/sm/md/lg</code>, <code>--ease-out/--ease-in/--ease-spring</code>. Hover uses <code>--motion-xs + --ease-out</code>. Drag snap-back and drop land on <code>--ease-spring</code>. Column reflow on drop uses <code>--motion-sm + --ease-out</code>. No linear easing anywhere.</p>
+  </footer>
+</div>
+</body>
+</html>

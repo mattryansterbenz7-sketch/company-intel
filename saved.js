@@ -2816,164 +2816,188 @@ function computeCardIndicators(c) {
 
 function renderKanbanCard(c) {
   const isJob = !!c.isOpportunity;
-  const stageField = activePipeline === 'opportunity' ? 'jobStage' : 'status';
   const currentStage = activePipeline === 'opportunity' ? (c.jobStage || 'needs_review') : (c.status || 'co_watchlist');
-  const arrClass = c.workArrangement === 'Remote' ? 'remote' : c.workArrangement === 'Hybrid' ? 'hybrid' : c.workArrangement === 'On-site' ? 'onsite' : '';
+
+  // Favicon
   const faviconDomain = c.companyWebsite?.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  const faviconHtml = faviconDomain ? `<img class="card-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" onerror="this.style.display='none'">` : '';
-  const stars = [1,2,3,4,5].map(i =>
-    `<span class="star ${(c.rating||0) >= i ? 'filled' : ''}" data-id="${c.id}" data-val="${i}">★</span>`
+  const faviconHtml = faviconDomain
+    ? `<img class="kc-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" onerror="this.style.display='none'">`
+    : '<span class="kc-favicon kc-favicon-placeholder"></span>';
+
+  // Indicator state + day counts
+  const { isStale, isOverdue } = computeCardIndicators(c);
+  let overdueDays = 0, staleDays = 0;
+  if (isOverdue && c.nextStepDate) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const due = new Date(c.nextStepDate + 'T00:00:00');
+    overdueDays = Math.max(1, Math.round((today - due) / 86400000));
+  }
+  if (isStale) {
+    const act = computeLastActivity(c);
+    const stageTs = c.stageTimestamps?.[currentStage] || c.savedAt || 0;
+    const lastTs = Math.max(act.timestamp || 0, stageTs);
+    if (lastTs > 0) staleDays = Math.round((Date.now() - lastTs) / 86400000);
+  }
+
+  // Score (spectrum by score value)
+  let scoreHtml = '';
+  if (isJob && c.jobMatch?.score) {
+    const { final, mod } = applyExcitementModifier(c.jobMatch.score, c.rating);
+    const tier = final >= 7.5 ? 's-green' : final >= 6.0 ? 's-amber' : final >= 4.5 ? 's-orange' : 's-red';
+    const modHtml = mod > 0 ? `<span class="kc-score-mod up">+${mod}</span>` : mod < 0 ? `<span class="kc-score-mod down">${mod}</span>` : '';
+    const agoText = c.jobMatchScoredAt ? (() => {
+      const d = Math.round((Date.now() - c.jobMatchScoredAt) / 86400000);
+      return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
+    })() : '';
+    scoreHtml = `<div class="kc-score ${tier}" title="Coop's score${agoText ? ' · last scored ' + agoText : ''}">${final}<span class="kc-score-d">/10</span>${modHtml}</div>`;
+  } else if (isJob && c._scoring) {
+    scoreHtml = '<div class="kc-scoring">Scoring\u2026</div>';
+  } else if (isJob && c.jobDescription && !c.jobMatch) {
+    scoreHtml = `<button class="kc-score-btn score-match-btn" data-id="${c.id}">Score match</button>`;
+  }
+
+  // Job title (hyperlinked to jobUrl when present)
+  const jobTitleHtml = isJob && c.jobTitle
+    ? (c.jobUrl
+      ? `<a class="kc-job card-job-link" href="${c.jobUrl}" target="_blank">${escapeHtml(c.jobTitle)}</a>`
+      : `<span class="kc-job">${escapeHtml(c.jobTitle)}</span>`)
+    : '';
+
+  // External links
+  const extLinksHtml = (c.companyLinkedin || c.companyWebsite)
+    ? `<div class="kc-ext-links">${c.companyLinkedin ? `<a class="card-link card-link-li" href="${c.companyLinkedin}" target="_blank">LinkedIn</a>` : ''}${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}</div>`
+    : '';
+
+  // Indicator pills (overdue/stale only — no Hard DQ)
+  const indicatorPills = [];
+  if (isOverdue) indicatorPills.push(`<span class="kc-pill bad">Overdue ${overdueDays}d</span>`);
+  if (isStale && staleDays > 0) indicatorPills.push(`<span class="kc-pill">Stale ${staleDays}d</span>`);
+  const indicatorsHtml = indicatorPills.length ? `<div class="kc-indicators">${indicatorPills.join('')}</div>` : '';
+
+  // Meta row: comp · arrangement · review · stars
+  const metaParts = [];
+  if (isJob) {
+    let compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || '';
+    if (compText && c.jobTitle && compText.toLowerCase().startsWith(c.jobTitle.toLowerCase())) {
+      compText = compText.slice(c.jobTitle.length).replace(/^[\s:—–\-,.;with]+/i, '').trim();
+      if (!/[\$\d]/.test(compText.slice(0, 20))) {
+        const m = compText.match(/\$[\d,]+[KkMm]?(?:\s*[-–]\s*\$[\d,]+[KkMm]?)?/);
+        compText = m ? m[0] : '';
+      }
+    }
+    const isOte = c.oteTotalComp || c.jobSnapshot?.salaryType === 'ote';
+    if (compText) metaParts.push(`<span>${escapeHtml(compText)}${isOte ? ' OTE' : ''}</span>`);
+
+    if (c.workArrangement) {
+      const userWantsRemote = Array.isArray(_userWorkArrangement) && _userWorkArrangement.some(w => /remote/i.test(w));
+      const arrMismatch = userWantsRemote && /on.?site|hybrid/i.test(c.workArrangement);
+      metaParts.push(`<span${arrMismatch ? ' class="kc-mismatch"' : ''}>${escapeHtml(c.workArrangement)}</span>`);
+    }
+  }
+
+  const ratingReview = (c.reviews || []).find(r => r.rating);
+  if (ratingReview) {
+    const rating = parseFloat(ratingReview.rating);
+    const warnCls = rating < 3.0 ? ' kc-warn' : '';
+    const src = ratingReview.source || 'Glassdoor';
+    const txt = `${rating} ${escapeHtml(src)}`;
+    metaParts.push(ratingReview.url
+      ? `<a class="kc-review${warnCls}" href="${escapeHtml(ratingReview.url)}" target="_blank" rel="noopener">${txt}</a>`
+      : `<span class="${warnCls.trim()}">${txt}</span>`);
+  }
+
+  // Stars — SVG, always shown, interactive
+  const starsHtml = `<span class="card-stars kc-stars">${[1,2,3,4,5].map(i =>
+    `<svg class="star ${(c.rating||0) >= i ? 'filled' : ''}" data-id="${c.id}" data-val="${i}" viewBox="0 0 10 10" aria-label="Rate ${i}"><polygon points="5,1 6.2,3.8 9,4 7,6 7.6,9 5,7.5 2.4,9 3,6 1,4 3.8,3.8"/></svg>`
+  ).join('')}</span>`;
+  metaParts.push(starsHtml);
+
+  const metaHtml = metaParts.length
+    ? `<div class="kc-meta">${metaParts.map((p, i) => i > 0 ? '<span class="kc-sep"></span>' + p : p).join('')}</div>`
+    : '';
+
+  // Flags (green/red dot-led lines from keySignals)
+  const keySignals = c.jobMatch?.keySignals || c.keySignals || [];
+  const flagsHtml = keySignals.length
+    ? `<div class="kc-flags">${keySignals.slice(0, 4).map(qt =>
+        `<div class="kc-flag ${qt.type === 'green' ? 'pos' : 'neg'}"><span class="kc-flag-dot"></span><span>${escHtml(qt.text)}</span></div>`
+      ).join('')}</div>`
+    : '';
+
+  // One-liner (suppress if duplicates job title)
+  let oneLinerHtml = '';
+  if (c.oneLiner) {
+    let show = true;
+    if (c.jobTitle) {
+      const titleLower = c.jobTitle.toLowerCase().trim();
+      const oneLower = c.oneLiner.toLowerCase().trim();
+      if (oneLower.startsWith(titleLower) || titleLower.startsWith(oneLower.slice(0, titleLower.length))) show = false;
+    }
+    if (show) oneLinerHtml = `<div class="kc-oneliner">${escapeHtml(c.oneLiner)}</div>`;
+  }
+
+  // Next-step grid (inline-editable Action / Next Step / Next Step Date, static Last Activity)
+  const actionStatuses = customActionStatuses || DEFAULT_ACTION_STATUSES;
+  const actionSelectOptions = actionStatuses.map(s =>
+    `<option value="${s.key}" ${(c.actionStatus || 'my_court') === s.key ? 'selected' : ''}>${s.label}</option>`
   ).join('');
-  const statusOptions = Object.entries(stageMap()).map(([val, label]) =>
-    `<option value="${val}" ${currentStage === val ? 'selected' : ''}>${label}</option>`
-  ).join('');
+  const actionValueClass = (c.actionStatus || 'my_court').replace(/_/g, '-');
 
-  const hasDetails = c.jobMatch?.jobSummary || c.jobMatch?.strongFits?.length || c.jobMatch?.redFlags?.length
-    || c.intelligence?.eli5 || c.intelligence?.whosBuyingIt || c.reviews?.length;
-  const detailsHtml = hasDetails ? `
-    <details class="kanban-details">
-      <summary class="kanban-details-toggle">Company Intel</summary>
-      <div class="kanban-details-body">
-        ${c.jobMatch?.jobSummary && (!c.jobTitle || !c.jobMatch.jobSummary.toLowerCase().startsWith(c.jobTitle.toLowerCase())) ? `<div class="kanban-detail-summary">${c.jobMatch.jobSummary}</div>` : ''}
-        ${c.jobMatch?.verdict ? `<div class="kanban-detail-verdict">${c.jobMatch.verdict}</div>` : ''}
-        ${c.jobMatch?.strongFits?.length ? `<details class="card-analysis"><summary>Green Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.strongFits.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="fit" title="${ev.replace(/"/g,'&quot;')}"><span>🟢</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div></details>` : ''}
-        ${c.jobMatch?.redFlags?.length ? `<details class="card-analysis"><summary>Red Flags</summary><div class="analysis-body"><ul class="analysis-bullets">${c.jobMatch.redFlags.map(f => { const t = typeof f === 'string' ? f : (f?.text || ''); const ev = typeof f === 'string' ? '' : (f?.evidence || ''); return `<li class="flag" title="${ev.replace(/"/g,'&quot;')}"><span>🔴</span><span>${boldKeyPhrase(t)}</span></li>`; }).join('')}</ul></div></details>` : ''}
-        ${c.intelligence?.eli5 ? `<details class="card-analysis"><summary>About the Company</summary><div class="analysis-body"><div class="analysis-section-body">${c.intelligence.eli5}</div></div></details>` : ''}
-        ${c.intelligence?.whosBuyingIt ? `<details class="card-analysis"><summary>Who Buys It</summary><div class="analysis-body"><div class="analysis-section-body">${c.intelligence.whosBuyingIt}</div></div></details>` : ''}
-        ${c.reviews?.length ? `<details class="card-analysis"><summary>Reviews & Signal</summary><div class="analysis-body">${c.reviews.slice(0,3).map(r => `<div class="analysis-review">"${r.snippet}"<div class="analysis-review-src">${r.source || ''}</div></div>`).join('')}</div></details>` : ''}
-      </div>
-    </details>` : '';
+  const act = computeLastActivity(c);
+  const lastActivityHtml = act.label && act.timestamp
+    ? (() => {
+        const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `<span class="kc-k">Last Activity</span><span class="kc-v kc-muted" title="${escapeHtml(act.label)} · ${dateStr}">${dateStr} — ${escapeHtml(act.label)}</span>`;
+      })()
+    : '';
 
-  const { actionClass, isStale, isOverdue } = computeCardIndicators(c);
-  const indicatorsHtml = (isStale || isOverdue) ? `
-    <div class="kanban-card-indicators">
-      ${isOverdue ? `<span class="kanban-overdue-badge" title="Next step is overdue">&#9888; Overdue</span>` : ''}
-      ${isStale ? `<span class="kanban-stale-badge" title="No activity for ${_stalenessThresholdDays}+ days">&#x231B; Stale</span>` : ''}
-    </div>` : '';
+  const nextHtml = `
+      <div class="kc-next">
+        <span class="kc-k">Action</span>
+        <span class="kc-v"><span class="kc-select-wrap"><select class="kanban-action-status kc-select ${actionValueClass}" data-id="${c.id}">${actionSelectOptions}</select></span></span>
+        <span class="kc-k">Next Step</span>
+        <span class="kc-v"><input class="kanban-next-step-input kc-input" data-id="${c.id}" type="text" placeholder="Add next step\u2026" value="${(c.nextStep || '').replace(/"/g, '&quot;')}"></span>
+        <span class="kc-k">Next Step Date</span>
+        <span class="kc-v"><input class="kanban-next-step-date kc-input${c.nextStepDate ? ' has-value' : ''}" data-id="${c.id}" type="date" value="${c.nextStepDate || ''}"></span>
+        ${lastActivityHtml}
+      </div>`;
 
-  return `
-    <div class="kanban-card${actionClass ? ' ' + actionClass : ''}" draggable="true" data-id="${c.id}" data-type="company" id="kcard-${c.id}" style="border-left: 3px solid ${stageColor(currentStage)};">
-      <div class="kanban-card-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
-        <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-            ${faviconHtml}
-            <span class="card-type ${isJob ? 'job' : 'company'}">${isJob ? 'Opp' : 'Co.'}</span>
-            <a class="kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}">${c.company}${c.dataConflict ? ' <span title="Intel may be inaccurate" style="color:#d97706">\u26a0</span>' : ''}</a>
-          </div>
-          ${isJob && c.jobTitle ? `<div class="kanban-card-job">${c.jobUrl ? `<a href="${c.jobUrl}" target="_blank" class="card-job-link">${c.jobTitle}</a>` : c.jobTitle}</div>` : ''}
-          ${(c.companyLinkedin || c.companyWebsite) ? `<div class="card-top-links">
-            ${c.companyLinkedin ? `<a class="card-link card-link-li" href="${c.companyLinkedin}" target="_blank">LinkedIn</a>` : ''}
-            ${c.companyWebsite ? `<a class="card-link card-link-web" href="${c.companyWebsite}" target="_blank">Website</a>` : ''}
-          </div>` : ''}
-        </div>
-        <button class="card-delete" data-id="${c.id}" title="Remove" style="flex-shrink:0">✕</button>
-      </div>
-      ${indicatorsHtml}
-      ${isJob && (c.jobMatch?.scoreBreakdown?.preferenceFit != null || c.jobMatch?.roleBrief?.qualificationScore != null) ? (() => {
-        const icpMatch = c.jobMatch?.scoreBreakdown?.preferenceFit;
-        const qualMatch = c.jobMatch?.roleBrief?.qualificationScore;
-        const renderBadge = (label, score) => {
-          if (score == null) return '';
-          const color = score >= 7 ? '#00897b' : score >= 5 ? '#d97706' : '#e5483b';
-          return `<span title="${label}" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${color}15;color:${color};white-space:nowrap;">${label} ${Number(score).toFixed(1)}</span>`;
-        };
-        const uc = c.jobMatch?.userCorrections;
-        const ucCount = uc?.pendingRescore ? Object.keys(uc.requirements || {}).length + (uc.overall ? 1 : 0) : 0;
-        const ucPill = ucCount ? `<span title="You have unsaved corrections to this score" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#FFF1EC;color:#FF7A59;white-space:nowrap;">${ucCount} pending re-score</span>` : '';
-        return `<div style="display:flex;gap:6px;padding:4px 0;margin-bottom:4px;font-size:11px;">${icpMatch != null ? renderBadge('ICP Match', icpMatch) : ''} ${qualMatch != null ? renderBadge('Qual Match', qualMatch) : ''} ${ucPill}</div>`;
-      })() : ''}
-      <div class="card-match-area" data-id="${c.id}">${isJob && c.jobMatch?.score ? (() => {
-        const { final, mod } = applyExcitementModifier(c.jobMatch.score, c.rating);
-        const v = scoreToVerdict(final);
-        const scoreColor = final >= 7 ? '#00897b' : final >= 5 ? '#d97706' : '#e5483b';
-        const modText = mod > 0 ? `<span class="card-score-mod up">+${mod}</span>` : mod < 0 ? `<span class="card-score-mod down">${mod}</span>` : '';
-        const agoText = c.jobMatchScoredAt ? (() => {
-          const d = Math.round((Date.now() - c.jobMatchScoredAt) / 86400000);
-          return d === 0 ? 'today' : d === 1 ? '1d ago' : d + 'd ago';
-        })() : '';
-        const hardDQ = c.jobMatch?.hardDQ || c.hardDQ;
-        const entryScore = c.jobMatch?.score ?? c.fitScore ?? null;
-        const hardDQHtml = hardDQ?.flagged && entryScore != null && entryScore <= 3 ? '<span class="hard-dq-badge">\u{1F6AB} Hard DQ</span>' : '';
-        return `<div class="card-score-row"><span class="card-score-num" style="color:${scoreColor}" title="Coop's Score">${final}<span class="card-score-denom">/10</span></span>${modText}<span class="card-verdict-badge ${v.cls}">${v.label}</span>${hardDQHtml}${agoText ? `<span class="card-score-ago" title="Last scored">${agoText}</span>` : ''}</div>`;
-      })() : (isJob && c._scoring ? '<span class="card-scoring-indicator">Scoring\u2026</span>' : isJob && c.jobDescription && !c.jobMatch ? '<button class="score-match-btn" data-id="' + c.id + '">Score match</button>' : '')}</div>
-      ${isJob && (c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || c.workArrangement) ? (() => {
-        let compText = c.baseSalaryRange || c.oteTotalComp || c.jobSnapshot?.salary || '';
-        // Strip job title from comp if AI baked it in
-        if (compText && c.jobTitle && compText.toLowerCase().startsWith(c.jobTitle.toLowerCase())) {
-          compText = compText.slice(c.jobTitle.length).replace(/^[\s:—–\-,.;with]+/i, '').trim();
-          if (!/[\$\d]/.test(compText.slice(0, 20))) {
-            const m = compText.match(/\$[\d,]+[KkMm]?(?:\s*[-–]\s*\$[\d,]+[KkMm]?)?/);
-            compText = m ? m[0] : '';
-          }
-        }
-        const compLabel = c.baseSalaryRange ? 'Base' : c.oteTotalComp ? 'OTE' : (c.jobSnapshot?.salaryType === 'ote' ? 'OTE' : 'Base');
-        const userWantsRemote = Array.isArray(_userWorkArrangement) && _userWorkArrangement.some(w => /remote/i.test(w));
-        const jobArr = c.workArrangement || '';
-        const arrMismatch = userWantsRemote && /on.?site|hybrid/i.test(jobArr);
-        return `<div class="card-job-chips">
-          ${compText ? `<span class="job-chip salary ${compLabel.toLowerCase()}">\u{1F4B0} ${compLabel}: ${compText}</span>` : ''}
-          ${c.equity ? `<span class="job-chip equity">\u{1F4C8} ${c.equity}</span>` : ''}
-          ${c.workArrangement ? `<span class="job-chip ${arrClass}${arrMismatch ? ' arr-mismatch' : ''}">${c.workArrangement === 'Remote' ? '\u{1F310}' : c.workArrangement === 'Hybrid' ? '\u{1F3E0}' : '\u{1F3E2}'} ${c.workArrangement}</span>` : ''}
-        </div>`;
-      })() : ''}
-      ${(() => {
-        const keySignals = c.jobMatch?.keySignals || c.keySignals || [];
-        return keySignals.length ? `<div class="quick-take">${keySignals.slice(0, 4).map(qt =>
-          `<div class="qt-bullet qt-${qt.type}">${qt.type === 'green' ? '\u{1F7E2}' : '\u{1F534}'} ${escHtml(qt.text)}</div>`
-        ).join('')}</div>` : '';
-      })()}
-      ${(() => {
-        const reviews = c.reviews || [];
-        const ratingReview = reviews.find(r => r.rating);
-        return ratingReview ? (() => {
-          const rating = parseFloat(ratingReview.rating);
-          const warn = rating < 3.0;
-          return `<span class="review-chip${warn ? ' review-warn' : ''}">${warn ? '\u26A0\uFE0F' : '\u2B50'} ${rating} ${ratingReview.source || 'Glassdoor'}</span>`;
-        })() : '';
-      })()}
-      ${(() => {
-        if (!c.oneLiner) return '';
-        if (c.jobTitle) {
-          const titleLower = c.jobTitle.toLowerCase().trim();
-          const oneLower = c.oneLiner.toLowerCase().trim();
-          // Hide if oneliner starts with or substantially contains the job title (redundant)
-          if (oneLower.startsWith(titleLower) || titleLower.startsWith(oneLower.slice(0, titleLower.length))) return '';
-        }
-        return `<div class="kanban-card-oneliner">${c.oneLiner}</div>`;
-      })()}
-      <div class="card-tags" id="tags-${c.id}">
+  // Tags — existing user tags + subtle + button always visible
+  const tagsHtml = `
+      <div class="kc-tags card-tags" id="tags-${c.id}">
         ${(c.tags || []).map(tag => {
           const cl = tagColor(tag);
-          return `<span class="card-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}" data-tag="${tag}" data-id="${c.id}">${tag}<span class="tag-remove" data-tag="${tag}" data-id="${c.id}">✕</span></span>`;
+          return `<span class="kc-tag card-tag" style="border-color:${cl.border};color:${cl.color};background:${cl.bg}" data-tag="${tag}" data-id="${c.id}">${escapeHtml(tag)}<span class="tag-remove" data-tag="${tag}" data-id="${c.id}">\u2715</span></span>`;
         }).join('')}
         <div class="tag-inline-wrap" id="tag-add-wrap-${c.id}">
-          <button class="tag-add-btn" data-id="${c.id}">+ tag</button>
+          <button class="kc-tag-add tag-add-btn" data-id="${c.id}" title="Add tag">+</button>
         </div>
+      </div>`;
+
+  const dataConflictHtml = c.dataConflict
+    ? ` <span class="kc-conflict" title="Intel may be inaccurate">!</span>`
+    : '';
+
+  return `
+    <div class="kanban-card" draggable="true" data-id="${c.id}" data-type="company" id="kcard-${c.id}">
+      <div class="kanban-card-header kc-header">
+        <div class="kc-ident">
+          <div class="kc-title-row">
+            ${faviconHtml}
+            <a class="kc-company kanban-card-company" href="${chrome.runtime.getURL('company.html')}?id=${c.id}">${escapeHtml(c.company)}</a>${dataConflictHtml}
+          </div>
+          ${jobTitleHtml}
+          ${extLinksHtml}
+        </div>
+        ${scoreHtml}
+        <button class="kc-del card-delete" data-id="${c.id}" title="Remove">\u2715</button>
       </div>
-      <div class="kanban-next-step">
-        <div class="kanban-next-step-row">
-          <label class="kanban-field-label">Action On</label>
-          <select class="kanban-action-status" data-id="${c.id}">
-            ${(customActionStatuses || DEFAULT_ACTION_STATUSES).map(s =>
-              `<option value="${s.key}" ${(c.actionStatus || 'my_court') === s.key ? 'selected' : ''} style="color:${s.color}">${s.label}</option>`
-            ).join('')}
-          </select>
-        </div>
-        <div class="kanban-next-step-row">
-          <label class="kanban-field-label">Next Step</label>
-          <input class="kanban-next-step-input" data-id="${c.id}" type="text" placeholder="" value="${(c.nextStep || '').replace(/"/g, '&quot;')}">
-        </div>
-        <div class="kanban-next-step-row">
-          <label class="kanban-field-label">Next Step Date</label>
-          <input class="kanban-next-step-date${c.nextStepDate ? ' has-value' : ''}" data-id="${c.id}" type="date" value="${c.nextStepDate || ''}">
-        </div>
-        ${(() => {
-          const act = computeLastActivity(c);
-          if (!act.label) return '';
-          const dateStr = new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          return `<div class="kanban-next-step-row"><label class="kanban-field-label">Last Activity</label><span class="kanban-activity-value" title="${act.label} · ${dateStr}">${dateStr} · ${act.label}</span></div>`;
-        })()}
-      </div>
+      ${indicatorsHtml}
+      ${metaHtml}
+      ${flagsHtml}
+      ${oneLinerHtml}
+      ${nextHtml}
+      ${tagsHtml}
     </div>`;
 }
 
