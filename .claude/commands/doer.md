@@ -58,7 +58,7 @@ A separate Opus thread (`/pm`) keeps Up Next sharp and deep. You and the PM comm
 
 If you hit a fork that needs Matt's judgment (design choice, strategy call, ambiguous requirement the PRD doesn't cover):
 
-1. Move the issue to **Blocked / Needs Matt** column.
+1. Move the issue to **Blocked / Needs Matt** column (option ID `fb391763`) and add the `blocked:execution` label.
 2. Post a comment prefixed `**Doer → Matt (unblock):**` with the specific question and your recommended direction.
 3. Move on to the next ready item in Up Next.
 
@@ -127,9 +127,7 @@ When Up Next is empty AND nothing is In Progress yours:
 - Project: `PVT_kwHOEA1iCM4BTJyy`
 - Status field: `PVTSSF_lAHOEA1iCM4BTJyyzhAegdY`
 - Priority field: `PVTSSF_lAHOEA1iCM4BTJyyzhAekQU`
-- Columns: Needs Spec `227f3e8b`, Backlog `43f0ed97`, Up Next `2cee5689`, In Progress `7556d12e`, Blocked / Needs Matt `TBD_MANUAL_ADD`, Monitoring `2eea7b72`, Done `c24e13e2`
-
-**Note:** the "Blocked / Needs Matt" column is being added manually in the GitHub UI. Until the option ID is known, route blocked items via label (`blocked:execution`) on the issue and leave the item in place with a `**Doer →**` note.
+- Columns: Needs Spec `227f3e8b`, Backlog `43f0ed97`, Blocked / Needs Matt `fb391763`, Up Next `2cee5689`, In Progress `7556d12e`, Monitoring `2eea7b72`, Done `c24e13e2`
 
 ## First action when invoked
 

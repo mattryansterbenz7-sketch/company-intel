@@ -83,7 +83,7 @@ On each tick, scan Monitoring for items missing this checklist. If you find one:
 
 ### Blocked / Needs Matt column
 
-When you hit an issue you CAN'T spec without Matt's direction (strategy calls, design tradeoffs, priority judgment calls), move it to the **Blocked / Needs Matt** column. Post a comment prefixed `**PM → Matt (strategize):**` with your specific questions.
+When you hit an issue you CAN'T spec without Matt's direction (strategy calls, design tradeoffs, priority judgment calls), move it to the **Blocked / Needs Matt** column (option ID `fb391763`) and add the `blocked:strategy` label. Post a comment prefixed `**PM → Matt (strategize):**` with your specific questions.
 
 When Matt answers, pull it back to **Backlog**, finish the spec, and run it through the Up Next gate.
 

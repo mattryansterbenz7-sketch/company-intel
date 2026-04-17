@@ -354,11 +354,11 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 | Backlog | `43f0ed97` |
 | Up Next | `2cee5689` |
 | In Progress | `7556d12e` |
-| Blocked / Needs Matt | `TBD_MANUAL_ADD` |
+| Blocked / Needs Matt | `fb391763` |
 | Monitoring | `2eea7b72` |
 | Done | `c24e13e2` |
 
-**Note:** The "Blocked / Needs Matt" column must be added manually in the GitHub UI (per `feedback_never_modify_board_fields` — the API mutation wipes item assignments). After adding it, paste its option ID into this table and into `.claude/commands/doer.md` + `pm.md`.
+**Note:** The "Blocked / Needs Matt" column sits between Backlog and Up Next. It's a universal "waiting on Matt" inbox — PM parks strategy/design questions (`blocked:strategy`), Doer parks mid-execution forks (`blocked:execution`), and either parks design-riff/pair-session work (`blocked:collab`). Each item must have a `**PM → Matt (strategize):**`, `**Doer → Matt (unblock):**`, or `**PM → Matt (collab):**` comment explaining the specific question.
 
 | Priority | Option ID |
 |----------|-----------|
