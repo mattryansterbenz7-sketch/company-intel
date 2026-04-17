@@ -126,15 +126,25 @@ chrome.storage.local.get(['savedCompanies', 'lastInboxViewedAt', 'gmailUserEmail
   chrome.storage.local.set({ lastInboxViewedAt: Date.now() });
   buildEmailIndex();
   init();
+  // Auto-fetch fresh emails on open — opening Inbox is an explicit user action,
+  // same principle as opportunity.js auto-firing GMAIL_FETCH_EMAILS on mount.
+  if (gmailUserEmail) refreshInboxEmails();
 });
 
-// Live-refresh stage list when pipeline config changes elsewhere
+// Live-refresh when pipeline config or email data changes elsewhere
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (changes.opportunityStages || changes.customStages) {
     const v = (changes.opportunityStages?.newValue) || (changes.customStages?.newValue) || [];
     configuredStages = v.map(s => ({ key: s.key, label: s.label || s.name || s.key }));
     if (typeof renderEmailList === 'function') renderEmailList();
+  }
+  // Rebuild index when another tab (e.g. opportunity.js) writes fresh cachedEmails
+  if (changes.savedCompanies?.newValue) {
+    allCompanies = changes.savedCompanies.newValue;
+    buildEmailIndex();
+    buildSidebar();
+    renderEmailList();
   }
 });
 
