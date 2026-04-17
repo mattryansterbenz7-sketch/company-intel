@@ -4,6 +4,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 For product vision, roadmap, and strategic direction, see [STRATEGY.md](STRATEGY.md).
 
+For design language, motion principles, and what Coop refuses to look like, see [DESIGN.md](DESIGN.md). Referenced on every UI diff; the `ux-qa-reviewer` agent runs with it in context.
+
 ## What this is
 
 **Coop.ai** (formerly CompanyIntel) — a Chrome Extension (Manifest V3) that functions as a personal CRM for job searching. It auto-detects companies from any website, enriches them with multi-source research, scores job postings against user preferences, manages a pipeline with Kanban workflow, and provides AI-powered chat with full context (emails, meetings, notes, transcripts).
