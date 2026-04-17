@@ -57,9 +57,19 @@
     .toolbar-tags  { overflow-x: auto; flex-wrap: nowrap; padding-top: 8px; padding-bottom: 8px; }
 
     .filter-label { font-size: 12px; font-weight: 800; color: var(--ci-text-secondary); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 60px; }
-    .filter-btn { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-secondary); font-size: 13px; font-weight: 500; padding: 7px 16px; cursor: pointer; white-space: nowrap; transition: all var(--ci-transition-fast); }
-    .filter-btn.active { border-color: var(--ci-accent-primary); color: var(--ci-text-on-dark); background: var(--ci-accent-primary); }
-    .filter-btn:hover:not(.active) { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+    .action-dd { position: relative; }
+    .action-dd-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: 10px; color: var(--ci-text-primary); font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; white-space: nowrap; transition: all var(--ci-transition-fast); font-family: inherit; }
+    .action-dd-btn:hover { border-color: var(--ci-border-strong); }
+    .action-dd-btn.open { border-color: var(--ci-accent-primary); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft); }
+    .action-dd-btn.filtered { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }
+    .action-dd-arrow { font-size: 11px; color: var(--ci-text-tertiary); transition: transform var(--motion-sm, 200ms) var(--ease-spring, cubic-bezier(0.34,1.56,0.64,1)); }
+    .action-dd-btn.open .action-dd-arrow { transform: rotate(180deg); }
+    .action-dd-menu { display: none; position: fixed; background: var(--ci-bg-overlay); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: 0 8px 30px rgba(0,0,0,0.13); z-index: 10001; min-width: 160px; padding: 6px 0; }
+    .action-dd-menu.open { display: block; }
+    .action-dd-opt { display: flex; align-items: center; padding: 9px 16px; font-size: 13px; font-weight: 500; color: var(--ci-text-primary); cursor: pointer; transition: background 0.1s; user-select: none; position: relative; }
+    .action-dd-opt:hover { background: var(--ci-bg-inset); }
+    .action-dd-opt.active { font-weight: 600; }
+    .action-dd-opt.active::after { content: '✓'; position: absolute; right: 16px; font-size: 12px; color: var(--ci-accent-primary); }
     .rating-dropdown { position: relative; }
     .rating-dropdown-btn { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 8px; color: var(--ci-text-primary); font-size: 13px; font-weight: 500; padding: 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all var(--ci-transition-fast); font-family: inherit; white-space: nowrap; }
     .rating-dropdown-btn:hover { border-color: var(--ci-border-strong); }
@@ -1799,11 +1809,17 @@
       </div>
     </div>
     <span class="filter-label" style="margin-left:16px">Action On:</span>
-    <div class="action-filter-btns" id="action-filter-btns">
-      <button class="filter-btn active" data-action-filter="all">All</button>
-      <button class="filter-btn" data-action-filter="my_court">🏀 My Court</button>
-      <button class="filter-btn" data-action-filter="their_court">⏳ Their Court</button>
-      <button class="filter-btn" data-action-filter="scheduled">📅 Scheduled</button>
+    <div class="action-dd" id="action-dd">
+      <button class="action-dd-btn" id="action-dd-btn">
+        <span id="action-dd-label">All</span>
+        <span class="action-dd-arrow">▾</span>
+      </button>
+      <div class="action-dd-menu" id="action-dd-menu">
+        <div class="action-dd-opt active" data-action-filter="all">All</div>
+        <div class="action-dd-opt" data-action-filter="my_court">My Court</div>
+        <div class="action-dd-opt" data-action-filter="their_court">Their Court</div>
+        <div class="action-dd-opt" data-action-filter="scheduled">Scheduled</div>
+      </div>
     </div>
   </div>
   <div class="toolbar toolbar-status" id="status-toolbar">
