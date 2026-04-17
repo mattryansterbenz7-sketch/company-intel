@@ -2825,7 +2825,7 @@ function renderKanbanCard(c) {
     : '<span class="kc-favicon kc-favicon-placeholder"></span>';
 
   // Indicator state + day counts
-  const { actionClass, isStale, isOverdue } = computeCardIndicators(c);
+  const { isStale, isOverdue } = computeCardIndicators(c);
   let overdueDays = 0, staleDays = 0;
   if (isOverdue && c.nextStepDate) {
     const today = new Date(); today.setHours(0,0,0,0);
@@ -2979,7 +2979,7 @@ function renderKanbanCard(c) {
     : '';
 
   return `
-    <div class="kanban-card${actionClass ? ' ' + actionClass : ''}" draggable="true" data-id="${c.id}" data-type="company" id="kcard-${c.id}">
+    <div class="kanban-card" draggable="true" data-id="${c.id}" data-type="company" id="kcard-${c.id}">
       <div class="kanban-card-header kc-header">
         <div class="kc-ident">
           <div class="kc-title-row">
