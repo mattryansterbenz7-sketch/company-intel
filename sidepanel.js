@@ -4897,10 +4897,21 @@ function renderContactsSection(el, contacts) {
       else CISounds.receive();
     }
     // If the backend fell back to a different model, show which one was used
+    // and update the toggle so the next turn uses the model that actually worked.
     const replyText = result?.reply || result?.error || 'Something went wrong.';
-    const fallbackNote = (result?.model && result.model !== spAvailableModels[chatModelIdx].id)
-      ? `\n\n*— answered by ${result.model.includes('gpt') ? 'GPT-4.1 mini' : result.model} (fallback)*`
-      : '';
+    const requestedSpId = spAvailableModels[chatModelIdx]?.id;
+    const didFallback = result?.model && requestedSpId && result.model !== requestedSpId;
+    let fallbackNote = '';
+    if (didFallback) {
+      const actualLabel = spAvailableModels.find(m => m.id === result.model)?.label || result.model;
+      const originalLabel = spAvailableModels.find(m => m.id === requestedSpId)?.label || requestedSpId;
+      fallbackNote = `\n\n*— answered by ${actualLabel} — ${originalLabel} unavailable*`;
+      const newIdx = spAvailableModels.findIndex(m => m.id === result.model);
+      if (newIdx >= 0) {
+        chatModelIdx = newIdx;
+        updateModelLabel();
+      }
+    }
     const msgEntry = { role: 'assistant', content: replyText + fallbackNote };
     // Store usage metadata for display
     if (result?.usage) msgEntry._usage = result.usage;
