@@ -382,7 +382,7 @@ Every new issue should have type + size + model + area labels. `/issue` applies 
 - **Backlog** — well-defined, no urgency; ready to pick up whenever. Also the home of parent/tracker issues (Tasks-checkbox bodies).
 - **Up Next** — prioritized, executable leaves ready for Doer. Must pass the Up Next gate (PRD + acceptance criteria + `model:` label + `area:*` label + single-session scope + not a tracker).
 - **In Progress** — actively being coded; Doer moves here before writing any code.
-- **Blocked / Needs Matt** — paused waiting on Matt's input. PM moves issues here when it needs strategy/design direction to spec; Doer moves issues here when it hits a mid-execution fork. Each item has a `**PM → Matt (strategize):**` or `**Doer → Matt (unblock):**` comment with the specific question.
+- **Blocked / Needs Matt** — paused waiting on Matt's input. Three routes in: PM parks strategy/design questions (`blocked:strategy`), Doer parks mid-execution forks (`blocked:execution`), and either parks design/strategy-heavy items meant for a Designer pair session (`blocked:collab`). Each item has a `**PM → Matt (strategize):**`, `**Doer → Matt (unblock):**`, or `**PM → Matt (collab):**` comment with the specific question. Doer's loop skips `blocked:collab` items automatically; those are Designer's territory.
 - **Monitoring** — Doer-finished, closed, awaiting Matt's verification. Must have a `## How to verify` comment with reload reminder + checklist.
 - **Done** — Matt-verified; issue already closed (closure happens at Monitoring transition, not here).
 
@@ -398,9 +398,10 @@ Every new issue should have type + size + model + area labels. `/issue` applies 
 2. When code is pushed to `origin/main`: move to **Monitoring**, close the GitHub issue, and post a `## How to verify` comment with reload reminder + markdown checklist. Closed + Monitoring = "Doer says done, awaiting Matt's verification."
 3. The Doer never moves issues to the **Done** column. Matt drags to Done after verifying.
 4. Never leave an issue open if it is in the Done column (Done is a terminal, verified state — the issue should already be closed when it lands there).
-5. **Refinement routing: Matt → PM → Doer, never Matt → Doer directly.** Feedback on Monitoring items goes to the PM thread. PM decides: tweak (reopen + re-spec + promote via Up Next) or rethink (close + new scoped issue). Doer only accepts work that comes through Up Next.
-6. **Up Next gate.** PM must not promote an issue to Up Next unless it passes: (a) concrete PRD with acceptance criteria, (b) `model:*` label, (c) `area:*` label, (d) single-session scope (not `large` + `strategy`), (e) not a parent/tracker (Tasks-checkbox bodies stay in Backlog as navigation aids).
-7. **Blocked routing.** If PM can't spec without Matt's direction, move to **Blocked / Needs Matt** with a `**PM → Matt (strategize):**` comment. If Doer hits a mid-execution fork, same column with `**Doer → Matt (unblock):**`. When Matt answers, the responsible thread pulls it back to the appropriate stage.
+5. **Refinement routing: Matt → PM → Doer or Designer, never Matt → Doer directly.** Feedback on Monitoring items goes to the PM thread. PM classifies: **tweak** (reopen + concrete re-spec + promote to Up Next for Doer), **discuss** (reopen + `blocked:collab` + move to Blocked / Needs Matt for Designer pair session), or **rethink** (close + new scoped issue). Doer only accepts work that comes through Up Next; Designer only touches `blocked:collab` items.
+6. **Up Next gate.** PM must not promote an issue to Up Next unless it passes: (a) concrete PRD with acceptance criteria, (b) `model:*` label, (c) `area:*` label, (d) single-session scope (not `large` + `strategy`), (e) not a parent/tracker (Tasks-checkbox bodies stay in Backlog as navigation aids). Designer-produced PRDs land directly in Up Next (they pass the gate by construction).
+7. **Blocked routing.** PM parks strategy/design-spec questions in **Blocked / Needs Matt** with `blocked:strategy` + `**PM → Matt (strategize):**`. Doer parks mid-execution forks there with `blocked:execution` + `**Doer → Matt (unblock):**`. PM parks Designer-bound items there with `blocked:collab` + `**PM → Matt (collab):**`. Only Designer works `blocked:collab` items; PM and Doer skip them.
+8. **Single shipping pipe.** Only the Doer commits to `origin/main`. PM and Designer never ship. This guarantees no concurrent-ship coordination problems.
 
 ### Adding issues to the board
 
