@@ -862,7 +862,7 @@ function showPipelineStats() {
       `<div class="sp-stat-chip">
         ${miniRing(c.count, c.goal, c.color)}
         <span class="sp-stat-num">${c.count}${c.goal ? `<span class="sp-stat-denom">/${c.goal}</span>` : ''}</span>
-        <span class="sp-stat-label">${c.label}</span>
+        <span class="sp-stat-label">${c.label.toLowerCase()}</span>
       </div>`
     ).join('<span style="color:#2D3E50">·</span>');
     el.style.display = 'flex';
@@ -1466,11 +1466,11 @@ function renderHomeState() {
         return true; // 'all' — include tasks with and without dates
       });
 
-      const priColors = { low: { bg: '#DBEAFE', color: '#1D4ED8' }, normal: { bg: '#FEF3C7', color: '#92400E' }, high: { bg: '#FEE2E2', color: '#991B1B' } };
+      const priColors = { low: { color: 'var(--ci-text-tertiary)' }, normal: { color: 'var(--ci-accent-amber)' }, high: { color: 'var(--ci-accent-red)' } };
 
       const filterBtn = (label, filterKey, filterVal) => {
         const isActive = (filterKey === 'pri' ? taskPriFilter : taskDateFilter) === filterVal;
-        return `<button data-filter-key="${filterKey}" data-filter-val="${filterVal}" style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid ${isActive ? '#FF7A59' : '#E8E5E0'};background:${isActive ? 'rgba(255,122,89,0.08)' : '#fff'};color:${isActive ? '#FF7A59' : '#6B6560'};cursor:pointer;font-family:inherit;transition:all 0.15s;">${label}</button>`;
+        return `<button data-filter-key="${filterKey}" data-filter-val="${filterVal}" style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid ${isActive ? 'var(--ci-accent-primary)' : 'var(--ci-border-default)'};background:transparent;color:${isActive ? 'var(--ci-accent-primary)' : 'var(--ci-text-secondary)'};cursor:pointer;font-family:inherit;transition:all 0.15s;">${label}</button>`;
       };
 
       {
@@ -1478,7 +1478,7 @@ function renderHomeState() {
           <div class="sp-home-section">
             <div class="sp-home-section-title" style="display:flex;align-items:center;justify-content:space-between;">
               Tasks
-              <button id="sp-task-new-btn" style="font-size:10px;font-weight:700;color:#FF7A59;background:none;border:1px solid #FF7A59;border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit;">+ New</button>
+              <button id="sp-task-new-btn" style="font-size:10px;font-weight:700;color:#fff;background:var(--ci-accent-primary);border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit;">+ New</button>
             </div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
               ${filterBtn('All', 'pri', 'all')}${filterBtn('High', 'pri', 'high')}${filterBtn('Normal', 'pri', 'normal')}${filterBtn('Low', 'pri', 'low')}
@@ -1497,7 +1497,7 @@ function renderHomeState() {
                     <div class="sp-home-action-company">${t.company || (t.text || '').slice(0, 50) || 'Task'}</div>
                     ${t.company ? `<div class="sp-home-action-step">${(t.text || '').slice(0, 50)}</div>` : ''}
                   </div>
-                  <span class="sp-task-pri-badge" data-task-id="${t.id}" data-pri="${pri}" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:3px 8px;border-radius:4px;background:${pc.bg};color:${pc.color};flex-shrink:0;border:1px solid ${pc.color}22;cursor:pointer;" title="Click to change priority">${pri}</span>
+                  <span class="sp-task-pri-badge" data-task-id="${t.id}" data-pri="${pri}" style="font-size:10px;font-weight:700;text-transform:capitalize;color:${pc.color};flex-shrink:0;cursor:pointer;" title="Click to change priority">${pri}</span>
                   <span class="sp-task-date-edit ${dateClass}" data-task-id="${t.id}" data-date="${t.dueDate || ''}" title="Click to change date" style="cursor:pointer;flex-shrink:0;${t.daysUntil===null?'color:#A09A94;font-size:10px;':''}">${dateLabel}</span>
                 </div>`;
               }).join('') : `<div style="color:#A09A94;font-size:12px;padding:8px 0;">${tasks.length ? 'No tasks match filter' : 'No tasks yet'}</div>`}
@@ -2720,15 +2720,15 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
         let detail = jobArr;
         if (jobArr === 'Remote' && currentPrefs?.remoteGeo) detail += ` · ${currentPrefs.remoteGeo}`;
         else if (jobLoc) detail += ` · ${jobLoc}`;
-        locationMatchHtml = `<div class="location-match ok"><span class="loc-icon">✓</span> ${detail} — matches your preference</div>`;
+        locationMatchHtml = `<div class="location-match ok">Location: <span class="loc-status">${detail}</span> — matches preference</div>`;
         locationSummary = `<span class="jopp-sum-loc ok">✓ ${jobArr}</span>`;
       } else {
         let jobDetail = jobArr + (jobLoc ? ` · ${jobLoc}` : '');
-        locationMatchHtml = `<div class="location-match bad"><span class="loc-icon">✗</span> ${jobDetail} — you want ${userWants.join('/')}</div>`;
+        locationMatchHtml = `<div class="location-match bad">Location: <span class="loc-status">${jobDetail}</span> — you want ${userWants.join('/')}</div>`;
         locationSummary = `<span class="jopp-sum-loc bad">✗ ${jobArr}</span>`;
       }
     } else {
-      locationMatchHtml = `<div class="location-match neutral"><span class="loc-icon">📍</span> ${jobArr}${jobLoc ? ' · ' + jobLoc : ''}</div>`;
+      locationMatchHtml = `<div class="location-match neutral">Location: <span class="loc-status">${jobArr}${jobLoc ? ' · ' + jobLoc : ''}</span></div>`;
       locationSummary = `<span class="jopp-sum-loc">${jobArr}</span>`;
     }
   }
@@ -2784,7 +2784,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
             ${jobMatch.verdict ? `<span class="fit-verdict">${jobMatch.verdict}</span>` : ''}
           </div>
           <div id="sp-thumb-form" style="display:none"></div>
-          ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Green Flags</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
+          ${jobMatch.strongFits ? `<details open class="flags-green"><summary>Strong fits</summary><div class="detail-body">${renderBullets(jobMatch.strongFits, 'fit')}</div></details>` : ''}
           ${(jobMatch.redFlags || jobMatch.watchOuts) ? `<details open class="flags-red"><summary>Red Flags</summary><div class="detail-body">${renderBullets(jobMatch.redFlags || jobMatch.watchOuts, 'flag')}</div></details>` : ''}
           ${jobMatch.qualifications?.length ? `<details class="flags-qual"><summary>${(_cachedUserName || '').split(/\s/)[0] ? (_cachedUserName.split(/\s/)[0] + "'s Qualifications") : 'Qualifications'} (${jobMatch.qualifications.filter(q => q.status === 'met' && !q.dismissed).length}/${jobMatch.qualifications.length})</summary><div class="detail-body">${renderQualifications(jobMatch.qualifications)}</div></details>` : ''}
           ${jobMatch.scoreBreakdown ? `<details class="flags-breakdown"><summary>Score Breakdown</summary><div class="detail-body">${renderScoreBreakdown(jobMatch.scoreBreakdown)}</div></details>` : ''}
@@ -3144,17 +3144,12 @@ function renderBullets(items, type) {
     bullets = String(items).split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 4).map(s => ({ text: s, source: null, evidence: null }));
   }
   if (bullets.length === 0) return '';
-  const icon = type === 'fit' ? '✓' : '✗';
   const cls = type === 'fit' ? 'bullet-fit' : 'bullet-flag';
-  const greenShades = ['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0'];
-  const redShades = ['#991b1b','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
-  const shades = type === 'fit' ? greenShades : redShades;
   const srcLabel = s => ({ job_posting: 'From job posting', company_data: 'From company research', preferences: 'From your preferences', candidate_profile: 'From your profile', dealbreaker_keyword: 'From your dealbreaker keywords' }[s] || (s ? `Source: ${s}` : 'No source linked'));
   const srcIcon = s => ({ job_posting: '📄', company_data: '🏢', preferences: '⚙', candidate_profile: '👤', dealbreaker_keyword: '⛔' }[s] || 'ⓘ');
-  return `<ul class="match-bullets">${bullets.map((b, i) => {
-    const color = shades[Math.min(i, shades.length - 1)];
+  return `<ul class="match-bullets">${bullets.map((b) => {
     const tip = (srcLabel(b.source) + (b.evidence ? ` — "${b.evidence}"` : ' — no evidence quoted')).replace(/"/g, '&quot;');
-    return `<li class="${cls}"><span class="bullet-icon" style="color:${color}">${icon}</span><span>${boldKeyPhrase(b.text.trim())}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${srcIcon(b.source)}</span></li>`;
+    return `<li class="${cls}"><span class="bullet-dot"></span><span>${boldKeyPhrase(b.text.trim())}</span><span title="${tip}" style="opacity:0.55;font-size:10px;margin-left:4px;cursor:help;">${srcIcon(b.source)}</span></li>`;
   }).join('')}</ul>`;
 }
 

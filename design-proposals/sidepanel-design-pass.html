@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Side Panel Design Pass — Before / After</title>
+<link rel="stylesheet" href="../design-tokens.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: var(--ci-font-family); background: #E8EBF0; display: flex; flex-direction: column; }
+
+  /* ── Chrome ── */
+  .page-header { background: var(--ci-bg-header); color: var(--ci-text-on-dark); padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  .page-header h1 { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+
+  /* ── Tab bar ── */
+  .tab-bar { display: flex; align-items: center; gap: 2px; background: var(--ci-bg-header); padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+  .tab { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.45); padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s; user-select: none; }
+  .tab:hover { color: rgba(255,255,255,0.75); }
+  .tab.active { color: #fff; border-bottom-color: var(--ci-accent-primary); }
+
+  /* ── Split columns ── */
+  .split { display: grid; grid-template-columns: 1fr 1fr; flex: 1; overflow: hidden; }
+  .pane { overflow-y: auto; display: flex; flex-direction: column; }
+  .pane-before { border-right: 1px solid rgba(0,0,0,0.1); }
+  .pane-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 16px; background: var(--ci-bg-base); border-bottom: 1px solid var(--ci-border-default); position: sticky; top: 0; z-index: 10; }
+  .pane-before .pane-label { color: #999; }
+  .pane-after  .pane-label { color: var(--ci-accent-primary); }
+
+  /* ── View sections ── */
+  .view { display: none; flex: 1; overflow: hidden; }
+  .view.active { display: contents; }
+
+  /* ── Shared panel chrome ── */
+  .sp-shell { background: var(--ci-bg-base); min-height: 100%; }
+  .sp-header { padding: 10px 16px; background: var(--ci-bg-header); display: flex; align-items: center; }
+  .sp-logo { font-size: 14px; font-weight: 700; color: #f8fafc; letter-spacing: -0.01em; }
+  .sp-logo span { color: #FC636B; font-weight: 400; }
+  .sp-company-bar { padding: 10px 16px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-default); }
+  .sp-company-name { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
+  .sp-detected { font-size: 10px; font-weight: 800; color: var(--ci-accent-primary); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 2px; }
+  .sp-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sec-label { font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary); margin-bottom: 8px; }
+  .section-box { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 12px; }
+  .section-box + .section-box { margin-top: 8px; }
+  .perks-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sp-job-title { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); margin-bottom: 2px; }
+  .sp-job-sub { font-size: 11px; color: var(--ci-text-tertiary); }
+
+  /* ════════════════════════════════════
+     BEFORE — Job Opportunity
+     ════════════════════════════════════ */
+  .b-jopp-summary { font-size: 11px; font-weight: 700; color: #FC636B; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; padding: 8px 10px 8px 12px; background: rgba(255,122,89,0.06); border-radius: var(--ci-radius-sm); display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,122,89,0.25); }
+  .b-jopp-right { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .b-verdict-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+  .b-verdict-badge.high  { background: rgba(0,189,165,0.12); color: #00897b; border: 1px solid rgba(0,189,165,0.3); }
+  .b-verdict-badge.mid   { background: rgba(255,122,89,0.12); color: #FC636B; border: 1px solid rgba(255,122,89,0.3); }
+  .b-verdict-badge.mixed { background: rgba(81,111,144,0.1);  color: #6F7782; border: 1px solid rgba(81,111,144,0.2); }
+  .b-verdict-badge.low   { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+  .b-verdict-badge-sm { font-size: 10px; font-weight: 700; border-radius: 12px; padding: 2px 8px; white-space: nowrap; border: 1px solid; }
+  .b-verdict-badge-sm.high  { background: rgba(0,189,165,0.1);  color: #00897b; border-color: rgba(0,189,165,0.35); }
+  .b-verdict-badge-sm.mixed { background: rgba(245,158,11,0.1); color: #d97706; border-color: rgba(245,158,11,0.35); }
+  .b-salary-display { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(52,211,153,0.07); border: 1px solid rgba(52,211,153,0.2); border-radius: 8px; }
+  .b-salary-label { font-size: 10px; font-weight: 800; color: #34d399; text-transform: uppercase; letter-spacing: 0.08em; }
+  .b-salary-value { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
+  .b-salary-rec { font-size: 11px; color: #6F7782; margin-top: 4px; }
+  .b-location-match { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 7px; }
+  .b-location-match.ok  { background: rgba(0,189,165,0.09); color: #00897b; border: 1px solid rgba(0,189,165,0.25); }
+  .b-location-match.bad { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+  .b-qual-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .b-qual-badge.required  { background: rgba(248,113,113,0.1); color: #f87171; }
+  .b-qual-badge.preferred { background: rgba(245,158,11,0.1);  color: #d97706; }
+  .b-qual-badge.bonus     { background: rgba(148,163,184,0.1); color: #8A8E94; }
+  .b-qual-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--ci-bg-inset); }
+  .b-qual-row:last-child { border-bottom: none; }
+  .b-qual-icon { font-size: 13px; font-weight: 700; width: 18px; text-align: center; flex-shrink: 0; }
+  .b-qual-icon.met     { color: #36B37E; }
+  .b-qual-icon.partial { color: #d97706; }
+  .b-qual-icon.unmet   { color: #f87171; }
+  .b-qual-req { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.4; flex: 1; }
+  .b-qual-evidence { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; }
+  .b-chat-btn { width: 100%; background: rgba(255,122,89,0.06); color: #FC636B; border: 1px solid rgba(255,122,89,0.25); border-radius: var(--ci-radius-sm); padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .b-bullets { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .b-bullets li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; }
+  .b-bullet-icon { font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .b-bullet-fit  .b-bullet-icon { color: #36B37E; }
+  .b-bullet-flag .b-bullet-icon { color: #f87171; }
+  .b-perk-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--ci-text-primary); background: rgba(148,163,184,0.08); border: 1px solid rgba(148,163,184,0.18); border-radius: 20px; padding: 3px 9px; }
+  .b-verdict-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+  .b-fit-reason { font-size: 13px; color: var(--ci-text-primary); line-height: 1.4; }
+  .b-flags-summary { font-size: 11px; font-weight: 700; color: #4ade80; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; padding: 8px 12px; background: rgba(74,222,128,0.06); border-radius: var(--ci-radius-sm); border: 1px solid rgba(74,222,128,0.3); display: flex; align-items: center; justify-content: space-between; }
+  .b-flags-summary.red { color: #f87171; background: rgba(248,113,113,0.06); border-color: rgba(248,113,113,0.3); }
+
+  /* ════════════════════════════════════
+     AFTER — Job Opportunity
+     ════════════════════════════════════ */
+  .a-jopp-header { display: flex; align-items: center; justify-content: space-between; padding: 0 0 8px; border-bottom: 1px solid var(--ci-border-subtle); }
+  .a-jopp-right { display: flex; align-items: center; gap: 6px; }
+  .a-verdict { font-size: 12px; font-weight: 800; letter-spacing: 0.01em; white-space: nowrap; }
+  .a-verdict.high  { color: var(--ci-accent-teal); }
+  .a-verdict.mid   { color: var(--ci-accent-amber); }
+  .a-verdict.mixed { color: var(--ci-text-secondary); }
+  .a-verdict.low   { color: var(--ci-accent-red); }
+  .a-score { font-size: 12px; font-weight: 700; color: var(--ci-text-tertiary); }
+  .a-score span { color: var(--ci-text-primary); font-size: 14px; font-weight: 800; }
+  .a-salary-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; }
+  .a-salary-label { font-size: 10px; font-weight: 800; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.1em; }
+  .a-salary-value { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); }
+  .a-salary-rec { font-size: 11px; color: var(--ci-text-tertiary); }
+  .a-location-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ci-text-secondary); padding: 4px 0; }
+  .a-location-status { font-weight: 700; }
+  .a-location-status.ok  { color: var(--ci-accent-teal); }
+  .a-location-status.bad { color: var(--ci-accent-red); }
+  .a-qual-badge { font-size: 11px; font-weight: 500; font-style: italic; }
+  .a-qual-badge.required  { color: var(--ci-accent-red); }
+  .a-qual-badge.preferred { color: var(--ci-accent-amber); }
+  .a-qual-badge.bonus     { color: var(--ci-text-tertiary); }
+  .a-qual-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--ci-border-subtle); }
+  .a-qual-row:last-child { border-bottom: none; }
+  .a-qual-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .a-qual-dot.met     { background: var(--ci-accent-teal); }
+  .a-qual-dot.partial { background: var(--ci-accent-amber); }
+  .a-qual-dot.unmet   { background: var(--ci-accent-red); }
+  .a-qual-req { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.4; flex: 1; }
+  .a-qual-evidence { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; }
+  .a-chat-btn { width: 100%; background: var(--ci-accent-primary); color: #fff; border: none; border-radius: var(--ci-radius-sm); padding: 9px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .a-bullets { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .a-bullets li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--ci-text-primary); }
+  .a-bullet-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .a-bullet-dot.fit  { background: var(--ci-accent-teal); }
+  .a-bullet-dot.flag { background: var(--ci-accent-red); }
+  .a-perk-chip { display: inline-flex; font-size: 11px; font-weight: 500; color: var(--ci-text-secondary); }
+  .a-perk-chip::before { content: '·'; margin-right: 4px; color: var(--ci-text-tertiary); }
+  .a-fit-reason { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55; }
+  .a-flags-row { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); cursor: pointer; padding: 8px 0; border-bottom: 1px solid var(--ci-border-subtle); display: flex; align-items: center; justify-content: space-between; }
+  .a-flags-row .a-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+  .a-flags-row.green .a-dot { background: var(--ci-accent-teal); }
+  .a-flags-row.red   .a-dot { background: var(--ci-accent-red); }
+  .a-flags-row-label { display: flex; align-items: center; }
+  .a-count { font-size: 10px; font-weight: 500; color: var(--ci-text-tertiary); margin-left: 6px; }
+  .a-chevron { font-size: 14px; color: var(--ci-text-tertiary); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Side Panel — Design Pass</h1>
+  <span style="font-size:11px;color:rgba(255,255,255,0.4);">Tinted boxes → flat · Emoji → dots · Semantic color only</span>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-view="jopp">Job opportunity</div>
+  <div class="tab" data-view="home">Home state</div>
+</div>
+
+<div class="split">
+
+  <!-- ════ VIEW: JOB OPPORTUNITY ════ -->
+  <div class="view active" data-view="jopp" style="display:contents">
+
+    <!-- BEFORE -->
+    <div class="pane pane-before">
+      <div class="pane-label">Before — current state</div>
+      <div class="sp-shell">
+        <div class="sp-header"><span class="sp-logo">Co<span>op</span>.ai</span></div>
+        <div class="sp-company-bar">
+          <div class="sp-detected">Detected</div>
+          <div class="sp-company-name">Acme Corp</div>
+        </div>
+        <div class="sp-body">
+
+          <div class="b-jopp-summary">
+            <span style="flex:1;letter-spacing:0.08em">🧭 GTM Lead, Enterprise</span>
+            <div class="b-jopp-right">
+              <span class="b-verdict-badge-sm high">Strong Fit</span>
+              <span class="b-verdict-badge-sm mixed">Remote Ok</span>
+              <span style="font-size:18px;color:#FC636B">›</span>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="sec-label">Job Match</div>
+            <div class="b-verdict-row">
+              <span class="b-verdict-badge high">Strong Fit</span>
+              <span class="b-fit-reason">Your enterprise sales background aligns well. Comp is in range.</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+              <span class="b-perk-chip">Remote-first</span>
+              <span class="b-perk-chip">Equity</span>
+              <span class="b-perk-chip">401k match</span>
+            </div>
+            <div class="b-salary-display">
+              <span class="b-salary-label">Salary</span>
+              <span class="b-salary-value">$180k–$220k</span>
+            </div>
+            <div class="b-salary-rec" style="margin-bottom:10px">🚩 Walk away below $175k &nbsp;·&nbsp; 🟢 Strong offer above $200k</div>
+            <div class="b-location-match ok"><span>📍</span> Remote — matches your preference</div>
+          </div>
+
+          <div class="section-box">
+            <div class="sec-label">Qualifications</div>
+            <div class="b-qual-row">
+              <span class="b-qual-icon met">✓</span>
+              <div style="flex:1"><div class="b-qual-req">7+ years enterprise sales</div><div class="b-qual-evidence">16 years GTM experience across Series B–D</div></div>
+              <span class="b-qual-badge required">Required</span>
+            </div>
+            <div class="b-qual-row">
+              <span class="b-qual-icon partial">~</span>
+              <div style="flex:1"><div class="b-qual-req">Salesforce CRM proficiency</div><div class="b-qual-evidence">HubSpot primary, Salesforce mentioned</div></div>
+              <span class="b-qual-badge preferred">Preferred</span>
+            </div>
+            <div class="b-qual-row">
+              <span class="b-qual-icon unmet">✗</span>
+              <div style="flex:1"><div class="b-qual-req">MEDDIC / MEDDPICC trained</div><div class="b-qual-evidence">No direct evidence in profile</div></div>
+              <span class="b-qual-badge bonus">Bonus</span>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="b-flags-summary">Strong Fits <span style="font-size:16px;margin-left:auto">›</span></div>
+            <ul class="b-bullets" style="margin-top:8px">
+              <li class="b-bullet-fit"><span class="b-bullet-icon">+</span> Enterprise motion experience aligns with ICP</li>
+              <li class="b-bullet-fit"><span class="b-bullet-icon">+</span> Comp range overlaps your floor</li>
+            </ul>
+            <div class="b-flags-summary red" style="margin-top:8px">Red Flags <span style="font-size:16px;margin-left:auto">›</span></div>
+            <ul class="b-bullets" style="margin-top:8px">
+              <li class="b-bullet-flag"><span class="b-bullet-icon">–</span> No MEDDIC evidence — likely asked in screen</li>
+            </ul>
+          </div>
+
+          <button class="b-chat-btn">⚡ Prompts — Ask Coop about this role</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="pane pane-after">
+      <div class="pane-label">After — proposed</div>
+      <div class="sp-shell">
+        <div class="sp-header"><span class="sp-logo">Co<span>op</span>.ai</span></div>
+        <div class="sp-company-bar">
+          <div class="sp-detected">Detected</div>
+          <div class="sp-company-name">Acme Corp</div>
+        </div>
+        <div class="sp-body">
+
+          <div class="a-jopp-header">
+            <div>
+              <div class="sp-job-title">GTM Lead, Enterprise</div>
+              <div class="sp-job-sub">Acme Corp · Full-time</div>
+            </div>
+            <div class="a-jopp-right">
+              <span class="a-verdict high">Strong Fit</span>
+              <span style="color:var(--ci-border-strong);font-size:10px">·</span>
+              <span style="color:var(--ci-accent-teal);font-size:12px;font-weight:700">Remote Ok</span>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="sec-label">Job match</div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+              <span class="a-score"><span>8.1</span> / 10</span>
+              <span class="a-verdict high">Strong Fit</span>
+            </div>
+            <p class="a-fit-reason" style="margin-bottom:10px">Your enterprise sales background aligns well. Comp is in range and location is remote-first.</p>
+            <div class="perks-row" style="margin-bottom:10px">
+              <span class="a-perk-chip">Remote-first</span>
+              <span class="a-perk-chip">Equity</span>
+              <span class="a-perk-chip">401k match</span>
+            </div>
+            <div class="a-salary-row">
+              <span class="a-salary-label">Base</span>
+              <span class="a-salary-value">$180k–$220k</span>
+              <span class="a-salary-rec">· walk away below $175k</span>
+            </div>
+            <div class="a-location-row">
+              <span>Location:</span>
+              <span class="a-location-status ok">Remote</span>
+              <span style="color:var(--ci-text-tertiary)">— matches preference</span>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="sec-label">Qualifications</div>
+            <div class="a-qual-row">
+              <div class="a-qual-dot met" style="margin-top:5px"></div>
+              <div style="flex:1"><div class="a-qual-req">7+ years enterprise sales <span class="a-qual-badge required">Required</span></div><div class="a-qual-evidence">16 years GTM experience across Series B–D</div></div>
+            </div>
+            <div class="a-qual-row">
+              <div class="a-qual-dot partial"></div>
+              <div style="flex:1"><div class="a-qual-req">Salesforce CRM proficiency <span class="a-qual-badge preferred">Preferred</span></div><div class="a-qual-evidence">HubSpot primary, Salesforce mentioned</div></div>
+            </div>
+            <div class="a-qual-row">
+              <div class="a-qual-dot unmet"></div>
+              <div style="flex:1"><div class="a-qual-req">MEDDIC / MEDDPICC trained <span class="a-qual-badge bonus">Bonus</span></div><div class="a-qual-evidence">No direct evidence in profile</div></div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="a-flags-row green">
+              <div class="a-flags-row-label"><span class="a-dot"></span>Strong fits<span class="a-count">2</span></div>
+              <span class="a-chevron">›</span>
+            </div>
+            <ul class="a-bullets" style="margin:8px 0">
+              <li><div class="a-bullet-dot fit"></div> Enterprise motion experience aligns with ICP</li>
+              <li><div class="a-bullet-dot fit"></div> Comp range overlaps your floor</li>
+            </ul>
+            <div class="a-flags-row red">
+              <div class="a-flags-row-label"><span class="a-dot"></span>Red flags<span class="a-count">1</span></div>
+              <span class="a-chevron">›</span>
+            </div>
+            <ul class="a-bullets" style="margin-top:8px">
+              <li><div class="a-bullet-dot flag"></div> No MEDDIC evidence — likely asked in screen</li>
+            </ul>
+          </div>
+
+          <button class="a-chat-btn">Ask Coop about this role</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /view jopp -->
+
+  <!-- ════ VIEW: HOME STATE ════ -->
+  <div class="view" data-view="home">
+
+    <!-- BEFORE -->
+    <div class="pane pane-before">
+      <div class="pane-label">Before — current state</div>
+      <div class="sp-shell">
+        <div class="sp-header"><span class="sp-logo">Co<span>op</span>.ai</span></div>
+
+        <!-- Pipeline stats bar -->
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 16px;background:var(--ci-bg-inset);border-bottom:1px solid var(--ci-border-default);">
+          <span style="font-size:10px;font-weight:600;color:#7c98b6;text-transform:uppercase;letter-spacing:0.04em;">Today</span>
+          <span style="font-size:12px;font-weight:800;color:var(--ci-text-primary);">3 <span style="font-size:9px;color:var(--ci-text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Opportunities</span></span>
+          <span style="color:#2D3E50">·</span>
+          <span style="font-size:12px;font-weight:800;color:var(--ci-text-primary);">1 <span style="font-size:9px;color:var(--ci-text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Applications</span></span>
+        </div>
+
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+
+          <!-- Queue card — orange gradient tint -->
+          <div style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(255,107,74,0.05),rgba(255,107,74,0.02));border:1px solid rgba(255,107,74,0.2);border-radius:8px;padding:12px 14px;cursor:pointer;">
+            <span style="font-size:24px;font-weight:800;color:var(--ci-accent-primary);">4</span>
+            <div>
+              <div style="font-size:13px;color:var(--ci-text-primary);font-weight:600;">in Coop's AI Scoring Queue</div>
+              <div style="font-size:11px;color:var(--ci-text-tertiary);">Tap to review</div>
+            </div>
+          </div>
+
+          <!-- NEXT STEPS — all-caps weight-700 -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Next Steps</div>
+            <div style="background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;padding:10px 14px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--ci-bg-inset);">
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Stripe</div><div style="font-size:12px;color:var(--ci-text-secondary);">Send follow-up after panel</div></div>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-primary);">Today</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Figma</div><div style="font-size:12px;color:var(--ci-text-secondary);">Prep case study slides</div></div>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);">in 2d</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TASKS — all-caps, orange tint filter pill, tinted priority badges -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+              Tasks
+              <button style="font-size:10px;font-weight:700;color:#FF7A59;background:none;border:1px solid #FF7A59;border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit;">+ New</button>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+              <button style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid #FF7A59;background:rgba(255,122,89,0.08);color:#FF7A59;cursor:pointer;font-family:inherit;">All</button>
+              <button style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid #E8E5E0;background:#fff;color:#6B6560;cursor:pointer;font-family:inherit;">High</button>
+              <button style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid #E8E5E0;background:#fff;color:#6B6560;cursor:pointer;font-family:inherit;">Normal</button>
+            </div>
+            <div style="background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;padding:10px 14px;">
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ci-bg-inset);">
+                <div style="width:18px;height:18px;border-radius:50%;border:2px solid #dfe3eb;flex-shrink:0;"></div>
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Acme Corp</div><div style="font-size:12px;color:var(--ci-text-secondary);">Review offer letter</div></div>
+                <span style="font-size:9px;font-weight:700;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:#FEE2E2;color:#991B1B;border:1px solid #991B1B22;">high</span>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-primary);">Today</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+                <div style="width:18px;height:18px;border-radius:50%;border:2px solid #dfe3eb;flex-shrink:0;"></div>
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Update resume</div></div>
+                <span style="font-size:9px;font-weight:700;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;border:1px solid #92400E22;">normal</span>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);">in 3d</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="pane pane-after">
+      <div class="pane-label">After — proposed</div>
+      <div class="sp-shell">
+        <div class="sp-header"><span class="sp-logo">Co<span>op</span>.ai</span></div>
+
+        <!-- Pipeline stats — stat labels lowercase -->
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 16px;background:var(--ci-bg-inset);border-bottom:1px solid var(--ci-border-default);">
+          <span style="font-size:10px;font-weight:600;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.04em;">Today</span>
+          <span style="font-size:12px;font-weight:800;color:var(--ci-text-primary);">3 <span style="font-size:9px;color:var(--ci-text-tertiary);font-weight:600;">opportunities</span></span>
+          <span style="color:var(--ci-border-strong)">·</span>
+          <span style="font-size:12px;font-weight:800;color:var(--ci-text-primary);">1 <span style="font-size:9px;color:var(--ci-text-tertiary);font-weight:600;">application</span></span>
+        </div>
+
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+
+          <!-- Queue card — flat, no tint -->
+          <div style="display:flex;align-items:center;gap:12px;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;padding:12px 14px;cursor:pointer;">
+            <span style="font-size:24px;font-weight:800;color:var(--ci-accent-primary);">4</span>
+            <div>
+              <div style="font-size:13px;color:var(--ci-text-primary);font-weight:600;">in Coop's AI Scoring Queue</div>
+              <div style="font-size:11px;color:var(--ci-text-tertiary);">Tap to review</div>
+            </div>
+          </div>
+
+          <!-- Next steps — sentence case, weight-600 -->
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);margin-bottom:8px;">Next steps</div>
+            <div style="background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;padding:10px 14px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--ci-bg-inset);">
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Stripe</div><div style="font-size:12px;color:var(--ci-text-secondary);">Send follow-up after panel</div></div>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-primary);">Today</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Figma</div><div style="font-size:12px;color:var(--ci-text-secondary);">Prep case study slides</div></div>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);">in 2d</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tasks — sentence case, clean filter pills, text-only priority -->
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+              Tasks
+              <button style="font-size:10px;font-weight:700;color:#fff;background:var(--ci-accent-primary);border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit;">+ New</button>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+              <button style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid var(--ci-accent-primary);background:transparent;color:var(--ci-accent-primary);cursor:pointer;font-family:inherit;">All</button>
+              <button style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid var(--ci-border-default);background:transparent;color:var(--ci-text-secondary);cursor:pointer;font-family:inherit;">High</button>
+              <button style="font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;border:1px solid var(--ci-border-default);background:transparent;color:var(--ci-text-secondary);cursor:pointer;font-family:inherit;">Normal</button>
+            </div>
+            <div style="background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;padding:10px 14px;">
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ci-bg-inset);">
+                <div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--ci-border-default);flex-shrink:0;"></div>
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Acme Corp</div><div style="font-size:12px;color:var(--ci-text-secondary);">Review offer letter</div></div>
+                <span style="font-size:10px;font-weight:700;color:var(--ci-accent-red);">High</span>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-accent-primary);">Today</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+                <div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--ci-border-default);flex-shrink:0;"></div>
+                <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ci-text-primary);">Update resume</div></div>
+                <span style="font-size:10px;font-weight:700;color:var(--ci-accent-amber);">Normal</span>
+                <span style="font-size:11px;font-weight:600;color:var(--ci-text-tertiary);">in 3d</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /view home -->
+
+</div><!-- /split -->
+
+<script>
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const v = tab.dataset.view;
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
+      document.querySelectorAll('.view').forEach(view => {
+        const isActive = view.dataset.view === v;
+        view.style.display = isActive ? 'contents' : 'none';
+        view.classList.toggle('active', isActive);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>
