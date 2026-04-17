@@ -125,10 +125,9 @@ chrome.storage.local.get(['savedCompanies', 'lastInboxViewedAt', 'gmailUserEmail
   lastViewedAt = isFirstOpen ? Date.now() : data.lastInboxViewedAt;
   chrome.storage.local.set({ lastInboxViewedAt: Date.now() });
   buildEmailIndex();
-  init();
-  // Auto-fetch fresh emails on open — opening Inbox is an explicit user action,
-  // same principle as opportunity.js auto-firing GMAIL_FETCH_EMAILS on mount.
+  // Auto-fetch before init() so a DOM error in init() can't block the refresh.
   if (gmailUserEmail) refreshInboxEmails();
+  init();
 });
 
 // Live-refresh when pipeline config or email data changes elsewhere
@@ -649,11 +648,34 @@ function deleteEmail(email) {
   buildSidebar();
 }
 
+const _PUBLIC_PROVIDER_RE = /^(gmail|yahoo|outlook|hotmail|icloud|aol|proton)\./i;
+
+function _deriveDomain(entry) {
+  if (entry.companyWebsite) {
+    return entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  }
+  // Fallback 1: first knownContact email domain that isn't a public provider
+  const contactDomain = (entry.knownContacts || [])
+    .map(c => (c.email || '').split('@')[1])
+    .filter(d => d && !_PUBLIC_PROVIDER_RE.test(d))[0];
+  if (contactDomain) return contactDomain;
+  // Fallback 2: most-frequent non-public sender domain from cachedEmails
+  const counts = {};
+  (entry.cachedEmails || []).forEach(e => {
+    const m = (e.from || '').match(/<([^>]+)>/);
+    const addr = (m ? m[1] : e.from || '').toLowerCase().trim();
+    const d = addr.split('@')[1];
+    if (d && !_PUBLIC_PROVIDER_RE.test(d)) counts[d] = (counts[d] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  return sorted[0]?.[0] || '';
+}
+
 async function refreshInboxEmails() {
   const btn = document.getElementById('inbox-refresh-btn');
   const labelEl = btn?.querySelector('.refresh-label');
 
-  let companiesToRefresh = allCompanies.filter(entry => entry.companyWebsite);
+  let companiesToRefresh = allCompanies.filter(entry => _deriveDomain(entry));
   if (stageFilter === 'active') {
     companiesToRefresh = companiesToRefresh.filter(entry =>
       entry.isOpportunity && !TERMINAL_STAGE_RE.test(entry.jobStage || entry.status || '')
@@ -666,12 +688,13 @@ async function refreshInboxEmails() {
 
   const total = companiesToRefresh.length;
   if (!total) return;
+  console.log('[Inbox] Auto-refresh firing for', total, 'companies');
 
   if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
   let done = 0;
 
   const fetchOne = (entry) => new Promise(resolve => {
-    const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+    const domain = _deriveDomain(entry);
     if (!domain) { done++; if (labelEl) labelEl.textContent = `${done}/${total}`; resolve(); return; }
     const knownContactEmails = (entry.knownContacts || []).map(c => c.email);
     chrome.runtime.sendMessage({

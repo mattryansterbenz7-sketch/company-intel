@@ -1008,8 +1008,23 @@ function bindActivityPanel() {
     });
   });
 
-  // Auto-load emails
-  const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  // Auto-load emails — derive domain from website, knownContacts, or cached sender history
+  const _pubProvRe = /^(gmail|yahoo|outlook|hotmail|icloud|aol|proton)\./i;
+  let domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  if (!domain) {
+    domain = (entry.knownContacts || []).map(c => (c.email || '').split('@')[1]).filter(d => d && !_pubProvRe.test(d))[0] || '';
+  }
+  if (!domain) {
+    const counts = {};
+    (entry.cachedEmails || []).forEach(e => {
+      const m = (e.from || '').match(/<([^>]+)>/);
+      const addr = (m ? m[1] : e.from || '').toLowerCase().trim();
+      const d = addr.split('@')[1];
+      if (d && !_pubProvRe.test(d)) counts[d] = (counts[d] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    domain = sorted[0]?.[0] || '';
+  }
   const linkedinSlug = (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
   chrome.runtime.sendMessage({ type: 'GMAIL_FETCH_EMAILS', domain, companyName: entry.company || '', linkedinSlug }, result => {
     const statusEl = document.getElementById('act-emails-status');

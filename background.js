@@ -327,6 +327,73 @@ chrome.storage.local.get(['savedCompanies', '_dataConflictScanDone'], data => {
   chrome.storage.local.set({ _dataConflictScanDone: true });
 });
 
+// ── One-time backfill: populate knownContacts from cachedEmails for entries that have none ──
+// Fixes entries like Krossings (no companyWebsite) where contacts exist in email history
+// but were never surfaced because the fetch was skipped due to missing domain.
+chrome.storage.local.get(['savedCompanies', 'gmailUserEmail', 'knownContactsBackfillV1'], data => {
+  if (data.knownContactsBackfillV1) return;
+  const entries = data.savedCompanies || [];
+  const selfEmail = (data.gmailUserEmail || '').toLowerCase();
+  const BULK_RE = /noreply|no-reply|notifications?@|mailer-daemon|postmaster|newsletter|digest@|updates?@|marketing@/i;
+  const ATS_RE = /@(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|jobvite\.com|myworkday\.com)/;
+  const PUBLIC_RE = /^(gmail|yahoo|outlook|hotmail|icloud|aol|proton)\./i;
+
+  let changed = false;
+  for (const entry of entries) {
+    if (!entry.cachedEmails?.length) continue;
+    if ((entry.knownContacts || []).length > 0) continue; // only fill when empty
+
+    const companyDomain = (entry.companyWebsite || '')
+      .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+
+    const seenEmails = new Set();
+    const contacts = [];
+
+    const tryAdd = (fromStr) => {
+      if (!fromStr) return;
+      const m = fromStr.match(/^(.+?)\s*<([^>]+)>/);
+      let name, email;
+      if (m) {
+        name = m[1].replace(/"/g, '').trim();
+        email = m[2].trim().toLowerCase();
+      } else {
+        email = fromStr.trim().toLowerCase();
+        name = email.includes('@') ? email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
+      }
+      if (!email || !email.includes('@')) return;
+      if (selfEmail && email === selfEmail) return;
+      if (BULK_RE.test(email) || ATS_RE.test(email)) return;
+      const senderDomain = (email.split('@')[1] || '').toLowerCase();
+      // If we know the company domain, only accept that domain's senders.
+      // If company domain is missing (the Krossings case), accept any non-public sender.
+      if (companyDomain && !PUBLIC_RE.test(companyDomain)) {
+        if (senderDomain !== companyDomain && !senderDomain.endsWith('.' + companyDomain)) return;
+      } else {
+        if (PUBLIC_RE.test(senderDomain)) return;
+      }
+      if (seenEmails.has(email)) return;
+      seenEmails.add(email);
+      contacts.push({ name: name || email.split('@')[0], email, source: 'email', detectedAt: Date.now() });
+    };
+
+    for (const thread of entry.cachedEmails) {
+      tryAdd(thread.from);
+      if (thread.messages) {
+        for (const msg of thread.messages) tryAdd(msg.from);
+      }
+    }
+
+    if (contacts.length) {
+      entry.knownContacts = contacts;
+      changed = true;
+      console.log('[Backfill] Populated', contacts.length, 'contacts for', entry.company);
+    }
+  }
+
+  if (changed) chrome.storage.local.set({ savedCompanies: entries });
+  chrome.storage.local.set({ knownContactsBackfillV1: true });
+});
+
 // ── Message router ────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_DEBUG_LOG') {
