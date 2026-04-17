@@ -782,6 +782,30 @@
     .act-date-reset { background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 5px 10px; font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit; }
     .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--ci-transition-fast); flex-shrink: 0; }
     .stat-cards-edit-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    /* ── Activity Tasks Panel ── */
+    .activity-tasks-panel { display: flex; align-items: flex-start; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ci-border-subtle); }
+    .activity-tasks-label { font-size: 10px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; padding-top: 2px; min-width: 36px; }
+    .activity-tasks-list { display: flex; gap: 8px; overflow-x: auto; flex: 1; padding-bottom: 4px; }
+    .activity-tasks-list::-webkit-scrollbar { height: 4px; }
+    .activity-tasks-list::-webkit-scrollbar-track { background: transparent; }
+    .activity-tasks-list::-webkit-scrollbar-thumb { background: var(--ci-border-default); border-radius: 2px; }
+    .activity-task-chip { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-md); min-width: 0; flex-shrink: 0; max-width: 260px; transition: border-color var(--ci-transition-fast); }
+    .activity-task-chip:hover { border-color: var(--ci-border-strong); }
+    .activity-task-chip.overdue { border-left: 3px solid var(--ci-accent-red); }
+    .activity-task-chip.completed { opacity: 0.45; }
+    .activity-task-chip.completed .activity-task-text { text-decoration: line-through; }
+    .activity-task-chip-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: transparent; transition: all 0.15s; }
+    .activity-task-chip-check:hover { border-color: #5DCAA5; }
+    .activity-task-chip.completed .activity-task-chip-check { background: #5DCAA5; border-color: #5DCAA5; color: var(--ci-text-on-dark); }
+    .activity-task-chip-body { min-width: 0; flex: 1; }
+    .activity-task-text { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+    .activity-task-meta { display: flex; gap: 5px; align-items: center; margin-top: 2px; }
+    .activity-task-company { font-size: 10px; color: var(--ci-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+    .activity-task-date { font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .activity-task-date.overdue { color: var(--ci-accent-red); }
+    .activity-task-date.today { color: var(--ci-accent-primary); }
+    .activity-task-date.upcoming { color: var(--ci-text-tertiary); }
+    .activity-tasks-empty { font-size: 12px; color: var(--ci-text-tertiary); font-style: italic; padding-top: 2px; }
 
     /* ── Cost Pill (header) ── */
     .cost-pill-inner { display: flex; align-items: center; gap: 6px; }

@@ -4863,7 +4863,6 @@ function renderActivitySection() {
     <div class="activity-head">
       <div class="activity-head-left">
         <span class="activity-section-title">Pipeline Overview</span>
-        <span style="font-size:12px;color:#7c98b6;margin-left:16px"><b style="color:#2d3e50">${allCompanies.length}</b> companies &nbsp; <b style="color:#2d3e50">${opps.length}</b> opportunities</span>
       </div>
       <div class="period-toggle">
         <div class="period-tabs">
@@ -4884,6 +4883,10 @@ function renderActivitySection() {
     <div class="activity-goals-row">
       ${goalCardsHtml}
       <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
+    </div>
+    <div class="activity-tasks-panel" id="activity-tasks-panel">
+      <span class="activity-tasks-label">Tasks</span>
+      <div class="activity-tasks-list" id="activity-tasks-list"><span class="activity-tasks-empty">Loading…</span></div>
     </div>
   `;
 
@@ -4965,6 +4968,73 @@ function renderActivitySection() {
       e.stopPropagation();
       openStatCardEditor();
     }
+  });
+
+  // Tasks panel — load async after the rest of the section is already rendered
+  populateActivityTasksPanel(section, start, end);
+}
+
+function populateActivityTasksPanel(section, start, end) {
+  const list = section.querySelector('#activity-tasks-list');
+  if (!list) return;
+
+  const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
+  const dateToMs = d => new Date(d + 'T12:00:00').getTime();
+
+  loadTasks(tasks => {
+    // Only include tasks with a dueDate that falls within the period
+    const inPeriod = tasks.filter(t => {
+      if (!t.dueDate) return false;
+      const ms = dateToMs(t.dueDate);
+      return ms >= start && ms <= end;
+    });
+
+    if (inPeriod.length === 0) {
+      list.innerHTML = '<span class="activity-tasks-empty">No tasks for this period.</span>';
+      return;
+    }
+
+    // Sort: incomplete first (by priority then date), completed after
+    const sorted = [...inPeriod].sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      return priVal(a.priority) - priVal(b.priority);
+    });
+
+    list.innerHTML = sorted.map(t => {
+      const dl = taskDateLabel(t.dueDate);
+      const isOverdue = dl.cls === 'overdue';
+      const chipCls = [
+        'activity-task-chip',
+        isOverdue ? 'overdue' : '',
+        t.completed ? 'completed' : ''
+      ].filter(Boolean).join(' ');
+      const truncText = t.text.length > 32 ? t.text.slice(0, 32) + '…' : t.text;
+      return `<div class="${chipCls}" data-task-id="${t.id}">
+        <div class="activity-task-chip-check" data-check="${t.id}" title="${t.completed ? 'Mark incomplete' : 'Mark complete'}">${t.completed ? '✓' : ''}</div>
+        <div class="activity-task-chip-body">
+          <div class="activity-task-text" title="${escHtml(t.text)}">${escHtml(truncText)}</div>
+          <div class="activity-task-meta">
+            ${t.company ? `<span class="activity-task-company" title="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
+            ${dl.text ? `<span class="activity-task-date ${dl.cls}">${dl.text}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Checkbox click — toggle completed and re-render
+    list.querySelectorAll('[data-check]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const id = btn.dataset.check;
+        loadTasks(all => {
+          const idx = all.findIndex(t => t.id === id);
+          if (idx === -1) return;
+          all[idx].completed = !all[idx].completed;
+          saveTasks(all, () => renderActivitySection());
+        });
+      });
+    });
   });
 }
 
