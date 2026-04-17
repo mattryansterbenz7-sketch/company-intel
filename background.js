@@ -342,16 +342,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   if (message.type === 'OPEN_SIDE_PANEL') {
-    (async () => {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          await chrome.sidePanel.open({ tabId: tab.id });
-        }
-      } catch (e) {
-        console.warn('[SidePanel] Failed to open:', e.message);
-      }
-    })();
+    const tabId = sender?.tab?.id;
+    if (tabId) {
+      chrome.sidePanel.open({ tabId }, () => { void chrome.runtime.lastError; });
+    } else {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.sidePanel.open({ tabId: tabs[0].id }, () => { void chrome.runtime.lastError; });
+      });
+    }
     return false;
   }
   if (message.type === 'CLOSE_SIDE_PANEL') {

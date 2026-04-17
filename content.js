@@ -1530,7 +1530,7 @@ function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
       background: #3B5068;
       box-shadow: 0 4px 18px rgba(59,80,104,0.55), 0 1px 4px rgba(0,0,0,0.22);
       cursor: pointer;
-      pointer-events: all;
+      pointer-events: none;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1538,29 +1538,25 @@ function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
       padding: 0;
       overflow: hidden;
       opacity: 0;
-      transform: scale(0.72) translateY(8px);
-      transition: opacity 0.32s cubic-bezier(0.34,1.56,0.64,1),
-                  transform 0.32s cubic-bezier(0.34,1.56,0.64,1),
+      transform: scale(0.6) translate(40px, 40px);
+      transition: opacity 0.45s cubic-bezier(0.34,1.56,0.64,1),
+                  transform 0.45s cubic-bezier(0.34,1.56,0.64,1),
                   box-shadow 0.18s ease;
     }
-    #fab.ready {
+    #fab.reveal {
       opacity: 1;
-      transform: scale(1) translateY(0);
+      transform: scale(1) translate(0, 0);
+      pointer-events: all;
     }
-    #fab:hover {
+    #fab.reveal:hover {
       box-shadow: 0 6px 26px rgba(59,80,104,0.7), 0 2px 6px rgba(0,0,0,0.26);
-      transform: scale(1.07) translateY(0);
+      transform: scale(1.07);
     }
-    #fab:active {
-      transform: scale(0.94) translateY(0);
+    #fab.reveal:active {
+      transform: scale(0.94);
       box-shadow: 0 2px 10px rgba(59,80,104,0.45);
     }
-    #fab.hidden {
-      opacity: 0 !important;
-      transform: scale(0.72) translateY(8px) !important;
-      pointer-events: none !important;
-      transition: opacity 0.2s ease, transform 0.2s ease !important;
-    }
+    #fab.hidden { display: none !important; }
   `;
   shadow.appendChild(style);
 
@@ -1598,16 +1594,35 @@ function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
 
   shadow.appendChild(fab);
 
-  // Pop-in animation — small delay so paint completes before transition fires
-  requestAnimationFrame(() => requestAnimationFrame(() => fab.classList.add('ready')));
-
   fab.addEventListener('click', () => {
     try {
       chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
     } catch (_) {}
   });
 
-  // Hide when side panel opens; show when it closes
+  // Proximity reveal: show only when mouse is near bottom-right corner
+  const REVEAL_DIST = 180; // px from corner to reveal
+  const HIDE_DIST = 260;   // px to retract (hysteresis)
+  let hideTimer = null;
+
+  document.addEventListener('mousemove', (e) => {
+    const dx = window.innerWidth - e.clientX;
+    const dy = window.innerHeight - e.clientY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < REVEAL_DIST) {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      fab.classList.add('reveal');
+    } else if (dist > HIDE_DIST) {
+      if (!hideTimer) {
+        hideTimer = setTimeout(() => {
+          fab.classList.remove('reveal');
+          hideTimer = null;
+        }, 400);
+      }
+    }
+  }, { passive: true });
+
+  // Hide entirely when side panel opens; restore when it closes
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === '_SIDEPANEL_OPENED') fab.classList.add('hidden');
     if (msg.type === '_SIDEPANEL_CLOSED') fab.classList.remove('hidden');
