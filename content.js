@@ -1505,6 +1505,115 @@ function extractDomain() {
 if (typeof _ciSidebarToggle === 'undefined') var _ciSidebarToggle = null;
 function toggleFloatingSidebar() { if (_ciSidebarToggle) _ciSidebarToggle(); }
 
+// ── Floating Coop FAB — bottom-right trigger to open side panel ──────────────
+
+(function _initCoopFab() {
+  if (window.location.protocol === 'chrome-extension:') return;
+  if (document.getElementById('coop-fab-host')) return;
+
+  const host = document.createElement('div');
+  host.id = 'coop-fab-host';
+  host.style.cssText = 'position:fixed;z-index:2147483646;bottom:0;right:0;width:0;height:0;pointer-events:none;';
+  document.body.appendChild(host);
+
+  const shadow = host.attachShadow({ mode: 'open' });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #fab {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #3B5068;
+      box-shadow: 0 4px 18px rgba(59,80,104,0.55), 0 1px 4px rgba(0,0,0,0.22);
+      cursor: pointer;
+      pointer-events: all;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      padding: 0;
+      overflow: hidden;
+      opacity: 0;
+      transform: scale(0.72) translateY(8px);
+      transition: opacity 0.32s cubic-bezier(0.34,1.56,0.64,1),
+                  transform 0.32s cubic-bezier(0.34,1.56,0.64,1),
+                  box-shadow 0.18s ease;
+    }
+    #fab.ready {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    #fab:hover {
+      box-shadow: 0 6px 26px rgba(59,80,104,0.7), 0 2px 6px rgba(0,0,0,0.26);
+      transform: scale(1.07) translateY(0);
+    }
+    #fab:active {
+      transform: scale(0.94) translateY(0);
+      box-shadow: 0 2px 10px rgba(59,80,104,0.45);
+    }
+    #fab.hidden {
+      opacity: 0 !important;
+      transform: scale(0.72) translateY(8px) !important;
+      pointer-events: none !important;
+      transition: opacity 0.2s ease, transform 0.2s ease !important;
+    }
+  `;
+  shadow.appendChild(style);
+
+  const fab = document.createElement('button');
+  fab.id = 'fab';
+  fab.title = 'Open Coop';
+  fab.setAttribute('aria-label', 'Open Coop side panel');
+
+  // Inline Coop avatar SVG (simplified from coop.js for content script context)
+  fab.innerHTML = `<svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;">
+    <circle cx="50" cy="50" r="50" fill="#3B5068"/>
+    <clipPath id="cfab"><circle cx="50" cy="50" r="48"/></clipPath>
+    <g clip-path="url(#cfab)">
+      <ellipse cx="50" cy="100" rx="48" ry="28" fill="#3D4F5F"/>
+      <ellipse cx="50" cy="100" rx="46" ry="26" fill="#435766"/>
+      <path d="M26 100 L40 77 L50 88 L60 77 L74 100" fill="#364854"/>
+      <path d="M40 77 L50 94 L60 77" fill="#F0EAE0"/>
+      <path d="M40 77 L43 75 L44 78Z" fill="#F0EAE0"/>
+      <path d="M60 77 L57 75 L56 78Z" fill="#F0EAE0"/>
+      <path d="M41 78 Q44 73 50 76 Q44 79 41 78Z" fill="#3D4F5F"/>
+      <path d="M59 78 Q56 73 50 76 Q56 79 59 78Z" fill="#3D4F5F"/>
+      <ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/>
+      <rect x="42" y="70" width="16" height="9" rx="2" fill="#E8C4A0"/>
+      <path d="M28 43 Q28 27 39 21 Q50 16 61 21 Q72 27 72 43 Q72 53 68 58 L63 64 L56 68 L50 70 L44 68 L37 64 Q32 58 28 53 Q28 48 28 43Z" fill="#EDBB92"/>
+      <path d="M27 40 Q27 15 50 10 Q73 15 73 40 L71 32 Q69 16 50 13 Q31 16 29 32Z" fill="#2D1F16"/>
+      <ellipse cx="38" cy="43" rx="5" ry="5.5" fill="white"/>
+      <ellipse cx="62" cy="43" rx="5" ry="5.5" fill="white"/>
+      <ellipse cx="39" cy="44" rx="3" ry="3.5" fill="#2D1F16"/>
+      <ellipse cx="63" cy="44" rx="3" ry="3.5" fill="#2D1F16"/>
+      <ellipse cx="40" cy="43" rx="1.2" ry="1.2" fill="white"/>
+      <ellipse cx="64" cy="43" rx="1.2" ry="1.2" fill="white"/>
+      <path d="M43 57 Q50 62 57 57" fill="none" stroke="#B8865E" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+  </svg>`;
+
+  shadow.appendChild(fab);
+
+  // Pop-in animation — small delay so paint completes before transition fires
+  requestAnimationFrame(() => requestAnimationFrame(() => fab.classList.add('ready')));
+
+  fab.addEventListener('click', () => {
+    try {
+      chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
+    } catch (_) {}
+  });
+
+  // Hide when side panel opens; show when it closes
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === '_SIDEPANEL_OPENED') fab.classList.add('hidden');
+    if (msg.type === '_SIDEPANEL_CLOSED') fab.classList.remove('hidden');
+  });
+})();
+
 // ── "Send to Coop" Button — injected on any detected job page ──────────────
 
 let _scoopInjected = false;
