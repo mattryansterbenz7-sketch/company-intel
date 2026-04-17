@@ -3,8 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <title>Tier 1A — Kanban card before/after (#194)</title>
-<link rel="stylesheet" href="../design-tokens.css">
 <style>
+  /* Inlined from ../design-tokens.css so this file renders standalone (no server). */
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-hover: #E04E56;
+    --ci-accent-primary-soft: rgba(252, 99, 107, 0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-blue: #4573D2;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232, 56, 79, 0.07);
+    --ci-shadow-sm: 0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --ci-shadow-md: 0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+    --ci-radius-md: 10px;
+    --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
   body {
     background: var(--ci-bg-base);
     padding: 32px 40px;
