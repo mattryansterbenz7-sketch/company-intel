@@ -3643,10 +3643,13 @@ function mergeExtractedContacts(extracted) {
     // Only add them if their email domain actually matches this company.
     // Contacts matched via explicit domain search ('email-domain', 'email-sibling-domain',
     // 'granola-email-domain', 'granola-folder', 'granola-title', 'granola-attendee-name')
-    // are still subject to the domain check below to prevent attendee bleed across meetings.
+    // pass through; all others need a domain match.
+    // Exception: when companyWebsite is missing we have no domain baseline, so we allow
+    // any non-generic contact from the email fetch — the fetch was already scoped to this
+    // company by name, so the signal is reliable enough.
     const matchType = (contact.matchedVia?.type || '').toLowerCase();
     const isDomainMatched = matchType === 'email-domain' || matchType === 'email-sibling-domain';
-    if (!isDomainMatched && !isCompanyDomainEmail(email)) {
+    if (!isDomainMatched && !isCompanyDomainEmail(email) && companyDomain) {
       // Not a domain-confirmed match and not from this company's domain — skip to prevent bleed
       continue;
     }

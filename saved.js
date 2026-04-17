@@ -155,8 +155,8 @@ const TABLE_COLUMNS = [
   },
   {
     key: 'lastActivity', label: 'Last Activity', defaultOn: false, sortable: true, defaultSortDir: 'desc',
-    sortVal: c => { const eTs = c.cachedEmails?.[0]?.date ? new Date(c.cachedEmails[0].date).getTime() : 0; const mTs = c.cachedMeetings?.[0]?.date ? new Date(c.cachedMeetings[0].date).getTime() : 0; return Math.max(eTs, mTs, 0); },
-    renderCell: c => { const eTs = c.cachedEmails?.[0]?.date ? new Date(c.cachedEmails[0].date).getTime() : 0; const mTs = c.cachedMeetings?.[0]?.date ? new Date(c.cachedMeetings[0].date).getTime() : 0; const ts = Math.max(eTs, mTs, 0); return ts ? `<span class="tbl-muted">${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : '<span class="tbl-muted">—</span>'; }
+    sortVal: c => computeLastActivity(c).timestamp || 0,
+    renderCell: c => { const act = computeLastActivity(c); return act.timestamp ? `<span class="tbl-muted">${new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : '<span class="tbl-muted">—</span>'; }
   },
   {
     key: 'tags', label: 'Tags', defaultOn: false, sortable: false, filterable: true,
