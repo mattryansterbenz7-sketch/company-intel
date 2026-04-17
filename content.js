@@ -149,6 +149,8 @@ async function detectCompanyAndJob() {
     result = detectRippling();
   } else if (url.includes('workable.com')) {
     result = detectWorkable();
+  } else if (url.includes('wellfound.com')) {
+    result = await detectWellfound();
   } else {
     result = detectGeneric();
   }
@@ -1089,6 +1091,97 @@ function detectWorkable() {
 
   if (!company) company = extractDomain();
   return { company, jobTitle: jobTitle || null, source: 'workable', domain: null };
+}
+
+async function detectWellfound() {
+  const path = window.location.pathname;
+  let company = null;
+  let jobTitle = null;
+
+  // 1. URL structure — extract company slug from /company/<slug> paths
+  const companyMatch = path.match(/^\/company\/([^/?#]+)/i);
+  const jobsPathMatch = path.match(/^\/jobs\//i);
+  const slug = companyMatch?.[1] || null;
+  if (slug) {
+    company = slug.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  }
+
+  // 2. ld+json — best source for structured job posting data
+  try {
+    const jsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const s of jsonScripts) {
+      const parsed = JSON.parse(s.textContent);
+      const objs = Array.isArray(parsed) ? parsed : [parsed];
+      for (const obj of objs) {
+        if (!obj) continue;
+        const type = obj['@type'];
+        if (type === 'JobPosting' || (Array.isArray(type) && type.includes('JobPosting'))) {
+          jobTitle = jobTitle || obj.title || null;
+          const orgName = obj.hiringOrganization?.name;
+          if (orgName) company = orgName;
+        } else if (type === 'Organization' && obj.name) {
+          company = company || obj.name;
+        }
+      }
+    }
+  } catch (_e) { /* malformed JSON-LD is common; ignore */ }
+
+  // 3. og meta tags
+  if (!company) {
+    const ogSite = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.trim();
+    if (ogSite && !/wellfound|angellist/i.test(ogSite)) company = ogSite;
+  }
+  if (!company || !jobTitle) {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
+    const segs = ogTitle.split(/\s*[|·—–]\s*/);
+    if (segs.length >= 2) {
+      if (!jobTitle) jobTitle = segs[0].trim() || null;
+      if (!company) {
+        const last = segs[segs.length - 1].trim();
+        if (last && !/wellfound|angellist/i.test(last)) company = last;
+      }
+    }
+  }
+
+  // 4. DOM scraping (short retry because React rendering)
+  if (!company || (jobsPathMatch && !jobTitle)) {
+    for (let i = 0; i < 10; i++) {
+      if (!company) {
+        const h1 = document.querySelector('h1');
+        const txt = h1?.textContent?.trim();
+        if (txt && txt.length > 1 && txt.length < 80) {
+          if (jobsPathMatch) {
+            if (!jobTitle) jobTitle = txt;
+          } else {
+            company = txt;
+          }
+        }
+      }
+      if (!jobTitle && (jobsPathMatch || companyMatch)) {
+        const maybe = document.querySelector('[data-test="JobTitle"], [data-test-id="job-title"]')?.textContent?.trim();
+        if (maybe) jobTitle = maybe;
+      }
+      if (company && (jobTitle || (!jobsPathMatch))) break;
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  // 5. document.title fallback for company
+  if (!company) {
+    const title = document.title || '';
+    const segs = title.split(/\s*[|·—–]\s*/);
+    if (segs.length >= 2) {
+      const last = segs[segs.length - 1].trim();
+      if (last && !/wellfound|angellist/i.test(last)) company = last;
+    }
+  }
+
+  return {
+    company: company || 'Unknown Company',
+    jobTitle: jobTitle || null,
+    source: 'wellfound',
+    domain: null, // Wellfound hosts the page; don't guess the company's real domain
+  };
 }
 
 function detectGeneric() {
