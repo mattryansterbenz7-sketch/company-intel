@@ -129,15 +129,19 @@ function buildChatPanel(container, entry) {
   }
 
   // Model switcher — default GPT-4.1 mini, click to cycle
-  const CHAT_MODELS = [
-    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',     icon: '◆' },
-    { id: 'gemini-2.0-flash-lite',     label: 'Flash-Lite',       icon: '✦' },
-    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',     icon: '◆' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',        icon: '⚡' },
-    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',     icon: '✦' },
-    { id: 'gpt-4.1',                   label: 'GPT-4.1',          icon: '◆' },
-    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',       icon: '✦' },
+  const CHAT_MODELS_ALL = [
+    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',     icon: '◆', provider: 'openai' },
+    { id: 'gemini-2.0-flash-lite',     label: 'Flash-Lite',       icon: '✦', provider: 'gemini' },
+    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',     icon: '◆', provider: 'openai' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',        icon: '⚡', provider: 'anthropic' },
+    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',     icon: '✦', provider: 'gemini' },
+    { id: 'gpt-4.1',                   label: 'GPT-4.1',          icon: '◆', provider: 'openai' },
+    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',       icon: '✦', provider: 'anthropic' },
   ];
+  // Filtered to providers with configured API keys (populated async below).
+  // Falls back to the full list if key-status lookup fails so we never leave
+  // the toggle empty.
+  let CHAT_MODELS = CHAT_MODELS_ALL.slice();
   let chatModelIdx = 0;
 
   const panelId = chatKey.replace(/[^a-z0-9]/gi, '_');
@@ -265,11 +269,27 @@ function buildChatPanel(container, entry) {
     });
   }
   function updateChatModelBtn() {
-    if (modelBtn) modelBtn.textContent = CHAT_MODELS[chatModelIdx].icon + ' ' + CHAT_MODELS[chatModelIdx].label;
+    if (!modelBtn) return;
+    const m = CHAT_MODELS[chatModelIdx] || CHAT_MODELS[0];
+    if (!m) return;
+    modelBtn.textContent = m.icon + ' ' + m.label;
   }
-  // Load default model from Pipeline settings, then update button
-  chrome.storage.local.get(['pipelineConfig'], data => {
-    const configModel = data.pipelineConfig?.aiModels?.chat;
+  // Filter CHAT_MODELS to providers with a configured API key, then pick the
+  // user's default. Runs in parallel to avoid a round-trip stall on panel build.
+  Promise.all([
+    new Promise(r => { try { chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, s => { void chrome.runtime.lastError; r(s); }); } catch (e) { r(null); } }),
+    new Promise(r => chrome.storage.local.get(['pipelineConfig'], d => r(d.pipelineConfig))),
+  ]).then(([status, pipelineCfg]) => {
+    if (status) {
+      const filtered = CHAT_MODELS_ALL.filter(m => {
+        if (m.provider === 'openai')    return !!status.openai;
+        if (m.provider === 'anthropic') return !!status.anthropic;
+        if (m.provider === 'gemini')    return !!status.gemini;
+        return true;
+      });
+      if (filtered.length) CHAT_MODELS = filtered;
+    }
+    const configModel = pipelineCfg?.aiModels?.chat;
     if (configModel) {
       const idx = CHAT_MODELS.findIndex(m => m.id === configModel);
       if (idx >= 0) chatModelIdx = idx;
