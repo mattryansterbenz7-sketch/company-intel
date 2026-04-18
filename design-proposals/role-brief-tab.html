@@ -1,0 +1,1292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>#255 Role Brief tab redesign — Coop.ai</title>
+<style>
+  :root {
+    --bg: #F0F2F5;
+    --panel: #FFFFFF;
+    --ink: #0A0B0D;
+    --ink-2: #6F7782;
+    --ink-3: #8A8E94;
+    --line: #E0E4E8;
+    --line-soft: #EAECEF;
+    --coral: #FC636B;
+    --green: #36B37E;
+    --amber: #F5A623;
+    --red: #E8384F;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  /* Page frame */
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px 32px 120px;
+  }
+
+  .page-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 24px; flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .page-head h1 {
+    font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0;
+  }
+  .page-head .issue-num { color: var(--ink-3); font-weight: 500; margin-right: 6px; }
+  .page-head .prompt {
+    color: var(--ink-2); font-size: 13px; max-width: 680px;
+  }
+
+  .section-label {
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    color: var(--ink-3);
+    margin: 64px 0 14px;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 4px;
+  }
+  .section-desc {
+    color: var(--ink-2);
+    font-size: 13px;
+    margin: 0 0 20px;
+    max-width: 680px;
+  }
+
+  /* ── Opp shell ─────────────────────────────────────────────── */
+  .opp-shell {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    min-height: 900px;
+  }
+  .opp-shell.narrow { min-height: 780px; }
+
+  .opp-main {
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .opp-header {
+    padding: 22px 28px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .opp-header-row {
+    display: flex; align-items: flex-start; gap: 20px;
+  }
+  .opp-title-block { flex: 1; min-width: 0; }
+  .opp-company {
+    font-size: 22px; font-weight: 600; letter-spacing: -0.01em;
+    color: var(--ink); margin: 0 0 2px;
+  }
+  .opp-subline {
+    color: var(--ink-2); font-size: 13px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .opp-subline .sep { color: var(--ink-3); }
+  .opp-subline a { color: var(--ink-2); text-decoration: none; }
+  .opp-subline a:hover { color: var(--ink); text-decoration: underline; }
+
+  .opp-header-actions {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .stage-pill {
+    font-size: 12px; font-weight: 500;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+    background: var(--panel);
+  }
+  .score-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--green);
+    background: var(--panel);
+  }
+  .score-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .icon-btn {
+    width: 30px; height: 30px;
+    border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-2); cursor: pointer;
+  }
+  .icon-btn:hover { color: var(--ink); border-color: #C4CAD1; }
+
+  .tabbar {
+    display: flex; gap: 0;
+    margin-top: 18px;
+    margin-bottom: -1px;
+  }
+  .tab {
+    padding: 10px 0;
+    margin-right: 22px;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-2);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--coral);
+    font-weight: 600;
+  }
+
+  /* Tab body */
+  .tab-body {
+    flex: 1;
+    padding: 28px 28px 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .tab-inner { max-width: 720px; margin: 0 auto; width: 100%; }
+
+  /* Summary card */
+  .summary-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+    background: var(--panel);
+    margin-bottom: 24px;
+  }
+  .sum-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px;
+  }
+  .sum-left { flex: 1; min-width: 0; }
+  .sum-verdict {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.5;
+    margin: 0;
+  }
+  .sum-verdict .verdict-label {
+    font-weight: 600;
+    color: var(--green);
+    margin-right: 6px;
+  }
+  .sum-score {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    padding-top: 2px;
+  }
+  .sum-score.amber { color: var(--amber); }
+  .sum-score.coral { color: var(--coral); }
+
+  .sum-bars {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .bar-item { display: flex; flex-direction: column; gap: 5px; }
+  .bar-label {
+    font-size: 11px;
+    color: var(--ink-2);
+    letter-spacing: 0.01em;
+  }
+  .bar-track {
+    height: 3px;
+    background: var(--line-soft);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    position: absolute; inset: 0 auto 0 0;
+    background: var(--ink);
+    border-radius: 2px;
+  }
+  .bar-fill.green { background: var(--green); }
+  .bar-fill.amber { background: var(--amber); }
+  .bar-fill.coral { background: var(--coral); }
+
+  .sum-quals {
+    display: flex; flex-wrap: wrap; gap: 12px 18px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .qual {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--ink);
+  }
+  .qual .mark {
+    width: 14px; height: 14px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .qual .mark.y { background: var(--green); }
+  .qual .mark.n { background: var(--red); }
+  .qual .rationale { color: var(--ink-2); }
+
+  .sum-toggle {
+    background: none; border: none;
+    color: var(--ink-2); font-size: 12px; font-weight: 500;
+    padding: 12px 0 0;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .sum-toggle:hover { color: var(--ink); }
+  .caret { display: inline-block; transition: transform 120ms ease; }
+  .caret.open { transform: rotate(180deg); }
+
+  /* Brief / JD toggle */
+  .mode-switch {
+    display: inline-flex;
+    padding: 3px;
+    background: #F5F6F8;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    margin-bottom: 22px;
+  }
+  .mode-btn {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: var(--ink-2);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+  .mode-btn.active {
+    background: var(--panel);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  /* Body reading block */
+  .read-body {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+  .read-body h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-3);
+    margin: 28px 0 10px;
+  }
+  .read-body h3:first-child { margin-top: 0; }
+  .read-body p { margin: 0 0 1.2em; }
+  .read-body p:last-child { margin-bottom: 0; }
+  .read-body ul { margin: 0 0 1.2em; padding-left: 20px; }
+  .read-body li { margin-bottom: 6px; }
+
+  /* Sticky footer actions */
+  .tab-footer {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(to top, var(--panel) 60%, rgba(255,255,255,0));
+    padding: 20px 0 22px;
+    margin-top: 32px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+  }
+  .btn:hover { border-color: #C4CAD1; }
+  .btn.ghost {
+    border: none;
+    background: transparent;
+    color: var(--ink-2);
+  }
+  .btn.ghost:hover { color: var(--ink); }
+  .btn.primary {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: #fff;
+  }
+  .btn.primary:hover { background: #000; }
+
+  /* Coop rail */
+  .coop-rail {
+    background: var(--panel);
+    display: flex; flex-direction: column;
+  }
+  .coop-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .coop-head-l { display: flex; align-items: center; gap: 10px; }
+  .coop-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink);
+    color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+  .coop-head-name {
+    font-size: 13px; font-weight: 600; color: var(--ink);
+  }
+  .coop-head-sub {
+    font-size: 11px; color: var(--ink-3);
+  }
+  .coop-body {
+    flex: 1;
+    padding: 20px 18px;
+    display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto;
+  }
+  .coop-msg {
+    display: flex; gap: 10px;
+  }
+  .coop-msg .sm-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ink); color: #fff;
+    font-size: 10px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .coop-msg.user .sm-avatar { background: #E0E4E8; color: var(--ink); }
+  .coop-bubble {
+    font-size: 13px; line-height: 1.5; color: var(--ink);
+  }
+  .coop-footer {
+    border-top: 1px solid var(--line);
+    padding: 12px 16px;
+  }
+  .coop-input {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px; color: var(--ink-2);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .coop-input .placeholder { color: var(--ink-3); }
+  .coop-send {
+    width: 26px; height: 26px; border-radius: 6px;
+    background: var(--ink); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px;
+  }
+
+  /* ── Section: Summary card expanded ─────────────────────────── */
+  .summary-wrap {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 28px;
+  }
+
+  .sum-details {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line-soft);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px 36px;
+  }
+  .dim-block .dim-title {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .dim-block .dim-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .dim-block .dim-score {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .dim-block .dim-rationale {
+    font-size: 12px;
+    color: var(--ink-2);
+    line-height: 1.5;
+    margin-top: 6px;
+  }
+
+  .quals-list {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .quals-list-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .qual-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .qual-row:last-child { border-bottom: none; }
+  .qual-row .mark {
+    width: 16px; height: 16px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .qual-row .mark.y { background: var(--green); }
+  .qual-row .mark.n { background: var(--red); }
+  .qual-row .mark.q { background: var(--amber); }
+  .qual-row .qual-text {
+    font-size: 13px; color: var(--ink); font-weight: 500;
+  }
+  .qual-row .qual-detail {
+    font-size: 12px; color: var(--ink-2); margin-top: 2px; line-height: 1.45;
+  }
+
+  /* ── Section: Brief vs JD side-by-side ─────────────────────────── */
+  .side-by-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .mini-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .mini-panel .mode-switch { margin-bottom: 18px; }
+  .mini-panel .read-body { font-size: 13px; }
+  .mini-panel .read-body h3 { margin-top: 18px; }
+  .mini-caption {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    color: var(--ink-3);
+    margin-bottom: 10px;
+  }
+  .jd-raw { color: var(--ink-2); }
+  .jd-raw p { margin-bottom: 10px; }
+  .jd-raw strong { color: var(--ink); font-weight: 600; }
+
+  /* ── Section: Reading rhythm annotated ───────────────────────── */
+  .rhythm-wrap {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 40px 60px;
+    position: relative;
+  }
+  .rhythm-doc {
+    max-width: 720px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .anno {
+    position: absolute;
+    font-size: 11px;
+    color: var(--coral);
+    font-family: 'SF Mono', monospace;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .anno .bar {
+    display: inline-block;
+    height: 1px;
+    background: var(--coral);
+  }
+  .anno-width {
+    top: -22px; left: 0; right: 0;
+    justify-content: center;
+  }
+  .anno-width .bar { flex: 1; max-width: 300px; }
+  .anno-linehtight {
+    right: -140px; top: 80px;
+    flex-direction: column; align-items: flex-start; gap: 4px;
+  }
+  .anno-linehtight .tag {
+    background: var(--coral); color: #fff; padding: 2px 6px; border-radius: 4px;
+    font-size: 10px;
+  }
+  .anno-para {
+    right: -140px; top: 240px;
+    flex-direction: column; align-items: flex-start; gap: 4px;
+  }
+  .anno-para .tag {
+    background: var(--coral); color: #fff; padding: 2px 6px; border-radius: 4px;
+    font-size: 10px;
+  }
+  .dashed-outline {
+    border: 1px dashed var(--coral);
+    border-left: 0; border-right: 0;
+    padding: 2px 0;
+    margin: 2px 0;
+    background: rgba(252, 99, 107, 0.04);
+  }
+
+  /* ── Section: Compare-to-prefs slide-out ───────────────────── */
+  .compare-frame {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    min-height: 560px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr 460px;
+  }
+  .compare-backdrop {
+    padding: 24px 28px;
+    opacity: 0.5;
+  }
+  .compare-backdrop .read-body p {
+    color: var(--ink-2);
+  }
+  .compare-backdrop .read-body h3 {
+    color: var(--ink-3);
+  }
+  .compare-slideout {
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 24px rgba(10,11,13,0.06);
+  }
+  .compare-head {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .compare-head-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0;
+  }
+  .compare-head-sub {
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-top: 2px;
+  }
+  .close-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: var(--ink-2);
+    font-size: 16px; line-height: 1;
+    cursor: pointer;
+  }
+  .close-btn:hover { background: #F5F6F8; color: var(--ink); }
+
+  .compare-body {
+    padding: 20px 22px;
+    display: flex; flex-direction: column; gap: 2px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .diff-row {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .diff-row:last-child { border-bottom: none; }
+  .diff-row .mark {
+    width: 16px; height: 16px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    margin-top: 2px;
+  }
+  .diff-row .mark.y { background: var(--green); }
+  .diff-row .mark.n { background: var(--red); }
+  .diff-row .mark.q { background: var(--amber); }
+  .diff-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .diff-pair {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    font-size: 12px;
+  }
+  .diff-key {
+    color: var(--ink-3);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-top: 1px;
+  }
+  .diff-val {
+    color: var(--ink);
+  }
+  .diff-val.off { color: var(--red); }
+  .diff-val.on { color: var(--ink); font-weight: 500; }
+
+  /* ── Open questions ───────────────────────────────────────── */
+  .questions {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 24px 28px;
+  }
+  .q-item {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .q-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .q-item:first-child { padding-top: 0; }
+  .q-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 4px;
+  }
+  .q-body {
+    font-size: 13px;
+    color: var(--ink-2);
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  /* Small arrow glyph */
+  .arrow-r { display: inline-block; transform: translateY(-1px); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ───── Page header ───── -->
+  <header class="page-head">
+    <div>
+      <h1><span class="issue-num">#255</span>Role Brief tab redesign</h1>
+      <p class="prompt">
+        Tab shows JD + Coop's Brief + score/flags/qualifications. Long-form reading surface.
+        Brief is the default view; summary card carries score + qualifications at the top;
+        sticky footer hosts actions.
+      </p>
+    </div>
+    <div style="color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;">
+      Recommended · throwaway mockup
+    </div>
+  </header>
+
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <!-- 1. HERO — Role Brief tab inside opp shell                 -->
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <div class="section-label">Hero</div>
+  <p class="section-title">Role Brief tab — default state</p>
+  <p class="section-desc">
+    Summary card collapsed with score + verdict + 5-dim micro-bars + qualifications bullets.
+    Brief is the default body mode; sticky footer holds secondary actions.
+  </p>
+
+  <div class="opp-shell">
+    <!-- Main column -->
+    <div class="opp-main">
+      <div class="opp-header">
+        <div class="opp-header-row">
+          <div class="opp-title-block">
+            <h2 class="opp-company">Topo.io</h2>
+            <div class="opp-subline">
+              <span>Head of Customer Operations</span>
+              <span class="sep">·</span>
+              <span>San Francisco · Hybrid</span>
+              <span class="sep">·</span>
+              <a href="#">topo.io</a>
+              <span class="sep">·</span>
+              <span>Series B · 80 people</span>
+            </div>
+          </div>
+          <div class="opp-header-actions">
+            <button class="icon-btn" title="Share"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+            <button class="icon-btn" title="More"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+            <span class="stage-pill">Applied</span>
+            <span class="score-chip"><span class="dot"></span>7.8</span>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab active">Role Brief</div>
+          <div class="tab">Activity</div>
+          <div class="tab">Emails</div>
+          <div class="tab">Meetings</div>
+          <div class="tab">Notes</div>
+          <div class="tab">Docs</div>
+          <div class="tab">Tasks</div>
+        </div>
+      </div>
+
+      <div class="tab-body">
+        <div class="tab-inner">
+
+          <!-- Summary card, collapsed -->
+          <div class="summary-card">
+            <div class="sum-top">
+              <div class="sum-left">
+                <p class="sum-verdict">
+                  <span class="verdict-label">Strong fit.</span>
+                  Exceeds salary floor by $15k, role directly matches Customer Ops leadership, Series B stage is your sweet spot.
+                </p>
+              </div>
+              <div class="sum-score">7.8</div>
+            </div>
+
+            <div class="sum-bars">
+              <div class="bar-item">
+                <span class="bar-label">Compensation</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 86%"></div></div>
+              </div>
+              <div class="bar-item">
+                <span class="bar-label">Role fit</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 92%"></div></div>
+              </div>
+              <div class="bar-item">
+                <span class="bar-label">Company stage</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 88%"></div></div>
+              </div>
+              <div class="bar-item">
+                <span class="bar-label">Responsibilities</span>
+                <div class="bar-track"><div class="bar-fill amber" style="width: 62%"></div></div>
+              </div>
+              <div class="bar-item">
+                <span class="bar-label">Growth</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 78%"></div></div>
+              </div>
+            </div>
+
+            <div class="sum-quals">
+              <span class="qual"><span class="mark y">✓</span> Salary $190k <span class="rationale">(floor $175k)</span></span>
+              <span class="qual"><span class="mark y">✓</span> Hybrid 3 days <span class="rationale">(prefers hybrid)</span></span>
+              <span class="qual"><span class="mark y">✓</span> GTM operations <span class="rationale">(directly matches)</span></span>
+              <span class="qual"><span class="mark n">✗</span> SF-based <span class="rationale">(prefers NYC/remote)</span></span>
+            </div>
+
+            <button class="sum-toggle">
+              Show details <span class="caret">▾</span>
+            </button>
+          </div>
+
+          <!-- Mode switch -->
+          <div class="mode-switch">
+            <button class="mode-btn active">Brief</button>
+            <button class="mode-btn">Raw JD</button>
+          </div>
+
+          <!-- Body content -->
+          <div class="read-body">
+            <h3>What this role actually is</h3>
+            <p>
+              Topo is hiring a Head of Customer Operations to own the post-sale machine end-to-end —
+              onboarding flow, usage expansion, renewal motion, and the CS tooling stack. The title
+              says "Customer Ops" but the scope reads closer to VP CS + RevOps hybrid. They want one
+              person accountable for net revenue retention, not three separate directors.
+            </p>
+            <p>
+              This is an IC-leader role day one. You'll inherit two CSMs and an ops contractor, and
+              the explicit mandate is to define the org structure you want and hire into it over Q2–Q3.
+              Reports directly to the COO, sits on the leadership team, and presents to the board quarterly.
+            </p>
+
+            <h3>What they care about</h3>
+            <p>
+              Three signals jumped out of the JD and their hiring page. First, NRR discipline — they
+              mention it four times and have a dashboard screenshot in their pitch deck. Second,
+              tooling fluency — they use Vitally and Mixpanel heavily and want someone who can tune
+              these without eng support. Third, expansion motion — they see CS as a revenue center,
+              not a cost center, and are willing to pay for that framing.
+            </p>
+
+            <h3>Who they want</h3>
+            <ul>
+              <li>5+ years post-sale leadership, ideally at a B2B SaaS company that scaled from $5M to $30M ARR</li>
+              <li>Built a CS org from fewer than 5 to 15+ people — mentioned explicitly as a "green flag"</li>
+              <li>Comfortable in the weeds but credible in front of a board</li>
+              <li>Bonus: prior founder or operator experience at an earlier-stage company</li>
+            </ul>
+            <p>
+              Matt's last three roles check every box on that list except the specific ARR band —
+              you scaled from $12M to $45M, which is stronger than what they're asking for.
+            </p>
+          </div>
+
+          <!-- Sticky footer -->
+          <div class="tab-footer">
+            <button class="btn ghost">Edit stored JD</button>
+            <button class="btn ghost">Regenerate Brief</button>
+            <button class="btn primary">Compare to my preferences <span class="arrow-r">→</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coop chat rail -->
+    <aside class="coop-rail">
+      <div class="coop-head">
+        <div class="coop-head-l">
+          <span class="coop-avatar">C</span>
+          <div>
+            <div class="coop-head-name">Coop</div>
+            <div class="coop-head-sub">Context: Topo.io · Role Brief</div>
+          </div>
+        </div>
+        <button class="icon-btn" style="border: none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+      </div>
+      <div class="coop-body">
+        <div class="coop-msg">
+          <span class="sm-avatar">C</span>
+          <div class="coop-bubble">
+            I pulled the brief from the JD + your Story Time profile. Flagged one yellow — they're SF-based
+            and you've leaned NYC/remote, but the hybrid schedule is 3 days which might be workable.
+          </div>
+        </div>
+        <div class="coop-msg user">
+          <span class="sm-avatar">M</span>
+          <div class="coop-bubble">What's the NRR number they're targeting?</div>
+        </div>
+        <div class="coop-msg">
+          <span class="sm-avatar">C</span>
+          <div class="coop-bubble">
+            JD doesn't give a hard number but the pitch deck screenshot shows 118% NRR trailing 12mo.
+            For the stage and ACV band that's top-quartile — they'll expect you to hold or grow it.
+          </div>
+        </div>
+      </div>
+      <div class="coop-footer">
+        <div class="coop-input">
+          <span class="placeholder">Ask about this role…</span>
+          <span class="coop-send">↑</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <!-- 2. Summary card expanded                                   -->
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <div class="section-label">Detail · 01</div>
+  <p class="section-title">Summary card — expanded state</p>
+  <p class="section-desc">
+    Clicking "Show details" reveals per-dimension rationale and the full qualifications list.
+    Dimensions stay in a tight 2-column grid; qualifications read as a linear checklist with inline reasoning.
+  </p>
+
+  <div class="summary-wrap">
+    <div class="sum-top">
+      <div class="sum-left">
+        <p class="sum-verdict">
+          <span class="verdict-label">Strong fit.</span>
+          Exceeds salary floor by $15k, role directly matches Customer Ops leadership, Series B stage is your sweet spot.
+        </p>
+      </div>
+      <div class="sum-score">7.8</div>
+    </div>
+
+    <div class="sum-bars">
+      <div class="bar-item">
+        <span class="bar-label">Compensation</span>
+        <div class="bar-track"><div class="bar-fill green" style="width: 86%"></div></div>
+      </div>
+      <div class="bar-item">
+        <span class="bar-label">Role fit</span>
+        <div class="bar-track"><div class="bar-fill green" style="width: 92%"></div></div>
+      </div>
+      <div class="bar-item">
+        <span class="bar-label">Company stage</span>
+        <div class="bar-track"><div class="bar-fill green" style="width: 88%"></div></div>
+      </div>
+      <div class="bar-item">
+        <span class="bar-label">Responsibilities</span>
+        <div class="bar-track"><div class="bar-fill amber" style="width: 62%"></div></div>
+      </div>
+      <div class="bar-item">
+        <span class="bar-label">Growth</span>
+        <div class="bar-track"><div class="bar-fill green" style="width: 78%"></div></div>
+      </div>
+    </div>
+
+    <div class="sum-details">
+      <div class="dim-block">
+        <div class="dim-title">
+          <span class="dim-name">Compensation</span>
+          <span class="dim-score" style="color: var(--green)">8.6</span>
+        </div>
+        <div class="dim-rationale">
+          $190k base exceeds your floor of $175k. OTE around $240k with equity refresh — strong signal.
+        </div>
+      </div>
+      <div class="dim-block">
+        <div class="dim-title">
+          <span class="dim-name">Role fit</span>
+          <span class="dim-score" style="color: var(--green)">9.2</span>
+        </div>
+        <div class="dim-rationale">
+          Post-sale leadership with a revenue mandate — you've done this three times.
+        </div>
+      </div>
+      <div class="dim-block">
+        <div class="dim-title">
+          <span class="dim-name">Company stage</span>
+          <span class="dim-score" style="color: var(--green)">8.8</span>
+        </div>
+        <div class="dim-rationale">
+          Series B, ~80 people, Nov 2025 round. Your sweet spot — post-find-the-market, pre-scale-pains.
+        </div>
+      </div>
+      <div class="dim-block">
+        <div class="dim-title">
+          <span class="dim-name">Responsibilities</span>
+          <span class="dim-score" style="color: var(--amber)">6.2</span>
+        </div>
+        <div class="dim-rationale">
+          Includes owning the CS tooling stack implementation — less strategic, more IC than ideal.
+        </div>
+      </div>
+      <div class="dim-block">
+        <div class="dim-title">
+          <span class="dim-name">Growth</span>
+          <span class="dim-score" style="color: var(--green)">7.8</span>
+        </div>
+        <div class="dim-rationale">
+          Reports to COO, board-facing, clear runway to VP title if NRR motion lands.
+        </div>
+      </div>
+    </div>
+
+    <div class="quals-list">
+      <div class="quals-list-title">Qualifications</div>
+      <div class="qual-row">
+        <span class="mark y">✓</span>
+        <div>
+          <div class="qual-text">Salary $190k base · $240k OTE</div>
+          <div class="qual-detail">Above your floor of $175k. OTE structure includes equity refresh at 1-year mark.</div>
+        </div>
+      </div>
+      <div class="qual-row">
+        <span class="mark y">✓</span>
+        <div>
+          <div class="qual-text">Hybrid, 3 days onsite</div>
+          <div class="qual-detail">Matches your "hybrid acceptable" preference if commute is workable.</div>
+        </div>
+      </div>
+      <div class="qual-row">
+        <span class="mark y">✓</span>
+        <div>
+          <div class="qual-text">Post-sale leadership with revenue mandate</div>
+          <div class="qual-detail">Directly matches your last three roles — you've owned NRR at this ACV band.</div>
+        </div>
+      </div>
+      <div class="qual-row">
+        <span class="mark q">?</span>
+        <div>
+          <div class="qual-text">Industry: GTM tooling for sales teams</div>
+          <div class="qual-detail">Adjacent to your infra-tools background. Worth a quick scan of their product before the intro call.</div>
+        </div>
+      </div>
+      <div class="qual-row">
+        <span class="mark n">✗</span>
+        <div>
+          <div class="qual-text">San Francisco-based</div>
+          <div class="qual-detail">You've flagged NYC/remote preference. Not a dealbreaker but a real tradeoff — ask about relocation support.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <!-- 3. Brief vs JD toggle                                       -->
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <div class="section-label">Detail · 02</div>
+  <p class="section-title">Brief vs. Raw JD — same tab, two modes</p>
+  <p class="section-desc">
+    The toggle swaps body content with a 200ms fade. Brief is faster to re-read; Raw JD is there
+    when Matt wants to check the source.
+  </p>
+
+  <div class="side-by-side">
+    <div class="mini-panel">
+      <div class="mini-caption">Default — Coop's Brief</div>
+      <div class="mode-switch">
+        <button class="mode-btn active">Brief</button>
+        <button class="mode-btn">Raw JD</button>
+      </div>
+      <div class="read-body">
+        <h3>What this role actually is</h3>
+        <p>
+          Topo is hiring a Head of Customer Operations to own the post-sale machine end-to-end — onboarding,
+          expansion, renewals, and the CS tooling stack. Title says "Ops" but scope reads closer to VP CS + RevOps.
+        </p>
+        <h3>What they care about</h3>
+        <p>
+          NRR discipline (mentioned four times), tooling fluency (Vitally + Mixpanel), and expansion motion —
+          they treat CS as a revenue center.
+        </p>
+      </div>
+    </div>
+
+    <div class="mini-panel">
+      <div class="mini-caption">Source — Raw JD</div>
+      <div class="mode-switch">
+        <button class="mode-btn">Brief</button>
+        <button class="mode-btn active">Raw JD</button>
+      </div>
+      <div class="read-body jd-raw">
+        <p><strong>Head of Customer Operations</strong><br>San Francisco · Hybrid · Full-time</p>
+        <p>
+          <strong>About Topo</strong><br>
+          Topo is the modern GTM platform for high-growth B2B companies. We're Series B, backed by
+          tier-1 investors, and growing 3x year over year.
+        </p>
+        <p>
+          <strong>The role</strong><br>
+          You'll own post-sale end-to-end. Onboarding flow, usage expansion, renewal motion,
+          and the tooling stack that powers all of it. You'll report to the COO and sit on the leadership team.
+        </p>
+        <p>
+          <strong>What you'll do</strong><br>
+          Drive Net Revenue Retention. Build and scale the CS organization…
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <!-- 4. Reading rhythm detail                                   -->
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <div class="section-label">Detail · 03</div>
+  <p class="section-title">Reading rhythm — typography specs</p>
+  <p class="section-desc">
+    Max-width 720px, body 15px / line-height 1.65, paragraphs separated by 1.2em. Section headings
+    in uppercase 13px tracking for quiet visual rhythm.
+  </p>
+
+  <div class="rhythm-wrap">
+    <div class="rhythm-doc">
+      <div class="anno anno-width">
+        <span class="bar"></span>
+        <span>max-width: 720px</span>
+        <span class="bar"></span>
+      </div>
+
+      <div class="anno anno-linehtight">
+        <span class="tag">line-height: 1.65</span>
+        <span>body 15px</span>
+      </div>
+
+      <div class="anno anno-para">
+        <span class="tag">margin-bottom: 1.2em</span>
+        <span>paragraph gap</span>
+      </div>
+
+      <div class="read-body">
+        <h3>What this role actually is</h3>
+        <p class="dashed-outline">
+          Topo is hiring a Head of Customer Operations to own the post-sale machine end-to-end —
+          onboarding flow, usage expansion, renewal motion, and the CS tooling stack.
+          The title says "Customer Ops" but the scope reads closer to VP CS + RevOps hybrid.
+        </p>
+        <p>
+          This is an IC-leader role day one. You'll inherit two CSMs and an ops contractor, and
+          the explicit mandate is to define the org structure you want and hire into it over Q2–Q3.
+        </p>
+        <h3>What they care about</h3>
+        <p>
+          Three signals jumped out of the JD and their hiring page. First, NRR discipline — they
+          mention it four times and have a dashboard screenshot in their pitch deck.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <!-- 5. Compare to preferences slide-out                        -->
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <div class="section-label">Detail · 04</div>
+  <p class="section-title">Compare to my preferences — side panel slide-out</p>
+  <p class="section-desc">
+    Clicking the primary footer CTA slides a 460px panel in from the right, inside the opp shell.
+    Each row shows the qualification, the JD value, and the matching preference value so the diff is obvious.
+  </p>
+
+  <div class="compare-frame">
+    <div class="compare-backdrop">
+      <div class="mode-switch">
+        <button class="mode-btn active">Brief</button>
+        <button class="mode-btn">Raw JD</button>
+      </div>
+      <div class="read-body">
+        <h3>What this role actually is</h3>
+        <p>
+          Topo is hiring a Head of Customer Operations to own the post-sale machine end-to-end —
+          onboarding flow, usage expansion, renewal motion, and the CS tooling stack.
+        </p>
+        <h3>What they care about</h3>
+        <p>
+          Three signals jumped out of the JD and their hiring page. First, NRR discipline — they
+          mention it four times and have a dashboard screenshot in their pitch deck.
+        </p>
+      </div>
+    </div>
+
+    <div class="compare-slideout">
+      <div class="compare-head">
+        <div>
+          <h3 class="compare-head-title">Qualifications vs. preferences</h3>
+          <div class="compare-head-sub">Topo.io · Head of Customer Operations</div>
+        </div>
+        <button class="close-btn">×</button>
+      </div>
+
+      <div class="compare-body">
+        <div class="diff-row">
+          <span class="mark y">✓</span>
+          <div>
+            <div class="diff-label">Compensation</div>
+            <div class="diff-pair">
+              <span class="diff-key">Role</span><span class="diff-val on">$190k base · $240k OTE</span>
+              <span class="diff-key">You want</span><span class="diff-val">≥ $175k base</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diff-row">
+          <span class="mark y">✓</span>
+          <div>
+            <div class="diff-label">Work arrangement</div>
+            <div class="diff-pair">
+              <span class="diff-key">Role</span><span class="diff-val on">Hybrid · 3 days onsite</span>
+              <span class="diff-key">You want</span><span class="diff-val">Hybrid or remote</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diff-row">
+          <span class="mark y">✓</span>
+          <div>
+            <div class="diff-label">Function</div>
+            <div class="diff-pair">
+              <span class="diff-key">Role</span><span class="diff-val on">Post-sale leadership · NRR</span>
+              <span class="diff-key">You want</span><span class="diff-val">GTM / post-sale ownership</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diff-row">
+          <span class="mark y">✓</span>
+          <div>
+            <div class="diff-label">Company stage</div>
+            <div class="diff-pair">
+              <span class="diff-key">Role</span><span class="diff-val on">Series B · ~80 people</span>
+              <span class="diff-key">You want</span><span class="diff-val">Series A–C · 30–150</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diff-row">
+          <span class="mark q">?</span>
+          <div>
+            <div class="diff-label">Industry</div>
+            <div class="diff-pair">
+              <span class="diff-key">Role</span><span class="diff-val on">GTM tooling / sales intelligence</span>
+              <span class="diff-key">You want</span><span class="diff-val">Infra, dev tools, B2B SaaS</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diff-row">
+          <span class="mark n">✗</span>
+          <div>
+            <div class="diff-label">Location</div>
+            <div class="diff-pair">
+              <span class="diff-key">Role</span><span class="diff-val off">San Francisco</span>
+              <span class="diff-key">You want</span><span class="diff-val">NYC · remote</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <!-- 6. Open questions                                          -->
+  <!-- ═════════════════════════════════════════════════════════ -->
+  <div class="section-label">Open questions</div>
+  <p class="section-title">Decisions still to make</p>
+  <p class="section-desc">Three things that need your call before this ships.</p>
+
+  <div class="questions">
+    <div class="q-item">
+      <p class="q-title">Summary card default state — collapsed or auto-expanded on first visit?</p>
+      <p class="q-body">
+        Collapsed is faster to scan on repeat visits, but first-time readers miss the dimension breakdown.
+        Option: auto-expand on the very first view of a given opp, then collapse by default after.
+        Alternative: always collapsed, relying on the micro-bars to carry the scorecard signal.
+      </p>
+    </div>
+    <div class="q-item">
+      <p class="q-title">Regenerate Brief — confirm dialog or one-click?</p>
+      <p class="q-body">
+        Regeneration costs a Haiku synthesis call (~$0.01–0.02). One click is frictionless but lets Matt
+        accidentally burn tokens if he misclicks. A small "Regenerating — 1 call, ~2s" inline hint may be
+        enough, or a true confirm for cases where a recent regen exists.
+      </p>
+    </div>
+    <div class="q-item">
+      <p class="q-title">Compare-to-preferences — side panel slide-out or full-page modal?</p>
+      <p class="q-body">
+        Slide-out keeps the Brief visible behind it (good for cross-reference), but sacrifices
+        the Coop rail. Full-page modal gets more horizontal room for the diff table but feels
+        heavier. Current vote: slide-out that temporarily hides the Coop rail while open.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

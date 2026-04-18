@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stage label treatment — #242</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-blue: #4573D2;
+    --ci-accent-purple: #7C6EF0;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --ci-radius-lg: 14px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Stage semantic colors */
+    --stage-new:        #8A8E94;  /* New / To research */
+    --stage-applied:    #4573D2;  /* Applied */
+    --stage-outreach:   #7C6EF0;  /* Outreach */
+    --stage-convo:      #F5A623;  /* Conversation */
+    --stage-initial:    #FC636B;  /* Initial Call */
+    --stage-hm:         #E04E56;  /* HM Call */
+    --stage-offer:      #36B37E;  /* Offer */
+    --stage-won:        #1B7E53;  /* Closed Won */
+    --stage-lost:       #E8384F;  /* Closed Lost */
+    --stage-rejected:   #8A8E94;  /* Rejected */
+    --stage-declined:   #C4CAD1;  /* Declined */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.015em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 900px; line-height: 1.55; margin-bottom: 8px; }
+  .prompt-line {
+    font-size: 12px; color: var(--ci-text-tertiary);
+    border-left: 2px solid var(--ci-border-strong);
+    padding: 6px 12px;
+    margin-bottom: 22px;
+    max-width: 900px;
+    background: var(--ci-bg-raised);
+    border-radius: 0 var(--ci-radius-sm) var(--ci-radius-sm) 0;
+    line-height: 1.55;
+  }
+
+  .rec-strap {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(54,179,126,0.10); color: #1B7E53;
+    font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: 99px;
+    margin-bottom: 28px;
+  }
+  .rec-strap::before { content: '●'; font-size: 8px; }
+
+  .section-label {
+    font-size: 15px; font-weight: 700; color: var(--ci-text-primary);
+    margin: 44px 0 4px; letter-spacing: -0.005em;
+  }
+  .section-label:first-of-type { margin-top: 8px; }
+  .section-sub { font-size: 12.5px; color: var(--ci-text-secondary); margin-bottom: 18px; max-width: 900px; line-height: 1.6; }
+
+  .card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 22px 24px;
+    max-width: 1320px;
+    margin-bottom: 20px;
+  }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.005em; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55; margin-bottom: 14px; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     TAXONOMY TABLE
+     ═══════════════════════════════════════════════════════════════ */
+  .tax-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .tax-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ci-border-default);
+    font-size: 11px; font-weight: 700;
+    color: var(--ci-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .tax-table td {
+    padding: 12px 12px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    vertical-align: top;
+  }
+  .tax-table tr:last-child td { border-bottom: none; }
+  .tax-old {
+    color: var(--ci-text-secondary);
+    text-decoration: line-through;
+    text-decoration-color: var(--ci-border-strong);
+    font-size: 12px;
+  }
+  .tax-arrow { color: var(--ci-text-tertiary); font-size: 13px; }
+  .tax-new { font-weight: 600; color: var(--ci-text-primary); }
+  .tax-sub {
+    display: inline-block;
+    font-size: 10.5px; font-weight: 500;
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+    padding: 2px 7px;
+    border-radius: 99px;
+    margin-left: 6px;
+    letter-spacing: 0.01em;
+  }
+  .tax-rationale {
+    font-size: 11.5px; color: var(--ci-text-secondary);
+    line-height: 1.55;
+  }
+  .tax-dot {
+    display: inline-block;
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+    position: relative; top: -1px;
+  }
+  .tax-keep {
+    font-size: 10.5px; font-weight: 600;
+    color: var(--ci-text-tertiary);
+    background: var(--ci-bg-inset);
+    padding: 2px 8px; border-radius: 99px;
+    letter-spacing: 0.01em;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     STAGE LABEL COMPONENTS — reusable
+     ═══════════════════════════════════════════════════════════════ */
+  .stage-label {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.005em;
+    line-height: 1.2;
+  }
+  .stage-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--stage-color, var(--ci-text-tertiary));
+  }
+  .stage-dot.larger { width: 8px; height: 8px; }
+  .stage-primary {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+  .stage-substate {
+    display: inline-flex; align-items: center;
+    font-size: 11px; font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+    letter-spacing: 0.01em;
+  }
+  .stage-substate.held { background: rgba(54,179,126,0.10); color: #1B7E53; }
+  .stage-substate.scheduled { background: rgba(69,115,210,0.10); color: var(--ci-accent-blue); }
+
+  /* ═══════════════════════════════════════════════════════════════
+     ANNOTATED HEADER CLOSE-UP
+     ═══════════════════════════════════════════════════════════════ */
+  .closeup-wrap {
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-md);
+    padding: 48px 60px 72px;
+    display: flex; justify-content: center;
+    position: relative;
+    margin-bottom: 14px;
+  }
+  .closeup-col {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-md);
+    width: 320px;
+    position: relative;
+  }
+  .closeup-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .closeup-count {
+    margin-left: auto;
+    font-size: 11px; font-weight: 700;
+    padding: 1px 8px;
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-secondary);
+    border-radius: 99px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* annotations */
+  .annot-line {
+    position: absolute;
+    border-left: 1px dashed var(--ci-text-tertiary);
+    border-bottom: 1px dashed var(--ci-text-tertiary);
+    pointer-events: none;
+  }
+  .annot-label {
+    position: absolute;
+    font-size: 10.5px; color: var(--ci-text-secondary);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    background: var(--ci-bg-raised);
+    padding: 3px 8px;
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: 4px;
+    white-space: nowrap;
+    line-height: 1.35;
+  }
+  .annot-label strong { color: var(--ci-text-primary); font-weight: 700; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     COLOR DOT REFERENCE
+     ═══════════════════════════════════════════════════════════════ */
+  .dot-ref-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 14px;
+    padding: 6px 0;
+  }
+  .dot-ref-item {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-raised);
+  }
+  .dot-ref-top { display: flex; align-items: center; gap: 8px; }
+  .dot-ref-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-ref-name { font-size: 12.5px; font-weight: 600; color: var(--ci-text-primary); letter-spacing: -0.005em; }
+  .dot-ref-hex { font-size: 10.5px; font-family: 'SF Mono', monospace; color: var(--ci-text-tertiary); }
+
+  /* ═══════════════════════════════════════════════════════════════
+     KANBAN BOARD — headers row
+     ═══════════════════════════════════════════════════════════════ */
+  .kanban-shell {
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-md);
+    padding: 20px 20px 28px;
+    overflow-x: auto;
+  }
+  .kanban-row {
+    display: flex; gap: 10px;
+    min-height: 320px;
+    align-items: flex-start;
+  }
+  .kanban-col {
+    flex-shrink: 0;
+    width: 240px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-md);
+    display: flex; flex-direction: column;
+  }
+  .kanban-col-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    height: 44px; /* fixed header height */
+  }
+  .kanban-col-cards {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 8px;
+    flex: 1;
+  }
+  .kanban-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: var(--ci-radius-sm);
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+  .kanban-card-title { font-weight: 600; color: var(--ci-text-primary); letter-spacing: -0.005em; margin-bottom: 2px; }
+  .kanban-card-sub { font-size: 10.5px; color: var(--ci-text-tertiary); }
+  .kanban-col-count {
+    margin-left: auto;
+    font-size: 11px; font-weight: 700;
+    padding: 1px 7px;
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-secondary);
+    border-radius: 99px;
+    font-variant-numeric: tabular-nums;
+  }
+  .kanban-col-count.zero { color: var(--ci-text-tertiary); opacity: 0.55; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     STATUS FILTER DROPDOWN
+     ═══════════════════════════════════════════════════════════════ */
+  .dropdown-demo {
+    display: flex; gap: 40px; align-items: flex-start;
+  }
+  .dropdown-trigger {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    font-size: 13px; font-weight: 500; color: var(--ci-text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .dropdown-trigger-chev {
+    width: 12px; height: 12px; stroke: var(--ci-text-tertiary);
+    fill: none; stroke-width: 2;
+  }
+  .dropdown-panel {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    box-shadow: 0 10px 36px rgba(30,31,33,0.14), 0 2px 8px rgba(0,0,0,0.06);
+    width: 280px;
+    padding: 4px;
+  }
+  .dropdown-panel-header {
+    font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ci-text-tertiary);
+    padding: 10px 12px 6px;
+  }
+  .dropdown-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+  }
+  .dropdown-item:hover { background: var(--ci-bg-inset); }
+  .dropdown-item.selected { background: var(--ci-accent-primary-soft); }
+  .dropdown-item.selected::after {
+    content: ''; width: 14px; height: 10px; margin-left: auto;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10'><path d='M1 5l4 4 8-8' stroke='%23FC636B' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: center;
+  }
+  .dropdown-item-text {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 500; color: var(--ci-text-primary);
+  }
+  .dropdown-item-substate {
+    font-size: 11px; font-weight: 500;
+    color: var(--ci-text-tertiary);
+    letter-spacing: 0.01em;
+  }
+  .dropdown-item-substate::before { content: '·'; margin-right: 6px; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     INBOX CHIPS
+     ═══════════════════════════════════════════════════════════════ */
+  .inbox-demo {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 16px 20px;
+    overflow-x: auto;
+  }
+  .inbox-chips-row {
+    display: flex; gap: 6px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .inbox-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 12px;
+    background: var(--ci-bg-inset);
+    border-radius: 99px;
+    font-size: 12px; font-weight: 500;
+    color: var(--ci-text-secondary);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out);
+  }
+  .inbox-chip.active {
+    background: var(--ci-accent-primary-soft);
+    color: var(--ci-accent-primary);
+    border-color: rgba(252,99,107,0.2);
+    font-weight: 600;
+  }
+  .inbox-chip:hover:not(.active) { background: #DFE2E6; color: var(--ci-text-primary); }
+  .inbox-chip-count {
+    font-size: 10px; font-weight: 700;
+    background: var(--ci-bg-raised);
+    padding: 1px 6px;
+    border-radius: 99px;
+    color: var(--ci-text-tertiary);
+    margin-left: 1px;
+  }
+  .inbox-chip.active .inbox-chip-count { background: var(--ci-accent-primary); color: #fff; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     COMPANY DETAIL STAGE PICKER
+     ═══════════════════════════════════════════════════════════════ */
+  .picker-demo {
+    display: flex; gap: 30px; align-items: flex-start;
+    padding: 24px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+  }
+  .picker-collapsed {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    font-size: 14px; font-weight: 600;
+    color: var(--ci-text-primary);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .picker-collapsed .chev {
+    margin-left: 6px; color: var(--ci-text-tertiary);
+    stroke: currentColor; fill: none; stroke-width: 2; width: 12px; height: 12px;
+  }
+  .picker-expanded {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    box-shadow: 0 10px 36px rgba(30,31,33,0.14);
+    width: 300px;
+    padding: 4px;
+  }
+  .picker-group-header {
+    font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ci-text-tertiary);
+    padding: 10px 12px 4px;
+  }
+  .picker-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+  }
+  .picker-item:hover { background: var(--ci-bg-inset); }
+  .picker-item.current { background: var(--ci-accent-primary-soft); }
+  .picker-item-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 500; color: var(--ci-text-primary);
+  }
+  .picker-item-sub {
+    font-size: 11.5px; color: var(--ci-text-secondary); font-weight: 500;
+  }
+  .picker-item-sub::before { content: '—'; margin: 0 6px; color: var(--ci-text-tertiary); }
+  .picker-substate-toggle {
+    margin-left: auto;
+    display: flex; gap: 2px;
+    background: var(--ci-bg-inset);
+    padding: 2px;
+    border-radius: var(--ci-radius-sm);
+  }
+  .picker-toggle-btn {
+    font-size: 10.5px; font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: var(--ci-text-tertiary);
+    background: transparent;
+    border: none; cursor: pointer;
+    font-family: inherit;
+  }
+  .picker-toggle-btn.active {
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     ACTIVITY FEED ENTRY
+     ═══════════════════════════════════════════════════════════════ */
+  .feed-demo {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .feed-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-icon {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .feed-icon svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .feed-content {
+    flex: 1;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .feed-line {
+    font-size: 13px; color: var(--ci-text-primary);
+    line-height: 1.45;
+    display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .feed-line strong { font-weight: 600; }
+  .feed-line .stage-label { display: inline-flex; }
+  .feed-time { font-size: 11px; color: var(--ci-text-tertiary); }
+
+  /* ═══════════════════════════════════════════════════════════════
+     APPLY QUEUE CARD STAGE
+     ═══════════════════════════════════════════════════════════════ */
+  .queue-demo {
+    display: flex; justify-content: center;
+    padding: 28px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-md);
+  }
+  .queue-card {
+    width: 320px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    padding: 18px 20px;
+    box-shadow: 0 4px 16px rgba(30,31,33,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .queue-card-top {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .queue-card-company {
+    font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .queue-card-role {
+    font-size: 13px; color: var(--ci-text-secondary); margin-top: 2px;
+  }
+  .queue-stage-indicator {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 10px;
+    background: var(--ci-bg-inset);
+    border-radius: 99px;
+    font-size: 11.5px; font-weight: 600;
+    color: var(--ci-text-primary);
+  }
+  .queue-card-meta {
+    display: flex; gap: 10px; font-size: 11px;
+    color: var(--ci-text-tertiary); padding-top: 8px;
+    border-top: 1px solid var(--ci-border-subtle);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     COOP CHAT REFERENCE
+     ═══════════════════════════════════════════════════════════════ */
+  .chat-demo {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .chat-msg {
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .chat-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--ci-accent-primary);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .chat-avatar.coop {
+    background: #fff;
+    border: 1.5px solid var(--ci-accent-primary);
+    color: var(--ci-accent-primary);
+  }
+  .chat-bubble {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-md);
+    font-size: 13px; line-height: 1.55;
+    color: var(--ci-text-primary);
+  }
+  .chat-bubble .stage-label { display: inline-flex; vertical-align: baseline; }
+  .chat-sender { font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 2px; font-weight: 600; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     BEFORE / AFTER
+     ═══════════════════════════════════════════════════════════════ */
+  .ba-wrap {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  }
+  .ba-col h4 {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 10px;
+  }
+  .ba-label-before {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; font-weight: 600;
+    background: rgba(232,56,79,0.08); color: var(--ci-accent-red);
+    padding: 2px 8px; border-radius: 99px;
+    margin-bottom: 12px;
+  }
+  .ba-label-before::before { content: '●'; font-size: 7px; }
+  .ba-label-after {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; font-weight: 600;
+    background: rgba(54,179,126,0.12); color: #1B7E53;
+    padding: 2px 8px; border-radius: 99px;
+    margin-bottom: 12px;
+  }
+  .ba-label-after::before { content: '●'; font-size: 7px; }
+  .ba-shell {
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-md);
+    padding: 14px;
+    overflow-x: auto;
+  }
+  .ba-row {
+    display: flex; gap: 6px; min-height: 150px;
+  }
+  .ba-col-mini {
+    flex-shrink: 0;
+    width: 160px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    display: flex; flex-direction: column;
+  }
+  .ba-col-mini-header-old {
+    padding: 10px 10px 8px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    font-size: 12px; font-weight: 600;
+    color: var(--ci-text-primary);
+    min-height: 52px;
+    display: flex; align-items: flex-start;
+    gap: 6px;
+  }
+  .ba-col-mini-header-new {
+    padding: 10px 10px 8px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    min-height: 40px; /* uniform */
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ba-col-mini-count {
+    margin-left: auto;
+    font-size: 10.5px; font-weight: 700;
+    padding: 1px 6px;
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-secondary);
+    border-radius: 99px;
+  }
+  .ba-col-mini-old-topstripe {
+    height: 3px;
+    background: var(--stage-color, var(--ci-text-tertiary));
+    border-top-left-radius: var(--ci-radius-sm);
+    border-top-right-radius: var(--ci-radius-sm);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     DATA MIGRATION
+     ═══════════════════════════════════════════════════════════════ */
+  .mig-box {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 20px 24px;
+    max-width: 900px;
+  }
+  .mig-box p { font-size: 13px; line-height: 1.7; color: var(--ci-text-primary); margin-bottom: 10px; }
+  .mig-box p:last-child { margin-bottom: 0; }
+  .mig-box code {
+    font-family: 'SF Mono', monospace;
+    font-size: 11.5px;
+    background: var(--ci-bg-inset);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--ci-text-primary);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     OPEN QUESTIONS
+     ═══════════════════════════════════════════════════════════════ */
+  .q-list {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 20px 24px;
+    max-width: 900px;
+  }
+  .q-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    display: flex; gap: 12px;
+  }
+  .q-item:first-child { padding-top: 0; }
+  .q-item:last-child { padding-bottom: 0; border-bottom: none; }
+  .q-num {
+    flex-shrink: 0;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .q-body { flex: 1; }
+  .q-body strong { font-size: 13px; font-weight: 600; display: block; margin-bottom: 3px; color: var(--ci-text-primary); }
+  .q-body p { font-size: 12.5px; color: var(--ci-text-secondary); line-height: 1.55; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     MISC
+     ═══════════════════════════════════════════════════════════════ */
+  .caption {
+    font-size: 11px;
+    color: var(--ci-text-tertiary);
+    margin-top: 10px;
+    max-width: 900px;
+    line-height: 1.5;
+  }
+  .row-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .pill-demo-group {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Stage label treatment — #242</h1>
+<p class="page-sub">Stage labels appear across Kanban headers, Inbox chips, Status filters, the Company detail picker, Activity feed, Apply Queue, and Coop chat. Today they're too long and inconsistent — columns wrap, labels get cut off at the right edge, and a stray checkmark on "Applied" breaks the grammar. This is the recommended fix: a tighter taxonomy, a primary + substate pattern for the dual-state stages, and a single consistent visual treatment on every surface.</p>
+<div class="prompt-line">Matt: redesign stage name display across all surfaces. Rename where too long, separate substates, apply the same pattern everywhere.</div>
+
+<div class="rec-strap">Recommended approach</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- TAXONOMY -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div class="section-label">1. Recommended taxonomy</div>
+<p class="section-sub">Rename aggressively for brevity. The rule: short, concrete, and parseable at a glance. Split Scheduled/Held out as substates rather than independent stages.</p>
+
+<div class="card">
+  <table class="tax-table">
+    <thead>
+      <tr>
+        <th style="width:28%;">Today</th>
+        <th style="width:32%;">Recommended</th>
+        <th style="width:40%;">Rationale</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-applied);"></span><span class="tax-old">Applied ✓</span></td>
+        <td><span class="tax-new">Applied</span></td>
+        <td class="tax-rationale">Checkmark was inconsistent decoration — every other label is plain text. Drop it.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-outreach);"></span><span class="tax-old">Reached Out / Requested Intro</span></td>
+        <td><span class="tax-new">Outreach</span></td>
+        <td class="tax-rationale">The slash-compound tried to name two actions that live at the same stage. One word covers both.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-convo);"></span><span class="tax-old">Convo Started</span></td>
+        <td><span class="tax-new">Conversation</span></td>
+        <td class="tax-rationale">"Convo" was informal shorthand; "Started" was an implicit past-participle. The stage itself <em>is</em> the conversation.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-initial);"></span><span class="tax-old">Initial Call Scheduled</span></td>
+        <td><span class="tax-new">Initial Call</span><span class="tax-sub">Scheduled</span></td>
+        <td class="tax-rationale">Splits into primary stage + substate. Two stages become one column with a Scheduled → Held progression.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-initial);"></span><span class="tax-old">Initial Call Held</span></td>
+        <td><span class="tax-new">Initial Call</span><span class="tax-sub">Held</span></td>
+        <td class="tax-rationale">Merges with above. Substate pill carries the pre/post-event distinction.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-hm);"></span><span class="tax-old">Hiring Manager / Founder Call Scheduled</span></td>
+        <td><span class="tax-new">HM Call</span><span class="tax-sub">Scheduled</span></td>
+        <td class="tax-rationale">"HM" is field-standard shorthand in GTM hiring. Covers hiring manager and founder calls without naming both.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-hm);"></span><span class="tax-old">Hiring Manager / Founder Call Held</span></td>
+        <td><span class="tax-new">HM Call</span><span class="tax-sub">Held</span></td>
+        <td class="tax-rationale">Merges with above.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-offer);"></span><span class="tax-old">Offer</span></td>
+        <td><span class="tax-new">Offer</span><span class="tax-keep">keep</span></td>
+        <td class="tax-rationale">Already clean.</td>
+      </tr>
+      <tr>
+        <td><span class="tax-dot" style="background: var(--stage-won);"></span><span class="tax-old">Closed Won Agreement</span></td>
+        <td><span class="tax-new">Closed Won</span></td>
+        <td class="tax-rationale">"Agreement" was redundant — Closed Won <em>means</em> a signed agreement.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- VISUAL PATTERN -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div class="section-label">2. Visual pattern</div>
+<p class="section-sub">One treatment: a 6px color dot + primary label + optional substate pill + counter. All text, no icons, no gradients, no checkmarks. Fixed column header height so the board stays uniform regardless of label length.</p>
+
+<!-- A) close-up annotated -->
+<div class="card">
+  <div class="card-title">A. Primary + substate pattern (annotated close-up)</div>
+  <div class="card-sub">Anatomy of a single column header. The substate pill is visually subordinate to the primary label — smaller text, muted pill background. Semantic color lives in the 6px dot only.</div>
+
+  <div class="closeup-wrap">
+    <div class="closeup-col">
+      <div class="closeup-header">
+        <span class="stage-dot larger" style="--stage-color: var(--stage-hm);"></span>
+        <span class="stage-primary" style="font-size: 14px;">HM Call</span>
+        <span class="stage-substate scheduled">Scheduled</span>
+        <span class="closeup-count">5</span>
+      </div>
+    </div>
+
+    <!-- annotation labels -->
+    <div class="annot-label" style="top: 8px; left: 64px;"><strong>6px dot</strong><br/>stage color</div>
+    <div class="annot-line" style="top: 30px; left: 110px; width: 20px; height: 30px;"></div>
+
+    <div class="annot-label" style="top: 8px; left: 210px;"><strong>primary</strong><br/>14px / 600</div>
+    <div class="annot-line" style="top: 30px; left: 245px; width: 20px; height: 30px;"></div>
+
+    <div class="annot-label" style="bottom: 8px; left: 140px;"><strong>substate pill</strong><br/>11px / 500 · muted bg</div>
+    <div class="annot-line" style="top: 62px; left: 300px; width: 20px; height: 40px; border-bottom: none; border-left: 1px dashed var(--ci-text-tertiary);"></div>
+
+    <div class="annot-label" style="bottom: 8px; right: 100px;"><strong>counter</strong><br/>11px / 700 · tabular</div>
+    <div class="annot-line" style="top: 62px; right: 135px; width: 20px; height: 40px; border-bottom: none; border-left: 1px dashed var(--ci-text-tertiary);"></div>
+  </div>
+
+  <p class="caption">The substate background is a muted gray (<code style="font-family:'SF Mono',monospace;">#EBEDF0</code>) by default. Optional semantic tint for Held = soft teal, Scheduled = soft blue — telegraphs the progression without color-coding the whole column.</p>
+</div>
+
+<!-- B) color dot reference -->
+<div class="card">
+  <div class="card-title">B. Color dot reference</div>
+  <div class="card-sub">One 6px dot per stage, earned semantics. Stages that share a family (Initial/HM calls) share a hue range. Terminal stages (Won/Lost/Rejected) get the strongest saturation.</div>
+
+  <div class="dot-ref-row">
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-new);"></span><span class="dot-ref-name">New</span></div>
+      <span class="dot-ref-hex">#8A8E94</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-applied);"></span><span class="dot-ref-name">Applied</span></div>
+      <span class="dot-ref-hex">#4573D2</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-outreach);"></span><span class="dot-ref-name">Outreach</span></div>
+      <span class="dot-ref-hex">#7C6EF0</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-convo);"></span><span class="dot-ref-name">Conversation</span></div>
+      <span class="dot-ref-hex">#F5A623</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-initial);"></span><span class="dot-ref-name">Initial Call</span></div>
+      <span class="dot-ref-hex">#FC636B</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-hm);"></span><span class="dot-ref-name">HM Call</span></div>
+      <span class="dot-ref-hex">#E04E56</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-offer);"></span><span class="dot-ref-name">Offer</span></div>
+      <span class="dot-ref-hex">#36B37E</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-won);"></span><span class="dot-ref-name">Closed Won</span></div>
+      <span class="dot-ref-hex">#1B7E53</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-lost);"></span><span class="dot-ref-name">Closed Lost</span></div>
+      <span class="dot-ref-hex">#E8384F</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-rejected);"></span><span class="dot-ref-name">Rejected</span></div>
+      <span class="dot-ref-hex">#8A8E94</span>
+    </div>
+    <div class="dot-ref-item">
+      <div class="dot-ref-top"><span class="dot-ref-dot" style="background: var(--stage-declined);"></span><span class="dot-ref-name">Declined</span></div>
+      <span class="dot-ref-hex">#C4CAD1</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- CROSS-SURFACE -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div class="section-label">3. Cross-surface application</div>
+<p class="section-sub">Same pattern on every surface. The substate is shown or hidden by density — loud where there's room (Kanban header, picker, activity feed, chat), hidden where chips are dense (Inbox).</p>
+
+<!-- A) Kanban -->
+<div class="card">
+  <div class="card-title">A. Kanban board header row</div>
+  <div class="card-sub">Ten columns, one fixed header height (44px). Nothing wraps. The drag-target and actions chrome from existing kanban-board-chrome stay unchanged.</div>
+
+  <div class="kanban-shell">
+    <div class="kanban-row">
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-new);"></span>
+          <span class="stage-primary">New</span>
+          <span class="kanban-col-count">12</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Modal</div><div class="kanban-card-sub">Forward Deployed Engineer</div></div>
+          <div class="kanban-card"><div class="kanban-card-title">Pinecone</div><div class="kanban-card-sub">GTM Lead</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-applied);"></span>
+          <span class="stage-primary">Applied</span>
+          <span class="kanban-col-count">7</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Linear</div><div class="kanban-card-sub">Head of GTM</div></div>
+          <div class="kanban-card"><div class="kanban-card-title">Figma</div><div class="kanban-card-sub">Sr PMM</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-outreach);"></span>
+          <span class="stage-primary">Outreach</span>
+          <span class="kanban-col-count">4</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Cursor</div><div class="kanban-card-sub">GTM Strategy</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-convo);"></span>
+          <span class="stage-primary">Conversation</span>
+          <span class="kanban-col-count">3</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Topo.io</div><div class="kanban-card-sub">Founding GTM</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+          <span class="stage-primary">Initial Call</span>
+          <span class="stage-substate scheduled">Scheduled</span>
+          <span class="kanban-col-count">2</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Clay</div><div class="kanban-card-sub">Head of Ops</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+          <span class="stage-primary">Initial Call</span>
+          <span class="stage-substate held">Held</span>
+          <span class="kanban-col-count">2</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Gong</div><div class="kanban-card-sub">PMM Lead</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+          <span class="stage-primary">HM Call</span>
+          <span class="stage-substate scheduled">Scheduled</span>
+          <span class="kanban-col-count">5</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Topo.io</div><div class="kanban-card-sub">with Roee, Fri</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+          <span class="stage-primary">HM Call</span>
+          <span class="stage-substate held">Held</span>
+          <span class="kanban-col-count">1</span>
+        </div>
+        <div class="kanban-col-cards">
+          <div class="kanban-card"><div class="kanban-card-title">Attio</div><div class="kanban-card-sub">with Alex</div></div>
+        </div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-offer);"></span>
+          <span class="stage-primary">Offer</span>
+          <span class="kanban-col-count zero">0</span>
+        </div>
+        <div class="kanban-col-cards"></div>
+      </div>
+
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="stage-dot" style="--stage-color: var(--stage-won);"></span>
+          <span class="stage-primary">Closed Won</span>
+          <span class="kanban-col-count zero">0</span>
+        </div>
+        <div class="kanban-col-cards"></div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">Header row is a uniform 44px. No wrapping, no cutoff. Substate pill sits inline right of the primary label and wraps under only at extreme column widths (which the Kanban already prevents via fixed column width).</p>
+</div>
+
+<!-- B) Status filter dropdown -->
+<div class="card">
+  <div class="card-title">B. Table view · Status filter dropdown</div>
+  <div class="card-sub">In dropdowns and filter lists the substate sits inline with a middle dot separator — denser than the pill treatment but still readable.</div>
+
+  <div class="dropdown-demo">
+    <div>
+      <div class="dropdown-trigger">
+        <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+        <span>Status: HM Call · Scheduled</span>
+        <svg class="dropdown-trigger-chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="dropdown-panel">
+      <div class="dropdown-panel-header">Filter by stage</div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-new);"></span>
+          New
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-applied);"></span>
+          Applied
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-outreach);"></span>
+          Outreach
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-convo);"></span>
+          Conversation
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+          Initial Call
+          <span class="dropdown-item-substate">Scheduled</span>
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+          Initial Call
+          <span class="dropdown-item-substate">Held</span>
+        </span>
+      </div>
+      <div class="dropdown-item selected">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+          HM Call
+          <span class="dropdown-item-substate">Scheduled</span>
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+          HM Call
+          <span class="dropdown-item-substate">Held</span>
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-offer);"></span>
+          Offer
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-won);"></span>
+          Closed Won
+        </span>
+      </div>
+      <div class="dropdown-item">
+        <span class="dropdown-item-text">
+          <span class="stage-dot" style="--stage-color: var(--stage-lost);"></span>
+          Closed Lost
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- C) Inbox chips -->
+<div class="card">
+  <div class="card-title">C. Inbox filter chips</div>
+  <div class="card-sub">Chips hide the substate to stay dense. One chip per primary stage; when filtering by HM Call the inbox shows both Scheduled and Held. Substate-level filter is still possible via the overflow menu.</div>
+
+  <div class="inbox-demo">
+    <div class="inbox-chips-row">
+      <span class="inbox-chip active">
+        <span>All</span>
+        <span class="inbox-chip-count">42</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-applied);"></span>
+        <span>Applied</span>
+        <span class="inbox-chip-count">7</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-outreach);"></span>
+        <span>Outreach</span>
+        <span class="inbox-chip-count">4</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-convo);"></span>
+        <span>Conversation</span>
+        <span class="inbox-chip-count">3</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+        <span>Initial Call</span>
+        <span class="inbox-chip-count">4</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+        <span>HM Call</span>
+        <span class="inbox-chip-count">6</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-offer);"></span>
+        <span>Offer</span>
+        <span class="inbox-chip-count">1</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-won);"></span>
+        <span>Closed Won</span>
+        <span class="inbox-chip-count">2</span>
+      </span>
+      <span class="inbox-chip">
+        <span class="stage-dot" style="--stage-color: var(--stage-lost);"></span>
+        <span>Closed Lost</span>
+        <span class="inbox-chip-count">8</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- D) Company detail picker -->
+<div class="card">
+  <div class="card-title">D. Company detail · stage picker</div>
+  <div class="card-sub">Full em-dash treatment in the closed state ("HM Call — Scheduled"). Expanded picker shows a substate toggle inline on the current stage — two-click to flip Scheduled/Held without re-picking.</div>
+
+  <div class="picker-demo">
+    <div>
+      <div style="font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Current stage</div>
+      <div class="picker-collapsed">
+        <span class="stage-dot larger" style="--stage-color: var(--stage-hm);"></span>
+        <span>HM Call</span>
+        <span class="picker-item-sub">Scheduled</span>
+        <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="picker-expanded">
+      <div class="picker-group-header">Pipeline</div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-applied);"></span>
+          Applied
+        </span>
+      </div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-outreach);"></span>
+          Outreach
+        </span>
+      </div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-convo);"></span>
+          Conversation
+        </span>
+      </div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+          Initial Call
+        </span>
+        <div class="picker-substate-toggle">
+          <button class="picker-toggle-btn active">Sched</button>
+          <button class="picker-toggle-btn">Held</button>
+        </div>
+      </div>
+      <div class="picker-item current">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+          HM Call
+        </span>
+        <div class="picker-substate-toggle">
+          <button class="picker-toggle-btn active">Sched</button>
+          <button class="picker-toggle-btn">Held</button>
+        </div>
+      </div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-offer);"></span>
+          Offer
+        </span>
+      </div>
+      <div class="picker-group-header">Closed</div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-won);"></span>
+          Closed Won
+        </span>
+      </div>
+      <div class="picker-item">
+        <span class="picker-item-label">
+          <span class="stage-dot" style="--stage-color: var(--stage-lost);"></span>
+          Closed Lost
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- E) Activity feed -->
+<div class="card">
+  <div class="card-title">E. Activity feed</div>
+  <div class="card-sub">Stage label embedded inline in the sentence. Middle-dot separator between primary and substate — no pill here to avoid competing with the feed's own chrome.</div>
+
+  <div class="feed-demo">
+    <div class="feed-item">
+      <div class="feed-icon">
+        <svg viewBox="0 0 14 14"><path d="M2 7h10M8 3l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="feed-content">
+        <div class="feed-line">
+          Moved <strong>Topo.io</strong> to
+          <span class="stage-label">
+            <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+            <span>HM Call</span>
+            <span style="color: var(--ci-text-tertiary); font-weight: 400; margin: 0 2px;">·</span>
+            <span style="font-weight: 500; color: var(--ci-text-secondary);">Scheduled</span>
+          </span>
+        </div>
+        <div class="feed-time">2 min ago</div>
+      </div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon">
+        <svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5"/><path d="M7 4v3l2 2"/></svg>
+      </div>
+      <div class="feed-content">
+        <div class="feed-line">
+          Initial call with <strong>Clay</strong> moved to
+          <span class="stage-label">
+            <span class="stage-dot" style="--stage-color: var(--stage-initial);"></span>
+            <span>Initial Call</span>
+            <span style="color: var(--ci-text-tertiary); font-weight: 400; margin: 0 2px;">·</span>
+            <span style="font-weight: 500; color: var(--ci-text-secondary);">Held</span>
+          </span>
+        </div>
+        <div class="feed-time">1 hr ago</div>
+      </div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon">
+        <svg viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="feed-content">
+        <div class="feed-line">
+          <strong>Figma</strong> application submitted · moved to
+          <span class="stage-label">
+            <span class="stage-dot" style="--stage-color: var(--stage-applied);"></span>
+            <span>Applied</span>
+          </span>
+        </div>
+        <div class="feed-time">Yesterday</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- F) Apply Queue card + G) Chat -->
+<div class="row-grid">
+  <div class="card">
+    <div class="card-title">F. Apply Queue · stage indicator</div>
+    <div class="card-sub">On a full card with breathing room, the pill treatment works at a glance.</div>
+
+    <div class="queue-demo">
+      <div class="queue-card">
+        <div class="queue-card-top">
+          <div>
+            <div class="queue-card-company">Topo.io</div>
+            <div class="queue-card-role">Founding GTM Lead</div>
+          </div>
+          <div class="queue-stage-indicator">
+            <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+            <span>HM Call</span>
+            <span style="color: var(--ci-text-tertiary); font-weight: 400;">·</span>
+            <span style="font-weight: 500; color: var(--ci-text-secondary);">Scheduled</span>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55;">
+          Series A (Jan 2024) · 32 people · Data observability platform. Roee confirmed Friday 10am PT.
+        </div>
+        <div class="queue-card-meta">
+          <span>Fit 8.2</span>
+          <span>·</span>
+          <span>$180K OTE</span>
+          <span>·</span>
+          <span>Hybrid SF</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">G. Coop chat reference</div>
+    <div class="card-sub">Text-only inline reference. Coop never draws a pill in chat — the dot + primary + middle-dot + substate stays part of the prose.</div>
+
+    <div class="chat-demo">
+      <div class="chat-msg">
+        <div class="chat-avatar">M</div>
+        <div style="flex: 1;">
+          <div class="chat-sender">Matt</div>
+          <div class="chat-bubble">What do I need to prep for Friday's Topo call?</div>
+        </div>
+      </div>
+
+      <div class="chat-msg">
+        <div class="chat-avatar coop">C</div>
+        <div style="flex: 1;">
+          <div class="chat-sender">Coop</div>
+          <div class="chat-bubble">
+            You're at
+            <span class="stage-label" style="font-size: 13px;">
+              <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+              <span>HM Call</span>
+              <span style="color: var(--ci-text-tertiary); font-weight: 400; margin: 0 2px;">·</span>
+              <span style="font-weight: 500; color: var(--ci-text-secondary);">Scheduled</span>
+            </span>
+            for <strong>Topo.io</strong> — Friday 10am PT with Roee. Priorities: make the case for forward-deployed GTM rather than pure IC sales, and bring a POV on their PLG-to-enterprise motion. I have three notes from your intro call; want me to pull the key quotes?
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- BEFORE / AFTER -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div class="section-label">4. Before / After</div>
+<p class="section-sub">Five columns from the current board compared to the redesigned version. Old: two lines wrapping, uneven header heights, right-edge cutoffs. New: uniform height, single line, everything fits.</p>
+
+<div class="card">
+  <div class="ba-wrap">
+    <div class="ba-col">
+      <h4>Before</h4>
+      <span class="ba-label-before">Uneven · wrapping · cut off</span>
+      <div class="ba-shell">
+        <div class="ba-row">
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-old-topstripe" style="--stage-color: var(--stage-outreach);"></div>
+            <div class="ba-col-mini-header-old">
+              <span>Reached Out /<br/>Requested Intro</span>
+              <span class="ba-col-mini-count">4</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-old-topstripe" style="--stage-color: var(--stage-convo);"></div>
+            <div class="ba-col-mini-header-old">
+              <span>Convo Started</span>
+              <span class="ba-col-mini-count">3</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-old-topstripe" style="--stage-color: var(--stage-hm);"></div>
+            <div class="ba-col-mini-header-old">
+              <span>Hiring Manager /<br/>Founder Call Scheduled</span>
+              <span class="ba-col-mini-count">5</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-old-topstripe" style="--stage-color: var(--stage-hm);"></div>
+            <div class="ba-col-mini-header-old">
+              <span>Hiring Manager /<br/>Founder Call Held</span>
+              <span class="ba-col-mini-count">1</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-old-topstripe" style="--stage-color: var(--stage-offer);"></div>
+            <div class="ba-col-mini-header-old" style="overflow: hidden;">
+              <span style="white-space: nowrap;">Off...</span>
+              <span class="ba-col-mini-count">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">Two columns wrap to a second line. "Offer" gets clipped on narrow windows. Top color stripes compete with card content. Column heights are non-uniform.</p>
+    </div>
+
+    <div class="ba-col">
+      <h4>After</h4>
+      <span class="ba-label-after">Uniform · single line · clean</span>
+      <div class="ba-shell">
+        <div class="ba-row">
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-header-new">
+              <span class="stage-dot" style="--stage-color: var(--stage-outreach);"></span>
+              <span class="stage-primary" style="font-size: 12.5px;">Outreach</span>
+              <span class="ba-col-mini-count">4</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-header-new">
+              <span class="stage-dot" style="--stage-color: var(--stage-convo);"></span>
+              <span class="stage-primary" style="font-size: 12.5px;">Conversation</span>
+              <span class="ba-col-mini-count">3</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-header-new">
+              <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+              <span class="stage-primary" style="font-size: 12.5px;">HM Call</span>
+              <span class="stage-substate scheduled" style="font-size: 10px; padding: 1px 6px;">Sched</span>
+              <span class="ba-col-mini-count">5</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-header-new">
+              <span class="stage-dot" style="--stage-color: var(--stage-hm);"></span>
+              <span class="stage-primary" style="font-size: 12.5px;">HM Call</span>
+              <span class="stage-substate held" style="font-size: 10px; padding: 1px 6px;">Held</span>
+              <span class="ba-col-mini-count">1</span>
+            </div>
+          </div>
+          <div class="ba-col-mini">
+            <div class="ba-col-mini-header-new">
+              <span class="stage-dot" style="--stage-color: var(--stage-offer);"></span>
+              <span class="stage-primary" style="font-size: 12.5px;">Offer</span>
+              <span class="ba-col-mini-count zero" style="opacity: 0.55;">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">Uniform 40px header. Every label reads on a single line. Substate pill carries the Scheduled/Held distinction without duplicating the column title. Dot color replaces the top stripe — less chrome, same semantic signal.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- DATA MIGRATION -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div class="section-label">5. Data migration note</div>
+<p class="section-sub">For the Doer handoff — how to apply this without breaking existing entries.</p>
+
+<div class="mig-box">
+  <p><strong>Keep <code>stageKey</code> stable.</strong> Display labels live in the pipeline config, not on the entries. Rename only the displayed string — <code>reached_out_requested_intro</code> still exists as an internal key, it just renders as "Outreach".</p>
+  <p><strong>Introduce <code>stageSubstate</code> on entries.</strong> New optional string field, one of <code>"scheduled" | "held" | null</code>. Only relevant for stages that declare a substate in their pipeline config (<code>supportsSubstate: true</code>).</p>
+  <p><strong>Migration for split stages.</strong> Entries currently in <code>initial_call_scheduled</code> → set <code>stageKey: "initial_call"</code>, <code>stageSubstate: "scheduled"</code>. Same pattern for <code>initial_call_held</code>, <code>hm_call_scheduled</code>, <code>hm_call_held</code>. Gate behind a one-shot migration flag (<code>_migratedStageSubstateV1</code>) in the startup chain alongside existing guards.</p>
+  <p><strong>Stage timestamps.</strong> Generic <code>stageTimestamps</code> keeps working — the map stays keyed by the new consolidated <code>stageKey</code>. Pre-migration timestamps for split-stage keys get merged: keep the earliest entered timestamp under the new primary key, drop the scheduled/held-specific keys (the substate is transient, not a timestamped event).</p>
+  <p><strong>Pipeline config schema change.</strong> Each stage entry in the pipeline config gains three optional fields: <code>dotColor</code>, <code>supportsSubstate</code>, <code>substateOptions: [{ key, label }]</code>. Default pipeline ships with the new schema; custom user pipelines get migrated in-place with sensible defaults (no substate).</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- OPEN QUESTIONS -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div class="section-label">6. Open questions</div>
+<p class="section-sub">Three things I'd flag before handing off.</p>
+
+<div class="q-list">
+  <div class="q-item">
+    <div class="q-num">1</div>
+    <div class="q-body">
+      <strong>Substate pill color — semantic tint or always gray?</strong>
+      <p>The mockup above uses a soft blue for Scheduled and soft teal for Held — it telegraphs the pre-event / post-event progression. But it may read as over-decoration vs. the monochrome-first principle. Alternative: keep every substate pill neutral gray and let the context carry meaning. Leaning toward semantic tint because the distinction actually matters behaviorally, but worth your call.</p>
+    </div>
+  </div>
+  <div class="q-item">
+    <div class="q-num">2</div>
+    <div class="q-body">
+      <strong>Terminal stage taxonomy — Closed Lost, Declined, Rejected?</strong>
+      <p>The original screenshot only showed "Closed Won Agreement". Terminal stages weren't spec'd but clearly exist. Proposed split: <strong>Closed Lost</strong> (you withdrew, they passed, process fell apart) as the umbrella, with substates <em>Declined by me</em> and <em>Rejected by them</em>. Alternative: three separate primary stages. Asking because the substate pattern is newly available and could consolidate here, but the semantic weight of "why it died" is real and might deserve separate columns.</p>
+    </div>
+  </div>
+  <div class="q-item">
+    <div class="q-num">3</div>
+    <div class="q-body">
+      <strong>Apply Queue density — revisit stage icons?</strong>
+      <p>This proposal rejects icons everywhere. But the Apply Queue is dense and stage-aware — when you're swiping through 30 cards, a consistent 12px outline icon per stage may read faster than a dot + word. Recommend shipping text-only first, then A/B-ing icons only in Apply Queue if density becomes a real problem. Not in scope for this issue.</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

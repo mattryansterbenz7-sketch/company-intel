@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tasks in pipeline overview — final (#239)</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232,56,79,0.07);
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 28px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 860px; line-height: 1.55; margin-bottom: 12px; }
+  .rec-strap { display: inline-flex; align-items: center; gap: 8px; background: rgba(54,179,126,0.10); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; margin-bottom: 24px; }
+  .rec-strap::before { content: '✓'; font-size: 11px; }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin: 28px 0 12px;
+  }
+  .section-label:first-of-type { margin-top: 6px; }
+
+  /* ── Page shell ── */
+  .page {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 18px 22px 14px;
+  }
+  .page-title-group { display: flex; align-items: baseline; gap: 10px; }
+  .page-title { font-size: 15px; font-weight: 700; letter-spacing: -0.005em; }
+  .page-sub-count { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500; }
+
+  .period-toggle { display: flex; gap: 2px; }
+  .period-tab { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: var(--ci-radius-sm); color: var(--ci-text-tertiary); cursor: pointer; user-select: none; }
+  .period-tab.active { background: var(--ci-bg-inset); color: var(--ci-text-primary); font-weight: 600; }
+  .date-picker { font-size: 11px; color: var(--ci-text-tertiary); padding: 4px 10px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); cursor: pointer; background: var(--ci-bg-raised); }
+  .date-picker .auto { color: var(--ci-text-tertiary); margin-left: 4px; opacity: 0.7; font-size: 10px; }
+
+  /* ── Split: stats LEFT, tasks RIGHT (switched per Matt's call) ── */
+  .split-body {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr;
+    gap: 0;
+  }
+  .split-col {
+    padding: 16px 22px 20px;
+    background: var(--ci-bg-raised);
+  }
+  .split-divider {
+    background: var(--ci-border-subtle);
+    width: 1px;
+  }
+  .split-col-title {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ci-text-secondary);
+    margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    min-height: 22px;
+  }
+  .split-col-title .count {
+    font-size: 11px; color: var(--ci-text-tertiary); font-weight: 500; text-transform: none; letter-spacing: 0;
+  }
+
+  /* Scope tabs (tasks column) */
+  .scope-tabs { display: flex; gap: 2px; }
+  .scope-tab {
+    font-size: 11px; font-weight: 500;
+    padding: 3px 9px; border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-tertiary); cursor: pointer; user-select: none;
+    letter-spacing: 0; text-transform: none;
+  }
+  .scope-tab.active {
+    background: var(--ci-bg-inset); color: var(--ci-text-primary); font-weight: 600;
+  }
+
+  /* ── Goal cards (stats column — 2×3 grid) ── */
+  .split-goals {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  }
+  .split-goal-card {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 2px;
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out);
+  }
+  .split-goal-card:hover { background: var(--ci-bg-inset); }
+  .split-goal-label { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); letter-spacing: 0.03em; text-transform: uppercase; }
+  .split-goal-valrow { display: flex; align-items: baseline; gap: 6px; }
+  .split-goal-value { font-size: 20px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.01em; }
+  .split-goal-delta { font-size: 11px; font-weight: 600; color: var(--ci-accent-teal); }
+  .split-goal-delta.flat { color: var(--ci-text-tertiary); }
+
+  /* ── Task list (right column) ── */
+  .task-list { display: flex; flex-direction: column; gap: 0; }
+  .task-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 8px 9px 4px;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out);
+    position: relative;
+  }
+  .task-row:hover { background: var(--ci-bg-base); }
+
+  .task-check {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ci-border-strong);
+    background: var(--ci-bg-raised);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: transparent;
+    font-size: 10px; font-weight: 700;
+    transition: all var(--motion-xs) var(--ease-out);
+  }
+  .task-check:hover { border-color: var(--ci-accent-teal); }
+  .task-row.done .task-check {
+    background: var(--ci-accent-teal);
+    border-color: var(--ci-accent-teal);
+    color: #fff;
+  }
+  .task-row.overdue .task-check { border-color: var(--ci-accent-red); }
+
+  .task-body {
+    flex: 1; min-width: 0;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .task-text {
+    font-size: 13.5px; font-weight: 500;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.005em;
+    line-height: 1.35;
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-row.done .task-text {
+    text-decoration: line-through;
+    color: var(--ci-text-tertiary);
+  }
+
+  .task-meta {
+    display: flex; align-items: baseline; gap: 6px;
+    font-size: 11.5px; color: var(--ci-text-tertiary);
+    white-space: nowrap;
+  }
+  .task-company {
+    color: var(--ci-text-secondary);
+    font-weight: 500;
+  }
+  .task-company:hover { color: var(--ci-accent-primary); text-decoration: underline; }
+  .task-meta-sep { opacity: 0.4; }
+  .task-due { font-weight: 500; }
+  .task-due.today { color: var(--ci-accent-amber); font-weight: 600; }
+  .task-due.overdue { color: var(--ci-accent-red); font-weight: 600; }
+
+  .task-actions {
+    display: flex; gap: 1px;
+    opacity: 0;
+    transition: opacity var(--motion-xs) var(--ease-out);
+  }
+  .task-row:hover .task-actions { opacity: 1; }
+  .task-act-btn {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ci-text-tertiary);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background var(--motion-xs), color var(--motion-xs);
+    background: transparent; border: none;
+  }
+  .task-act-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+
+  .task-row.overdue::before {
+    content: '';
+    position: absolute; left: -4px; top: 10px; bottom: 10px;
+    width: 2px; background: var(--ci-accent-red);
+    border-radius: 1px;
+  }
+
+  .task-source-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--ci-accent-amber);
+    flex-shrink: 0;
+    position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
+  }
+
+  .task-review {
+    display: inline-flex; gap: 6px; margin-left: 2px;
+    font-size: 11px;
+  }
+  .task-review a { color: var(--ci-accent-amber); font-weight: 600; cursor: pointer; }
+  .task-review a.dismiss { color: var(--ci-text-tertiary); }
+  .task-review a:hover { text-decoration: underline; }
+
+  .task-add {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 8px 9px 4px;
+    color: var(--ci-text-tertiary);
+    font-size: 13.5px; font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--ci-radius-sm);
+    transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+    border: none; background: transparent;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .task-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-base); }
+  .task-add-circle {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px dashed var(--ci-border-strong);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--ci-text-tertiary);
+  }
+
+  .done-collapse {
+    font-size: 11.5px; color: var(--ci-text-tertiary);
+    padding: 6px 4px; margin-top: 2px;
+    cursor: pointer;
+    transition: color var(--motion-xs) var(--ease-out);
+  }
+  .done-collapse .show-link { color: var(--ci-text-link); text-decoration: underline; }
+  .done-collapse:hover { color: var(--ci-text-secondary); }
+
+  .today-empty {
+    padding: 18px 4px 10px;
+    font-size: 13px; color: var(--ci-text-tertiary);
+    line-height: 1.5;
+  }
+  .today-empty-title { color: var(--ci-text-secondary); font-weight: 600; margin-bottom: 2px; }
+  .today-empty-cta { color: var(--ci-text-link); cursor: pointer; }
+
+  /* ── Caption / spec ── */
+  .caption {
+    font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.6;
+    margin-top: 14px; max-width: 900px;
+  }
+  .caption strong { color: var(--ci-text-secondary); font-weight: 600; }
+
+  .state-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin: 18px 0 8px;
+  }
+
+  .spec {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 22px 26px;
+    max-width: 900px;
+    margin-top: 32px;
+    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
+  }
+  .spec h3 { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px; }
+  .spec h3 + h3, .spec p + h3, .spec ul + h3 { margin-top: 16px; }
+  .spec ul { padding-left: 20px; margin: 4px 0 8px; }
+  .spec li { margin-bottom: 4px; }
+  .spec code { background: var(--ci-bg-inset); padding: 1px 6px; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--ci-text-primary); }
+  .spec .qline { color: var(--ci-text-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Tasks in pipeline overview — Option 2, sides switched</h1>
+<p class="page-sub"><a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/239" style="color:var(--ci-accent-primary)">#239</a> · Stats left, tasks right. Single Pipeline Overview section, split into two columns under one header. List-grammar for tasks (not chips), inline-editable, minimal chrome.</p>
+
+<div class="rec-strap">Final direction — polishing states + edge cases before spec</div>
+
+<!-- ═════════════ Primary state ═════════════ -->
+<div class="section-label">Primary state · typical day</div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title-group">
+      <span class="page-title">Pipeline Overview</span>
+      <span class="page-sub-count">Friday, Apr 17 · 72 companies · 34 opportunities</span>
+    </div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <div class="period-toggle">
+        <div class="period-tab active">Daily</div>
+        <div class="period-tab">Weekly</div>
+        <div class="period-tab">Monthly</div>
+      </div>
+      <div class="date-picker">📅 Apr 17<span class="auto">auto</span></div>
+    </div>
+  </div>
+
+  <div class="split-body">
+    <!-- LEFT: Stats -->
+    <div class="split-col stats">
+      <div class="split-col-title">
+        Pipeline <span class="count">this week</span>
+      </div>
+      <div class="split-goals">
+        <div class="split-goal-card">
+          <div class="split-goal-label">Saved</div>
+          <div class="split-goal-valrow"><span class="split-goal-value">41</span><span class="split-goal-delta">+3</span></div>
+        </div>
+        <div class="split-goal-card">
+          <div class="split-goal-label">Applications</div>
+          <div class="split-goal-valrow"><span class="split-goal-value">18</span><span class="split-goal-delta">+2</span></div>
+        </div>
+        <div class="split-goal-card">
+          <div class="split-goal-label">Reached Out</div>
+          <div class="split-goal-valrow"><span class="split-goal-value">27</span><span class="split-goal-delta">+5</span></div>
+        </div>
+        <div class="split-goal-card">
+          <div class="split-goal-label">New Convos</div>
+          <div class="split-goal-valrow"><span class="split-goal-value">12</span><span class="split-goal-delta">+1</span></div>
+        </div>
+        <div class="split-goal-card" style="grid-column: span 2;">
+          <div class="split-goal-label">Active In Play</div>
+          <div class="split-goal-valrow"><span class="split-goal-value">8</span><span class="split-goal-delta flat">same</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-divider"></div>
+
+    <!-- RIGHT: Tasks -->
+    <div class="split-col tasks">
+      <div class="split-col-title">
+        <span>Today <span class="count" style="margin-left:6px">1 overdue · 3 due</span></span>
+        <div class="scope-tabs">
+          <span class="scope-tab active">Today</span>
+          <span class="scope-tab">Week</span>
+          <span class="scope-tab">All</span>
+        </div>
+      </div>
+      <div class="task-list">
+        <div class="task-row overdue">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Reply to Brian Bird's follow-up on comp</div>
+            <div class="task-meta">
+              <span class="task-company">Kustomer</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due overdue">2d overdue</span>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button class="task-act-btn" title="Snooze">⏱</button>
+            <button class="task-act-btn" title="Open">↗</button>
+            <button class="task-act-btn" title="More">⋯</button>
+          </div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Complete Wonderlic assessment</div>
+            <div class="task-meta">
+              <span class="task-company">Wonderlic</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due today">Today</span>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button class="task-act-btn" title="Snooze">⏱</button>
+            <button class="task-act-btn" title="Open">↗</button>
+            <button class="task-act-btn" title="More">⋯</button>
+          </div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Prep 30-60-90 doc for HM round</div>
+            <div class="task-meta">
+              <span class="task-company">Transform VXR</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due today">Today, 2pm</span>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button class="task-act-btn" title="Snooze">⏱</button>
+            <button class="task-act-btn" title="Open">↗</button>
+            <button class="task-act-btn" title="More">⋯</button>
+          </div>
+        </div>
+        <div class="task-row" style="margin-left: 10px">
+          <div class="task-source-dot" title="Suggested from email"></div>
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Return signed offer letter</div>
+            <div class="task-meta">
+              <span class="task-company">Slack</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due">Tomorrow</span>
+              <span class="task-review">
+                <a>keep</a>
+                <span style="opacity:0.4">·</span>
+                <a class="dismiss">dismiss</a>
+              </span>
+            </div>
+          </div>
+        </div>
+        <button class="task-add">
+          <span class="task-add-circle">+</span>
+          Add a task
+        </button>
+      </div>
+      <div class="done-collapse">
+        2 completed today · <span class="show-link">show</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Read order matches usage.</strong> Scoreboard on the left (the "what's happening") → to-do on the right (the "what I need to do about it"). 50/50 split. Single Pipeline Overview section header with the period toggle + date picker — these control the stats; tasks have their own scope toggle (Today/Week/All) at the top of the right column. Overdue sits at top with a red left-rule and red date. Amber dot to the left of unreviewed email-suggested tasks (no "from email" pill). Done items collapse behind a one-line "2 completed today · show" link.
+</div>
+
+<!-- ═════════════ Empty state ═════════════ -->
+<div class="section-label">Empty state · nothing due today</div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title-group">
+      <span class="page-title">Pipeline Overview</span>
+      <span class="page-sub-count">Friday, Apr 17 · 72 companies · 34 opportunities</span>
+    </div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <div class="period-toggle">
+        <div class="period-tab active">Daily</div>
+        <div class="period-tab">Weekly</div>
+        <div class="period-tab">Monthly</div>
+      </div>
+      <div class="date-picker">📅 Apr 17<span class="auto">auto</span></div>
+    </div>
+  </div>
+
+  <div class="split-body">
+    <div class="split-col stats">
+      <div class="split-col-title">Pipeline <span class="count">this week</span></div>
+      <div class="split-goals">
+        <div class="split-goal-card"><div class="split-goal-label">Saved</div><div class="split-goal-valrow"><span class="split-goal-value">41</span><span class="split-goal-delta">+3</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">Applications</div><div class="split-goal-valrow"><span class="split-goal-value">18</span><span class="split-goal-delta">+2</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">Reached Out</div><div class="split-goal-valrow"><span class="split-goal-value">27</span><span class="split-goal-delta">+5</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">New Convos</div><div class="split-goal-valrow"><span class="split-goal-value">12</span><span class="split-goal-delta">+1</span></div></div>
+        <div class="split-goal-card" style="grid-column: span 2;"><div class="split-goal-label">Active In Play</div><div class="split-goal-valrow"><span class="split-goal-value">8</span><span class="split-goal-delta flat">same</span></div></div>
+      </div>
+    </div>
+    <div class="split-divider"></div>
+    <div class="split-col tasks">
+      <div class="split-col-title">
+        <span>Today <span class="count" style="margin-left:6px">nothing due</span></span>
+        <div class="scope-tabs">
+          <span class="scope-tab active">Today</span>
+          <span class="scope-tab">Week</span>
+          <span class="scope-tab">All</span>
+        </div>
+      </div>
+      <div class="today-empty">
+        <div class="today-empty-title">Clear slate.</div>
+        <div>Nothing due today. <span class="today-empty-cta">Add a task →</span></div>
+      </div>
+      <div class="task-list" style="margin-top: 4px">
+        <button class="task-add">
+          <span class="task-add-circle">+</span>
+          Add a task
+        </button>
+      </div>
+      <div class="done-collapse">
+        1 completed today · <span class="show-link">show</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Empty state.</strong> Not "no tasks yet!" with a motivational illustration — just honest: "Clear slate. Nothing due today." The "+ Add a task" ghost row still renders so adding one is one click away. If there are completed items today, they still get the done-collapse footer.
+</div>
+
+<!-- ═════════════ Done expanded state ═════════════ -->
+<div class="section-label">Done expanded · "show" clicked</div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title-group">
+      <span class="page-title">Pipeline Overview</span>
+      <span class="page-sub-count">Friday, Apr 17 · 72 companies · 34 opportunities</span>
+    </div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <div class="period-toggle">
+        <div class="period-tab active">Daily</div>
+        <div class="period-tab">Weekly</div>
+        <div class="period-tab">Monthly</div>
+      </div>
+      <div class="date-picker">📅 Apr 17<span class="auto">auto</span></div>
+    </div>
+  </div>
+
+  <div class="split-body">
+    <div class="split-col stats">
+      <div class="split-col-title">Pipeline <span class="count">this week</span></div>
+      <div class="split-goals">
+        <div class="split-goal-card"><div class="split-goal-label">Saved</div><div class="split-goal-valrow"><span class="split-goal-value">41</span><span class="split-goal-delta">+3</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">Applications</div><div class="split-goal-valrow"><span class="split-goal-value">18</span><span class="split-goal-delta">+2</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">Reached Out</div><div class="split-goal-valrow"><span class="split-goal-value">27</span><span class="split-goal-delta">+5</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">New Convos</div><div class="split-goal-valrow"><span class="split-goal-value">12</span><span class="split-goal-delta">+1</span></div></div>
+        <div class="split-goal-card" style="grid-column: span 2;"><div class="split-goal-label">Active In Play</div><div class="split-goal-valrow"><span class="split-goal-value">8</span><span class="split-goal-delta flat">same</span></div></div>
+      </div>
+    </div>
+    <div class="split-divider"></div>
+    <div class="split-col tasks">
+      <div class="split-col-title">
+        <span>Today <span class="count" style="margin-left:6px">3 due · 2 done</span></span>
+        <div class="scope-tabs">
+          <span class="scope-tab active">Today</span>
+          <span class="scope-tab">Week</span>
+          <span class="scope-tab">All</span>
+        </div>
+      </div>
+      <div class="task-list">
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Complete Wonderlic assessment</div>
+            <div class="task-meta"><span class="task-company">Wonderlic</span><span class="task-meta-sep">·</span><span class="task-due today">Today</span></div>
+          </div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Prep 30-60-90 doc for HM round</div>
+            <div class="task-meta"><span class="task-company">Transform VXR</span><span class="task-meta-sep">·</span><span class="task-due today">Today, 2pm</span></div>
+          </div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Send recap email to Rob + Eric</div>
+            <div class="task-meta"><span class="task-company">Transform VXR</span><span class="task-meta-sep">·</span><span class="task-due">Tomorrow</span></div>
+          </div>
+        </div>
+        <div class="task-row done">
+          <div class="task-check">✓</div>
+          <div class="task-body">
+            <div class="task-text">Join Zoom call with Arthur</div>
+            <div class="task-meta"><span class="task-company">Unitbase</span><span class="task-meta-sep">·</span><span class="task-due">10am</span></div>
+          </div>
+        </div>
+        <div class="task-row done">
+          <div class="task-check">✓</div>
+          <div class="task-body">
+            <div class="task-text">Review Q3 OKR deck before call</div>
+            <div class="task-meta"><span class="task-company">Transform VXR</span></div>
+          </div>
+        </div>
+        <button class="task-add">
+          <span class="task-add-circle">+</span>
+          Add a task
+        </button>
+      </div>
+      <div class="done-collapse">
+        <span class="show-link">hide completed</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Done expanded.</strong> Click "show" → done items inline below active ones, strike-through + tertiary text color. Footer link flips to "hide completed." Done state is truthful (not hiding that you did the work) but doesn't clutter the active list.
+</div>
+
+<!-- ═════════════ Spec card ═════════════ -->
+<div class="spec">
+  <h3>Key decisions locked</h3>
+  <ul>
+    <li><strong>Layout:</strong> Single Pipeline Overview section, split 50/50. Stats left, tasks right. Divider = 1px var(--ci-border-subtle) vertical line.</li>
+    <li><strong>Section header:</strong> kept as "Pipeline Overview" with subtitle showing the date ("Friday, Apr 17 · 72 companies · 34 opportunities"). Period toggle (Daily/Weekly/Monthly) + date picker stay in the section header — they control the stats side. Tasks get their own Today/Week/All scope tabs inside the right column.</li>
+    <li><strong>Stat cards:</strong> 2×3 grid (6 slots; "Active In Play" spans 2 columns in the bottom row). Same content as today, tighter layout.</li>
+    <li><strong>Task rows:</strong> list-grammar, not chip-grammar. 14px/500 title, 12px tertiary meta. Checkbox = 18px circle. Overdue = red left-rule + red date. Today-due = amber date. Done = green check + strike-through.</li>
+    <li><strong>Hover reveals:</strong> three action buttons at row right — snooze (⏱), open-company (↗), more (⋯ for reschedule/delete/edit).</li>
+    <li><strong>Email-suggested tasks:</strong> 5px amber dot at the row's left edge (not a border, not a pill). Inline "keep · dismiss" links in meta row until reviewed. Matches existing review flow logic.</li>
+    <li><strong>Done collapse default:</strong> hidden. Footer: "N completed today · <em>show</em>" → inline reveal. Click "hide completed" to re-collapse. Preference saved in localStorage.</li>
+    <li><strong>Empty state:</strong> "Clear slate." title + "Nothing due today. Add a task →" — keeps "+ Add a task" ghost row visible. No illustration, no motivation copy.</li>
+    <li><strong>+ Add a task:</strong> ghost row at the bottom of the active list. Click → inline composer (title, company picker, date). Same data model as existing tasks (text, company, dueDate, priority default "normal").</li>
+    <li><strong>Scope tabs:</strong> Today (default) / Week / All — tasks-only filter, stored in localStorage. Independent of the Daily/Weekly/Monthly period toggle (which applies only to stats).</li>
+    <li><strong>Narrow viewport:</strong> below 1100px, stack to single column — stats on top, tasks below. Keeps parity with mobile behavior.</li>
+    <li><strong>#231:</strong> close as subsumed — this ships the whole header restructure.</li>
+  </ul>
+
+  <h3 class="qline">Three small calls before spec</h3>
+  <ul>
+    <li><strong>1. Column split ratio.</strong> 50/50 matches the mockup. Alternative: 55/45 stats/tasks (more room for goal cards to breathe), or 45/55 tasks/stats (more room for task title text). Gut-call: 50/50.</li>
+    <li><strong>2. Section label on the tasks column.</strong> "Today" (my pick — implies the scope) vs. "Tasks" (literal, but redundant with the scope tabs). Gut-call: "Today."</li>
+    <li><strong>3. Keep overdue under "Today" scope.</strong> When scope = Today, the mockup includes overdue items at top. Alt: strict "only due today" (overdue moves to a separate row or "Week" scope). Gut-call: include overdue — they're urgent and belong near today.</li>
+  </ul>
+  <p>If my three gut-calls all look right, reply <strong>"ship it"</strong> and I'll write the PRD and hand off. Otherwise name which ones to change.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LinkedIn profile capture — flow (#36)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #0A0B0D;
+    background: #F0F2F5;
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .page-sub { color: #6F7782; font-size: 13px; margin: 0 0 28px; max-width: 900px; line-height: 1.5; }
+
+  .label-row { display: flex; align-items: baseline; gap: 12px; margin: 28px 0 10px; }
+  .label-row:first-of-type { margin-top: 0; }
+  .label-row h2 { font-size: 13px; font-weight: 700; color: #8A8E94; }
+  .label-badge {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+    background: rgba(69,115,210,0.12); color: #345DB2;
+  }
+  .label-hint { font-size: 12px; color: #6F7782; line-height: 1.5; max-width: 700px; margin-bottom: 12px; }
+
+  .arrow { text-align: center; color: #8A8E94; font-size: 16px; margin: 18px 0; }
+
+  /* ═══ Step 1 — LinkedIn profile with sidepanel showing capture CTA ═══ */
+  .step {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 0;
+    max-width: 1200px;
+    border: 1px solid #E0E4E8;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #FFFFFF;
+  }
+
+  /* LinkedIn mock */
+  .linkedin {
+    background: #F3F2EF;
+    padding: 20px;
+    min-height: 540px;
+  }
+  .li-topbar {
+    background: #FFFFFF;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid #DCE3E8;
+  }
+  .li-logo {
+    width: 30px; height: 30px; border-radius: 4px;
+    background: #0A66C2;
+    color: #fff; font-weight: 900; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .li-search {
+    flex: 1;
+    padding: 7px 12px;
+    background: #EEF3F8; border-radius: 4px;
+    font-size: 12px; color: #8A8E94;
+  }
+
+  .li-profile-card {
+    background: #FFFFFF;
+    border: 1px solid #DCE3E8;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .li-banner {
+    height: 90px;
+    background: linear-gradient(135deg, #0A66C2, #3E85CF);
+  }
+  .li-profile-body {
+    padding: 16px 20px 20px;
+    position: relative;
+  }
+  .li-avatar {
+    width: 100px; height: 100px; border-radius: 50%;
+    background: #F5A623;
+    color: #fff; font-size: 32px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 4px solid #fff;
+    margin-top: -62px;
+    margin-bottom: 10px;
+  }
+  .li-name {
+    font-size: 22px; font-weight: 700; color: #0A0B0D;
+    letter-spacing: -0.01em;
+  }
+  .li-headline {
+    font-size: 14px; color: #0A0B0D;
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .li-location {
+    font-size: 12px; color: #666; margin-top: 6px;
+  }
+  .li-current-co {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #EEF3F8;
+  }
+  .li-co-logo {
+    width: 32px; height: 32px; border-radius: 4px;
+    background: #FC636B; color: #fff;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .li-co-name { font-size: 13px; font-weight: 600; color: #0A0B0D; }
+  .li-co-sub { font-size: 11px; color: #666; }
+
+  /* ── Coop side panel ── */
+  .sidepanel {
+    background: #FFFFFF;
+    border-left: 1px solid #E0E4E8;
+    padding: 16px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+  }
+  .sp-head {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sp-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #FC636B;
+    color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sp-title { font-size: 14px; font-weight: 700; color: #0A0B0D; }
+  .sp-sub { font-size: 11px; color: #8A8E94; margin-top: 1px; }
+  .sp-controls {
+    margin-left: auto;
+    display: flex; gap: 4px;
+  }
+  .sp-ctrl {
+    width: 22px; height: 22px; border-radius: 4px;
+    color: #8A8E94; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+
+  .detected-banner {
+    padding: 10px 12px;
+    background: rgba(245,166,35,0.10);
+    border: 1px solid rgba(245,166,35,0.35);
+    border-radius: 8px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: #6F7782;
+    line-height: 1.4;
+  }
+  .detected-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #F5A623; flex-shrink: 0;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Preview card of who was detected */
+  .preview {
+    background: #F9FAFB;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .preview-head {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .preview-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #F5A623; color: #fff;
+    font-size: 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .preview-name { font-size: 15px; font-weight: 700; color: #0A0B0D; letter-spacing: -0.005em; }
+  .preview-headline { font-size: 12px; color: #6F7782; margin-top: 2px; line-height: 1.4; }
+
+  .preview-rows {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-bottom: 12px;
+  }
+  .preview-row {
+    display: flex; font-size: 12px; gap: 10px;
+    align-items: baseline;
+  }
+  .preview-label { color: #8A8E94; width: 64px; flex-shrink: 0; }
+  .preview-val { color: #0A0B0D; flex: 1; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 9px 14px;
+    font-size: 13px; font-weight: 600;
+    border-radius: 8px; cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: background 120ms, border-color 120ms;
+  }
+  .btn-primary {
+    background: #FC636B; color: #fff;
+    width: 100%;
+  }
+  .btn-primary:hover { background: #E04E56; }
+  .btn-secondary {
+    background: #FFFFFF; color: #0A0B0D;
+    border: 1px solid #E0E4E8;
+  }
+  .btn-secondary:hover { border-color: #C4CAD1; }
+
+  .preview-actions { display: flex; flex-direction: column; gap: 6px; }
+
+  .sp-section-head {
+    font-size: 11px; font-weight: 700; color: #6F7782;
+    margin-bottom: 8px;
+  }
+
+  /* ═══ Step 2 — Company picker modal ═══ */
+  .modal-scrim {
+    position: relative;
+    background: rgba(30,31,33,0.5);
+    border-radius: 12px;
+    padding: 40px;
+    display: flex; justify-content: center;
+    max-width: 900px;
+  }
+  .modal {
+    background: #FFFFFF;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(30,31,33,0.28);
+    width: 480px;
+    overflow: hidden;
+  }
+  .modal-head {
+    padding: 18px 22px 12px;
+  }
+  .modal-title { font-size: 17px; font-weight: 700; color: #0A0B0D; letter-spacing: -0.01em; }
+  .modal-sub { font-size: 13px; color: #6F7782; margin-top: 4px; line-height: 1.4; }
+
+  .modal-search {
+    padding: 0 22px 12px;
+  }
+  .modal-search input {
+    width: 100%;
+    padding: 9px 12px;
+    background: #F9FAFB; border: 1px solid #E0E4E8;
+    border-radius: 8px; font-size: 13px;
+    font-family: inherit; color: #0A0B0D;
+    outline: none;
+  }
+  .modal-search input:focus { border-color: #FC636B; }
+
+  .co-list {
+    max-height: 280px; overflow-y: auto;
+    padding: 0 12px;
+    margin-bottom: 10px;
+  }
+  .co-list-group {
+    font-size: 11px; font-weight: 600;
+    color: #8A8E94;
+    padding: 8px 10px 6px;
+  }
+  .co-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .co-row:hover { background: #F5F7F9; }
+  .co-row.selected { background: rgba(252,99,107,0.08); border: 1px solid rgba(252,99,107,0.4); }
+  .co-favicon {
+    width: 28px; height: 28px; border-radius: 6px;
+    color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .co-favicon.a1 { background: #FC636B; }
+  .co-favicon.a2 { background: #4573D2; }
+  .co-favicon.a3 { background: #36B37E; }
+  .co-favicon.a4 { background: #7C6EF0; }
+  .co-favicon.a5 { background: #F5A623; }
+  .co-name { font-size: 13px; font-weight: 600; color: #0A0B0D; }
+  .co-meta { font-size: 11px; color: #8A8E94; margin-top: 1px; }
+
+  .co-create {
+    padding: 9px 10px;
+    border-top: 1px solid #EAECEF;
+    margin-top: 6px;
+    font-size: 13px; color: #6F7782;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    border-radius: 8px;
+  }
+  .co-create:hover { background: #F5F7F9; }
+
+  .modal-foot {
+    padding: 14px 22px;
+    border-top: 1px solid #EAECEF;
+    display: flex; justify-content: space-between;
+    align-items: center;
+  }
+  .modal-foot .btn { padding: 8px 14px; font-size: 13px; }
+
+  /* ═══ Step 3 — Captured contact appears in Coop ═══ */
+  .after-panel {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 12px;
+    padding: 22px 24px;
+    max-width: 640px;
+  }
+  .panel-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-bottom: 14px; margin-bottom: 12px;
+    border-bottom: 1px solid #EAECEF;
+  }
+  .panel-head h3 { font-size: 15px; font-weight: 700; color: #0A0B0D; letter-spacing: -0.005em; }
+  .panel-head .count { font-size: 12px; color: #8A8E94; font-weight: 500; }
+
+  .contact-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px; padding: 10px 0;
+    border-top: 1px solid #F0F2F5;
+    align-items: center;
+  }
+  .contact-row:first-of-type { border-top: none; }
+  .contact-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .contact-avatar.new {
+    background: #F5A623;
+    box-shadow: 0 0 0 3px rgba(245,166,35,0.2);
+  }
+  .contact-avatar.blue { background: #4573D2; }
+  .contact-avatar.teal { background: #36B37E; }
+
+  .contact-body .contact-name { font-size: 13px; font-weight: 600; color: #0A0B0D; }
+  .contact-body .contact-title { font-size: 11px; color: #6F7782; margin-top: 1px; }
+
+  .contact-meta {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .contact-new-tag {
+    font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+    background: rgba(245,166,35,0.14);
+    color: #B77A0F;
+  }
+  .contact-li-link {
+    font-size: 11px; color: #6F7782;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 6px; border-radius: 4px;
+    background: #F5F7F9;
+  }
+  .contact-li-link:hover { background: #EBEDF0; color: #0A0B0D; }
+
+</style>
+</head>
+<body>
+
+  <h1>LinkedIn profile capture — flow</h1>
+  <p class="page-sub">Three-screen flow: (1) user lands on a LinkedIn profile — side panel detects the profile and shows a capture CTA with extracted fields; (2) clicking Capture opens a company-picker modal to associate with a saved company/opportunity; (3) the contact appears in the Contacts panel on that company, with a LinkedIn link.</p>
+
+  <!-- STEP 1 -->
+  <div class="label-row">
+    <h2>1 · Detect + preview</h2>
+    <span class="label-badge">sidepanel auto-detects a /in/ URL</span>
+  </div>
+  <p class="label-hint">When <code>content.js</code> detects a LinkedIn profile, side panel switches into "person mode" showing the extracted name + headline + current company. Capture CTA is the primary action.</p>
+
+  <div class="step">
+    <div class="linkedin">
+      <div class="li-topbar">
+        <div class="li-logo">in</div>
+        <div class="li-search">Search</div>
+      </div>
+      <div class="li-profile-card">
+        <div class="li-banner"></div>
+        <div class="li-profile-body">
+          <div class="li-avatar">JK</div>
+          <div class="li-name">Jake Kim</div>
+          <div class="li-headline">Founder & CEO at Krossings · Applied ML for retail inventory · ex-Stripe</div>
+          <div class="li-location">San Francisco Bay Area · 1st</div>
+          <div class="li-current-co">
+            <div class="li-co-logo">KR</div>
+            <div>
+              <div class="li-co-name">Krossings</div>
+              <div class="li-co-sub">B2B SaaS · Series A · 28 employees</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidepanel">
+      <div class="sp-head">
+        <div class="sp-avatar">C</div>
+        <div>
+          <div class="sp-title">Coop</div>
+          <div class="sp-sub">Linkedin profile detected</div>
+        </div>
+        <div class="sp-controls">
+          <div class="sp-ctrl">×</div>
+        </div>
+      </div>
+
+      <div class="detected-banner">
+        <div class="detected-dot"></div>
+        <div>Profile detected — capture this person as a contact.</div>
+      </div>
+
+      <div class="preview">
+        <div class="preview-head">
+          <div class="preview-avatar">JK</div>
+          <div>
+            <div class="preview-name">Jake Kim</div>
+            <div class="preview-headline">Founder & CEO at Krossings · Applied ML for retail inventory · ex-Stripe</div>
+          </div>
+        </div>
+
+        <div class="preview-rows">
+          <div class="preview-row"><span class="preview-label">Company</span><span class="preview-val">Krossings</span></div>
+          <div class="preview-row"><span class="preview-label">Title</span><span class="preview-val">Founder & CEO</span></div>
+          <div class="preview-row"><span class="preview-label">Location</span><span class="preview-val">San Francisco Bay Area</span></div>
+          <div class="preview-row"><span class="preview-label">Profile</span><span class="preview-val">linkedin.com/in/jakekim</span></div>
+        </div>
+
+        <div class="preview-actions">
+          <button class="btn btn-primary">Capture as contact</button>
+          <button class="btn btn-secondary">Edit before saving</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 4px;">
+        <div class="sp-section-head">Or do something else</div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 12px; color: #6F7782; padding: 6px 0;">• Save Krossings as an opportunity</div>
+          <div style="font-size: 12px; color: #6F7782; padding: 6px 0;">• Ask Coop about Jake</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓ click "Capture as contact" ↓</div>
+
+  <!-- STEP 2 -->
+  <div class="label-row">
+    <h2>2 · Associate with a saved company/opportunity</h2>
+    <span class="label-badge">modal over side panel</span>
+  </div>
+  <p class="label-hint">Picker shows saved opportunities first (most likely target) then companies. Each row shows favicon, name, stage or count of existing contacts. "Save without associating" goes to a floating Rolodex that's scoped to Matt, not a specific company.</p>
+
+  <div class="modal-scrim">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">Associate Jake Kim with…</div>
+        <div class="modal-sub">Contacts live on companies. Pick which one.</div>
+      </div>
+
+      <div class="modal-search">
+        <input placeholder="Search companies or opportunities…" />
+      </div>
+
+      <div class="co-list">
+        <div class="co-list-group">Opportunities</div>
+        <div class="co-row selected">
+          <div class="co-favicon a1">KR</div>
+          <div>
+            <div class="co-name">Krossings <span style="color:#8A8E94; font-weight:500;">· Head of GTM</span></div>
+            <div class="co-meta">Onsite stage · 2 contacts · matches Jake's current company</div>
+          </div>
+        </div>
+        <div class="co-row">
+          <div class="co-favicon a2">AC</div>
+          <div>
+            <div class="co-name">Acme <span style="color:#8A8E94; font-weight:500;">· VP Revenue</span></div>
+            <div class="co-meta">First call stage · 3 contacts</div>
+          </div>
+        </div>
+        <div class="co-row">
+          <div class="co-favicon a3">ME</div>
+          <div>
+            <div class="co-name">Mercor <span style="color:#8A8E94; font-weight:500;">· Head of GTM</span></div>
+            <div class="co-meta">Intro stage · 1 contact</div>
+          </div>
+        </div>
+
+        <div class="co-list-group">Companies</div>
+        <div class="co-row">
+          <div class="co-favicon a4">VL</div>
+          <div>
+            <div class="co-name">Vellum</div>
+            <div class="co-meta">Researched · 0 contacts</div>
+          </div>
+        </div>
+        <div class="co-row">
+          <div class="co-favicon a5">HX</div>
+          <div>
+            <div class="co-name">Harvey</div>
+            <div class="co-meta">Researched · 4 contacts</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="co-create">+ Save Jake without associating to anyone</div>
+
+      <div class="modal-foot">
+        <button class="btn btn-secondary">Cancel</button>
+        <button class="btn btn-primary" style="width: auto;">Associate with Krossings</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓ pick Krossings ↓</div>
+
+  <!-- STEP 3 -->
+  <div class="label-row">
+    <h2>3 · Contact lands in Krossings' Contacts panel</h2>
+    <span class="label-badge">with a visual "new" marker</span>
+  </div>
+  <p class="label-hint">Captured contact appears at the top of the Contacts panel on Krossings with a small `new` tag (auto-fades after 24h or user dismissal) and a LinkedIn-link chip. Same entry point as before — Coop chat now knows Jake exists and can answer "what does Jake care about" with the profile context.</p>
+
+  <div class="after-panel">
+    <div class="panel-head">
+      <h3>Contacts</h3>
+      <span class="count">3 at Krossings</span>
+    </div>
+
+    <div class="contact-row">
+      <div class="contact-avatar new">JK</div>
+      <div class="contact-body">
+        <div class="contact-name">Jake Kim</div>
+        <div class="contact-title">Founder & CEO · ex-Stripe</div>
+      </div>
+      <div class="contact-meta">
+        <span class="contact-new-tag">new</span>
+        <a class="contact-li-link">in ↗</a>
+      </div>
+    </div>
+
+    <div class="contact-row">
+      <div class="contact-avatar blue">MS</div>
+      <div class="contact-body">
+        <div class="contact-name">Maya Stone</div>
+        <div class="contact-title">Head of Operations</div>
+      </div>
+      <div class="contact-meta">
+        <a class="contact-li-link">in ↗</a>
+      </div>
+    </div>
+
+    <div class="contact-row">
+      <div class="contact-avatar teal">BB</div>
+      <div class="contact-body">
+        <div class="contact-name">Brian Bird</div>
+        <div class="contact-title">Referrer · Benchmark</div>
+      </div>
+      <div class="contact-meta">
+        <a class="contact-li-link">in ↗</a>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

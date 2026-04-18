@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Floating Coop chat — polish pass (#79)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #0A0B0D;
+    background: #F0F2F5;
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .page-sub { color: #6F7782; font-size: 13px; margin: 0 0 28px; max-width: 900px; line-height: 1.5; }
+  .label-row { display: flex; align-items: baseline; gap: 12px; margin: 28px 0 10px; }
+  .label-row:first-of-type { margin-top: 0; }
+  .label-row h2 {
+    font-size: 13px; font-weight: 700; color: #8A8E94;
+  }
+  .label-badge {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+    background: rgba(54,179,126,0.12); color: #1B7E53;
+  }
+  .label-hint { font-size: 12px; color: #6F7782; line-height: 1.5; max-width: 700px; margin-bottom: 12px; }
+
+  .panels {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px;
+    max-width: 1360px;
+  }
+
+  /* ── Floating chat panel ── */
+  .chat {
+    width: 100%; max-width: 420px;
+    height: 620px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    box-shadow: 0 20px 48px rgba(30,31,33,0.14), 0 4px 12px rgba(0,0,0,0.06);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Header — clear separation: identity left, controls right */
+  .chat-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    background: #151B26; color: #F5F4F2;
+    cursor: grab;
+    user-select: none;
+  }
+  .chat-head-id {
+    display: flex; align-items: center; gap: 10px;
+    min-width: 0; flex: 1;
+  }
+  .chat-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #FC636B;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .chat-title { font-size: 14px; font-weight: 700; letter-spacing: -0.005em; }
+  .chat-subtitle {
+    font-size: 11px; color: #A3AEBE; margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chat-head-controls {
+    display: flex; gap: 2px; align-items: center;
+  }
+  .chat-ctrl {
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    color: #A3AEBE; cursor: pointer;
+    border-radius: 6px; font-size: 14px;
+    transition: background 120ms;
+  }
+  .chat-ctrl:hover { background: #1F2A3C; color: #F5F4F2; }
+
+  /* Model indicator — honest, compact, sentence case */
+  .chat-model-row {
+    padding: 10px 16px 8px;
+    border-bottom: 1px solid #F0F2F5;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px;
+    color: #8A8E94;
+  }
+  .chat-model-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; background: transparent;
+    border: 1px solid #E0E4E8;
+    border-radius: 5px;
+    font-size: 11px; color: #0A0B0D;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .chat-model-btn:hover { background: #F9FAFB; }
+  .chat-model-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #FC636B;
+  }
+  .chat-model-dot.openai { background: #10A37F; }
+  .chat-model-dot.haiku { background: #F5A623; }
+
+  .chat-fallback-note {
+    font-size: 11px; color: #8A8E94;
+  }
+
+  /* Body */
+  .chat-body {
+    flex: 1; overflow-y: auto;
+    padding: 18px 16px 12px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Message rendering — no bubbles for assistant, real type hierarchy */
+  .msg { max-width: 100%; }
+  .msg-user {
+    align-self: flex-end;
+    background: #151B26;
+    color: #F5F4F2;
+    padding: 8px 12px;
+    border-radius: 14px 14px 4px 14px;
+    font-size: 13px; line-height: 1.5;
+    max-width: 88%;
+  }
+  .msg-assistant {
+    font-size: 13px; line-height: 1.65;
+    color: #0A0B0D;
+    padding: 0 2px;
+  }
+  .msg-assistant p { margin-bottom: 10px; }
+  .msg-assistant p:last-child { margin-bottom: 0; }
+  .msg-assistant ul { margin: 8px 0 10px 20px; }
+  .msg-assistant li { margin-bottom: 4px; line-height: 1.55; }
+  .msg-assistant strong { font-weight: 600; }
+  .msg-assistant h4 {
+    font-size: 13px; font-weight: 700; margin: 14px 0 6px;
+    color: #0A0B0D;
+    letter-spacing: -0.005em;
+    /* NOTE: no uppercase, no tiny-caps — the explicit DESIGN.md ask */
+  }
+
+  /* Streaming caret */
+  .streaming-caret {
+    display: inline-block; width: 2px; height: 14px;
+    background: #0A0B0D; margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: caret 1.1s ease-in-out infinite;
+  }
+  @keyframes caret {
+    0%, 45% { opacity: 1; }
+    50%, 100% { opacity: 0.35; }
+  }
+
+  /* Tool-use: first-class inline, NOT a collapsible gray box */
+  .tool-use {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0;
+    font-size: 12px; color: #6F7782;
+  }
+  .tool-use-icon {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .tool-use.emails .tool-use-icon { background: rgba(69,115,210,0.12); color: #4573D2; }
+  .tool-use.meetings .tool-use-icon { background: rgba(54,179,126,0.12); color: #36B37E; }
+  .tool-use.profile .tool-use-icon { background: rgba(124,110,240,0.12); color: #7C6EF0; }
+  .tool-use.memory .tool-use-icon { background: rgba(245,166,35,0.12); color: #F5A623; }
+  .tool-use-label {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tool-use-label strong { color: #0A0B0D; font-weight: 600; }
+  .tool-use-state {
+    font-size: 11px; color: #8A8E94;
+    flex-shrink: 0;
+  }
+  .tool-use-state.done { color: #1B7E53; }
+  .tool-use-state.active { color: #F5A623; }
+
+  /* Tool-use wave indicator — a subtle "in progress" line, not a spinner */
+  .tool-use-progress {
+    height: 2px; background: #F0F2F5;
+    border-radius: 1px; overflow: hidden;
+    margin: 4px 0 10px;
+    position: relative;
+  }
+  .tool-use-progress::after {
+    content: '';
+    position: absolute; top: 0; left: 0; height: 100%;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, #F5A623, transparent);
+    animation: progress-slide 1.4s ease-in-out infinite;
+  }
+  @keyframes progress-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  /* Empty state — no italic marketing copy */
+  .empty {
+    padding: 24px 16px;
+    display: flex; flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .empty-greeting {
+    font-size: 15px; font-weight: 600; color: #0A0B0D;
+    letter-spacing: -0.01em;
+  }
+  .empty-sub {
+    font-size: 13px; color: #6F7782;
+    line-height: 1.5;
+  }
+  .prompts {
+    display: flex; flex-direction: column;
+    gap: 6px; width: 100%; margin-top: 4px;
+  }
+  .prompt {
+    padding: 9px 12px;
+    background: #F5F7F9;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 12px; color: #0A0B0D;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 120ms, background 120ms;
+  }
+  .prompt:hover {
+    border-color: #C4CAD1; background: #FFFFFF;
+  }
+
+  /* Input */
+  .chat-input-wrap {
+    padding: 12px 14px;
+    border-top: 1px solid #EAECEF;
+  }
+  .chat-input {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: #F9FAFB;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #8A8E94;
+  }
+  .chat-input input {
+    flex: 1; border: none; outline: none;
+    background: transparent; font-size: 13px;
+    color: #0A0B0D; font-family: inherit;
+  }
+  .send-btn {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #FC636B; color: #fff;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: none;
+  }
+  .send-btn.disabled { background: #E0E4E8; color: #8A8E94; cursor: not-allowed; }
+
+  /* Notes */
+  .violation {
+    color: #E8384F; font-weight: 600;
+  }
+  .spec-block {
+    margin-top: 40px;
+    padding: 22px 26px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 12px;
+    max-width: 1360px;
+    font-size: 13px; color: #6F7782; line-height: 1.65;
+  }
+  .spec-block h3 {
+    font-size: 14px; font-weight: 700; color: #0A0B0D;
+    margin-bottom: 10px; letter-spacing: -0.005em;
+  }
+  .spec-block ul { padding-left: 20px; margin-bottom: 10px; }
+  .spec-block li { margin-bottom: 4px; }
+  .spec-block strong { color: #0A0B0D; }
+  .spec-block code {
+    background: #EBEDF0; padding: 1px 6px; border-radius: 4px;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+  }
+
+</style>
+</head>
+<body>
+
+  <h1>Floating Coop chat — polish pass</h1>
+  <p class="page-sub">Three states in one view: <strong>idle / empty</strong>, <strong>streaming</strong>, and <strong>tool-use in progress</strong>. Fixes: kill uppercase tiny-caps, kill italic marketing copy ("Hey, I'm Coop"), move tool-use from collapsed-gray-box to first-class inline with narrative progress, add real streaming caret, model indicator as sentence-case compact chip, header with clear identity-vs-controls separation, no bubble for assistant messages (typographic hierarchy carries the rhythm).</p>
+
+  <div class="panels">
+
+    <!-- ═══════════ STATE 1 — IDLE / EMPTY ═══════════ -->
+    <div>
+      <div class="label-row">
+        <h2>1 · Idle / empty</h2>
+        <span class="label-badge">opened, no history</span>
+      </div>
+      <p class="label-hint">Prompt chips contextually scoped (opportunity vs. meeting). No italic marketing greeting. Model indicator sentence case.</p>
+
+      <div class="chat">
+        <div class="chat-head">
+          <div class="chat-head-id">
+            <div class="chat-avatar">C</div>
+            <div style="min-width:0;">
+              <div class="chat-title">Coop</div>
+              <div class="chat-subtitle">Krossings · Head of GTM</div>
+            </div>
+          </div>
+          <div class="chat-head-controls">
+            <div class="chat-ctrl">⤢</div>
+            <div class="chat-ctrl">−</div>
+            <div class="chat-ctrl">×</div>
+          </div>
+        </div>
+
+        <div class="chat-model-row">
+          <span>Using</span>
+          <button class="chat-model-btn">
+            <span class="chat-model-dot"></span>
+            Sonnet 4.6
+          </button>
+        </div>
+
+        <div class="chat-body">
+          <div class="empty">
+            <div class="empty-greeting">What should we figure out?</div>
+
+            <div class="prompts">
+              <div class="prompt">Draft a cover letter for this role</div>
+              <div class="prompt">What should I prep for the next interview?</div>
+              <div class="prompt">Why is this role a good fit for me?</div>
+              <div class="prompt">Draft a follow-up to Jake</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-wrap">
+          <div class="chat-input">
+            <input placeholder="Ask Coop about Krossings…" />
+            <button class="send-btn disabled">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ STATE 2 — STREAMING ═══════════ -->
+    <div>
+      <div class="label-row">
+        <h2>2 · Streaming</h2>
+        <span class="label-badge">Granola-paced</span>
+      </div>
+      <p class="label-hint">Tokens arrive at a rate that feels like thinking, not typing. Blinking caret shows where text is being generated. No progress bar, no spinner.</p>
+
+      <div class="chat">
+        <div class="chat-head">
+          <div class="chat-head-id">
+            <div class="chat-avatar">C</div>
+            <div style="min-width:0;">
+              <div class="chat-title">Coop</div>
+              <div class="chat-subtitle">Krossings · Head of GTM</div>
+            </div>
+          </div>
+          <div class="chat-head-controls">
+            <div class="chat-ctrl">⤢</div>
+            <div class="chat-ctrl">−</div>
+            <div class="chat-ctrl">×</div>
+          </div>
+        </div>
+
+        <div class="chat-model-row">
+          <span>Using</span>
+          <button class="chat-model-btn">
+            <span class="chat-model-dot"></span>
+            Sonnet 4.6
+          </button>
+        </div>
+
+        <div class="chat-body">
+          <div class="msg msg-user">What should I prep for Friday's GTM plan meeting with Maya?</div>
+
+          <div class="msg msg-assistant">
+            <p>Three things she'll actually measure you on:</p>
+            <h4>Your pipeline logic</h4>
+            <p>Maya said she wants someone who can "close the first 10 logos personally." The GTM plan needs a named-account strategy — not a persona-based one. Pick 20-25 retail enterprises where their vertical wedge actually lands, and show how you'd sequence outreach for the first ten.</p>
+            <h4>Pricing</h4>
+            <p>Dan's going to push on this. They're at $1.1M ARR, so pricing mistakes cost them runway. Bring a three-tier framework with numbers, not just a chart<span class="streaming-caret"></span></p>
+          </div>
+        </div>
+
+        <div class="chat-input-wrap">
+          <div class="chat-input">
+            <input placeholder="Ask Coop about Krossings…" />
+            <button class="send-btn disabled">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ STATE 3 — TOOL USE ═══════════ -->
+    <div>
+      <div class="label-row">
+        <h2>3 · Tool use</h2>
+        <span class="label-badge">narrative, first-class</span>
+      </div>
+      <p class="label-hint">Tool calls shown inline as the response forms. Colored dot per tool category (emails blue, meetings green, profile purple, memory amber). Progress line for active calls; check mark on complete. No collapsible gray box.</p>
+
+      <div class="chat">
+        <div class="chat-head">
+          <div class="chat-head-id">
+            <div class="chat-avatar">C</div>
+            <div style="min-width:0;">
+              <div class="chat-title">Coop</div>
+              <div class="chat-subtitle">Krossings · Head of GTM</div>
+            </div>
+          </div>
+          <div class="chat-head-controls">
+            <div class="chat-ctrl">⤢</div>
+            <div class="chat-ctrl">−</div>
+            <div class="chat-ctrl">×</div>
+          </div>
+        </div>
+
+        <div class="chat-model-row">
+          <span>Using</span>
+          <button class="chat-model-btn">
+            <span class="chat-model-dot haiku"></span>
+            Haiku 4.5
+          </button>
+          <span class="chat-fallback-note">· fell back from Sonnet</span>
+        </div>
+
+        <div class="chat-body">
+          <div class="msg msg-user">Draft a follow-up to Jake after Wednesday's meeting</div>
+
+          <div>
+            <div class="tool-use meetings">
+              <div class="tool-use-icon">●</div>
+              <div class="tool-use-label">Read <strong>Krossings · product deep dive</strong> from Granola</div>
+              <div class="tool-use-state done">✓</div>
+            </div>
+
+            <div class="tool-use emails">
+              <div class="tool-use-icon">●</div>
+              <div class="tool-use-label">Pulled <strong>3 emails</strong> with Jake Kim</div>
+              <div class="tool-use-state done">✓</div>
+            </div>
+
+            <div class="tool-use profile">
+              <div class="tool-use-icon">●</div>
+              <div class="tool-use-label">Loaded <strong>voice profile</strong></div>
+              <div class="tool-use-state active">in progress</div>
+            </div>
+            <div class="tool-use-progress"></div>
+          </div>
+        </div>
+
+        <div class="chat-input-wrap">
+          <div class="chat-input">
+            <input placeholder="Ask Coop about Krossings…" />
+            <button class="send-btn disabled">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="spec-block">
+    <h3>Spec summary for the Doer</h3>
+    <ul>
+      <li><strong>Kill</strong>: italic "Hey, I'm Coop" greeting; uppercase tiny-caps on markdown h3 (<code>company.js:5146</code>); uppercase+letter-spacing on model button (<code>chat.js:156</code>); collapsible gray box for tool-use (<code>ui-utils.js:161+</code>); bouncing-dots "thinking" animation (<code>company.html:851-855</code>); all emoji/symbol-as-icon on model list.</li>
+      <li><strong>Streaming</strong>: use SSE or equivalent streaming response from Anthropic/OpenAI. Append deltas to the current assistant message node at ~15-30 tok/s natural pace. Blinking caret at the end while streaming; removes on complete. Markdown renders progressively (partial h4 and ul are OK).</li>
+      <li><strong>Tool-use as first-class inline</strong>: replace <code>renderContextManifest</code>'s collapsible box. Each tool call is a one-line inline row <em>inside</em> the forming assistant message: colored dot (by category) + "Read {thing} from {source}" or "Pulled {N} {kind}" with a right-aligned state (<code>in progress</code> → <code>✓</code>). Use a subtle amber progress-line for active calls (no spinner).</li>
+      <li><strong>Model indicator</strong>: sentence case ("Sonnet 4.6" / "Haiku 4.5" / "GPT-4.1"), small colored dot per provider (green=OpenAI, coral=Anthropic, amber=Haiku), compact chip "Using [model]" above the body. Click chip cycles to next available model. Fallback note is natural language: <code>· fell back from Sonnet</code>.</li>
+      <li><strong>Header</strong>: left block = avatar + "Coop" title + surface subtitle ("Krossings · Head of GTM"). Right block = 3 controls (maximize, minimize, close), visually separated. No mixing of identity and controls.</li>
+      <li><strong>Empty state</strong>: sentence-case greeting that asks a question ("What should we figure out?") rather than a marketing pitch. Prompts are contextual to the surface.</li>
+      <li><strong>Message rendering</strong>: user message gets a dark pill; assistant messages are plain text with real typographic hierarchy (<code>h4</code>, <code>ul</code>, <code>p</code>, <code>strong</code>) — no bubble, no gradient, no avatar glow. Line-height 1.65 on body, 10px paragraph spacing.</li>
+      <li><strong>Motion</strong>: panel open fades + scales 0.96→1 over 200ms ease-out. Panel close reverse, 120ms ease-in. Message-added fades in 120ms.</li>
+    </ul>
+  </div>
+
+</body>
+</html>

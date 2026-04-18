@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanban board chrome audit</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --motion-md: 300ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 28px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 880px; line-height: 1.55; margin-bottom: 12px; }
+  .rec-strap { display: inline-flex; align-items: center; gap: 8px; background: rgba(54,179,126,0.10); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; margin-bottom: 24px; }
+  .rec-strap::before { content: '✓'; font-size: 11px; }
+
+  .frame { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px 22px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; max-width: 880px; margin-bottom: 28px; }
+  .frame h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; }
+  .frame p + h3 { margin-top: 10px; }
+  .frame ul { padding-left: 18px; margin-top: 4px; }
+  .frame li { margin-bottom: 2px; }
+
+  .section-label { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin: 40px 0 10px; letter-spacing: -0.005em; }
+  .section-label:first-of-type { margin-top: 8px; }
+  .section-sub { font-size: 12px; color: var(--ci-text-secondary); margin-bottom: 16px; max-width: 860px; line-height: 1.6; }
+  .state-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--ci-bg-inset); color: var(--ci-text-secondary); margin-bottom: 10px; }
+  .state-tag.bad { background: rgba(232,56,79,0.08); color: var(--ci-accent-red); }
+  .state-tag.good { background: rgba(54,179,126,0.12); color: #1B7E53; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SHARED SURFACE SHELL (dashboard frame)
+     ═══════════════════════════════════════════════════════════════ */
+  .dash-surface {
+    max-width: 1280px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+  .dash-topbar {
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 16px;
+    font-size: 13px;
+  }
+  .dash-topbar-brand { display: flex; align-items: center; gap: 8px; }
+  .dash-topbar-brand-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--ci-accent-primary); }
+  .dash-topbar-brand-name { font-weight: 700; letter-spacing: -0.005em; }
+  .dash-topbar-links { display: flex; gap: 14px; opacity: 0.7; font-size: 12px; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     BEFORE · current board chrome
+     ═══════════════════════════════════════════════════════════════ */
+  .old-board {
+    background: var(--ci-bg-inset);
+    padding: 14px 18px 18px;
+    display: flex; gap: 12px;
+    overflow-x: auto;
+    min-height: 380px;
+    align-items: flex-start;
+  }
+  .old-col {
+    flex-shrink: 0;
+    width: 240px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .old-col-header {
+    padding: 10px 12px 8px;
+    border-top: 3px solid var(--ci-accent-primary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .old-col-header.c2 { border-top-color: var(--ci-accent-amber); }
+  .old-col-header.c3 { border-top-color: var(--ci-accent-teal); }
+  .old-col-header.c4 { border-top-color: var(--ci-text-link); }
+  .old-col-header.c5 { border-top-color: var(--ci-accent-red); }
+  .old-col-title { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); }
+  .old-col-count { font-size: 12px; color: var(--ci-text-tertiary); margin-left: 2px; }
+  .old-col-chevron { margin-left: auto; font-size: 12px; color: var(--ci-text-tertiary); opacity: 0.5; }
+  .old-cards { display: flex; flex-direction: column; gap: 8px; padding: 4px 4px; }
+  .old-card {
+    background: var(--ci-bg-raised);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    box-shadow: 0 1px 3px rgba(30,31,33,0.06);
+  }
+  .old-card-title { font-weight: 600; letter-spacing: -0.005em; margin-bottom: 2px; }
+  .old-card-sub { font-size: 10.5px; color: var(--ci-text-tertiary); }
+  .old-empty { font-size: 11px; color: var(--ci-text-tertiary); text-align: center; padding: 24px 0; font-style: italic; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     AFTER · new board chrome
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* Board toolbar — above columns */
+  .board-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px 12px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    background: var(--ci-bg-raised);
+  }
+  .tb-group { display: flex; align-items: center; gap: 4px; }
+  .tb-search {
+    position: relative;
+    flex: 0 1 280px;
+  }
+  .tb-search-input {
+    width: 100%;
+    font-size: 12.5px; font-family: inherit;
+    padding: 6px 10px 6px 28px;
+    background: var(--ci-bg-inset);
+    border: 1px solid transparent;
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-primary);
+    outline: none;
+    transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  }
+  .tb-search-input::placeholder { color: var(--ci-text-tertiary); }
+  .tb-search-input:focus { background: var(--ci-bg-raised); border-color: var(--ci-border-strong); }
+  .tb-search-icon {
+    position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+    color: var(--ci-text-tertiary); pointer-events: none;
+  }
+  .tb-search-icon svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  .tb-divider { width: 1px; height: 20px; background: var(--ci-border-subtle); margin: 0 4px; }
+
+  .tb-chip {
+    font-size: 12px; font-weight: 500;
+    padding: 5px 10px;
+    border-radius: var(--ci-radius-sm);
+    background: transparent;
+    color: var(--ci-text-secondary);
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 5px;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  }
+  .tb-chip:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .tb-chip.active {
+    background: var(--ci-accent-primary-soft);
+    color: var(--ci-accent-primary);
+    border-color: rgba(252,99,107,0.2);
+  }
+  .tb-chip-count {
+    font-size: 10px; padding: 1px 5px; border-radius: 99px;
+    background: var(--ci-accent-primary); color: #fff; font-weight: 700;
+  }
+
+  .tb-view-toggle {
+    display: flex; background: var(--ci-bg-inset); border-radius: var(--ci-radius-sm); padding: 2px;
+  }
+  .tb-view-btn {
+    font-size: 11.5px; font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 4px;
+    color: var(--ci-text-tertiary);
+    background: transparent;
+    border: none; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .tb-view-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+  .tb-view-btn.active { background: var(--ci-bg-raised); color: var(--ci-text-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+
+  .tb-icon-btn {
+    width: 26px; height: 26px;
+    border-radius: var(--ci-radius-sm);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ci-text-tertiary);
+    background: transparent; border: none; cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .tb-icon-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .tb-icon-btn svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  .tb-spacer { flex: 1; }
+
+  /* Board itself */
+  .new-board {
+    background: var(--ci-bg-inset);
+    padding: 18px 20px 20px;
+    display: flex; gap: 12px;
+    overflow-x: auto;
+    min-height: 420px;
+    align-items: flex-start;
+  }
+  .board-col {
+    flex-shrink: 0;
+    width: 268px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-md);
+    display: flex; flex-direction: column;
+    max-height: 380px;
+    transition: background var(--motion-xs) var(--ease-out), transform var(--motion-sm) var(--ease-out);
+    position: relative;
+  }
+  .board-col:hover { background: #ECEEF1; }
+  .board-col.drag-over {
+    background: var(--ci-accent-primary-soft);
+    box-shadow: inset 0 0 0 1.5px var(--ci-accent-primary);
+  }
+
+  .board-col-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    cursor: grab;
+    user-select: none;
+  }
+  .board-col-header:active { cursor: grabbing; }
+  .board-col-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--stage-color, var(--ci-text-tertiary));
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1.5px var(--ci-bg-base);
+  }
+  .board-col-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.005em;
+  }
+  .board-col-count {
+    font-size: 11px; font-weight: 700;
+    padding: 1px 7px;
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-secondary);
+    border-radius: 99px;
+    font-variant-numeric: tabular-nums;
+  }
+  .board-col-count.zero { color: var(--ci-text-tertiary); opacity: 0.6; }
+  .board-col-actions { margin-left: auto; display: flex; gap: 1px; opacity: 0; transition: opacity var(--motion-xs) var(--ease-out); }
+  .board-col:hover .board-col-actions { opacity: 1; }
+  .col-act {
+    width: 22px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ci-text-tertiary);
+    background: transparent; border: none; cursor: pointer;
+    border-radius: 4px;
+    transition: background var(--motion-xs), color var(--motion-xs);
+  }
+  .col-act:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .col-act svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  .board-cards {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 8px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 80px;
+  }
+  .board-cards.drag-target {
+    background: rgba(252,99,107,0.04);
+  }
+
+  .board-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: var(--ci-radius-sm);
+    padding: 10px 11px;
+    font-size: 12px;
+    cursor: grab;
+    transition: border-color var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out), transform var(--motion-xs) var(--ease-out);
+  }
+  .board-card:hover {
+    border-color: var(--ci-border-strong);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transform: translateY(-1px);
+  }
+  .board-card:active { cursor: grabbing; }
+  .board-card.dragging { opacity: 0.4; transform: scale(0.97); }
+  .board-card-title { font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; margin-bottom: 3px; }
+  .board-card-sub { font-size: 10.5px; color: var(--ci-text-tertiary); display: flex; align-items: center; gap: 6px; }
+  .board-card-score {
+    margin-left: auto;
+    font-size: 11px; font-weight: 700;
+    padding: 1px 5px; border-radius: 3px;
+    background: rgba(54,179,126,0.1); color: var(--ci-accent-teal);
+    font-variant-numeric: tabular-nums;
+  }
+  .board-card-score.amber { background: rgba(245,166,35,0.12); color: #C88500; }
+  .board-card-score.red { background: rgba(232,56,79,0.1); color: var(--ci-accent-red); }
+
+  /* Insertion indicator during drag */
+  .drop-indicator {
+    height: 2px; background: var(--ci-accent-primary);
+    border-radius: 99px;
+    margin: 0 2px;
+    position: relative;
+  }
+  .drop-indicator::before, .drop-indicator::after {
+    content: ''; position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--ci-accent-primary);
+    top: 50%; transform: translateY(-50%);
+  }
+  .drop-indicator::before { left: -4px; }
+  .drop-indicator::after { right: -4px; }
+
+  /* Empty column — uses the EmptyBlock grammar (tight variant) */
+  .col-empty {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 28px 16px;
+    gap: 6px;
+    text-align: center;
+  }
+  .col-empty-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--ci-text-secondary);
+    letter-spacing: -0.002em;
+  }
+  .col-empty-hint {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    line-height: 1.4;
+    max-width: 200px;
+  }
+
+  /* Add-card affordance at bottom of column */
+  .board-col-add {
+    padding: 8px 10px;
+    font-size: 11.5px; font-weight: 500;
+    color: var(--ci-text-tertiary);
+    background: transparent;
+    border: none;
+    border-top: 1px dashed transparent;
+    cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; gap: 6px;
+    transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+  }
+  .board-col-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-raised); }
+  .board-col-add-circle {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1px dashed var(--ci-border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+
+  /* Ghost "add stage" column at the end */
+  .board-add-stage {
+    flex-shrink: 0;
+    width: 220px;
+    min-height: 100px;
+    border-radius: var(--ci-radius-md);
+    border: 1px dashed var(--ci-border-strong);
+    background: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px;
+    padding: 20px 12px;
+    cursor: pointer;
+    color: var(--ci-text-tertiary);
+    font-family: inherit;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    align-self: stretch;
+  }
+  .board-add-stage:hover {
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-primary);
+    border-color: var(--ci-border-default);
+    border-style: solid;
+  }
+  .board-add-stage-circle {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ci-bg-raised);
+    border: 1px dashed var(--ci-border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: inherit;
+    font-weight: 700;
+  }
+  .board-add-stage-label { font-size: 12px; font-weight: 500; letter-spacing: -0.005em; }
+
+  /* Collapsed column */
+  .board-col.collapsed {
+    width: 44px;
+    min-width: 44px;
+  }
+  .board-col.collapsed .board-col-header {
+    flex-direction: column;
+    padding: 12px 4px;
+    gap: 8px;
+    border-bottom: none;
+    height: 100%;
+    min-height: 200px;
+  }
+  .board-col.collapsed .board-col-title {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 10px;
+  }
+  .board-col.collapsed .board-col-actions { display: none; }
+  .board-col.collapsed .board-cards, .board-col.collapsed .board-col-add { display: none; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     ZOOM: toolbar detail
+     ═══════════════════════════════════════════════════════════════ */
+  .zoom-box { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; max-width: 1280px; }
+
+  .caption { font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.6; margin-top: 14px; max-width: 880px; }
+  .caption strong { color: var(--ci-text-secondary); font-weight: 600; }
+
+  .spec { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 22px 26px; max-width: 900px; margin-top: 36px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; }
+  .spec h3 { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px; }
+  .spec h3 + h3, .spec p + h3, .spec ul + h3 { margin-top: 18px; }
+  .spec ul { padding-left: 20px; margin: 4px 0 8px; }
+  .spec li { margin-bottom: 4px; }
+  .spec code { background: var(--ci-bg-inset); padding: 1px 6px; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--ci-text-primary); }
+  .spec .qline { color: var(--ci-text-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Kanban board chrome audit</h1>
+<p class="page-sub">[NEW] — Tier 1 shipped the Kanban <em>card</em>. The board <em>around</em> the cards never got a DESIGN.md pass. Column headers are thin, no board-level search/filter, no "add stage" affordance, empty columns are a one-liner. This pass fixes the chrome — cards themselves stay untouched.</p>
+
+<div class="frame">
+  <h3>What today is missing</h3>
+  <ul>
+    <li><strong>No board-level toolbar</strong> — search, filter, view switcher, group-by, sort all live outside the Kanban view or don't exist. No unified control surface.</li>
+    <li><strong>Thin column headers</strong> — 3px colored top-border is the only differentiator; stage name + count blend into the content. Hard to scan at a glance.</li>
+    <li><strong>No inline add-stage</strong> — stages are configured in a hidden settings modal. Can't just drop "+ Add stage" at the end of the columns.</li>
+    <li><strong>Empty columns underdeveloped</strong> — one line of italic tertiary text "No cards." Nothing else. Each column's purpose should whisper, not just echo.</li>
+    <li><strong>Drag-over states hardcoded</strong> — <code>rgba(255,122,89,0.07)</code> instead of <code>var(--ci-accent-primary-soft)</code>. Violates the token system.</li>
+    <li><strong>Column collapse is the only per-column action</strong> — no quick-edit (rename, recolor, reorder, archive), no column-level filter ("show only this stage").</li>
+    <li><strong>No per-card quick-move</strong> — must drag. Keyboard arrows or a right-click "move to…" menu would help.</li>
+  </ul>
+  <h3>What this pass ships</h3>
+  <ul>
+    <li>Board toolbar — search + filter chips + view switcher + add-stage + overflow menu</li>
+    <li>Column headers with stage-dot + uppercase label + pill count + hover-reveal actions</li>
+    <li>Ghost "+ Add stage" column at the end of the columns row</li>
+    <li>Empty-column state using the <code>EmptyBlock</code> grammar (tight variant) from <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/165">#165</a></li>
+    <li>Proper drag-over states via tokens (coral-soft bg + 1.5px coral inset shadow)</li>
+    <li>Drop indicator (2px coral pill with end-dots) between cards while dragging</li>
+    <li>Collapsed column treatment — vertical title, still shows count</li>
+  </ul>
+  <h3>What stays untouched</h3>
+  <ul>
+    <li><strong>The Kanban card itself</strong> — Tier 1 locked this grammar (see <code>design-proposals/tier-1a-kanban-card.html</code>). Out of scope.</li>
+    <li>The stage schema / status values / color-picker — no data-model changes</li>
+    <li>Stage-reorder logic (adds affordance on column header, but mechanics unchanged)</li>
+  </ul>
+</div>
+
+<div class="rec-strap">Recommended: ship the whole chrome pass together — toolbar + column headers + add-stage + empty columns — they're one coherent surface</div>
+
+<!-- ═════════════ BEFORE ═════════════ -->
+<div class="section-label">Before · current board chrome</div>
+<span class="state-tag bad">Today</span>
+<div class="dash-surface">
+  <div class="dash-topbar">
+    <div class="dash-topbar-brand">
+      <div class="dash-topbar-brand-dot"></div>
+      <div class="dash-topbar-brand-name">Coop</div>
+    </div>
+    <div class="dash-topbar-links"><span>Dashboard</span><span>Tasks</span><span>Inbox</span><span>Docs</span></div>
+  </div>
+  <div class="old-board">
+    <div class="old-col">
+      <div class="old-col-header"><span class="old-col-title">Watch List</span><span class="old-col-count">8</span><span class="old-col-chevron">‹</span></div>
+      <div class="old-cards">
+        <div class="old-card"><div class="old-card-title">Transform VXR</div><div class="old-card-sub">Senior PM · applied 2d ago</div></div>
+        <div class="old-card"><div class="old-card-title">Unitbase, Inc.</div><div class="old-card-sub">Head of Product · saved</div></div>
+        <div class="old-card"><div class="old-card-title">Kustomer</div><div class="old-card-sub">VP PM · saved</div></div>
+      </div>
+    </div>
+    <div class="old-col">
+      <div class="old-col-header c2"><span class="old-col-title">Researching</span><span class="old-col-count">4</span><span class="old-col-chevron">‹</span></div>
+      <div class="old-cards">
+        <div class="old-card"><div class="old-card-title">Wonderlic</div><div class="old-card-sub">Product Lead · assessment</div></div>
+        <div class="old-card"><div class="old-card-title">Luminous</div><div class="old-card-sub">PM · researching</div></div>
+      </div>
+    </div>
+    <div class="old-col">
+      <div class="old-col-header c3"><span class="old-col-title">Applied</span><span class="old-col-count">2</span><span class="old-col-chevron">‹</span></div>
+      <div class="old-cards">
+        <div class="old-card"><div class="old-card-title">Product Genius</div><div class="old-card-sub">Sr PM · applied 3d ago</div></div>
+      </div>
+    </div>
+    <div class="old-col">
+      <div class="old-col-header c4"><span class="old-col-title">Interviewing</span><span class="old-col-count">1</span><span class="old-col-chevron">‹</span></div>
+      <div class="old-cards">
+        <div class="old-card"><div class="old-card-title">SalesAPE.ai</div><div class="old-card-sub">VP · 3rd round</div></div>
+      </div>
+    </div>
+    <div class="old-col">
+      <div class="old-col-header c5"><span class="old-col-title">Offer</span><span class="old-col-count">0</span><span class="old-col-chevron">‹</span></div>
+      <div class="old-cards">
+        <div class="old-empty">No cards.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="caption"><strong>Issues visible.</strong> No toolbar at all; stage config is buried in settings. Column headers are weak — 3px color bar + small text + tiny gray count. Empty column is italic "No cards." with no guidance. No add-stage affordance. No filter or search for the board.</div>
+
+<!-- ═════════════ AFTER ═════════════ -->
+<div class="section-label">After · new board chrome</div>
+<span class="state-tag good">Target</span>
+
+<div class="dash-surface">
+  <div class="dash-topbar">
+    <div class="dash-topbar-brand">
+      <div class="dash-topbar-brand-dot"></div>
+      <div class="dash-topbar-brand-name">Coop</div>
+    </div>
+    <div class="dash-topbar-links"><span>Dashboard</span><span>Tasks</span><span>Inbox</span><span>Docs</span></div>
+  </div>
+
+  <!-- Board toolbar -->
+  <div class="board-toolbar">
+    <div class="tb-search">
+      <span class="tb-search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+      <input class="tb-search-input" placeholder="Search companies, roles, tags…" />
+    </div>
+    <div class="tb-divider"></div>
+    <div class="tb-group">
+      <button class="tb-chip active">All <span class="tb-chip-count">15</span></button>
+      <button class="tb-chip">My court <span style="color: var(--ci-text-tertiary); font-size: 10px; margin-left: 2px">3</span></button>
+      <button class="tb-chip">Overdue <span style="color: var(--ci-accent-red); font-size: 10px; margin-left: 2px; font-weight: 700;">2</span></button>
+      <button class="tb-chip">Qualified</button>
+      <button class="tb-chip">Starred</button>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-view-toggle">
+      <button class="tb-view-btn active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
+      <button class="tb-view-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
+    </div>
+    <button class="tb-icon-btn" title="Group by"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h12"/><path d="M3 18h6"/></svg></button>
+    <button class="tb-icon-btn" title="Sort"><svg viewBox="0 0 24 24"><path d="M7 16l-4-4 4-4"/><path d="M3 12h14"/><path d="M17 8l4 4-4 4"/></svg></button>
+    <button class="tb-icon-btn" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg></button>
+  </div>
+
+  <!-- Board -->
+  <div class="new-board">
+    <!-- Column 1: Watch List -->
+    <div class="board-col" style="--stage-color: #FC636B">
+      <div class="board-col-header">
+        <div class="board-col-dot"></div>
+        <div class="board-col-title">Watch List</div>
+        <span class="board-col-count">8</span>
+        <div class="board-col-actions">
+          <button class="col-act" title="Collapse"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="col-act" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></button>
+        </div>
+      </div>
+      <div class="board-cards">
+        <div class="board-card">
+          <div class="board-card-title">Transform VXR</div>
+          <div class="board-card-sub">Senior PM<span class="board-card-score">8.2</span></div>
+        </div>
+        <div class="board-card">
+          <div class="board-card-title">Unitbase, Inc.</div>
+          <div class="board-card-sub">Head of Product<span class="board-card-score">7.8</span></div>
+        </div>
+        <div class="board-card">
+          <div class="board-card-title">Kustomer</div>
+          <div class="board-card-sub">VP PM<span class="board-card-score amber">6.4</span></div>
+        </div>
+      </div>
+      <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+    </div>
+
+    <!-- Column 2: Researching -->
+    <div class="board-col" style="--stage-color: #F5A623">
+      <div class="board-col-header">
+        <div class="board-col-dot"></div>
+        <div class="board-col-title">Researching</div>
+        <span class="board-col-count">4</span>
+        <div class="board-col-actions">
+          <button class="col-act" title="Collapse"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="col-act" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></button>
+        </div>
+      </div>
+      <div class="board-cards">
+        <div class="board-card">
+          <div class="board-card-title">Wonderlic</div>
+          <div class="board-card-sub">Product Lead<span class="board-card-score">7.5</span></div>
+        </div>
+        <div class="drop-indicator"></div>
+        <div class="board-card dragging" style="opacity: 0.5;">
+          <div class="board-card-title">Luminous</div>
+          <div class="board-card-sub">PM<span class="board-card-score">7.1</span></div>
+        </div>
+      </div>
+      <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+    </div>
+
+    <!-- Column 3: Applied -->
+    <div class="board-col drag-over" style="--stage-color: #36B37E">
+      <div class="board-col-header">
+        <div class="board-col-dot"></div>
+        <div class="board-col-title">Applied</div>
+        <span class="board-col-count">2</span>
+        <div class="board-col-actions">
+          <button class="col-act" title="Collapse"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="col-act" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></button>
+        </div>
+      </div>
+      <div class="board-cards drag-target">
+        <div class="board-card">
+          <div class="board-card-title">Product Genius</div>
+          <div class="board-card-sub">Sr PM · 3d ago<span class="board-card-score">8.4</span></div>
+        </div>
+        <div class="board-card">
+          <div class="board-card-title">SalesAPE.ai</div>
+          <div class="board-card-sub">VP · 5d ago<span class="board-card-score amber">6.8</span></div>
+        </div>
+        <div class="drop-indicator"></div>
+      </div>
+      <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+    </div>
+
+    <!-- Column 4: Interviewing -->
+    <div class="board-col" style="--stage-color: #4573D2">
+      <div class="board-col-header">
+        <div class="board-col-dot"></div>
+        <div class="board-col-title">Interviewing</div>
+        <span class="board-col-count">1</span>
+        <div class="board-col-actions">
+          <button class="col-act" title="Collapse"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="col-act" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></button>
+        </div>
+      </div>
+      <div class="board-cards">
+        <div class="board-card">
+          <div class="board-card-title">Slack</div>
+          <div class="board-card-sub">Staff PM · round 3<span class="board-card-score">8.9</span></div>
+        </div>
+      </div>
+      <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+    </div>
+
+    <!-- Column 5: Offer (empty) -->
+    <div class="board-col" style="--stage-color: #E8384F">
+      <div class="board-col-header">
+        <div class="board-col-dot"></div>
+        <div class="board-col-title">Offer</div>
+        <span class="board-col-count zero">0</span>
+        <div class="board-col-actions">
+          <button class="col-act" title="Collapse"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="col-act" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></button>
+        </div>
+      </div>
+      <div class="board-cards">
+        <div class="col-empty">
+          <div class="col-empty-title">Nothing here yet.</div>
+          <div class="col-empty-hint">Drop a card when you have a written offer on the table.</div>
+        </div>
+      </div>
+      <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+    </div>
+
+    <!-- Ghost: Add stage -->
+    <button class="board-add-stage">
+      <span class="board-add-stage-circle">+</span>
+      <span class="board-add-stage-label">Add stage</span>
+    </button>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>What's new.</strong> Board toolbar at top: search (left), filter chips (All / My court / Overdue / Qualified / Starred), view switcher (Kanban / Table) with Linear-style icon-pill, group-by + sort + overflow icon-buttons. Columns get stronger headers — stage-dot + uppercase label + pill count + hover-revealed collapse/more. Cards are the existing Tier 1 grammar (compact variant shown here with score chips). Drop indicator is a 2px coral pill with end dots. Empty column uses the <code>EmptyBlock</code> grammar — tight variant with no glyph, just title + hint. "+ Add stage" ghost column at the end — dashed border becomes solid on hover. Stage colors are applied to the dot at <code>--stage-color</code>, not to borders (more restrained than the 3px color bar).
+</div>
+
+<!-- ═════════════ ZOOM: Column detail states ═════════════ -->
+<div class="section-label">Column states · detail</div>
+
+<div style="display: flex; gap: 20px; flex-wrap: wrap;">
+  <!-- Default column -->
+  <div>
+    <div class="state-tag">Default</div>
+    <div style="background: var(--ci-bg-inset); padding: 16px; border-radius: var(--ci-radius-md);">
+      <div class="board-col" style="--stage-color: #FC636B; width: 260px;">
+        <div class="board-col-header">
+          <div class="board-col-dot"></div>
+          <div class="board-col-title">Watch List</div>
+          <span class="board-col-count">8</span>
+          <div class="board-col-actions" style="opacity: 1;">
+            <button class="col-act" title="Collapse"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+            <button class="col-act" title="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></button>
+          </div>
+        </div>
+        <div class="board-cards">
+          <div class="board-card"><div class="board-card-title">Transform VXR</div><div class="board-card-sub">Senior PM<span class="board-card-score">8.2</span></div></div>
+        </div>
+        <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drag-over state -->
+  <div>
+    <div class="state-tag">Drag-over (valid drop target)</div>
+    <div style="background: var(--ci-bg-inset); padding: 16px; border-radius: var(--ci-radius-md);">
+      <div class="board-col drag-over" style="--stage-color: #36B37E; width: 260px;">
+        <div class="board-col-header">
+          <div class="board-col-dot"></div>
+          <div class="board-col-title">Applied</div>
+          <span class="board-col-count">2</span>
+        </div>
+        <div class="board-cards drag-target">
+          <div class="board-card"><div class="board-card-title">Product Genius</div><div class="board-card-sub">Sr PM · 3d ago<span class="board-card-score">8.4</span></div></div>
+          <div class="drop-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty column -->
+  <div>
+    <div class="state-tag">Empty</div>
+    <div style="background: var(--ci-bg-inset); padding: 16px; border-radius: var(--ci-radius-md);">
+      <div class="board-col" style="--stage-color: #E8384F; width: 260px;">
+        <div class="board-col-header">
+          <div class="board-col-dot"></div>
+          <div class="board-col-title">Offer</div>
+          <span class="board-col-count zero">0</span>
+        </div>
+        <div class="board-cards">
+          <div class="col-empty">
+            <div class="col-empty-title">Nothing here yet.</div>
+            <div class="col-empty-hint">Drop a card when you have a written offer on the table.</div>
+          </div>
+        </div>
+        <button class="board-col-add"><span class="board-col-add-circle">+</span>Add card</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collapsed column -->
+  <div>
+    <div class="state-tag">Collapsed</div>
+    <div style="background: var(--ci-bg-inset); padding: 16px; border-radius: var(--ci-radius-md);">
+      <div style="display: flex; gap: 8px;">
+        <div class="board-col collapsed" style="--stage-color: #FC636B;">
+          <div class="board-col-header">
+            <div class="board-col-dot"></div>
+            <div class="board-col-title">Watch List</div>
+            <span class="board-col-count">8</span>
+          </div>
+        </div>
+        <div class="board-col collapsed" style="--stage-color: #F5A623;">
+          <div class="board-col-header">
+            <div class="board-col-dot"></div>
+            <div class="board-col-title">Researching</div>
+            <span class="board-col-count">4</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ Spec ═════════════ -->
+<div class="spec">
+  <h3>Key decisions locked</h3>
+  <ul>
+    <li><strong>Board toolbar</strong> is a new surface above the columns — search (left, ~280px, coop-style muted input that unfocuses to <code>--ci-bg-inset</code>), filter chips (All / My court / Overdue / Qualified / Starred — configurable later), view switcher (Kanban / Table), group-by / sort / overflow icon-buttons.</li>
+    <li><strong>Column header grammar:</strong> stage-dot (8px circle, <code>--stage-color</code>) + uppercase label (11px/700, 0.04em tracking) + pill count (11px/700 in <code>--ci-bg-raised</code> pill) + hover-revealed action cluster (collapse / more).</li>
+    <li><strong>Stage color</strong> moves from a 3px top border to the stage-dot only. Less chrome, more signal. Border is removed.</li>
+    <li><strong>"+ Add card" ghost row</strong> at the bottom of each column — transparent by default, reveals on column hover. Click opens an inline composer.</li>
+    <li><strong>"+ Add stage" ghost column</strong> at the end of the columns row — 220px wide, dashed border → solid on hover. Click opens the stage config modal (existing).</li>
+    <li><strong>Empty columns</strong> use the <code>EmptyBlock</code> (tight) grammar from <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/165">#165</a>: no glyph, just title ("Nothing here yet.") + hint ("Drop a card when you have a written offer on the table."). Hint copy is stage-specific and lives in the stage definition.</li>
+    <li><strong>Drag-over state:</strong> column shell background → <code>--ci-accent-primary-soft</code>, inset shadow of 1.5px <code>--ci-accent-primary</code>. Card-container optional secondary tint. Tokens only; no hardcoded rgba.</li>
+    <li><strong>Drop indicator:</strong> 2px coral pill with 6px end-dots, inserted between cards as the drag hovers. Use <code>--motion-xs</code> fade-in.</li>
+    <li><strong>Collapsed column:</strong> 44px wide, vertical-text title (rotate 180° writing-mode). Count stays visible horizontally. Hover expands to show the stage name horizontally briefly (optional).</li>
+    <li><strong>Column reorder:</strong> grab the column header to drag. Existing behavior stays; visual polish is the whole change.</li>
+    <li><strong>Search</strong> filters cards in place — non-matching cards fade to 0.2 opacity (not hidden, so the board structure stays stable). Matching cards highlight with a subtle 1px <code>--ci-accent-amber</code> ring (120ms ease-out).</li>
+  </ul>
+
+  <h3>Surface → file map</h3>
+  <ul>
+    <li><strong>Board toolbar:</strong> new component, mounted above <code>#kanban-board</code> in <code>saved.html</code>. Handlers in <code>saved.js</code> next to <code>renderKanban()</code>.</li>
+    <li><strong>Column header restructure:</strong> <code>saved.js:2687-2695</code> — replace the existing header template with the new one. Delete the 3px color top-border; add the stage-dot.</li>
+    <li><strong>Column actions on hover:</strong> <code>saved.js:2993+</code> — extend delegation for `.col-act` clicks (collapse, more).</li>
+    <li><strong>"+ Add card" ghost row:</strong> render after <code>.kanban-cards</code> inside each column. Opens an inline composer (reuse existing save flow).</li>
+    <li><strong>"+ Add stage" ghost column:</strong> render after the last real column in <code>renderKanban()</code>. Click → existing <code>openStageConfig()</code> or equivalent.</li>
+    <li><strong>Empty column state:</strong> replace the <code>.kanban-empty</code> one-liner with <code>.col-empty</code> using the EmptyBlock-tight grammar. Stage definition gets a new <code>emptyHint: string</code> field (optional).</li>
+    <li><strong>Drag-over + drop indicator:</strong> replace all hardcoded <code>rgba(255,122,89,...)</code> with <code>var(--ci-accent-primary-soft)</code> + <code>var(--ci-accent-primary)</code>. Drop indicator DOM node is injected into <code>.board-cards</code> during <code>dragover</code>, removed on <code>dragleave</code> / drop.</li>
+    <li><strong>CSS:</strong> <code>saved.html:368-474</code> — the whole <code>.kanban-*</code> block. Replace with the new <code>.board-*</code> tree (rename from kanban-* to board-* is a bonus naming cleanup but can stay as kanban-* if the Doer prefers to minimize churn).</li>
+  </ul>
+
+  <h3 class="qline">Three small calls before spec</h3>
+  <ul>
+    <li><strong>1. Naming.</strong> Rename classes <code>.kanban-*</code> → <code>.board-*</code> (my pick — board chrome is more accurate, card grammar already calls itself <code>.kanban-card</code> which stays) or keep <code>.kanban-*</code> to minimize churn. Gut: rename.</li>
+    <li><strong>2. Stage color treatment.</strong> Dot-only (my pick — less chrome) vs dot + subtle 1px top accent that matches the dot. Gut: dot-only.</li>
+    <li><strong>3. Filter chips set.</strong> Default chips = <code>All / My court / Overdue / Qualified / Starred</code> (my pick — matches existing action-status + scoring grammar) vs user-configurable from the start. Gut: ship these five, configurable later.</li>
+  </ul>
+  <p>Reply <strong>"ship it"</strong> if the gut-calls look right, otherwise name which to change.</p>
+</div>
+
+</body>
+</html>

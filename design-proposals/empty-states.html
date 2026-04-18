@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Empty states + first-run (#165)</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --ci-radius-lg: 14px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --motion-md: 300ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 28px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 880px; line-height: 1.55; margin-bottom: 12px; }
+  .rec-strap { display: inline-flex; align-items: center; gap: 8px; background: rgba(54,179,126,0.10); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; margin-bottom: 24px; }
+  .rec-strap::before { content: '✓'; font-size: 11px; }
+
+  .frame { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px 22px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; max-width: 880px; margin-bottom: 28px; }
+  .frame h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; }
+  .frame p + h3 { margin-top: 10px; }
+
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ci-text-tertiary); margin: 40px 0 10px; }
+  .section-label:first-of-type { margin-top: 8px; }
+  .section-sub { font-size: 12px; color: var(--ci-text-secondary); margin-bottom: 16px; max-width: 860px; line-height: 1.6; }
+  .surface-label { font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+
+  /* ─── Grammar utilities ─── */
+  .empty-shell {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+
+  /* The EMPTY BLOCK — the single re-used pattern across all surfaces */
+  .empty-block {
+    padding: 48px 32px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    gap: 12px;
+  }
+  .empty-block.compact { padding: 28px 20px; gap: 8px; }
+  .empty-block.tight { padding: 18px 14px; gap: 6px; }
+
+  .empty-glyph {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ci-border-default);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 4px;
+  }
+  .empty-glyph svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .empty-block.compact .empty-glyph { width: 28px; height: 28px; }
+  .empty-block.compact .empty-glyph svg { width: 12px; height: 12px; }
+  .empty-block.tight .empty-glyph { display: none; }
+
+  .empty-title {
+    font-size: 15px; font-weight: 700;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.005em;
+  }
+  .empty-block.compact .empty-title { font-size: 13px; }
+  .empty-block.tight .empty-title { font-size: 12px; font-weight: 600; }
+
+  .empty-sub {
+    font-size: 13px; font-weight: 400;
+    color: var(--ci-text-secondary);
+    line-height: 1.5;
+    max-width: 360px;
+  }
+  .empty-block.compact .empty-sub { font-size: 12px; max-width: 280px; }
+  .empty-block.tight .empty-sub { font-size: 11px; max-width: 220px; }
+
+  .empty-cta {
+    margin-top: 6px;
+    font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    border: none; cursor: pointer; font-family: inherit;
+    transition: background var(--motion-xs) var(--ease-out);
+    text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .empty-cta:hover { background: #1F2A3C; }
+  .empty-cta.secondary {
+    background: transparent; color: var(--ci-text-primary);
+    border: 1px solid var(--ci-border-default);
+  }
+  .empty-cta.secondary:hover { background: var(--ci-bg-inset); border-color: var(--ci-border-strong); }
+  .empty-block.compact .empty-cta { padding: 6px 12px; font-size: 12px; }
+
+  /* Secondary text link (not a button) */
+  .empty-link {
+    font-size: 12px; color: var(--ci-text-link);
+    text-decoration: none;
+    display: inline-flex; gap: 4px; align-items: center;
+    transition: color var(--motion-xs);
+  }
+  .empty-link:hover { text-decoration: underline; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SURFACE 1 — First-run welcome (side panel on day 0)
+     ═══════════════════════════════════════════════════════════════ */
+  .surface-sidepanel {
+    width: 380px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 560px;
+  }
+  .sidepanel-header {
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sidepanel-brand {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ci-accent-primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .sidepanel-title { font-size: 13px; font-weight: 600; flex: 1; }
+  .sidepanel-close { font-size: 14px; opacity: 0.7; cursor: pointer; }
+
+  .first-run {
+    padding: 32px 24px 24px;
+    display: flex; flex-direction: column; gap: 20px;
+    flex: 1;
+  }
+  .first-run-head { text-align: center; }
+  .first-run-head h2 {
+    font-size: 22px; font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .first-run-head p {
+    font-size: 13px; color: var(--ci-text-secondary);
+    line-height: 1.55;
+    max-width: 300px; margin: 0 auto;
+  }
+  .setup-list { display: flex; flex-direction: column; gap: 2px; }
+  .setup-step {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--ci-radius-sm);
+    transition: background var(--motion-xs) var(--ease-out);
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+  }
+  .setup-step:hover { background: var(--ci-bg-base); }
+  .setup-step-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid var(--ci-border-strong);
+    background: var(--ci-bg-raised);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    color: var(--ci-text-secondary);
+    flex-shrink: 0;
+    transition: all var(--motion-xs) var(--ease-out);
+  }
+  .setup-step.done .setup-step-num { background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff; }
+  .setup-step.current .setup-step-num { background: var(--ci-accent-primary); border-color: var(--ci-accent-primary); color: #fff; }
+  .setup-step-body { flex: 1; min-width: 0; padding-top: 1px; }
+  .setup-step-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.005em;
+  }
+  .setup-step.done .setup-step-title { color: var(--ci-text-tertiary); }
+  .setup-step-sub {
+    font-size: 11.5px; color: var(--ci-text-tertiary);
+    margin-top: 1px; line-height: 1.4;
+  }
+  .setup-step-arrow {
+    font-size: 14px; color: var(--ci-text-tertiary);
+    opacity: 0; transition: opacity var(--motion-xs);
+    align-self: center;
+  }
+  .setup-step:hover .setup-step-arrow { opacity: 1; }
+  .setup-step.done .setup-step-arrow { display: none; }
+
+  .first-run-foot {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--ci-border-subtle);
+    font-size: 11px; color: var(--ci-text-tertiary);
+    text-align: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SURFACE 2 — Empty pipeline (dashboard, day 0)
+     ═══════════════════════════════════════════════════════════════ */
+  .dash-surface {
+    max-width: 860px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+  .dash-topbar {
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 16px;
+    font-size: 13px;
+  }
+  .dash-topbar-brand { display: flex; align-items: center; gap: 8px; }
+  .dash-topbar-brand-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--ci-accent-primary); }
+  .dash-topbar-brand-name { font-weight: 700; letter-spacing: -0.005em; }
+  .dash-topbar-links { display: flex; gap: 14px; opacity: 0.7; font-size: 12px; }
+
+  .dash-body { padding: 22px 22px 28px; }
+  .dash-section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .dash-section-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .dash-section-sub { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500; }
+
+  /* Zero-state goal cards (ghost) */
+  .goals-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+  .goal-zero {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 4px;
+    opacity: 0.7;
+  }
+  .goal-zero-label { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); letter-spacing: 0.03em; text-transform: uppercase; }
+  .goal-zero-value { font-size: 22px; font-weight: 700; color: var(--ci-border-strong); font-variant-numeric: tabular-nums; }
+
+  /* Kanban zero-state — whole board with empty columns */
+  .kanban-zero {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+    min-height: 280px;
+  }
+  .kanban-col {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 12px 10px;
+    display: flex; flex-direction: column;
+  }
+  .kanban-col-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2px 10px;
+    font-size: 11px; font-weight: 700;
+    color: var(--ci-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .kanban-col-count {
+    font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
+    padding: 1px 6px; background: var(--ci-bg-inset); border-radius: 99px;
+  }
+  .kanban-empty-hint {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--ci-text-tertiary);
+    font-style: italic;
+    padding: 20px 4px;
+    text-align: center;
+    line-height: 1.45;
+  }
+  .kanban-col.hero .kanban-empty-hint {
+    color: var(--ci-text-secondary);
+    font-style: normal; font-weight: 500;
+  }
+
+  /* Hero empty card overlays the kanban */
+  .dash-empty-hero {
+    background: var(--ci-bg-raised);
+    border: 1px dashed var(--ci-border-strong);
+    border-radius: var(--ci-radius-md);
+    padding: 52px 32px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SURFACE 3 — Side panel, no detection
+     ═══════════════════════════════════════════════════════════════ */
+  .nodetect-body {
+    padding: 32px 20px 20px;
+    flex: 1;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .nodetect-head {
+    text-align: center;
+    padding: 0 8px 8px;
+    font-size: 13px;
+    color: var(--ci-text-secondary);
+  }
+  .nodetect-meta {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    font-family: var(--ci-font-mono, 'SF Mono', monospace);
+    padding: 5px 10px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 14px;
+    align-self: center;
+  }
+  .nodetect-meta-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ci-text-tertiary); }
+
+  .nodetect-quick {
+    display: flex; flex-direction: column; gap: 4px;
+    margin-top: 4px;
+  }
+  .nodetect-quick-head {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 6px;
+  }
+  .nodetect-option {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: var(--ci-radius-sm);
+    background: transparent;
+    border: 1px solid var(--ci-border-subtle);
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    text-decoration: none; color: inherit;
+  }
+  .nodetect-option:hover {
+    background: var(--ci-bg-base);
+    border-color: var(--ci-border-default);
+  }
+  .nodetect-option-icon {
+    width: 26px; height: 26px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-inset);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ci-text-secondary);
+    flex-shrink: 0;
+  }
+  .nodetect-option-icon svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .nodetect-option-body { flex: 1; min-width: 0; }
+  .nodetect-option-title { font-size: 12.5px; font-weight: 600; color: var(--ci-text-primary); }
+  .nodetect-option-sub { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 1px; line-height: 1.35; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SURFACE 4 — Integrations page, no keys
+     ═══════════════════════════════════════════════════════════════ */
+  .integrations-surface {
+    max-width: 720px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+  .integrations-head {
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .integrations-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .integrations-head-sub { font-size: 13px; color: var(--ci-text-secondary); margin-top: 2px; line-height: 1.5; }
+
+  .integrations-zero-banner {
+    margin: 16px 22px 0;
+    padding: 14px 16px;
+    background: var(--ci-accent-primary-soft);
+    border: 1px solid rgba(252,99,107,0.2);
+    border-radius: var(--ci-radius-sm);
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .integrations-zero-icon {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--ci-accent-primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .integrations-zero-body { flex: 1; font-size: 12.5px; line-height: 1.55; color: var(--ci-text-primary); }
+  .integrations-zero-body strong { font-weight: 700; }
+  .integrations-zero-body .sub { color: var(--ci-text-secondary); }
+
+  .integration-list { padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+  .integration-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 12px;
+    border-radius: var(--ci-radius-sm);
+  }
+  .integration-logo {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--ci-bg-inset);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    color: var(--ci-text-secondary);
+    flex-shrink: 0;
+  }
+  .integration-logo.claude { background: #FBECE2; color: #CC6638; }
+  .integration-logo.openai { background: #E8F4EC; color: #2E7D5A; }
+  .integration-logo.apollo { background: #E0EAFF; color: #3D52AA; }
+  .integration-logo.serper { background: #F0E8FF; color: #6B4FC8; }
+  .integration-body { flex: 1; min-width: 0; }
+  .integration-title { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .integration-sub { font-size: 11.5px; color: var(--ci-text-tertiary); margin-top: 2px; line-height: 1.4; }
+  .integration-status { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 500; }
+  .integration-action {
+    font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    border: none; cursor: pointer; font-family: inherit;
+  }
+  .integration-action.done {
+    background: transparent;
+    color: var(--ci-accent-teal);
+    padding-left: 0;
+    font-size: 11px;
+  }
+  .integration-action.done::before { content: '✓'; margin-right: 4px; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SURFACE 5 — Zero-research company card
+     ═══════════════════════════════════════════════════════════════ */
+  .company-surface {
+    max-width: 520px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    padding: 18px 22px;
+  }
+  .company-head { display: flex; gap: 12px; align-items: center; }
+  .company-logo {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: var(--ci-bg-inset);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--ci-text-secondary);
+  }
+  .company-name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .company-url { font-size: 11.5px; color: var(--ci-text-tertiary); margin-top: 1px; }
+
+  .company-slots {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-top: 14px;
+  }
+  .company-slot {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 10px 12px;
+  }
+  .company-slot-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ci-text-tertiary); }
+  .company-slot-placeholder { font-size: 12px; color: var(--ci-text-tertiary); font-style: italic; margin-top: 3px; }
+
+  .company-research-cta {
+    margin-top: 16px;
+    padding: 16px 18px;
+    background: var(--ci-bg-base);
+    border: 1px dashed var(--ci-border-strong);
+    border-radius: var(--ci-radius-sm);
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  }
+  .company-research-cta-text { font-size: 12.5px; color: var(--ci-text-secondary); line-height: 1.5; flex: 1; }
+  .company-research-cta-text strong { color: var(--ci-text-primary); font-weight: 700; }
+  .company-research-btn {
+    font-size: 12.5px; font-weight: 600;
+    padding: 7px 14px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-accent-primary); color: #fff;
+    border: none; cursor: pointer; font-family: inherit;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     LAYOUT HELPERS
+     ═══════════════════════════════════════════════════════════════ */
+  .surface-cols { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .caption { font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.6; margin-top: 12px; max-width: 420px; }
+  .caption.wide { max-width: 860px; }
+  .caption strong { color: var(--ci-text-secondary); font-weight: 600; }
+
+  .spec { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 22px 26px; max-width: 900px; margin-top: 36px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; }
+  .spec h3 { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px; }
+  .spec h3 + h3, .spec p + h3, .spec ul + h3 { margin-top: 18px; }
+  .spec ul { padding-left: 20px; margin: 4px 0 8px; }
+  .spec li { margin-bottom: 4px; }
+  .spec code { background: var(--ci-bg-inset); padding: 1px 6px; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--ci-text-primary); }
+  .spec .qline { color: var(--ci-text-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Empty states + first-run</h1>
+<p class="page-sub"><a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/165" style="color:var(--ci-accent-primary)">#165</a> · Pre-Josiah launch. Five surfaces the first external user will hit before they have any data. Grammar: typography-first, no illustrations, no motivational copy, honest label + single primary CTA.</p>
+
+<div class="frame">
+  <h3>The grammar (one pattern, re-used)</h3>
+  <p>Every empty state shares the same structure: <strong>small outline glyph</strong> (optional) → <strong>tight title</strong> (what's empty, in plain words) → <strong>one sentence of orientation</strong> (why it's empty, what to do) → <strong>one primary CTA</strong> (dark pill button) and optionally one muted secondary link. Three sizes: full (dashboard, integrations), compact (company card, side panel), tight (kanban column). No stock illustrations. No "Welcome 👋" exclamations. No "Your journey starts here." The UI is honest about being empty and points you at the next action.</p>
+  <h3>Why no illustrations</h3>
+  <p>Illustrated empty states are the slop tell. They add ornament without information, cost bytes, and date poorly. DESIGN.md rule: earn every pixel. A well-typed title + a one-line explanation + a clear CTA communicates faster than a decorated ghost holding a magnifying glass.</p>
+  <h3>First-run sequence</h3>
+  <p>First user-launch is a 3-step checklist (Add a key → Tell Coop about yourself → Visit a company) rendered INSIDE the side panel, not a separate onboarding modal. Each step links to the relevant page. Progress persists in <code>chrome.storage.local</code>.</p>
+</div>
+
+<div class="rec-strap">Recommended: ship all five together — they share one grammar, one component, one PRD</div>
+
+<!-- ═════════════════════════════════════════════════════════════════
+     SURFACE 1 — First-run welcome (sidepanel, day 0)
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="section-label">Surface 1 · First-run welcome (sidepanel)</div>
+<p class="section-sub">First thing Josiah sees after installing the extension and pinning it to the toolbar. The side panel auto-opens; content detection is suppressed until setup completes. A 3-step checklist guides him through keys → profile → first save.</p>
+
+<div class="surface-cols">
+
+  <!-- State A: day 0, nothing done -->
+  <div>
+    <div class="surface-label">State A · nothing done yet</div>
+    <div class="surface-sidepanel">
+      <div class="sidepanel-header">
+        <div class="sidepanel-brand">C</div>
+        <div class="sidepanel-title">Coop</div>
+        <div class="sidepanel-close">×</div>
+      </div>
+      <div class="first-run">
+        <div class="first-run-head">
+          <h2>Let's set you up.</h2>
+          <p>Three quick steps and Coop starts working — auto-researching companies, scoring jobs, and keeping your pipeline current.</p>
+        </div>
+        <div class="setup-list">
+          <a class="setup-step current">
+            <div class="setup-step-num">1</div>
+            <div class="setup-step-body">
+              <div class="setup-step-title">Add an API key</div>
+              <div class="setup-step-sub">Claude or OpenAI to power research + chat. Apollo / Serper optional.</div>
+            </div>
+            <div class="setup-step-arrow">→</div>
+          </a>
+          <a class="setup-step">
+            <div class="setup-step-num">2</div>
+            <div class="setup-step-body">
+              <div class="setup-step-title">Tell Coop about yourself</div>
+              <div class="setup-step-sub">One paragraph or a resume paste. Sets context for scoring + chat.</div>
+            </div>
+            <div class="setup-step-arrow">→</div>
+          </a>
+          <a class="setup-step">
+            <div class="setup-step-num">3</div>
+            <div class="setup-step-body">
+              <div class="setup-step-title">Visit a company page</div>
+              <div class="setup-step-sub">LinkedIn, Greenhouse, a company's site — Coop will detect and save.</div>
+            </div>
+            <div class="setup-step-arrow">→</div>
+          </a>
+        </div>
+        <div class="first-run-foot">Takes about 2 minutes · data stays local in your browser</div>
+      </div>
+    </div>
+    <div class="caption">Checklist state — each step is a link to its destination page. Current step has a coral number, others are outlined. Tight copy, no "welcome to your journey" padding.</div>
+  </div>
+
+  <!-- State B: key added, profile not done -->
+  <div>
+    <div class="surface-label">State B · in progress</div>
+    <div class="surface-sidepanel">
+      <div class="sidepanel-header">
+        <div class="sidepanel-brand">C</div>
+        <div class="sidepanel-title">Coop</div>
+        <div class="sidepanel-close">×</div>
+      </div>
+      <div class="first-run">
+        <div class="first-run-head">
+          <h2>Almost set up.</h2>
+          <p>Keys are in. Two more steps before Coop is fully wired.</p>
+        </div>
+        <div class="setup-list">
+          <div class="setup-step done">
+            <div class="setup-step-num">✓</div>
+            <div class="setup-step-body">
+              <div class="setup-step-title">Add an API key</div>
+              <div class="setup-step-sub">Claude key added</div>
+            </div>
+          </div>
+          <a class="setup-step current">
+            <div class="setup-step-num">2</div>
+            <div class="setup-step-body">
+              <div class="setup-step-title">Tell Coop about yourself</div>
+              <div class="setup-step-sub">Takes 60 seconds — paste your resume or write a paragraph.</div>
+            </div>
+            <div class="setup-step-arrow">→</div>
+          </a>
+          <a class="setup-step">
+            <div class="setup-step-num">3</div>
+            <div class="setup-step-body">
+              <div class="setup-step-title">Visit a company page</div>
+              <div class="setup-step-sub">Coop will detect and save.</div>
+            </div>
+            <div class="setup-step-arrow">→</div>
+          </a>
+        </div>
+        <div class="first-run-foot">Skip this and use Coop anyway — <a href="#" style="color:var(--ci-text-link);">dismiss</a></div>
+      </div>
+    </div>
+    <div class="caption">Progress persists — green checks for done steps, coral for current, outline for remaining. "Dismiss" link at bottom for the user who wants to explore without the checklist.</div>
+  </div>
+
+  <!-- State C: all done, transitional -->
+  <div>
+    <div class="surface-label">State C · transitioning to normal mode</div>
+    <div class="surface-sidepanel">
+      <div class="sidepanel-header">
+        <div class="sidepanel-brand">C</div>
+        <div class="sidepanel-title">Coop</div>
+        <div class="sidepanel-close">×</div>
+      </div>
+      <div style="padding: 48px 24px 24px; display: flex; flex-direction: column; gap: 18px;">
+        <div class="first-run-head" style="text-align: left;">
+          <h2 style="font-size: 19px;">You're set.</h2>
+          <p>Open any company page — LinkedIn, their site, a job posting — and Coop will start doing its thing.</p>
+        </div>
+        <div class="nodetect-quick" style="margin-top: 8px;">
+          <div class="nodetect-quick-head">Try one</div>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">Stripe on LinkedIn</div>
+              <div class="nodetect-option-sub">Sample company page · opens in new tab</div>
+            </div>
+          </a>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">A Greenhouse job post</div>
+              <div class="nodetect-option-sub">Coop extracts the role + scores it</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="caption">After all 3 steps complete, checklist dissolves. Next time sidepanel opens without a detected page, this "try one of these" affordance renders (see Surface 3).</div>
+  </div>
+
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════
+     SURFACE 2 — Empty pipeline dashboard
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="section-label">Surface 2 · Empty pipeline (dashboard on day 0)</div>
+<p class="section-sub">When the user opens <code>saved.html</code> with zero entries saved. Stats collapse to zero-values (tertiary gray), Kanban renders as 5 empty columns with per-column hints, and a centered primary CTA lives above telling them where to start.</p>
+
+<div class="dash-surface">
+  <div class="dash-topbar">
+    <div class="dash-topbar-brand">
+      <div class="dash-topbar-brand-dot"></div>
+      <div class="dash-topbar-brand-name">Coop</div>
+    </div>
+    <div class="dash-topbar-links">
+      <span>Dashboard</span>
+      <span>Tasks</span>
+      <span>Inbox</span>
+      <span>Docs</span>
+    </div>
+  </div>
+  <div class="dash-body">
+    <div class="dash-section-head">
+      <div>
+        <div class="dash-section-title">Pipeline Overview</div>
+        <div class="dash-section-sub">Friday, Apr 17</div>
+      </div>
+    </div>
+
+    <div class="goals-row">
+      <div class="goal-zero"><div class="goal-zero-label">Saved</div><div class="goal-zero-value">0</div></div>
+      <div class="goal-zero"><div class="goal-zero-label">Applications</div><div class="goal-zero-value">0</div></div>
+      <div class="goal-zero"><div class="goal-zero-label">Reached Out</div><div class="goal-zero-value">0</div></div>
+      <div class="goal-zero"><div class="goal-zero-label">New Convos</div><div class="goal-zero-value">0</div></div>
+      <div class="goal-zero"><div class="goal-zero-label">In Play</div><div class="goal-zero-value">0</div></div>
+    </div>
+
+    <div class="dash-empty-hero">
+      <div class="empty-glyph"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+      <div class="empty-title">No companies saved yet.</div>
+      <div class="empty-sub">Visit any company page — LinkedIn, a job posting, their website — and Coop will detect it. Save your first one to start filling this pipeline.</div>
+      <button class="empty-cta">Open sample: Stripe on LinkedIn →</button>
+      <a class="empty-link" style="margin-top: 2px;">or browse the docs</a>
+    </div>
+
+    <div style="margin-top: 24px;">
+      <div class="dash-section-head" style="margin-bottom: 12px;">
+        <div class="dash-section-title" style="font-size: 13px;">Pipeline</div>
+        <div class="dash-section-sub">Kanban view</div>
+      </div>
+      <div class="kanban-zero">
+        <div class="kanban-col">
+          <div class="kanban-col-head"><span>Watch List</span><span class="kanban-col-count">0</span></div>
+          <div class="kanban-empty-hint">Companies you're tracking</div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-head"><span>Researching</span><span class="kanban-col-count">0</span></div>
+          <div class="kanban-empty-hint">Actively exploring</div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-head"><span>Applied</span><span class="kanban-col-count">0</span></div>
+          <div class="kanban-empty-hint">Applications sent</div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-head"><span>Interviewing</span><span class="kanban-col-count">0</span></div>
+          <div class="kanban-empty-hint">In conversation</div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-head"><span>Offer</span><span class="kanban-col-count">0</span></div>
+          <div class="kanban-empty-hint">Decision time</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption wide">
+  <strong>Empty dashboard.</strong> Goal cards still render but with gray zeros (tertiary color, 0.7 opacity — they exist, they just have no data yet). Centered hero empty block is the focal point: dashed border to signal "placeholder for future content," single primary CTA to open a sample company, muted "browse the docs" secondary link. Kanban columns below render with short per-column hint text — not empty, not loud; just a reminder of what each column is for. When one card is added, the hint on that column fades out.
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════
+     SURFACE 3 — Side panel, no detection
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="section-label">Surface 3 · Side panel on a page with no detected company</div>
+<p class="section-sub">When the user opens the side panel on a page Coop can't parse (google.com, a random blog, their own dashboard, etc.). Today: blank + confusing. Target: honest about what's visible + a ramp into the parts of Coop that don't need detection.</p>
+
+<div class="surface-cols">
+  <div>
+    <div class="surface-label">Primary state</div>
+    <div class="surface-sidepanel" style="min-height: 520px;">
+      <div class="sidepanel-header">
+        <div class="sidepanel-brand">C</div>
+        <div class="sidepanel-title">Coop</div>
+        <div class="sidepanel-close">×</div>
+      </div>
+      <div class="nodetect-body">
+        <div class="empty-block compact" style="padding: 24px 14px 8px;">
+          <div class="empty-glyph"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+          <div class="empty-title">Nothing to detect here.</div>
+          <div class="empty-sub">This page doesn't look like a company site, job post, or LinkedIn profile.</div>
+        </div>
+        <div class="nodetect-meta">
+          <span class="nodetect-meta-dot"></span>
+          mail.google.com
+        </div>
+        <div class="nodetect-quick">
+          <div class="nodetect-quick-head">Or do something else</div>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><path d="M3 12l2-9 2 5 3-4 2 6 4-2 2 4 2-2 1 6"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">Open your pipeline</div>
+              <div class="nodetect-option-sub">41 companies · 34 opportunities</div>
+            </div>
+          </a>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">Ask Coop a question</div>
+              <div class="nodetect-option-sub">Pipeline-wide chat · full context</div>
+            </div>
+          </a>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">3 tasks due today</div>
+              <div class="nodetect-option-sub">Reply to Brian · Complete Wonderlic …</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="caption">Detects the page isn't a company surface → honest copy + current URL in a mono chip for transparency → three one-click escape hatches into parts of Coop that work on any page.</div>
+  </div>
+
+  <div>
+    <div class="surface-label">Day-0 variant · no pipeline yet</div>
+    <div class="surface-sidepanel" style="min-height: 520px;">
+      <div class="sidepanel-header">
+        <div class="sidepanel-brand">C</div>
+        <div class="sidepanel-title">Coop</div>
+        <div class="sidepanel-close">×</div>
+      </div>
+      <div class="nodetect-body">
+        <div class="empty-block compact" style="padding: 24px 14px 8px;">
+          <div class="empty-glyph"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+          <div class="empty-title">Nothing to detect here.</div>
+          <div class="empty-sub">Try opening a company page — LinkedIn, Greenhouse, a company's website.</div>
+        </div>
+        <div class="nodetect-meta">
+          <span class="nodetect-meta-dot"></span>
+          mail.google.com
+        </div>
+        <div class="nodetect-quick">
+          <div class="nodetect-quick-head">Try one of these</div>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">Stripe on LinkedIn</div>
+              <div class="nodetect-option-sub">Sample company page</div>
+            </div>
+          </a>
+          <a class="nodetect-option">
+            <div class="nodetect-option-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>
+            <div class="nodetect-option-body">
+              <div class="nodetect-option-title">A Greenhouse job post</div>
+              <div class="nodetect-option-sub">Coop extracts + scores it</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="caption">Day-0 swaps "Open your pipeline / Ask Coop / Tasks" (those are empty too) for "Try one of these" sample pages. Same grammar, different affordances.</div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════
+     SURFACE 4 — Integrations page with no keys
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="section-label">Surface 4 · Integrations page with no keys</div>
+<p class="section-sub">First place a new user lands from the "Add an API key" checklist step. Currently: list of integrations with empty inputs. Target: explicit banner explaining why keys matter, inline status for each provider, a clear distinction between required (Claude or OpenAI) and optional (Apollo, Serper).</p>
+
+<div class="integrations-surface">
+  <div class="integrations-head">
+    <h2>Integrations</h2>
+    <div class="integrations-head-sub">API keys let Coop do research, scoring, and chat. Everything stays in your browser — keys are stored locally.</div>
+  </div>
+  <div class="integrations-zero-banner">
+    <div class="integrations-zero-icon">!</div>
+    <div class="integrations-zero-body">
+      <strong>Coop needs at least one chat key to get started.</strong>
+      <div class="sub" style="margin-top:3px">Add Claude or OpenAI below — the rest are optional enrichments.</div>
+    </div>
+  </div>
+  <div class="integration-list">
+    <div class="integration-row">
+      <div class="integration-logo claude">C</div>
+      <div class="integration-body">
+        <div class="integration-title">Claude <span style="font-weight: 500; color: var(--ci-accent-primary); font-size: 11px; margin-left: 6px;">required</span></div>
+        <div class="integration-sub">Primary chat + research synthesis · get a key at console.anthropic.com</div>
+      </div>
+      <button class="integration-action">Add key</button>
+    </div>
+    <div class="integration-row">
+      <div class="integration-logo openai">O</div>
+      <div class="integration-body">
+        <div class="integration-title">OpenAI <span style="font-weight: 500; color: var(--ci-text-tertiary); font-size: 11px; margin-left: 6px;">required (or Claude)</span></div>
+        <div class="integration-sub">Chat fallback · get a key at platform.openai.com</div>
+      </div>
+      <button class="integration-action">Add key</button>
+    </div>
+    <div class="integration-row">
+      <div class="integration-logo apollo">A</div>
+      <div class="integration-body">
+        <div class="integration-title">Apollo <span style="font-weight: 500; color: var(--ci-text-tertiary); font-size: 11px; margin-left: 6px;">optional</span></div>
+        <div class="integration-sub">Firmographics · employees, funding, leaders</div>
+      </div>
+      <button class="integration-action" style="background: transparent; color: var(--ci-text-primary); border: 1px solid var(--ci-border-default);">Add key</button>
+    </div>
+    <div class="integration-row">
+      <div class="integration-logo serper">S</div>
+      <div class="integration-body">
+        <div class="integration-title">Serper <span style="font-weight: 500; color: var(--ci-text-tertiary); font-size: 11px; margin-left: 6px;">optional</span></div>
+        <div class="integration-sub">Web research fallback when Apollo can't help</div>
+      </div>
+      <button class="integration-action" style="background: transparent; color: var(--ci-text-primary); border: 1px solid var(--ci-border-default);">Add key</button>
+    </div>
+  </div>
+</div>
+
+<div class="caption wide">
+  <strong>Integrations zero-state.</strong> Coral-tinted banner at the top makes it unmissable that ONE of Claude or OpenAI is required; the rest are quiet optional adds. Required providers get a dark-pill "Add key" button; optional providers get a soft outlined button. Provider logos use semantic-adjacent tints (warm for Anthropic, green for OpenAI, blue for Apollo, purple for Serper) — monochrome-first rule relaxed only here because each logo represents a distinct vendor the user needs to cognitively differentiate.
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════
+     SURFACE 5 — Zero-research company card
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="section-label">Surface 5 · Company saved, no research run yet</div>
+<p class="section-sub">User saved a company but hasn't clicked Research. Company card has a name + url + maybe a logo initial, but every enrichment field is empty. Honest placeholder in each slot + one call-to-research CTA at the bottom.</p>
+
+<div class="company-surface">
+  <div class="company-head">
+    <div class="company-logo">U</div>
+    <div>
+      <div class="company-name">Unitbase, Inc.</div>
+      <div class="company-url">unitbase.com</div>
+    </div>
+  </div>
+  <div class="company-slots">
+    <div class="company-slot">
+      <div class="company-slot-label">Employees</div>
+      <div class="company-slot-placeholder">Not researched</div>
+    </div>
+    <div class="company-slot">
+      <div class="company-slot-label">Funding</div>
+      <div class="company-slot-placeholder">Not researched</div>
+    </div>
+    <div class="company-slot">
+      <div class="company-slot-label">Industry</div>
+      <div class="company-slot-placeholder">Not researched</div>
+    </div>
+  </div>
+  <div class="company-research-cta">
+    <div class="company-research-cta-text">
+      <strong>Nothing researched yet.</strong><br>
+      Run enrichment to fill firmographics, leadership, reviews, and synthesis.
+    </div>
+    <button class="company-research-btn">Research →</button>
+  </div>
+</div>
+
+<div class="caption wide">
+  <strong>Zero-research card.</strong> Slots are present but labeled "Not researched" (italic, tertiary color) — so the user sees what enrichment will fill. Dashed-border CTA at the bottom is the single action. When Research is clicked, the new pipeline card from <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/241">#241</a> takes over the surface and these slots fill in live.
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════
+     Spec card
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="spec">
+  <h3>Key decisions locked</h3>
+  <ul>
+    <li><strong>One component, three sizes.</strong> Single <code>&lt;EmptyBlock&gt;</code> pattern: glyph (optional) → title → sub → primary CTA → optional secondary link. Sizes: <code>full</code> (dashboard hero, integrations), <code>compact</code> (company card, sidepanel), <code>tight</code> (kanban column hint, table row).</li>
+    <li><strong>No illustrations.</strong> Ever. Slop signature.</li>
+    <li><strong>No motivational copy.</strong> No "Your journey starts here." No "Welcome! 👋." Plain labels, single sentence of orientation, one action.</li>
+    <li><strong>Icons are outline-only SVGs</strong> via single-color <code>currentColor</code> stroke. No filled shapes, no emoji.</li>
+    <li><strong>Primary CTA style:</strong> dark-navy pill (<code>--ci-bg-header</code>) with white text. Matches the existing navy chrome. Secondary: outlined, no fill.</li>
+    <li><strong>First-run checklist</strong> lives inside the side panel, not a separate modal. Persists in <code>chrome.storage.local</code> under <code>onboardingState</code>. Dismissable.</li>
+    <li><strong>Empty dashboard:</strong> goal cards render zeros at tertiary color (not hidden). Kanban columns render with a short hint ("Companies you're tracking") that fades on first card added to that column.</li>
+    <li><strong>Sidepanel no-detect:</strong> honest "Nothing to detect here" + current URL in a monospace chip + 3 escape hatches (pipeline / chat / tasks). Day-0 variant swaps those for sample pages.</li>
+    <li><strong>Integrations zero-state</strong> coral banner makes required-vs-optional unmissable. Required gets filled pill CTAs, optional gets outlined.</li>
+    <li><strong>Zero-research company card:</strong> slots labeled "Not researched" in italic tertiary; one dashed-border CTA at the bottom calls <code>Research</code>. Integrates with <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/241">#241</a> when clicked.</li>
+    <li><strong>All motion:</strong> 120ms hover, 200ms state change. <code>var(--ease-out)</code>. No linear, no decorative pulses.</li>
+  </ul>
+
+  <h3>Surface → file map</h3>
+  <ul>
+    <li><strong>First-run checklist:</strong> <code>sidepanel.js</code> new mode <code>first-run</code>, guarded by <code>onboardingState.completed !== true</code>. Detection suppressed during first-run.</li>
+    <li><strong>Empty pipeline dashboard:</strong> <code>saved.js</code> — renders empty block when <code>savedCompanies.length === 0</code>. Kanban columns render hints when empty.</li>
+    <li><strong>Sidepanel no-detect:</strong> <code>sidepanel.js</code> — new state <code>mode === 'no-detect'</code> when <code>content.js</code> returns no company. Shows escape-hatch menu.</li>
+    <li><strong>Integrations zero-state:</strong> <code>integrations.js</code> / <code>integrations.html</code> — banner above provider list when no keys set.</li>
+    <li><strong>Zero-research company:</strong> <code>company.js</code> — slot placeholder + research CTA when <code>entry.employees === undefined</code> and all enrichment fields absent.</li>
+  </ul>
+
+  <h3 class="qline">Three small calls before spec</h3>
+  <ul>
+    <li><strong>1. First-run position.</strong> Inline in sidepanel (my pick — less disruptive, context-sensitive) vs. a full-page welcome modal on first launch. Gut: sidepanel inline.</li>
+    <li><strong>2. Checklist persistence.</strong> Dismiss = hidden forever (my pick), or dismiss = snooze-until-next-session? Gut: hidden forever with an option in Settings to re-open.</li>
+    <li><strong>3. Day-0 sample page suggestions.</strong> Include real companies (Stripe on LinkedIn) as samples (my pick — concrete, actionable) vs. generic instruction ("open any LinkedIn company page"). Gut: real samples; links open in new tab.</li>
+  </ul>
+  <p>Reply <strong>"ship it"</strong> if all three look right, otherwise name which to change.</p>
+</div>
+
+</body>
+</html>

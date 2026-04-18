@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#263 Preferences redesign</title>
+<style>
+  :root {
+    --bg-base: #F0F2F5;
+    --bg-raised: #FFFFFF;
+    --bg-inset: #EBEDF0;
+    --bg-sidebar: #EEF1F3;
+    --text-primary: #0A0B0D;
+    --text-secondary: #6F7782;
+    --text-tertiary: #8A8E94;
+    --border-default: #E0E4E8;
+    --border-subtle: #EAECEF;
+    --accent-coral: #FC636B;
+    --accent-teal: #36B37E;
+    --accent-red: #E8384F;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Page chrome ── */
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 32px 96px;
+  }
+  .page-header {
+    margin-bottom: 32px;
+  }
+  .page-title {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  .prompt {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-left: 3px solid var(--accent-coral);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .prompt strong { color: var(--text-primary); font-weight: 600; }
+
+  /* ── Section wrappers ── */
+  .section {
+    margin-top: 48px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin: 0 0 8px;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .section-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 20px;
+    max-width: 620px;
+  }
+
+  /* ── Hero: the full preferences page ── */
+  .hero-frame {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(30, 31, 33, 0.08);
+  }
+  .hero-topbar {
+    height: 52px;
+    background: #151B26;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+  }
+  .hero-logo {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--accent-coral);
+  }
+  .hero-breadcrumb {
+    font-size: 13px;
+    color: #A3AEBE;
+    margin-left: auto;
+  }
+  .hero-breadcrumb span { color: #F5F4F2; }
+
+  .hero-body {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 720px;
+  }
+
+  /* ── Left rail ── */
+  .rail {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-default);
+    padding: 24px 0 32px;
+  }
+  .rail-group {
+    padding: 0 20px;
+    margin-bottom: 20px;
+  }
+  .rail-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin: 0 0 10px;
+  }
+  .rail-link {
+    display: block;
+    padding: 7px 12px 7px 13px;
+    margin: 0 0 1px -3px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .rail-link:hover {
+    color: var(--text-primary);
+  }
+  .rail-link.active {
+    color: var(--text-primary);
+    background: var(--bg-raised);
+    border-left-color: var(--accent-coral);
+    font-weight: 500;
+  }
+
+  /* ── Main column ── */
+  .main {
+    padding: 40px 48px 64px;
+    max-width: 780px;
+  }
+  .main-crumb {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin: 0 0 6px;
+  }
+  .main-crumb span { color: var(--text-secondary); }
+  .main-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .main-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 32px;
+  }
+
+  /* ── Form field ── */
+  .field { margin-bottom: 22px; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+  }
+  .field-helper {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin: 0 0 8px;
+  }
+  .field-input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    outline: none;
+  }
+  .field-input:focus {
+    border-color: var(--accent-coral);
+    box-shadow: 0 0 0 3px rgba(252, 99, 107, 0.12);
+  }
+  .field-input::placeholder { color: var(--text-tertiary); }
+  textarea.field-input {
+    min-height: 88px;
+    resize: vertical;
+    line-height: 1.55;
+  }
+  .field-error {
+    font-size: 12px;
+    color: var(--accent-red);
+    margin-top: 4px;
+  }
+
+  /* Save chip */
+  .save-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent-teal);
+    background: rgba(54, 179, 126, 0.08);
+    border-radius: 10px;
+    vertical-align: middle;
+  }
+  .save-chip::before {
+    content: '';
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent-teal);
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><path d='M2 5l2 2 4-4' stroke='white' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") center/contain no-repeat;
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><path d='M2 5l2 2 4-4' stroke='white' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") center/contain no-repeat;
+    background: var(--accent-teal);
+  }
+
+  /* ── Group nav detail ── */
+  .rail-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .rail-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 20px 20px 24px;
+  }
+  .rail-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+  .rail-card-meta {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin: 0 0 14px;
+  }
+  .rail-card-item {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .rail-card-item:last-child { border-bottom: none; }
+
+  /* ── Form consistency comparison ── */
+  .consistency-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .consistency-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 24px;
+  }
+  .consistency-card-crumb {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 10px;
+  }
+  .consistency-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 16px;
+  }
+
+  /* ── Storyboard ── */
+  .storyboard {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .story-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 18px 18px 20px;
+  }
+  .story-step {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 10px;
+  }
+  .story-caption {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 14px 0 0;
+    line-height: 1.5;
+  }
+  .story-field {
+    padding: 8px 12px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 36px;
+  }
+  .story-field.focused {
+    background: var(--bg-raised);
+    border-color: var(--accent-coral);
+    box-shadow: 0 0 0 3px rgba(252, 99, 107, 0.12);
+  }
+  .story-field .cursor {
+    display: inline-block;
+    width: 1px; height: 14px;
+    background: var(--text-primary);
+    margin-left: 1px;
+  }
+  .story-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent-teal);
+    background: rgba(54, 179, 126, 0.08);
+    border-radius: 10px;
+  }
+  .story-chip::before {
+    content: '';
+    width: 10px; height: 10px;
+    background: var(--accent-teal);
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><path d='M2 5l2 2 4-4' stroke='white' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") center/contain no-repeat;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><path d='M2 5l2 2 4-4' stroke='white' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") center/contain no-repeat;
+  }
+  .story-chip.fading { opacity: 0.35; }
+
+  /* ── Before / After ── */
+  .ba-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .ba-frame {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .ba-label {
+    padding: 10px 18px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-inset);
+  }
+  .ba-body {
+    padding: 20px;
+    height: 380px;
+    overflow: hidden;
+    position: relative;
+  }
+  .ba-sim-block {
+    background: var(--bg-inset);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .ba-sim-h {
+    height: 12px;
+    background: #D3D7DC;
+    border-radius: 2px;
+    width: 40%;
+    margin-bottom: 10px;
+  }
+  .ba-sim-line {
+    height: 8px;
+    background: #E4E7EB;
+    border-radius: 2px;
+    margin-bottom: 6px;
+  }
+  .ba-sim-line.short { width: 70%; }
+  .ba-sim-line.tiny { width: 40%; }
+  .ba-fade {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 60px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), var(--bg-raised));
+    pointer-events: none;
+  }
+  .ba-split {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    height: 100%;
+    gap: 0;
+  }
+  .ba-split-rail {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-default);
+    padding: 14px 10px;
+  }
+  .ba-split-rail-dot {
+    height: 8px;
+    border-radius: 2px;
+    background: #D3D7DC;
+    margin-bottom: 8px;
+  }
+  .ba-split-rail-dot.active {
+    background: var(--accent-coral);
+    width: 60%;
+  }
+  .ba-split-rail-dot.small { width: 55%; background: #E4E7EB; }
+  .ba-split-main {
+    padding: 16px;
+  }
+
+  /* ── Open questions ── */
+  .oq-list {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .oq-item {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .oq-item:last-child { border-bottom: none; }
+  .oq-q {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .oq-a {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.55;
+  }
+  .oq-stance {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent-coral);
+  }
+
+  /* ── Misc ── */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: 12px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    color: var(--text-primary);
+  }
+  .tag .x {
+    margin-left: 6px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+  }
+  .split-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE HEADER
+       ═══════════════════════════════════════════════════════════ -->
+  <header class="page-header">
+    <h1 class="page-title">#263 Preferences redesign</h1>
+    <p class="page-subtitle">Sprawling page today — many sections, no nav, varying visual treatments.</p>
+    <div class="prompt">
+      <strong>Matt's prompt.</strong> Render a RECOMMENDED direction: left-rail section nav, 4 top-level groups (Profile, Job match, Coop behavior, Data pipeline), one consistent form treatment across every sub-section, autosave on blur with inline confirmation, max-width 780px main column.
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HERO — FULL PAGE
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <p class="section-label">Recommended</p>
+    <h2 class="section-title">Preferences — left-rail, grouped, autosaving</h2>
+    <p class="section-desc">Four top-level groups in a 220px rail. Single form treatment fills the main column. Main column capped at 780px for readability. Personal info shown populated below.</p>
+
+    <div class="hero-frame">
+      <div class="hero-topbar">
+        <div class="hero-logo"></div>
+        <div class="hero-breadcrumb">Coop.ai · <span>Preferences</span></div>
+      </div>
+      <div class="hero-body">
+
+        <!-- LEFT RAIL -->
+        <nav class="rail">
+          <div class="rail-group">
+            <p class="rail-group-label">Profile</p>
+            <a class="rail-link">Name</a>
+            <a class="rail-link active">Personal info &amp; links</a>
+            <a class="rail-link">Resume</a>
+            <a class="rail-link">Story Time</a>
+          </div>
+          <div class="rail-group">
+            <p class="rail-group-label">Job match</p>
+            <a class="rail-link">Salary floors</a>
+            <a class="rail-link">OTE target</a>
+            <a class="rail-link">Work arrangement</a>
+            <a class="rail-link">Roles of interest</a>
+          </div>
+          <div class="rail-group">
+            <p class="rail-group-label">Coop behavior</p>
+            <a class="rail-link">Operating principles</a>
+            <a class="rail-link">Scoring weights</a>
+            <a class="rail-link">Auto-rescore triggers</a>
+          </div>
+          <div class="rail-group">
+            <p class="rail-group-label">Data pipeline</p>
+            <a class="rail-link">Data sync settings</a>
+            <a class="rail-link">Provider preferences</a>
+          </div>
+        </nav>
+
+        <!-- MAIN -->
+        <main class="main">
+          <p class="main-crumb">Profile <span>· Personal info &amp; links</span></p>
+          <h2 class="main-title">Personal info &amp; links</h2>
+          <p class="main-desc">Used across Coop's writing, outreach drafting, and research prompts. Visible only to you — all data stays in the browser.</p>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">Full name</label>
+              <input class="field-input" type="text" value="Matt Sterbenz">
+            </div>
+            <div class="field">
+              <label class="field-label">Preferred pronouns</label>
+              <input class="field-input" type="text" value="he/him">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Headline</label>
+            <p class="field-helper">One sentence Coop uses when introducing you in outreach drafts.</p>
+            <input class="field-input" type="text" value="GTM operator. 12 years scaling revenue teams from seed to Series D.">
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">Location</label>
+              <input class="field-input" type="text" value="Brooklyn, NY">
+            </div>
+            <div class="field">
+              <label class="field-label">Email</label>
+              <input class="field-input" type="email" value="mattryansterbenz7@gmail.com">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">LinkedIn</label>
+              <input class="field-input" type="url" value="linkedin.com/in/mattsterbenz">
+            </div>
+            <div class="field">
+              <label class="field-label">Personal site</label>
+              <input class="field-input" type="url" placeholder="https://...">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Short bio <span class="save-chip">Saved</span></label>
+            <p class="field-helper">Plain prose — Coop pulls tone and phrasing from here when drafting in your voice.</p>
+            <textarea class="field-input">Revenue leader with a bias for building — sales, partnerships, RevOps. Most recently scaled a GTM org from $0 to $30M ARR. Now looking for a seed-to-Series-B role where I can shape the motion, not inherit it.</textarea>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Tags</label>
+            <p class="field-helper">Informal labels Coop uses to categorize opportunities against your interests.</p>
+            <div class="tag-row">
+              <span class="tag">GTM <span class="x">×</span></span>
+              <span class="tag">RevOps <span class="x">×</span></span>
+              <span class="tag">Seed to Series B <span class="x">×</span></span>
+              <span class="tag">Dev-tools <span class="x">×</span></span>
+              <span class="tag">AI tooling <span class="x">×</span></span>
+              <span class="tag" style="color: var(--text-tertiary);">+ Add</span>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       GROUP NAVIGATION
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <p class="section-label">Group navigation</p>
+    <h2 class="section-title">Four groups, thirteen sub-sections</h2>
+    <p class="section-desc">Every preference lives under one of these. No orphan toggles, no hero blocks, no collapsibles. Section counts below show how the page is chunked.</p>
+
+    <div class="rail-detail-grid">
+      <div class="rail-card">
+        <h3 class="rail-card-title">Profile</h3>
+        <p class="rail-card-meta">4 sub-sections · who you are</p>
+        <div class="rail-card-item">Name</div>
+        <div class="rail-card-item">Personal info &amp; links</div>
+        <div class="rail-card-item">Resume</div>
+        <div class="rail-card-item">Story Time</div>
+      </div>
+      <div class="rail-card">
+        <h3 class="rail-card-title">Job match</h3>
+        <p class="rail-card-meta">4 sub-sections · what you want</p>
+        <div class="rail-card-item">Salary floors</div>
+        <div class="rail-card-item">OTE target</div>
+        <div class="rail-card-item">Work arrangement</div>
+        <div class="rail-card-item">Roles of interest</div>
+      </div>
+      <div class="rail-card">
+        <h3 class="rail-card-title">Coop behavior</h3>
+        <p class="rail-card-meta">3 sub-sections · how Coop acts</p>
+        <div class="rail-card-item">Operating principles</div>
+        <div class="rail-card-item">Scoring weights</div>
+        <div class="rail-card-item">Auto-rescore triggers</div>
+      </div>
+      <div class="rail-card">
+        <h3 class="rail-card-title">Data pipeline</h3>
+        <p class="rail-card-meta">2 sub-sections · how data flows</p>
+        <div class="rail-card-item">Data sync settings</div>
+        <div class="rail-card-item">Provider preferences</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM TREATMENT CONSISTENCY
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <p class="section-label">Consistency</p>
+    <h2 class="section-title">One form pattern, every sub-section</h2>
+    <p class="section-desc">Label, optional helper, input, optional inline error. That's it. Whether it's a name, a number, or a paragraph of personality, the grammar is identical.</p>
+
+    <div class="consistency-grid">
+      <!-- Personal info -->
+      <div class="consistency-card">
+        <p class="consistency-card-crumb">Profile</p>
+        <h3 class="consistency-card-title">Personal info &amp; links</h3>
+
+        <div class="field">
+          <label class="field-label">Full name</label>
+          <input class="field-input" type="text" value="Matt Sterbenz">
+        </div>
+        <div class="field">
+          <label class="field-label">Location</label>
+          <p class="field-helper">Used for commute distance and remote-only filtering.</p>
+          <input class="field-input" type="text" value="Brooklyn, NY">
+        </div>
+        <div class="field">
+          <label class="field-label">LinkedIn</label>
+          <input class="field-input" type="url" value="linkedin.com/in/mattsterbenz">
+        </div>
+      </div>
+
+      <!-- Salary floors -->
+      <div class="consistency-card">
+        <p class="consistency-card-crumb">Job match</p>
+        <h3 class="consistency-card-title">Salary floors</h3>
+
+        <div class="field">
+          <label class="field-label">Base salary minimum</label>
+          <p class="field-helper">Opportunities below this score as red-flagged.</p>
+          <input class="field-input" type="text" value="$200,000">
+        </div>
+        <div class="field">
+          <label class="field-label">OTE target</label>
+          <input class="field-input" type="text" value="$300,000">
+        </div>
+        <div class="field">
+          <label class="field-label">Equity floor</label>
+          <p class="field-helper">Minimum acceptable equity refresh per year, as % of company.</p>
+          <input class="field-input" type="text" value="0.25%">
+        </div>
+      </div>
+
+      <!-- Operating principles -->
+      <div class="consistency-card">
+        <p class="consistency-card-crumb">Coop behavior</p>
+        <h3 class="consistency-card-title">Operating principles</h3>
+
+        <div class="field">
+          <label class="field-label">How Coop should talk to you</label>
+          <p class="field-helper">Plain prose. Written the way you'd brief a smart colleague.</p>
+          <textarea class="field-input" style="min-height: 70px;">Skip pleasantries. Always lead with the recommendation.</textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Drafting voice</label>
+          <input class="field-input" type="text" value="Warm, direct, mildly self-deprecating">
+        </div>
+        <div class="field">
+          <label class="field-label">Refusal style</label>
+          <input class="field-input" type="text" value="Push back before complying">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       AUTOSAVE STORYBOARD
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <p class="section-label">Save UX</p>
+    <h2 class="section-title">Autosave on blur, inline confirmation</h2>
+    <p class="section-desc">No Save buttons anywhere. Fields commit on blur. A small "Saved" chip appears next to the label for 1.5s, then fades. No modals, no toasts, no interruption.</p>
+
+    <div class="storyboard">
+      <div class="story-card">
+        <p class="story-step">01 · Edit</p>
+        <label class="field-label">Headline</label>
+        <div class="story-field focused">
+          <span>GTM operator. 12 years<span class="cursor"></span></span>
+        </div>
+        <p class="story-caption">User types into the field. Coral focus ring; no chip yet.</p>
+      </div>
+
+      <div class="story-card">
+        <p class="story-step">02 · Blur</p>
+        <label class="field-label">Headline</label>
+        <div class="story-field">
+          <span>GTM operator. 12 years scaling...</span>
+        </div>
+        <p class="story-caption">User tabs or clicks away. Focus ring drops; save fires silently.</p>
+      </div>
+
+      <div class="story-card">
+        <p class="story-step">03 · Confirm</p>
+        <label class="field-label">Headline <span class="story-chip">Saved</span></label>
+        <div class="story-field">
+          <span>GTM operator. 12 years scaling...</span>
+        </div>
+        <p class="story-caption">"Saved" chip appears inline next to the label. Teal, subtle.</p>
+      </div>
+
+      <div class="story-card">
+        <p class="story-step">04 · Fade</p>
+        <label class="field-label">Headline <span class="story-chip fading">Saved</span></label>
+        <div class="story-field">
+          <span>GTM operator. 12 years scaling...</span>
+        </div>
+        <p class="story-caption">After 1.5s the chip fades out. Label returns to resting state.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       BEFORE / AFTER
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <p class="section-label">Before / After</p>
+    <h2 class="section-title">From scrolling grab-bag to navigable surface</h2>
+    <p class="section-desc">Today the page is one long scroll with inconsistent section styling. The redesign pins navigation to a rail and unifies every sub-section under one form treatment.</p>
+
+    <div class="ba-grid">
+      <div class="ba-frame">
+        <div class="ba-label">Before</div>
+        <div class="ba-body">
+          <div class="ba-sim-block">
+            <div class="ba-sim-h"></div>
+            <div class="ba-sim-line"></div>
+            <div class="ba-sim-line short"></div>
+            <div class="ba-sim-line tiny"></div>
+          </div>
+          <div class="ba-sim-block" style="background: #fff; border: 2px solid var(--border-default);">
+            <div class="ba-sim-h" style="width: 60%;"></div>
+            <div class="ba-sim-line"></div>
+            <div class="ba-sim-line"></div>
+            <div class="ba-sim-line short"></div>
+          </div>
+          <div class="ba-sim-block" style="background: rgba(252, 99, 107, 0.05);">
+            <div class="ba-sim-h" style="background: var(--accent-coral); opacity: 0.4;"></div>
+            <div class="ba-sim-line"></div>
+            <div class="ba-sim-line short"></div>
+          </div>
+          <div class="ba-sim-block">
+            <div class="ba-sim-h"></div>
+            <div class="ba-sim-line"></div>
+            <div class="ba-sim-line"></div>
+            <div class="ba-sim-line short"></div>
+          </div>
+          <div class="ba-fade"></div>
+        </div>
+      </div>
+
+      <div class="ba-frame">
+        <div class="ba-label">After</div>
+        <div class="ba-body" style="padding: 0;">
+          <div class="ba-split">
+            <div class="ba-split-rail">
+              <div class="ba-split-rail-dot" style="width: 70%; background: #D3D7DC;"></div>
+              <div class="ba-split-rail-dot small"></div>
+              <div class="ba-split-rail-dot small"></div>
+              <div class="ba-split-rail-dot small"></div>
+              <div style="height: 12px;"></div>
+              <div class="ba-split-rail-dot" style="width: 70%; background: #D3D7DC;"></div>
+              <div class="ba-split-rail-dot active"></div>
+              <div class="ba-split-rail-dot small"></div>
+              <div class="ba-split-rail-dot small"></div>
+              <div style="height: 12px;"></div>
+              <div class="ba-split-rail-dot" style="width: 70%; background: #D3D7DC;"></div>
+              <div class="ba-split-rail-dot small"></div>
+              <div class="ba-split-rail-dot small"></div>
+            </div>
+            <div class="ba-split-main">
+              <div class="ba-sim-h" style="width: 55%;"></div>
+              <div class="ba-sim-line short" style="background: #EEF1F3;"></div>
+              <div style="height: 16px;"></div>
+              <div class="ba-sim-line tiny" style="height: 6px;"></div>
+              <div style="height: 6px;"></div>
+              <div class="ba-sim-line" style="height: 28px; background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: 6px;"></div>
+              <div style="height: 16px;"></div>
+              <div class="ba-sim-line tiny" style="height: 6px;"></div>
+              <div style="height: 6px;"></div>
+              <div class="ba-sim-line" style="height: 28px; background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: 6px;"></div>
+              <div style="height: 16px;"></div>
+              <div class="ba-sim-line tiny" style="height: 6px;"></div>
+              <div style="height: 6px;"></div>
+              <div class="ba-sim-line" style="height: 28px; background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: 6px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       OPEN QUESTIONS
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <p class="section-label">Open questions</p>
+    <h2 class="section-title">Three decisions before build</h2>
+    <p class="section-desc">Each has a recommended stance but is worth calling out explicitly.</p>
+
+    <div class="oq-list">
+      <div class="oq-item">
+        <h3 class="oq-q">Where does Story Time live — Profile or Coop behavior?</h3>
+        <p class="oq-a">Story Time is personal content (your background, the arc of your career) but its whole purpose is to shape how Coop talks about you. Put it under <strong>Profile</strong> — it answers "who you are" more than "how Coop acts."</p>
+        <span class="oq-stance">Stance · Profile &gt; Story Time</span>
+      </div>
+      <div class="oq-item">
+        <h3 class="oq-q">Four groups or five?</h3>
+        <p class="oq-a">Considered splitting Coop behavior into "Personality" (operating principles, voice) and "Pipeline" (scoring weights, auto-rescore). Extra group adds nav weight for only 3 items split 2/1. Keep <strong>four</strong>.</p>
+        <span class="oq-stance">Stance · Four groups</span>
+      </div>
+      <div class="oq-item">
+        <h3 class="oq-q">Sticky left rail on scroll?</h3>
+        <p class="oq-a">Main column can run long for sub-sections like Resume or Story Time. A sticky rail lets users jump groups without scrolling all the way back. Cost is one more CSS position to maintain. <strong>Yes, sticky.</strong></p>
+        <span class="oq-stance">Stance · Sticky</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

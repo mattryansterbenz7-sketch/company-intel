@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#256 Activity tab — recommended</title>
+<style>
+  :root {
+    --bg-base: #F0F2F5;
+    --bg-raised: #FFFFFF;
+    --bg-inset: #EBEDF0;
+    --text-primary: #0A0B0D;
+    --text-secondary: #6F7782;
+    --text-tertiary: #8A8E94;
+    --border-default: #E0E4E8;
+    --border-subtle: #EAECEF;
+    --coral: #FC636B;
+    --teal: #36B37E;
+    --red: #E8384F;
+    --amber: #F5A623;
+    --blue: #4573D2;
+    --coral-soft: rgba(252, 99, 107, 0.08);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .page { max-width: 1360px; margin: 0 auto; padding: 32px 28px 80px; }
+
+  /* ── Header ── */
+  .hdr { margin-bottom: 28px; }
+  .hdr h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .hdr .sub { font-size: 13px; color: var(--text-secondary); }
+  .hdr .prompt {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .hdr .prompt strong { color: var(--text-primary); font-weight: 600; }
+
+  /* ── Section labels ── */
+  .sec {
+    margin-top: 44px;
+  }
+  .sec-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .sec-head {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+  .sec-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+
+  /* ── Opp shell ── */
+  .shell {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .shell-head {
+    padding: 20px 24px 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .shell-head .title-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .shell-head .logo {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: var(--bg-inset);
+    display: grid; place-items: center;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-secondary);
+  }
+  .shell-head .ttl { font-size: 18px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .shell-head .meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .shell-head .pill {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: var(--bg-inset);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--coral);
+    font-weight: 600;
+  }
+  .tab .count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 6px;
+    background: var(--bg-inset);
+    border-radius: 999px;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    font-weight: 600;
+  }
+  .tab.active .count {
+    background: var(--coral-soft);
+    color: var(--coral);
+  }
+
+  /* ── Main + rail ── */
+  .shell-body {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    min-height: 640px;
+  }
+  .main { padding: 20px 24px; }
+  .rail {
+    border-left: 1px solid var(--border-default);
+    background: var(--bg-inset);
+    display: flex; flex-direction: column;
+  }
+  .rail-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-default);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .coop-dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--coral);
+    display: grid; place-items: center;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .rail-body {
+    flex: 1;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .chat-msg {
+    padding: 10px 12px;
+    background: var(--bg-raised);
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .chat-msg.me {
+    background: #0A0B0D;
+    color: #fff;
+    border-color: transparent;
+    margin-left: 30px;
+  }
+  .chat-input {
+    margin: 12px 16px 16px;
+    padding: 10px 12px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text-tertiary);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .chat-input .send {
+    width: 24px; height: 24px; border-radius: 6px; background: var(--bg-inset); display: grid; place-items: center;
+    color: var(--text-tertiary);
+  }
+
+  /* ── Log-new ── */
+  .log-new-collapsed {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px dashed var(--border-default);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .log-new-collapsed:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+    background: var(--coral-soft);
+  }
+  .log-new-collapsed .plus { font-size: 15px; font-weight: 300; }
+
+  .log-new-expanded {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .log-type-row {
+    display: flex; gap: 6px; margin-bottom: 10px;
+  }
+  .log-type {
+    padding: 6px 12px;
+    background: var(--bg-inset);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .log-type.active { background: var(--text-primary); color: #fff; }
+  .log-textarea {
+    width: 100%;
+    min-height: 64px;
+    padding: 10px 12px;
+    background: var(--bg-inset);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-family: inherit;
+    resize: vertical;
+  }
+  .log-textarea:focus { outline: none; border-color: var(--coral); background: var(--bg-raised); }
+  .log-actions {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;
+  }
+  .btn {
+    padding: 7px 14px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .btn.primary { background: var(--text-primary); color: #fff; border-color: var(--text-primary); }
+  .btn:hover { border-color: var(--text-secondary); }
+
+  /* ── Filter chips ── */
+  .filters {
+    display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .chip {
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .chip:hover { color: var(--text-primary); }
+  .chip.active {
+    background: var(--coral);
+    color: #fff;
+    border-color: var(--coral);
+    font-weight: 600;
+  }
+  .chip .count {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 11px;
+    opacity: 0.7;
+    font-weight: 500;
+  }
+
+  /* ── Feed ── */
+  .feed {
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .feed-day-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    margin-top: 4px;
+    padding-left: 2px;
+  }
+  .event {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 12px 14px 12px 16px;
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: 12px;
+    align-items: flex-start;
+    cursor: pointer;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+    position: relative;
+  }
+  .event:hover { border-color: var(--text-tertiary); }
+  .event .icon {
+    width: 18px; height: 18px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+  }
+  .event .icon svg { width: 18px; height: 18px; display: block; }
+  .event .body { min-width: 0; line-height: 1.4; }
+  .event .meta-row {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+  .event .primary-label {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .event .secondary {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .event .preview {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .event .ts {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    padding-top: 2px;
+  }
+
+  /* Stage change — 3px colored left border (no icon column used) */
+  .event.stage {
+    grid-template-columns: 1fr auto;
+    padding-left: 16px;
+    border-left: 3px solid var(--coral);
+  }
+  .event.stage.stage-teal { border-left-color: var(--teal); }
+  .event.stage.stage-amber { border-left-color: var(--amber); }
+  .event.stage.stage-blue { border-left-color: var(--blue); }
+  .event.stage.stage-red { border-left-color: var(--red); }
+  .event.stage .stage-label {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--text-primary);
+  }
+  .event.stage .arrow { color: var(--text-tertiary); margin: 0 4px; }
+  .event.stage .from { color: var(--text-secondary); font-weight: 500; }
+  .event.stage .to { color: var(--text-primary); font-weight: 600; }
+
+  /* AI-inferred */
+  .event.inferred { background: var(--coral-soft); border-color: rgba(252,99,107,0.2); }
+  .event.inferred .coop-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--coral);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 10px; font-weight: 700;
+  }
+  .event.inferred .primary-label { font-style: italic; font-weight: 500; }
+  .event.inferred .tag {
+    display: inline-block;
+    padding: 2px 7px;
+    background: var(--coral);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 6px;
+    vertical-align: 1px;
+    font-style: normal;
+  }
+
+  /* Expanded */
+  .event.expanded {
+    border-color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(30,31,33,0.08);
+  }
+  .event.expanded .preview { white-space: normal; }
+  .event-expand {
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+  .event-expand .kv {
+    display: grid; grid-template-columns: 80px 1fr;
+    gap: 8px 12px;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .event-expand .kv dt { color: var(--text-tertiary); font-weight: 500; }
+  .event-expand .kv dd { margin: 0; color: var(--text-primary); }
+  .event-expand .body-text {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.55;
+  }
+  .event-expand .body-text p { margin: 0 0 8px; }
+  .transcript {
+    margin-top: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--bg-inset);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .transcript p { margin: 0 0 8px; }
+  .transcript .speaker { font-weight: 600; color: var(--text-primary); }
+  .event-expand-actions {
+    display: flex; gap: 6px; margin-top: 10px;
+  }
+
+  /* ── Grid sections ── */
+  .grid-6 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .grid-3-storyboard {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .card-panel {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .card-panel .tag-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  /* ── Zoomed inferred ── */
+  .zoom-inferred {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 640px;
+  }
+
+  /* ── Open questions ── */
+  .questions {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 18px 22px;
+  }
+  .questions ol {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+  }
+  .questions ol li { margin-bottom: 8px; }
+  .questions ol li:last-child { margin-bottom: 0; }
+  .questions strong { font-weight: 600; }
+  .questions .opts { color: var(--text-secondary); }
+
+  /* ── Icons (stroke outline) ── */
+  .sx { stroke: currentColor; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ═══ HEADER ═══ -->
+  <div class="hdr">
+    <h1>#256 Activity tab (subsumes #218 / #219 / #236 / #240)</h1>
+    <div class="sub">Unified feed for the opp-view — pipeline, emails, meetings, calls, notes, Coop-inferred.</div>
+    <div class="prompt">
+      <strong>Stance:</strong> six event types, ranked by visual weight. Stage change is heaviest — 3px colored left border. Everything else: neutral bg, outline icon, primary line, preview line. Every entry expands inline on click (one at a time). Log-new pinned at top with collapsed ghost button; multi-select filter chips below it. Meeting-backed calls expand to Granola transcript inline. AI-inferred gets a tinted bg + coop avatar + italic + <em>Inferred</em> tag.
+    </div>
+  </div>
+
+  <!-- ═══ RECOMMENDED HERO ═══ -->
+  <div class="sec">
+    <div class="sec-label">1 · Recommended hero</div>
+    <div class="sec-head">Activity tab — full opp-shell</div>
+    <div class="sec-sub">Header + 7-tab bar · main column + docked chat rail · populated feed with one entry expanded inline.</div>
+
+    <div class="shell">
+      <!-- Opp header -->
+      <div class="shell-head">
+        <div class="title-row">
+          <div class="logo">AT</div>
+          <div>
+            <h2 class="ttl">Senior Product Manager · Atlas Robotics</h2>
+            <div class="meta">$185k–$215k base · Remote-friendly · Added 6 days ago</div>
+          </div>
+          <div class="pill">Interview</div>
+        </div>
+        <div class="tabs">
+          <div class="tab">Role Brief</div>
+          <div class="tab active">Activity <span class="count">24</span></div>
+          <div class="tab">Emails <span class="count">7</span></div>
+          <div class="tab">Meetings <span class="count">3</span></div>
+          <div class="tab">Notes</div>
+          <div class="tab">Docs</div>
+          <div class="tab">Tasks <span class="count">2</span></div>
+        </div>
+      </div>
+
+      <!-- Body: main + rail -->
+      <div class="shell-body">
+        <div class="main">
+
+          <!-- Log-new collapsed -->
+          <button class="log-new-collapsed">
+            <span class="plus">+</span>
+            <span>Log activity</span>
+          </button>
+
+          <!-- Filter chips -->
+          <div class="filters">
+            <div class="chip active">All <span class="count">24</span></div>
+            <div class="chip">Pipeline <span class="count">4</span></div>
+            <div class="chip active">Email <span class="count">7</span></div>
+            <div class="chip active">Meeting <span class="count">3</span></div>
+            <div class="chip">Manual <span class="count">5</span></div>
+            <div class="chip">Coop-inferred <span class="count">5</span></div>
+          </div>
+
+          <!-- Feed -->
+          <div class="feed">
+
+            <div class="feed-day-label">Today</div>
+
+            <!-- Stage change (heaviest) -->
+            <div class="event stage stage-teal">
+              <div class="body">
+                <div class="meta-row">
+                  <span class="stage-label">Stage advanced</span>
+                </div>
+                <div class="secondary">
+                  <span class="from">2nd round</span>
+                  <span class="arrow">→</span>
+                  <span class="to">Offer</span>
+                  · by Matt
+                </div>
+              </div>
+              <div class="ts">2:14 PM</div>
+            </div>
+
+            <!-- AI inferred -->
+            <div class="event inferred">
+              <div class="coop-avatar">C</div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Inferred next step: schedule compensation call with Priya<span class="tag">Inferred</span></span>
+                </div>
+                <div class="preview">Based on offer letter language — "final packet within 48h"</div>
+              </div>
+              <div class="ts">1:42 PM</div>
+            </div>
+
+            <!-- Email received -->
+            <div class="event">
+              <div class="icon">
+                <svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg>
+              </div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Priya Desai</span>
+                  <span class="secondary">Offer letter — please review</span>
+                </div>
+                <div class="preview">Matt — attached is your formal offer for the Senior PM role. We'd love to walk through comp on a quick call…</div>
+              </div>
+              <div class="ts">11:08 AM</div>
+            </div>
+
+            <div class="feed-day-label">Yesterday</div>
+
+            <!-- Meeting (EXPANDED) -->
+            <div class="event expanded">
+              <div class="icon">
+                <svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+              </div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Final round panel · Atlas Robotics</span>
+                  <span class="secondary">4 attendees</span>
+                </div>
+                <div class="preview">Deep-dive on the robotics GTM motion. Panel walked through mock PRD for the warehouse SKU. Strong signal on pricing instinct and cross-functional coordination.</div>
+
+                <div class="event-expand">
+                  <dl class="kv">
+                    <dt>Attendees</dt><dd>Priya Desai, Marcus Chen, Elena Ruiz, Sam Wright</dd>
+                    <dt>Duration</dt><dd>58 min</dd>
+                    <dt>Source</dt><dd>Granola transcript · auto-captured</dd>
+                  </dl>
+
+                  <div class="body-text">
+                    <p><strong>Summary:</strong> Matt presented a mock 90-day plan centered on the new warehouse SKU. Priya probed on pricing instinct — Matt's reply on tiered land-and-expand landed well. Elena flagged cross-functional coordination as her highest concern; Matt walked through the Notion example from his prior role.</p>
+                  </div>
+
+                  <div class="transcript">
+                    <p><span class="speaker">Priya:</span> So walk us through how you'd frame the pricing conversation with a mid-market logistics customer.</p>
+                    <p><span class="speaker">Matt:</span> I'd start with the job they're hiring the product for — throughput per picker per hour is usually the one they can quote back at you. Then tier from there.</p>
+                    <p><span class="speaker">Elena:</span> That's a reasonable frame. But how do you handle it when eng and sales disagree on whether a discount is warranted?</p>
+                    <p><span class="speaker">Matt:</span> I've been in that room a lot. The answer that works is making the economics legible — not picking a side.</p>
+                  </div>
+
+                  <div class="event-expand-actions">
+                    <button class="btn">Open full meeting</button>
+                    <button class="btn">Copy notes</button>
+                  </div>
+                </div>
+              </div>
+              <div class="ts">4:00 PM</div>
+            </div>
+
+            <!-- Call scheduled -->
+            <div class="event">
+              <div class="icon">
+                <svg class="sx" viewBox="0 0 24 24"><path d="M4 5c0 9 6 15 15 15l2-4-5-2-2 2c-3-1-5-3-6-6l2-2-2-5-4 2z"/></svg>
+              </div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Compensation review · Priya Desai</span>
+                  <span class="secondary">Tomorrow · 10:30 AM</span>
+                </div>
+                <div class="preview">30 min · Zoom · From Priya's offer email — confirmed by Matt</div>
+              </div>
+              <div class="ts">3:48 PM</div>
+            </div>
+
+            <!-- Email sent -->
+            <div class="event">
+              <div class="icon">
+                <svg class="sx" viewBox="0 0 24 24"><path d="M3 11l18-7-7 18-2-8-9-3z"/></svg>
+              </div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Sent to Elena Ruiz</span>
+                  <span class="secondary">Thanks for the panel conversation</span>
+                </div>
+                <div class="preview">Elena — really appreciated the depth of the product questions. Your framing on cross-functional coordination stuck with me…</div>
+              </div>
+              <div class="ts">9:22 AM</div>
+            </div>
+
+            <div class="feed-day-label">Monday</div>
+
+            <!-- Stage change (blue) -->
+            <div class="event stage stage-blue">
+              <div class="body">
+                <div class="meta-row">
+                  <span class="stage-label">Stage advanced</span>
+                </div>
+                <div class="secondary">
+                  <span class="from">1st round</span>
+                  <span class="arrow">→</span>
+                  <span class="to">2nd round</span>
+                  · by Matt
+                </div>
+              </div>
+              <div class="ts">5:12 PM</div>
+            </div>
+
+            <!-- Manual log (note) -->
+            <div class="event">
+              <div class="icon">
+                <svg class="sx" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>
+              </div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Note from Matt</span>
+                </div>
+                <div class="preview">Priya mentioned the comp band was being revised — could come in tighter than posted. Should counter on base, flex on equity.</div>
+              </div>
+              <div class="ts">2:58 PM</div>
+            </div>
+
+            <!-- AI inferred (secondary) -->
+            <div class="event inferred">
+              <div class="coop-avatar">C</div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">Noticed Priya is likely the hiring-decision lead<span class="tag">Inferred</span></span>
+                </div>
+                <div class="preview">She's been CC'd on every email thread and drove the final-round agenda</div>
+              </div>
+              <div class="ts">Mon 11:04 AM</div>
+            </div>
+
+            <!-- Meeting (prior round) -->
+            <div class="event">
+              <div class="icon">
+                <svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+              </div>
+              <div class="body">
+                <div class="meta-row">
+                  <span class="primary-label">1:1 with Marcus Chen (VP Product)</span>
+                  <span class="secondary">Granola · 42 min</span>
+                </div>
+                <div class="preview">Culture + team-structure conversation. Walked through the PM org, how decisions get made, his philosophy on product reviews…</div>
+              </div>
+              <div class="ts">Mon 10:00 AM</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Chat rail -->
+        <div class="rail">
+          <div class="rail-head">
+            <div class="coop-dot">C</div>
+            <span>Coop chat</span>
+          </div>
+          <div class="rail-body">
+            <div class="chat-msg">You're in offer stage with Atlas. Based on today's activity, the big thing is comp strategy with Priya.</div>
+            <div class="chat-msg me">What should I push for on base?</div>
+            <div class="chat-msg">The posted range topped at $215k. Priya mentioned the band may tighten — anchor at $225k and flex on equity. Elena's panel notes show strong alignment on scope.</div>
+          </div>
+          <div class="chat-input">
+            <span>Ask Coop anything…</span>
+            <span class="send">▸</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SECTION 2 — Event-type treatments ═══ -->
+  <div class="sec">
+    <div class="sec-label">2 · Event-type treatments</div>
+    <div class="sec-head">Six types, ranked by weight</div>
+    <div class="sec-sub">Stage change is heaviest (colored left border). Everything else uses a neutral bg + outline icon + primary/preview lines. Coop-inferred gets a soft coral wash.</div>
+
+    <div class="grid-6">
+
+      <div class="card-panel">
+        <div class="tag-label">Stage change · weight 1</div>
+        <div class="event stage stage-teal" style="cursor:default">
+          <div class="body">
+            <div class="meta-row"><span class="stage-label">Stage advanced</span></div>
+            <div class="secondary"><span class="from">Applied</span><span class="arrow">→</span><span class="to">1st round</span> · by Matt</div>
+          </div>
+          <div class="ts">2:14 PM</div>
+        </div>
+      </div>
+
+      <div class="card-panel">
+        <div class="tag-label">Email · weight 2</div>
+        <div class="event" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Priya Desai</span><span class="secondary">Offer — please review</span></div>
+            <div class="preview">Matt — attached is your formal offer for the Senior PM role…</div>
+          </div>
+          <div class="ts">11:08 AM</div>
+        </div>
+      </div>
+
+      <div class="card-panel">
+        <div class="tag-label">Meeting · weight 3</div>
+        <div class="event" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Final round panel</span><span class="secondary">4 attendees</span></div>
+            <div class="preview">Deep-dive on robotics GTM motion. Panel walked through mock PRD…</div>
+          </div>
+          <div class="ts">4:00 PM</div>
+        </div>
+      </div>
+
+      <div class="card-panel">
+        <div class="tag-label">Call · weight 4</div>
+        <div class="event" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><path d="M4 5c0 9 6 15 15 15l2-4-5-2-2 2c-3-1-5-3-6-6l2-2-2-5-4 2z"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Comp review call</span><span class="secondary">Tomorrow · 10:30 AM</span></div>
+            <div class="preview">30 min · Zoom · confirmed by Matt</div>
+          </div>
+          <div class="ts">3:48 PM</div>
+        </div>
+      </div>
+
+      <div class="card-panel">
+        <div class="tag-label">Manual log · weight 5</div>
+        <div class="event" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Note from Matt</span></div>
+            <div class="preview">Priya mentioned the comp band was being revised…</div>
+          </div>
+          <div class="ts">2:58 PM</div>
+        </div>
+      </div>
+
+      <div class="card-panel">
+        <div class="tag-label">AI-inferred · weight 6</div>
+        <div class="event inferred" style="cursor:default">
+          <div class="coop-avatar">C</div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Priya is likely the hiring lead<span class="tag">Inferred</span></span></div>
+            <div class="preview">CC'd on every thread, drove the final-round agenda</div>
+          </div>
+          <div class="ts">Mon 11:04 AM</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ SECTION 3 — Expansion states ═══ -->
+  <div class="sec">
+    <div class="sec-label">3 · Expansion states</div>
+    <div class="sec-head">Inline expand, one at a time</div>
+    <div class="sec-sub">No modal. Click expands below; secondary click or ESC collapses. Calls with Granola data expand to scrolling transcript (max-height 400px).</div>
+
+    <div class="grid-3-storyboard">
+
+      <!-- (a) Collapsed -->
+      <div class="card-panel">
+        <div class="tag-label">a · Collapsed</div>
+        <div class="event" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Priya Desai</span><span class="secondary">Offer — please review</span></div>
+            <div class="preview">Matt — attached is your formal offer for the Senior PM role…</div>
+          </div>
+          <div class="ts">11:08</div>
+        </div>
+      </div>
+
+      <!-- (b) Expanded general -->
+      <div class="card-panel">
+        <div class="tag-label">b · Expanded (email)</div>
+        <div class="event expanded" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Priya Desai</span><span class="secondary">Offer — please review</span></div>
+            <div class="preview">Matt — attached is your formal offer for the Senior PM role…</div>
+            <div class="event-expand">
+              <dl class="kv">
+                <dt>From</dt><dd>priya@atlasrobotics.com</dd>
+                <dt>To</dt><dd>Matt</dd>
+                <dt>Thread</dt><dd>3 messages</dd>
+              </dl>
+              <div class="body-text">
+                <p>Matt — attached is your formal offer for the Senior PM role at Atlas. We'd love to walk through comp on a quick call tomorrow if you have 30 min. No rush on a formal answer — we know these decisions take reflection.</p>
+                <p>Looking forward,<br>Priya</p>
+              </div>
+              <div class="event-expand-actions">
+                <button class="btn primary">Reply</button>
+                <button class="btn">Open in Gmail</button>
+              </div>
+            </div>
+          </div>
+          <div class="ts">11:08</div>
+        </div>
+      </div>
+
+      <!-- (c) Call expanded with Granola transcript -->
+      <div class="card-panel">
+        <div class="tag-label">c · Call · transcript (#240)</div>
+        <div class="event expanded" style="cursor:default">
+          <div class="icon"><svg class="sx" viewBox="0 0 24 24"><path d="M4 5c0 9 6 15 15 15l2-4-5-2-2 2c-3-1-5-3-6-6l2-2-2-5-4 2z"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Recruiter intro · Priya Desai</span><span class="secondary">28 min · Granola</span></div>
+            <div class="preview">Intro call, role + company overview. Priya walked through how Atlas thinks about PM scope.</div>
+            <div class="event-expand">
+              <dl class="kv">
+                <dt>Duration</dt><dd>28 min</dd>
+                <dt>Source</dt><dd>Granola · transcript captured</dd>
+              </dl>
+              <div class="transcript" style="max-height: 180px;">
+                <p><span class="speaker">Priya:</span> Thanks for making time, Matt. How familiar are you with what we do at Atlas?</p>
+                <p><span class="speaker">Matt:</span> I've spent a good chunk of the last week digging in. Warehouse automation, SKU is mostly for logistics customers, you raised series B last year.</p>
+                <p><span class="speaker">Priya:</span> That's a fair summary. The thing most people miss is that we're not actually selling robots — we're selling throughput per picker.</p>
+                <p><span class="speaker">Matt:</span> That makes sense. The hardware is the mechanism, not the product.</p>
+                <p><span class="speaker">Priya:</span> Exactly. And that framing is what we need the next PM hire to own.</p>
+              </div>
+              <div class="event-expand-actions">
+                <button class="btn">Open full transcript</button>
+              </div>
+            </div>
+          </div>
+          <div class="ts">3:20</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ SECTION 4 — Log-new flow ═══ -->
+  <div class="sec">
+    <div class="sec-label">4 · Log-new flow</div>
+    <div class="sec-head">Pinned at top of feed</div>
+    <div class="sec-sub">Collapsed ghost button → click reveals type picker + textarea → save auto-collapses and prepends the new entry.</div>
+
+    <div class="grid-3-storyboard">
+
+      <!-- (a) Collapsed -->
+      <div class="card-panel">
+        <div class="tag-label">a · Collapsed</div>
+        <button class="log-new-collapsed" style="margin-bottom: 0">
+          <span class="plus">+</span>
+          <span>Log activity</span>
+        </button>
+      </div>
+
+      <!-- (b) Expanded -->
+      <div class="card-panel">
+        <div class="tag-label">b · Expanded</div>
+        <div class="log-new-expanded" style="margin-bottom: 0">
+          <div class="log-type-row">
+            <div class="log-type">Note</div>
+            <div class="log-type active">Call</div>
+            <div class="log-type">Email</div>
+            <div class="log-type">Meeting</div>
+          </div>
+          <textarea class="log-textarea" placeholder="Quick call with Priya — mentioned comp band may tighten. Should anchor counter on base…">Quick call with Priya — mentioned comp band may tighten. Should anchor counter on base.</textarea>
+          <div class="log-actions">
+            <button class="btn">Cancel</button>
+            <button class="btn primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- (c) Post-save -->
+      <div class="card-panel">
+        <div class="tag-label">c · Post-save</div>
+        <button class="log-new-collapsed">
+          <span class="plus">+</span>
+          <span>Log activity</span>
+        </button>
+        <div class="event" style="cursor:default; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(54,179,126,0.15);">
+          <div class="icon" style="color: var(--teal)"><svg class="sx" viewBox="0 0 24 24"><path d="M4 5c0 9 6 15 15 15l2-4-5-2-2 2c-3-1-5-3-6-6l2-2-2-5-4 2z"/></svg></div>
+          <div class="body">
+            <div class="meta-row"><span class="primary-label">Call logged by Matt</span></div>
+            <div class="preview">Quick call with Priya — mentioned comp band may tighten…</div>
+          </div>
+          <div class="ts">Just now</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ SECTION 5 — Filter chips ═══ -->
+  <div class="sec">
+    <div class="sec-label">5 · Filter chips</div>
+    <div class="sec-head">Multi-select, combinable</div>
+    <div class="sec-sub">Default is All. Active state: coral background, weight 600. Combinations: Email + Meeting filters both in.</div>
+
+    <div class="card-panel">
+      <div class="filters" style="margin-bottom: 14px">
+        <div class="chip active">All <span class="count">24</span></div>
+        <div class="chip">Pipeline <span class="count">4</span></div>
+        <div class="chip">Email <span class="count">7</span></div>
+        <div class="chip">Meeting <span class="count">3</span></div>
+        <div class="chip">Manual <span class="count">5</span></div>
+        <div class="chip">Coop-inferred <span class="count">5</span></div>
+      </div>
+      <div style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 14px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;">Multi-select — Email + Meeting active</div>
+      <div class="filters" style="margin-bottom: 0">
+        <div class="chip">All <span class="count">24</span></div>
+        <div class="chip">Pipeline <span class="count">4</span></div>
+        <div class="chip active">Email <span class="count">7</span></div>
+        <div class="chip active">Meeting <span class="count">3</span></div>
+        <div class="chip">Manual <span class="count">5</span></div>
+        <div class="chip">Coop-inferred <span class="count">5</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SECTION 6 — AI-inferred zoom ═══ -->
+  <div class="sec">
+    <div class="sec-label">6 · AI-inferred event treatment</div>
+    <div class="sec-head">Coop avatar dot + italic + tag</div>
+    <div class="sec-sub">Soft coral bg separates inferred events from objective facts. Tag asserts provenance.</div>
+
+    <div class="zoom-inferred">
+      <div class="event inferred" style="cursor:default">
+        <div class="coop-avatar">C</div>
+        <div class="body">
+          <div class="meta-row">
+            <span class="primary-label">Inferred next step: schedule compensation call with Priya<span class="tag">Inferred</span></span>
+          </div>
+          <div class="preview" style="white-space: normal; margin-top: 4px; font-size: 13px;">Based on offer letter language — "final packet within 48h." No call on your calendar yet for this thread.</div>
+        </div>
+        <div class="ts">1:42 PM</div>
+      </div>
+
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-subtle); font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">Rules of the treatment</div>
+        <ul style="margin: 0; padding-left: 18px;">
+          <li>Always led by the Coop avatar dot (coral, left)</li>
+          <li>Primary line in italic, weight 500 — assertion, not fact</li>
+          <li><em>Inferred</em> tag in coral always appears inline with the label</li>
+          <li>Preview explains the basis ("based on…", "noticed…")</li>
+          <li>Full-width coral-soft background separates it from the timeline</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SECTION 7 — Open questions ═══ -->
+  <div class="sec">
+    <div class="sec-label">7 · Open questions</div>
+    <div class="sec-head">Three decisions before build</div>
+    <div class="sec-sub">None are blockers for the visual model — all are behavior-level defaults.</div>
+
+    <div class="questions">
+      <ol>
+        <li><strong>Multi-expand:</strong> should only ONE entry be expanded at a time, or multiple? <span class="opts">(Stance: one at a time — keeps the feed scannable. But multiple would let users cross-reference email ↔ meeting.)</span></li>
+        <li><strong>Log-new pinned:</strong> always at top even when the feed is scrolled, or scrolls with the feed? <span class="opts">(Stance: pinned sticky on scroll — it's the primary action on this tab.)</span></li>
+        <li><strong>Coop-inferred events:</strong> keep/dismiss per-event, or global off-switch only? <span class="opts">(Stance: both. Per-event dismiss for noisy ones, global toggle in preferences for the "I don't want any of this" user.)</span></li>
+      </ol>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

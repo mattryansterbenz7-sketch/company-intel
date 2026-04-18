@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#261 Saved dashboard — full-surface design pass</title>
+<style>
+  /* Inlined from ../design-tokens.css so this file renders standalone */
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-bg-header-hover: #1F2A3C;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-on-dark-muted: #A3AEBE;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-hover: #E04E56;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-blue: #4573D2;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-shadow-sm: 0 1px 3px rgba(30,31,33,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --ci-shadow-md: 0 4px 16px rgba(30,31,33,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    --ci-shadow-lg: 0 10px 36px rgba(30,31,33,0.14), 0 2px 8px rgba(0,0,0,0.06);
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --ci-radius-lg: 14px;
+    --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --motion-md: 300ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--ci-font-family);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 36px 40px 60px;
+  }
+
+  /* ── Page chrome ── */
+  .page-head {
+    max-width: 1480px; margin: 0 auto 24px;
+  }
+  .page-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--ci-text-tertiary); text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.015em;
+    color: var(--ci-text-primary); margin-bottom: 10px;
+  }
+  .page-matt {
+    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
+    max-width: 880px; margin-bottom: 6px;
+  }
+  .page-matt .tag {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    padding: 1px 7px; border-radius: 4px; margin-right: 6px;
+    background: var(--ci-bg-inset); color: var(--ci-text-secondary);
+  }
+  .page-matt .tag.rec { background: rgba(54,179,126,0.10); color: #1B7E53; }
+
+  .section-label {
+    max-width: 1480px; margin: 44px auto 12px;
+    font-size: 13px; font-weight: 700; letter-spacing: -0.005em;
+    color: var(--ci-text-primary);
+  }
+  .section-label .num {
+    display: inline-block; width: 20px; height: 20px; line-height: 20px;
+    text-align: center; font-size: 11px; font-weight: 700;
+    border-radius: 50%; background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    margin-right: 8px; vertical-align: 1px;
+  }
+  .section-sub {
+    max-width: 880px; margin: 0 auto 18px;
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.6;
+  }
+  /* Center the max-width wrappers */
+  .page-head, .section-label, .section-sub, .surface-frame, .storyboard, .states-grid, .open-q {
+    margin-left: auto; margin-right: auto;
+  }
+
+  /* ── Dashboard surface frame (simulates the app) ── */
+  .surface-frame {
+    max-width: 1480px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .topbar {
+    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    padding: 10px 22px; display: flex; align-items: center; gap: 18px;
+    font-size: 13px;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 9px; }
+  .topbar-brand-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ci-accent-primary);
+  }
+  .topbar-brand-name { font-weight: 700; letter-spacing: -0.005em; }
+  .topbar-nav { display: flex; gap: 16px; font-size: 12px; color: var(--ci-text-on-dark-muted); }
+  .topbar-nav .on { color: var(--ci-text-on-dark); font-weight: 600; }
+  .topbar-spacer { flex: 1; }
+  .topbar-user {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ci-accent-primary); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+
+  /* ── Pipeline Overview header (shipped via #231) ── */
+  .overview {
+    padding: 20px 24px 18px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .overview-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; gap: 24px; }
+  .overview-title { font-size: 19px; font-weight: 700; letter-spacing: -0.015em; color: var(--ci-text-primary); }
+  .overview-sub { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 2px; }
+  .overview-pipeline {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ci-text-secondary); font-weight: 500;
+    padding: 6px 10px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+  }
+  .overview-pipeline:hover { background: #E4E6EA; }
+  .overview-pipeline .chev { color: var(--ci-text-tertiary); font-size: 10px; }
+
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .stat {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-left: 3px solid transparent;
+    border-radius: var(--ci-radius-sm);
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+  }
+  .stat:hover { border-color: var(--ci-border-strong); }
+  .stat-label {
+    font-size: 11px; font-weight: 500;
+    color: var(--ci-text-tertiary); text-transform: none; letter-spacing: 0;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
+    color: var(--ci-text-primary); line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-delta {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    margin-top: 4px; font-weight: 500;
+  }
+  .stat-delta.up { color: #1B7E53; }
+  .stat-delta.warn { color: #b45309; }
+  .stat.active {
+    border-left-color: var(--ci-accent-primary);
+    background: var(--ci-accent-primary-soft);
+  }
+  .stat.active .stat-label { color: var(--ci-accent-primary); font-weight: 600; }
+
+  /* ── Filter bar ── */
+  .filter-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    background: var(--ci-bg-raised);
+  }
+  .pick {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-inset);
+    border: 1px solid transparent;
+    border-radius: var(--ci-radius-sm);
+    padding: 6px 10px; cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  }
+  .pick:hover { background: #E4E6EA; }
+  .pick .k { color: var(--ci-text-tertiary); font-weight: 500; margin-right: 2px; }
+  .pick .v { color: var(--ci-text-primary); font-weight: 600; }
+  .pick .chev { color: var(--ci-text-tertiary); font-size: 10px; margin-left: 2px; }
+  .pick.set { background: var(--ci-accent-primary-soft); border-color: rgba(252,99,107,0.2); }
+  .pick.set .k { color: var(--ci-accent-primary); }
+  .pick.set .v { color: var(--ci-accent-primary); }
+  .filter-spacer { flex: 1; }
+
+  /* View switcher */
+  .view-switch {
+    display: inline-flex; background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm); padding: 2px;
+  }
+  .view-btn {
+    font-size: 12px; font-weight: 500; font-family: inherit;
+    padding: 5px 11px; border: none; background: transparent;
+    color: var(--ci-text-tertiary); cursor: pointer;
+    border-radius: 4px;
+    display: inline-flex; align-items: center; gap: 5px;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .view-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+  .view-btn.active {
+    background: var(--ci-bg-raised); color: var(--ci-text-primary);
+    font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .view-btn:hover:not(.active) { color: var(--ci-text-secondary); }
+
+  /* ── Main content area ── */
+  .main {
+    display: flex;
+    min-height: 640px;
+    background: var(--ci-bg-inset);
+    position: relative;
+  }
+  .main-view { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  /* ── Kanban ── */
+  .kanban {
+    flex: 1; min-height: 0;
+    padding: 16px 20px 20px;
+    display: flex; gap: 12px;
+    overflow-x: auto;
+    align-items: flex-start;
+  }
+  .col {
+    flex-shrink: 0;
+    width: 260px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-md);
+    display: flex; flex-direction: column;
+    max-height: 600px;
+  }
+  .col-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 12px 10px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .col-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--stage-color, var(--ci-text-tertiary));
+    flex-shrink: 0;
+  }
+  .col-title {
+    font-size: 12.5px; font-weight: 600;
+    color: var(--ci-text-primary); letter-spacing: -0.005em;
+  }
+  .col-count {
+    font-size: 11px; font-weight: 700;
+    padding: 1px 7px; background: var(--ci-bg-raised);
+    color: var(--ci-text-secondary); border-radius: 99px;
+    font-variant-numeric: tabular-nums;
+  }
+  .col-count.zero { color: var(--ci-text-tertiary); opacity: 0.6; }
+  .col-cards {
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 8px 8px 4px; overflow-y: auto;
+    flex: 1;
+  }
+  .col-add {
+    padding: 7px 10px 9px;
+    font-size: 11.5px; font-weight: 500; font-family: inherit;
+    color: var(--ci-text-tertiary);
+    background: transparent; border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+  }
+  .col-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-raised); border-radius: 0 0 var(--ci-radius-md) var(--ci-radius-md); }
+  .col-add-circ {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1px dashed var(--ci-border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--ci-text-tertiary);
+  }
+  .col-empty {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 28px 14px 20px; gap: 6px; text-align: center;
+  }
+  .col-empty-t { font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); }
+  .col-empty-h { font-size: 11px; color: var(--ci-text-tertiary); line-height: 1.4; max-width: 200px; }
+
+  /* Kanban card — compact, following Tier 1A #194 grammar */
+  .kc {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    padding: 10px 11px;
+    display: flex; flex-direction: column; gap: 7px;
+    cursor: grab;
+    transition: border-color var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out), transform var(--motion-xs) var(--ease-out);
+  }
+  .kc:hover {
+    border-color: var(--ci-border-strong);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transform: translateY(-1px);
+  }
+  .kc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .kc-ident { min-width: 0; }
+  .kc-title-row { display: flex; align-items: center; gap: 6px; }
+  .kc-fav {
+    width: 14px; height: 14px; border-radius: 3px;
+    background: var(--ci-border-default); flex-shrink: 0;
+  }
+  .kc-company { font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; color: var(--ci-text-primary); }
+  .kc-role {
+    font-size: 11.5px; color: var(--ci-text-secondary);
+    margin-top: 1px; line-height: 1.35;
+  }
+  .kc-score {
+    font-size: 12.5px; font-weight: 600;
+    font-variant-numeric: tabular-nums; line-height: 1; padding-top: 1px;
+    white-space: nowrap;
+  }
+  .kc-score .d { font-weight: 400; color: var(--ci-text-tertiary); }
+  .kc-score.green  { color: #047857; }
+  .kc-score.amber  { color: #b45309; }
+  .kc-score.orange { color: #c2410c; }
+  .kc-score.red    { color: #b91c1c; }
+  .kc-meta {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0 7px;
+    font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4;
+  }
+  .kc-meta .sep {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: var(--ci-text-tertiary); opacity: 0.55;
+    display: inline-block;
+  }
+  .kc-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10.5px; color: var(--ci-text-tertiary);
+    gap: 8px;
+  }
+  .kc-action { font-weight: 500; }
+  .kc-action.my { color: var(--ci-accent-red); }
+  .kc-action.their { color: #b45309; }
+  .kc-action.scheduled { color: var(--ci-accent-blue); }
+  .kc-due { color: var(--ci-text-tertiary); }
+  .kc-due.overdue { color: var(--ci-accent-red); font-weight: 500; }
+
+  /* ── Tasks drawer ── */
+  .tasks-drawer {
+    flex-shrink: 0;
+    width: 48px;
+    background: var(--ci-bg-raised);
+    border-left: 1px solid var(--ci-border-subtle);
+    display: flex; flex-direction: column;
+    align-items: center;
+    padding: 14px 0 0;
+    cursor: pointer;
+    transition: width var(--motion-sm) var(--ease-out), background var(--motion-xs) var(--ease-out);
+  }
+  .tasks-drawer:hover { background: var(--ci-bg-inset); }
+  .tasks-drawer .drawer-label {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: 12px; font-weight: 600; color: var(--ci-text-secondary);
+    letter-spacing: 0.04em; margin-top: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tasks-drawer .drawer-chev { color: var(--ci-text-tertiary); font-size: 13px; margin-bottom: 10px; }
+  .tasks-drawer .drawer-count {
+    font-size: 10px; font-weight: 700;
+    background: var(--ci-accent-primary); color: #fff;
+    padding: 1px 6px; border-radius: 99px;
+    margin-top: 4px;
+    writing-mode: horizontal-tb;
+  }
+
+  /* Tasks drawer — expanded variant (storyboard) */
+  .tasks-drawer.open {
+    width: 320px; cursor: default;
+    align-items: stretch; padding: 0;
+  }
+  .tasks-head {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .tasks-head-title {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.005em;
+  }
+  .tasks-head-count {
+    font-size: 11px; font-weight: 700;
+    background: var(--ci-accent-primary); color: #fff;
+    padding: 1px 7px; border-radius: 99px;
+  }
+  .tasks-head-close {
+    border: none; background: transparent; color: var(--ci-text-tertiary);
+    cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .tasks-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .tasks-group-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ci-text-tertiary);
+    padding: 10px 6px 4px;
+  }
+  .task {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 8px 8px;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out);
+  }
+  .task:hover { background: var(--ci-bg-inset); }
+  .task-check {
+    width: 14px; height: 14px; border-radius: 4px;
+    border: 1.5px solid var(--ci-border-strong);
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .task-body { min-width: 0; flex: 1; }
+  .task-title {
+    font-size: 12px; font-weight: 500;
+    color: var(--ci-text-primary); line-height: 1.4;
+  }
+  .task-sub {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    margin-top: 2px; display: flex; align-items: center; gap: 6px;
+  }
+  .task-company { color: var(--ci-text-secondary); font-weight: 500; }
+  .task-due.overdue { color: var(--ci-accent-red); font-weight: 500; }
+
+  /* ── Table view ── */
+  .table-wrap {
+    flex: 1;
+    padding: 16px 20px 20px;
+    overflow: auto;
+    background: var(--ci-bg-inset);
+  }
+  table.dash-table {
+    width: 100%;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: var(--ci-radius-md);
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    overflow: hidden;
+  }
+  .dash-table thead th {
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    text-align: left;
+    padding: 10px 14px 9px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    background: var(--ci-bg-raised);
+  }
+  .dash-table tbody tr { transition: background var(--motion-xs) var(--ease-out); }
+  .dash-table tbody tr:hover { background: var(--ci-bg-inset); }
+  .dash-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    vertical-align: middle;
+  }
+  .dash-table tbody tr:last-child td { border-bottom: none; }
+  .td-company {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 600; color: var(--ci-text-primary);
+  }
+  .td-company .f { width: 14px; height: 14px; border-radius: 3px; background: var(--ci-border-default); }
+  .td-role { color: var(--ci-text-secondary); }
+  .td-stage { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .td-stage .d { width: 7px; height: 7px; border-radius: 50%; }
+  .td-action.my { color: var(--ci-accent-red); font-weight: 500; }
+  .td-action.their { color: #b45309; font-weight: 500; }
+  .td-action.scheduled { color: var(--ci-accent-blue); font-weight: 500; }
+  .td-score {
+    font-variant-numeric: tabular-nums; font-weight: 600;
+  }
+  .td-score.green  { color: #047857; }
+  .td-score.amber  { color: #b45309; }
+  .td-score.orange { color: #c2410c; }
+  .td-score.red    { color: #b91c1c; }
+  .td-updated { color: var(--ci-text-tertiary); }
+
+  /* ── Grid view ── */
+  .grid-wrap {
+    flex: 1;
+    padding: 20px 24px 20px;
+    background: var(--ci-bg-inset);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    align-content: start;
+  }
+  .gc {
+    width: 100%; height: 200px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: border-color var(--motion-xs) var(--ease-out), transform var(--motion-xs) var(--ease-out);
+  }
+  .gc:hover { border-color: var(--ci-border-strong); transform: translateY(-1px); }
+  .gc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .gc-company { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
+  .gc-role { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }
+  .gc-score { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .gc-score.green  { color: #047857; }
+  .gc-score.amber  { color: #b45309; }
+  .gc-score.orange { color: #c2410c; }
+  .gc-score.red    { color: #b91c1c; }
+  .gc-meta { font-size: 11px; color: var(--ci-text-secondary); line-height: 1.5; }
+  .gc-foot {
+    margin-top: auto; display: flex; align-items: center;
+    justify-content: space-between; font-size: 11px;
+    padding-top: 8px; border-top: 1px solid var(--ci-border-subtle);
+  }
+  .gc-stage { display: inline-flex; align-items: center; gap: 6px; color: var(--ci-text-secondary); font-weight: 500; }
+  .gc-stage .d { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ── Storyboard (3-up) ── */
+  .storyboard {
+    max-width: 1480px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .frame {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+  .frame-head {
+    padding: 10px 14px 9px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    font-size: 11px; font-weight: 700;
+    color: var(--ci-text-secondary);
+    letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .frame-step {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+  }
+  .frame-body {
+    padding: 0; background: var(--ci-bg-inset);
+    min-height: 320px; position: relative;
+  }
+
+  /* Mini overview for storyboard */
+  .mini { padding: 12px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-subtle); }
+  .mini-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .mini-stat {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-left: 2px solid transparent;
+    border-radius: 4px;
+    padding: 6px 8px;
+  }
+  .mini-stat-l { font-size: 9.5px; color: var(--ci-text-tertiary); margin-bottom: 2px; }
+  .mini-stat-v { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .mini-stat.active { border-left-color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }
+  .mini-stat.active .mini-stat-l { color: var(--ci-accent-primary); font-weight: 600; }
+  .mini-stat.active .mini-stat-v { color: var(--ci-accent-primary); }
+
+  /* Mini kanban */
+  .mini-kanban { padding: 10px; display: flex; gap: 6px; overflow: hidden; }
+  .mini-col {
+    flex-shrink: 0; flex: 1;
+    background: var(--ci-bg-base);
+    border-radius: 6px;
+    padding: 8px 6px;
+    min-height: 180px;
+  }
+  .mini-col.faded { opacity: 0.28; }
+  .mini-col.solo { flex: 0 0 220px; }
+  .mini-col-head { display: flex; align-items: center; gap: 5px; padding: 0 3px 6px; }
+  .mini-col-d { width: 6px; height: 6px; border-radius: 50%; background: var(--stage-color, var(--ci-text-tertiary)); }
+  .mini-col-t { font-size: 10px; font-weight: 600; }
+  .mini-col-c { font-size: 9px; font-weight: 700; padding: 0 5px; background: var(--ci-bg-raised); color: var(--ci-text-secondary); border-radius: 99px; margin-left: auto; }
+  .mini-kc {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: 4px;
+    padding: 5px 6px;
+    margin-bottom: 4px;
+  }
+  .mini-kc-t { font-size: 10px; font-weight: 600; }
+  .mini-kc-s { font-size: 9px; color: var(--ci-text-tertiary); margin-top: 1px; }
+
+  /* ── Empty state ── */
+  .empty-state-frame {
+    max-width: 1480px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    margin-left: auto; margin-right: auto;
+  }
+  .empty-state {
+    padding: 80px 40px 96px;
+    background: var(--ci-bg-inset);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    text-align: center;
+  }
+  .empty-avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .empty-avatar svg { width: 36px; height: 36px; }
+  .empty-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .empty-hint {
+    font-size: 13px; color: var(--ci-text-secondary);
+    max-width: 440px; line-height: 1.55;
+  }
+  .empty-cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; font-family: inherit;
+    padding: 9px 16px; background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    border: none; border-radius: var(--ci-radius-sm);
+    cursor: pointer; margin-top: 6px;
+    transition: background var(--motion-xs) var(--ease-out);
+  }
+  .empty-cta:hover { background: var(--ci-bg-header-hover); }
+
+  /* ── Grid kill/keep comparison ── */
+  .states-grid {
+    max-width: 1480px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .kill-frame { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; }
+  .kill-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .kill-head-l { display: flex; align-items: center; gap: 8px; }
+  .kill-title { font-size: 13px; font-weight: 700; }
+  .kill-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    padding: 2px 8px; border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .kill-tag.kill { background: rgba(232,56,79,0.08); color: var(--ci-accent-red); }
+  .kill-tag.keep { background: rgba(54,179,126,0.10); color: #1B7E53; }
+  .kill-body { padding: 16px; background: var(--ci-bg-inset); min-height: 240px; }
+  .kill-note {
+    padding: 12px 16px;
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
+    background: var(--ci-bg-raised);
+    border-top: 1px solid var(--ci-border-subtle);
+  }
+  .kill-note strong { color: var(--ci-text-primary); font-weight: 600; }
+
+  .mini-table-head { display: grid; grid-template-columns: 1.4fr 1.6fr 1fr 0.8fr 0.6fr; gap: 8px; font-size: 9.5px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: 0.05em; text-transform: uppercase; padding: 8px 10px; background: var(--ci-bg-raised); border-radius: 6px 6px 0 0; border: 1px solid var(--ci-border-subtle); border-bottom: none; }
+  .mini-table-row { display: grid; grid-template-columns: 1.4fr 1.6fr 1fr 0.8fr 0.6fr; gap: 8px; font-size: 10.5px; padding: 7px 10px; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-top: none; align-items: center; }
+  .mini-table-row .c { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .mini-table-row .c .f { width: 11px; height: 11px; border-radius: 2px; background: var(--ci-border-default); }
+  .mini-table-row .r { color: var(--ci-text-secondary); }
+  .mini-table-row .s { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
+  .mini-table-row .s .d { width: 6px; height: 6px; border-radius: 50%; }
+  .mini-table-row .sc { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .mini-table-row .sc.green { color: #047857; }
+  .mini-table-row .sc.amber { color: #b45309; }
+
+  .mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .mini-gc {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: 6px;
+    padding: 10px 12px;
+    height: 100px;
+    display: flex; flex-direction: column;
+  }
+  .mini-gc-t { font-size: 11px; font-weight: 600; }
+  .mini-gc-r { font-size: 10px; color: var(--ci-text-secondary); margin-top: 1px; }
+  .mini-gc-foot { margin-top: auto; font-size: 9.5px; color: var(--ci-text-tertiary); display: flex; align-items: center; justify-content: space-between; padding-top: 6px; border-top: 1px solid var(--ci-border-subtle); }
+
+  /* ── Open questions ── */
+  .open-q {
+    max-width: 1480px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 22px 26px;
+    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
+    margin-top: 24px;
+  }
+  .open-q h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 10px; }
+  .open-q ol { padding-left: 22px; }
+  .open-q li { margin-bottom: 10px; }
+  .open-q li strong { color: var(--ci-text-primary); font-weight: 600; }
+  .open-q .pick-me { color: var(--ci-accent-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div class="page-eyebrow">#261</div>
+  <h1>Saved dashboard — full-surface design pass</h1>
+  <p class="page-matt">
+    <span class="tag rec">Recommended</span>
+    Zoom-out on <code style="font-size:12px">saved.html</code>. How Pipeline Overview header (#231 shipped), filter bar, view switcher, Kanban / Table / Grid, and the new Tasks drawer (#239 territory) compose into one surface. Stat cards act as filters. Default view is Kanban. Grid view up for debate.
+  </p>
+</div>
+
+<!-- ══════════════════ 1. HERO — KANBAN ══════════════════ -->
+<div class="section-label"><span class="num">1</span>Hero · Kanban · default view</div>
+<div class="section-sub">
+  Full dashboard at ~1440px. Overview header + filter bar + Kanban with 6 columns + Tasks drawer collapsed at right edge. Using the shipped Tier 1A Kanban card grammar (#194) in compact form.
+</div>
+
+<div class="surface-frame">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-dot"></div>
+      <div class="topbar-brand-name">Coop</div>
+    </div>
+    <div class="topbar-nav">
+      <span class="on">Saved</span>
+      <span>Apply Queue</span>
+      <span>Inbox</span>
+      <span>Docs</span>
+      <span>Settings</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-user">MS</div>
+  </div>
+
+  <!-- Pipeline Overview -->
+  <div class="overview">
+    <div class="overview-top">
+      <div>
+        <div class="overview-title">Pipeline Overview</div>
+        <div class="overview-sub">32 opportunities · 5 active this week · last sync 4m ago</div>
+      </div>
+      <div class="overview-pipeline">
+        <span style="color:var(--ci-text-tertiary)">Pipeline:</span>
+        <span>GTM Senior PM / Product Leader</span>
+        <span class="chev">▾</span>
+      </div>
+    </div>
+    <div class="stat-cards">
+      <div class="stat">
+        <div class="stat-label">Saved</div>
+        <div class="stat-value">32</div>
+        <div class="stat-delta up">+4 this week</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Watch list</div>
+        <div class="stat-value">12</div>
+        <div class="stat-delta">5 unscored</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Researching</div>
+        <div class="stat-value">6</div>
+        <div class="stat-delta warn">2 overdue</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Applied</div>
+        <div class="stat-value">8</div>
+        <div class="stat-delta">avg 7d since reply</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Interviewing</div>
+        <div class="stat-value">3</div>
+        <div class="stat-delta up">Slack · Ramp · Notion</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Offer</div>
+        <div class="stat-value">0</div>
+        <div class="stat-delta">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="pick">
+      <span class="k">Excitement</span>
+      <span class="v">All</span>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pick">
+      <span class="k">Action On</span>
+      <span class="v">All</span>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pick">
+      <span class="k">Status</span>
+      <span class="v">Active</span>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pick">
+      <span class="k">Tags</span>
+      <span class="v">All</span>
+      <span class="chev">▾</span>
+    </div>
+    <div class="filter-spacer"></div>
+    <div class="view-switch">
+      <button class="view-btn active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
+      <button class="view-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
+      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Grid</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="main-view">
+      <div class="kanban">
+        <!-- Watch list -->
+        <div class="col" style="--stage-color: #FC636B">
+          <div class="col-head">
+            <div class="col-dot"></div>
+            <div class="col-title">Watch list</div>
+            <span class="col-count">12</span>
+          </div>
+          <div class="col-cards">
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Transform VXR</div>
+                  </div>
+                  <div class="kc-role">Senior PM, GTM</div>
+                </div>
+                <div class="kc-score green">8.2<span class="d">/10</span></div>
+              </div>
+              <div class="kc-meta">
+                <span>$230–270K OTE</span>
+                <span class="sep"></span>
+                <span>Remote</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Unitbase, Inc.</div>
+                  </div>
+                  <div class="kc-role">Head of Product</div>
+                </div>
+                <div class="kc-score green">7.8<span class="d">/10</span></div>
+              </div>
+              <div class="kc-meta">
+                <span>$260K base</span>
+                <span class="sep"></span>
+                <span>NYC hybrid</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Kustomer</div>
+                  </div>
+                  <div class="kc-role">VP Product</div>
+                </div>
+                <div class="kc-score amber">6.4<span class="d">/10</span></div>
+              </div>
+              <div class="kc-meta">
+                <span>$310K OTE</span>
+                <span class="sep"></span>
+                <span>Remote</span>
+              </div>
+            </div>
+          </div>
+          <button class="col-add"><span class="col-add-circ">+</span>Add card</button>
+        </div>
+
+        <!-- Researching -->
+        <div class="col" style="--stage-color: #F5A623">
+          <div class="col-head">
+            <div class="col-dot"></div>
+            <div class="col-title">Researching</div>
+            <span class="col-count">6</span>
+          </div>
+          <div class="col-cards">
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Ramp</div>
+                  </div>
+                  <div class="kc-role">Senior PM, GTM</div>
+                </div>
+                <div class="kc-score amber">7.0<span class="d">/10</span></div>
+              </div>
+              <div class="kc-meta">
+                <span>$220–260K OTE</span>
+                <span class="sep"></span>
+                <span>Remote</span>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action my">My court</span>
+                <span class="kc-due">Due Apr 21</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Wonderlic</div>
+                  </div>
+                  <div class="kc-role">Product Lead</div>
+                </div>
+                <div class="kc-score amber">7.5<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action their">Their court</span>
+                <span class="kc-due">—</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Luminous</div>
+                  </div>
+                  <div class="kc-role">PM, Growth</div>
+                </div>
+                <div class="kc-score amber">7.1<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action my">My court</span>
+                <span class="kc-due overdue">Overdue 3d</span>
+              </div>
+            </div>
+          </div>
+          <button class="col-add"><span class="col-add-circ">+</span>Add card</button>
+        </div>
+
+        <!-- Applied -->
+        <div class="col" style="--stage-color: #36B37E">
+          <div class="col-head">
+            <div class="col-dot"></div>
+            <div class="col-title">Applied</div>
+            <span class="col-count">8</span>
+          </div>
+          <div class="col-cards">
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Product Genius</div>
+                  </div>
+                  <div class="kc-role">Sr PM, Platform</div>
+                </div>
+                <div class="kc-score green">8.4<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action their">Their court</span>
+                <span class="kc-due">Applied 3d ago</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">SalesAPE.ai</div>
+                  </div>
+                  <div class="kc-role">VP Product</div>
+                </div>
+                <div class="kc-score amber">6.8<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action their">Their court</span>
+                <span class="kc-due">Applied 5d ago</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Clay</div>
+                  </div>
+                  <div class="kc-role">Head of GTM</div>
+                </div>
+                <div class="kc-score green">8.1<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action their">Their court</span>
+                <span class="kc-due">Applied 7d ago</span>
+              </div>
+            </div>
+          </div>
+          <button class="col-add"><span class="col-add-circ">+</span>Add card</button>
+        </div>
+
+        <!-- Interviewing -->
+        <div class="col" style="--stage-color: #4573D2">
+          <div class="col-head">
+            <div class="col-dot"></div>
+            <div class="col-title">Interviewing</div>
+            <span class="col-count">3</span>
+          </div>
+          <div class="col-cards">
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Slack</div>
+                  </div>
+                  <div class="kc-role">Staff PM, Platform</div>
+                </div>
+                <div class="kc-score green">8.9<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action scheduled">Scheduled</span>
+                <span class="kc-due">Round 3 · Apr 22</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Notion</div>
+                  </div>
+                  <div class="kc-role">Head of GTM Strategy</div>
+                </div>
+                <div class="kc-score green">7.6<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action my">My court</span>
+                <span class="kc-due">Prep for panel Apr 24</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Figma</div>
+                  </div>
+                  <div class="kc-role">Senior PM, Enterprise</div>
+                </div>
+                <div class="kc-score amber">7.2<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span class="kc-action their">Their court</span>
+                <span class="kc-due">Waiting on recruiter</span>
+              </div>
+            </div>
+          </div>
+          <button class="col-add"><span class="col-add-circ">+</span>Add card</button>
+        </div>
+
+        <!-- Offer -->
+        <div class="col" style="--stage-color: #7C6EF0">
+          <div class="col-head">
+            <div class="col-dot"></div>
+            <div class="col-title">Offer</div>
+            <span class="col-count zero">0</span>
+          </div>
+          <div class="col-cards">
+            <div class="col-empty">
+              <div class="col-empty-t">Nothing here yet.</div>
+              <div class="col-empty-h">Drop a card when you have a written offer on the table.</div>
+            </div>
+          </div>
+          <button class="col-add"><span class="col-add-circ">+</span>Add card</button>
+        </div>
+
+        <!-- Closed -->
+        <div class="col" style="--stage-color: #8A8E94">
+          <div class="col-head">
+            <div class="col-dot"></div>
+            <div class="col-title">Closed</div>
+            <span class="col-count">3</span>
+          </div>
+          <div class="col-cards">
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Scale AI</div>
+                  </div>
+                  <div class="kc-role">VP Product, Enterprise</div>
+                </div>
+                <div class="kc-score red">—</div>
+              </div>
+              <div class="kc-foot">
+                <span style="color:var(--ci-text-tertiary)">Passed · culture fit</span>
+                <span class="kc-due">12d ago</span>
+              </div>
+            </div>
+            <div class="kc">
+              <div class="kc-head">
+                <div class="kc-ident">
+                  <div class="kc-title-row">
+                    <div class="kc-fav"></div>
+                    <div class="kc-company">Retool</div>
+                  </div>
+                  <div class="kc-role">PM, Growth</div>
+                </div>
+                <div class="kc-score orange">5.2<span class="d">/10</span></div>
+              </div>
+              <div class="kc-foot">
+                <span style="color:var(--ci-text-tertiary)">Rejected · stage 2</span>
+                <span class="kc-due">18d ago</span>
+              </div>
+            </div>
+          </div>
+          <button class="col-add"><span class="col-add-circ">+</span>Add card</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks drawer (collapsed) -->
+    <div class="tasks-drawer">
+      <div class="drawer-chev">‹</div>
+      <div class="drawer-label">Tasks</div>
+      <div class="drawer-count">5</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 2. TABLE VIEW ══════════════════ -->
+<div class="section-label"><span class="num">2</span>Table view</div>
+<div class="section-sub">
+  Same dashboard, view switcher flipped to Table. Filters preserved. Columns: Company / Role / Stage / Action / Score / Updated. Sortable by any column (default: Updated desc).
+</div>
+
+<div class="surface-frame">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-dot"></div>
+      <div class="topbar-brand-name">Coop</div>
+    </div>
+    <div class="topbar-nav">
+      <span class="on">Saved</span>
+      <span>Apply Queue</span>
+      <span>Inbox</span>
+      <span>Docs</span>
+      <span>Settings</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-user">MS</div>
+  </div>
+
+  <div class="overview">
+    <div class="overview-top">
+      <div>
+        <div class="overview-title">Pipeline Overview</div>
+        <div class="overview-sub">32 opportunities · 5 active this week · last sync 4m ago</div>
+      </div>
+      <div class="overview-pipeline">
+        <span style="color:var(--ci-text-tertiary)">Pipeline:</span>
+        <span>GTM Senior PM / Product Leader</span>
+        <span class="chev">▾</span>
+      </div>
+    </div>
+    <div class="stat-cards">
+      <div class="stat"><div class="stat-label">Saved</div><div class="stat-value">32</div><div class="stat-delta up">+4 this week</div></div>
+      <div class="stat"><div class="stat-label">Watch list</div><div class="stat-value">12</div><div class="stat-delta">5 unscored</div></div>
+      <div class="stat"><div class="stat-label">Researching</div><div class="stat-value">6</div><div class="stat-delta warn">2 overdue</div></div>
+      <div class="stat"><div class="stat-label">Applied</div><div class="stat-value">8</div><div class="stat-delta">avg 7d since reply</div></div>
+      <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value">3</div><div class="stat-delta up">Slack · Ramp · Notion</div></div>
+      <div class="stat"><div class="stat-label">Offer</div><div class="stat-value">0</div><div class="stat-delta">—</div></div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="pick"><span class="k">Excitement</span><span class="v">All</span><span class="chev">▾</span></div>
+    <div class="pick"><span class="k">Action On</span><span class="v">All</span><span class="chev">▾</span></div>
+    <div class="pick"><span class="k">Status</span><span class="v">Active</span><span class="chev">▾</span></div>
+    <div class="pick"><span class="k">Tags</span><span class="v">All</span><span class="chev">▾</span></div>
+    <div class="filter-spacer"></div>
+    <div class="view-switch">
+      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
+      <button class="view-btn active"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
+      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Grid</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="main-view">
+      <div class="table-wrap">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th style="width: 19%">Company</th>
+              <th style="width: 22%">Role</th>
+              <th style="width: 16%">Stage</th>
+              <th style="width: 14%">Action</th>
+              <th style="width: 10%">Score</th>
+              <th style="width: 19%">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Slack</div></td>
+              <td class="td-role">Staff PM, Platform</td>
+              <td><span class="td-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span></td>
+              <td class="td-action scheduled">Scheduled · Apr 22</td>
+              <td class="td-score green">8.9</td>
+              <td class="td-updated">1h ago · recruiter reply</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Ramp</div></td>
+              <td class="td-role">Senior PM, GTM</td>
+              <td><span class="td-stage"><span class="d" style="background: #F5A623"></span>Researching</span></td>
+              <td class="td-action my">My court · due Apr 21</td>
+              <td class="td-score amber">7.0</td>
+              <td class="td-updated">3h ago · email Rachel</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Product Genius</div></td>
+              <td class="td-role">Sr PM, Platform</td>
+              <td><span class="td-stage"><span class="d" style="background: #36B37E"></span>Applied</span></td>
+              <td class="td-action their">Their court</td>
+              <td class="td-score green">8.4</td>
+              <td class="td-updated">3d ago · applied</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Notion</div></td>
+              <td class="td-role">Head of GTM Strategy</td>
+              <td><span class="td-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span></td>
+              <td class="td-action my">My court · Apr 24</td>
+              <td class="td-score green">7.6</td>
+              <td class="td-updated">yesterday · panel scheduled</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Clay</div></td>
+              <td class="td-role">Head of GTM</td>
+              <td><span class="td-stage"><span class="d" style="background: #36B37E"></span>Applied</span></td>
+              <td class="td-action their">Their court</td>
+              <td class="td-score green">8.1</td>
+              <td class="td-updated">7d ago · applied</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Transform VXR</div></td>
+              <td class="td-role">Senior PM, GTM</td>
+              <td><span class="td-stage"><span class="d" style="background: #FC636B"></span>Watch list</span></td>
+              <td class="td-action my">My court</td>
+              <td class="td-score green">8.2</td>
+              <td class="td-updated">2d ago · saved</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Luminous</div></td>
+              <td class="td-role">PM, Growth</td>
+              <td><span class="td-stage"><span class="d" style="background: #F5A623"></span>Researching</span></td>
+              <td class="td-action my"><span style="color:var(--ci-accent-red); font-weight: 500;">Overdue 3d</span></td>
+              <td class="td-score amber">7.1</td>
+              <td class="td-updated">9d ago · researching</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Figma</div></td>
+              <td class="td-role">Senior PM, Enterprise</td>
+              <td><span class="td-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span></td>
+              <td class="td-action their">Their court</td>
+              <td class="td-score amber">7.2</td>
+              <td class="td-updated">6d ago · round 1 done</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Unitbase, Inc.</div></td>
+              <td class="td-role">Head of Product</td>
+              <td><span class="td-stage"><span class="d" style="background: #FC636B"></span>Watch list</span></td>
+              <td class="td-action my">My court</td>
+              <td class="td-score green">7.8</td>
+              <td class="td-updated">4d ago · saved</td>
+            </tr>
+            <tr>
+              <td><div class="td-company"><div class="f"></div>Kustomer</div></td>
+              <td class="td-role">VP Product</td>
+              <td><span class="td-stage"><span class="d" style="background: #FC636B"></span>Watch list</span></td>
+              <td class="td-action my">My court</td>
+              <td class="td-score amber">6.4</td>
+              <td class="td-updated">5d ago · saved</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tasks-drawer">
+      <div class="drawer-chev">‹</div>
+      <div class="drawer-label">Tasks</div>
+      <div class="drawer-count">5</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 3. GRID VIEW ══════════════════ -->
+<div class="section-label"><span class="num">3</span>Grid view · if kept</div>
+<div class="section-sub">
+  Tiled 280×200 cards. Shown for comparison — recommendation in the kill/keep frame below.
+</div>
+
+<div class="surface-frame">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-dot"></div>
+      <div class="topbar-brand-name">Coop</div>
+    </div>
+    <div class="topbar-nav">
+      <span class="on">Saved</span>
+      <span>Apply Queue</span>
+      <span>Inbox</span>
+      <span>Docs</span>
+      <span>Settings</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-user">MS</div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="pick"><span class="k">Excitement</span><span class="v">All</span><span class="chev">▾</span></div>
+    <div class="pick"><span class="k">Action On</span><span class="v">All</span><span class="chev">▾</span></div>
+    <div class="pick"><span class="k">Status</span><span class="v">Active</span><span class="chev">▾</span></div>
+    <div class="pick"><span class="k">Tags</span><span class="v">All</span><span class="chev">▾</span></div>
+    <div class="filter-spacer"></div>
+    <div class="view-switch">
+      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
+      <button class="view-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
+      <button class="view-btn active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Grid</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="main-view">
+      <div class="grid-wrap">
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Slack</div><div class="gc-role">Staff PM, Platform</div></div>
+            <div class="gc-score green">8.9<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$280–340K OTE · Remote · 4.4 Glassdoor</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span>
+            <span style="color:var(--ci-accent-blue); font-weight: 500;">Round 3 · Apr 22</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Ramp</div><div class="gc-role">Senior PM, GTM</div></div>
+            <div class="gc-score amber">7.0<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$220–260K OTE · Remote · 4.1 Glassdoor</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #F5A623"></span>Researching</span>
+            <span style="color:var(--ci-accent-red); font-weight: 500;">My court · Apr 21</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Notion</div><div class="gc-role">Head of GTM Strategy</div></div>
+            <div class="gc-score green">7.6<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$300K OTE · SF hybrid · 4.3 Glassdoor</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span>
+            <span style="color:var(--ci-accent-red); font-weight: 500;">Panel · Apr 24</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Clay</div><div class="gc-role">Head of GTM</div></div>
+            <div class="gc-score green">8.1<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$260K base · NYC · Series B</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #36B37E"></span>Applied</span>
+            <span style="color:#b45309; font-weight: 500;">Their court · 7d</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Transform VXR</div><div class="gc-role">Senior PM, GTM</div></div>
+            <div class="gc-score green">8.2<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$230–270K OTE · Remote · Series C</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #FC636B"></span>Watch list</span>
+            <span style="color:var(--ci-accent-red); font-weight: 500;">Score match</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Figma</div><div class="gc-role">Senior PM, Enterprise</div></div>
+            <div class="gc-score amber">7.2<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$270K OTE · SF hybrid · 4.6 Glassdoor</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span>
+            <span style="color:#b45309; font-weight: 500;">Their court</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Product Genius</div><div class="gc-role">Sr PM, Platform</div></div>
+            <div class="gc-score green">8.4<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$250K OTE · Remote · Seed</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #36B37E"></span>Applied</span>
+            <span style="color:#b45309; font-weight: 500;">Their court · 3d</span>
+          </div>
+        </div>
+        <div class="gc">
+          <div class="gc-head">
+            <div><div class="gc-company">Wonderlic</div><div class="gc-role">Product Lead</div></div>
+            <div class="gc-score amber">7.5<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
+          </div>
+          <div class="gc-meta">$200K base · Remote · 3.6 Glassdoor</div>
+          <div class="gc-foot">
+            <span class="gc-stage"><span class="d" style="background: #F5A623"></span>Researching</span>
+            <span style="color:#b45309; font-weight: 500;">Their court</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tasks-drawer">
+      <div class="drawer-chev">‹</div>
+      <div class="drawer-label">Tasks</div>
+      <div class="drawer-count">5</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 4. STAT CARD → FILTER STORYBOARD ══════════════════ -->
+<div class="section-label"><span class="num">4</span>Stat card as filter · 3-step storyboard</div>
+<div class="section-sub">
+  Click a stat card to filter the main view. Active stat gets a 3px coral left border + soft coral background. Click again to clear. Persists across Kanban / Table / Grid switches.
+</div>
+
+<div class="storyboard">
+  <!-- Frame 1: Default -->
+  <div class="frame">
+    <div class="frame-head"><span class="frame-step">1</span>Default · no filter</div>
+    <div class="frame-body">
+      <div class="mini">
+        <div class="mini-row">
+          <div class="mini-stat"><div class="mini-stat-l">Saved</div><div class="mini-stat-v">32</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Watch list</div><div class="mini-stat-v">12</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Researching</div><div class="mini-stat-v">6</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Applied</div><div class="mini-stat-v">8</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Interviewing</div><div class="mini-stat-v">3</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Offer</div><div class="mini-stat-v">0</div></div>
+        </div>
+      </div>
+      <div class="mini-kanban">
+        <div class="mini-col" style="--stage-color: #FC636B">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Watch list</div><span class="mini-col-c">12</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Transform VXR</div><div class="mini-kc-s">Senior PM · 8.2</div></div>
+          <div class="mini-kc"><div class="mini-kc-t">Unitbase</div><div class="mini-kc-s">Head of Product · 7.8</div></div>
+        </div>
+        <div class="mini-col" style="--stage-color: #F5A623">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Researching</div><span class="mini-col-c">6</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Ramp</div><div class="mini-kc-s">Senior PM · 7.0</div></div>
+          <div class="mini-kc"><div class="mini-kc-t">Luminous</div><div class="mini-kc-s">PM · 7.1</div></div>
+        </div>
+        <div class="mini-col" style="--stage-color: #4573D2">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Interviewing</div><span class="mini-col-c">3</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Slack</div><div class="mini-kc-s">Staff PM · 8.9</div></div>
+          <div class="mini-kc"><div class="mini-kc-t">Notion</div><div class="mini-kc-s">GTM · 7.6</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Frame 2: Hover/click -->
+  <div class="frame">
+    <div class="frame-head"><span class="frame-step">2</span>Click "Interviewing"</div>
+    <div class="frame-body">
+      <div class="mini">
+        <div class="mini-row">
+          <div class="mini-stat"><div class="mini-stat-l">Saved</div><div class="mini-stat-v">32</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Watch list</div><div class="mini-stat-v">12</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Researching</div><div class="mini-stat-v">6</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Applied</div><div class="mini-stat-v">8</div></div>
+          <div class="mini-stat" style="border: 1px solid var(--ci-border-strong); box-shadow: 0 0 0 2px var(--ci-accent-primary-soft);"><div class="mini-stat-l">Interviewing</div><div class="mini-stat-v">3</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Offer</div><div class="mini-stat-v">0</div></div>
+        </div>
+      </div>
+      <div class="mini-kanban">
+        <div class="mini-col" style="--stage-color: #FC636B">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Watch list</div><span class="mini-col-c">12</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Transform VXR</div><div class="mini-kc-s">Senior PM · 8.2</div></div>
+        </div>
+        <div class="mini-col" style="--stage-color: #F5A623">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Researching</div><span class="mini-col-c">6</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Ramp</div><div class="mini-kc-s">Senior PM · 7.0</div></div>
+        </div>
+        <div class="mini-col" style="--stage-color: #4573D2">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Interviewing</div><span class="mini-col-c">3</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Slack</div><div class="mini-kc-s">Staff PM · 8.9</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Frame 3: Filtered -->
+  <div class="frame">
+    <div class="frame-head"><span class="frame-step">3</span>Filtered · only Interviewing</div>
+    <div class="frame-body">
+      <div class="mini">
+        <div class="mini-row">
+          <div class="mini-stat"><div class="mini-stat-l">Saved</div><div class="mini-stat-v">32</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Watch list</div><div class="mini-stat-v">12</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Researching</div><div class="mini-stat-v">6</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Applied</div><div class="mini-stat-v">8</div></div>
+          <div class="mini-stat active"><div class="mini-stat-l">Interviewing</div><div class="mini-stat-v">3</div></div>
+          <div class="mini-stat"><div class="mini-stat-l">Offer</div><div class="mini-stat-v">0</div></div>
+        </div>
+      </div>
+      <div class="mini-kanban" style="justify-content: center;">
+        <div class="mini-col solo" style="--stage-color: #4573D2">
+          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Interviewing</div><span class="mini-col-c">3</span></div>
+          <div class="mini-kc"><div class="mini-kc-t">Slack</div><div class="mini-kc-s">Staff PM · 8.9 · Round 3</div></div>
+          <div class="mini-kc"><div class="mini-kc-t">Notion</div><div class="mini-kc-s">GTM Strategy · 7.6 · Panel</div></div>
+          <div class="mini-kc"><div class="mini-kc-t">Figma</div><div class="mini-kc-s">Senior PM · 7.2 · Waiting</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 5. EMPTY STATE ══════════════════ -->
+<div class="section-label"><span class="num">5</span>Empty state · cold start</div>
+<div class="section-sub">
+  First-visit state when <code style="font-size:12px">savedCompanies[]</code> is empty. Coop avatar + short title + hint + CTA. Header and filter bar render normally (with zero stats) so users immediately understand the shape of the surface.
+</div>
+
+<div class="empty-state-frame">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-dot"></div>
+      <div class="topbar-brand-name">Coop</div>
+    </div>
+    <div class="topbar-nav">
+      <span class="on">Saved</span>
+      <span>Apply Queue</span>
+      <span>Inbox</span>
+      <span>Docs</span>
+      <span>Settings</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-user">MS</div>
+  </div>
+
+  <div class="overview">
+    <div class="overview-top">
+      <div>
+        <div class="overview-title">Pipeline Overview</div>
+        <div class="overview-sub">0 opportunities · nothing saved yet</div>
+      </div>
+    </div>
+    <div class="stat-cards">
+      <div class="stat"><div class="stat-label">Saved</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+      <div class="stat"><div class="stat-label">Watch list</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+      <div class="stat"><div class="stat-label">Researching</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+      <div class="stat"><div class="stat-label">Applied</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+      <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+      <div class="stat"><div class="stat-label">Offer</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+    </div>
+  </div>
+
+  <div class="empty-state">
+    <div class="empty-avatar">
+      <!-- Coop avatar (simplified) -->
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="18" fill="#FC636B"/>
+        <circle cx="18" cy="21" r="2.5" fill="#151B26"/>
+        <circle cx="30" cy="21" r="2.5" fill="#151B26"/>
+        <path d="M16 29 Q24 35 32 29" stroke="#151B26" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+    </div>
+    <div class="empty-title">No opportunities saved yet</div>
+    <div class="empty-hint">
+      Visit any company page in Chrome — Coop will detect it and offer to save.
+      You can also import from LinkedIn, Greenhouse, Lever, Workday, or Ashby.
+    </div>
+    <button class="empty-cta">Browse companies</button>
+  </div>
+</div>
+
+<!-- ══════════════════ 6. GRID KILL / KEEP ══════════════════ -->
+<div class="section-label"><span class="num">6</span>Grid view · kill or keep</div>
+<div class="section-sub">
+  Open question for Matt. Gut: kill. Kanban is the primary mental model for pipeline; Table is for audit + sort + search. Grid is a third way to look at the same data that doesn't earn its keep — it shows less info than a Kanban card while taking up more space.
+</div>
+
+<div class="states-grid">
+  <!-- A. Keep (polished) -->
+  <div class="kill-frame">
+    <div class="kill-head">
+      <div class="kill-head-l">
+        <div class="kill-title">Option A · Keep grid, polish</div>
+      </div>
+      <span class="kill-tag keep">Keep</span>
+    </div>
+    <div class="kill-body">
+      <div class="mini-grid">
+        <div class="mini-gc">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><div class="mini-gc-t">Slack</div><div class="mini-gc-r">Staff PM</div></div>
+            <div style="font-size:11px; font-weight:600; color:#047857; font-variant-numeric:tabular-nums;">8.9</div>
+          </div>
+          <div class="mini-gc-foot"><span>Interviewing</span><span>Apr 22</span></div>
+        </div>
+        <div class="mini-gc">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><div class="mini-gc-t">Ramp</div><div class="mini-gc-r">Senior PM</div></div>
+            <div style="font-size:11px; font-weight:600; color:#b45309; font-variant-numeric:tabular-nums;">7.0</div>
+          </div>
+          <div class="mini-gc-foot"><span>Researching</span><span>My court</span></div>
+        </div>
+        <div class="mini-gc">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><div class="mini-gc-t">Notion</div><div class="mini-gc-r">GTM Strategy</div></div>
+            <div style="font-size:11px; font-weight:600; color:#047857; font-variant-numeric:tabular-nums;">7.6</div>
+          </div>
+          <div class="mini-gc-foot"><span>Interviewing</span><span>Apr 24</span></div>
+        </div>
+        <div class="mini-gc">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><div class="mini-gc-t">Clay</div><div class="mini-gc-r">Head of GTM</div></div>
+            <div style="font-size:11px; font-weight:600; color:#047857; font-variant-numeric:tabular-nums;">8.1</div>
+          </div>
+          <div class="mini-gc-foot"><span>Applied</span><span>7d ago</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="kill-note">
+      <strong>What it costs</strong>: a third view to maintain and design-pass. <strong>What it earns</strong>: visual browsing for users who prefer tile layouts over column layouts. Honestly — hard to name a moment where Grid beats Kanban or Table.
+    </div>
+  </div>
+
+  <!-- B. Kill -->
+  <div class="kill-frame">
+    <div class="kill-head">
+      <div class="kill-head-l">
+        <div class="kill-title">Option B · Kill grid, Kanban / Table only</div>
+      </div>
+      <span class="kill-tag kill">Recommended</span>
+    </div>
+    <div class="kill-body">
+      <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 12px;">
+        <div class="mini-table-head">
+          <div>Company</div>
+          <div>Role</div>
+          <div>Stage</div>
+          <div>Action</div>
+          <div>Score</div>
+        </div>
+        <div class="mini-table-row"><div class="c"><div class="f"></div>Slack</div><div class="r">Staff PM, Platform</div><div class="s"><span class="d" style="background: #4573D2"></span>Interviewing</div><div style="font-size:10px; color: var(--ci-accent-blue); font-weight:500;">Apr 22</div><div class="sc green">8.9</div></div>
+        <div class="mini-table-row"><div class="c"><div class="f"></div>Ramp</div><div class="r">Senior PM, GTM</div><div class="s"><span class="d" style="background: #F5A623"></span>Researching</div><div style="font-size:10px; color: var(--ci-accent-red); font-weight:500;">My court</div><div class="sc amber">7.0</div></div>
+        <div class="mini-table-row"><div class="c"><div class="f"></div>Notion</div><div class="r">GTM Strategy</div><div class="s"><span class="d" style="background: #4573D2"></span>Interviewing</div><div style="font-size:10px; color: var(--ci-accent-red); font-weight:500;">Apr 24</div><div class="sc green">7.6</div></div>
+      </div>
+      <div style="margin-top: 10px; font-size: 11px; color: var(--ci-text-tertiary); text-align: center; line-height: 1.5;">
+        View switcher becomes <span style="font-weight: 600; color: var(--ci-text-secondary)">Kanban / Table</span> only.<br/>One clearer primary mental model, one dense audit surface.
+      </div>
+    </div>
+    <div class="kill-note">
+      <strong>Why</strong>: Kanban covers "where is everything" visually. Table covers "let me sort, search, scan everything at once." Grid sits between them with less info than Kanban (no next step / action context) and less density than Table (fewer rows per page). No moment where it's the right tool.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ 7. OPEN QUESTIONS ══════════════════ -->
+<div class="section-label"><span class="num">7</span>Open questions</div>
+
+<div class="open-q">
+  <h3>Three calls for Matt before spec</h3>
+  <ol>
+    <li>
+      <strong>Tasks drawer default state.</strong>
+      Collapsed on first load (shown in hero) — preserves main-view real estate, user expands when they want it. Alt: expanded by default so users discover it. <span class="pick-me">Gut: collapsed.</span> Remember last-used state per session.
+    </li>
+    <li>
+      <strong>Stat-card filter persistence.</strong>
+      Persistent across view switches (click "Interviewing" in Kanban → switch to Table → still filtered to Interviewing) or reset on switch? <span class="pick-me">Gut: persistent.</span> Filters are state about the data, views are state about the visualization — they're orthogonal.
+    </li>
+    <li>
+      <strong>Grid view.</strong>
+      Kill (Kanban + Table only) or keep (polish it)? <span class="pick-me">Gut: kill.</span> No moment where it beats Kanban or Table. Switcher simplifies to a 2-state toggle. If kept, cards get a DESIGN.md pass but we own a third surface forever.
+    </li>
+  </ol>
+  <p style="margin-top: 14px; color: var(--ci-text-primary); font-weight: 500;">Reply <strong>"ship it"</strong> if the three gut-calls look right, otherwise name which to change.</p>
+</div>
+
+</body>
+</html>

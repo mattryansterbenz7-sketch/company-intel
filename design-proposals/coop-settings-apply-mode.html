@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Apply Mode section in Coop Settings — #246</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-sidebar: #EEF1F3;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-on-dark-muted: #A3AEBE;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-teal-soft: rgba(54,179,126,0.08);
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232,56,79,0.07);
+    --ci-accent-blue: #4573D2;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --ci-radius-lg: 14px;
+    --ci-radius-full: 9999px;
+    --ci-shadow-sm: 0 1px 3px rgba(30,31,33,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --ci-shadow-md: 0 4px 16px rgba(30,31,33,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    --ci-shadow-lg: 0 10px 36px rgba(30,31,33,0.14), 0 2px 8px rgba(0,0,0,0.06);
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  /* ── Page header ── */
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .prompt-line { color: var(--ci-text-secondary); font-size: 13px; max-width: 880px; line-height: 1.55; margin-bottom: 14px; }
+  .prompt-line .label { color: var(--ci-text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; margin-right: 6px; }
+
+  .rec-strap {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(54,179,126,0.10); color: #1B7E53;
+    font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: 99px;
+    margin-bottom: 24px;
+  }
+  .rec-strap::before { content: '✓'; font-size: 11px; }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin: 32px 0 14px;
+  }
+  .section-label:first-of-type { margin-top: 8px; }
+
+  .subsection-label {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+    color: var(--ci-text-primary);
+    margin: 22px 0 8px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .subsection-label .letter {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* ── Coop Settings page shell ── */
+  .page-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .coop-settings-page {
+    width: 100%;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    box-shadow: var(--ci-shadow-sm);
+  }
+
+  /* Global nav strip (simulates the dark header bar) */
+  .global-nav {
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 14px;
+    font-size: 13px;
+  }
+  .global-nav .logo { font-weight: 700; letter-spacing: -0.01em; }
+  .global-nav .logo-dot { color: var(--ci-accent-primary); }
+  .global-nav .crumb { color: var(--ci-text-on-dark-muted); font-size: 12px; }
+  .global-nav .crumb::before { content: '/'; margin-right: 10px; color: #3A4459; }
+  .global-nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ci-text-on-dark-muted); }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    display: flex; align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--ci-border-default);
+    background: var(--ci-bg-raised);
+    position: relative;
+  }
+  .tab {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 14px 16px;
+    font-size: 13px; font-weight: 500;
+    color: var(--ci-text-secondary);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    letter-spacing: -0.005em;
+    transition: color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  }
+  .tab:hover { color: var(--ci-text-primary); }
+  .tab.active {
+    color: var(--ci-text-primary);
+    font-weight: 600;
+    border-bottom-color: var(--ci-accent-primary);
+  }
+  .tab-bar-right {
+    margin-left: auto;
+    display: flex; align-items: center;
+    padding: 10px 0;
+  }
+  /* Red-pill live indicator on active Apply Mode */
+  .apply-live-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600;
+    color: var(--ci-accent-red);
+    padding: 4px 10px;
+    border: 1px solid var(--ci-accent-red);
+    border-radius: var(--ci-radius-full);
+    letter-spacing: 0.01em;
+    background: transparent;
+  }
+  .apply-live-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ci-accent-red);
+    box-shadow: 0 0 0 0 rgba(232,56,79,0.6);
+    animation: redpulse 1.6s ease-out infinite;
+  }
+  @keyframes redpulse {
+    0% { box-shadow: 0 0 0 0 rgba(232,56,79,0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(232,56,79,0); }
+    100% { box-shadow: 0 0 0 0 rgba(232,56,79,0); }
+  }
+
+  /* ── Tab body ── */
+  .tab-body {
+    padding: 26px 28px 32px;
+    background: var(--ci-bg-raised);
+  }
+  .tab-body-header {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .tab-title {
+    font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .tab-desc {
+    font-size: 13px; color: var(--ci-text-secondary);
+    max-width: 640px; line-height: 1.55;
+  }
+
+  /* Section card (one per sub-section inside Apply Mode) */
+  .s-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  .s-head { margin-bottom: 14px; }
+  .s-head.row {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  }
+  .s-title {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.005em;
+    margin-bottom: 3px;
+  }
+  .s-subtitle {
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
+    max-width: 620px;
+  }
+
+  /* Toggles */
+  .toggle {
+    position: relative;
+    width: 40px; height: 22px;
+    border-radius: var(--ci-radius-full);
+    background: var(--ci-border-strong);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out);
+  }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    transition: left var(--motion-xs) var(--ease-out);
+  }
+  .toggle.on { background: var(--ci-accent-primary); }
+  .toggle.on::after { left: 20px; }
+  .toggle.off { background: var(--ci-border-strong); }
+  .toggle.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Quick Links list */
+  .ql-helper {
+    font-size: 12px; color: var(--ci-text-secondary);
+    line-height: 1.55;
+    padding: 9px 12px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    margin-bottom: 14px;
+  }
+  .ql-helper a { color: var(--ci-text-link); font-weight: 500; text-decoration: none; }
+  .ql-helper a:hover { text-decoration: underline; }
+
+  .ql-list { display: flex; flex-direction: column; gap: 0; }
+  .ql-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 2px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .ql-row:last-child { border-bottom: none; }
+  .ql-icon {
+    width: 30px; height: 30px; flex-shrink: 0;
+    border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-inset);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ci-text-secondary);
+  }
+  .ql-icon svg { width: 15px; height: 15px; }
+  .ql-name { font-size: 13px; font-weight: 600; min-width: 96px; }
+  .ql-url {
+    flex: 1;
+    font-size: 13px;
+    color: var(--ci-text-secondary);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 380px;
+  }
+  .ql-actions { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    border-radius: var(--ci-radius-sm);
+    background: transparent;
+    border: 1px solid var(--ci-border-default);
+    color: var(--ci-text-secondary);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .icon-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .icon-btn svg { width: 13px; height: 13px; }
+  .icon-btn.copy { color: var(--ci-text-tertiary); }
+
+  .ql-row-add {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ci-text-tertiary);
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 10px;
+    border-radius: var(--ci-radius-sm);
+    border: 1px dashed var(--ci-border-default);
+  }
+  .ql-row-add:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+  .ql-row-add svg { width: 11px; height: 11px; }
+
+  /* Answer Library */
+  .al-buckets {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .al-bucket {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 12px 12px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .al-bucket-name { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); }
+  .al-bucket-count { font-size: 11px; color: var(--ci-text-tertiary); }
+
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600;
+    color: var(--ci-text-link);
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid var(--ci-border-default);
+    padding: 7px 12px;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  }
+  .btn-ghost:hover {
+    background: var(--ci-bg-inset);
+    border-color: var(--ci-border-strong);
+  }
+  .btn-ghost svg { width: 12px; height: 12px; }
+
+  /* Experimental tag */
+  .tag-exp {
+    display: inline-flex; align-items: center;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    padding: 2px 7px;
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    margin-left: 8px;
+  }
+
+  /* Caption lines under toggles */
+  .config-caption {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    line-height: 1.5;
+    margin-top: 6px;
+  }
+
+  /* ── Detail B: zoom on tab bar ── */
+  .zoom-card {
+    max-width: 1040px;
+    margin: 0 auto 10px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .zoom-caption {
+    font-size: 12px; color: var(--ci-text-secondary);
+    text-align: center;
+    margin: 10px auto 0;
+    max-width: 700px;
+    line-height: 1.55;
+  }
+
+  /* ── Detail C: side panel with Settings link ── */
+  .side-grid {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: 28px;
+    max-width: 1100px;
+    margin: 0 auto;
+    align-items: start;
+  }
+  .sp {
+    width: 400px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--ci-shadow-md);
+  }
+  .sp-head {
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sp-head-title { font-size: 13px; font-weight: 700; }
+  .sp-head-pill {
+    margin-left: auto;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: var(--ci-radius-full);
+    background: rgba(232,56,79,0.22);
+    color: #FF8190;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .sp-head-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: #FF8190; }
+
+  .sp-body {
+    padding: 16px 14px;
+    min-height: 400px;
+    background: var(--ci-bg-base);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .sp-apply-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-left: 3px solid var(--ci-accent-red);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 14px 12px;
+  }
+  .sp-apply-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .sp-apply-head-left { display: flex; align-items: center; gap: 8px; }
+  .sp-apply-title { font-size: 13px; font-weight: 700; }
+  .sp-apply-toggle { display: flex; align-items: center; gap: 8px; }
+  .sp-apply-settings {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 500;
+    color: var(--ci-text-link);
+    cursor: pointer;
+    text-decoration: none;
+    padding: 3px 6px;
+    border-radius: var(--ci-radius-sm);
+  }
+  .sp-apply-settings:hover { background: var(--ci-bg-inset); }
+  .sp-apply-settings svg { width: 10px; height: 10px; }
+  .sp-apply-body-row { font-size: 12px; color: var(--ci-text-secondary); display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; }
+  .sp-apply-body-row .k { color: var(--ci-text-tertiary); }
+  .sp-apply-body-row .v { color: var(--ci-text-primary); font-weight: 500; }
+
+  .sp-annot {
+    font-size: 12px; color: var(--ci-text-secondary);
+    line-height: 1.55;
+    padding: 14px 16px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    max-width: 380px;
+  }
+  .sp-annot strong { color: var(--ci-text-primary); font-weight: 700; }
+  .sp-annot code {
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+    background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 3px;
+  }
+
+  /* ── Before / After ── */
+  .ba-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .ba-col {}
+  .ba-head {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ci-text-secondary);
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ba-head .tag {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px;
+    letter-spacing: 0.04em;
+  }
+  .ba-head .tag.before { background: rgba(232,56,79,0.09); color: var(--ci-accent-red); }
+  .ba-head .tag.after { background: rgba(54,179,126,0.12); color: #1B7E53; }
+
+  .pref-page {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 18px 18px 20px;
+    min-height: 340px;
+  }
+  .pref-page-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+  .pref-section {
+    border-bottom: 1px solid var(--ci-border-subtle);
+    padding: 14px 0;
+  }
+  .pref-section:last-child { border-bottom: none; }
+  .pref-section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .pref-section-name { font-size: 13px; font-weight: 600; }
+  .pref-section-name.muted { color: var(--ci-text-tertiary); }
+  .pref-section-desc { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55; max-width: 420px; }
+  .pref-links-list {
+    margin-top: 8px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .pref-link-item { font-size: 12px; color: var(--ci-text-secondary); display: flex; gap: 8px; padding: 4px 0; }
+  .pref-link-item .k { min-width: 80px; font-weight: 600; color: var(--ci-text-primary); }
+  .pref-link-item .v { color: var(--ci-text-link); font-family: monospace; font-size: 11px; }
+
+  .pref-moved-note {
+    font-size: 12px; color: var(--ci-text-secondary);
+    background: var(--ci-bg-inset);
+    padding: 10px 12px;
+    border-radius: var(--ci-radius-sm);
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 4px;
+  }
+  .pref-moved-note a { color: var(--ci-text-link); text-decoration: none; font-weight: 500; }
+  .pref-moved-note a:hover { text-decoration: underline; }
+  .pref-moved-note svg { width: 13px; height: 13px; color: var(--ci-text-tertiary); flex-shrink: 0; }
+
+  .pref-section.strikethrough .pref-section-name { text-decoration: line-through; color: var(--ci-text-tertiary); }
+  .pref-section.strikethrough .pref-links-list { opacity: 0.35; pointer-events: none; }
+
+  /* ── Why not B or C ── */
+  .why-not-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; }
+  .why-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 18px 20px;
+  }
+  .why-title {
+    font-size: 13px; font-weight: 700; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .why-title .rej {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px;
+    background: var(--ci-bg-inset); color: var(--ci-text-secondary);
+    letter-spacing: 0.05em;
+  }
+  .why-body { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.6; }
+
+  /* ── Open questions ── */
+  .oq-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 20px 22px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .oq-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .oq-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: var(--ci-text-primary); line-height: 1.55;
+  }
+  .oq-q { color: var(--ci-accent-primary); font-weight: 700; min-width: 20px; font-size: 14px; }
+  .oq-text { color: var(--ci-text-primary); }
+  .oq-text .lean { display: inline-block; font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-inset); padding: 1px 7px; border-radius: var(--ci-radius-full); margin-left: 6px; }
+
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+<h1>Apply Mode section in Coop Settings — #246</h1>
+<div class="prompt-line">
+  <span class="label">Matt</span>Quick Links currently live in general Preferences, but they're really an Apply Mode feature. Need a new Application Mode section in Coop Settings to house them plus Q&amp;A pairings (#244), Snip config (#188), and any other apply-specific settings. Where does it sit and what lives there?
+</div>
+
+<div class="rec-strap">Recommended — Option A: dedicated "Apply Mode" tab within Coop Settings</div>
+
+<!-- ═════════════════════════════ SECTION: RECOMMENDED ═════════════════════════════ -->
+<div class="section-label">Recommended — Option A</div>
+
+<!-- ════ A) Full Coop Settings page ════ -->
+<div class="subsection-label"><span class="letter">A</span>Full Coop Settings page with Apply Mode tab active</div>
+
+<div class="coop-settings-page">
+
+  <!-- Global nav strip -->
+  <div class="global-nav">
+    <div class="logo">Coop<span class="logo-dot">.</span>ai</div>
+    <div class="crumb">Coop Settings</div>
+    <div class="global-nav-right"><span>mattryansterbenz7@gmail.com</span></div>
+  </div>
+
+  <!-- Top tab bar -->
+  <div class="tab-bar">
+    <div class="tab">Models</div>
+    <div class="tab">Personality</div>
+    <div class="tab">Memory</div>
+    <div class="tab">Behavior</div>
+    <div class="tab">Usage</div>
+    <div class="tab active">
+      Apply Mode
+    </div>
+    <div class="tab-bar-right">
+      <span class="apply-live-pill"><span class="dot"></span>Apply Mode</span>
+    </div>
+  </div>
+
+  <!-- Tab body -->
+  <div class="tab-body">
+
+    <div class="tab-body-header">
+      <div>
+        <div class="tab-title">Apply Mode</div>
+        <div class="tab-desc">Configure what Coop shows when you're filling out job applications. Quick Links, saved answers, snip capture, and the writing assistant all live here.</div>
+      </div>
+    </div>
+
+    <!-- ── Quick Links section ── -->
+    <div class="s-card">
+      <div class="s-head">
+        <div class="s-title">Quick Links</div>
+        <div class="s-subtitle">URLs you paste into applications often. Click a row to copy. Reads from Personal Info &amp; Links in Preferences — that's the source of truth.</div>
+      </div>
+
+      <div class="ql-helper">
+        Source: <a href="#">Preferences → Personal Info &amp; Links</a>. Edit there, appears here.
+      </div>
+
+      <div class="ql-list">
+        <div class="ql-row">
+          <div class="ql-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><line x1="7" y1="10" x2="7" y2="18"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><path d="M11 18v-4.5a2.5 2.5 0 0 1 5 0V18"/><line x1="11" y1="10" x2="11" y2="18"/></svg>
+          </div>
+          <div class="ql-name">LinkedIn</div>
+          <div class="ql-url">linkedin.com/in/mattryansterbenz</div>
+          <div class="ql-actions">
+            <button class="icon-btn copy" title="Copy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5a1.5 1.5 0 0 1 1.5-1.5h9"/></svg>
+            </button>
+            <button class="icon-btn" title="Open">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="ql-row">
+          <div class="ql-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4 1.5-4-2.5-6-3m12 5v-3.5a3.5 3.5 0 0 0-1-2.5c3.3-.4 6.7-1.6 6.7-7A5.4 5.4 0 0 0 19 3.8 5 5 0 0 0 18.9.7S17.7.4 15 2.2a13 13 0 0 0-6 0C6.3.4 5.1.7 5.1.7a5 5 0 0 0-.1 3.1 5.4 5.4 0 0 0-1.3 3.7c0 5.4 3.3 6.6 6.6 7a3.2 3.2 0 0 0-1 2.5V21"/></svg>
+          </div>
+          <div class="ql-name">GitHub</div>
+          <div class="ql-url">github.com/mattryansterbenz7-sketch</div>
+          <div class="ql-actions">
+            <button class="icon-btn copy" title="Copy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5a1.5 1.5 0 0 1 1.5-1.5h9"/></svg>
+            </button>
+            <button class="icon-btn" title="Open">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="ql-row">
+          <div class="ql-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
+          </div>
+          <div class="ql-name">Portfolio</div>
+          <div class="ql-url">mattsterbenz.com/work</div>
+          <div class="ql-actions">
+            <button class="icon-btn copy" title="Copy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5a1.5 1.5 0 0 1 1.5-1.5h9"/></svg>
+            </button>
+            <button class="icon-btn" title="Open">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="ql-row">
+          <div class="ql-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 0 1 0 18A13 13 0 0 1 12 3z"/></svg>
+          </div>
+          <div class="ql-name">Website</div>
+          <div class="ql-url">mattsterbenz.com</div>
+          <div class="ql-actions">
+            <button class="icon-btn copy" title="Copy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5a1.5 1.5 0 0 1 1.5-1.5h9"/></svg>
+            </button>
+            <button class="icon-btn" title="Open">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="ql-row">
+          <div class="ql-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+          </div>
+          <div class="ql-name">Booking</div>
+          <div class="ql-url">cal.com/mattsterbenz/intro</div>
+          <div class="ql-actions">
+            <button class="icon-btn copy" title="Copy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5a1.5 1.5 0 0 1 1.5-1.5h9"/></svg>
+            </button>
+            <button class="icon-btn" title="Open">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ql-row-add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add link
+      </div>
+    </div>
+
+    <!-- ── Answer Library ── -->
+    <div class="s-card">
+      <div class="s-head row">
+        <div>
+          <div class="s-title">Answer Library</div>
+          <div class="s-subtitle">Reusable replies to the application questions that come up every time — compensation, sponsorship, availability, experience, and motivation. Coop paraphrases into the current field.</div>
+        </div>
+        <button class="btn-ghost">
+          Manage answers
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>
+        </button>
+      </div>
+
+      <div class="al-buckets">
+        <div class="al-bucket"><div class="al-bucket-name">Compensation</div><div class="al-bucket-count">3 saved</div></div>
+        <div class="al-bucket"><div class="al-bucket-name">Sponsorship</div><div class="al-bucket-count">2 saved</div></div>
+        <div class="al-bucket"><div class="al-bucket-name">Availability</div><div class="al-bucket-count">2 saved</div></div>
+        <div class="al-bucket"><div class="al-bucket-name">Experience</div><div class="al-bucket-count">5 saved</div></div>
+        <div class="al-bucket"><div class="al-bucket-name">Motivation</div><div class="al-bucket-count">4 saved</div></div>
+      </div>
+    </div>
+
+    <!-- ── Snip ── -->
+    <div class="s-card">
+      <div class="s-head row">
+        <div>
+          <div class="s-title">Snip</div>
+          <div class="s-subtitle">Capture the application field you're on and ask Coop to draft a response. Shortcut fires the snip interaction from the side panel.</div>
+        </div>
+        <div class="toggle on" role="switch" aria-checked="true"></div>
+      </div>
+      <div class="config-caption">Shortcut: <code>⌘ Shift S</code> — captures focused field + label, opens a draft panel in side panel. Auto-sends to Coop when enabled.</div>
+    </div>
+
+    <!-- ── Writing assistant ── -->
+    <div class="s-card">
+      <div class="s-head row">
+        <div>
+          <div class="s-title">
+            Writing assistant
+            <span class="tag-exp">Experimental</span>
+          </div>
+          <div class="s-subtitle">Ambient inline rewrites on any text field — tone shift (In my voice / Tighten / Punchier / Warmer). Currently shelved for performance; off by default.</div>
+        </div>
+        <div class="toggle off disabled" role="switch" aria-checked="false" aria-disabled="true"></div>
+      </div>
+      <div class="config-caption">Not included in the extension's shipped manifest. Toggle is shown here so the feature is discoverable when enabled in future releases.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════ B) Zoomed tab-bar detail ════ -->
+<div class="subsection-label" style="margin-top: 36px;"><span class="letter">B</span>Tab bar detail — Apply Mode sits last with live indicator</div>
+
+<div class="zoom-card">
+  <div class="tab-bar" style="padding: 0 22px;">
+    <div class="tab">Models</div>
+    <div class="tab">Personality</div>
+    <div class="tab">Memory</div>
+    <div class="tab">Behavior</div>
+    <div class="tab">Usage</div>
+    <div class="tab active">Apply Mode</div>
+    <div class="tab-bar-right">
+      <span class="apply-live-pill"><span class="dot"></span>Apply Mode</span>
+    </div>
+  </div>
+</div>
+<div class="zoom-caption">The red-pill indicator echoes the one in the side panel when Apply Mode is currently running on the active tab. Same affordance, same visual weight — one pill across surfaces.</div>
+
+<!-- ════ C) Cross-surface deep link ════ -->
+<div class="subsection-label" style="margin-top: 36px;"><span class="letter">C</span>Cross-surface deep link — side panel jumps here</div>
+
+<div class="side-grid">
+  <div class="sp">
+    <div class="sp-head">
+      <div class="sp-head-title">Coop</div>
+      <span class="sp-head-pill"><span class="dot"></span>Apply Mode</span>
+    </div>
+    <div class="sp-body">
+      <div class="sp-apply-card">
+        <div class="sp-apply-head">
+          <div class="sp-apply-head-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E8384F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6M7 17h8"/></svg>
+            <div class="sp-apply-title">Apply Mode active</div>
+          </div>
+          <div class="sp-apply-toggle">
+            <div class="toggle on"></div>
+            <a href="#" class="sp-apply-settings">
+              Settings
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>
+            </a>
+          </div>
+        </div>
+        <div class="sp-apply-body-row"><span class="k">Focused field</span><span class="v">Why are you interested?</span></div>
+        <div class="sp-apply-body-row"><span class="k">Suggested bucket</span><span class="v">Motivation</span></div>
+        <div class="sp-apply-body-row"><span class="k">Quick Links</span><span class="v">5 available</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sp-annot">
+    <strong>Deep link.</strong> The <code>Settings</code> link in the Apply Mode card opens <strong>Coop Settings → Apply Mode tab</strong> directly — Matt never lands on Models or has to hunt. Both surfaces share the same red-pill indicator so the connection is legible at a glance.
+  </div>
+</div>
+
+<!-- ═════════════════════════════ SECTION: BEFORE / AFTER ═════════════════════════════ -->
+<div class="section-label" style="margin-top: 44px;">Before &amp; After — Preferences page</div>
+
+<div class="ba-grid">
+  <div class="ba-col">
+    <div class="ba-head">Before <span class="tag before">Current</span></div>
+    <div class="pref-page">
+      <div class="pref-page-title">Preferences</div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Personal Info &amp; Links</div></div>
+        <div class="pref-section-desc">Your name, headline, contact details, and links used across Coop.</div>
+        <div class="pref-links-list">
+          <div class="pref-link-item"><span class="k">LinkedIn</span><span class="v">linkedin.com/in/mattryansterbenz</span></div>
+          <div class="pref-link-item"><span class="k">GitHub</span><span class="v">github.com/mattryansterbenz7-sketch</span></div>
+          <div class="pref-link-item"><span class="k">Portfolio</span><span class="v">mattsterbenz.com/work</span></div>
+        </div>
+      </div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Quick Links</div></div>
+        <div class="pref-section-desc">Choose which of your links appear in the Apply Mode quick-copy row, and their order.</div>
+        <div class="pref-links-list">
+          <div class="pref-link-item"><span class="k">LinkedIn</span><span class="v">On</span></div>
+          <div class="pref-link-item"><span class="k">GitHub</span><span class="v">On</span></div>
+          <div class="pref-link-item"><span class="k">Portfolio</span><span class="v">On</span></div>
+          <div class="pref-link-item"><span class="k">Website</span><span class="v">On</span></div>
+          <div class="pref-link-item"><span class="k">Booking</span><span class="v">On</span></div>
+        </div>
+      </div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Job Match Preferences</div></div>
+        <div class="pref-section-desc">Salary floor, work arrangement, role tracks, disqualifiers.</div>
+      </div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Story Time</div></div>
+        <div class="pref-section-desc">Background narrative Coop uses to paraphrase in your voice.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ba-col">
+    <div class="ba-head">After <span class="tag after">Proposed</span></div>
+    <div class="pref-page">
+      <div class="pref-page-title">Preferences</div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Personal Info &amp; Links</div></div>
+        <div class="pref-section-desc">Your name, headline, contact details, and links used across Coop. <strong>Source of truth.</strong></div>
+        <div class="pref-links-list">
+          <div class="pref-link-item"><span class="k">LinkedIn</span><span class="v">linkedin.com/in/mattryansterbenz</span></div>
+          <div class="pref-link-item"><span class="k">GitHub</span><span class="v">github.com/mattryansterbenz7-sketch</span></div>
+          <div class="pref-link-item"><span class="k">Portfolio</span><span class="v">mattsterbenz.com/work</span></div>
+        </div>
+      </div>
+
+      <div class="pref-section strikethrough">
+        <div class="pref-section-head"><div class="pref-section-name muted">Quick Links</div></div>
+        <div class="pref-moved-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><polyline points="13 5 20 12 13 19"/></svg>
+          Moved to <a href="#">Coop Settings → Apply Mode</a>. Link display now configured alongside other apply-specific settings.
+        </div>
+      </div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Job Match Preferences</div></div>
+        <div class="pref-section-desc">Salary floor, work arrangement, role tracks, disqualifiers.</div>
+      </div>
+
+      <div class="pref-section">
+        <div class="pref-section-head"><div class="pref-section-name">Story Time</div></div>
+        <div class="pref-section-desc">Background narrative Coop uses to paraphrase in your voice.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════ WHY NOT B or C ═════════════════════════════ -->
+<div class="section-label" style="margin-top: 44px;">Why not Option B or C</div>
+
+<div class="why-not-grid">
+  <div class="why-card">
+    <div class="why-title">Option B — Collapsible sections in main Coop Settings <span class="rej">Rejected</span></div>
+    <div class="why-body">
+      One long scrollable Coop Settings page with Apply Mode as a collapsed accordion alongside Models, Personality, and Memory. Rejected because the existing settings page already uses horizontal tabs for clean separation of unrelated config domains. Burying Apply Mode as a collapsed section among models and memory controls dilutes its visibility and breaks the tabbed pattern users already learned. Adding a fifth+ collapsed region turns a scannable settings surface into a wall of accordions.
+    </div>
+  </div>
+  <div class="why-card">
+    <div class="why-title">Option C — Separate Apply Mode page with its own top-level nav <span class="rej">Rejected</span></div>
+    <div class="why-body">
+      A dedicated /apply-mode-settings page navigated to from either Coop Settings or directly from the side panel Apply Mode toggle. Rejected because it fragments Coop's configuration surface — Matt would then have two places to look for Coop-related settings (Coop Settings AND Apply Mode Settings). Apply Mode is a Coop feature, not a separate product. The tab pattern keeps the mental model "all Coop configuration lives in Coop Settings" intact.
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════ OPEN QUESTIONS ═════════════════════════════ -->
+<div class="section-label" style="margin-top: 44px;">Open questions</div>
+
+<div class="oq-card">
+  <ul class="oq-list">
+    <li class="oq-item">
+      <span class="oq-q">1.</span>
+      <span class="oq-text">Should the Writing assistant appear at all given it's currently shelved? <span class="lean">Lean: yes — disabled toggle</span>. It makes the feature discoverable for when it ships, and the "Experimental" tag is honest about its status.</span>
+    </li>
+    <li class="oq-item">
+      <span class="oq-q">2.</span>
+      <span class="oq-text">Red-pill indicator: should it change visual state (filled vs outline) when Apply Mode is actively running on the current tab, vs always-visible? A filled pulse would mean "on now," while the outline version means "this tab configures it" — worth testing both to see which reads more clearly.</span>
+    </li>
+    <li class="oq-item">
+      <span class="oq-q">3.</span>
+      <span class="oq-text">Should the deep-link from the side panel open Coop Settings in a new tab or navigate in the side panel itself? The side panel can host full settings UIs (we already do this for Coop Settings from the main nav), but a full-page tab gives more breathing room to configure Quick Links and the Answer Library.</span>
+    </li>
+    <li class="oq-item">
+      <span class="oq-q">4.</span>
+      <span class="oq-text">Scope of the Answer Library editor — does the "Manage answers" button open an inline editor within the tab, a modal over it, or a full sub-page? Leaning toward inline slide-in within the tab so the context stays on Apply Mode settings.</span>
+    </li>
+    <li class="oq-item">
+      <span class="oq-q">5.</span>
+      <span class="oq-text">Does the Quick Links row need ordering controls, or inherit order from Personal Info &amp; Links? If we keep it read-only here, re-ordering only happens in Preferences. Simpler surface, but means one more hop for a common tweak.</span>
+    </li>
+  </ul>
+</div>
+
+</div><!-- /page-wrap -->
+
+</body>
+</html>

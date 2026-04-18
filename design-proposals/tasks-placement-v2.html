@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tasks in pipeline overview — take 2 (#239)</title>
+<style>
+  /* ── Tokens (inlined from design-tokens.css) ── */
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232,56,79,0.07);
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 28px;
+    min-height: 100vh;
+  }
+
+  /* ── Page chrome ── */
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.015em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 820px; line-height: 1.55; margin-bottom: 12px; }
+  .rec-strap { display: inline-flex; align-items: center; gap: 8px; background: rgba(54,179,126,0.10); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; margin-bottom: 28px; }
+  .rec-strap::before { content: '✓'; font-size: 11px; }
+  .frame {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 18px 22px;
+    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
+    max-width: 860px;
+    margin-bottom: 28px;
+  }
+  .frame h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; letter-spacing: 0; }
+  .frame p + h3 { margin-top: 10px; }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin: 36px 0 10px;
+  }
+  .section-label:first-of-type { margin-top: 8px; }
+  .opt-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600;
+    padding: 3px 10px; border-radius: 99px;
+    margin-bottom: 12px;
+    background: var(--ci-bg-inset); color: var(--ci-text-secondary);
+  }
+  .opt-tag.recommended { background: rgba(54,179,126,0.12); color: #1B7E53; }
+  .opt-tag.recommended::before { content: '✓'; }
+
+  /* ── Shared page shell ── */
+  .page {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+
+  /* ── Stat cards (used by all options, same chrome) ── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+    padding: 14px 22px 20px; background: var(--ci-bg-raised);
+  }
+  .stat-card {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .stat-card-label { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); letter-spacing: 0.03em; text-transform: uppercase; }
+  .stat-card-value { font-size: 20px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.01em; }
+  .stat-card-delta { font-size: 10px; color: var(--ci-accent-teal); font-weight: 600; margin-top: 1px; }
+
+  /* ── Page header (the current Pipeline Overview band) ── */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 18px 22px 14px;
+  }
+  .page-title-group { display: flex; align-items: baseline; gap: 10px; }
+  .page-title { font-size: 15px; font-weight: 700; letter-spacing: -0.005em; }
+  .page-sub-count { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500; }
+
+  .period-toggle { display: flex; gap: 2px; }
+  .period-tab { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: var(--ci-radius-sm); color: var(--ci-text-tertiary); cursor: pointer; user-select: none; }
+  .period-tab.active { background: var(--ci-bg-inset); color: var(--ci-text-primary); font-weight: 600; }
+  .date-picker { font-size: 11px; color: var(--ci-text-tertiary); padding: 4px 10px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); cursor: pointer; background: var(--ci-bg-raised); }
+  .date-picker .auto { color: var(--ci-text-tertiary); margin-left: 4px; opacity: 0.7; font-size: 10px; }
+
+  /* ─────────────────────────────────────────────────────────────
+     OPTION 1 — "Today" section above stats
+     Reframe: top half of page IS the day. Stats move below.
+     ───────────────────────────────────────────────────────────── */
+  .today-section {
+    padding: 22px 22px 18px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .today-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .today-head-left { display: flex; align-items: baseline; gap: 12px; }
+  .today-title {
+    font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+    color: var(--ci-text-primary);
+  }
+  .today-subtitle {
+    font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500;
+  }
+  .today-scope-tabs { display: flex; gap: 2px; }
+  .scope-tab {
+    font-size: 11px; font-weight: 500;
+    padding: 3px 10px; border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-tertiary); cursor: pointer; user-select: none;
+  }
+  .scope-tab.active {
+    background: var(--ci-bg-inset); color: var(--ci-text-primary); font-weight: 600;
+  }
+
+  /* ── Task row (Things 3 / Linear inbox grammar) ── */
+  .task-list { display: flex; flex-direction: column; gap: 0; }
+  .task-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 10px 10px 4px;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+    transition: background var(--motion-xs) var(--ease-out);
+    position: relative;
+  }
+  .task-row:hover { background: var(--ci-bg-base); }
+
+  .task-check {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ci-border-strong);
+    background: var(--ci-bg-raised);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: transparent;
+    font-size: 10px; font-weight: 700;
+    transition: all var(--motion-xs) var(--ease-out);
+  }
+  .task-check:hover { border-color: var(--ci-accent-teal); }
+  .task-row.done .task-check {
+    background: var(--ci-accent-teal);
+    border-color: var(--ci-accent-teal);
+    color: #fff;
+  }
+  .task-row.overdue .task-check { border-color: var(--ci-accent-red); }
+
+  .task-body {
+    flex: 1; min-width: 0;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .task-text {
+    font-size: 14px; font-weight: 500;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.005em;
+    line-height: 1.35;
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-row.done .task-text {
+    text-decoration: line-through;
+    color: var(--ci-text-tertiary);
+  }
+
+  .task-meta {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 12px; color: var(--ci-text-tertiary);
+    white-space: nowrap;
+  }
+  .task-company {
+    color: var(--ci-text-secondary);
+    font-weight: 500;
+  }
+  .task-company:hover { color: var(--ci-accent-primary); text-decoration: underline; }
+  .task-meta-sep { opacity: 0.4; }
+  .task-due { font-weight: 500; }
+  .task-due.today { color: var(--ci-accent-amber); font-weight: 600; }
+  .task-due.overdue { color: var(--ci-accent-red); font-weight: 600; }
+
+  .task-actions {
+    display: flex; gap: 2px;
+    opacity: 0;
+    transition: opacity var(--motion-xs) var(--ease-out);
+  }
+  .task-row:hover .task-actions { opacity: 1; }
+  .task-act-btn {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ci-text-tertiary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background var(--motion-xs), color var(--motion-xs);
+    background: transparent; border: none;
+  }
+  .task-act-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+
+  /* Overdue left-rule — typographic weight cue, no decoration */
+  .task-row.overdue::before {
+    content: '';
+    position: absolute; left: -4px; top: 12px; bottom: 12px;
+    width: 2px; background: var(--ci-accent-red);
+    border-radius: 1px;
+  }
+
+  /* From-email source — subtle dot + fainter */
+  .task-source-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--ci-accent-amber);
+    flex-shrink: 0;
+    margin-right: -6px;
+  }
+
+  /* Unreviewed from-email: keep/dismiss inline */
+  .task-review {
+    display: inline-flex; gap: 8px; margin-left: 4px;
+    font-size: 11px;
+  }
+  .task-review a { color: var(--ci-accent-amber); font-weight: 600; cursor: pointer; }
+  .task-review a.dismiss { color: var(--ci-text-tertiary); }
+  .task-review a:hover { text-decoration: underline; }
+
+  /* Add-task ghost row */
+  .task-add {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 10px 10px 4px;
+    color: var(--ci-text-tertiary);
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--ci-radius-sm);
+    transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+    border: none; background: transparent;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .task-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-base); }
+  .task-add-circle {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px dashed var(--ci-border-strong);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--ci-text-tertiary);
+  }
+
+  /* Done collapse footer */
+  .done-collapse {
+    font-size: 12px; color: var(--ci-text-tertiary);
+    padding: 6px 4px; margin-top: 4px;
+    cursor: pointer;
+    transition: color var(--motion-xs) var(--ease-out);
+  }
+  .done-collapse:hover { color: var(--ci-text-secondary); }
+
+  /* Empty state */
+  .today-empty {
+    padding: 18px 4px;
+    font-size: 13px; color: var(--ci-text-tertiary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .today-empty strong { color: var(--ci-text-secondary); font-weight: 600; }
+
+  /* ─────────────────────────────────────────────────────────────
+     OPTION 2 — Split columns
+     ───────────────────────────────────────────────────────────── */
+  .split-body {
+    display: grid; grid-template-columns: 1fr 1px 1fr;
+    gap: 0;
+    padding: 0;
+  }
+  .split-col {
+    padding: 18px 22px 20px;
+  }
+  .split-col.tasks { background: var(--ci-bg-raised); }
+  .split-col.stats { background: var(--ci-bg-raised); }
+  .split-divider {
+    background: var(--ci-border-subtle);
+    width: 1px;
+  }
+  .split-col-title {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ci-text-secondary);
+    margin-bottom: 12px;
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .split-col-title .count {
+    font-size: 11px; color: var(--ci-text-tertiary); font-weight: 500; text-transform: none; letter-spacing: 0;
+  }
+  .split-goals {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  }
+  .split-goal-card {
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    padding: 10px 12px;
+  }
+  .split-goal-label { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); letter-spacing: 0.03em; text-transform: uppercase; }
+  .split-goal-value { font-size: 18px; font-weight: 700; margin-top: 2px; letter-spacing: -0.01em; }
+
+  /* ─────────────────────────────────────────────────────────────
+     OPTION 3 — Collapsible "Today" drawer above overview
+     ───────────────────────────────────────────────────────────── */
+  .today-drawer {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .drawer-bar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--motion-xs) var(--ease-out);
+  }
+  .drawer-bar:hover { background: var(--ci-bg-base); }
+  .drawer-bar-icon {
+    font-size: 14px; color: var(--ci-text-tertiary);
+    transition: transform var(--motion-sm) var(--ease-out);
+  }
+  .today-drawer.expanded .drawer-bar-icon { transform: rotate(90deg); }
+  .drawer-bar-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--ci-text-primary);
+  }
+  .drawer-bar-summary {
+    font-size: 12px; color: var(--ci-text-tertiary);
+    display: flex; align-items: center; gap: 8px;
+    flex: 1;
+  }
+  .drawer-bar-count {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 99px;
+    background: var(--ci-accent-primary-soft);
+    color: var(--ci-accent-primary);
+  }
+  .drawer-bar-count.overdue {
+    background: var(--ci-accent-red-soft);
+    color: var(--ci-accent-red);
+  }
+  .drawer-bar-preview {
+    font-size: 12px; color: var(--ci-text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1; min-width: 0;
+  }
+  .drawer-body {
+    padding: 4px 10px 14px;
+    border-top: 1px solid var(--ci-border-subtle);
+  }
+
+  /* ── Caption under each option ── */
+  .caption {
+    font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.55;
+    margin-top: 12px; max-width: 860px;
+  }
+  .caption strong { color: var(--ci-text-secondary); font-weight: 600; }
+
+  /* ── Spec card ── */
+  .spec {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 22px 26px;
+    max-width: 900px;
+    margin-top: 36px;
+    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
+  }
+  .spec h3 { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px; }
+  .spec h3 + h3 { margin-top: 18px; }
+  .spec ul { padding-left: 20px; margin: 4px 0 8px; }
+  .spec li { margin-bottom: 4px; }
+  .spec code { background: var(--ci-bg-inset); padding: 1px 6px; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--ci-text-primary); }
+</style>
+</head>
+<body>
+
+<h1>Tasks in pipeline overview — take 2</h1>
+<p class="page-sub"><a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/239" style="color:var(--ci-accent-primary)">#239</a> · Second pass. The first crack produced three variations of "a strip of task chips somewhere on the page" — a band, a pill row, a right rail. None of them landed.</p>
+
+<div class="frame">
+  <h3>What I changed for take 2</h3>
+  <p>Tasks aren't a <em>strip</em> — they're a <em>list</em>. I abandoned chip-grammar entirely. Reference products (Things 3's Today view, Linear's Inbox, Superhuman's triage) all share the same shape: vertical rows, typography carries it, inline-editable, minimal chrome. That's the right grammar for tasks because a task is fundamentally a line of text with a checkbox — not a card.</p>
+  <h3>The real question</h3>
+  <p>Not "where do tasks go on the overview" — "what's the top of the page <em>for</em>?" Today it mixes a data scoreboard (stat cards) with a to-do tray (chips). The reframe: the top is <strong>your day</strong>. Below it is <strong>the pipeline</strong>. Two jobs, two sections, clear hierarchy.</p>
+  <h3>Three options, my pick is Option 1</h3>
+  <p>Option 1 (recommended) gives tasks the top-of-page real estate. Option 2 splits the current overview in half (tasks left, stats right). Option 3 is the lightest touch — a collapsible drawer above the existing overview.</p>
+</div>
+
+<div class="rec-strap">Recommended: Option 1 — tasks take the top, stats move below. Clean vertical list, inline-editable, no filter chips.</div>
+
+<!-- ═════════════ OPTION 1: "Today" section above stats ═════════════ -->
+<div class="section-label">Option 1 · "Today" section above stats</div>
+<span class="opt-tag recommended">Pick this — tasks as the top-of-page hero, stats as pipeline scorecard below</span>
+
+<div class="page">
+  <!-- Today section (tasks) -->
+  <div class="today-section">
+    <div class="today-head">
+      <div class="today-head-left">
+        <span class="today-title">Today</span>
+        <span class="today-subtitle">Friday, Apr 17</span>
+      </div>
+      <div class="today-scope-tabs">
+        <span class="scope-tab active">Today</span>
+        <span class="scope-tab">This week</span>
+        <span class="scope-tab">All</span>
+      </div>
+    </div>
+
+    <div class="task-list">
+      <!-- Overdue -->
+      <div class="task-row overdue">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Reply to Brian Bird's follow-up on comp</div>
+          <div class="task-meta">
+            <span class="task-company">Kustomer</span>
+            <span class="task-meta-sep">·</span>
+            <span class="task-due overdue">2d overdue</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="task-act-btn" title="Snooze">⏱</button>
+          <button class="task-act-btn" title="Open company">↗</button>
+          <button class="task-act-btn" title="More">⋯</button>
+        </div>
+      </div>
+
+      <!-- Today -->
+      <div class="task-row">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Complete Wonderlic assessment</div>
+          <div class="task-meta">
+            <span class="task-company">Wonderlic</span>
+            <span class="task-meta-sep">·</span>
+            <span class="task-due today">Today</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="task-act-btn" title="Snooze">⏱</button>
+          <button class="task-act-btn" title="Open company">↗</button>
+          <button class="task-act-btn" title="More">⋯</button>
+        </div>
+      </div>
+
+      <!-- Today w/ time -->
+      <div class="task-row">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Prep 30-60-90 doc for HM round</div>
+          <div class="task-meta">
+            <span class="task-company">Transform VXR</span>
+            <span class="task-meta-sep">·</span>
+            <span class="task-due today">Today, 2pm</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="task-act-btn" title="Snooze">⏱</button>
+          <button class="task-act-btn" title="Open company">↗</button>
+          <button class="task-act-btn" title="More">⋯</button>
+        </div>
+      </div>
+
+      <!-- Unreviewed from-email -->
+      <div class="task-row">
+        <div class="task-source-dot" title="Suggested from email"></div>
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Return signed offer letter</div>
+          <div class="task-meta">
+            <span class="task-company">Slack</span>
+            <span class="task-meta-sep">·</span>
+            <span class="task-due">Tomorrow</span>
+            <span class="task-review">
+              <a>keep</a>
+              <span style="opacity:0.4">·</span>
+              <a class="dismiss">dismiss</a>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tomorrow -->
+      <div class="task-row">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Send recap email to Rob + Eric</div>
+          <div class="task-meta">
+            <span class="task-company">Transform VXR</span>
+            <span class="task-meta-sep">·</span>
+            <span class="task-due">Tomorrow</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="task-act-btn" title="Snooze">⏱</button>
+          <button class="task-act-btn" title="Open company">↗</button>
+          <button class="task-act-btn" title="More">⋯</button>
+        </div>
+      </div>
+
+      <!-- Add -->
+      <button class="task-add">
+        <span class="task-add-circle">+</span>
+        Add a task
+      </button>
+    </div>
+
+    <div class="done-collapse">
+      2 completed today · <span style="color:var(--ci-text-link); text-decoration:underline; cursor:pointer">show</span>
+    </div>
+  </div>
+
+  <!-- Stats row (pipeline scorecard) -->
+  <div class="page-header">
+    <div class="page-title-group">
+      <span class="page-title">Pipeline</span>
+      <span class="page-sub-count">72 companies · 34 opportunities</span>
+    </div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <div class="period-toggle">
+        <div class="period-tab active">Daily</div>
+        <div class="period-tab">Weekly</div>
+        <div class="period-tab">Monthly</div>
+      </div>
+      <div class="date-picker">📅 Apr 17<span class="auto">auto</span></div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-card-label">Saved</div><div class="stat-card-value">41</div><div class="stat-card-delta">+3</div></div>
+    <div class="stat-card"><div class="stat-card-label">Applications</div><div class="stat-card-value">18</div><div class="stat-card-delta">+2</div></div>
+    <div class="stat-card"><div class="stat-card-label">Reached Out</div><div class="stat-card-value">27</div><div class="stat-card-delta">+5</div></div>
+    <div class="stat-card"><div class="stat-card-label">New Convos</div><div class="stat-card-value">12</div><div class="stat-card-delta">+1</div></div>
+    <div class="stat-card"><div class="stat-card-label">Active In Play</div><div class="stat-card-value">8</div><div class="stat-card-delta" style="color:var(--ci-text-tertiary)">—</div></div>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Why this works.</strong> Tasks get hero real estate at the top of the page — the first thing you see when you open the dashboard is "what do I need to do today." Rows are typography, not chips — titles at 14px/500, meta at 12px/tertiary, due-dates color-coded (amber=today, red=overdue). Checkbox is on-target, inline-editable reveals on click. Hover shows snooze/open-company/⋯ in the right gutter. Scope tabs (Today / This week / All) are quiet text-toggles, not pill chips. Done items collapse to a single link at the bottom. Unreviewed email-suggestions get a small amber dot + inline keep/dismiss — no left-border flag, no "from email" badge.
+</div>
+
+<!-- ═════════════ OPTION 2: Split columns ═════════════ -->
+<div class="section-label">Option 2 · Split column — tasks left, stats right</div>
+<span class="opt-tag">Alternative — equal footing, preserves a single "Pipeline Overview" section</span>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title-group">
+      <span class="page-title">Pipeline Overview</span>
+      <span class="page-sub-count">Friday, Apr 17 · 72 companies · 34 opportunities</span>
+    </div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <div class="period-toggle">
+        <div class="period-tab active">Daily</div>
+        <div class="period-tab">Weekly</div>
+        <div class="period-tab">Monthly</div>
+      </div>
+      <div class="date-picker">📅 Apr 17<span class="auto">auto</span></div>
+    </div>
+  </div>
+
+  <div class="split-body">
+    <!-- Tasks column -->
+    <div class="split-col tasks">
+      <div class="split-col-title">
+        Today <span class="count">3 due · 1 overdue</span>
+      </div>
+      <div class="task-list">
+        <div class="task-row overdue">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Reply to Brian Bird's follow-up on comp</div>
+            <div class="task-meta">
+              <span class="task-company">Kustomer</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due overdue">2d</span>
+            </div>
+          </div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Complete Wonderlic assessment</div>
+            <div class="task-meta">
+              <span class="task-company">Wonderlic</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due today">Today</span>
+            </div>
+          </div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-text">Prep 30-60-90 doc for HM round</div>
+            <div class="task-meta">
+              <span class="task-company">Transform VXR</span>
+              <span class="task-meta-sep">·</span>
+              <span class="task-due today">2pm</span>
+            </div>
+          </div>
+        </div>
+        <div class="task-row done">
+          <div class="task-check">✓</div>
+          <div class="task-body">
+            <div class="task-text">Join Zoom call with Arthur</div>
+            <div class="task-meta">
+              <span class="task-company">Unitbase</span>
+            </div>
+          </div>
+        </div>
+        <button class="task-add">
+          <span class="task-add-circle">+</span>
+          Add a task
+        </button>
+      </div>
+    </div>
+
+    <div class="split-divider"></div>
+
+    <!-- Stats column -->
+    <div class="split-col stats">
+      <div class="split-col-title">
+        Pipeline <span class="count">this week</span>
+      </div>
+      <div class="split-goals">
+        <div class="split-goal-card"><div class="split-goal-label">Saved</div><div class="split-goal-value">41 <span style="font-size:11px;color:var(--ci-accent-teal);font-weight:600">+3</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">Applications</div><div class="split-goal-value">18 <span style="font-size:11px;color:var(--ci-accent-teal);font-weight:600">+2</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">Reached Out</div><div class="split-goal-value">27 <span style="font-size:11px;color:var(--ci-accent-teal);font-weight:600">+5</span></div></div>
+        <div class="split-goal-card"><div class="split-goal-label">New Convos</div><div class="split-goal-value">12 <span style="font-size:11px;color:var(--ci-accent-teal);font-weight:600">+1</span></div></div>
+        <div class="split-goal-card" style="grid-column: span 2;"><div class="split-goal-label">Active In Play</div><div class="split-goal-value">8 <span style="font-size:11px;color:var(--ci-text-tertiary);font-weight:600">same</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Tradeoff.</strong> Tasks get equal billing to stats — peer sections, not hero-and-subordinate. Works if you want the day and the pipeline side-by-side. <strong>Downside:</strong> stat cards have to shrink (2×3 grid) to fit, which loses impact. The period toggle applies to the pipeline half but not tasks — needs a secondary scope switcher for tasks, adds complexity. Narrower viewports (below ~1100px) stack the two columns, which defeats the layout.
+</div>
+
+<!-- ═════════════ OPTION 3: Collapsible drawer ═════════════ -->
+<div class="section-label">Option 3 · Collapsible "Today" drawer above the overview</div>
+<span class="opt-tag">Lightest touch — preserves current Pipeline Overview, adds a dedicated drawer above it</span>
+
+<!-- Collapsed state -->
+<div style="margin-bottom: 8px; font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Collapsed</div>
+<div class="today-drawer">
+  <div class="drawer-bar">
+    <span class="drawer-bar-icon">▸</span>
+    <span class="drawer-bar-title">Today</span>
+    <span class="drawer-bar-count overdue">1 overdue</span>
+    <span class="drawer-bar-count">3 due</span>
+    <span class="drawer-bar-preview">Reply to Brian Bird's follow-up on comp · Complete Wonderlic assessment · Prep 30-60-90…</span>
+  </div>
+</div>
+
+<!-- Expanded state -->
+<div style="margin-bottom: 8px; font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Expanded</div>
+<div class="today-drawer expanded">
+  <div class="drawer-bar">
+    <span class="drawer-bar-icon">▸</span>
+    <span class="drawer-bar-title">Today</span>
+    <span class="drawer-bar-count overdue">1 overdue</span>
+    <span class="drawer-bar-count">3 due</span>
+    <span style="flex:1"></span>
+    <div class="today-scope-tabs">
+      <span class="scope-tab active">Today</span>
+      <span class="scope-tab">Week</span>
+      <span class="scope-tab">All</span>
+    </div>
+  </div>
+  <div class="drawer-body">
+    <div class="task-list">
+      <div class="task-row overdue">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Reply to Brian Bird's follow-up on comp</div>
+          <div class="task-meta"><span class="task-company">Kustomer</span><span class="task-meta-sep">·</span><span class="task-due overdue">2d overdue</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Complete Wonderlic assessment</div>
+          <div class="task-meta"><span class="task-company">Wonderlic</span><span class="task-meta-sep">·</span><span class="task-due today">Today</span></div>
+        </div>
+      </div>
+      <div class="task-row">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-text">Prep 30-60-90 doc for HM round</div>
+          <div class="task-meta"><span class="task-company">Transform VXR</span><span class="task-meta-sep">·</span><span class="task-due today">Today, 2pm</span></div>
+        </div>
+      </div>
+      <button class="task-add"><span class="task-add-circle">+</span>Add a task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pipeline overview (unchanged) -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-title-group">
+      <span class="page-title">Pipeline Overview</span>
+      <span class="page-sub-count">72 companies · 34 opportunities</span>
+    </div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <div class="period-toggle">
+        <div class="period-tab active">Daily</div>
+        <div class="period-tab">Weekly</div>
+        <div class="period-tab">Monthly</div>
+      </div>
+      <div class="date-picker">📅 Apr 17<span class="auto">auto</span></div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-card-label">Saved</div><div class="stat-card-value">41</div><div class="stat-card-delta">+3</div></div>
+    <div class="stat-card"><div class="stat-card-label">Applications</div><div class="stat-card-value">18</div><div class="stat-card-delta">+2</div></div>
+    <div class="stat-card"><div class="stat-card-label">Reached Out</div><div class="stat-card-value">27</div><div class="stat-card-delta">+5</div></div>
+    <div class="stat-card"><div class="stat-card-label">New Convos</div><div class="stat-card-value">12</div><div class="stat-card-delta">+1</div></div>
+    <div class="stat-card"><div class="stat-card-label">Active In Play</div><div class="stat-card-value">8</div><div class="stat-card-delta" style="color:var(--ci-text-tertiary)">—</div></div>
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Tradeoff.</strong> Collapsible drawer is the safest move — no restructuring of the current section, tasks just get a dedicated home on top. <strong>Downside:</strong> drawers that collapse are things users ignore. If the default is collapsed, tasks become even more hidden than they are today. If the default is expanded, it's functionally Option 1 with an extra bar of chrome (the drawer header). So it's strictly worse than Option 1 in both states.
+</div>
+
+<!-- ═════════════ Why Option 1 wins ═════════════ -->
+<div class="spec">
+  <h3>Why Option 1 wins</h3>
+  <ul>
+    <li><strong>Hero placement that matches usage.</strong> When you open the pipeline overview in the morning, the question you're answering is "what do I need to do today?" — not "what's my application-count this week?". The top-of-page real estate goes to the job it's actually doing.</li>
+    <li><strong>List grammar, not chip grammar.</strong> Tasks are one line of text with a checkbox. That's a row, not a card. Chips force title-truncation and a horizontal-scroll affordance; rows let you read the whole title at 14px without ornament.</li>
+    <li><strong>Inline-editable by DESIGN.md convention.</strong> Matches the approved pattern (memory: feedback_inline_editable_pattern) — text reads-as-text, hover reveals actions, click text to edit in place.</li>
+    <li><strong>Filter without chips.</strong> A quiet three-tab scope toggle (Today / This week / All) sits at the right of the section header — doesn't clutter the list. No "By company" filter — if you want company scoping, you go to the company detail page.</li>
+    <li><strong>Monochrome first, color earned.</strong> Text is black/gray. The only colors: amber for today-due (brand accent, used sparingly), red for overdue (danger), green for done-check (success). Passes DESIGN.md "what does this color mean?" test.</li>
+    <li><strong>Email-source handling without decoration.</strong> A 5px amber dot to the left of the check + inline "keep / dismiss" links. No orange left-border, no "from email" pill, no 3px decorative flag — the dot is enough.</li>
+    <li><strong>Done-state truthful.</strong> Checkbox fills green on completion (200ms ease-out), row strikes through + fades to tertiary. "2 completed today · show" collapses done items; expanding restores them inline.</li>
+    <li><strong>Empty state is a feature.</strong> Zero tasks due today renders "Nothing due today. <em>Add a task →</em>" — honest, no fake motivation, no gradient-confetti.</li>
+  </ul>
+
+  <h3>Rejected alternatives (don't re-raise)</h3>
+  <ul>
+    <li><strong>Horizontal-scroll task chips</strong> — the previous pass's recommendation. Card/chip grammar, title-truncation, "scroll to see more" UX on a dashboard. Abandoned in take 2.</li>
+    <li><strong>Filter chips (Today / This week / By company / Done)</strong> — the previous pass added four filter chips. Too much chrome; "By company" is useless on an overview; Done is just "show completed." Replaced with a single 3-tab scope toggle.</li>
+    <li><strong>⋯ menu as primary action target</strong> — previous pass had a ⋯ button on every card. Replaced with discoverable hover-reveal of snooze/open/more icons.</li>
+    <li><strong>Right-rail variant</strong> — steals 280px of horizontal dashboard width; compresses stat row; off the table.</li>
+    <li><strong>Separate /today page</strong> — tasks already have a /tasks page. Adding /today would duplicate. The overview's top is the summary; /tasks is the deep view.</li>
+  </ul>
+
+  <h3>Open questions for you</h3>
+  <ul>
+    <li>Do you want the "Today" header to carry the date prominently ("Today · Friday, Apr 17") or just the word ("Today")? Current mockup shows both.</li>
+    <li>When a task has a time ("2pm"), should it always show, or only when within 4 hours? Current mockup always shows.</li>
+    <li>Default scope: Today, or Today + overdue? Overdue-items-first is already the sort — scope "Today" includes overdue in the mockup.</li>
+  </ul>
+
+  <h3>Resolves #231?</h3>
+  <p><a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/231">#231</a> proposed "move tasks to top-right, center the toggle." Take-2 Option 1 subsumes it entirely — tasks move out of the header row into a dedicated Today section. <strong>Recommendation:</strong> close #231 as subsumed by this ship.</p>
+</div>
+
+</body>
+</html>

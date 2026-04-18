@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Context transparency: click into sources (#226)</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-deepinset: #DDE0E5;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-purple: #7C6EF0;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --font-mono: 'SF Mono', Monaco, 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 800px; line-height: 1.5; margin-bottom: 10px; }
+  .rec { display: inline-flex; align-items: center; gap: 6px; background: rgba(54,179,126,0.12); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; margin-bottom: 24px; }
+
+  .scenes { display: grid; grid-template-columns: 480px 1fr; gap: 28px; max-width: 1360px; }
+
+  /* Chat bubble container */
+  .chat {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 18px 20px;
+  }
+  .msg {
+    font-size: 13px; line-height: 1.55;
+    color: var(--ci-text-primary);
+  }
+  .msg p { margin-bottom: 8px; }
+
+  /* ── Context manifest — unchanged summary line, new interaction ── */
+  .ctx-manifest {
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .ctx-header {
+    display: flex; align-items: center; gap: 4px;
+    cursor: pointer;
+    color: var(--ci-accent-purple);
+    padding: 2px 0;
+    user-select: none;
+  }
+  .ctx-header:hover { opacity: 0.8; }
+  .ctx-summary { flex: 1; }
+  .ctx-chevron {
+    font-size: 8px; opacity: 0.6;
+    transition: transform var(--motion-xs) var(--ease-out);
+  }
+  .ctx-manifest[data-open="true"] > .ctx-header .ctx-chevron { transform: rotate(90deg); }
+
+  .ctx-detail {
+    background: var(--ci-bg-inset);
+    border: 1px solid var(--ci-border-subtle);
+    border-radius: var(--ci-radius-sm);
+    padding: 8px 10px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--ci-text-secondary);
+    display: none;
+  }
+  .ctx-manifest[data-open="true"] > .ctx-detail { display: block; }
+
+  .ctx-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 0;
+  }
+  .ctx-row strong { color: var(--ci-text-primary); font-weight: 600; }
+  .ctx-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .ctx-dot-comms { background: #36B37E; }
+  .ctx-dot-profile { background: var(--ci-accent-purple); }
+  .ctx-dot-company { background: #5B8DEF; }
+
+  /* NEW: clickable sub-row */
+  .ctx-sub-clickable {
+    display: flex; align-items: center; gap: 4px;
+    padding-left: 18px; padding-right: 6px;
+    padding-top: 3px; padding-bottom: 3px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background var(--motion-xs);
+    color: var(--ci-text-tertiary);
+    font-size: 9px;
+    line-height: 1.6;
+    user-select: none;
+  }
+  .ctx-sub-clickable:hover {
+    background: rgba(124, 110, 240, 0.08);
+    color: var(--ci-text-secondary);
+  }
+  .ctx-sub-icon { flex-shrink: 0; width: 10px; font-size: 10px; line-height: 1; }
+  .ctx-sub-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-sub-date { opacity: 0.7; margin-left: 4px; }
+  .ctx-sub-chev { font-size: 7px; opacity: 0.5; flex-shrink: 0; transition: transform var(--motion-xs) var(--ease-out); }
+  .ctx-sub-clickable[data-open="true"] .ctx-sub-chev { transform: rotate(90deg); }
+  .ctx-sub-clickable[data-open="true"] { color: var(--ci-accent-purple); background: rgba(124, 110, 240, 0.06); }
+
+  /* NEW: raw content panel — reading posture */
+  .ctx-source-content {
+    margin-left: 18px;
+    margin-top: 4px; margin-bottom: 8px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    border-left: 3px solid var(--ci-accent-purple);
+    border-radius: var(--ci-radius-sm);
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    animation: sourceFadeIn var(--motion-sm) var(--ease-out);
+  }
+  @keyframes sourceFadeIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+  .ctx-source-head {
+    padding: 10px 14px;
+    background: var(--ci-bg-inset);
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .ctx-source-title { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.4; }
+  .ctx-source-meta {
+    font-size: 11px; color: var(--ci-text-tertiary); margin-top: 3px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .ctx-source-meta span + span::before { content: "·"; margin-right: 8px; color: var(--ci-border-default); }
+  .ctx-source-body {
+    padding: 14px 16px;
+    font-size: 13px; line-height: 1.6;
+    color: var(--ci-text-primary);
+    white-space: pre-wrap;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .ctx-source-foot {
+    padding: 7px 14px;
+    background: var(--ci-bg-inset);
+    border-top: 1px solid var(--ci-border-subtle);
+    font-size: 10px; color: var(--ci-text-tertiary);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .ctx-truncate-note { color: var(--ci-accent-primary); font-weight: 500; }
+  .ctx-source-close {
+    background: none; border: none; color: var(--ci-text-tertiary);
+    font-size: 11px; cursor: pointer; font-family: inherit;
+    padding: 2px 6px; border-radius: 3px;
+  }
+  .ctx-source-close:hover { background: rgba(0,0,0,0.04); color: var(--ci-text-primary); }
+
+  /* Token footer */
+  .ctx-tokens {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--ci-text-tertiary);
+  }
+
+  .caption { font-size: 11px; color: var(--ci-text-tertiary); font-style: italic; margin-top: 16px; }
+  .section-label { font-size: 13px; font-weight: 700; color: var(--ci-text-secondary); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* Right column scene */
+  .col { display: flex; flex-direction: column; gap: 28px; }
+  .detail-scene {
+    background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 18px 20px;
+  }
+  .scene-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Context transparency: click into sources (#226)</h1>
+<p class="page-sub">Every source listed in the manifest becomes clickable. Click → opens a reading pane inline with the exact content injected into the prompt. No re-fetch, no modal. One consistent pattern for all source types (emails, meetings, profile sections, company context).</p>
+
+<div class="rec">✓ Recommended: inline accordion with scroll for everything — one pattern, no modal nav</div>
+
+<div class="scenes">
+
+  <!-- ══════════ LEFT: full chat showing manifest with one source opened ══════════ -->
+  <div>
+    <div class="section-label">Manifest with an email source open</div>
+    <div class="chat">
+      <div class="msg">
+        <p>Here's the follow-up draft for Rob at Transform VXR:</p>
+        <p><em>"Rob — appreciated the conversation Monday. Quick recap and a couple of questions before Thursday's HM call..."</em></p>
+      </div>
+
+      <div class="ctx-manifest" data-open="true">
+        <div class="ctx-header">
+          <span style="color:var(--ci-accent-purple);">↳</span>
+          <span class="ctx-summary">Loaded 3 emails, 1 meeting, your profile</span>
+          <span class="ctx-chevron">▸</span>
+        </div>
+        <div class="ctx-detail">
+          <div class="ctx-row"><span class="ctx-dot ctx-dot-profile"></span><strong>Profile Manifest</strong> — section index (~150 tok) (always loaded)</div>
+
+          <div class="ctx-row"><span class="ctx-dot ctx-dot-comms"></span><strong>Communications</strong> — Transform VXR</div>
+
+          <!-- Click target collapsed -->
+          <div class="ctx-sub-clickable">
+            <span class="ctx-sub-icon">📧</span>
+            <span class="ctx-sub-text">Invitation: Matt Interview with Transform VXR Leaders @ Mon Apr 13, 1:30pm</span>
+            <span class="ctx-sub-date">Rob Weeks, Thu Apr 9</span>
+            <span class="ctx-sub-chev">▸</span>
+          </div>
+
+          <!-- Click target OPENED — reading pane -->
+          <div class="ctx-sub-clickable" data-open="true">
+            <span class="ctx-sub-icon">📧</span>
+            <span class="ctx-sub-text">Re: Interview for Founding EAE Role with Transform VXR</span>
+            <span class="ctx-sub-date">Matt Sterbenz, Thu Apr 9</span>
+            <span class="ctx-sub-chev">▸</span>
+          </div>
+          <div class="ctx-source-content">
+            <div class="ctx-source-head">
+              <div class="ctx-source-title">Re: Interview for Founding EAE Role with Transform VXR</div>
+              <div class="ctx-source-meta">
+                <span>From: Matt Sterbenz &lt;mattryansterbenz7@gmail.com&gt;</span>
+                <span>To: Rob Weeks</span>
+                <span>Thu, 9 Apr 2026 10:40</span>
+              </div>
+            </div>
+            <div class="ctx-source-body">Rob —
+
+Thanks for the quick turnaround. Monday at 1:30pm ET works on my end; I'll plan on 45 minutes.
+
+A few questions I'd like to dig into so I come prepared:
+
+1. How is the founding GTM team structured today — is the EAE role the first field hire or the bridge between founder-led sales and the first AEs?
+2. What does a first-90-days success picture look like — pipeline created, qualified opps, closed-won, or something more forward-looking (partnerships, ICP refinement)?
+3. Territory / ICP — is this a full-geo remit or an industry-specific focus?
+
+Really looking forward to it.
+
+Matt</div>
+            <div class="ctx-source-foot">
+              <span>1,184 chars · exactly as injected into prompt</span>
+              <button class="ctx-source-close">Close</button>
+            </div>
+          </div>
+
+          <div class="ctx-sub-clickable">
+            <span class="ctx-sub-icon">📧</span>
+            <span class="ctx-sub-text">Interview for Founding EAE Role with Transform VXR</span>
+            <span class="ctx-sub-date">Rob Weeks, Thu Apr 9</span>
+            <span class="ctx-sub-chev">▸</span>
+          </div>
+
+          <div class="ctx-sub-clickable">
+            <span class="ctx-sub-icon">📅</span>
+            <span class="ctx-sub-text">Matt Interview with Transform VXR Leaders</span>
+            <span class="ctx-sub-date">2026-04-13</span>
+            <span class="ctx-sub-chev">▸</span>
+          </div>
+        </div>
+        <div class="ctx-tokens">14,575 tok · $0.0060</div>
+      </div>
+    </div>
+    <div class="caption">Click sub-row → opens reading pane inline. Click again or "Close" → collapses. Multiple sources can be open at once. Scroll inside the pane for long content.</div>
+  </div>
+
+  <!-- ══════════ RIGHT: variant showcase ══════════ -->
+  <div class="col">
+
+    <div class="detail-scene">
+      <div class="scene-title">Meeting source — transcript with scroll</div>
+
+      <div class="ctx-manifest" data-open="true" style="margin-top:0">
+        <div class="ctx-detail">
+          <div class="ctx-sub-clickable" data-open="true">
+            <span class="ctx-sub-icon">📅</span>
+            <span class="ctx-sub-text">Matt Interview with Transform VXR Leaders</span>
+            <span class="ctx-sub-date">2026-04-13</span>
+            <span class="ctx-sub-chev">▸</span>
+          </div>
+          <div class="ctx-source-content">
+            <div class="ctx-source-head">
+              <div class="ctx-source-title">Matt Interview with Transform VXR Leaders</div>
+              <div class="ctx-source-meta">
+                <span>Apr 13, 1:30pm – 2:15pm</span>
+                <span>Rob Weeks, Eric Linde, Matt</span>
+                <span>Granola</span>
+              </div>
+            </div>
+            <div class="ctx-source-body">## Meeting notes
+
+**Rob (VP GTM):** Walked through the last 18 months of the company — from the seed round to their current ARR run rate. They're at ~$2M ARR, 80% from a single Fortune 500 pilot, and they need to prove repeatability before a Series B.
+
+**Eric (co-founder):** Strongly views the first field hire as a "founding" EAE — someone who can take the product in to a cold account, run their own discovery, and build the early ICP from signal. Not a "closer" but not an SDR either. Asked pointed questions about how I'd approach the first 30 days.
+
+**Discussion highlights:**
+- Territory: no assigned territory. I'd work with Rob on target account selection.
+- ICP today: mid-market industrial (oil &amp; gas, heavy equipment). Expansion target: logistics, field service.
+- Comp: they want to anchor OTE around $180k. Said they'd be flexible if I brought a strong proof of trajectory.
+
+**Red flags I noted:**
+- One customer is 80% of ARR. Concentration risk is real.
+- They don't have a competitive kill sheet or ICP doc — I'd be building those.
+
+**My next steps:**
+- Send recap email with specific questions about pipeline handoff from founder-led sales
+- Ask for intro to Eric's co-founder Sarah (CTO)
+- Prep a 30-60-90 doc before the HM round
+
+**Their next steps:**
+- Rob will set up HM call with Eric's co-founder and the head of product.
+- Pulling together a compensation doc for my review.</div>
+            <div class="ctx-source-foot">
+              <span>2,134 chars · exactly as injected into prompt</span>
+              <button class="ctx-source-close">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">Long transcripts scroll inside a 320px max-height pane. No modal, no route change.</div>
+    </div>
+
+    <div class="detail-scene">
+      <div class="scene-title">Profile section — markdown preserved</div>
+      <div class="ctx-manifest" data-open="true" style="margin-top:0">
+        <div class="ctx-detail">
+          <div class="ctx-sub-clickable" data-open="true">
+            <span class="ctx-sub-icon">👤</span>
+            <span class="ctx-sub-text">Story · loaded via get_profile_section</span>
+            <span class="ctx-sub-chev">▸</span>
+          </div>
+          <div class="ctx-source-content">
+            <div class="ctx-source-head">
+              <div class="ctx-source-title">Profile · Story</div>
+              <div class="ctx-source-meta">
+                <span>Standard tier</span>
+                <span>746 tokens</span>
+              </div>
+            </div>
+            <div class="ctx-source-body">## Story
+
+Matt spent 12 years in professional basketball operations — the last 7 at the NBA's Basketball Operations office. He led the rollout of sports-analytics tools across all 30 team front offices, owned a $4M annual vendor portfolio, and ran the league-side evaluation of every new performance-tech platform from 2015–2023.
+
+The work that moved him closer to GTM: in 2023 he turned down a "safe" track at the league and joined a founding team as the first GTM hire at Turnstyle Analytics, an AI performance-insight startup targeting NCAA programs. Built the first repeatable sales motion, closed 11 programs including three Power-5 schools, and learned the founding-EAE job is 30% selling and 70% ICP refinement.
+
+Moved into the enterprise SaaS job search after Turnstyle's 2025 acquisition by a larger platform he didn't want to work inside. Targeting Series B through early Series D companies in AI/analytics/performance-tech — specifically the "founding" EAE role where the hire shapes the motion rather than executing against a pre-built playbook.</div>
+            <div class="ctx-source-foot">
+              <span>Exactly the text injected into prompt · tier: standard</span>
+              <button class="ctx-source-close">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">Same pane treatment for .md profile sections. Headers, paragraphs, line-breaks preserved via <code>white-space: pre-wrap</code>.</div>
+    </div>
+
+    <div class="detail-scene">
+      <div class="scene-title">Truncation indicator — when content was clipped before injection</div>
+      <div class="ctx-source-content" style="margin: 0;">
+        <div class="ctx-source-head">
+          <div class="ctx-source-title">Re: Offer discussion — Transform VXR</div>
+          <div class="ctx-source-meta">
+            <span>From: Rob Weeks</span>
+            <span>Apr 14</span>
+          </div>
+        </div>
+        <div class="ctx-source-body">Matt —
+
+Appreciate the time Monday. The team regrouped yesterday and we'd like to move to the offer stage. Here are the core terms for you to chew on:
+
+Base: $135k
+Target OTE: $185k (on-target annual earnings; variable quota-driven)
+Equity: 0.4% with 4-year vest, 1-year cliff
+
+Signing: $15k paid over first two months. Typical onboarding package — laptop, stipend for home office upgrade, $500/mo. Co
+
+[... truncated at 1,000 chars before injection ...]</div>
+        <div class="ctx-source-foot">
+          <span class="ctx-truncate-note">⚠ Content truncated at 1,000 chars before injection. This is what the model saw.</span>
+          <button class="ctx-source-close">Close</button>
+        </div>
+      </div>
+      <div class="caption">Truncation note shows in the foot if the source was clipped by the context pipeline. Accurately reflects what the model read — the v2 pipeline principle.</div>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>
