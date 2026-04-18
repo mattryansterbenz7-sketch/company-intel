@@ -671,34 +671,39 @@
     .thread-gmail-link { font-size: 11px; color: var(--ci-accent-primary); text-decoration: none; font-weight: 600; display: block; text-align: right; padding: 8px 14px; border-top: 1px solid var(--ci-border-subtle); background: var(--ci-bg-inset); }
     .thread-gmail-link:hover { color: var(--ci-accent-primary-hover); }
     /* ── Meetings UI ─────────────────────────────────────────────────────── */
+    /* Panel header */
+    .mtg-panel-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
+    .mtg-panel-title { font-size: 16px; font-weight: 700; color: var(--ci-text-primary); }
+    .mtg-panel-count { font-size: 13px; font-weight: 500; color: var(--ci-text-tertiary); }
     /* Date group dividers */
-    .mtg-date-group { font-size: 12px; font-weight: 600; color: var(--ci-text-tertiary); padding: 16px 0 6px; border-bottom: 1px solid var(--ci-border-subtle); margin-bottom: 4px; }
+    .mtg-date-group { font-size: 12px; font-weight: 600; color: var(--ci-text-tertiary); padding: 16px 0 6px; border-top: 1px solid var(--ci-border-subtle); margin-bottom: 4px; }
+    .mtg-date-group:first-child { padding-top: 0; border-top: none; }
     /* Meeting card — 3-column grid */
-    .mtg-card { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: start; padding: 12px 8px; border-radius: var(--ci-radius-md); cursor: pointer; transition: background var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out); position: relative; }
-    .mtg-card:hover { background: var(--ci-bg-inset); box-shadow: inset 0 0 0 1px var(--ci-border-subtle); }
+    .mtg-card { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: start; padding: 12px 8px; border-radius: var(--ci-radius-md); cursor: pointer; transition: background var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out); position: relative; }
+    .mtg-card:hover { background: #F9FAFB; }
     .mtg-card:hover .mtg-card-dismiss { opacity: 0.5 !important; }
     .mtg-card:hover .mtg-card-dismiss:hover { opacity: 1 !important; color: #e24b4a; }
     .mtg-card:hover .mtg-granola-link { opacity: 1; }
     /* Calendar-only cards are not clickable */
-    .mtg-card-cal { cursor: default; grid-template-columns: 52px 1fr; }
-    .mtg-card-cal:hover { background: transparent; box-shadow: none; }
+    .mtg-card-cal { cursor: default; grid-template-columns: 64px 1fr; }
+    .mtg-card-cal:hover { background: transparent; }
     /* Date column */
     .mtg-date { display: flex; flex-direction: column; align-items: center; padding-top: 2px; }
-    .mtg-date-day { font-size: 22px; font-weight: 700; color: var(--ci-text-primary); line-height: 1; }
-    .mtg-date-mon { font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary); margin-top: 1px; }
-    .mtg-date-time { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; }
+    .mtg-date-day { font-size: 22px; font-weight: 700; color: var(--ci-text-primary); line-height: 1; letter-spacing: -0.02em; }
+    .mtg-date-mon { font-size: 12px; font-weight: 500; color: var(--ci-text-tertiary); margin-top: 4px; }
+    .mtg-date-time { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 10px; }
     /* Body column */
     .mtg-body { min-width: 0; }
-    .mtg-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 4px; }
-    .mtg-title { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.3; }
-    .mtg-kind { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 1px 6px; white-space: nowrap; }
+    .mtg-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+    .mtg-title { font-size: 15px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.3; }
+    .mtg-kind { font-size: 12px; font-weight: 500; color: var(--ci-text-tertiary); white-space: nowrap; }
     .mtg-manual-badge { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 1px 6px; }
     /* Participants */
     .mtg-participants { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .mtg-avatar-row { display: flex; }
-    .mtg-avatar { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--ci-bg-raised); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: #fff; flex-shrink: 0; margin-left: -5px; }
+    .mtg-avatar { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: #fff; flex-shrink: 0; margin-left: -4px; }
     .mtg-avatar:first-child { margin-left: 0; }
-    .mtg-avatar-overflow { background: var(--ci-bg-inset); color: var(--ci-text-tertiary); font-size: 8px; border: 2px solid var(--ci-bg-raised); }
+    .mtg-avatar-overflow { background: var(--ci-bg-inset); color: var(--ci-text-tertiary); font-size: 8px; border: 2px solid #fff; }
     .mtg-names { font-size: 12px; color: var(--ci-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* Takeaways (amber dot bullets) */
     .mtg-takeaways { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
@@ -714,46 +719,55 @@
     .mtg-card-edit:hover { color: var(--ci-accent-primary); }
     .mtg-card-del:hover { color: #e24b4a; }
     /* Granola link chip (hover-revealed) */
-    .mtg-granola-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); text-decoration: none; padding: 3px 8px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); opacity: 0; transition: opacity var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out); white-space: nowrap; }
-    .mtg-granola-link:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+    .mtg-granola-link { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--ci-text-tertiary); text-decoration: none; padding: 4px 8px; border-radius: var(--ci-radius-sm); background: #F5F7F9; opacity: 0; transition: opacity var(--motion-xs) var(--ease-out); white-space: nowrap; }
+    .mtg-granola-link:hover { color: var(--ci-text-secondary); }
     .granola-glyph { display: inline-block; width: 12px; height: 12px; background: var(--ci-accent-amber); border-radius: 3px; flex-shrink: 0; position: relative; }
     .granola-glyph::after { content: ''; position: absolute; top: 2.5px; left: 2.5px; right: 2.5px; bottom: 2.5px; background: #fff; border-radius: 1.5px; }
     /* ── Detail view ─────────────────────────────────────────────────────── */
-    .panel-back { font-size: 13px; color: var(--ci-text-tertiary); background: none; border: none; cursor: pointer; padding: 0 0 16px; font-family: inherit; display: block; transition: color var(--motion-xs) var(--ease-out); }
+    .panel-back { font-size: 13px; font-weight: 500; color: var(--ci-text-secondary); background: none; border: none; cursor: pointer; padding: 0 0 16px; font-family: inherit; display: block; transition: color var(--motion-xs) var(--ease-out); }
     .panel-back:hover { color: var(--ci-text-primary); }
     .detail-head { margin-bottom: 16px; }
     .detail-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-    .detail-title { font-size: 22px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.25; flex: 1; }
-    .detail-granola-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); text-decoration: none; padding: 6px 12px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-raised); flex-shrink: 0; transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); margin-top: 4px; }
+    .detail-title { font-size: 22px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.25; flex: 1; letter-spacing: -0.02em; }
+    .detail-granola-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ci-text-tertiary); text-decoration: none; padding: 8px 14px; border: 1px solid var(--ci-border-default); border-radius: 8px; background: var(--ci-bg-raised); flex-shrink: 0; transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); margin-top: 4px; }
     .detail-granola-btn:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
     .granola-logo-lg { display: inline-block; width: 14px; height: 14px; background: var(--ci-accent-amber); border-radius: 3px; flex-shrink: 0; position: relative; }
     .granola-logo-lg::after { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; background: #fff; border-radius: 1.5px; }
     .detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--ci-text-secondary); }
-    .detail-meta-sep { color: var(--ci-border-strong); }
+    .detail-meta-sep { color: var(--ci-text-tertiary); font-size: 10px; }
     .detail-meta .mtg-avatar-row { display: flex; }
     /* Detail sections */
-    .detail-section { margin-bottom: 20px; }
-    .detail-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 6px; }
-    .detail-section-head h3 { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; letter-spacing: 0.01em; }
+    .detail-section { margin-bottom: 24px; }
+    .detail-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 8px; }
+    .detail-section-head h3 { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin: 0; }
     .detail-section-head .edit-link { margin-left: auto; }
     .detail-source-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 11px; color: var(--ci-text-muted, #888);
-      font-weight: 400;
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 500; color: var(--ci-text-tertiary);
+      border: 1px solid var(--ci-border-subtle); border-radius: 4px; padding: 2px 6px;
     }
-    .edit-link { font-size: 12px; color: var(--ci-text-tertiary); text-decoration: none; transition: color var(--motion-xs) var(--ease-out); }
+    .detail-source-badge .granola-glyph { width: 9px; height: 9px; }
+    .detail-source-badge .granola-glyph::after { top: 2px; left: 2px; right: 2px; bottom: 2px; }
+    .edit-link { font-size: 11px; font-weight: 500; color: var(--ci-text-tertiary); text-decoration: none; transition: color var(--motion-xs) var(--ease-out); }
     .edit-link:hover { color: var(--ci-accent-primary); }
+    /* summaryMarkdown rendered body */
+    .detail-summary h5 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin: 16px 0 6px; }
+    .detail-summary ul { padding-left: 20px; margin: 0 0 12px; }
+    .detail-summary li { font-size: 14px; line-height: 1.55; margin-bottom: 4px; color: var(--ci-text-primary); }
+    .detail-summary strong { font-weight: 600; }
+    .detail-summary p { font-size: 14px; line-height: 1.7; margin: 0 0 10px; color: var(--ci-text-primary); }
     /* Meeting-detail My-notes composer */
     .detail-coop-compose {
-      margin-top: 10px; border: 1px solid var(--ci-border-subtle, #e5e5e5);
-      border-radius: 8px; padding: 10px; background: #fff;
+      margin-top: 10px; border: 1px solid var(--ci-border-subtle);
+      border-left: 2px solid var(--ci-accent-primary); border-radius: 6px; padding: 10px 12px;
+      background: #F9FAFB;
     }
     .detail-coop-editable {
-      min-height: 44px; outline: none; font-size: 13px; line-height: 1.5;
-      color: var(--ci-text-primary, #2d2d2d);
+      min-height: 44px; outline: none; font-size: 13px; line-height: 1.55;
+      color: var(--ci-text-primary);
     }
     .detail-coop-editable.notes-empty-edit::before {
-      content: 'Write a note about this meeting…'; color: var(--ci-text-tertiary, #999); pointer-events: none;
+      content: 'Your notes on this meeting…'; color: var(--ci-text-tertiary); pointer-events: none;
     }
     .detail-coop-compose-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
     .detail-coop-save-btn {
@@ -763,18 +777,20 @@
     .detail-coop-save-btn:hover { background: var(--ci-accent-primary-hover); }
     .detail-coop-save-btn:disabled { opacity: 0.4; cursor: default; }
     .detail-coop-saved-indicator {
-      font-size: 11px; color: var(--ci-text-tertiary); margin-left: auto; opacity: 0;
-      transition: opacity 0.3s;
+      font-size: 11px; font-weight: 500; color: var(--ci-text-tertiary); margin-left: auto; opacity: 0;
+      transition: opacity var(--motion-sm) var(--ease-out);
     }
     .detail-coop-notes-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
     .detail-coop-empty { font-size: 13px; color: var(--ci-text-tertiary); font-style: italic; }
+    .detail-coop-hint { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 8px; line-height: 1.5; }
     /* Private-notes meeting source chip */
     .note-card-meeting-chip {
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 11px; color: var(--ci-text-tertiary);
-      margin-left: 8px; cursor: default;
+      margin-left: 8px; cursor: pointer;
       max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    .note-card-meeting-chip:hover { color: var(--ci-accent-primary); }
     .detail-takeaways { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
     .detail-takeaways li { font-size: 14px; color: var(--ci-text-primary); line-height: 1.6; padding-left: 18px; position: relative; }
     .detail-takeaways li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-amber); }
@@ -786,23 +802,29 @@
     .detail-notes strong { color: var(--ci-text-primary); font-weight: 700; }
     /* Styled transcript collapse */
     .detail-transcript { border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-md); overflow: hidden; margin-bottom: 20px; }
-    .detail-transcript-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; background: var(--ci-bg-inset); user-select: none; transition: background var(--motion-xs) var(--ease-out); }
-    .detail-transcript-head:hover { background: var(--ci-bg-raised); }
-    .detail-transcript-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; }
+    .detail-transcript-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; background: #F9FAFB; user-select: none; transition: background var(--motion-xs) var(--ease-out); }
+    .detail-transcript-head:hover { background: var(--ci-bg-inset); }
+    .detail-transcript-head h3 { font-size: 13px; font-weight: 600; color: var(--ci-text-secondary); margin: 0; }
     .detail-transcript-chevron { font-size: 13px; color: var(--ci-text-tertiary); transition: transform var(--motion-sm) var(--ease-out); display: inline-block; }
     .detail-transcript.open .detail-transcript-chevron { transform: rotate(90deg); }
     .detail-transcript-body { max-height: 0; overflow: hidden; transition: max-height var(--motion-sm) var(--ease-out); }
     .detail-transcript.open .detail-transcript-body { max-height: 800px; }
-    .detail-transcript-inner { padding: 14px; font-size: 12px; color: var(--ci-text-secondary); line-height: 1.75; }
+    .detail-transcript-inner { padding: 16px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.7; }
     /* Speaker-diarized transcript */
     .tx-block { margin-bottom: 12px; }
-    .tx-speaker { font-size: 11px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 1px; }
-    .tx-timestamp { font-size: 10px; color: var(--ci-text-tertiary); margin-left: 6px; font-weight: 400; }
-    .tx-utterance { color: var(--ci-text-secondary); }
+    .tx-speaker { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); margin-bottom: 1px; margin-top: 12px; display: block; }
+    .tx-timestamp { font-size: 11px; color: var(--ci-text-tertiary); margin-left: 8px; font-weight: 500; }
+    .tx-utterance { font-size: 13px; color: var(--ci-text-secondary); margin-bottom: 8px; display: block; }
     /* Coop layer */
-    .detail-coop { border-top: 1px dashed var(--ci-border-default); padding-top: 16px; margin-top: 4px; }
+    .detail-coop { border-top: 1px dashed var(--ci-border-default); padding-top: 22px; margin-top: 28px; }
     .detail-coop-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .detail-coop-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; }
+    .detail-coop-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); }
+    .detail-coop-pill { display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; color: #fff; background: var(--ci-accent-primary); border-radius: 4px; padding: 2px 6px; }
+    .detail-coop-sync { font-size: 11px; font-weight: 500; color: var(--ci-text-tertiary); margin-left: auto; }
+    .detail-coop-next { background: rgba(245,166,35,0.08); border-radius: 8px; padding: 10px 12px; margin-top: 10px; display: flex; gap: 8px; align-items: baseline; }
+    .detail-coop-next-label { font-size: 11px; font-weight: 700; color: var(--ci-accent-amber); flex-shrink: 0; }
+    .detail-coop-next-text { font-size: 13px; color: var(--ci-text-primary); }
+    /* legacy compat */
     .coop-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); }
     .coop-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary); }
     /* ── Manual Meeting Form ── */

@@ -3059,6 +3059,16 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   });
   let html = '';
 
+  // ── Panel header ────────────────────────────────────────────────────────────
+  const meetingCount = meetings.length;
+  const countLabel = meetingCount
+    ? `${meetingCount} with ${escapeHtml(entry.company || 'this company')}`
+    : '';
+  html += `<div class="mtg-panel-head">
+    <span class="mtg-panel-title">Meetings</span>
+    ${countLabel ? `<span class="mtg-panel-count">${countLabel}</span>` : ''}
+  </div>`;
+
   // ── "+ Add meeting" button and form ────────────────────────────────────────
   html += `<button class="mtg-add-btn" id="mtg-add-btn">+ Add meeting</button>`;
   html += `
@@ -3201,9 +3211,6 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
   if (!meetings.length && !events.length) html += '<div class="p-empty">No meetings found.</div>';
 
   contentEl.innerHTML = html;
-
-  // Init "ask all meetings" chat panel
-  if (typeof initChatPanels === 'function') initChatPanels(entry);
 
   // ── Manual meeting form wiring ─────────────────────────────────────────────
   let _mmEditId = null; // tracks which manual meeting is being edited
@@ -3380,6 +3387,78 @@ function renderMeetingDetail(contentEl, meeting, events, granolaNotes) {
   _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes);
 }
 
+// Minimal markdown renderer for Granola summaryMarkdown — produces .detail-summary HTML.
+// Handles: ATX headings (→ h5), fenced/indented code blocks (skipped), ul/ol lists, bold, italic, paragraphs.
+// No third-party libs. No text-transform: uppercase anywhere — DESIGN.md rule.
+function _renderMtgSummaryMarkdown(text) {
+  if (!text) return '';
+  const lines = text.split('\n');
+  let out = '';
+  let inList = false;
+  let inOl = false;
+
+  const flushList = () => {
+    if (inList) { out += '</ul>'; inList = false; }
+    if (inOl) { out += '</ol>'; inOl = false; }
+  };
+  const inline = (s) => {
+    // Escape HTML first
+    s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Bold+italic ***text***
+    s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+    // Bold **text**
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // Italic *text* or _text_
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+    // Inline code `text`
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return s;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip blank lines — close any open list
+    if (!trimmed) {
+      flushList();
+      continue;
+    }
+
+    // ATX headings (#, ##, ###, etc.) — all render as h5 per PRD
+    const headingMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      flushList();
+      out += `<h5>${inline(headingMatch[1])}</h5>`;
+      continue;
+    }
+
+    // Unordered list: "- ", "* ", "• "
+    const ulMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+    if (ulMatch) {
+      if (!inList) { flushList(); out += '<ul>'; inList = true; }
+      out += `<li>${inline(ulMatch[1])}</li>`;
+      continue;
+    }
+
+    // Ordered list: "1. ", "2. "
+    const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (olMatch) {
+      if (!inOl) { flushList(); out += '<ol>'; inOl = true; }
+      out += `<li>${inline(olMatch[1])}</li>`;
+      continue;
+    }
+
+    // Regular paragraph text
+    flushList();
+    out += `<p>${inline(trimmed)}</p>`;
+  }
+
+  flushList();
+  return out;
+}
+
 function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
   const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
   const dateStr = (d && !isNaN(d))
@@ -3398,11 +3477,6 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
 
   // Transcript
   const resolvedTranscript = meeting.transcript ? resolveTranscriptSpeakers(meeting.transcript, meeting) : '';
-
-  // Render notes with markdown helper
-  const notesHtml = notesSource
-    ? `<div class="detail-notes">${typeof renderMarkdown === 'function' ? renderMarkdown(notesSource) : escapeHtml(notesSource)}</div>`
-    : '';
 
   // Transcript body: try to detect speaker-diarized format ("Speaker Name: utterance").
   // The same pattern is used for both detection and parsing so mid-sentence colons
@@ -3434,6 +3508,11 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
     }
   }
 
+  // Render notesSource using the detail-summary class for proper hierarchy
+  const summaryBodyHtml = notesSource
+    ? `<div class="detail-summary">${_renderMtgSummaryMarkdown(notesSource)}</div>`
+    : '';
+
   contentEl.innerHTML = `
     <button class="panel-back" id="mtg-back">← Meetings</button>
     <div class="detail-head">
@@ -3445,19 +3524,19 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
         ${avatarHtml}
         ${namesHtml ? `<span>${namesHtml}</span>` : ''}
         ${(avatarHtml || namesHtml) && (dateStr || timeStr) ? `<span class="detail-meta-sep">·</span>` : ''}
-        ${dateStr ? `<span>${escapeHtml(dateStr)}${timeStr ? ' at ' + escapeHtml(timeStr) : ''}</span>` : ''}
+        ${dateStr ? `<span>${escapeHtml(dateStr)}${timeStr ? ' · ' + escapeHtml(timeStr) : ''}</span>` : ''}
         ${meeting._isManual ? `<span class="detail-meta-sep">·</span><span class="mtg-manual-badge">Manual</span>` : ''}
       </div>
     </div>
 
-    ${notesHtml ? `
+    ${summaryBodyHtml ? `
     <div class="detail-section">
       <div class="detail-section-head">
         <h3>Summary</h3>
         ${!meeting._isManual ? `<span class="detail-source-badge"><span class="granola-glyph"></span>from Granola</span>` : ''}
         ${granolaUrl ? `<a class="edit-link" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer">View in Granola ↗</a>` : ''}
       </div>
-      ${notesHtml}
+      ${summaryBodyHtml}
     </div>` : ''}
 
     ${resolvedTranscript ? `
@@ -3473,21 +3552,21 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
 
     <div class="detail-coop">
       <div class="detail-coop-head">
-        <h3>My notes</h3>
-        <span class="coop-label"><span class="coop-dot"></span>Coop</span>
-        <span class="detail-coop-saved-indicator" id="detail-coop-saved-indicator">✓ Saved to Private notes</span>
+        <span class="detail-coop-title">My notes</span>
+        <span class="detail-coop-pill">Coop</span>
+        <span class="detail-coop-sync detail-coop-saved-indicator" id="detail-coop-saved-indicator">↑ Saved to Private notes</span>
       </div>
       <div class="detail-coop-compose" id="detail-coop-compose">
         <div class="detail-coop-editable notes-empty-edit" id="detail-coop-editable" contenteditable="true"></div>
         <div class="detail-coop-compose-actions">
-          <button class="detail-coop-save-btn" id="detail-coop-save-btn" disabled>+ Add note</button>
+          <button class="detail-coop-save-btn" id="detail-coop-save-btn" disabled>Save note</button>
         </div>
       </div>
+      <div class="detail-coop-hint">Written here? It also appears in ${escapeHtml(entry.company || 'company')} Private notes with a link back to this meeting.</div>
       <div class="detail-coop-notes-list" id="detail-coop-notes-list"></div>
+      ${entry.nextStep ? `<div class="detail-coop-next"><span class="detail-coop-next-label">Next step:</span><span class="detail-coop-next-text">${escapeHtml(entry.nextStep)}</span></div>` : ''}
     </div>
   `;
-
-  if (typeof initChatPanels === 'function') initChatPanels(entry);
 
   // Transcript toggle (styled collapse, not <details>)
   const transcriptCollapse = contentEl.querySelector('#mtg-transcript-collapse');
@@ -5429,7 +5508,7 @@ function renderNoteCard(n) {
     const srcMeeting = allMeetings.find(m => m.id === n.meetingId);
     if (srcMeeting) {
       const chipTitle = escapeHtml(srcMeeting.title || 'Meeting');
-      meetingChipHtml = `<span class="note-card-meeting-chip" title="${chipTitle}">↗ ${chipTitle}</span>`;
+      meetingChipHtml = `<span class="note-card-meeting-chip" data-meeting-id="${escapeHtml(n.meetingId)}" title="${chipTitle}">↗ ${chipTitle}</span>`;
     }
   }
   return `
@@ -5549,6 +5628,28 @@ function bindNoteCardEvents() {
       bodyEl.addEventListener('keydown', onKeydown);
     });
   });
+
+  // Meeting chip click → jump to that meeting's detail view
+  container.querySelectorAll('.note-card-meeting-chip[data-meeting-id]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const mid = chip.dataset.meetingId;
+      const contentEl = document.getElementById('act-meetings-content');
+      if (!contentEl) return;
+      // Switch to Meetings tab first
+      const meetingsTab = document.querySelector('.hub-tab[data-tab="meetings"]');
+      if (meetingsTab) meetingsTab.click();
+      // Find and render the meeting detail
+      const allMeetings = [
+        ...(entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false })),
+        ...(entry.manualMeetings || []).map(m => ({ ...m, _isManual: true })),
+      ];
+      const meeting = allMeetings.find(m => m.id === mid);
+      if (meeting) {
+        if (meeting._isManual) renderManualMeetingDetail(contentEl, meeting, entry.cachedCalendarEvents || [], null);
+        else renderMeetingDetail(contentEl, meeting, entry.cachedCalendarEvents || [], null);
+      }
+    });
+  });
 }
 
 // escapeHtml — provided by ui-utils.js
@@ -5556,9 +5657,9 @@ function bindNoteCardEvents() {
 function renderMarkdown(text) {
   // Escape HTML first, then apply markdown patterns
   let s = escapeHtml(text);
-  // Headers: ## Heading
-  s = s.replace(/^### (.+)$/gm, '<strong style="font-size:12px;color:#7c98b6;text-transform:uppercase;letter-spacing:.04em">$1</strong>');
-  s = s.replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:14px;color:#2d3e50;margin:10px 0 4px">$1</div>');
+  // Headers: ### / ## rendered as bold section labels (no uppercase, no tiny-caps)
+  s = s.replace(/^### (.+)$/gm, '<strong style="font-size:12px;color:var(--ci-text-secondary);font-weight:700">$1</strong>');
+  s = s.replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:14px;color:var(--ci-text-primary);margin:10px 0 4px">$1</div>');
   // Bold: **text**
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   // Citation links: [[N]](url) — render as clickable superscript

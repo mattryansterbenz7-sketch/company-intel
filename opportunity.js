@@ -1041,6 +1041,19 @@ function bindActivityPanel() {
     if (result.extractedContacts?.length) mergeExtractedContacts(result.extractedContacts);
   });
 
+  // Show cached meetings immediately while Granola refreshes
+  const cachedM = (entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false }));
+  const manualM0 = (entry.manualMeetings || []).map(m => ({ ...m, _isManual: true }));
+  if (cachedM.length || manualM0.length) {
+    const statusEl0 = document.getElementById('act-meetings-status');
+    const contentEl0 = document.getElementById('act-meetings-content');
+    if (statusEl0) statusEl0.style.display = 'none';
+    if (contentEl0) {
+      const merged0 = [...cachedM, ...manualM0].sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1);
+      _oppRenderMeetingsTimeline(contentEl0, merged0);
+    }
+  }
+
   // Auto-load Granola meeting notes
   chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company }, result => {
     const statusEl = document.getElementById('act-meetings-status');
@@ -1053,7 +1066,10 @@ function bindActivityPanel() {
       saveEntry({ cachedMeetings: granolaMeetings, cachedMeetingNotes: granolaNotes, cachedMeetingNotesAt: Date.now() });
     }
     statusEl.style.display = 'none';
-    _oppRenderMeetingsTimeline(contentEl, granolaMeetings);
+    const manualM = (entry.manualMeetings || []).map(m => ({ ...m, _isManual: true }));
+    const granolaM = granolaMeetings.map(m => ({ ...m, _isManual: false }));
+    const merged = [...granolaM, ...manualM].sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1);
+    _oppRenderMeetingsTimeline(contentEl, merged);
   });
 }
 
@@ -1108,20 +1124,56 @@ function _oppDateGroupLabel(dateKey) {
 }
 
 function _oppRenderMeetingsTimeline(contentEl, meetings) {
-  if (!meetings || !meetings.length) {
-    contentEl.innerHTML = '<div class="p-empty">No meetings found.</div>';
+  const allMeetings = meetings || [];
+
+  // ── Panel header ────────────────────────────────────────────────────────────
+  const meetingCount = allMeetings.length;
+  const countLabel = meetingCount
+    ? `${meetingCount} with ${escapeHtml(entry.company || 'this company')}`
+    : '';
+  let html = `<div class="mtg-panel-head">
+    <span class="mtg-panel-title">Meetings</span>
+    ${countLabel ? `<span class="mtg-panel-count">${countLabel}</span>` : ''}
+  </div>`;
+
+  // ── "+ Add meeting" button and form ────────────────────────────────────────
+  html += `<button class="mtg-add-btn" id="opp-mtg-add-btn">+ Add meeting</button>`;
+  html += `
+    <div class="mtg-add-form" id="opp-mtg-add-form" style="display:none">
+      <div class="mtg-add-title">Log a meeting</div>
+      <div class="mtg-add-fields">
+        <input type="text" class="mtg-add-input" id="opp-mm-title" placeholder="Meeting title…">
+        <div style="display:flex;gap:8px">
+          <input type="date" class="mtg-add-input" id="opp-mm-date" style="flex:1">
+          <input type="text" class="mtg-add-input" id="opp-mm-time" placeholder="e.g. 2:00 PM" style="flex:1">
+        </div>
+        <input type="text" class="mtg-add-input" id="opp-mm-attendees" placeholder="e.g. Sarah Chen, VP Sales">
+        <textarea class="mtg-add-input" id="opp-mm-notes" rows="4" placeholder="Key takeaways, decisions, action items…"></textarea>
+        <div class="mtg-transcript-toggle" id="opp-mm-transcript-toggle">+ Add full transcript</div>
+        <textarea class="mtg-add-input" id="opp-mm-transcript" rows="8" placeholder="Paste full meeting transcript…" style="display:none"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="mtg-add-save" id="opp-mm-save">Save meeting</button>
+          <button class="mtg-add-cancel" id="opp-mm-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (!allMeetings.length) {
+    html += '<div class="p-empty">No meetings found.</div>';
+    contentEl.innerHTML = html;
+    _oppWireAddMeetingForm(contentEl, allMeetings);
     return;
   }
 
   const groups = [];
   const groupMap = {};
-  meetings.forEach(m => {
+  allMeetings.forEach(m => {
     const label = _oppDateGroupLabel(m.date || '');
     if (!groupMap[label]) { groupMap[label] = { label, items: [] }; groups.push(groupMap[label]); }
     groupMap[label].items.push(m);
   });
 
-  let html = '<div class="mtg-list">';
+  html += '<div class="mtg-list">';
   for (const group of groups) {
     html += `<div class="mtg-date-group">${escapeHtml(group.label)}</div>`;
     for (const m of group.items) {
@@ -1167,7 +1219,320 @@ function _oppRenderMeetingsTimeline(contentEl, meetings) {
   html += '</div>';
   contentEl.innerHTML = html;
 
-  if (typeof initChatPanels === 'function') initChatPanels(entry);
+  _oppWireAddMeetingForm(contentEl, allMeetings);
+
+  // Meeting card click → detail view
+  contentEl.querySelectorAll('.mtg-card[data-opp-meeting-id]').forEach(card => {
+    card.addEventListener('click', () => {
+      const mid = card.dataset.oppMeetingId;
+      const meeting = allMeetings.find(m => m.id === mid);
+      if (meeting) _oppRenderMeetingDetail(contentEl, meeting, allMeetings);
+    });
+  });
+}
+
+function _oppWireAddMeetingForm(contentEl, meetings) {
+  let _mmEditId = null;
+  const addBtn = contentEl.querySelector('#opp-mtg-add-btn');
+  const addForm = contentEl.querySelector('#opp-mtg-add-form');
+  const mmTitle = contentEl.querySelector('#opp-mm-title');
+  const mmDate = contentEl.querySelector('#opp-mm-date');
+  const mmTime = contentEl.querySelector('#opp-mm-time');
+  const mmAttendees = contentEl.querySelector('#opp-mm-attendees');
+  const mmNotes = contentEl.querySelector('#opp-mm-notes');
+  const mmTranscript = contentEl.querySelector('#opp-mm-transcript');
+  const mmTranscriptToggle = contentEl.querySelector('#opp-mm-transcript-toggle');
+  const mmSave = contentEl.querySelector('#opp-mm-save');
+  const mmCancel = contentEl.querySelector('#opp-mm-cancel');
+
+  if (!addBtn || !addForm) return;
+
+  mmDate.value = new Date().toISOString().slice(0, 10);
+
+  addBtn.addEventListener('click', () => {
+    _mmEditId = null;
+    mmTitle.value = ''; mmTime.value = ''; mmAttendees.value = '';
+    mmNotes.value = ''; mmTranscript.value = '';
+    mmDate.value = new Date().toISOString().slice(0, 10);
+    mmTranscript.style.display = 'none';
+    mmTranscriptToggle.textContent = '+ Add full transcript';
+    mmSave.textContent = 'Save meeting';
+    addForm.style.display = '';
+    addBtn.style.display = 'none';
+    mmTitle.focus();
+  });
+
+  mmTranscriptToggle.addEventListener('click', () => {
+    const showing = mmTranscript.style.display !== 'none';
+    mmTranscript.style.display = showing ? 'none' : '';
+    mmTranscriptToggle.textContent = showing ? '+ Add full transcript' : '− Hide transcript';
+  });
+
+  mmCancel.addEventListener('click', () => {
+    addForm.style.display = 'none';
+    addBtn.style.display = '';
+    _mmEditId = null;
+  });
+
+  mmSave.addEventListener('click', () => {
+    const title = mmTitle.value.trim();
+    const date = mmDate.value || new Date().toISOString().slice(0, 10);
+    const time = mmTime.value.trim();
+    const attendees = mmAttendees.value.trim();
+    const notes = mmNotes.value.trim();
+    const transcript = mmTranscript.value.trim();
+    if (!title && !notes && !transcript) return;
+
+    const current = entry.manualMeetings || [];
+    if (_mmEditId) {
+      const idx = current.findIndex(m => m.id === _mmEditId);
+      if (idx !== -1) {
+        current[idx] = { ...current[idx], title, date, time, attendees, notes, transcript, updatedAt: Date.now() };
+      }
+    } else {
+      current.unshift({ id: 'mm_' + Date.now(), title, date, time, attendees, notes, transcript, createdAt: Date.now() });
+    }
+    saveEntry({ manualMeetings: current });
+    _mmEditId = null;
+    // Re-render with updated manual meetings merged into Granola meetings
+    const granolaM = (entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false }));
+    const manualM = (entry.manualMeetings || []).map(m => ({ ...m, _isManual: true }));
+    const merged = [...granolaM, ...manualM].sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1);
+    _oppRenderMeetingsTimeline(contentEl, merged);
+  });
+}
+
+// Minimal markdown renderer for Granola summaryMarkdown in opportunity context
+function _oppRenderSummaryMarkdown(text) {
+  if (!text) return '';
+  const lines = text.split('\n');
+  let out = '';
+  let inList = false;
+  let inOl = false;
+  const flushList = () => {
+    if (inList) { out += '</ul>'; inList = false; }
+    if (inOl) { out += '</ol>'; inOl = false; }
+  };
+  const inline = (s) => {
+    s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+    return s;
+  };
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) { flushList(); continue; }
+    const hm = t.match(/^#{1,6}\s+(.+)$/);
+    if (hm) { flushList(); out += `<h5>${inline(hm[1])}</h5>`; continue; }
+    const ulm = t.match(/^[-*•]\s+(.+)$/);
+    if (ulm) { if (!inList) { flushList(); out += '<ul>'; inList = true; } out += `<li>${inline(ulm[1])}</li>`; continue; }
+    const olm = t.match(/^\d+\.\s+(.+)$/);
+    if (olm) { if (!inOl) { flushList(); out += '<ol>'; inOl = true; } out += `<li>${inline(olm[1])}</li>`; continue; }
+    flushList();
+    out += `<p>${inline(t)}</p>`;
+  }
+  flushList();
+  return out;
+}
+
+function _oppRenderMeetingDetail(contentEl, meeting, allMeetings) {
+  const d = meeting.date ? new Date(meeting.date + 'T12:00:00') : null;
+  const dateStr = (d && !isNaN(d))
+    ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : (meeting.date || '');
+  const timeStr = meeting.time || '';
+  const granolaUrl = meeting.url || null;
+  const attendeeNames = _oppParseAttendees(meeting.attendees);
+  const avatarHtml = _oppAvatarHtml(attendeeNames);
+  const namesHtml = _oppNamesHtml(attendeeNames);
+
+  const notesSource = meeting._isManual
+    ? (meeting.notes || '')
+    : (meeting.summaryMarkdown || meeting.summary || '');
+
+  const resolvedTranscript = meeting.transcript ? meeting.transcript : '';
+  const summaryBodyHtml = notesSource
+    ? `<div class="detail-summary">${_oppRenderSummaryMarkdown(notesSource)}</div>`
+    : '';
+
+  // Transcript body
+  const SPEAKER_LINE = /^([A-Z][A-Za-z .'-]{0,40}):\s(.*)$/;
+  let transcriptBodyHtml = '';
+  if (resolvedTranscript) {
+    const lines = resolvedTranscript.split('\n');
+    const speakerCount = lines.reduce((n, l) => n + (SPEAKER_LINE.test(l) ? 1 : 0), 0);
+    if (speakerCount >= 2) {
+      const blocks = [];
+      let cur = null;
+      lines.forEach(line => {
+        const m = line.match(SPEAKER_LINE);
+        if (m) { if (cur) blocks.push(cur); cur = { speaker: m[1], utterance: m[2] }; }
+        else if (cur) { cur.utterance += ' ' + line; }
+      });
+      if (cur) blocks.push(cur);
+      transcriptBodyHtml = blocks.map(b =>
+        `<div class="tx-block"><span class="tx-speaker">${escapeHtml(b.speaker)}</span><span class="tx-utterance">${escapeHtml(b.utterance.trim())}</span></div>`
+      ).join('');
+    } else {
+      transcriptBodyHtml = resolvedTranscript.split('\n').filter(Boolean).map(p => `<p>${escapeHtml(p)}</p>`).join('');
+    }
+  }
+
+  contentEl.innerHTML = `
+    <button class="panel-back" id="opp-mtg-back">← Meetings</button>
+    <div class="detail-head">
+      <div class="detail-title-row">
+        <div class="detail-title">${escapeHtml(meeting.title || 'Untitled')}</div>
+        ${granolaUrl ? `<a class="detail-granola-btn" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer"><span class="granola-logo-lg"></span>Open in Granola</a>` : ''}
+      </div>
+      <div class="detail-meta">
+        ${avatarHtml}
+        ${namesHtml ? `<span>${namesHtml}</span>` : ''}
+        ${(avatarHtml || namesHtml) && (dateStr || timeStr) ? `<span class="detail-meta-sep">·</span>` : ''}
+        ${dateStr ? `<span>${escapeHtml(dateStr)}${timeStr ? ' · ' + escapeHtml(timeStr) : ''}</span>` : ''}
+        ${meeting._isManual ? `<span class="detail-meta-sep">·</span><span class="mtg-manual-badge">Manual</span>` : ''}
+      </div>
+    </div>
+
+    ${summaryBodyHtml ? `
+    <div class="detail-section">
+      <div class="detail-section-head">
+        <h3>Summary</h3>
+        ${!meeting._isManual ? `<span class="detail-source-badge"><span class="granola-glyph"></span>from Granola</span>` : ''}
+        ${granolaUrl ? `<a class="edit-link" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer">View in Granola ↗</a>` : ''}
+      </div>
+      ${summaryBodyHtml}
+    </div>` : ''}
+
+    ${resolvedTranscript ? `
+    <div class="detail-transcript" id="opp-mtg-transcript-collapse">
+      <div class="detail-transcript-head" id="opp-mtg-transcript-toggle-btn">
+        <h3>Full transcript</h3>
+        <span class="detail-transcript-chevron">›</span>
+      </div>
+      <div class="detail-transcript-body">
+        <div class="detail-transcript-inner">${transcriptBodyHtml}</div>
+      </div>
+    </div>` : ''}
+
+    <div class="detail-coop">
+      <div class="detail-coop-head">
+        <span class="detail-coop-title">My notes</span>
+        <span class="detail-coop-pill">Coop</span>
+        <span class="detail-coop-sync detail-coop-saved-indicator" id="opp-detail-coop-saved-indicator">↑ Saved to Private notes</span>
+      </div>
+      <div class="detail-coop-compose" id="opp-detail-coop-compose">
+        <div class="detail-coop-editable notes-empty-edit" id="opp-detail-coop-editable" contenteditable="true"></div>
+        <div class="detail-coop-compose-actions">
+          <button class="detail-coop-save-btn" id="opp-detail-coop-save-btn" disabled>Save note</button>
+        </div>
+      </div>
+      <div class="detail-coop-hint">Written here? It also appears in ${escapeHtml(entry.company || 'company')} Private notes with a link back to this meeting.</div>
+      <div class="detail-coop-notes-list" id="opp-detail-coop-notes-list"></div>
+    </div>
+  `;
+
+  // Transcript toggle
+  const transcriptCollapse = contentEl.querySelector('#opp-mtg-transcript-collapse');
+  const transcriptToggleBtn = contentEl.querySelector('#opp-mtg-transcript-toggle-btn');
+  if (transcriptCollapse && transcriptToggleBtn) {
+    transcriptToggleBtn.addEventListener('click', () => transcriptCollapse.classList.toggle('open'));
+  }
+
+  // Back button
+  contentEl.querySelector('#opp-mtg-back').addEventListener('click', () => {
+    const granolaM = (entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false }));
+    const manualM = (entry.manualMeetings || []).map(m => ({ ...m, _isManual: true }));
+    const merged = [...granolaM, ...manualM].sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1);
+    _oppRenderMeetingsTimeline(contentEl, merged);
+  });
+
+  // My notes composer
+  const coopEditable = contentEl.querySelector('#opp-detail-coop-editable');
+  const coopSaveBtn = contentEl.querySelector('#opp-detail-coop-save-btn');
+  const coopNotesList = contentEl.querySelector('#opp-detail-coop-notes-list');
+  const coopSavedIndicator = contentEl.querySelector('#opp-detail-coop-saved-indicator');
+
+  function _renderOppDetailNotesList() {
+    const meetingNotes = (entry.notesFeed || [])
+      .filter(n => n.meetingId === meeting.id)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (!coopNotesList) return;
+    if (!meetingNotes.length) {
+      coopNotesList.innerHTML = '';
+      return;
+    }
+    coopNotesList.innerHTML = meetingNotes.map(n => {
+      const nd = new Date(n.createdAt);
+      const nDateStr = nd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `
+        <div class="note-card" data-detail-note-id="${escapeHtml(n.id)}">
+          <div class="note-card-header">
+            <span class="note-card-date">${nDateStr}</span>
+            <span class="note-card-actions">
+              <button class="note-del-btn opp-detail-note-del" data-detail-note-id="${escapeHtml(n.id)}" title="Delete">✕</button>
+            </span>
+          </div>
+          <div class="note-card-body">${n.content}</div>
+        </div>`;
+    }).join('');
+
+    coopNotesList.querySelectorAll('.opp-detail-note-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const nid = btn.dataset.detailNoteId;
+        entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== nid);
+        const latest = [...entry.notesFeed].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+        saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+        _renderOppDetailNotesList();
+      });
+    });
+  }
+
+  _renderOppDetailNotesList();
+
+  if (coopEditable && coopSaveBtn) {
+    coopEditable.addEventListener('input', () => {
+      const hasContent = !!coopEditable.textContent.trim();
+      coopEditable.classList.toggle('notes-empty-edit', !hasContent);
+      coopSaveBtn.disabled = !hasContent;
+    });
+    coopEditable.addEventListener('focus', () => coopEditable.classList.remove('notes-empty-edit'));
+    coopEditable.addEventListener('blur', () => {
+      if (!coopEditable.textContent.trim()) coopEditable.classList.add('notes-empty-edit');
+    });
+
+    const _saveOppDetailNote = () => {
+      const text = coopEditable.textContent.trim();
+      if (!text) return;
+      const now = Date.now();
+      const content = coopEditable.innerHTML;
+      const newNote = {
+        id: 'note_' + now.toString(36) + Math.random().toString(36).substr(2),
+        content,
+        createdAt: now,
+        updatedAt: now,
+        meetingId: meeting.id,
+      };
+      entry.notesFeed = [newNote, ...(entry.notesFeed || [])];
+      const latest = [...entry.notesFeed].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+      saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+      coopEditable.innerHTML = '';
+      coopEditable.classList.add('notes-empty-edit');
+      coopSaveBtn.disabled = true;
+      _renderOppDetailNotesList();
+      if (coopSavedIndicator) {
+        coopSavedIndicator.style.opacity = '1';
+        setTimeout(() => { coopSavedIndicator.style.opacity = ''; }, 2000);
+      }
+    };
+
+    coopSaveBtn.addEventListener('click', _saveOppDetailNote);
+    coopEditable.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); _saveOppDetailNote(); }
+    });
+  }
 }
 
 // ── Panel drag & drop ─────────────────────────────────────────────────────────
