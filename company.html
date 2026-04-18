@@ -545,9 +545,10 @@
 
     /* ── Chat panel ── */
     .chat-messages { min-height: 80px; max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 0 8px; }
-    .chat-empty { font-size: 13px; color: var(--ci-text-tertiary); font-style: italic; padding: 8px 0; }
+    /* Empty state — sentence-case, no italic (DESIGN.md) */
+    .chat-empty { font-size: 13px; color: var(--ci-text-tertiary); padding: 8px 0; }
     .chat-quick-prompts { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; width: 100%; max-width: 280px; }
-    .chat-qp-btn { font-size: 13px; color: var(--ci-text-secondary); background: var(--ci-bg-base); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 10px 14px; cursor: pointer; font-family: inherit; text-align: left; transition: all 0.15s; }
+    .chat-qp-btn { font-size: 13px; color: var(--ci-text-secondary); background: var(--ci-bg-base); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 10px 14px; cursor: pointer; font-family: inherit; text-align: left; transition: border-color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); }
     .chat-qp-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-text-primary); background: var(--ci-bg-inset); }
     .chat-msg { display: flex; flex-direction: column; }
     .chat-msg-user { align-items: flex-end; }
@@ -605,7 +606,7 @@
     .chat-prev-sessions { margin-bottom: 10px; border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-md); overflow: hidden; }
     .prev-sessions-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--ci-bg-inset); }
     .prev-sessions-toggle { display: flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 0; flex: 1; min-width: 0; }
-    .prev-sessions-label { font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+    .prev-sessions-label { font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); }
     .prev-sessions-chevron { font-size: 8px; color: var(--ci-text-tertiary); }
     .prev-sessions-clear { font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); background: none; border: none; cursor: pointer; font-family: inherit; padding: 2px 6px; border-radius: 4px; transition: color var(--ci-transition-fast); flex-shrink: 0; }
     .prev-sessions-clear:hover { opacity: 1; color: var(--ci-accent-red); }
@@ -966,14 +967,38 @@
       box-shadow: var(--ci-shadow-lg);
       display: flex; flex-direction: column; z-index: 9999;
       border: 1px solid var(--ci-border-default); overflow: hidden;
-      transition: width var(--motion-sm) var(--ease-out), height var(--motion-md) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+      transition: width var(--motion-sm) var(--ease-out), height var(--motion-md) var(--ease-out);
+      /* Panel open: opacity + scale — anchored bottom-right */
+      transform-origin: bottom right;
     }
-    #ci-float-chat.fch-hidden { display: none; }
+    /* Panel open/close motion — 200ms ease-out open, 120ms ease-in close */
+    #ci-float-chat.fch-hidden {
+      display: none;
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    #ci-float-chat.fch-visible {
+      opacity: 1;
+      transform: scale(1);
+      animation: fchPanelOpen var(--motion-sm) var(--ease-out) both;
+    }
+    @keyframes fchPanelOpen {
+      from { opacity: 0; transform: scale(0.96); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    #ci-float-chat.fch-closing {
+      animation: fchPanelClose var(--motion-xs) var(--ease-in) both;
+      pointer-events: none;
+    }
+    @keyframes fchPanelClose {
+      from { opacity: 1; transform: scale(1); }
+      to   { opacity: 0; transform: scale(0.96); }
+    }
     #ci-float-chat.fch-minimized { height: 52px !important; }
     #ci-float-chat.fch-maximized { width: 720px; height: 680px !important; }
     #ci-float-chat.fch-fullscreen { width: calc(100vw - 48px); height: calc(100vh - 48px) !important; top: 24px; bottom: auto; right: 24px; }
 
-    /* Header — 26px square controls, 5px radius */
+    /* Header — identity left (28px coral avatar + stacked title/subtitle), controls right */
     .fch-header {
       height: 52px; padding: 0 10px 0 14px;
       background: var(--ci-bg-header); display: flex; align-items: center;
@@ -982,11 +1007,18 @@
     }
     #ci-float-chat.fch-minimized .fch-header { border-radius: var(--ci-radius-lg); }
     .fch-header:active { cursor: grabbing; }
-    .fch-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .fch-spark { color: var(--ci-accent-primary); font-size: 15px; flex-shrink: 0; }
-    .fch-title { color: var(--ci-text-on-dark); font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .fch-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+    /* 28px coral circle avatar with "C" monogram */
+    .fch-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--ci-accent-primary); color: #fff;
+      font-size: 14px; font-weight: 700; line-height: 28px; text-align: center;
+      flex-shrink: 0; letter-spacing: -0.01em;
+    }
+    .fch-identity { display: flex; flex-direction: column; min-width: 0; }
+    .fch-title { color: var(--ci-text-on-dark); font-size: 14px; font-weight: 700; white-space: nowrap; line-height: 1.2; }
     /* Subtitle: sentence-case, muted, ellipsis */
-    .fch-company { color: var(--ci-text-on-dark-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fch-company { color: var(--ci-text-on-dark-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
     .fch-header-btns { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
     /* 26px square, 5px radius controls */
     .fch-btn {
@@ -1088,7 +1120,16 @@
     #ci-float-chat .chat-prompts-dropdown-sep { height: 1px; background: var(--ci-border-subtle); }
     #ci-float-chat .chat-prompts-dropdown-action { color: var(--ci-text-secondary); font-size: 12px; }
 
-    #ci-float-chat .chat-empty { color: var(--ci-text-tertiary); font-size: 13px; padding: 32px 20px; text-align: center; line-height: 1.6; }
+    /* Empty state — sentence-case greeting, no italic, no sub-copy */
+    #ci-float-chat .chat-empty { padding: 20px 16px 8px; text-align: center; }
+    #ci-float-chat .chat-quick-prompts { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; text-align: left; }
+    #ci-float-chat .chat-qp-btn {
+      padding: 9px 12px; background: #F5F7F9; border: 1px solid transparent;
+      border-radius: 8px; font-size: 12px; color: var(--ci-text-primary); cursor: pointer;
+      font-family: inherit; text-align: left;
+      transition: border-color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+    }
+    #ci-float-chat .chat-qp-btn:hover { border-color: var(--ci-border-strong); background: var(--ci-bg-raised); }
 
     /* Message rendering */
     #ci-float-chat .chat-msg { margin-bottom: 12px; }
@@ -1120,11 +1161,23 @@
     #ci-float-chat .chat-followups { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
     #ci-float-chat .chat-followup-btn { font-size: 11px; padding: 3px 10px; border-radius: var(--ci-radius-full); border: 1px solid var(--ci-border-default); background: var(--ci-bg-inset); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit; transition: all var(--ci-transition-fast); }
     #ci-float-chat .chat-followup-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
-    .chat-thinking { color: var(--ci-text-tertiary) !important; font-style: italic; }
-    .chat-thinking-dots span { animation: chatDotPulse 1.4s infinite; opacity: 0.3; }
-    .chat-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .chat-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes chatDotPulse { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+    /* Streaming caret — 2px wide, 14px tall, 1.1s ease-in-out blink. Removed on stream complete. */
+    @keyframes streamingCaretBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .streaming-caret {
+      display: inline-block; width: 2px; height: 14px;
+      background: var(--ci-text-primary); border-radius: 1px;
+      margin-left: 2px; vertical-align: text-bottom;
+      animation: streamingCaretBlink 1.1s ease-in-out infinite;
+    }
+    /* Message fade-in on add — 120ms ease-out */
+    @keyframes chatMsgFadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    #ci-float-chat .chat-msg { animation: chatMsgFadeIn var(--motion-xs) var(--ease-out); }
 
     /* ── Documents tab ── */
     .docs-section { padding: 16px 0; }
@@ -1384,9 +1437,11 @@
   <div id="ci-float-chat" class="fch-hidden">
     <div class="fch-header" id="fch-header">
       <div class="fch-header-left">
-        <span class="fch-spark">✦</span>
-        <span class="fch-title">Coop</span>
-        <span class="fch-company" id="fch-company-name"></span>
+        <div class="fch-avatar" aria-hidden="true">C</div>
+        <div class="fch-identity">
+          <span class="fch-title">Coop</span>
+          <span class="fch-company" id="fch-company-name"></span>
+        </div>
       </div>
       <div class="fch-header-btns">
         <button class="fch-btn" id="fch-size-toggle" title="Maximize">⤢</button>

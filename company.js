@@ -5256,18 +5256,32 @@ function initFloatingChat() {
   const SIZE_CLASSES = ['', 'fch-maximized', 'fch-fullscreen'];
 
   function open() {
-    floatEl.classList.remove('fch-hidden', 'fch-minimized');
+    // Panel open: 200ms ease-out, opacity 0→1 + scale(0.96)→scale(1)
+    floatEl.classList.remove('fch-hidden', 'fch-closing', 'fch-minimized');
+    floatEl.classList.add('fch-visible');
     trigger.style.display = 'none';
     isMinimized = false;
     setTimeout(() => chatContainer.querySelector('.chat-input-box,.chat-input')?.focus(), 150);
   }
 
   function close() {
-    floatEl.classList.add('fch-hidden');
-    floatEl.classList.remove('fch-minimized', 'fch-maximized', 'fch-fullscreen');
-    trigger.style.display = '';
-    isMinimized = false; sizeState = 0;
-    sizeBtn.textContent = SIZE_ICONS[0];
+    // Panel close: 120ms ease-in, reverse
+    floatEl.classList.remove('fch-visible');
+    floatEl.classList.add('fch-closing');
+    const onAnimEnd = () => {
+      floatEl.classList.remove('fch-closing');
+      floatEl.classList.add('fch-hidden');
+      floatEl.classList.remove('fch-minimized', 'fch-maximized', 'fch-fullscreen');
+      trigger.style.display = '';
+      isMinimized = false; sizeState = 0;
+      sizeBtn.textContent = SIZE_ICONS[0];
+      floatEl.removeEventListener('animationend', onAnimEnd);
+    };
+    floatEl.addEventListener('animationend', onAnimEnd, { once: true });
+    // Fallback: ensure hidden even if animation event doesn't fire
+    setTimeout(() => {
+      if (!floatEl.classList.contains('fch-hidden')) onAnimEnd();
+    }, 200);
   }
 
   function minimize() {
@@ -5655,19 +5669,21 @@ function bindNoteCardEvents() {
 // escapeHtml — provided by ui-utils.js
 
 function renderMarkdown(text) {
-  // Escape HTML first, then apply markdown patterns
+  // Escape HTML first, then apply markdown patterns.
+  // No text-transform:uppercase, no letter-spacing anywhere — DESIGN.md rule.
   let s = escapeHtml(text);
-  // Headers: ### / ## rendered as bold section labels (no uppercase, no tiny-caps)
-  s = s.replace(/^### (.+)$/gm, '<strong style="font-size:12px;color:var(--ci-text-secondary);font-weight:700">$1</strong>');
-  s = s.replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:14px;color:var(--ci-text-primary);margin:10px 0 4px">$1</div>');
+  // ### → h4-style treatment: 13px/700, sentence case, 14px top/6px bottom margin
+  s = s.replace(/^### (.+)$/gm, '<div style="font-size:13px;font-weight:700;color:var(--ci-text-primary);margin:14px 0 6px;line-height:1.3">$1</div>');
+  // ## → slightly larger section label
+  s = s.replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:14px;color:var(--ci-text-primary);margin:14px 0 6px;line-height:1.3">$1</div>');
   // Bold: **text**
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:600">$1</strong>');
   // Citation links: [[N]](url) — render as clickable superscript
-  s = s.replace(/\[\[(\d+)\]\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" style="font-size:10px;color:#0077b5;vertical-align:super;text-decoration:none">[$1]</a>');
+  s = s.replace(/\[\[(\d+)\]\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" style="font-size:10px;color:var(--ci-accent-blue,#0077b5);vertical-align:super;text-decoration:none">[$1]</a>');
   // Plain markdown links: [text](url)
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" style="color:#0077b5">$1</a>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--ci-accent-blue,#0077b5);text-decoration:none">$1</a>');
   // Bullet lines: "- item"
-  s = s.replace(/^- (.+)$/gm, '<div style="padding-left:12px;margin:2px 0">• $1</div>');
+  s = s.replace(/^- (.+)$/gm, '<div style="padding-left:16px;margin:3px 0;line-height:1.55">• $1</div>');
   // Line breaks
   s = s.replace(/\n/g, '<br>');
   return s;

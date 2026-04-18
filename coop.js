@@ -47,15 +47,10 @@ const COOP = {
   },
 
   emptyStateHTML(context = 'company') {
-    const prompts = {
-      company: 'Ask about this company, role, or get help applying.',
-      global: 'Ask me anything about your pipeline, prep for interviews, or strategize your search.',
-      meeting: 'Ask about this meeting — attendees, takeaways, or follow-ups.',
-    };
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;text-align:center;">
-      ${this.avatar(56)}
-      <div style="font-size:15px;font-weight:700;color:#2D2D2D;">Hey, I'm Coop</div>
-      <div style="font-size:13px;color:#8B8680;line-height:1.5;max-width:260px;">${prompts[context] || prompts.company}</div>
+    // No italic greeting, no "Hey, I'm Coop" — DESIGN.md compliance.
+    // Sentence-case question, 15px/600, no sub-copy.
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 16px 16px;text-align:center;">
+      <div style="font-size:15px;font-weight:600;color:var(--ci-text-primary,#0A0B0D);letter-spacing:-0.01em;">What should we figure out?</div>
     </div>`;
   },
 
@@ -64,9 +59,10 @@ const COOP = {
   thinkingAvatar(size = 36) { return this.avatar(size); },
 
   thinkingHTML() {
-    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
-      ${this.thinkingAvatar(22)}
-      <span style="color:#8B8680;font-size:13px;font-style:italic;">Coop is thinking...</span>
+    // Non-italic, non-bouncing-dots indicator. Streaming will replace this once wired up.
+    // Uses a pulsing streaming-caret as the only motion signal — DESIGN.md: narrative > spinners.
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;">
+      <span style="font-size:13px;color:var(--ci-text-tertiary,#8A8E94);">Coop</span><span class="streaming-caret" style="display:inline-block;width:2px;height:14px;background:var(--ci-text-primary,#0A0B0D);border-radius:1px;margin-left:2px;animation:streamingCaretBlink 1.1s ease-in-out infinite;"></span>
     </div>`;
   },
 

@@ -164,16 +164,26 @@ function buildChatPanel(container, entry) {
     }, 2000);
   }
 
-  // Model switcher — default GPT-4.1 mini, click to cycle
+  // Model switcher — default GPT-4.1 mini, click to cycle.
+  // No emoji icons (◆ ✦ ⚡) — DESIGN.md compliance. Dot color set by provider.
   const CHAT_MODELS_ALL = [
-    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',     icon: '◆', provider: 'openai' },
-    { id: 'gemini-2.0-flash-lite',     label: 'Flash-Lite',       icon: '✦', provider: 'gemini' },
-    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',     icon: '◆', provider: 'openai' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',        icon: '⚡', provider: 'anthropic' },
-    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',     icon: '✦', provider: 'gemini' },
-    { id: 'gpt-4.1',                   label: 'GPT-4.1',          icon: '◆', provider: 'openai' },
-    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',       icon: '✦', provider: 'anthropic' },
+    { id: 'gpt-4.1-nano',              label: 'GPT-4.1 Nano',     provider: 'openai' },
+    { id: 'gemini-2.0-flash-lite',     label: 'Flash-Lite',       provider: 'gemini' },
+    { id: 'gpt-4.1-mini',              label: 'GPT-4.1 Mini',     provider: 'openai' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5',        provider: 'anthropic' },
+    { id: 'gemini-2.0-flash',          label: 'Gemini Flash',     provider: 'gemini' },
+    { id: 'gpt-4.1',                   label: 'GPT-4.1',          provider: 'openai' },
+    { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6',       provider: 'anthropic' },
   ];
+  // Dot color per provider: anthropic-haiku=amber, anthropic-sonnet/opus=coral, openai=teal-green, gemini=blue
+  const _providerDotColor = (model) => {
+    if (!model) return 'var(--ci-accent-primary)';
+    if (model.id?.includes('haiku')) return 'var(--ci-accent-amber, #F5A623)';
+    if (model.provider === 'anthropic') return 'var(--ci-accent-primary, #FC636B)';
+    if (model.provider === 'openai') return '#10A37F';
+    if (model.provider === 'gemini') return '#4285F4';
+    return 'var(--ci-accent-primary)';
+  };
   // Filtered to providers with configured API keys (populated async below).
   // Falls back to the full list if key-status lookup fails so we never leave
   // the toggle empty.
@@ -203,7 +213,7 @@ function buildChatPanel(container, entry) {
       </div>
     </div>
     <div class="chat-actions-mini" id="chat-actions-mini-${panelId}">
-      <button class="chat-prompts-btn" id="chat-prompts-btn-${panelId}" title="Quick prompts">⚡ Prompts</button>
+      <button class="chat-prompts-btn" id="chat-prompts-btn-${panelId}" title="Quick prompts">Prompts</button>
       <button class="chat-clear-btn" id="chat-clear-btn-${panelId}" title="Clear conversation">Clear</button>
     </div>
   `;
@@ -317,6 +327,9 @@ function buildChatPanel(container, entry) {
     if (!modelBtn) return;
     const m = CHAT_MODELS[chatModelIdx] || CHAT_MODELS[0];
     if (!m) return;
+    // Update dot color by provider (no emoji icons — DESIGN.md)
+    const dotEl = modelBtn.querySelector('.chat-model-dot');
+    if (dotEl) dotEl.style.background = _providerDotColor(m);
     if (modelLabelEl) modelLabelEl.textContent = m.label;
     else modelBtn.textContent = m.label;
   }
@@ -370,8 +383,9 @@ function buildChatPanel(container, entry) {
     const emptyHTML = typeof COOP !== 'undefined'
       ? `<div class="chat-empty">${COOP.emptyStateHTML('company')}${qpHTML}</div>`
       : `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.${qpHTML}</div>`;
+    // Thinking state: streaming caret only — no bouncing dots (DESIGN.md)
     const thinkingHTML = showThinking
-      ? (typeof COOP !== 'undefined' ? `<div class="chat-msg chat-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="chat-msg chat-msg-assistant"><div class="chat-msg-bubble chat-thinking"><span class="chat-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>')
+      ? `<div class="chat-msg chat-msg-assistant">${typeof COOP !== 'undefined' ? COOP.thinkingHTML() : '<span class="streaming-caret"></span>'}</div>`
       : '';
     msgsEl.innerHTML = history.length === 0
       ? emptyHTML
@@ -384,9 +398,10 @@ function buildChatPanel(container, entry) {
           const followup = isLastAssistant
             ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
             : '';
-          const saveBtn = m.role === 'assistant' ? `<button class="chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern" style="background:none;border:none;font-size:13px;cursor:pointer;opacity:0.4;padding:2px;">💾</button>` : '';
-          const copyBtn = m.role === 'assistant' ? `<button class="chat-copy-answer" data-idx="${idx}" title="Copy to clipboard" style="background:none;border:none;font-size:13px;cursor:pointer;opacity:0.4;padding:2px;">📋</button>` : '';
-          const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
+          const saveBtn = m.role === 'assistant' ? `<button class="chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern" style="background:none;border:none;font-size:11px;cursor:pointer;opacity:0.4;padding:2px;font-family:inherit;color:var(--ci-text-tertiary);">Save</button>` : '';
+          const copyBtn = m.role === 'assistant' ? `<button class="chat-copy-answer" data-idx="${idx}" title="Copy to clipboard" style="background:none;border:none;font-size:11px;cursor:pointer;opacity:0.4;padding:2px;font-family:inherit;color:var(--ci-text-tertiary);">Copy</button>` : '';
+          // No messagePrefixHTML — assistant messages are plain typographic body (DESIGN.md)
+          const prefix = '';
           const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
             const inp = m._usage.input || 0, out = m._usage.output || 0;
             const cacheW = m._usage.cacheCreation || 0, cacheR = m._usage.cacheRead || 0;
@@ -453,9 +468,10 @@ function buildChatPanel(container, entry) {
         const clean = text.replace(/^["']|["']$/g, '').trim();
 
         navigator.clipboard.writeText(clean).then(() => {
-          btn.textContent = '✓';
+          btn.textContent = '✓ Copied';
           btn.style.color = '#00BDA5';
-          setTimeout(() => { btn.textContent = '📋'; btn.style.color = ''; }, 1500);
+          btn.style.opacity = '0.7';
+          setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.opacity = '0.4'; }, 1500);
         });
       });
     });
@@ -486,11 +502,11 @@ function buildChatPanel(container, entry) {
             source: 'manual-save'
           });
           chrome.storage.local.set({ storyTime: st }, () => {
-            btn.textContent = '✓';
-            btn.style.opacity = '1';
+            btn.textContent = '✓ Saved';
+            btn.style.opacity = '0.7';
             btn.style.color = '#15803d';
             btn.disabled = true;
-            setTimeout(() => { btn.textContent = '💾'; btn.style.opacity = '0.4'; btn.style.color = ''; btn.disabled = false; }, 2000);
+            setTimeout(() => { btn.textContent = 'Save'; btn.style.opacity = '0.4'; btn.style.color = ''; btn.disabled = false; }, 2000);
           });
         });
       });

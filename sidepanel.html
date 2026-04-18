@@ -755,6 +755,17 @@
     .sp-chat-copy { background: var(--ci-bg-inset); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-sm); padding: 3px 8px; font-size: 11px; cursor: pointer; color: var(--ci-text-tertiary); transition: all 0.12s; line-height: 1; }
     .sp-chat-copy:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }
 
+    /* Streaming caret — used by COOP.thinkingHTML() during wait states */
+    @keyframes streamingCaretBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .streaming-caret {
+      display: inline-block; width: 2px; height: 14px;
+      background: var(--ci-text-primary); border-radius: 1px;
+      margin-left: 2px; vertical-align: text-bottom;
+      animation: streamingCaretBlink 1.1s ease-in-out infinite;
+    }
     /* Message entrance animation */
     @keyframes msgSlideIn {
       from { opacity: 0; transform: translateY(10px) scale(0.98); }
