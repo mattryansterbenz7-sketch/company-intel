@@ -6,6 +6,39 @@ function setChatContext(key, context) {
   _chatContextOverrides[key] = context;
 }
 
+// ── Dynamic chat sizing ───────────────────────────────────────────────────────
+// Auto-grows the floating chat panel within [260px, min(75vh, 720px)].
+// Grow-only mid-conversation; user override (preset click or drag) disables
+// auto-grow for that session; page reload re-enables it.
+
+const CHAT_BOUNDS = {
+  min: 260,
+  max: () => Math.min(Math.round(window.innerHeight * 0.75), 720),
+  chrome: 150, // header + model row + input wrap
+};
+let _chatUserSizedThisSession = false;
+let _chatLastMeasuredHeight = null;
+
+function _markUserSized() {
+  _chatUserSizedThisSession = true;
+}
+
+function measureAndGrowChat(panel) {
+  if (_chatUserSizedThisSession) return;
+  // panel may be the inner container — walk up to find the sizing root
+  const sizingPanel = panel?.closest?.('[data-chat-size-root]') || panel;
+  if (!sizingPanel) return;
+  const body = sizingPanel.querySelector('.chat-messages') || sizingPanel.querySelector('.chat-body');
+  if (!body) return;
+  const contentHeight = body.scrollHeight + CHAT_BOUNDS.chrome;
+  const target = Math.max(CHAT_BOUNDS.min, Math.min(contentHeight, CHAT_BOUNDS.max()));
+  const current = parseInt(sizingPanel.style.height) || sizingPanel.offsetHeight || CHAT_BOUNDS.min;
+  if (target > current) {
+    sizingPanel.style.height = target + 'px';
+    _chatLastMeasuredHeight = target;
+  }
+}
+
 // ── Chat history persistence ──────────────────────────────────────────────────
 // Storage key: chatHistory_${entryId}
 // Shape: { sessions: [{ id, startedAt, messages: [{role, content, _usage, _model}] }] }
@@ -67,6 +100,9 @@ function formatSessionDate(isoStr) {
 }
 
 function initChatPanels(entry) {
+  // Reset auto-grow flag each time panels are (re-)initialized (i.e. each page load)
+  _chatUserSizedThisSession = false;
+  _chatLastMeasuredHeight = null;
   // Inject context manifest CSS once
   if (typeof injectContextManifestStyles === 'function') injectContextManifestStyles('chat');
   document.querySelectorAll('[data-chat-panel]').forEach(container => {
@@ -151,17 +187,25 @@ function buildChatPanel(container, entry) {
     <div class="chat-prev-sessions" id="chat-prev-${panelId}" style="display:none"></div>
     <div class="chat-messages" id="chat-msgs-${panelId}"></div>
     <div class="chat-email-status" id="chat-email-status-${panelId}" style="display:none"></div>
-    <div class="chat-input-row">
-      <textarea class="chat-input" id="chat-input-${panelId}" placeholder="${placeholder}" rows="1"></textarea>
-      <button class="chat-model-btn" id="chat-model-${panelId}" title="Click to switch model" style="background:none;border:1px solid #DDD9D4;color:#8B8680;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">...</button>
-      <button class="chat-send-btn" id="chat-send-${panelId}">Send</button>
+    <div class="chat-model-row" id="chat-model-row-${panelId}">
+      <button class="chat-model-btn" id="chat-model-${panelId}" title="Click to switch model">
+        <span class="chat-model-dot"></span>
+        <span class="chat-model-label">...</span>
+        <span class="chat-model-caret">›</span>
+      </button>
     </div>
-    ${minimal ? `<div class="chat-actions"><button class="chat-action-btn chat-clear-btn" data-action="clear">Clear chat</button></div>` : `
-    <div class="chat-actions">
-      <button class="chat-action-btn" data-action="emails">Load emails</button>
-      <button class="chat-action-btn" data-action="granola">Load meeting notes</button>
-      <button class="chat-action-btn chat-clear-btn" data-action="clear">Clear chat</button>
-    </div>`}
+    <div class="chat-input-wrap">
+      <div class="chat-input-main">
+        <textarea class="chat-input-box" id="chat-input-${panelId}" placeholder="${placeholder}" rows="1"></textarea>
+        <button class="chat-send-btn" id="chat-send-${panelId}" title="Send">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14.5 8L2 2.5l3 5.5-3 5.5 12.5-5.5z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="chat-actions-mini" id="chat-actions-mini-${panelId}">
+      <button class="chat-prompts-btn" id="chat-prompts-btn-${panelId}" title="Quick prompts">⚡ Prompts</button>
+      <button class="chat-clear-btn" id="chat-clear-btn-${panelId}" title="Clear conversation">Clear</button>
+    </div>
   `;
 
   const msgsEl        = container.querySelector(`#chat-msgs-${panelId}`);
@@ -170,7 +214,8 @@ function buildChatPanel(container, entry) {
   const sendBtn       = container.querySelector(`#chat-send-${panelId}`);
   const statusEl      = container.querySelector(`#chat-email-status-${panelId}`);
   const modelBtn      = container.querySelector(`#chat-model-${panelId}`);
-  const actionsEl     = container.querySelector('.chat-actions');
+  const modelLabelEl  = modelBtn?.querySelector('.chat-model-label');
+  const actionsEl     = container.querySelector(`#chat-actions-mini-${panelId}`);
 
   // Render "Previous sessions" collapsible above current chat
   function renderPrevSessions(sessions) {
@@ -272,7 +317,8 @@ function buildChatPanel(container, entry) {
     if (!modelBtn) return;
     const m = CHAT_MODELS[chatModelIdx] || CHAT_MODELS[0];
     if (!m) return;
-    modelBtn.textContent = m.icon + ' ' + m.label;
+    if (modelLabelEl) modelLabelEl.textContent = m.label;
+    else modelBtn.textContent = m.label;
   }
   // Filter CHAT_MODELS to providers with a configured API key, then pick the
   // user's default. Runs in parallel to avoid a round-trip stall on panel build.
@@ -461,11 +507,16 @@ function buildChatPanel(container, entry) {
 
     inputEl.value = '';
     inputEl.style.height = '';
+    // Toggle send button state back to empty
+    sendBtn.classList.remove('has-text');
     history.push({ role: 'user', content: [{ type: 'text', text }] });
     renderHistory(true);
 
+    // Grow panel to fit the thinking state
+    const _sizingPanel = container.closest('[data-chat-size-root]');
+    if (_sizingPanel) measureAndGrowChat(_sizingPanel);
+
     sendBtn.disabled = true;
-    sendBtn.textContent = '…';
 
     // Always read the freshest override at send time — handles Granola arriving after panel was built
     const effectiveGranola = _chatContextOverrides[chatKey] || granolaContext;
@@ -500,7 +551,6 @@ function buildChatPanel(container, entry) {
     }
 
     sendBtn.disabled = false;
-    sendBtn.textContent = 'Send';
 
     if (result?.reply) {
       const msgEntry = { role: 'assistant', content: [{ type: 'text', text: result.reply }] };
@@ -530,6 +580,8 @@ function buildChatPanel(container, entry) {
 
     saveHistory();
     renderHistory();
+    // Grow panel after assistant reply renders
+    if (_sizingPanel) measureAndGrowChat(_sizingPanel);
   }
 
   sendBtn.addEventListener('click', send);
@@ -539,103 +591,113 @@ function buildChatPanel(container, entry) {
   inputEl.addEventListener('input', () => {
     inputEl.style.height = '';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+    // Toggle send button active state
+    sendBtn.classList.toggle('has-text', inputEl.value.trim().length > 0);
   });
 
-  // Action buttons
-  container.querySelector('.chat-actions').addEventListener('click', async e => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    const action = btn.dataset.action;
+  // ── Action row: Prompts dropdown + Clear ─────────────────────────────────────
+  const promptsBtnEl = container.querySelector(`#chat-prompts-btn-${panelId}`);
+  const clearBtnEl   = container.querySelector(`#chat-clear-btn-${panelId}`);
 
-    if (action === 'clear') {
+  // Helper: load emails into context (used by Prompts dropdown entries)
+  async function loadEmails() {
+    const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+    const linkedinSlug = (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
+    const companyName = entry.company || '';
+    const result = await new Promise(resolve =>
+      chrome.runtime.sendMessage({ type: 'GMAIL_FETCH_EMAILS', domain, companyName, linkedinSlug }, resolve)
+    );
+    if (result?.error === 'not_connected') { showStatus('Gmail not connected. Connect it in Integrations.', 'err'); return false; }
+    if (!result?.emails?.length) { showStatus('No emails found with this domain.', 'info'); return false; }
+    emailContext = result.emails;
+    showStatus(`${result.emails.length} email${result.emails.length === 1 ? '' : 's'} loaded into context.`, 'ok');
+    return true;
+  }
+
+  // Helper: load meeting notes into context
+  async function loadMeetings() {
+    const contactNames = (entry.knownContacts || []).map(c => c.name).filter(Boolean);
+    const result = await new Promise(resolve =>
+      chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames }, resolve)
+    );
+    console.log('[Chat Granola] Raw result:', JSON.stringify({
+      hasNotes: !!result?.notes, notesLen: result?.notes?.length || 0,
+      hasTranscript: !!result?.transcript, transcriptLen: result?.transcript?.length || 0,
+      meetingsCount: result?.meetings?.length || 0, error: result?.error || null
+    }));
+    if (result?.error === 'token_expired') { showStatus('Granola session expired — please reconnect in Integrations.', 'err'); return false; }
+    if (result?.error === 'not_connected') { showStatus('Granola not connected. Connect it in Integrations.', 'err'); return false; }
+    if (!result?.notes && !result?.transcript && !result?.meetings?.length) { showStatus('No Granola notes found for this company.', 'info'); return false; }
+    granolaContext = result.transcript || result.notes;
+    if (result.meetings?.length) {
+      meetingsContext = result.meetings;
+      console.log('[Chat Granola] Stored', meetingsContext.length, 'structured meetings');
+    }
+    const count = result.meetings?.length || (result.transcript ? 'transcripts' : 'notes');
+    showStatus(`Meeting ${typeof count === 'number' ? count + ' meeting(s)' : count} loaded into context.`, 'ok');
+    return true;
+  }
+
+  // Prompts dropdown — same pattern as sidepanel.js sp-prompts-btn
+  if (promptsBtnEl) {
+    promptsBtnEl.addEventListener('click', e => {
+      e.stopPropagation();
+      // Close any existing dropdown
+      container.querySelector('.chat-prompts-dropdown')?.remove();
+      const isMeetingChat = isMeetingChatKey(chatKey);
+      const promptSet = isMeetingChat ? _meetingQuickPrompts : _chatQuickPrompts;
+      // Build extended prompt list: standard prompts + load emails/notes actions
+      const actionItems = [
+        { label: 'Load emails', isAction: true, action: async () => { promptsBtnEl.disabled = true; await loadEmails(); promptsBtnEl.disabled = false; } },
+        { label: 'Load meeting notes', isAction: true, action: async () => { promptsBtnEl.disabled = true; await loadMeetings(); promptsBtnEl.disabled = false; } },
+      ];
+      const dd = document.createElement('div');
+      dd.className = 'chat-prompts-dropdown';
+      // Prompt items
+      promptSet.forEach(p => {
+        const item = document.createElement('button');
+        item.className = 'chat-prompts-dropdown-item';
+        item.textContent = p.label;
+        item.addEventListener('click', () => {
+          inputEl.value = p.prompt;
+          inputEl.dispatchEvent(new Event('input'));
+          dd.remove();
+          inputEl.focus();
+        });
+        dd.appendChild(item);
+      });
+      // Separator if there are prompt items
+      if (promptSet.length && actionItems.length) {
+        const sep = document.createElement('div');
+        sep.className = 'chat-prompts-dropdown-sep';
+        dd.appendChild(sep);
+      }
+      // Action items (load emails / load notes)
+      actionItems.forEach(a => {
+        const item = document.createElement('button');
+        item.className = 'chat-prompts-dropdown-item chat-prompts-dropdown-action';
+        item.textContent = a.label;
+        item.addEventListener('click', () => { dd.remove(); a.action(); });
+        dd.appendChild(item);
+      });
+      container.querySelector('.chat-actions-mini').appendChild(dd);
+      document.addEventListener('click', () => dd.remove(), { once: true });
+    });
+  }
+
+  // Clear button
+  if (clearBtnEl) {
+    clearBtnEl.addEventListener('click', () => {
       history = [];
       currentSession.messages = history;
+      // Reset panel height to min when clearing
+      const _sp = container.closest('[data-chat-size-root]');
+      if (_sp && !_chatUserSizedThisSession) {
+        _sp.style.height = CHAT_BOUNDS.min + 'px';
+        _chatLastMeasuredHeight = null;
+      }
       renderHistory();
-      return;
-    }
-
-    if (action === 'emails') {
-      const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
-      // Extract LinkedIn slug as fallback keyword
-      const linkedinSlug = (entry.companyLinkedin || '').replace(/\/$/, '').split('/').pop();
-      const companyName = entry.company || '';
-
-      btn.disabled = true;
-      btn.textContent = 'Loading…';
-      const result = await new Promise(resolve =>
-        chrome.runtime.sendMessage({ type: 'GMAIL_FETCH_EMAILS', domain, companyName, linkedinSlug }, resolve)
-      );
-      btn.disabled = false;
-      btn.textContent = 'Load emails';
-
-      if (result?.error === 'not_connected') {
-        showStatus('Gmail not connected. Connect it in Integrations.', 'err');
-        return;
-      }
-      if (!result?.emails?.length) {
-        showStatus('No emails found with this domain.', 'info');
-        return;
-      }
-      emailContext = result.emails;
-      showStatus(`${result.emails.length} email${result.emails.length === 1 ? '' : 's'} loaded into context.`, 'ok');
-      return;
-    }
-
-    if (action === 'granola') {
-      btn.disabled = true;
-      btn.textContent = 'Loading…';
-      const contactNames = (entry.knownContacts || []).map(c => c.name).filter(Boolean);
-      const result = await new Promise(resolve =>
-        chrome.runtime.sendMessage({ type: 'GRANOLA_SEARCH', companyName: entry.company, contactNames }, resolve)
-      );
-      btn.disabled = false;
-      btn.textContent = 'Load meeting notes';
-
-      console.log('[Chat Granola] Raw result:', JSON.stringify({
-        hasNotes: !!result?.notes,
-        notesLen: result?.notes?.length || 0,
-        hasTranscript: !!result?.transcript,
-        transcriptLen: result?.transcript?.length || 0,
-        meetingsCount: result?.meetings?.length || 0,
-        error: result?.error || null
-      }));
-
-      if (result?.error === 'token_expired') {
-        showStatus('Granola session expired — please reconnect in Integrations.', 'err');
-        return;
-      }
-      if (result?.error === 'not_connected') {
-        showStatus('Granola not connected. Connect it in Integrations.', 'err');
-        return;
-      }
-      if (!result?.notes && !result?.transcript && !result?.meetings?.length) {
-        showStatus('No Granola notes found for this company.', 'info');
-        return;
-      }
-      granolaContext = result.transcript || result.notes;
-      // Also capture structured meetings so they're available in context
-      if (result.meetings?.length) {
-        meetingsContext = result.meetings;
-        console.log('[Chat Granola] Stored', meetingsContext.length, 'structured meetings');
-      }
-      const count = result.meetings?.length || (result.transcript ? 'transcripts' : 'notes');
-      showStatus(`Meeting ${typeof count === 'number' ? count + ' meeting(s)' : count} loaded into context.`, 'ok');
-    }
-
-    // Chat journeys for opportunities
-    if (action === 'journey-coverletter') {
-      const journeyPrompt = `Help me write a custom cover letter for this ${entry.jobTitle || 'role'} application. Make it compelling and personalized.`;
-      inputEl.value = journeyPrompt;
-      inputEl.focus();
-      send();
-      return;
-    }
-  });
-
-  // Add journey buttons for opportunities (not meetings chat)
-  if (entry.isOpportunity && actionsEl && !isMeetingChatKey(chatKey)) {
-    const journeyHtml = `<button class="chat-action-btn" data-action="journey-coverletter" style="background-color:rgba(255, 122, 89, 0.08);color:#FF7A59;font-weight:600;">✎ Cover letter</button>`;
-    actionsEl.insertAdjacentHTML('afterbegin', journeyHtml);
+    });
   }
 
   function showStatus(msg, type) {

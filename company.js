@@ -5011,6 +5011,11 @@ function initFloatingChat() {
 
   if (nameEl && entry.company) nameEl.textContent = `— ${entry.company}`;
 
+  // Mark as the dynamic sizing root so measureAndGrowChat can find it
+  floatEl.setAttribute('data-chat-size-root', '1');
+  // Initialize at minimum height
+  floatEl.style.height = (typeof CHAT_BOUNDS !== 'undefined' ? CHAT_BOUNDS.min : 260) + 'px';
+
   // Build the chat panel once
   const chatContainer = document.createElement('div');
   chatContainer.setAttribute('data-chat-panel', entry.id);
@@ -5027,7 +5032,7 @@ function initFloatingChat() {
     floatEl.classList.remove('fch-hidden', 'fch-minimized');
     trigger.style.display = 'none';
     isMinimized = false;
-    setTimeout(() => chatContainer.querySelector('.chat-input')?.focus(), 150);
+    setTimeout(() => chatContainer.querySelector('.chat-input-box,.chat-input')?.focus(), 150);
   }
 
   function close() {
@@ -5046,6 +5051,8 @@ function initFloatingChat() {
       floatEl.classList.remove('fch-maximized', 'fch-fullscreen');
       sizeState = 0; sizeBtn.textContent = SIZE_ICONS[0];
     }
+    // Minimize is a user-controlled size action
+    if (typeof _markUserSized === 'function') _markUserSized();
   }
 
   function cycleSize() {
@@ -5054,6 +5061,8 @@ function initFloatingChat() {
     if (SIZE_CLASSES[sizeState]) floatEl.classList.add(SIZE_CLASSES[sizeState]);
     sizeBtn.textContent = SIZE_ICONS[sizeState];
     if (isMinimized) { isMinimized = false; floatEl.classList.remove('fch-minimized'); minBtn.textContent = '−'; }
+    // Preset cycle is a user-controlled size action
+    if (typeof _markUserSized === 'function') _markUserSized();
   }
 
   trigger.addEventListener('click', open);
@@ -5061,7 +5070,7 @@ function initFloatingChat() {
   minBtn.addEventListener('click', minimize);
   sizeBtn.addEventListener('click', cycleSize);
 
-  // Drag to reposition
+  // Drag to reposition (doesn't resize — auto-grow stays enabled)
   let dragging = false, startX, startY, startRight, startBottom;
   header.addEventListener('mousedown', e => {
     if (e.target.closest('.fch-btn')) return;
@@ -5102,7 +5111,7 @@ function openChatPanel() {
   }
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   setTimeout(() => {
-    const input = panel.querySelector('.chat-input');
+    const input = panel.querySelector('.chat-input-box, .chat-input');
     if (input) input.focus();
   }, 300);
 }
