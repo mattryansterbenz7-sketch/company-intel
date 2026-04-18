@@ -747,18 +747,28 @@
     /* ── Stage editor modal ── */
     /* ── Activity & Goals ── */
     .activity-section { padding: 20px 32px 22px; border-bottom: 2px solid var(--ci-border-default); background: var(--ci-bg-inset); }
-    .activity-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+    .activity-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
     .activity-head-left { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; }
-    .activity-head-right { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .activity-section-title { font-size: 10px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: 0.07em; text-transform: uppercase; }
-    .activity-period-label { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); white-space: nowrap; }
+    .activity-head-right { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+    .activity-section-title { font-size: 15px; font-weight: 700; letter-spacing: -0.005em; color: var(--ci-text-primary); }
+    .activity-section-sub { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500; }
+    .activity-period-label { font-size: 13px; font-weight: 600; color: var(--ci-text-secondary); white-space: nowrap; cursor: pointer; }
     .period-toggle { display: flex; align-items: center; justify-content: center; gap: 0; flex: 0 0 auto; }
     .period-tabs { display: flex; gap: 2px; background: var(--ci-border-default); border-radius: 8px; padding: 3px; flex-shrink: 0; }
-    .period-tab { font-size: 13px; font-weight: 700; color: var(--ci-text-tertiary); border: none; background: none; border-radius: var(--ci-radius-sm); padding: 6px 16px; cursor: pointer; font-family: inherit; transition: all 0.12s; }
+    .period-tab { font-size: 13px; font-weight: 700; color: var(--ci-text-tertiary); border: none; background: none; border-radius: var(--ci-radius-sm); padding: 6px 16px; cursor: pointer; font-family: inherit; transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); }
     .period-tab:hover:not(.active) { color: var(--ci-text-secondary); background: rgba(255,255,255,0.5); }
     .period-tab.active { background: var(--ci-bg-raised); color: var(--ci-text-primary); box-shadow: var(--ci-shadow-sm); }
-    .activity-goals-row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .goal-card { position: relative; display: flex; align-items: center; gap: 14px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 14px 18px; cursor: pointer; transition: border-color 0.15s; user-select: none; min-width: 155px; }
+    /* ── Split layout ── */
+    .activity-body-split { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0; }
+    .activity-stats-col { padding-right: 22px; }
+    .activity-tasks-col { padding-left: 22px; min-width: 0; }
+    .activity-split-divider { background: var(--ci-border-subtle); width: 1px; }
+    .activity-col-title { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ci-text-secondary); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; min-height: 22px; }
+    .activity-col-title .count { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 500; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+    /* ── Goals grid ── */
+    .activity-goals-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .activity-goals-grid .goal-card:nth-child(5) { grid-column: span 2; }
+    .goal-card { position: relative; display: flex; align-items: center; gap: 14px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 14px 18px; cursor: pointer; transition: border-color var(--motion-xs) var(--ease-out); user-select: none; min-width: 0; }
     .goal-info-icon { position: absolute; top: 7px; right: 9px; font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary); cursor: help; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); display: flex; align-items: center; justify-content: center; font-style: italic; font-family: Georgia, serif; line-height: 1; }
     .goal-info-icon:hover { color: var(--ci-text-secondary); border-color: var(--ci-border-strong); }
     .goal-card:hover { border-color: var(--ci-border-strong); }
@@ -790,31 +800,89 @@
     .act-date-input:focus { border-color: var(--ci-accent-primary); }
     .act-date-apply { background: var(--ci-accent-primary); color: var(--ci-text-on-dark); border: none; border-radius: var(--ci-radius-sm); padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .act-date-reset { background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 5px 10px; font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit; }
-    .stat-cards-edit-btn { align-self: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--ci-transition-fast); flex-shrink: 0; }
+    .stat-cards-edit-btn { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); background: var(--ci-bg-raised); color: var(--ci-text-tertiary); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); flex-shrink: 0; }
     .stat-cards-edit-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
-    /* ── Activity Tasks Panel ── */
-    .activity-tasks-label { display: none; }
-    .activity-tasks-list { display: flex; gap: 8px; overflow-x: auto; flex: 1; padding-bottom: 4px; min-width: 0; }
-    .activity-tasks-list::-webkit-scrollbar { height: 4px; }
-    .activity-tasks-list::-webkit-scrollbar-track { background: transparent; }
-    .activity-tasks-list::-webkit-scrollbar-thumb { background: var(--ci-border-default); border-radius: 2px; }
-    .activity-task-chip { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--ci-bg-raised); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-md); min-width: 0; flex-shrink: 0; max-width: 260px; transition: border-color var(--ci-transition-fast); }
-    .activity-task-chip:hover { border-color: var(--ci-border-strong); }
-    .activity-task-chip.overdue { border-left: 3px solid var(--ci-accent-red); }
-    .activity-task-chip.completed { opacity: 0.45; }
-    .activity-task-chip.completed .activity-task-text { text-decoration: line-through; }
-    .activity-task-chip-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ci-border-default); cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: transparent; transition: all 0.15s; }
-    .activity-task-chip-check:hover { border-color: #5DCAA5; }
-    .activity-task-chip.completed .activity-task-chip-check { background: #5DCAA5; border-color: #5DCAA5; color: var(--ci-text-on-dark); }
-    .activity-task-chip-body { min-width: 0; flex: 1; }
-    .activity-task-text { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
-    .activity-task-meta { display: flex; gap: 5px; align-items: center; margin-top: 2px; }
-    .activity-task-company { font-size: 10px; color: var(--ci-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
-    .activity-task-date { font-size: 10px; font-weight: 600; white-space: nowrap; }
-    .activity-task-date.overdue { color: var(--ci-accent-red); }
-    .activity-task-date.today { color: var(--ci-accent-primary); }
-    .activity-task-date.upcoming { color: var(--ci-text-tertiary); }
-    .activity-tasks-empty { font-size: 12px; color: var(--ci-text-tertiary); font-style: italic; padding-top: 2px; }
+    /* ── Scope tabs ── */
+    .activity-scope-tabs { display: flex; gap: 2px; }
+    .scope-tab { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: var(--ci-radius-sm); color: var(--ci-text-tertiary); cursor: pointer; user-select: none; background: transparent; border: none; font-family: inherit; transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); }
+    .scope-tab:hover { color: var(--ci-text-primary); }
+    .scope-tab.active { background: var(--ci-bg-inset); color: var(--ci-text-primary); font-weight: 600; }
+    /* ── Task rows ── */
+    .activity-tasks-list { display: flex; flex-direction: column; gap: 0; }
+    .task-row { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--ci-border-subtle); transition: background var(--motion-xs) var(--ease-out); }
+    .task-row:last-child { border-bottom: none; }
+    .task-row:hover { background: var(--ci-bg-inset); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: var(--ci-radius-sm); }
+    .task-row:hover .task-actions { opacity: 1; pointer-events: auto; }
+    .task-row.overdue { padding-left: 10px; }
+    .task-row.overdue::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px; background: var(--ci-accent-red); border-radius: 2px; }
+    .task-row.done { opacity: 0.55; }
+    .task-row.done .task-text { text-decoration: line-through; color: var(--ci-text-tertiary); }
+    .task-row.has-source-dot { padding-left: 12px; }
+    .task-source-dot { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 5px; height: 5px; border-radius: 50%; background: var(--ci-accent-amber); flex-shrink: 0; }
+    .task-check { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ci-border-strong); cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: transparent; transition: all var(--motion-xs) var(--ease-out); margin-top: 1px; }
+    .task-check:hover { border-color: var(--ci-accent-teal); background: var(--ci-accent-teal-soft); }
+    .task-row.done .task-check { background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: var(--ci-text-on-dark); }
+    .task-body { flex: 1; min-width: 0; }
+    .task-text { font-size: 13.5px; font-weight: 500; color: var(--ci-text-primary); line-height: 1.35; cursor: pointer; word-break: break-word; }
+    .task-text:hover { color: var(--ci-accent-primary); }
+    .task-meta { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 2px; }
+    .task-company { font-size: 11.5px; color: var(--ci-text-tertiary); }
+    .task-meta-sep { font-size: 11px; color: var(--ci-text-tertiary); opacity: 0.5; }
+    .task-due { font-size: 11.5px; font-weight: 500; color: var(--ci-text-tertiary); }
+    .task-due.today { color: var(--ci-accent-amber); font-weight: 600; }
+    .task-due.overdue { color: var(--ci-accent-red); font-weight: 600; }
+    .task-review { display: flex; align-items: center; gap: 3px; margin-left: 4px; }
+    .task-keep { font-size: 11px; font-weight: 600; color: var(--ci-accent-amber); text-decoration: none; }
+    .task-keep:hover { text-decoration: underline; }
+    .task-dismiss { font-size: 11px; color: var(--ci-text-tertiary); text-decoration: none; }
+    .task-dismiss:hover { color: var(--ci-text-secondary); text-decoration: underline; }
+    .task-actions { display: flex; gap: 2px; flex-shrink: 0; opacity: 0; pointer-events: none; transition: opacity var(--motion-xs) var(--ease-out); }
+    .task-act-btn { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 13px; border: none; background: none; color: var(--ci-text-tertiary); cursor: pointer; border-radius: var(--ci-radius-sm); transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); font-family: inherit; }
+    .task-act-btn:hover { background: var(--ci-border-default); color: var(--ci-text-primary); }
+    /* Task more menu */
+    .task-more-menu { position: absolute; background: var(--ci-bg-overlay); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: var(--ci-shadow-md); padding: 4px; min-width: 130px; }
+    .task-more-item { display: block; width: 100%; padding: 7px 12px; font-size: 13px; font-weight: 500; color: var(--ci-text-primary); background: none; border: none; border-radius: var(--ci-radius-sm); text-align: left; cursor: pointer; font-family: inherit; transition: background var(--motion-xs) var(--ease-out); }
+    .task-more-item:hover { background: var(--ci-bg-inset); }
+    .task-more-delete { color: var(--ci-accent-red); }
+    /* Inline edit */
+    .task-edit-input { font-size: 13.5px; font-weight: 500; color: var(--ci-text-primary); border: 1.5px solid var(--ci-accent-primary); border-radius: var(--ci-radius-sm); padding: 2px 6px; outline: none; font-family: inherit; width: 100%; background: var(--ci-bg-raised); }
+    .task-edit-date { font-size: 12px; border: 1.5px solid var(--ci-accent-primary); border-radius: var(--ci-radius-sm); padding: 2px 6px; outline: none; font-family: inherit; color: var(--ci-text-primary); }
+    /* Add task ghost row */
+    .task-add { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 0; font-size: 13px; font-weight: 500; color: var(--ci-text-tertiary); background: none; border: none; cursor: pointer; font-family: inherit; transition: color var(--motion-xs) var(--ease-out); }
+    .task-add:hover { color: var(--ci-accent-primary); }
+    .task-add-circle { width: 18px; height: 18px; border-radius: 50%; border: 1.5px dashed var(--ci-border-strong); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; transition: border-color var(--motion-xs) var(--ease-out); }
+    .task-add:hover .task-add-circle { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    /* Done collapse footer */
+    .done-collapse { font-size: 11.5px; color: var(--ci-text-tertiary); padding: 8px 0 4px; }
+    .done-collapse .show-link { color: var(--ci-accent-primary); cursor: pointer; font-weight: 600; }
+    .done-collapse .show-link:hover { text-decoration: underline; }
+    /* Empty state */
+    .today-empty { padding: 20px 0 12px; text-align: center; }
+    .today-empty-title { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; }
+    .today-empty { font-size: 13px; color: var(--ci-text-tertiary); }
+    .today-empty-cta { color: var(--ci-accent-primary); cursor: pointer; font-weight: 600; }
+    .today-empty-cta:hover { text-decoration: underline; }
+    /* Inline task composer */
+    .task-composer { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 8px; border-top: 1.5px solid var(--ci-accent-primary); margin-top: 4px; }
+    .task-composer-input { font-size: 13.5px; font-weight: 500; color: var(--ci-text-primary); border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 6px 10px; outline: none; font-family: inherit; width: 100%; background: var(--ci-bg-raised); transition: border-color var(--motion-xs) var(--ease-out); }
+    .task-composer-input:focus { border-color: var(--ci-accent-primary); }
+    .task-composer-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .task-composer-select { font-size: 12px; border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 5px 8px; color: var(--ci-text-primary); font-family: inherit; outline: none; flex: 1; min-width: 0; transition: border-color var(--motion-xs) var(--ease-out); }
+    .task-composer-select:focus { border-color: var(--ci-accent-primary); }
+    .task-composer-date { font-size: 12px; border: 1.5px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 5px 8px; color: var(--ci-text-primary); font-family: inherit; outline: none; transition: border-color var(--motion-xs) var(--ease-out); }
+    .task-composer-date:focus { border-color: var(--ci-accent-primary); }
+    .task-composer-actions { display: flex; gap: 8px; align-items: center; }
+    .task-composer-save { background: var(--ci-accent-primary); color: var(--ci-text-on-dark); border: none; border-radius: var(--ci-radius-sm); padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background var(--motion-xs) var(--ease-out); }
+    .task-composer-save:hover { background: var(--ci-accent-primary-hover); }
+    .task-composer-cancel { background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 6px 12px; font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit; transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); }
+    .task-composer-cancel:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+    /* ── Narrow viewport stack ── */
+    @media (max-width: 1100px) {
+      .activity-body-split { grid-template-columns: 1fr; }
+      .activity-split-divider { width: 100%; height: 1px; }
+      .activity-stats-col { padding-right: 0; padding-bottom: 16px; }
+      .activity-tasks-col { padding-left: 0; padding-top: 16px; border-top: 1px solid var(--ci-border-subtle); }
+    }
 
     /* ── Cost Pill (header) ── */
     .cost-pill-inner { display: flex; align-items: center; gap: 6px; }

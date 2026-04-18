@@ -4861,33 +4861,63 @@ function renderActivitySection() {
   // Format dates for <input type="date"> value (YYYY-MM-DD)
   const toInputDate = ts => new Date(ts).toISOString().slice(0, 10);
 
+  // Header subtitle data
+  const todayDate = new Date();
+  const dayLabel = todayDate.toLocaleDateString('en-US', { weekday: 'long' });
+  const dateLabel = todayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const companyCount = allCompanies.filter(c => !c.isOpportunity).length;
+  const oppCount = allCompanies.filter(c => c.isOpportunity).length;
+  const periodLabel = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[activityPeriod];
+
+  // Tasks scope tabs
+  const scope = localStorage.getItem('ci_tasksScope') || 'today';
+  const autoBadge = range.custom ? '' : ' <span class="act-auto-badge">auto</span>';
+
   section.innerHTML = `
     <div class="activity-head">
       <div class="activity-head-left">
         <span class="activity-section-title">Pipeline Overview</span>
-      </div>
-      <div class="period-toggle">
-        <div class="period-tabs">
-          <button class="period-tab${activityPeriod==='daily'?' active':''}" data-period="daily">Daily</button>
-          <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
-          <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
-        </div>
+        <span class="activity-section-sub">${dayLabel}, ${dateLabel} · ${companyCount} ${companyCount === 1 ? 'company' : 'companies'} · ${oppCount} ${oppCount === 1 ? 'opportunity' : 'opportunities'}</span>
       </div>
       <div class="activity-head-right">
-        <div class="activity-tasks-list" id="activity-tasks-list"><span class="activity-tasks-empty">Loading…</span></div>
-        <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">📅 ${label}${range.custom ? '' : ' <span class="act-auto-badge">auto</span>'}</span>
+        <div class="period-toggle">
+          <div class="period-tabs">
+            <button class="period-tab${activityPeriod==='daily'?' active':''}" data-period="daily">Daily</button>
+            <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
+            <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
+          </div>
+        </div>
+        <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">&#128197; ${label}${autoBadge}</span>
         <div class="act-date-picker" id="act-date-picker" style="display:none">
           <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
-          <span style="color:#7c98b6;font-size:13px">–</span>
+          <span style="color:var(--ci-text-tertiary);font-size:13px">–</span>
           <input type="date" id="act-date-end" class="act-date-input" value="${toInputDate(end)}">
           <button class="act-date-apply">Apply</button>
           ${range.custom ? `<button class="act-date-reset">Reset to auto</button>` : ''}
         </div>
       </div>
     </div>
-    <div class="activity-goals-row">
-      ${goalCardsHtml}
-      <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">⚙</button>
+    <div class="activity-body-split">
+      <div class="activity-stats-col">
+        <div class="activity-col-title">Pipeline <span class="count">${periodLabel}</span>
+          <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">&#9881;</button>
+        </div>
+        <div class="activity-goals-grid">
+          ${goalCardsHtml}
+        </div>
+      </div>
+      <div class="activity-split-divider"></div>
+      <div class="activity-tasks-col">
+        <div class="activity-col-title">
+          <span>Today <span class="count" id="tasks-count-label"></span></span>
+          <div class="activity-scope-tabs">
+            <span class="scope-tab${scope==='today'?' active':''}" data-scope="today">Today</span>
+            <span class="scope-tab${scope==='week'?' active':''}" data-scope="week">Week</span>
+            <span class="scope-tab${scope==='all'?' active':''}" data-scope="all">All</span>
+          </div>
+        </div>
+        <div class="activity-tasks-list" id="activity-tasks-list">Loading…</div>
+      </div>
     </div>
   `;
 
@@ -4901,11 +4931,20 @@ function renderActivitySection() {
     });
   });
 
+  // Scope tabs — re-render tasks panel only (stats stay)
+  section.querySelectorAll('.scope-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      localStorage.setItem('ci_tasksScope', tab.dataset.scope);
+      section.querySelectorAll('.scope-tab').forEach(t => t.classList.toggle('active', t === tab));
+      populateActivityTasksPanel(section, start, end);
+    });
+  });
+
   // Date range editing
-  const dateLabel = section.querySelector('#act-date-label');
+  const actDateLabel = section.querySelector('#act-date-label');
   const datePicker = section.querySelector('#act-date-picker');
-  if (dateLabel && datePicker) {
-    dateLabel.addEventListener('click', () => {
+  if (actDateLabel && datePicker) {
+    actDateLabel.addEventListener('click', () => {
       datePicker.style.display = datePicker.style.display === 'none' ? 'flex' : 'none';
     });
     section.querySelector('.act-date-apply')?.addEventListener('click', () => {
@@ -4994,49 +5033,349 @@ function populateActivityTasksPanel(section, start, end) {
   const list = section.querySelector('#activity-tasks-list');
   if (!list) return;
 
+  const scope = localStorage.getItem('ci_tasksScope') || 'today';
+  const showDone = localStorage.getItem('ci_tasksShowDone') === 'true';
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })();
   const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
-  const dateToMs = d => new Date(d + 'T12:00:00').getTime();
+
+  // Helpers
+  const formatShort = dateStr => {
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+  const daysAgo = dateStr => {
+    const ms = new Date(todayStr + 'T12:00:00') - new Date(dateStr + 'T12:00:00');
+    return Math.round(ms / 86400000);
+  };
+
+  function taskRowHtml(t) {
+    const overdue = !t.completed && t.dueDate && t.dueDate < todayStr;
+    const isToday = t.dueDate === todayStr;
+    const isAuto = t.source === 'email';
+    const unreviewed = isAuto && !t.reviewed && !t.completed;
+    let dueLabel = '';
+    if (t.dueDate) {
+      if (overdue) dueLabel = `${daysAgo(t.dueDate)}d overdue`;
+      else if (isToday) dueLabel = 'Today';
+      else if (t.dueDate === tomorrowStr) dueLabel = 'Tomorrow';
+      else dueLabel = formatShort(t.dueDate);
+    }
+    const dueCls = overdue ? 'overdue' : isToday ? 'today' : '';
+    const rowCls = ['task-row', overdue ? 'overdue' : '', t.completed ? 'done' : '', unreviewed ? 'has-source-dot' : ''].filter(Boolean).join(' ');
+    return `<div class="${rowCls}" data-task-id="${t.id}">
+      ${unreviewed ? '<div class="task-source-dot" title="Suggested from email"></div>' : ''}
+      <div class="task-check" data-check="${t.id}" title="${t.completed ? 'Mark incomplete' : 'Mark complete'}">${t.completed ? '&#10003;' : ''}</div>
+      <div class="task-body">
+        <div class="task-text" data-field="text">${escHtml(t.text)}</div>
+        <div class="task-meta">
+          ${t.company ? `<span class="task-company" data-company="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
+          ${(t.company && dueLabel) ? '<span class="task-meta-sep">·</span>' : ''}
+          ${dueLabel ? `<span class="task-due ${dueCls}">${dueLabel}</span>` : ''}
+          ${unreviewed ? `<span class="task-review"><a class="task-keep" href="#" data-task-id="${t.id}">keep</a><span class="task-meta-sep">·</span><a class="task-dismiss" href="#" data-task-id="${t.id}">dismiss</a></span>` : ''}
+        </div>
+      </div>
+      ${!t.completed && !unreviewed ? `<div class="task-actions">
+        <button class="task-act-btn task-snooze" data-task-id="${t.id}" title="Snooze 1 day">&#9201;</button>
+        <button class="task-act-btn task-open" data-task-id="${t.id}" title="Open company">&#8599;</button>
+        <button class="task-act-btn task-more" data-task-id="${t.id}" title="More">&#8943;</button>
+      </div>` : ''}
+    </div>`;
+  }
 
   loadTasks(tasks => {
-    // Only include tasks with a dueDate that falls within the period
-    const inPeriod = tasks.filter(t => {
-      if (!t.dueDate) return false;
-      const ms = dateToMs(t.dueDate);
-      return ms >= start && ms <= end;
+    // Build in-scope active task list
+    const inScope = tasks.filter(t => {
+      if (!t.dueDate || t.completed) return false;
+      if (scope === 'today') {
+        return t.dueDate <= todayStr; // overdue + today
+      }
+      if (scope === 'week') {
+        const now = new Date(); const day = now.getDay() || 7;
+        const mon = new Date(now); mon.setDate(now.getDate() - (day - 1));
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        const s = mon.toISOString().slice(0, 10); const e = sun.toISOString().slice(0, 10);
+        return t.dueDate >= s && t.dueDate <= e;
+      }
+      return true; // 'all'
     });
 
-    if (inPeriod.length === 0) {
-      list.innerHTML = '<span class="activity-tasks-empty">No tasks for this period.</span>';
-      return;
-    }
-
-    // Sort: incomplete first (by priority then date), completed after
-    const sorted = [...inPeriod].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    // Sort: overdue first (oldest first), then today, then upcoming ascending, then by priority
+    inScope.sort((a, b) => {
+      const aOver = a.dueDate < todayStr ? 0 : a.dueDate === todayStr ? 1 : 2;
+      const bOver = b.dueDate < todayStr ? 0 : b.dueDate === todayStr ? 1 : 2;
+      if (aOver !== bOver) return aOver - bOver;
       if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
       return priVal(a.priority) - priVal(b.priority);
     });
 
-    list.innerHTML = sorted.map(t => {
-      const dl = taskDateLabel(t.dueDate);
-      const isOverdue = dl.cls === 'overdue';
-      const chipCls = [
-        'activity-task-chip',
-        isOverdue ? 'overdue' : '',
-        t.completed ? 'completed' : ''
-      ].filter(Boolean).join(' ');
-      const truncText = t.text.length > 32 ? t.text.slice(0, 32) + '…' : t.text;
-      return `<div class="${chipCls}" data-task-id="${t.id}">
-        <div class="activity-task-chip-check" data-check="${t.id}" title="${t.completed ? 'Mark incomplete' : 'Mark complete'}">${t.completed ? '✓' : ''}</div>
-        <div class="activity-task-chip-body">
-          <div class="activity-task-text" title="${escHtml(t.text)}">${escHtml(truncText)}</div>
-          <div class="activity-task-meta">
-            ${t.company ? `<span class="activity-task-company" title="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
-            ${dl.text ? `<span class="activity-task-date ${dl.cls}">${dl.text}</span>` : ''}
-          </div>
-        </div>
+    // Done items for today (for collapse footer)
+    const doneToday = tasks.filter(t => {
+      if (!t.completed) return false;
+      if (t.completedAt) return t.completedAt.startsWith(todayStr);
+      return t.dueDate === todayStr;
+    });
+
+    // Update count label in col title
+    const countLabel = section.querySelector('#tasks-count-label');
+    if (countLabel) {
+      const overdueCnt = inScope.filter(t => t.dueDate < todayStr).length;
+      const todayCnt = inScope.filter(t => t.dueDate === todayStr).length;
+      if (inScope.length === 0) countLabel.textContent = '';
+      else if (overdueCnt > 0 && todayCnt > 0) countLabel.textContent = `${overdueCnt} overdue · ${todayCnt} due`;
+      else if (overdueCnt > 0) countLabel.textContent = `${overdueCnt} overdue`;
+      else countLabel.textContent = `${todayCnt} due`;
+    }
+
+    // Build HTML
+    let html = '';
+
+    if (inScope.length === 0) {
+      html += `<div class="today-empty">
+        <div class="today-empty-title">Clear slate.</div>
+        <div>Nothing due${scope === 'today' ? ' today' : ''}. <span class="today-empty-cta" id="empty-add-task">Add a task &#8594;</span></div>
       </div>`;
-    }).join('');
+    } else {
+      html += inScope.map(t => taskRowHtml(t)).join('');
+    }
+
+    // Add-task ghost row
+    html += `<button class="task-add" id="overview-task-add"><span class="task-add-circle">+</span>Add a task</button>`;
+
+    // Done collapse footer
+    if (doneToday.length > 0) {
+      html += `<div class="done-collapse">${doneToday.length} completed today · <span class="show-link" id="toggle-done">${showDone ? 'hide' : 'show'}</span></div>`;
+      if (showDone) {
+        html += doneToday.map(t => taskRowHtml(t)).join('');
+      }
+    }
+
+    list.innerHTML = html;
+
+    // Wire new task-specific events (delegation on list)
+    list.addEventListener('click', e => {
+      // task-keep
+      const keepBtn = e.target.closest('.task-keep');
+      if (keepBtn) {
+        e.preventDefault();
+        const id = keepBtn.dataset.taskId;
+        loadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (t) { t.reviewed = true; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); }
+        });
+        return;
+      }
+      // task-dismiss
+      const dismissBtn = e.target.closest('.task-dismiss');
+      if (dismissBtn) {
+        e.preventDefault();
+        const id = dismissBtn.dataset.taskId;
+        loadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (t) { t.reviewed = true; t.completed = true; t.completedAt = new Date().toISOString(); saveTasks(all, () => populateActivityTasksPanel(section, start, end)); }
+        });
+        return;
+      }
+      // task-snooze
+      const snoozeBtn = e.target.closest('.task-snooze');
+      if (snoozeBtn) {
+        const id = snoozeBtn.dataset.taskId;
+        loadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (t) {
+            const d = new Date((t.dueDate || todayStr) + 'T12:00:00');
+            d.setDate(d.getDate() + 1);
+            t.dueDate = d.toISOString().slice(0, 10);
+            saveTasks(all, () => populateActivityTasksPanel(section, start, end));
+          }
+        });
+        return;
+      }
+      // task-open (navigate to company)
+      const openBtn = e.target.closest('.task-open');
+      if (openBtn) {
+        const id = openBtn.dataset.taskId;
+        loadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (t && t.company) {
+            const entry = allCompanies.find(c => c.company === t.company);
+            if (entry) coopNavigate(chrome.runtime.getURL('company.html') + '?id=' + entry.id);
+          }
+        });
+        return;
+      }
+      // task-more (inline dropdown: edit / reschedule / delete)
+      const moreBtn = e.target.closest('.task-more');
+      if (moreBtn) {
+        e.stopPropagation();
+        const existing = list.querySelector('.task-more-menu');
+        if (existing) { existing.remove(); return; }
+        const id = moreBtn.dataset.taskId;
+        const menu = document.createElement('div');
+        menu.className = 'task-more-menu';
+        menu.innerHTML = `<button class="task-more-item" data-action="edit" data-task-id="${id}">Edit</button>
+          <button class="task-more-item" data-action="reschedule" data-task-id="${id}">Reschedule</button>
+          <button class="task-more-item task-more-delete" data-action="delete" data-task-id="${id}">Delete</button>`;
+        // Position below the button
+        const rect = moreBtn.getBoundingClientRect();
+        const listRect = list.getBoundingClientRect();
+        menu.style.cssText = `position:absolute;top:${rect.bottom - listRect.top + 4}px;right:0;z-index:100;`;
+        list.style.position = 'relative';
+        list.appendChild(menu);
+        const closeMenu = ev => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+        return;
+      }
+      // task-more-item actions
+      const moreItem = e.target.closest('.task-more-item');
+      if (moreItem) {
+        const action = moreItem.dataset.action;
+        const id = moreItem.dataset.taskId;
+        moreItem.closest('.task-more-menu')?.remove();
+        if (action === 'delete') {
+          loadTasks(all => saveTasks(all.filter(t => t.id !== id), () => populateActivityTasksPanel(section, start, end)));
+        } else if (action === 'edit' || action === 'reschedule') {
+          // Open the inline edit via the task text or date field
+          const taskRow = list.querySelector(`.task-row[data-task-id="${id}"]`);
+          if (taskRow) {
+            const field = action === 'reschedule' ? 'task-due' : 'task-text';
+            // For reschedule, trigger inline date editing
+            loadTasks(all => {
+              const t = all.find(x => x.id === id);
+              if (!t) return;
+              if (action === 'reschedule') {
+                const dateInput = document.createElement('input');
+                dateInput.type = 'date';
+                dateInput.className = 'task-edit-date';
+                dateInput.value = t.dueDate || '';
+                dateInput.setAttribute('data-task-edit', '');
+                const dueLbl = taskRow.querySelector('.task-due');
+                if (dueLbl) {
+                  let saved = false;
+                  const save = () => { if (saved) return; saved = true; t.dueDate = dateInput.value || null; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); };
+                  dateInput.addEventListener('change', save);
+                  dateInput.addEventListener('blur', () => setTimeout(() => { if (!saved) save(); }, 200));
+                  dateInput.addEventListener('keydown', ev => { if (ev.key === 'Escape') { saved = true; populateActivityTasksPanel(section, start, end); ev.preventDefault(); } });
+                  dueLbl.replaceWith(dateInput);
+                  dateInput.focus();
+                }
+              } else {
+                // Edit text
+                const textEl = taskRow.querySelector('.task-text');
+                if (textEl) {
+                  const inp = document.createElement('input');
+                  inp.type = 'text';
+                  inp.className = 'task-edit-input';
+                  inp.value = t.text;
+                  inp.setAttribute('data-task-edit', '');
+                  const save = () => { const v = inp.value.trim(); if (v && v !== t.text) { t.text = v; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); } else { populateActivityTasksPanel(section, start, end); } };
+                  inp.addEventListener('blur', save);
+                  inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { save(); ev.preventDefault(); } else if (ev.key === 'Escape') { populateActivityTasksPanel(section, start, end); ev.preventDefault(); } });
+                  textEl.replaceWith(inp);
+                  inp.focus(); inp.select();
+                }
+              }
+            });
+          }
+        }
+        return;
+      }
+      // task-text inline edit (click on title)
+      const textEl = e.target.closest('.task-text');
+      if (textEl && !e.target.closest('[data-task-edit]')) {
+        const taskRow = textEl.closest('.task-row');
+        const id = taskRow?.dataset.taskId;
+        if (id) {
+          loadTasks(all => {
+            const t = all.find(x => x.id === id);
+            if (!t) return;
+            const inp = document.createElement('input');
+            inp.type = 'text';
+            inp.className = 'task-edit-input';
+            inp.value = t.text;
+            inp.setAttribute('data-task-edit', '');
+            const save = () => { const v = inp.value.trim(); if (v && v !== t.text) { t.text = v; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); } else { populateActivityTasksPanel(section, start, end); } };
+            inp.addEventListener('blur', save);
+            inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { save(); ev.preventDefault(); } else if (ev.key === 'Escape') { populateActivityTasksPanel(section, start, end); ev.preventDefault(); } });
+            textEl.replaceWith(inp);
+            inp.focus(); inp.select();
+          });
+        }
+        return;
+      }
+      // toggle-done
+      if (e.target.id === 'toggle-done') {
+        const cur = localStorage.getItem('ci_tasksShowDone') === 'true';
+        localStorage.setItem('ci_tasksShowDone', (!cur).toString());
+        populateActivityTasksPanel(section, start, end);
+        return;
+      }
+      // add task buttons
+      if (e.target.id === 'overview-task-add' || e.target.id === 'empty-add-task' || e.target.closest('#overview-task-add')) {
+        showOverviewTaskComposer(section, start, end, list);
+        return;
+      }
+    });
+  });
+}
+
+function showOverviewTaskComposer(section, start, end, list) {
+  // Remove existing composer if any
+  list.querySelector('.task-composer')?.remove();
+  list.querySelector('#overview-task-add')?.remove();
+
+  const companyOpts = allCompanies
+    .filter(c => c.company)
+    .map(c => `<option value="${escHtml(c.company)}">${escHtml(c.company)}</option>`)
+    .join('');
+
+  const composer = document.createElement('div');
+  composer.className = 'task-composer';
+  composer.innerHTML = `
+    <input type="text" class="task-composer-input" id="composer-text" placeholder="Task title…" autocomplete="off">
+    <div class="task-composer-row">
+      <select class="task-composer-select" id="composer-company">
+        <option value="">No company</option>
+        ${companyOpts}
+      </select>
+      <input type="date" class="task-composer-date" id="composer-date">
+    </div>
+    <div class="task-composer-actions">
+      <button class="task-composer-save" id="composer-save">Save</button>
+      <button class="task-composer-cancel" id="composer-cancel">Cancel</button>
+    </div>`;
+  list.appendChild(composer);
+
+  const textInput = composer.querySelector('#composer-text');
+  textInput.focus();
+
+  const save = () => {
+    const text = textInput.value.trim();
+    if (!text) { textInput.focus(); return; }
+    const company = composer.querySelector('#composer-company').value || null;
+    const dueDate = composer.querySelector('#composer-date').value || null;
+    const newTask = {
+      id: crypto.randomUUID(),
+      text,
+      company,
+      dueDate,
+      priority: 'normal',
+      completed: false,
+      createdAt: new Date().toISOString()
+    };
+    loadTasks(all => {
+      all.push(newTask);
+      saveTasks(all, () => populateActivityTasksPanel(section, start, end));
+    });
+  };
+
+  const cancel = () => populateActivityTasksPanel(section, start, end);
+
+  composer.querySelector('#composer-save').addEventListener('click', save);
+  composer.querySelector('#composer-cancel').addEventListener('click', cancel);
+  textInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { save(); e.preventDefault(); }
+    else if (e.key === 'Escape') { cancel(); e.preventDefault(); }
   });
 }
 
