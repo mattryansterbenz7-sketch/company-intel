@@ -5013,20 +5013,24 @@ function renderActivitySection() {
   // Tasks panel — load async after the rest of the section is already rendered
   populateActivityTasksPanel(section, start, end);
 
-  // Event delegation for task check toggle (now inside activity-head-right within activity-head)
-  section.addEventListener('click', e => {
-    const checkBtn = e.target.closest('[data-check]');
-    if (checkBtn) {
-      e.stopPropagation();
-      const id = checkBtn.dataset.check;
-      loadTasks(all => {
-        const idx = all.findIndex(t => t.id === id);
-        if (idx === -1) return;
-        all[idx].completed = !all[idx].completed;
-        saveTasks(all, () => renderActivitySection());
-      });
-    }
-  });
+  // Event delegation for task check toggle — guard against re-attachment on re-render
+  if (!section.dataset.checkWired) {
+    section.dataset.checkWired = '1';
+    section.addEventListener('click', e => {
+      const checkBtn = e.target.closest('[data-check]');
+      if (checkBtn) {
+        e.stopPropagation();
+        const id = checkBtn.dataset.check;
+        loadTasks(all => {
+          const idx = all.findIndex(t => t.id === id);
+          if (idx === -1) return;
+          all[idx].completed = !all[idx].completed;
+          if (all[idx].completed) all[idx].completedAt = new Date().toISOString();
+          saveTasks(all, () => populateActivityTasksPanel(section, start, end));
+        });
+      }
+    });
+  }
 }
 
 function populateActivityTasksPanel(section, start, end) {
@@ -5152,7 +5156,10 @@ function populateActivityTasksPanel(section, start, end) {
 
     list.innerHTML = html;
 
-    // Wire new task-specific events (delegation on list)
+    // Wire task-specific events (delegation on list) — guard against re-attachment
+    // on every re-render. populateActivityTasksPanel is called on every action.
+    if (list.dataset.wired) return;
+    list.dataset.wired = '1';
     list.addEventListener('click', e => {
       // task-keep
       const keepBtn = e.target.closest('.task-keep');
