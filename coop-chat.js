@@ -226,6 +226,8 @@ OUTPUT FORMAT:
 
 CRITICAL: You have the user's FULL profile available via tools. ALWAYS call get_profile_section(section: "profile", tier: "full") + get_company_context IN PARALLEL on the first application question. DRAFT the answer from what you already know, then ask only for specific missing details. NEVER ask the user to provide information you can fetch.
 
+VISION INPUT: When the user sends an image in Apply mode, read the application question from the image — including any visible instructions, character limits, or guardrails. Answer in Matt's voice in 2–4 sentences, respecting the stated limit. If no limit is visible, aim for 400–600 characters. Do not describe the image; only answer the question.
+
 When the user first enters this mode, respond: "Paste the application question and I'll write your answer."`);
 
     // Archetype-specific prompt hints

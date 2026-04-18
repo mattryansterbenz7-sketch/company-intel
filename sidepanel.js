@@ -3967,6 +3967,12 @@ function renderContactsSection(el, contacts) {
 
         if (typeof CISounds !== 'undefined') CISounds.snip();
         console.log(`[Snip] Captured ${rect.w}x${rect.h} region (${Math.round(compressed.length / 1024)}KB)`);
+
+        // Apply mode: auto-send the snip as a vision-only message
+        if (isApplicationMode) {
+          inputEl.value = '';
+          send();
+        }
       } catch (e) {
         console.warn('[Snip] Failed:', e.message);
         snipBtn.classList.remove('active');
@@ -4152,6 +4158,11 @@ function renderContactsSection(el, contacts) {
 
   function updateAppModeBadge() {
     if (appModeBadge) appModeBadge.style.display = isApplicationMode ? '' : 'none';
+    if (snipBtn) {
+      snipBtn.title = isApplicationMode
+        ? 'Snip a question — Coop answers automatically'
+        : 'Snip a region to send to Coop';
+    }
   }
 
   function tryAutoActivateAppMode() {
@@ -4750,7 +4761,7 @@ function renderContactsSection(el, contacts) {
   async function send() {
     const text = inputEl.value.trim();
     console.log('[SP Chat] Send called, text:', text?.slice(0, 50));
-    if (!text) return;
+    if (!text && !_pendingSnip) return;
     // Detect application mode from user message
     if (/help me (apply|answer|fill)|application (question|field)/i.test(text)) {
       isApplicationMode = true;
