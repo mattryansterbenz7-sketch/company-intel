@@ -1097,6 +1097,42 @@
     }
     .insight-check { color: #5DCAA5; font-weight: 700; }
     .insight-text { line-height: 1.4; }
+    .mtg-add-textarea { font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical; min-height: 80px; width: 100%; }
+    .timeline-note {
+      margin-top: 6px; background: var(--ci-bg-inset);
+      border-radius: var(--ci-radius-sm); border-left: 3px solid var(--ci-border-default);
+      overflow: hidden;
+      transition: border-color var(--motion-xs, 120ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+    }
+    .timeline-note:hover { border-left-color: var(--ci-text-tertiary); }
+    .timeline-note[data-expanded="true"] { border-left-color: var(--ci-accent-primary); }
+    .timeline-note-head {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px; cursor: pointer; user-select: none;
+      font-size: 13px; line-height: 1.5; color: var(--ci-text-secondary);
+    }
+    .timeline-note-head:hover { background: rgba(0,0,0,0.02); }
+    .timeline-note-head:focus-visible { outline: 2px solid var(--ci-accent-primary); outline-offset: -2px; }
+    .timeline-note-chev {
+      flex-shrink: 0; width: 14px; display: inline-flex; justify-content: center;
+      color: var(--ci-text-tertiary); font-size: 10px;
+      transition: transform var(--motion-xs, 120ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+    }
+    .timeline-note[data-expanded="true"] .timeline-note-chev { transform: rotate(90deg); }
+    .timeline-note-preview {
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .timeline-note[data-expanded="true"] .timeline-note-preview { display: none; }
+    .timeline-note-body {
+      padding: 0 12px 12px 32px;
+      font-size: 13px; line-height: 1.6; color: var(--ci-text-primary);
+      white-space: pre-wrap; display: none;
+    }
+    .timeline-note[data-expanded="true"] .timeline-note-body {
+      display: block;
+      animation: timelineNoteFade 200ms var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+    }
+    @keyframes timelineNoteFade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 <body>

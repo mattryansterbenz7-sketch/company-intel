@@ -1219,8 +1219,8 @@ function buildActivityTimeline(e) {
     events.push({
       ts, icon: typeIcons[log.type] || '\u{1F4DD}', badgeType: 'activity', badge: typeNames[log.type] || 'Activity',
       title: typeNames[log.type] || 'Activity',
-      subtitle: log.note ? log.note.slice(0, 80) : null,
-      preview: null
+      fullNote: log.note || '',
+      isActivity: true
     });
   });
 
@@ -1287,21 +1287,42 @@ function buildActivityTimeline(e) {
 
   if (!filtered.length) return '<div class="p-empty">No activity tracked yet. Emails, meetings, and manual logs will appear here as they\'re detected.</div>';
 
-  return filtered.map(ev => {
+  return filtered.map((ev, idx) => {
     const dateStr = new Date(ev.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const actKey = `${ev.badgeType}-${ev.ts}-${(ev.title || '').slice(0, 30)}`;
+    const headerHtml = `
+      <div class="timeline-header">
+        <span class="timeline-badge timeline-badge-${ev.badgeType}">${ev.badge}</span>
+        <span class="timeline-date">${dateStr}</span>
+        <button class="timeline-remove-btn" data-act-key="${escapeHtml(actKey)}" title="Remove this activity">&times;</button>
+      </div>
+      <div class="timeline-title">${escapeHtml(ev.title)}</div>`;
+    if (ev.isActivity) {
+      const preview = escapeHtml((ev.fullNote || '').replace(/\s+/g, ' ').slice(0, 120));
+      return `<div class="timeline-entry timeline-${ev.badgeType}">
+        <div class="timeline-dot-col">
+          <div class="timeline-dot">${ev.icon}</div>
+          <div class="timeline-line"></div>
+        </div>
+        <div class="timeline-content">
+          ${headerHtml}
+          <div class="timeline-note" data-expanded="false">
+            <div class="timeline-note-head" role="button" tabindex="0" aria-expanded="false" aria-controls="note-body-${idx}">
+              <span class="timeline-note-chev">&#9658;</span>
+              <span class="timeline-note-preview">${preview}</span>
+            </div>
+            <div class="timeline-note-body" id="note-body-${idx}">${escapeHtml(ev.fullNote)}</div>
+          </div>
+        </div>
+      </div>`;
+    }
     return `<div class="timeline-entry timeline-${ev.badgeType}${ev.isStage ? ' timeline-stage' : ''}">
       <div class="timeline-dot-col">
         <div class="timeline-dot">${ev.icon}</div>
         <div class="timeline-line"></div>
       </div>
       <div class="timeline-content">
-        <div class="timeline-header">
-          <span class="timeline-badge timeline-badge-${ev.badgeType}">${ev.badge}</span>
-          <span class="timeline-date">${dateStr}</span>
-          <button class="timeline-remove-btn" data-act-key="${escapeHtml(actKey)}" title="Remove this activity">&times;</button>
-        </div>
-        <div class="timeline-title">${escapeHtml(ev.title)}</div>
+        ${headerHtml}
         ${ev.subtitle ? `<div class="timeline-subtitle">${escapeHtml(ev.subtitle)}</div>` : ''}
         ${ev.preview ? `<div class="timeline-preview">${escapeHtml(ev.preview)}</div>` : ''}
       </div>
@@ -1325,6 +1346,20 @@ function initActivityTab() {
     });
   });
 
+  // Bind expand/collapse on activity note shells
+  container.querySelectorAll('.timeline-note-head').forEach(head => {
+    const toggle = () => {
+      const shell = head.closest('.timeline-note');
+      const expanded = shell.getAttribute('data-expanded') === 'true';
+      shell.setAttribute('data-expanded', expanded ? 'false' : 'true');
+      head.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    };
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
   // Inject "Log activity" button + form into Activity tab
   const logSection = document.getElementById('activity-log-section');
   if (logSection) {
@@ -1342,7 +1377,7 @@ function initActivityTab() {
             <option value="email_sent">Email Sent</option>
             <option value="other">Other</option>
           </select>
-          <input type="text" class="mtg-add-input" id="al-note-act" placeholder="What happened?">
+          <textarea class="mtg-add-input mtg-add-textarea" id="al-note-act" placeholder="What happened? Paste full message thread, call debrief, or intro context — all of it is preserved." rows="4"></textarea>
           <input type="date" class="mtg-add-input" id="al-date-act" style="width:auto" value="${new Date().toISOString().slice(0,10)}">
           <div style="display:flex;gap:8px;margin-top:8px">
             <button class="mtg-add-save" id="al-save-act">Save</button>
@@ -1712,7 +1747,7 @@ function renderCompanyTasks() {
 const DEFAULT_TAB_ORDER = ['intel', 'activity', 'tasks', 'notes', 'emails', 'meetings', 'docs'];
 const TAB_LABELS = { intel: 'Role Brief', activity: 'Activity', tasks: 'Tasks', notes: 'Notes', emails: 'Emails', meetings: 'Meetings', docs: 'Docs' };
 const TAB_PANE_HTML = {
-  activity: '<div id="activity-timeline"></div><div id="activity-log-section"></div>',
+  activity: '<div id="activity-log-section"></div><div id="activity-timeline"></div>',
   tasks: '<div id="company-tasks-container"></div>',
   intel: '', // filled by buildIntelTab()
   notes: '<div id="hub-notes-container" data-editing="0"></div>',
