@@ -543,6 +543,378 @@ function showToast(msg) {
   setTimeout(() => el.classList.remove('show'), 3500);
 }
 
+// ── LinkedIn "person mode" (issue #36) ────────────────────────────────────────
+// Shown when content.js detects a linkedin.com/in/* profile page.
+
+let _currentLinkedInProfile = null; // profileData currently in person mode
+
+function _spEscape(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _liAvatarBg(name) {
+  const palette = ['#FC636B','#4573D2','#36B37E','#7C6EF0','#F5A623'];
+  if (!name) return palette[0];
+  return palette[(name.charCodeAt(0) || 0) % palette.length];
+}
+
+function _liInitials(name) {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+}
+
+/**
+ * Render the LinkedIn profile "person mode" into #sp-linkedin-profile.
+ * @param {object} profileData — from content.js extractLinkedInProfile()
+ * @param {'detecting'|'preview'|'editing'|'saved'} [state]
+ * @param {object} [opts] — { savedToEntry, editedFields }
+ */
+function renderLinkedInProfileMode(profileData, state = 'preview', opts = {}) {
+  const el = document.getElementById('sp-linkedin-profile');
+  if (!el) return;
+  _currentLinkedInProfile = profileData;
+
+  // Hide regular company UI — person mode takes over
+  const homeEl = document.getElementById('sp-home');
+  if (homeEl) homeEl.style.display = 'none';
+  const companyContent = document.getElementById('company-content');
+  if (companyContent) companyContent.style.display = 'none';
+  const pipelineStats = document.getElementById('sp-pipeline-stats');
+  if (pipelineStats) pipelineStats.style.display = 'none';
+
+  el.classList.add('visible');
+
+  const p = profileData || {};
+  const name         = p.name        || '—';
+  const headline     = p.headline    || null;
+  const company      = p.currentCompany || null;
+  const title        = p.currentTitle   || null;
+  const location     = p.location    || null;
+  const profileUrl   = p.profileUrl  || null;
+  const photoUrl     = p.photoUrl    || null;
+
+  const bgColor  = _liAvatarBg(name);
+  const initials = _liInitials(name);
+
+  const avatarInner = photoUrl
+    ? `<img src="${_spEscape(photoUrl)}" alt="${_spEscape(initials)}" onerror="this.onerror=null;this.parentElement.textContent=this.alt;">`
+    : _spEscape(initials);
+
+  // ── Banner ──
+  let bannerHtml;
+  if (state === 'saved') {
+    const savedEntry = opts.savedToEntry;
+    const entryName = savedEntry ? savedEntry.company : '';
+    const viewUrl = savedEntry
+      ? chrome.runtime.getURL(`${savedEntry.isOpportunity ? 'opportunity' : 'company'}.html?id=${savedEntry.id}`)
+      : null;
+    bannerHtml = `
+      <div class="sp-li-banner saved-state">
+        <div class="sp-li-dot saved"></div>
+        <div>Saved to ${_spEscape(entryName)}${viewUrl ? ` &middot; <a href="${_spEscape(viewUrl)}" target="_blank" style="color:var(--ci-accent-teal);font-weight:600;text-decoration:none;">view in Coop ↗</a>` : ''}</div>
+      </div>`;
+  } else {
+    bannerHtml = `
+      <div class="sp-li-banner">
+        <div class="sp-li-dot"></div>
+        <div>Profile detected — capture this person as a contact.</div>
+      </div>`;
+  }
+
+  // ── Preview rows ──
+  function row(label, val) {
+    const display = val ? _spEscape(val) : '<span class="muted">—</span>';
+    return `<div class="sp-li-row"><span class="sp-li-label">${label}</span><span class="sp-li-val">${display}</span></div>`;
+  }
+
+  const previewRows = [
+    row('Company',  company),
+    row('Title',    title),
+    row('Location', location),
+    row('Profile',  profileUrl),
+  ].join('');
+
+  // ── Actions ──
+  let actionsHtml;
+  if (state === 'editing') {
+    const ef = opts.editedFields || {};
+    actionsHtml = `
+      <div class="sp-li-edit-form" id="sp-li-edit-form">
+        <input class="sp-li-edit-input" id="sp-li-edit-name"  placeholder="Name"          value="${_spEscape(ef.name  || name)}" />
+        <input class="sp-li-edit-input" id="sp-li-edit-title" placeholder="Title / Role"  value="${_spEscape(ef.title || title || '')}" />
+        <input class="sp-li-edit-input" id="sp-li-edit-email" placeholder="Email (optional)" value="${_spEscape(ef.email || '')}" type="email" />
+        <input class="sp-li-edit-input" id="sp-li-edit-url"   placeholder="LinkedIn URL"  value="${_spEscape(ef.url || profileUrl || '')}" />
+        <div class="sp-li-edit-actions">
+          <button class="sp-li-btn sp-li-btn-secondary" id="sp-li-edit-cancel">Cancel</button>
+          <button class="sp-li-btn sp-li-btn-primary"   id="sp-li-edit-confirm">Continue to pick company</button>
+        </div>
+      </div>`;
+  } else if (state === 'saved') {
+    actionsHtml = ''; // no actions after save
+  } else {
+    actionsHtml = `
+      <div class="sp-li-actions">
+        <button class="sp-li-btn sp-li-btn-primary"    id="sp-li-capture-btn">Capture as contact</button>
+        <button class="sp-li-btn sp-li-btn-secondary"  id="sp-li-edit-btn">Edit before saving</button>
+      </div>`;
+  }
+
+  // ── "Or do something else" ──
+  let altHtml = '';
+  if (state !== 'saved') {
+    const companySaved = _liCompanyAlreadySaved(company);
+    const saveCompanyItem = company && !companySaved
+      ? `<div class="sp-li-alt-item" id="sp-li-save-company">· Save ${_spEscape(company)} as an opportunity</div>`
+      : '';
+    altHtml = `
+      <div class="sp-li-alt-section">
+        <div class="sp-li-alt-label">Or do something else</div>
+        ${saveCompanyItem}
+        <div class="sp-li-alt-item" id="sp-li-ask-coop">· Ask Coop about ${_spEscape(name.split(' ')[0])}</div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    ${bannerHtml}
+    <div class="sp-li-preview">
+      <div class="sp-li-preview-head">
+        <div class="sp-li-avatar" style="background:${bgColor}">${avatarInner}</div>
+        <div>
+          <div class="sp-li-name">${_spEscape(name)}</div>
+          ${headline ? `<div class="sp-li-headline">${_spEscape(headline)}</div>` : ''}
+        </div>
+      </div>
+      <div class="sp-li-rows">${previewRows}</div>
+      ${actionsHtml}
+    </div>
+    ${altHtml}`;
+
+  // ── Wire events ──
+  _bindLinkedInProfileEvents(profileData, state, opts);
+}
+
+/** Check if a company name already exists in savedCompanies */
+function _liCompanyAlreadySaved(companyName) {
+  // We can't call chrome.storage synchronously, so we rely on the cached list
+  // from the sidepanel's own saved-company tracking when available.
+  // Returns false conservatively — worst case is an extra "save" option shown.
+  if (!companyName) return false;
+  // If we have a cached list from tryShowCompanyFromUrl or prior research, use it
+  if (typeof _liCachedSavedCompanies !== 'undefined') {
+    return _liCachedSavedCompanies.some(e => {
+      const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const na = norm(e.company), nb = norm(companyName);
+      return na && nb && (na === nb || na.includes(nb) || nb.includes(na));
+    });
+  }
+  return false;
+}
+let _liCachedSavedCompanies = [];
+chrome.storage.local.get(['savedCompanies'], d => { _liCachedSavedCompanies = d.savedCompanies || []; });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.savedCompanies) _liCachedSavedCompanies = changes.savedCompanies.newValue || [];
+});
+
+function _bindLinkedInProfileEvents(profileData, state, opts) {
+  const p = profileData || {};
+
+  // Capture as contact
+  document.getElementById('sp-li-capture-btn')?.addEventListener('click', () => {
+    _openLinkedInContactPicker(profileData);
+  });
+
+  // Edit before saving
+  document.getElementById('sp-li-edit-btn')?.addEventListener('click', () => {
+    renderLinkedInProfileMode(profileData, 'editing', opts);
+  });
+
+  // Edit form — cancel
+  document.getElementById('sp-li-edit-cancel')?.addEventListener('click', () => {
+    renderLinkedInProfileMode(profileData, 'preview', opts);
+  });
+
+  // Edit form — confirm → open picker with edited fields
+  document.getElementById('sp-li-edit-confirm')?.addEventListener('click', () => {
+    const editedFields = {
+      name:  document.getElementById('sp-li-edit-name')?.value.trim()  || p.name  || '',
+      title: document.getElementById('sp-li-edit-title')?.value.trim() || p.currentTitle || '',
+      email: document.getElementById('sp-li-edit-email')?.value.trim() || null,
+      url:   document.getElementById('sp-li-edit-url')?.value.trim()   || p.profileUrl || null,
+    };
+    _openLinkedInContactPicker(profileData, editedFields);
+  });
+
+  // Save company alt action
+  document.getElementById('sp-li-save-company')?.addEventListener('click', () => {
+    if (!p.currentCompany) return;
+    // Switch to normal company mode for this company
+    exitLinkedInProfileMode();
+    companyNameEl.textContent = p.currentCompany;
+    const homeEl = document.getElementById('sp-home');
+    if (homeEl) homeEl.style.display = 'none';
+    const companyContent = document.getElementById('company-content');
+    if (companyContent) companyContent.style.display = '';
+    if (searchBtn) searchBtn.style.display = '';
+    triggerResearch(p.currentCompany);
+  });
+
+  // Ask Coop alt action
+  document.getElementById('sp-li-ask-coop')?.addEventListener('click', () => {
+    const name = (p.name || '').split(' ')[0];
+    enterChatMode();
+    // Pre-fill the chat input with a prompt about this person
+    const chatInput = document.getElementById('sp-chat-input');
+    if (chatInput) {
+      chatInput.value = `Tell me what you know about ${name || 'this person'} at ${p.currentCompany || 'this company'}.`;
+      chatInput.dispatchEvent(new Event('input'));
+    }
+  });
+}
+
+/**
+ * Open the company picker for a LinkedIn-captured contact.
+ * Saves to knownContacts on success, shows toast with Undo.
+ */
+function _openLinkedInContactPicker(profileData, editedFields) {
+  const p = profileData || {};
+  const name      = editedFields?.name  || p.name        || 'Contact';
+  const title     = editedFields?.title || p.currentTitle || null;
+  const email     = editedFields?.email || null;
+  const liUrl     = editedFields?.url   || p.profileUrl  || null;
+  const photoUrl  = p.photoUrl || null;
+
+  if (typeof openCompanyPicker !== 'function') {
+    console.warn('[SP] openCompanyPicker not loaded yet');
+    return;
+  }
+
+  openCompanyPicker({
+    contactName:      name,
+    preselectCompany: p.currentCompany || null,
+    onSelect(entry) {
+      _saveLinkedInContact({ name, title, email, liUrl, photoUrl }, entry);
+    },
+    onCancel() {
+      // Nothing — stay on person mode
+    },
+  });
+}
+
+/**
+ * Append the captured contact to entry.knownContacts[] and show toast.
+ */
+function _saveLinkedInContact({ name, title, email, liUrl, photoUrl }, entry) {
+  const newContact = {
+    name:        name,
+    title:       title || null,
+    linkedinUrl: liUrl || null,
+    photoUrl:    photoUrl || null,
+    email:       email || null,
+    source:      'linkedin-capture',
+    addedAt:     Date.now(),
+    capturedAt:  Date.now(),
+    matchedVia: {
+      type:   'manual',
+      detail: `captured from LinkedIn${liUrl ? ' ' + liUrl : ''}`,
+    },
+  };
+
+  chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+    void chrome.runtime.lastError;
+    const entries = savedCompanies || [];
+    const idx = entries.findIndex(e => e.id === entry.id);
+    if (idx === -1) {
+      showToast('Could not find the entry — try refreshing.');
+      return;
+    }
+
+    const target = entries[idx];
+    const existing = target.knownContacts || [];
+
+    // De-dup by linkedinUrl (if present) or name
+    const alreadyExists = existing.some(c => {
+      if (liUrl && c.linkedinUrl && c.linkedinUrl === liUrl) return true;
+      if (c.name && c.name.toLowerCase() === name.toLowerCase()) return true;
+      return false;
+    });
+    if (alreadyExists) {
+      showToast(`${name} is already a contact on ${entry.company}.`);
+      renderLinkedInProfileMode(_currentLinkedInProfile, 'saved', { savedToEntry: entry });
+      return;
+    }
+
+    // Prepend so new contact appears at top
+    target.knownContacts = [newContact, ...existing];
+    entries[idx] = target;
+
+    chrome.storage.local.set({ savedCompanies: entries }, () => {
+      void chrome.runtime.lastError;
+
+      // Update person-mode UI to "saved" state
+      renderLinkedInProfileMode(_currentLinkedInProfile, 'saved', { savedToEntry: entry });
+
+      // Show toast with Undo
+      _showLinkedInCaptureToast(name, entry, () => {
+        // Undo: remove the contact we just added
+        chrome.storage.local.get(['savedCompanies'], ({ savedCompanies: sc }) => {
+          void chrome.runtime.lastError;
+          const ents = sc || [];
+          const i2 = ents.findIndex(e => e.id === entry.id);
+          if (i2 === -1) return;
+          ents[i2].knownContacts = (ents[i2].knownContacts || []).filter(c => c.addedAt !== newContact.addedAt);
+          chrome.storage.local.set({ savedCompanies: ents });
+          renderLinkedInProfileMode(_currentLinkedInProfile, 'preview', {});
+        });
+      });
+
+      console.log('[SP] LinkedIn contact saved:', name, '→', entry.company);
+    });
+  });
+}
+
+/**
+ * Show a 5-second toast with an "Undo" action.
+ */
+function _showLinkedInCaptureToast(name, entry, onUndo) {
+  const toastEl = document.getElementById('sp-toast');
+  if (!toastEl) return;
+
+  toastEl.innerHTML = `
+    <span>${_spEscape(name)} added to ${_spEscape(entry.company)}</span>
+    <button id="sp-li-undo-btn" style="background:none;border:none;color:var(--ci-accent-primary);font-size:12px;font-weight:700;cursor:pointer;margin-left:10px;font-family:inherit;padding:0;">Undo</button>`;
+
+  toastEl.classList.add('show');
+
+  let undone = false;
+  const undoBtn = document.getElementById('sp-li-undo-btn');
+  undoBtn?.addEventListener('click', () => {
+    if (undone) return;
+    undone = true;
+    toastEl.classList.remove('show');
+    onUndo?.();
+    setTimeout(() => { toastEl.innerHTML = ''; }, 350);
+  });
+
+  const timer = setTimeout(() => {
+    if (undone) return;
+    toastEl.classList.remove('show');
+    setTimeout(() => { toastEl.innerHTML = ''; }, 350);
+  }, 5000);
+
+  // If user clicked undo, clear the auto-dismiss timer
+  undoBtn?.addEventListener('click', () => clearTimeout(timer));
+}
+
+/** Hide person mode and restore normal panel UI */
+function exitLinkedInProfileMode() {
+  const el = document.getElementById('sp-linkedin-profile');
+  if (el) { el.classList.remove('visible'); el.innerHTML = ''; }
+  _currentLinkedInProfile = null;
+  const pipelineStats = document.getElementById('sp-pipeline-stats');
+  if (pipelineStats) pipelineStats.style.display = '';
+}
+// ── End LinkedIn person mode ───────────────────────────────────────────────────
+
 saveConfirmBtn.addEventListener('click', () => {
   if (saveConfirmBtn.classList.contains('saved')) return;
   const company = companyNameEl.textContent;
@@ -904,12 +1276,18 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
       updateJobTitleBar();
       return;
     }
+    // LinkedIn profile page detected — switch to "person mode" (issue #36)
+    if (response && response.linkedinProfileData) {
+      renderLinkedInProfileMode(response.linkedinProfileData);
+      return;
+    }
     if (chrome.runtime.lastError || !response || !response.company) {
       // Content script didn't respond — try URL-based match against saved companies
       tryShowCompanyFromUrl(currentUrl, renderHomeState);
       return;
     }
-    // Company detected — hide home state, show company UI
+    // Company detected — hide home state + person mode, show company UI
+    exitLinkedInProfileMode();
     const homeEl = document.getElementById('sp-home');
     if (homeEl) homeEl.style.display = 'none';
     const companyContent = document.getElementById('company-content');
@@ -1312,6 +1690,9 @@ searchBtn.addEventListener('click', () => {
 function renderHomeState() {
   const homeEl = document.getElementById('sp-home');
   if (!homeEl) return;
+
+  // If person mode is active, clear it
+  exitLinkedInProfileMode();
 
   // Hide company content, show home
   const companyContent = document.getElementById('company-content');

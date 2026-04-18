@@ -4150,26 +4150,53 @@ function buildContacts() {
     'manual':                { label: '✎ manual',                      fallback: 'Added manually.' },
     'leader-promoted':       { label: '✎ leader · promoted',           fallback: 'Promoted from the leadership card into contacts.' },
     'calendar':              { label: '📅 calendar',                   fallback: 'Matched as an attendee in a Google Calendar event associated with this company.' },
+    'linkedin-capture':      { label: 'in LinkedIn · captured',        fallback: 'Captured from a LinkedIn profile page.' },
   };
   const formatMatchedVia = (c) => {
     const mv = c.matchedVia;
     if (!mv || !mv.type) {
       // Legacy fallback for contacts created before traceability existed
-      const legacy = c.source === 'manual' ? '✎ manual' : c.source === 'email' ? '✉ email' : '📅 calendar';
+      const legacy = c.source === 'manual' ? '✎ manual' : c.source === 'email' ? '✉ email' : c.source === 'linkedin-capture' ? 'in LinkedIn · captured' : '📅 calendar';
       return { label: legacy, detail: 'This contact was added before match reasoning was recorded, so only the high-level source is known.' };
     }
-    const def = MATCHED_VIA_LABELS[mv.type] || { label: mv.type, fallback: 'No description available.' };
+    // LinkedIn-captured contacts have type:'manual' but source:'linkedin-capture' — prefer the source label
+    const typeKey = (c.source === 'linkedin-capture' && mv.type === 'manual') ? 'linkedin-capture' : mv.type;
+    const def = MATCHED_VIA_LABELS[typeKey] || { label: mv.type, fallback: 'No description available.' };
     return { label: def.label, detail: mv.detail || def.fallback };
   };
-  const cardsHtml = contacts.length === 0
+  // Sort: most-recently captured LinkedIn contacts first, then by addedAt/detectedAt
+  const sortedContacts = [...contacts].sort((a, b) => {
+    const ta = a.capturedAt || a.addedAt || a.detectedAt || 0;
+    const tb = b.capturedAt || b.addedAt || b.detectedAt || 0;
+    return tb - ta;
+  });
+
+  const NOW = Date.now();
+  const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h
+
+  const cardsHtml = sortedContacts.length === 0
     ? `<div class="p-empty" style="font-size:12px;color:#7c98b6">No contacts yet. Add one below or scan emails.</div>`
-    : contacts.map(c => {
-        const initials = c.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
+    : sortedContacts.map(c => {
+        const initials = (c.name || '?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
         const mv = formatMatchedVia(c);
         const sourceLabel = mv.label;
         const sourceTitle = mv.detail.replace(/"/g, '&quot;');
-        const safeEmail = c.email.replace(/"/g, '&quot;');
-        const allEmails = [c.email, ...(c.aliases || [])];
+        // LinkedIn-captured contacts may have email: null — use name as key
+        const contactKey = (c.email || c.linkedinUrl || c.name || '').replace(/"/g, '&quot;');
+        const safeEmail = (c.email || '').replace(/"/g, '&quot;');
+
+        // ── "New" indicator — amber ring + tag for capturedAt within 24h ──
+        const capturedTs = c.capturedAt || (c.source === 'linkedin-capture' ? c.addedAt : 0) || 0;
+        const isNew = capturedTs && (NOW - capturedTs) < NEW_THRESHOLD_MS;
+        const newTag = isNew
+          ? `<span class="contact-new-tag" data-contact-key="${escapeHtml(contactKey)}" title="Click to dismiss">new</span>`
+          : '';
+        const avatarRingStyle = isNew
+          ? 'box-shadow:0 0 0 3px rgba(245,166,35,0.20);'
+          : '';
+
+        // ── Emails row (skip if email is null — LinkedIn-only contact) ──
+        const allEmails = c.email ? [c.email, ...(c.aliases || [])] : (c.aliases || []);
         const emailsHtml = allEmails.map(em => {
           const se = em.replace(/"/g, '&quot;');
           return `<div class="contact-email-row">
@@ -4177,26 +4204,36 @@ function buildContacts() {
             <button class="contact-copy-btn" data-email="${se}" title="Copy email">⎘</button>
           </div>`;
         }).join('');
+
+        // ── LinkedIn chip — "in ↗" per mockup (issue #36) ──
         const leader = leaders.find(l => namesMatch(l.name || '', c.name));
         const liUrl = c.linkedinUrl || leader?.linkedinUrl || leader?.linkedin || (leader?.newsUrl && /linkedin\.com/i.test(leader.newsUrl) ? leader.newsUrl : null);
-        const liHtml = liUrl ? `<a class="contact-li-link" href="${safeUrl(liUrl)}" target="_blank">LinkedIn</a>` : '';
+        const liHtml = liUrl
+          ? `<a class="contact-li-chip" href="${safeUrl(liUrl)}" target="_blank" title="Open LinkedIn profile">in ↗</a>`
+          : '';
+
+        // ── Avatar ──
         const avatarContent = c.photoUrl
-          ? `<img src="${safeUrl(c.photoUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.parentElement.textContent='${initials}'">`
-          : initials;
+          ? `<img src="${safeUrl(c.photoUrl)}" alt="${escapeHtml(initials)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.onerror=null;this.parentElement.textContent=this.alt;">`
+          : escapeHtml(initials);
+
         return `
-          <div class="contact-card" data-email="${safeEmail}">
-            <div class="contact-avatar" id="cavatar-${encodeURIComponent(c.email)}">${avatarContent}</div>
+          <div class="contact-card" data-email="${safeEmail}" data-contact-key="${escapeHtml(contactKey)}">
+            <div class="contact-avatar" id="cavatar-${encodeURIComponent(contactKey)}" style="${avatarRingStyle}">${avatarContent}</div>
             <div style="min-width:0;overflow:hidden;flex:1">
-              <div class="contact-name">${c.name}</div>
-              ${c.title ? `<div class="contact-title">${c.title}</div>` : ''}
+              <div class="contact-name">${escapeHtml(c.name || '')}</div>
+              ${c.title ? `<div class="contact-title">${escapeHtml(c.title)}</div>` : ''}
               ${emailsHtml}
               ${c.phone ? `<div style="font-size:11px;color:var(--ci-text-secondary);margin-top:2px;">${escapeHtml(c.phone)}</div>` : ''}
-              ${liHtml}
+              <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+                ${liHtml}
+                ${newTag}
+              </div>
               <div class="contact-source" title="${sourceTitle}">${sourceLabel}</div>
             </div>
             <div class="contact-card-actions">
-              <button class="contact-edit-btn" data-email="${safeEmail}" title="Edit">✎</button>
-              <button class="contact-remove-btn" data-email="${safeEmail}" title="Remove">×</button>
+              <button class="contact-edit-btn" data-email="${safeEmail}" data-contact-key="${escapeHtml(contactKey)}" title="Edit">✎</button>
+              <button class="contact-remove-btn" data-email="${safeEmail}" data-contact-key="${escapeHtml(contactKey)}" title="Remove">×</button>
             </div>
           </div>`;
       }).join('');
@@ -4466,15 +4503,44 @@ function bindPanelBodyEvents(pid) {
     const body = document.getElementById('pbody-contacts');
     if (!body) return;
 
-    // Remove contact
+    // Dismiss "new" tag on click (issue #36)
+    body.querySelectorAll('.contact-new-tag').forEach(tag => {
+      tag.addEventListener('click', () => {
+        const key = tag.dataset.contactKey;
+        // Clear capturedAt so the tag won't re-appear
+        const updated = (entry.knownContacts || []).map(c => {
+          const ck = c.email || c.linkedinUrl || c.name || '';
+          if (ck === key) return { ...c, capturedAt: null };
+          return c;
+        });
+        saveEntry({ knownContacts: updated });
+        tag.remove();
+        // Also remove the avatar ring
+        const card = body.querySelector(`.contact-card[data-contact-key="${CSS.escape(key)}"]`);
+        const avatar = card?.querySelector('.contact-avatar');
+        if (avatar) avatar.style.boxShadow = '';
+      });
+    });
+
+    // Remove contact — handle both email-keyed and linkedin-only contacts
     body.querySelectorAll('.contact-remove-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const email = btn.dataset.email;
-        const contact = (entry.knownContacts || []).find(c => c.email === email);
-        const allEmails = contact ? [contact.email, ...(contact.aliases || [])] : [email];
-        const blocked = [...new Set([...(entry.removedContacts || []), ...allEmails])];
+        const contactKey = btn.dataset.contactKey || email;
+        // Find contact by email first, then by key fallback
+        const contact = (entry.knownContacts || []).find(c => {
+          if (email && c.email === email) return true;
+          const ck = c.email || c.linkedinUrl || c.name || '';
+          return ck === contactKey;
+        });
+        const allEmails = contact && contact.email ? [contact.email, ...(contact.aliases || [])] : (email ? [email] : []);
+        const blocked = allEmails.length ? [...new Set([...(entry.removedContacts || []), ...allEmails])] : (entry.removedContacts || []);
         saveEntry({
-          knownContacts: (entry.knownContacts || []).filter(c => c.email !== email),
+          knownContacts: (entry.knownContacts || []).filter(c => {
+            if (email && c.email === email) return false;
+            const ck = c.email || c.linkedinUrl || c.name || '';
+            return ck !== contactKey;
+          }),
           removedContacts: blocked
         });
         renderPanel('contacts'); bindPanelBodyEvents('contacts');
@@ -4494,12 +4560,18 @@ function bindPanelBodyEvents(pid) {
     body.querySelectorAll('.contact-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const email = btn.dataset.email;
-        const contact = (entry.knownContacts || []).find(c => c.email === email);
+        const contactKey = btn.dataset.contactKey || email;
+        const contact = (entry.knownContacts || []).find(c => {
+          if (email && c.email === email) return true;
+          const ck = c.email || c.linkedinUrl || c.name || '';
+          return ck === contactKey;
+        });
         if (!contact) return;
         const card = btn.closest('.contact-card');
         if (!card) return;
-        const initials = contact.name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
-        const allEmails = [contact.email, ...(contact.aliases || [])];
+        const initials = (contact.name || '?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
+        // LinkedIn-captured contacts may have email: null
+        const allEmails = contact.email ? [contact.email, ...(contact.aliases || [])] : [];
 
         const emailRowsHtml = allEmails.map((em, i) => `
           <div class="contact-edit-email-row">
@@ -4507,13 +4579,16 @@ function bindPanelBodyEvents(pid) {
             ${allEmails.length > 1 ? `<button class="contact-email-del-btn" data-idx="${i}" title="Remove this email">×</button>` : ''}
           </div>`).join('');
 
+        const liUrlVal = (contact.linkedinUrl || '').replace(/"/g,'&quot;');
+
         card.innerHTML = `
           <div class="contact-avatar">${initials}</div>
           <div class="contact-edit-form">
-            <input class="contact-edit-input" id="ced-name" value="${contact.name.replace(/"/g,'&quot;')}" placeholder="Name">
+            <input class="contact-edit-input" id="ced-name" value="${(contact.name||'').replace(/"/g,'&quot;')}" placeholder="Name">
             <input class="contact-edit-input" id="ced-title" value="${(contact.title || '').replace(/"/g,'&quot;')}" placeholder="Title / Role (optional)">
             <div class="contact-edit-emails">${emailRowsHtml}</div>
             <button class="contact-add-email-btn">+ Add email</button>
+            <input class="contact-edit-input" id="ced-linkedin" value="${liUrlVal}" placeholder="LinkedIn URL (optional)" style="margin-top:4px">
             <div class="contact-add-actions" style="margin-top:6px">
               <button class="contact-confirm-btn contact-save-edit">Save</button>
               <button class="contact-cancel-btn contact-cancel-edit">Cancel</button>
@@ -4541,12 +4616,20 @@ function bindPanelBodyEvents(pid) {
         const save = () => {
           const newName = card.querySelector('#ced-name').value.trim();
           const newTitle = card.querySelector('#ced-title').value.trim();
+          const newLinkedinUrl = card.querySelector('#ced-linkedin')?.value.trim() || contact.linkedinUrl || null;
           const emails = [...card.querySelectorAll('.email-val')]
             .map(i => i.value.trim().toLowerCase()).filter(e => e.includes('@'));
-          if (!emails.length) return;
-          saveEntry({ knownContacts: (entry.knownContacts || []).map(c =>
-            c.email === email ? { ...c, name: newName || c.name, title: newTitle || undefined, email: emails[0], aliases: emails.slice(1) } : c
-          )});
+          // LinkedIn-captured contacts can be saved without email — allow it
+          saveEntry({ knownContacts: (entry.knownContacts || []).map(c => {
+            const ck = c.email || c.linkedinUrl || c.name || '';
+            const isTarget = (email && c.email === email) || ck === contactKey;
+            if (!isTarget) return c;
+            const updated = { ...c, name: newName || c.name };
+            if (newTitle) updated.title = newTitle; else delete updated.title;
+            if (hasEmail) { updated.email = emails[0]; updated.aliases = emails.slice(1); }
+            if (newLinkedinUrl) updated.linkedinUrl = newLinkedinUrl;
+            return updated;
+          })});
           renderPanel('contacts'); bindPanelBodyEvents('contacts');
         };
         card.querySelector('.contact-save-edit').addEventListener('click', save);

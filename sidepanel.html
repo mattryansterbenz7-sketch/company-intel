@@ -135,8 +135,8 @@
     .dup-btn-update:hover { border-color: var(--ci-accent-primary); }
     .dup-btn-new { background: var(--ci-accent-primary); color: var(--ci-bg-raised); }
     .dup-btn-new:hover { background: var(--ci-accent-primary-hover); }
-    .sp-toast { position: fixed; bottom: 16px; left: 16px; right: 16px; background: var(--ci-bg-inset); color: var(--ci-text-primary); font-size: 12px; font-weight: 600; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--ci-border-default); z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-    .sp-toast.show { opacity: 1; }
+    .sp-toast { position: fixed; bottom: 16px; left: 16px; right: 16px; background: var(--ci-bg-inset); color: var(--ci-text-primary); font-size: 12px; font-weight: 600; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--ci-border-default); z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; display: flex; align-items: center; }
+    .sp-toast.show { opacity: 1; pointer-events: auto; }
 
     /* Opportunity fields strip */
     #sp-opp-fields { display: none; padding: 8px 16px 10px; background: var(--ci-bg-inset); border-bottom: 1px solid var(--ci-border-default); }
@@ -832,6 +832,115 @@
     .sp-home-search-result:hover { background: rgba(255,107,74,0.04); }
     .sp-home-search-result-name { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); }
     .sp-home-search-result-role { font-size: 11px; color: var(--ci-text-tertiary); }
+
+    /* ── LinkedIn "person mode" — issue #36 ─────────────────────────────── */
+    #sp-linkedin-profile { display: none; padding: 14px 14px 0; flex-direction: column; gap: 12px; }
+    #sp-linkedin-profile.visible { display: flex; }
+
+    /* Detected banner */
+    .sp-li-banner {
+      padding: 10px 12px;
+      background: rgba(245,166,35,0.10);
+      border: 1px solid rgba(245,166,35,0.35);
+      border-radius: 8px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px; color: var(--ci-text-secondary);
+      line-height: 1.4;
+    }
+    .sp-li-banner.saved-state {
+      background: rgba(54,179,126,0.08);
+      border-color: rgba(54,179,126,0.30);
+    }
+    .sp-li-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ci-accent-amber); flex-shrink: 0;
+      animation: sp-li-pulse 1.5s ease-in-out infinite;
+    }
+    .sp-li-dot.saved { background: var(--ci-accent-teal); animation: none; }
+    @keyframes sp-li-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Preview card */
+    .sp-li-preview {
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .sp-li-preview-head {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .sp-li-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      color: #fff; font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; overflow: hidden;
+    }
+    .sp-li-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .sp-li-name { font-size: 15px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.005em; }
+    .sp-li-headline { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    .sp-li-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .sp-li-row { display: flex; font-size: 12px; gap: 10px; align-items: baseline; }
+    .sp-li-label { color: var(--ci-text-tertiary); width: 64px; flex-shrink: 0; font-weight: 500; }
+    .sp-li-val { color: var(--ci-text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-li-val.muted { color: var(--ci-text-tertiary); }
+
+    .sp-li-actions { display: flex; flex-direction: column; gap: 6px; }
+    .sp-li-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 9px 14px; font-size: 13px; font-weight: 600;
+      border-radius: 8px; cursor: pointer; border: none;
+      font-family: inherit; width: 100%;
+      transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    }
+    .sp-li-btn-primary {
+      background: var(--ci-accent-primary); color: #fff;
+    }
+    .sp-li-btn-primary:hover { background: var(--ci-accent-primary-hover); }
+    .sp-li-btn-secondary {
+      background: var(--ci-bg-raised); color: var(--ci-text-primary);
+      border: 1px solid var(--ci-border-default);
+    }
+    .sp-li-btn-secondary:hover { border-color: var(--ci-border-strong); }
+
+    /* "Or do something else" section */
+    .sp-li-alt-label {
+      font-size: 11px; font-weight: 700; color: var(--ci-text-tertiary);
+      margin-bottom: 6px;
+    }
+    .sp-li-alt-item {
+      font-size: 12px; color: var(--ci-text-secondary);
+      padding: 6px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: color var(--motion-xs) var(--ease-out);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .sp-li-alt-item:hover { color: var(--ci-accent-primary); }
+    .sp-li-alt-section { padding-bottom: 12px; }
+
+    /* Edit-fields form (inline before picker) */
+    .sp-li-edit-form {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 12px 14px; background: var(--ci-bg-inset);
+      border: 1px solid var(--ci-border-default); border-radius: 8px;
+    }
+    .sp-li-edit-input {
+      width: 100%; padding: 7px 10px;
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: 6px; font-size: 13px; font-family: inherit;
+      color: var(--ci-text-primary); outline: none;
+    }
+    .sp-li-edit-input:focus { border-color: var(--ci-accent-primary); }
+    .sp-li-edit-input::placeholder { color: var(--ci-text-tertiary); }
+    .sp-li-edit-actions { display: flex; gap: 8px; }
+    .sp-li-edit-actions .sp-li-btn { flex: 1; }
   </style>
 </head>
 <body>
@@ -855,6 +964,9 @@
   </div>
 
   <div id="sp-main-scroll" style="flex:1;overflow-y:auto;min-height:0;">
+  <!-- LinkedIn "person mode" — shown when a linkedin.com/in/* profile is detected (issue #36) -->
+  <div id="sp-linkedin-profile"></div>
+
   <!-- Pipeline stats row -->
   <div id="sp-pipeline-stats" class="sp-pipeline-stats"></div>
 
@@ -1171,6 +1283,7 @@
   <script src="onboarding.js"></script>
   <script src="date-picker.js"></script>
   <script src="components/research-pipeline.js"></script>
+  <script src="components/company-picker.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

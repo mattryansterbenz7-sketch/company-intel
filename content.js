@@ -82,10 +82,154 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // LinkedIn profile capture — returns full profileData object for the side panel "person mode"
+  if (message.type === 'GET_LINKEDIN_PROFILE') {
+    if (!/linkedin\.com\/in\/[^/?#]+/i.test(window.location.href)) {
+      sendResponse({ error: 'Not a LinkedIn profile page' });
+      return true;
+    }
+    extractLinkedInProfile()
+      .then(data => sendResponse(data))
+      .catch(err => sendResponse({ error: err.message }));
+    return true;
+  }
+
   return true;
 });
 
 
+
+// ── LinkedIn profile capture (issue #36) ────────────────────────────────────
+// Extracts visible profile data from a linkedin.com/in/* page for contact capture.
+// Each field can be null — callers must handle graceful degradation.
+async function extractLinkedInProfile() {
+  // Wait for React to render the top card
+  await new Promise(r => setTimeout(r, 800));
+
+  // ── Name ──────────────────────────────────────────────────────────────────
+  let name = null;
+  const nameSelectors = [
+    'h1.text-heading-xlarge',
+    '.text-heading-xlarge',
+    '.top-card-layout__title',
+    'h1[class*="inline"]',
+    'h1',
+  ];
+  for (const sel of nameSelectors) {
+    const el = document.querySelector(sel);
+    const text = el?.textContent?.trim();
+    if (text && text.length > 1 && text.length < 100 && text.toLowerCase() !== 'linkedin') {
+      name = text;
+      break;
+    }
+  }
+
+  // ── Headline ──────────────────────────────────────────────────────────────
+  let headline = null;
+  const headlineSelectors = [
+    '.text-body-medium.break-words',
+    '.top-card-layout__headline',
+    '[data-generated-suggestion-target]',
+  ];
+  for (const sel of headlineSelectors) {
+    const el = document.querySelector(sel);
+    const text = el?.textContent?.trim();
+    if (text && text.length > 1 && text.length < 300) {
+      headline = text;
+      break;
+    }
+  }
+
+  // ── Current company (re-use existing logic) ────────────────────────────────
+  let currentCompany = null;
+  try {
+    const compResult = await detectLinkedInProfileCompany();
+    currentCompany = compResult?.company || null;
+  } catch (e) {
+    console.warn('[CI] extractLinkedInProfile: company detection failed', e);
+  }
+
+  // ── Current title ──────────────────────────────────────────────────────────
+  // Try to get the current role title from the top card or headline
+  let currentTitle = null;
+  // LinkedIn often shows "Title at Company" in the headline
+  if (headline && currentCompany) {
+    const atPattern = new RegExp(`^(.+?)\\s+(?:@|at)\\s+${currentCompany.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+    const m = headline.match(atPattern);
+    if (m) currentTitle = m[1].trim();
+  }
+  // Fallback: first experience item
+  if (!currentTitle) {
+    const expTitleSelectors = [
+      '#experience ~ .pvs-list__outer-container .t-bold span[aria-hidden="true"]',
+      'section[id*="experience"] .t-bold span[aria-hidden="true"]',
+    ];
+    for (const sel of expTitleSelectors) {
+      const el = document.querySelector(sel);
+      const text = el?.textContent?.trim();
+      if (text && text.length > 1 && text.length < 100) {
+        currentTitle = text;
+        break;
+      }
+    }
+  }
+
+  // ── Location ───────────────────────────────────────────────────────────────
+  let location = null;
+  const locationSelectors = [
+    '.text-body-small.inline.t-black--light.break-words',
+    '.top-card-layout__location',
+    '.pv-top-card--list-bullet .text-body-small',
+  ];
+  for (const sel of locationSelectors) {
+    const el = document.querySelector(sel);
+    const text = el?.textContent?.trim();
+    if (text && text.length > 1 && text.length < 100) {
+      location = text;
+      break;
+    }
+  }
+
+  // ── Profile URL ────────────────────────────────────────────────────────────
+  // Normalize to linkedin.com/in/{handle}, strip query params and trailing slashes
+  let profileUrl = null;
+  try {
+    const u = new URL(window.location.href);
+    const m = u.pathname.match(/\/in\/([^/?#]+)/);
+    if (m) profileUrl = `https://www.linkedin.com/in/${m[1]}`;
+  } catch (e) { /* ignore */ }
+
+  // ── Photo URL ──────────────────────────────────────────────────────────────
+  let photoUrl = null;
+  const photoSelectors = [
+    '.pv-top-card-profile-picture__image',
+    '.profile-photo-edit__preview',
+    '.pv-top-card__photo .profile-photo-edit__preview',
+    'img.pv-top-card-profile-picture__image--show',
+    '.presence-entity__image',
+  ];
+  for (const sel of photoSelectors) {
+    const el = document.querySelector(sel);
+    const src = el?.src || el?.getAttribute('src');
+    if (src && /^https?:\/\//.test(src) && !/ghost/i.test(src)) {
+      photoUrl = src;
+      break;
+    }
+  }
+
+  console.log('[CI] extractLinkedInProfile:', { name, headline, currentCompany, currentTitle, location, profileUrl, photoUrl: !!photoUrl });
+
+  return {
+    source: 'linkedin-profile',
+    name,
+    headline,
+    currentCompany,
+    currentTitle,
+    location,
+    profileUrl,
+    photoUrl,
+  };
+}
 
 function extractMyLinkedInProfile() {
   const parts = [];
@@ -340,10 +484,17 @@ async function detectLinkedIn() {
     return detectLinkedInCompanyPage();
   }
 
-  // Profile pages: extract current employer from the profile top card
+  // Profile pages: extract full profile data for contact capture flow (issue #36)
   if (isProfilePage) {
-    const profileCompany = await detectLinkedInProfileCompany();
-    return { ...profileCompany, source: 'linkedin', domain: null };
+    const profileData = await extractLinkedInProfile();
+    // Include the basic company/job fields that sidepanel.js expects for backwards compat
+    return {
+      company: profileData.currentCompany || null,
+      jobTitle: null,
+      source: 'linkedin',
+      domain: null,
+      linkedinProfileData: profileData, // new — triggers "person mode" in sidepanel
+    };
   }
 
   // Non-job pages or title timed out: DOM selectors
