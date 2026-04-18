@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="icons/coop-monogram.svg">
   <link rel="stylesheet" href="design-tokens.css">
   <title>Coop.ai — Coop</title>
   <style>
@@ -101,6 +102,40 @@
     .icp-autofill-btn--primary:hover { background: var(--ci-accent-primary-hover); border-color: var(--ci-accent-primary-hover); color: #fff; }
     .compiled-tier-btn.active, .compiled-doc-btn.active {
       color: #fff; background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);
+    }
+
+    /* ── Coop portrait hero (#237) ── */
+    .coop-hero {
+      background: linear-gradient(180deg, #1F3542 0%, #2C4A5E 100%);
+      color: var(--ci-text-on-dark);
+      padding: 36px 40px;
+      border-radius: var(--ci-radius-md);
+      display: flex; align-items: center; gap: 24px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+    .coop-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at top right, rgba(252,99,107,0.15), transparent 60%);
+      pointer-events: none;
+    }
+    .coop-hero-portrait {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      position: relative; z-index: 1;
+      background: #1F3542;
+      flex-shrink: 0;
+    }
+    .coop-hero-body { position: relative; z-index: 1; }
+    .coop-hero-title {
+      font-size: 24px; font-weight: 700; letter-spacing: -0.015em;
+      color: var(--ci-text-on-dark);
+    }
+    .coop-hero-sub {
+      font-size: 13px; color: var(--ci-text-on-dark-muted);
+      margin-top: 6px; line-height: 1.5; max-width: 440px;
     }
 
     /* ── AI Models hero section ── */
@@ -510,8 +545,14 @@
 </div>
 
 <div class="page">
-  <div class="page-title">Coop</div>
-  <div class="page-subtitle">Configure how Coop thinks, talks, and spends.</div>
+  <div class="coop-hero">
+    <img src="icons/coop-portrait-256.png" alt="Coop" class="coop-hero-portrait"
+         onerror="this.onerror=null;this.src='icons/coop-monogram.svg';this.style.background='transparent';">
+    <div class="coop-hero-body">
+      <div class="coop-hero-title">Coop</div>
+      <div class="coop-hero-sub">Your co-operator. Tune how Coop thinks, how deep he remembers, and which model handles each turn.</div>
+    </div>
+  </div>
 
   <div class="page-tabs">
     <button class="page-tab active" data-tab="settings">Settings</button>
