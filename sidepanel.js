@@ -5020,6 +5020,11 @@ function renderContactsSection(el, contacts) {
     function renderQuickLinksDropdown(links) {
       const valid = (links || []).filter(l => l.label && l.url);
       qlDd.innerHTML = '';
+      // Header
+      const header = document.createElement('div');
+      header.className = 'sp-ql-header';
+      header.innerHTML = `<div class="sp-ql-label">Quick Links <span class="sp-ql-hint">· click to copy</span></div>`;
+      qlDd.appendChild(header);
       if (!valid.length) {
         const empty = document.createElement('div');
         empty.className = 'sp-ql-empty';
@@ -5032,11 +5037,30 @@ function renderContactsSection(el, contacts) {
           btn.setAttribute('role', 'menuitem');
           btn.innerHTML =
             `<span class="sp-ql-label">${escapeHtml(link.label)}</span>` +
-            `<span class="sp-ql-url">${escapeHtml(shortUrl(link.url))}</span>`;
-          btn.addEventListener('click', () => {
-            navigator.clipboard.writeText(link.url).catch(() => {});
-            showToast(`Copied ${link.label}`);
-            closeQuickLinks();
+            `<span class="sp-ql-item-url">${escapeHtml(shortUrl(link.url))}</span>`;
+          btn.addEventListener('click', async () => {
+            const url = link.url;
+            const label = link.label;
+            try {
+              await navigator.clipboard.writeText(url);
+              const urlEl = btn.querySelector('.sp-ql-item-url');
+              const originalUrl = urlEl?.textContent;
+              if (urlEl) {
+                urlEl.textContent = '✓ Copied to clipboard';
+                urlEl.classList.add('sp-ql-item-url-copied');
+              }
+              showToast(`Copied ${label}`);
+              setTimeout(() => {
+                if (urlEl && originalUrl) {
+                  urlEl.textContent = originalUrl;
+                  urlEl.classList.remove('sp-ql-item-url-copied');
+                }
+                closeQuickLinks();
+              }, 500);
+            } catch {
+              showToast('Copy failed', { error: true });
+              closeQuickLinks();
+            }
           });
           qlDd.appendChild(btn);
         });
