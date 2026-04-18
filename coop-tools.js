@@ -287,6 +287,18 @@ export function _capToolResult(obj) {
 // Tool handlers
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Build the exact string injected into the prompt for an email.
+function _buildEmailRaw(em) {
+  const header = [
+    `From: ${em.from || '(unknown)'}`,
+    em.to ? `To: ${em.to}` : null,
+    `Date: ${em.date || '(unknown)'}`,
+    `Subject: ${em.subject || '(no subject)'}`,
+  ].filter(Boolean).join('\n');
+  const body = (em.body || em.snippet || '').trim();
+  return `${header}\n\n${body}`;
+}
+
 async function _tool_get_company_context({ company_name }, ctx) {
   const r = await _coopResolveCompany(company_name, ctx);
   if (r.error) return r;
@@ -365,6 +377,7 @@ async function _tool_get_company_context({ company_name }, ctx) {
       leaderCount: leaders.length,
       hasJobDescription: !!(e.jobDescription),
       hasScore: e.jobMatch?.score != null,
+      rawContent: content,
     },
   };
 }
@@ -444,16 +457,30 @@ async function _tool_get_communications({ company_name, types, limit, keywords }
   const sortedEmails = wantEmails ? _sortByDateDesc(e.cachedEmails || []).slice(0, lim) : [];
   const emailSources = sortedEmails.map(em => ({
     kind: 'email',
+    id: `email_${em.id || em.date || Math.random().toString(36).slice(2)}`,
     subject: em.subject || '(no subject)',
     from: (em.from || '').replace(/<[^>]+>/, '').trim(),
+    to: em.to || '',
     date: em.date || 'unknown',
+    rawContent: _buildEmailRaw(em),
+    truncatedAt: em._truncatedAt || null,
   }));
   const sortedMtgs = wantMeetings ? _sortByDateDesc([...(e.cachedMeetings || []), ...(e.manualMeetings || [])]).slice(0, lim) : [];
-  const meetingSources = sortedMtgs.map(m => ({
-    kind: 'meeting',
-    title: m.title || 'Untitled',
-    date: m.date || 'unknown',
-  }));
+  const meetingSources = sortedMtgs.map(m => {
+    const transcript = m.transcript || m.notes || '';
+    const slicedAt = transcript.length > 20000 ? 20000 : null;
+    const attendees = (m.attendees || []).slice(0, 8).map(a => typeof a === 'string' ? a : (a.name || a.email || '')).join(', ');
+    return {
+      kind: 'meeting',
+      id: `meeting_${m.id || m.date || Math.random().toString(36).slice(2)}`,
+      title: m.title || 'Untitled',
+      attendees,
+      date: m.date || 'unknown',
+      source: m._isManual ? 'manual' : 'granola',
+      rawContent: transcript.slice(0, 20000),
+      truncatedAt: slicedAt,
+    };
+  });
 
   return {
     content: md.length > TOOL_RESULT_SIZE_CAP ? md.slice(0, TOOL_RESULT_SIZE_CAP) + '\n\n[truncated]' : md,
@@ -499,6 +526,7 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
         loadedSections,
         charCount: content.length,
         tokenEstimate: Math.round(content.length / 4),
+        rawContent: content,
       },
     };
   }
@@ -533,7 +561,7 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
     const content = t === 'full' ? d.coopProfileFull : d.coopProfileStandard;
     if (content) return {
       section, tier: t, content,
-      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(content), charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(content), charCount: content.length, tokenEstimate: Math.round(content.length / 4), rawContent: content },
     };
     // Fallback: compile on-demand if not yet compiled
     const { compileProfile } = await import('./profile-compiler.js');
@@ -541,7 +569,7 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
     const fallbackContent = t === 'full' ? compiled.coopProfileFull : compiled.coopProfileStandard;
     return {
       section, tier: t, content: fallbackContent,
-      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(fallbackContent), charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(fallbackContent), charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4), rawContent: fallbackContent || '' },
     };
   }
 
@@ -549,14 +577,14 @@ async function _tool_get_profile_section({ section, tier, sections: sectionIds }
     const content = t === 'full' ? d.coopPrefsFull : d.coopPrefsStandard;
     if (content) return {
       section, tier: t, content,
-      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(content), charCount: content.length, tokenEstimate: Math.round(content.length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(content), charCount: content.length, tokenEstimate: Math.round(content.length / 4), rawContent: content },
     };
     const { compileProfile } = await import('./profile-compiler.js');
     const compiled = await compileProfile();
     const fallbackContent = t === 'full' ? compiled.coopPrefsFull : compiled.coopPrefsStandard;
     return {
       section, tier: t, content: fallbackContent,
-      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(fallbackContent), charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4) },
+      _meta: { type: 'profile', section, tier: t, sectionHeaders: _extractSectionHeaders(fallbackContent), charCount: (fallbackContent || '').length, tokenEstimate: Math.round((fallbackContent || '').length / 4), rawContent: fallbackContent || '' },
     };
   }
 

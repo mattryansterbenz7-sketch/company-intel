@@ -212,24 +212,96 @@ function renderContextManifest(manifest, toolCalls, prefix) {
     const targetStr = t.target ? ` — ${escapeHtml(t.target)}` : '';
     let subRows = '';
 
-    // Communications: show email/meeting sources
+    // Communications: show email/meeting sources as clickable rows
     if (meta.type === 'communications' && meta.sources?.length) {
       const emailSources = meta.sources.filter(s => s.kind === 'email');
       const meetingSources = meta.sources.filter(s => s.kind === 'meeting');
       if (emailSources.length) {
-        subRows += emailSources.map(s =>
-          `<div class="${p}-ctx-sub">📧 ${escapeHtml(s.subject)} <span class="${p}-ctx-date">${escapeHtml(s.from)}, ${escapeHtml(s.date)}</span></div>`
-        ).join('');
+        subRows += emailSources.map((s, i) => {
+          const sourceId = `${id}_email_${i}`;
+          const title = s.subject;
+          const dateLabel = `${escapeHtml(s.from)}, ${escapeHtml(s.date)}`;
+          const metaLine = [s.from ? `From: ${s.from}` : null, s.to ? `To: ${s.to}` : null, s.date].filter(Boolean).join(' · ');
+          const body = s.rawContent || '(no content available)';
+          const charCount = (s.rawContent || '').length;
+          const truncNote = s.truncatedAt ? ` · <span class="${p}-ctx-truncate">&#9888; truncated at ${s.truncatedAt.toLocaleString()}</span>` : '';
+          return `<div class="${p}-ctx-sub-clickable" data-source-id="${escapeHtml(sourceId)}" role="button" tabindex="0" aria-expanded="false">
+            <span class="${p}-ctx-sub-icon">&#128231;</span>
+            <span class="${p}-ctx-sub-text">${escapeHtml(title)}</span>
+            <span class="${p}-ctx-sub-date">${dateLabel}</span>
+            <span class="${p}-ctx-sub-chev">&#9656;</span>
+          </div>
+          <div class="${p}-ctx-source-content" id="${escapeHtml(sourceId)}_panel" hidden>
+            <div class="${p}-ctx-source-head">
+              <div class="${p}-ctx-source-title">${escapeHtml(title)}</div>
+              <div class="${p}-ctx-source-meta">${escapeHtml(metaLine)}</div>
+            </div>
+            <div class="${p}-ctx-source-body">${escapeHtml(body)}</div>
+            <div class="${p}-ctx-source-foot">
+              <span>${charCount.toLocaleString()} chars${truncNote} &middot; exactly as injected into prompt</span>
+              <button class="${p}-ctx-source-close">Close</button>
+            </div>
+          </div>`;
+        }).join('');
       }
       if (meetingSources.length) {
-        subRows += meetingSources.map(s =>
-          `<div class="${p}-ctx-sub">📅 ${escapeHtml(s.title)} <span class="${p}-ctx-date">${escapeHtml(s.date)}</span></div>`
-        ).join('');
+        subRows += meetingSources.map((s, i) => {
+          const sourceId = `${id}_meeting_${i}`;
+          const title = s.title;
+          const dateLabel = escapeHtml(s.date);
+          const metaLine = [s.date, s.attendees, s.source].filter(Boolean).join(' · ');
+          const body = s.rawContent || '(no content available)';
+          const charCount = (s.rawContent || '').length;
+          const truncNote = s.truncatedAt ? ` · <span class="${p}-ctx-truncate">&#9888; truncated at ${s.truncatedAt.toLocaleString()}</span>` : '';
+          return `<div class="${p}-ctx-sub-clickable" data-source-id="${escapeHtml(sourceId)}" role="button" tabindex="0" aria-expanded="false">
+            <span class="${p}-ctx-sub-icon">&#128197;</span>
+            <span class="${p}-ctx-sub-text">${escapeHtml(title)}</span>
+            <span class="${p}-ctx-sub-date">${dateLabel}</span>
+            <span class="${p}-ctx-sub-chev">&#9656;</span>
+          </div>
+          <div class="${p}-ctx-source-content" id="${escapeHtml(sourceId)}_panel" hidden>
+            <div class="${p}-ctx-source-head">
+              <div class="${p}-ctx-source-title">${escapeHtml(title)}</div>
+              <div class="${p}-ctx-source-meta">${escapeHtml(metaLine)}</div>
+            </div>
+            <div class="${p}-ctx-source-body">${escapeHtml(body)}</div>
+            <div class="${p}-ctx-source-foot">
+              <span>${charCount.toLocaleString()} chars${truncNote} &middot; exactly as injected into prompt</span>
+              <button class="${p}-ctx-source-close">Close</button>
+            </div>
+          </div>`;
+        }).join('');
       }
     }
 
-    // Profile: show what sections were loaded
-    if (meta.type === 'profile' && meta.loadedSections?.length) {
+    // Profile: show what sections were loaded (clickable if rawContent present)
+    if (meta.type === 'profile' && meta.rawContent) {
+      const sourceId = `${id}_profile_${Math.random().toString(36).slice(2, 6)}`;
+      let sectionLabel = 'Profile';
+      if (meta.section === 'preferences') sectionLabel = 'Preferences';
+      else if (meta.section === 'learnings') sectionLabel = 'Learnings';
+      else if (meta.section === 'granular' && meta.loadedSections?.length) sectionLabel = meta.loadedSections.map(s => s.replace(/^(profile|prefs):/, '')).join(', ');
+      const titleLabel = `Profile · ${sectionLabel}`;
+      const tierLabel = meta.tier ? `${meta.tier} tier` : '';
+      const charCount = (meta.rawContent || '').length;
+      subRows += `<div class="${p}-ctx-sub-clickable" data-source-id="${escapeHtml(sourceId)}" role="button" tabindex="0" aria-expanded="false">
+        <span class="${p}-ctx-sub-icon">&#128100;</span>
+        <span class="${p}-ctx-sub-text">${escapeHtml(titleLabel)}</span>
+        ${tierLabel ? `<span class="${p}-ctx-sub-date">${escapeHtml(tierLabel)}</span>` : ''}
+        <span class="${p}-ctx-sub-chev">&#9656;</span>
+      </div>
+      <div class="${p}-ctx-source-content" id="${escapeHtml(sourceId)}_panel" hidden>
+        <div class="${p}-ctx-source-head">
+          <div class="${p}-ctx-source-title">${escapeHtml(titleLabel)}</div>
+          ${tierLabel ? `<div class="${p}-ctx-source-meta">${escapeHtml(tierLabel)}</div>` : ''}
+        </div>
+        <div class="${p}-ctx-source-body">${escapeHtml(meta.rawContent)}</div>
+        <div class="${p}-ctx-source-foot">
+          <span>${charCount.toLocaleString()} chars &middot; exactly as injected into prompt</span>
+          <button class="${p}-ctx-source-close">Close</button>
+        </div>
+      </div>`;
+    } else if (meta.type === 'profile' && meta.loadedSections?.length) {
       const _sectionLabels = {
         'profile': 'profile', 'preferences': 'preferences',
         'profile:story': 'Story', 'profile:experience': 'Experience', 'profile:skills': 'Skills',
@@ -249,8 +321,30 @@ function renderContextManifest(manifest, toolCalls, prefix) {
       subRows += `<div class="${p}-ctx-sub">${escapeHtml(meta.section || 'profile')} (${meta.tier} tier)</div>`;
     }
 
-    // Company: show what data was included
-    if (meta.type === 'company' && meta.sections?.length) {
+    // Company: clickable if rawContent present, otherwise plain summary
+    if (meta.type === 'company' && meta.rawContent) {
+      const sourceId = `${id}_company_${Math.random().toString(36).slice(2, 6)}`;
+      const titleLabel = `Company context · ${meta.company || 'unknown'}`;
+      const metaLine = meta.sections?.length ? meta.sections.join(', ') : '';
+      const charCount = (meta.rawContent || '').length;
+      subRows += `<div class="${p}-ctx-sub-clickable" data-source-id="${escapeHtml(sourceId)}" role="button" tabindex="0" aria-expanded="false">
+        <span class="${p}-ctx-sub-icon">&#127968;</span>
+        <span class="${p}-ctx-sub-text">${escapeHtml(titleLabel)}</span>
+        ${metaLine ? `<span class="${p}-ctx-sub-date">${escapeHtml(metaLine)}</span>` : ''}
+        <span class="${p}-ctx-sub-chev">&#9656;</span>
+      </div>
+      <div class="${p}-ctx-source-content" id="${escapeHtml(sourceId)}_panel" hidden>
+        <div class="${p}-ctx-source-head">
+          <div class="${p}-ctx-source-title">${escapeHtml(titleLabel)}</div>
+          ${metaLine ? `<div class="${p}-ctx-source-meta">${escapeHtml(metaLine)}</div>` : ''}
+        </div>
+        <div class="${p}-ctx-source-body">${escapeHtml(meta.rawContent)}</div>
+        <div class="${p}-ctx-source-foot">
+          <span>${charCount.toLocaleString()} chars &middot; exactly as injected into prompt</span>
+          <button class="${p}-ctx-source-close">Close</button>
+        </div>
+      </div>`;
+    } else if (meta.type === 'company' && meta.sections?.length) {
       subRows += `<div class="${p}-ctx-sub">${escapeHtml(meta.sections.join(', '))}</div>`;
     }
 
@@ -314,6 +408,35 @@ function bindContextManifestEvents(container) {
       detail.style.display = isHidden ? 'block' : 'none';
       if (chevron) chevron.textContent = isHidden ? '▾' : '▸';
     });
+  });
+
+  // Source row expand/collapse (emails, meetings, profile, company)
+  container.querySelectorAll('[data-source-id]').forEach(row => {
+    if (row._srcBound) return;
+    row._srcBound = true;
+    const sourceId = row.dataset.sourceId;
+    // Use CSS.escape to safely handle any special chars in the id
+    const panel = container.querySelector('#' + CSS.escape(sourceId + '_panel'));
+    if (!panel) return;
+    const chev = row.querySelector('[class$="-ctx-sub-chev"]');
+    const toggle = () => {
+      const open = !panel.hidden;
+      panel.hidden = open;
+      row.setAttribute('aria-expanded', open ? 'false' : 'true');
+      row.setAttribute('data-open', open ? 'false' : 'true');
+      if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+    };
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+    const closeBtn = panel.querySelector('[class$="-ctx-source-close"]');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!panel.hidden) toggle();
+      });
+    }
   });
 }
 
@@ -389,6 +512,130 @@ function injectContextManifestStyles(prefix) {
     }
     .${p}-ctx-date {
       opacity: 0.7;
+    }
+    .${p}-ctx-sub-clickable {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px 3px 18px;
+      border-radius: 3px;
+      cursor: pointer;
+      color: var(--ci-text-tertiary, #8A8E94);
+      font-size: 9px;
+      line-height: 1.6;
+      user-select: none;
+      transition: background 120ms, color 120ms;
+    }
+    .${p}-ctx-sub-clickable:hover {
+      background: rgba(124, 110, 240, 0.08);
+      color: var(--ci-text-secondary, #6F7782);
+    }
+    .${p}-ctx-sub-clickable:focus-visible {
+      outline: 2px solid var(--ci-accent-purple, #7C6EF0);
+      outline-offset: -2px;
+    }
+    .${p}-ctx-sub-clickable[data-open="true"] {
+      color: var(--ci-accent-purple, #7C6EF0);
+      background: rgba(124, 110, 240, 0.06);
+    }
+    .${p}-ctx-sub-icon {
+      flex-shrink: 0;
+      width: 10px;
+      font-size: 10px;
+      line-height: 1;
+    }
+    .${p}-ctx-sub-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .${p}-ctx-sub-date {
+      opacity: 0.7;
+      margin-left: 4px;
+      flex-shrink: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 120px;
+    }
+    .${p}-ctx-sub-chev {
+      font-size: 7px;
+      opacity: 0.5;
+      flex-shrink: 0;
+      transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .${p}-ctx-source-content {
+      margin: 4px 4px 8px 18px;
+      background: var(--ci-bg-raised, #FFFFFF);
+      border: 1px solid var(--ci-border-subtle, #EAECEF);
+      border-left: 3px solid var(--ci-accent-purple, #7C6EF0);
+      border-radius: var(--ci-radius-sm, 6px);
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      animation: ${p}SourceFadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes ${p}SourceFadeIn {
+      from { opacity: 0; transform: translateY(-2px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .${p}-ctx-source-head {
+      padding: 10px 14px;
+      background: var(--ci-bg-inset, #EBEDF0);
+      border-bottom: 1px solid var(--ci-border-subtle, #EAECEF);
+    }
+    .${p}-ctx-source-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ci-text-primary, #0A0B0D);
+      line-height: 1.4;
+    }
+    .${p}-ctx-source-meta {
+      font-size: 11px;
+      color: var(--ci-text-tertiary, #8A8E94);
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+    .${p}-ctx-source-body {
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--ci-text-primary, #0A0B0D);
+      white-space: pre-wrap;
+      max-height: 320px;
+      overflow-y: auto;
+      word-break: break-word;
+    }
+    .${p}-ctx-source-foot {
+      padding: 7px 14px;
+      background: var(--ci-bg-inset, #EBEDF0);
+      border-top: 1px solid var(--ci-border-subtle, #EAECEF);
+      font-size: 10px;
+      color: var(--ci-text-tertiary, #8A8E94);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .${p}-ctx-truncate {
+      color: var(--ci-accent-primary, #FC636B);
+      font-weight: 500;
+    }
+    .${p}-ctx-source-close {
+      background: none;
+      border: none;
+      color: var(--ci-text-tertiary, #8A8E94);
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 2px 6px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .${p}-ctx-source-close:hover {
+      background: rgba(0, 0, 0, 0.04);
+      color: var(--ci-text-primary, #0A0B0D);
     }
   `;
   document.head.appendChild(style);
