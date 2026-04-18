@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Research pipeline narrative motion (#241)</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --motion-md: 300ms;
+    --motion-lg: 400ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 28px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 880px; line-height: 1.55; margin-bottom: 12px; }
+  .rec-strap { display: inline-flex; align-items: center; gap: 8px; background: rgba(54,179,126,0.10); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; margin-bottom: 24px; }
+  .rec-strap::before { content: '✓'; font-size: 11px; }
+
+  .frame { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px 22px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; max-width: 880px; margin-bottom: 28px; }
+  .frame h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; }
+  .frame p + h3 { margin-top: 10px; }
+
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ci-text-tertiary); margin: 36px 0 10px; }
+  .section-label:first-of-type { margin-top: 8px; }
+  .state-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; background: var(--ci-bg-inset); color: var(--ci-text-secondary); margin-bottom: 10px; }
+  .state-tag.bad { background: rgba(232,56,79,0.08); color: var(--ci-accent-red); }
+  .state-tag.good { background: rgba(54,179,126,0.12); color: #1B7E53; }
+
+  /* Demo surface — simulates the side panel */
+  .demo-rail {
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px;
+    max-width: 420px;
+    min-height: 540px;
+    display: flex; flex-direction: column; gap: 14px;
+    position: relative;
+  }
+  .demo-rail.wider { max-width: 600px; }
+  .replay-btn {
+    position: absolute; top: 14px; right: 14px;
+    font-size: 11px; font-weight: 600;
+    padding: 5px 10px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+    color: var(--ci-text-secondary); cursor: pointer; font-family: inherit;
+    z-index: 10;
+    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .replay-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+
+  /* ─────────────────────────────────────────────────────────────
+     BEFORE · current state (static)
+     ───────────────────────────────────────────────────────────── */
+  .before-phases-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 14px;
+  }
+  .before-phases-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .before-avatar-blob {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #3B5068; position: relative;
+    flex-shrink: 0;
+  }
+  .before-avatar-blob::before, .before-avatar-blob::after {
+    content: ''; position: absolute; border-radius: 50%; background: rgba(255,255,255,0.6);
+  }
+  .before-avatar-blob::before { width: 10px; height: 10px; top: -2px; right: -4px; animation: bobble 2s infinite ease-in-out; }
+  .before-avatar-blob::after { width: 6px; height: 6px; top: 4px; right: 8px; animation: bobble 2.3s infinite ease-in-out; }
+  @keyframes bobble { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-3px);} }
+  .before-phases-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.3; }
+  .before-phases-title .company { color: var(--ci-accent-primary); }
+  .before-phase-list { display: flex; flex-direction: column; gap: 6px; }
+  .before-phase {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: var(--ci-radius-sm);
+    font-size: 12px;
+  }
+  .before-phase.done .rp-icon::before { content: '✓'; color: var(--ci-accent-teal); font-weight: 700; }
+  .before-phase.active { background: var(--ci-accent-primary-soft); }
+  .before-phase.active .rp-icon::before { content: '●'; color: var(--ci-accent-primary); animation: pulse 1.2s infinite; }
+  .before-phase.pending .rp-icon::before { content: '○'; color: var(--ci-text-tertiary); }
+  .before-phase .rp-icon { width: 14px; display: inline-block; text-align: center; font-size: 10px; }
+  .before-phase.active .rp-text { font-weight: 600; color: var(--ci-text-primary); }
+  .before-phase.done .rp-text { color: var(--ci-text-tertiary); }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: 0.6; transform: scale(1.1);} }
+  .before-elapsed { font-size: 11px; color: var(--ci-text-tertiary); text-align: center; margin-top: 10px; font-variant-numeric: tabular-nums; }
+
+  /* Placeholder empty card below (nothing fills in until whole thing is done) */
+  .before-result-empty {
+    padding: 22px 14px; text-align: center;
+    color: var(--ci-text-tertiary); font-size: 12px; font-style: italic;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     AFTER · new design (animated)
+     Timing choreography (restart on .replay toggle):
+       t = 0.0s  Stage 1 (Apollo) active
+       t = 1.2s  Stage 1 done — firmographics fields fill
+       t = 1.4s  Stage 2 (Serper) active
+       t = 2.6s  — reviews return
+       t = 3.0s  — leaders return
+       t = 3.4s  — jobs return
+       t = 3.8s  — product return
+       t = 4.0s  Stage 2 done
+       t = 4.1s  Stage 3 (Claude) active — streaming synthesis
+       t = 6.8s  Stage 3 done — intelligence summary filled
+     ───────────────────────────────────────────────────────────── */
+  .pipeline-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 12px 14px;
+  }
+  .pipeline-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pipeline-brand {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+    letter-spacing: 0;
+  }
+  .pipeline-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--ci-text-primary); line-height: 1.3;
+    flex: 1;
+  }
+  .pipeline-title .company { color: var(--ci-accent-primary); }
+  .pipeline-timer {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  /* Stage list */
+  .stage-list { display: flex; flex-direction: column; gap: 2px; }
+  .stage {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--ci-radius-sm);
+    transition: background var(--motion-sm) var(--ease-out);
+    position: relative;
+  }
+  .stage.active { background: var(--ci-accent-primary-soft); }
+  .stage-dot-col {
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 2px; flex-shrink: 0;
+    position: relative;
+  }
+  .stage-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.5px solid var(--ci-border-strong);
+    background: var(--ci-bg-raised);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700;
+    color: transparent;
+    transition: all var(--motion-sm) var(--ease-out);
+    z-index: 2;
+  }
+  .stage.active .stage-dot {
+    border-color: var(--ci-accent-primary);
+    background: var(--ci-accent-primary);
+    color: transparent;
+  }
+  .stage.active .stage-dot::after {
+    content: '';
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ci-accent-primary);
+    opacity: 0;
+    animation: stage-pulse 1.4s ease-out infinite;
+    z-index: 1;
+  }
+  @keyframes stage-pulse {
+    0% { transform: scale(0.6); opacity: 0.6; }
+    100% { transform: scale(1.3); opacity: 0; }
+  }
+  .stage.done .stage-dot {
+    background: var(--ci-accent-teal);
+    border-color: var(--ci-accent-teal);
+    color: #fff;
+  }
+  .stage.skipped .stage-dot {
+    border-color: var(--ci-text-tertiary);
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-tertiary);
+  }
+  .stage.skipped .stage-dot::after { content: '—'; font-size: 8px; }
+
+  .stage-connector {
+    width: 1.5px; flex: 1; min-height: 10px;
+    background: var(--ci-border-default);
+    margin-top: 2px;
+  }
+  .stage.done + .stage .stage-connector,
+  .stage.done .stage-connector { background: var(--ci-accent-teal); opacity: 0.4; }
+
+  .stage-body { flex: 1; min-width: 0; }
+  .stage-title-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  }
+  .stage-title {
+    font-size: 12.5px; font-weight: 500;
+    color: var(--ci-text-primary);
+    letter-spacing: -0.002em;
+    transition: color var(--motion-xs), font-weight var(--motion-xs);
+  }
+  .stage.active .stage-title { font-weight: 600; }
+  .stage.done .stage-title { color: var(--ci-text-secondary); font-weight: 500; }
+  .stage.skipped .stage-title { color: var(--ci-text-tertiary); font-weight: 500; }
+
+  .stage-timing {
+    font-size: 10.5px; color: var(--ci-text-tertiary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity var(--motion-xs) var(--ease-out);
+  }
+  .stage.done .stage-timing, .stage.active .stage-timing, .stage.skipped .stage-timing { opacity: 1; }
+  .stage.done .stage-timing { color: var(--ci-accent-teal); }
+
+  .stage-sub {
+    margin-top: 6px; display: flex; flex-direction: column; gap: 4px;
+    max-height: 0; overflow: hidden;
+    transition: max-height var(--motion-md) var(--ease-out), margin-top var(--motion-xs);
+  }
+  .stage.active .stage-sub, .stage.done .stage-sub, .stage.skipped .stage-sub { max-height: 120px; }
+  .stage-sub-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--ci-text-tertiary);
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity var(--motion-sm) var(--ease-out), transform var(--motion-sm) var(--ease-out);
+  }
+  .stage-sub-item.visible { opacity: 1; transform: translateY(0); }
+  .stage-sub-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--ci-accent-teal);
+    flex-shrink: 0;
+  }
+  .stage-sub-dot.skipped { background: var(--ci-text-tertiary); }
+  .stage-sub-item .amt {
+    margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ci-text-secondary);
+    font-weight: 500;
+  }
+
+  /* Streaming synthesis text (stage 3 body) */
+  .stage-stream {
+    font-size: 12px; color: var(--ci-text-secondary);
+    line-height: 1.5;
+    margin-top: 6px;
+    max-height: 0; overflow: hidden;
+    transition: max-height var(--motion-md) var(--ease-out);
+  }
+  .stage.active .stage-stream, .stage.done .stage-stream { max-height: 160px; }
+  .stage-stream-cursor {
+    display: inline-block; width: 2px; height: 11px; background: var(--ci-accent-primary);
+    vertical-align: text-bottom; animation: blink 1.1s infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink { 0%,50% { opacity: 1;} 51%,100% { opacity: 0;} }
+  .stage.done .stage-stream-cursor { display: none; }
+
+  /* ─────────────────────────────────────────────────────────────
+     Result card — company scaffolding that fills in live
+     ───────────────────────────────────────────────────────────── */
+  .result-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .result-head { display: flex; align-items: center; gap: 10px; }
+  .result-logo {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--ci-bg-inset);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    color: var(--ci-text-secondary);
+    letter-spacing: 0;
+  }
+  .result-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .result-url { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 1px; }
+
+  .result-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .result-stat {
+    background: var(--ci-bg-base);
+    padding: 8px 10px;
+    border-radius: var(--ci-radius-sm);
+  }
+  .result-stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ci-text-tertiary); }
+  .result-stat-value { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-top: 2px; letter-spacing: -0.005em; }
+
+  .result-section-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ci-text-secondary);
+    margin-top: 4px;
+  }
+  .result-section { display: flex; flex-direction: column; gap: 4px; }
+  .result-row {
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.4;
+    display: flex; justify-content: space-between; gap: 10px;
+  }
+  .result-row .label { color: var(--ci-text-tertiary); }
+  .result-row .value { color: var(--ci-text-primary); font-weight: 500; }
+
+  .result-summary {
+    font-size: 12px; color: var(--ci-text-primary);
+    line-height: 1.5;
+    background: var(--ci-bg-base);
+    padding: 10px 12px;
+    border-radius: var(--ci-radius-sm);
+  }
+
+  /* Skeleton shimmer — used for unfilled values */
+  .skel {
+    display: inline-block;
+    height: 12px;
+    background: linear-gradient(90deg, var(--ci-bg-inset) 0%, #F5F6F8 50%, var(--ci-bg-inset) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  .skel.sm { height: 10px; width: 48px; }
+  .skel.md { height: 13px; width: 72px; }
+  .skel.lg { height: 13px; width: 120px; }
+  .skel.line { height: 10px; width: 100%; display: block; margin-bottom: 4px; }
+  .skel.line:last-child { width: 62%; }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Field-fill reveal — skeleton fades out, value fades in */
+  .value-slot .filled { display: none; opacity: 0; transform: translateY(2px); }
+  .value-slot.on .skel { display: none; }
+  .value-slot.on .filled {
+    display: inline-block; opacity: 1; transform: translateY(0);
+    transition: opacity var(--motion-sm) var(--ease-out), transform var(--motion-sm) var(--ease-out);
+  }
+
+  /* Error / hint row */
+  .pipeline-hint {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    margin-top: 8px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+  }
+  .pipeline-hint.warn { color: var(--ci-accent-amber); background: rgba(245,166,35,0.07); }
+  .pipeline-hint.err { color: var(--ci-accent-red); background: rgba(232,56,79,0.06); }
+
+  /* ─────────────────────────────────────────────────────────────
+     Choreography (the magic)
+     ───────────────────────────────────────────────────────────── */
+  .replay-trigger:checked ~ .demo-rail .auto-anim,
+  .replay-trigger:checked ~ .demo-rail .pipeline-card,
+  .replay-trigger:checked ~ .demo-rail .result-card { animation-play-state: running; }
+
+  /* Stage 1 (apollo) */
+  .s1 { animation: stage1 7s linear 1 forwards; }
+  @keyframes stage1 {
+    0%   { background: var(--ci-accent-primary-soft); }
+    17%  { background: transparent; } /* 1.2s → done */
+    100% { background: transparent; }
+  }
+  .s1-dot { animation: s1dot 7s linear 1 forwards; }
+  @keyframes s1dot {
+    0%   { background: var(--ci-accent-primary); border-color: var(--ci-accent-primary); color: transparent; }
+    17%  { background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff; }
+    100% { background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff; }
+  }
+  .s1-dot::before { content: ''; animation: s1check 7s linear 1 forwards; }
+  @keyframes s1check { 0%,16% { content: '';} 17%,100% { content: '✓'; }}
+
+  /* Stage 2 (serper) — active from 1.2s → 4.0s */
+  .s2 { animation: stage2 7s linear 1 forwards; }
+  @keyframes stage2 {
+    0%,17%    { background: transparent; }
+    18%,57%   { background: var(--ci-accent-primary-soft); }
+    58%,100%  { background: transparent; }
+  }
+  .s2-dot { animation: s2dot 7s linear 1 forwards; }
+  @keyframes s2dot {
+    0%,17%    { background: var(--ci-bg-raised); border-color: var(--ci-border-strong); color: transparent; }
+    18%,57%   { background: var(--ci-accent-primary); border-color: var(--ci-accent-primary); color: transparent; }
+    58%,100%  { background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff; }
+  }
+  /* Sub-items reveal at specific times */
+  .s2-sub-1 { animation: subreveal 7s linear 1 forwards; animation-delay: 0s; }
+  .s2-sub-2 { animation: subreveal2 7s linear 1 forwards; animation-delay: 0s; }
+  .s2-sub-3 { animation: subreveal3 7s linear 1 forwards; animation-delay: 0s; }
+  .s2-sub-4 { animation: subreveal4 7s linear 1 forwards; animation-delay: 0s; }
+  @keyframes subreveal   { 0%,36% { opacity: 0; transform: translateY(-2px);} 37%,100% { opacity: 1; transform: translateY(0);} } /* 2.6s */
+  @keyframes subreveal2  { 0%,42% { opacity: 0; transform: translateY(-2px);} 43%,100% { opacity: 1; transform: translateY(0);} } /* 3.0s */
+  @keyframes subreveal3  { 0%,48% { opacity: 0; transform: translateY(-2px);} 49%,100% { opacity: 1; transform: translateY(0);} } /* 3.4s */
+  @keyframes subreveal4  { 0%,54% { opacity: 0; transform: translateY(-2px);} 55%,100% { opacity: 1; transform: translateY(0);} } /* 3.8s */
+
+  /* Stage 3 (synthesis) — active from 4.1s → 6.8s */
+  .s3 { animation: stage3 7s linear 1 forwards; }
+  @keyframes stage3 {
+    0%,58%    { background: transparent; }
+    59%,97%   { background: var(--ci-accent-primary-soft); }
+    98%,100%  { background: transparent; }
+  }
+  .s3-dot { animation: s3dot 7s linear 1 forwards; }
+  @keyframes s3dot {
+    0%,58%    { background: var(--ci-bg-raised); border-color: var(--ci-border-strong); color: transparent; }
+    59%,97%   { background: var(--ci-accent-primary); border-color: var(--ci-accent-primary); color: transparent; }
+    98%,100%  { background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff; }
+  }
+  /* Streaming text typing effect */
+  .s3-stream-text {
+    display: inline-block;
+    overflow: hidden;
+    white-space: pre-wrap;
+    animation: typestream 7s linear 1 forwards;
+    vertical-align: top;
+  }
+  @keyframes typestream {
+    0%,58%    { max-height: 0; opacity: 0; }
+    59%       { max-height: 0; opacity: 1; }
+    97%,100%  { max-height: 120px; opacity: 1; }
+  }
+  .s3-stream-cursor { animation: s3cur 7s linear 1 forwards; }
+  @keyframes s3cur {
+    0%,58%    { opacity: 0; }
+    59%,97%   { opacity: 1; }
+    98%,100%  { opacity: 0; }
+  }
+
+  /* Stage timings (text reveals at done-time) */
+  .s1-timing { animation: timing1 7s linear 1 forwards; }
+  @keyframes timing1 { 0%,16% { opacity: 0;} 17%,100% { opacity: 1;} }
+  .s2-timing { animation: timing2 7s linear 1 forwards; }
+  @keyframes timing2 { 0%,57% { opacity: 0;} 58%,100% { opacity: 1;} }
+  .s3-timing { animation: timing3 7s linear 1 forwards; }
+  @keyframes timing3 { 0%,97% { opacity: 0;} 98%,100% { opacity: 1;} }
+
+  /* Field-fill timings — result card */
+  .f-firmo { animation: fillShow 7s linear 1 forwards; }
+  @keyframes fillShow { 0%,16% { opacity: 0; transform: translateY(2px);} 17%,100% { opacity: 1; transform: translateY(0);} }
+  .f-reviews { animation: fillReviews 7s linear 1 forwards; }
+  @keyframes fillReviews { 0%,36% { opacity: 0; transform: translateY(2px);} 37%,100% { opacity: 1; transform: translateY(0);} }
+  .f-leaders { animation: fillLeaders 7s linear 1 forwards; }
+  @keyframes fillLeaders { 0%,42% { opacity: 0; transform: translateY(2px);} 43%,100% { opacity: 1; transform: translateY(0);} }
+  .f-summary { animation: fillSummary 7s linear 1 forwards; }
+  @keyframes fillSummary { 0%,96% { opacity: 0; transform: translateY(2px);} 97%,100% { opacity: 1; transform: translateY(0);} }
+  .val-show { opacity: 0; }
+  .val-show.f-firmo, .val-show.f-reviews, .val-show.f-leaders, .val-show.f-summary { /* animates above */ }
+
+  .skel-hide { animation: skelHide 7s linear 1 forwards; }
+  @keyframes skelHide {
+    0%,16% { opacity: 1;} 17%,100% { opacity: 0; width: 0;}
+  }
+  .skel-hide.f-reviews { animation: skelReviewsHide 7s linear 1 forwards; }
+  @keyframes skelReviewsHide { 0%,36% { opacity: 1;} 37%,100% { opacity: 0; width: 0;}}
+  .skel-hide.f-leaders { animation: skelLeadersHide 7s linear 1 forwards; }
+  @keyframes skelLeadersHide { 0%,42% { opacity: 1;} 43%,100% { opacity: 0; width: 0;}}
+  /* Intelligence summary skeletons collapse fully at the end — not just opacity+width,
+     also height + margin, otherwise the stacked line-skeletons reserve ~38px of
+     empty gray above the final text. */
+  .skel-hide.f-summary { animation: skelSummaryHide 7s linear 1 forwards; }
+  @keyframes skelSummaryHide {
+    0%, 96% { opacity: 1; max-height: 14px; margin-bottom: 4px; }
+    97%, 100% { opacity: 0; max-height: 0; margin-bottom: 0; overflow: hidden; padding: 0; border: 0; }
+  }
+
+  /* Overall timer */
+  .timer-text { animation: timerAnim 7s linear 1 forwards; font-variant-numeric: tabular-nums; }
+  @keyframes timerAnim {
+    0% { } 100% { }
+  }
+
+  /* Replay button trick */
+  input.replay-toggle { display: none; }
+  .replay-toggle:checked ~ .demo-rail .pipeline-card *,
+  .replay-toggle:checked ~ .demo-rail .result-card * {
+    animation-duration: 7s;
+    animation-iteration-count: 1;
+  }
+
+  .caption { font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.6; margin-top: 14px; max-width: 880px; }
+  .caption strong { color: var(--ci-text-secondary); font-weight: 600; }
+
+  .spec { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 22px 26px; max-width: 900px; margin-top: 36px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; }
+  .spec h3 { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px; }
+  .spec h3 + h3, .spec p + h3, .spec ul + h3 { margin-top: 18px; }
+  .spec ul { padding-left: 20px; margin: 4px 0 8px; }
+  .spec li { margin-bottom: 4px; }
+  .spec code { background: var(--ci-bg-inset); padding: 1px 6px; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--ci-text-primary); }
+  .spec .qline { color: var(--ci-text-primary); font-weight: 600; }
+
+  .grid-before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1160px; }
+  @media (max-width: 1100px) { .grid-before-after { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Research pipeline narrative motion</h1>
+<p class="page-sub"><a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/241" style="color:var(--ci-accent-primary)">#241</a> · DESIGN.md rule 4: slow operations get narrative motion, not spinners. Today: 3-phase loader is there, but fields don't fill in as data arrives, sub-stages aren't visible, no per-stage timing, emoji 🔍 loader elsewhere in the surface. This pass fixes all of that.</p>
+
+<div class="frame">
+  <h3>What changes</h3>
+  <p><strong>1. Field-fill mechanic.</strong> The result card appears <em>immediately</em> with skeleton placeholders. As each stage completes, the corresponding fields fill in with a 200ms ease-out reveal. The user sees progress as data, not as a spinner that finally stops.</p>
+  <p><strong>2. Sub-stage visibility.</strong> Stage 2 (Serper) runs 4 parallel searches — reviews / leaders / jobs / product. Show each as a bullet that resolves independently with its count ("6 reviews", "4 leaders") so the user sees the chain actually working.</p>
+  <p><strong>3. Per-stage timing.</strong> When a stage finishes, show its elapsed time ("1.2s") in tabular-numerics next to the stage title. Green on the done check. Free signal that the system is fast.</p>
+  <p><strong>4. Streaming synthesis.</strong> Stage 3 (Claude) streams the intelligence summary into the result card instead of buffering the whole JSON. Cursor blinks while streaming.</p>
+  <p><strong>5. Honest skip/fail states.</strong> Apollo exhausted → stage shows <code>—</code> + "fell back to web" hint. Serper rate limit → specific sub-items show <em>skipped</em>, not failed.</p>
+  <p><strong>6. Drop the emoji loaders.</strong> The 🔍 <code>jopp-loader-icon</code> on job opportunities in the sidepanel goes away — replaced with the same skeleton-shimmer + chain grammar.</p>
+</div>
+
+<div class="rec-strap">Recommended: the animated "AFTER" below. Press Replay to watch the full 7s choreography.</div>
+
+<div class="grid-before-after">
+
+  <!-- ═════════════ BEFORE ═════════════ -->
+  <div>
+    <div class="section-label">Before · today's state</div>
+    <span class="state-tag bad">Current ship</span>
+    <div class="demo-rail">
+      <div class="before-phases-card">
+        <div class="before-phases-header">
+          <div class="before-avatar-blob"></div>
+          <div class="before-phases-title">Researching <span class="company">Unitbase, Inc.</span></div>
+        </div>
+        <div class="before-phase-list">
+          <div class="before-phase done">
+            <span class="rp-icon"></span>
+            <span class="rp-text">Fetching firmographics</span>
+          </div>
+          <div class="before-phase active">
+            <span class="rp-icon"></span>
+            <span class="rp-text">Scanning leaders & reviews</span>
+          </div>
+          <div class="before-phase pending">
+            <span class="rp-icon"></span>
+            <span class="rp-text">Synthesizing company intel</span>
+          </div>
+        </div>
+        <div class="before-elapsed">0:03</div>
+      </div>
+      <div class="before-result-empty">Waiting for research to finish before rendering company card…</div>
+    </div>
+    <div class="caption">
+      <strong>What's wrong.</strong> Three-phase card is fine but it stops there — the company card below doesn't render until the ENTIRE pipeline completes. No per-stage timing. No visibility into the 4 parallel Serper searches running under stage 2. Emoji 🔍 loaders elsewhere (job opportunity block) read as vibe-coded. Timer is a single cumulative count instead of telling you where the time went.
+    </div>
+  </div>
+
+  <!-- ═════════════ AFTER ═════════════ -->
+  <div>
+    <div class="section-label">After · narrative motion (animated)</div>
+    <span class="state-tag good">Press Replay to watch</span>
+    <div class="demo-rail" id="after-rail">
+      <button class="replay-btn" onclick="document.getElementById('after-rail').classList.add('replaying'); setTimeout(()=>location.reload(),100)">↺ Replay</button>
+
+      <!-- Pipeline card -->
+      <div class="pipeline-card">
+        <div class="pipeline-head">
+          <div class="pipeline-brand">C</div>
+          <div class="pipeline-title">Researching <span class="company">Unitbase, Inc.</span></div>
+          <div class="pipeline-timer"><span id="live-timer">0.0s</span></div>
+        </div>
+
+        <div class="stage-list">
+          <!-- Stage 1: Apollo -->
+          <div class="stage s1">
+            <div class="stage-dot-col">
+              <div class="stage-dot s1-dot">✓</div>
+            </div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Firmographics · Apollo</span>
+                <span class="stage-timing s1-timing">1.2s</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stage 2: Serper -->
+          <div class="stage s2">
+            <div class="stage-dot-col">
+              <div class="stage-dot s2-dot">✓</div>
+            </div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Leaders · reviews · jobs · product (Serper)</span>
+                <span class="stage-timing s2-timing">2.6s</span>
+              </div>
+              <div class="stage-sub">
+                <div class="stage-sub-item s2-sub-1"><span class="stage-sub-dot"></span>Reviews <span class="amt">6 results</span></div>
+                <div class="stage-sub-item s2-sub-2"><span class="stage-sub-dot"></span>Leaders <span class="amt">4 results</span></div>
+                <div class="stage-sub-item s2-sub-3"><span class="stage-sub-dot"></span>Job listings <span class="amt">12 results</span></div>
+                <div class="stage-sub-item s2-sub-4"><span class="stage-sub-dot"></span>Product overview <span class="amt">8 results</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stage 3: Claude -->
+          <div class="stage s3">
+            <div class="stage-dot-col">
+              <div class="stage-dot s3-dot">✓</div>
+            </div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Synthesis · Claude</span>
+                <span class="stage-timing s3-timing">2.7s</span>
+              </div>
+              <div class="stage-stream">
+                <span class="s3-stream-text">Unitbase is a Series B workforce operations platform building analytics and shift-planning tools for deskless teams...</span><span class="stage-stream-cursor s3-stream-cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result card (scaffolding fills in live) -->
+      <div class="result-card">
+        <div class="result-head">
+          <div class="result-logo">U</div>
+          <div>
+            <div class="result-name">Unitbase, Inc.</div>
+            <div class="result-url">unitbase.com</div>
+          </div>
+        </div>
+
+        <!-- Firmographics row — skeleton → filled at t=1.2s -->
+        <div class="result-stats">
+          <div class="result-stat">
+            <div class="result-stat-label">Employees</div>
+            <div class="result-stat-value">
+              <span class="skel sm skel-hide"></span><span class="val-show f-firmo">180</span>
+            </div>
+          </div>
+          <div class="result-stat">
+            <div class="result-stat-label">Funding</div>
+            <div class="result-stat-value">
+              <span class="skel sm skel-hide"></span><span class="val-show f-firmo">$42M Series B</span>
+            </div>
+          </div>
+          <div class="result-stat">
+            <div class="result-stat-label">Industry</div>
+            <div class="result-stat-value">
+              <span class="skel sm skel-hide"></span><span class="val-show f-firmo">Workforce ops</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Leaders — fills at t=3.0s -->
+        <div class="result-section">
+          <div class="result-section-title">Leadership</div>
+          <div class="result-row">
+            <span class="label">CEO</span>
+            <span class="value"><span class="skel md skel-hide f-leaders"></span><span class="val-show f-leaders">Arthur Chen</span></span>
+          </div>
+          <div class="result-row">
+            <span class="label">VP Product</span>
+            <span class="value"><span class="skel md skel-hide f-leaders"></span><span class="val-show f-leaders">Priya Nambiar</span></span>
+          </div>
+        </div>
+
+        <!-- Reviews — fills at t=2.6s -->
+        <div class="result-section">
+          <div class="result-section-title">Reviews</div>
+          <div class="result-row">
+            <span class="label">Glassdoor</span>
+            <span class="value"><span class="skel md skel-hide f-reviews"></span><span class="val-show f-reviews">4.3 · 68 reviews</span></span>
+          </div>
+        </div>
+
+        <!-- Intelligence summary — fills at t=6.8s after streaming in stage 3 -->
+        <div class="result-section">
+          <div class="result-section-title">Intelligence</div>
+          <div class="result-summary">
+            <span class="skel line skel-hide f-summary"></span>
+            <span class="skel line skel-hide f-summary"></span>
+            <span class="skel line skel-hide f-summary"></span>
+            <span class="val-show f-summary">Unitbase competes with WorkJam and Crew in the deskless workforce space. Series B signals a 12–18 month runway at current burn; hiring pace suggests GTM motion is scaling. Former Toast ops lead Arthur Chen runs product; sales org currently 8 reps.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">
+      <strong>Choreography.</strong> <code>t=0</code> stage 1 active + card scaffolded with skeletons · <code>t=1.2s</code> Apollo done + firmographics fields fill · <code>t=1.4s</code> stage 2 active · <code>t=2.6s</code> reviews resolve · <code>t=3.0s</code> leaders resolve · <code>t=3.4s</code> jobs resolve · <code>t=3.8s</code> product resolves · <code>t=4.1s</code> stage 3 active, Claude streaming synthesis · <code>t=6.8s</code> stage 3 done, summary finalized. Every transition uses <code>var(--motion-sm)</code> + <code>var(--ease-out)</code>. Overall elapsed timer in the top-right in tabular-numerics (not shown live in this mock but will tick).
+    </div>
+  </div>
+
+</div>
+
+<!-- ═════════════ Failure states ═════════════ -->
+<div class="section-label">Failure & skip states</div>
+
+<div style="display: flex; gap: 20px; flex-wrap: wrap; max-width: 1160px;">
+
+  <div style="flex: 1; min-width: 380px;">
+    <span class="state-tag">Apollo exhausted · fallback to web</span>
+    <div class="demo-rail" style="min-height: auto;">
+      <div class="pipeline-card">
+        <div class="pipeline-head">
+          <div class="pipeline-brand">C</div>
+          <div class="pipeline-title">Researching <span class="company">Unitbase, Inc.</span></div>
+          <div class="pipeline-timer">3.4s</div>
+        </div>
+        <div class="stage-list">
+          <div class="stage skipped">
+            <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-bg-inset); border-color: var(--ci-text-tertiary); color: var(--ci-text-tertiary);">—</div></div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Firmographics · Apollo</span>
+                <span class="stage-timing" style="opacity: 1;">skipped</span>
+              </div>
+              <div class="pipeline-hint warn" style="margin-top: 6px; padding: 5px 8px;">
+                Apollo credits exhausted · falling back to web research
+              </div>
+            </div>
+          </div>
+          <div class="stage done">
+            <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff;">✓</div></div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Web research (Serper)</span>
+                <span class="stage-timing" style="opacity: 1; color: var(--ci-accent-teal);">2.9s</span>
+              </div>
+            </div>
+          </div>
+          <div class="stage active">
+            <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);"></div></div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Synthesis · Claude</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption" style="max-width: 380px;">Apollo exhausted → stage 1 shows dash-dot (skipped), not a red ✗. Inline hint explains the fallback. Chain keeps moving.</div>
+  </div>
+
+  <div style="flex: 1; min-width: 380px;">
+    <span class="state-tag">Serper partial · jobs + product skipped</span>
+    <div class="demo-rail" style="min-height: auto;">
+      <div class="pipeline-card">
+        <div class="pipeline-head">
+          <div class="pipeline-brand">C</div>
+          <div class="pipeline-title">Researching <span class="company">Unitbase, Inc.</span></div>
+          <div class="pipeline-timer">4.1s</div>
+        </div>
+        <div class="stage-list">
+          <div class="stage done">
+            <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff;">✓</div></div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Firmographics · Apollo</span>
+                <span class="stage-timing" style="opacity: 1; color: var(--ci-accent-teal);">1.1s</span>
+              </div>
+            </div>
+          </div>
+          <div class="stage done">
+            <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff;">✓</div></div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Leaders · reviews · jobs · product (Serper)</span>
+                <span class="stage-timing" style="opacity: 1; color: var(--ci-accent-teal);">2.4s</span>
+              </div>
+              <div class="stage-sub" style="max-height: 120px;">
+                <div class="stage-sub-item visible"><span class="stage-sub-dot"></span>Reviews <span class="amt">6 results</span></div>
+                <div class="stage-sub-item visible"><span class="stage-sub-dot"></span>Leaders <span class="amt">4 results</span></div>
+                <div class="stage-sub-item visible"><span class="stage-sub-dot skipped"></span><span style="color: var(--ci-text-tertiary);">Job listings</span> <span class="amt" style="color: var(--ci-text-tertiary);">skipped (rate limit)</span></div>
+                <div class="stage-sub-item visible"><span class="stage-sub-dot skipped"></span><span style="color: var(--ci-text-tertiary);">Product overview</span> <span class="amt" style="color: var(--ci-text-tertiary);">skipped (rate limit)</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="stage active">
+            <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-primary); border-color: var(--ci-accent-primary);"></div></div>
+            <div class="stage-body">
+              <div class="stage-title-row">
+                <span class="stage-title">Synthesis · Claude</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption" style="max-width: 380px;">Sub-items can fail independently. Skipped sub-items get a gray dot + "skipped (reason)" tag. Stage overall still reads "done" because partial data is still data.</div>
+  </div>
+
+</div>
+
+<!-- ═════════════ Zoom: stage detail ═════════════ -->
+<div class="section-label">Zoom · stage markup</div>
+<div style="display: flex; gap: 16px; max-width: 1160px;">
+  <div class="demo-rail" style="min-height: auto; max-width: 480px;">
+    <div class="pipeline-card">
+      <div class="pipeline-head">
+        <div class="pipeline-brand">C</div>
+        <div class="pipeline-title">Researching <span class="company">Transform VXR</span></div>
+        <div class="pipeline-timer">7.2s</div>
+      </div>
+      <div class="stage-list">
+        <div class="stage done">
+          <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff;">✓</div></div>
+          <div class="stage-body">
+            <div class="stage-title-row">
+              <span class="stage-title">Firmographics · Apollo</span>
+              <span class="stage-timing" style="opacity:1; color: var(--ci-accent-teal);">1.2s</span>
+            </div>
+          </div>
+        </div>
+        <div class="stage done">
+          <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff;">✓</div></div>
+          <div class="stage-body">
+            <div class="stage-title-row">
+              <span class="stage-title">Leaders · reviews · jobs · product (Serper)</span>
+              <span class="stage-timing" style="opacity:1; color: var(--ci-accent-teal);">2.6s</span>
+            </div>
+            <div class="stage-sub" style="max-height: 120px;">
+              <div class="stage-sub-item visible"><span class="stage-sub-dot"></span>Reviews <span class="amt">6 results</span></div>
+              <div class="stage-sub-item visible"><span class="stage-sub-dot"></span>Leaders <span class="amt">4 results</span></div>
+              <div class="stage-sub-item visible"><span class="stage-sub-dot"></span>Job listings <span class="amt">12 results</span></div>
+              <div class="stage-sub-item visible"><span class="stage-sub-dot"></span>Product overview <span class="amt">8 results</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="stage done">
+          <div class="stage-dot-col"><div class="stage-dot" style="background: var(--ci-accent-teal); border-color: var(--ci-accent-teal); color: #fff;">✓</div></div>
+          <div class="stage-body">
+            <div class="stage-title-row">
+              <span class="stage-title">Synthesis · Claude</span>
+              <span class="stage-timing" style="opacity:1; color: var(--ci-accent-teal);">3.4s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption" style="max-width: 340px; margin-top: 0;">
+    <strong>Finished state.</strong> All three stages done, sub-items visible and countable. Timer freezes at final total. After 2s of finished state, the whole pipeline card collapses to a single line <em>"Researched in 7.2s · refresh"</em> at the top of the result card — tucks away once you start reading the data.
+  </div>
+</div>
+
+<!-- ═════════════ Spec ═════════════ -->
+<div class="spec">
+  <h3>Key decisions locked</h3>
+  <ul>
+    <li><strong>Surface:</strong> applies to both <code>sidepanel.js</code> research flow (`renderResearchPhases`) and <code>company.js</code> research refresh flow. Single component, two mount points.</li>
+    <li><strong>Result card appears immediately</strong> with skeleton shimmer on all data slots. Scaffolding known from the company record (name, url, logo initial) — everything else is <code>.skel</code>.</li>
+    <li><strong>Three stages:</strong> Firmographics (Apollo), Leaders/reviews/jobs/product (Serper), Synthesis (Claude). Names updated from current ("Fetching firmographics" → "Firmographics · Apollo") to show the provider — reads as a chain, not jargon.</li>
+    <li><strong>Per-stage timing</strong> in tabular-numerics at row-right. Green on done, tertiary on active (blank until complete), "skipped" text on skipped.</li>
+    <li><strong>Stage 2 sub-items</strong> reveal as each Serper search resolves. Shows result count ("6 results") or <em>skipped (rate limit)</em>. Matches the existing parallel-search structure in <code>research.js:495</code>.</li>
+    <li><strong>Stage 3 streaming:</strong> intelligence summary streams into the stage body (and into the result card's Intelligence slot) as Claude generates. Cursor blinks while streaming. Uses the existing streaming pattern from chat (<code>chatWithFallback</code>) adapted for this endpoint.</li>
+    <li><strong>Field-fill animation:</strong> 200ms ease-out opacity + 2px Y-translate as skeleton fades out. No "pop-in" — smooth transition.</li>
+    <li><strong>Skeleton shimmer</strong> uses 1.4s linear (stay below 400ms cap because it's continuous ambient motion, not a discrete transition — this is the one exception to the motion budget).</li>
+    <li><strong>Active stage</strong> has a tinted bg (<code>--ci-accent-primary-soft</code>) + pulsing ring around the dot (1.4s infinite). Only ONE stage is active at a time.</li>
+    <li><strong>Chain collapse on finish:</strong> 2s after final stage completes, the pipeline card collapses to a single header line <em>"Researched in N.Ns · refresh"</em> at the top of the result card, freeing vertical space.</li>
+    <li><strong>Emoji loaders removed:</strong> 🔍 <code>jopp-loader-icon</code> in sidepanel.js (job opportunity block) replaced with same skeleton/chain grammar. No spinner anywhere that runs longer than 400ms.</li>
+    <li><strong>Skip/fail states:</strong> stages (and sub-items) have a <code>skipped</code> state — dash-dot icon, "skipped" text, inline hint explaining why. No red ✗ for non-errors; only for real hard failures (network completely down).</li>
+    <li><strong>Timing events:</strong> timings come from actual network callbacks (not faked by setInterval). Each provider call brackets its own <code>performance.now()</code> and emits a real completion time.</li>
+  </ul>
+
+  <h3>Motion tokens used</h3>
+  <ul>
+    <li><code>--motion-xs (120ms)</code> — stage title weight change, color transitions on the dot.</li>
+    <li><code>--motion-sm (200ms)</code> — stage background tint, field-fill reveal, sub-item enter.</li>
+    <li><code>--motion-md (300ms)</code> — stage-sub max-height expand, pipeline-card collapse-on-finish.</li>
+    <li><code>--ease-out</code> — every transition above (arrivals). Linear <em>banned</em> per DESIGN.md.</li>
+  </ul>
+
+  <h3 class="qline">Three small calls before spec</h3>
+  <ul>
+    <li><strong>1. Chain collapse on finish</strong> — collapses to single-line 2s after stage 3 done (my pick), or keeps the full chain visible until user manually dismisses? Gut: auto-collapse.</li>
+    <li><strong>2. Stage titles</strong> — "Firmographics · Apollo" (my pick — shows the provider) vs. "Fetching firmographics" (today) vs. "1. Apollo" (shortest). Gut: the dotted provider form.</li>
+    <li><strong>3. Scope</strong> — ship sidepanel + company.js in one PR, or split into two? Gut: one PR, since they share the component.</li>
+  </ul>
+  <p>Reply <strong>"ship it"</strong> if all three gut-calls look right, otherwise name which to change.</p>
+</div>
+
+</body>
+</html>

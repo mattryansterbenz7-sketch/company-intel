@@ -1981,8 +1981,10 @@ async function triggerResearch(company, forceRefresh = false) {
     return;
   }
 
-  // Phase-based loading UI — visible, informative, and slick
-  renderResearchPhases(company);
+  // Narrative pipeline UI — ResearchPipeline component (#241)
+  const enrichDomainForPipeline = (detectedDomain && !/linkedin\.com/i.test(detectedDomain)) ? detectedDomain : '';
+  const logoInitialForPipeline  = company ? company.charAt(0).toUpperCase() : 'C';
+  renderResearchPhases(company, enrichDomainForPipeline, logoInitialForPipeline);
 
   chrome.storage.local.get(['researchCache'], ({ researchCache }) => {
     loadPrefsWithMigration((prefs) => {
@@ -2025,32 +2027,107 @@ async function triggerResearch(company, forceRefresh = false) {
     // Derive a usable domain — LinkedIn pages have domain=null but may have a LinkedIn company URL
     const enrichDomain = (detectedDomain && !/linkedin\.com/i.test(detectedDomain)) ? detectedDomain : null;
 
-    // Phase 1: Apollo quick lookup — renders stats while Claude runs
+    // Stage 0: Apollo quick lookup — firmographics
+    // Record start time for per-stage timing in the pipeline component.
+    const _t0Apollo = performance.now();
     chrome.runtime.sendMessage(
       { type: 'QUICK_LOOKUP', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo },
       (quick) => {
         void chrome.runtime.lastError;
-        // Advance the phase loader to "Scanning leaders & reviews" regardless of
-        // whether quick-lookup returned data — the firmographics phase is done.
-        try { window.__researchPhases?.advance(1); } catch (_) {}
-        if (quick && (quick.employees || quick.funding || quick.companyWebsite)) {
+        const apolloMs = performance.now() - _t0Apollo;
+        const pipeline = window.__researchPipeline;
+
+        if (quick?._apolloExhausted) {
+          // Apollo credits exhausted — skip stage 0, chain continues via web fallback
+          try { pipeline?.skipStage(0, 'Apollo credits exhausted · falling back to web research'); } catch (_) {}
+        } else if (quick && (quick.employees || quick.funding || quick.companyWebsite)) {
+          // Stage 0 done — fill firmographic fields in result card
+          try {
+            pipeline?.completeStage(0, apolloMs);
+            if (quick.employees) pipeline?.fillField('employees', quick.employees);
+            if (quick.funding)   pipeline?.fillField('funding',   quick.funding);
+            if (quick.industry)  pipeline?.fillField('industry',  quick.industry);
+          } catch (_) {}
           if (quick.companyWebsite) setFavicon(quick.companyWebsite);
           renderQuickData(quick);
+        } else {
+          // No data returned — still mark stage 0 complete (no data is valid)
+          try { pipeline?.completeStage(0, apolloMs); } catch (_) {}
         }
+
+        // Advance to stage 1 (Serper web research) regardless of Apollo result
+        try { window.__researchPhases?.advance(1); } catch (_) {}
       }
     );
 
-    // Phase 2: Full research — fills in the rest when ready
+    // Stages 1+2: Full research (Serper + Claude synthesis)
+    // Sub-item progress: Approach B — all four Serper sub-items (reviews/leaders/
+    // jobs/product) reveal together when RESEARCH_COMPANY returns, not individually
+    // as each resolves. Approach A (per-item RESEARCH_PROGRESS messages) would
+    // require changes to background.js message routing + research.js emitters —
+    // filed as a follow-up upgrade if per-item granularity is desired.
+    const _t1Serper = performance.now();
     chrome.runtime.sendMessage(
       { type: 'RESEARCH_COMPANY', company, domain: enrichDomain, companyLinkedin: detectedCompanyLinkedin, linkedinFirmo: detectedLinkedinFirmo, prefs: prefs || null },
       (response) => {
         void chrome.runtime.lastError;
-        // Close out the phase loader — research is done (success or error)
-        try { window.__researchPhases?.finish(); window.__researchPhases?.stop(); } catch (_) {}
+        const pipeline = window.__researchPipeline;
+
         if (!response || response.error) {
+          // Hard failure — mark active stage as failed
+          try {
+            const activeStage = [0,1,2].find(i => {
+              const el = document.getElementById(`rp-stage-${i}`);
+              return el?.classList.contains('active');
+            }) ?? 1;
+            pipeline?.fail(activeStage, response?.error || 'Research failed');
+          } catch (_) {}
           contentEl.innerHTML = '<div class="error">' + (response?.error || 'Something went wrong') + '</div>';
           return;
         }
+
+        // Stage 1 (Serper) done — reveal all sub-items with real counts
+        const serperMs = performance.now() - _t1Serper;
+        try {
+          // Individual sub-item counts from the response
+          const reviewCount  = response.reviews?.length        || 0;
+          const leaderCount  = response.leaders?.length        || 0;
+          const jobCount     = response.jobListings?.length    || 0;
+          const productCount = response.intelligence ? 1 : 0;
+          pipeline?.completeSubItem(1, 'reviews', reviewCount);
+          pipeline?.completeSubItem(1, 'leaders', leaderCount);
+          pipeline?.completeSubItem(1, 'jobs',    jobCount);
+          pipeline?.completeSubItem(1, 'product', productCount);
+          pipeline?.completeStage(1, serperMs);
+          // Fill leaders and reviews slots
+          if (response.reviews?.length) {
+            const r0 = response.reviews[0];
+            const reviewText = r0?.rating ? `${r0.rating} · ${response.reviews.length} review${response.reviews.length !== 1 ? 's' : ''}` : `${response.reviews.length} review${response.reviews.length !== 1 ? 's' : ''}`;
+            pipeline?.fillField('reviews', reviewText);
+          }
+          if (response.leaders?.length) {
+            pipeline?.fillField('leaders', response.leaders);
+          }
+          // Advance to stage 2 (Claude synthesis)
+          pipeline?.advance(2);
+        } catch (_) {}
+
+        // Stage 2 (Claude) done on response — fill intelligence summary
+        // Streaming not wired (claudeApiCall doesn't expose streaming callbacks
+        // to sidepanel; filed as follow-up if streaming is added to research pipeline).
+        try {
+          if (response.intelligence?.summary || response.intelligence?.oneLiner) {
+            const summaryText = response.intelligence.summary || response.intelligence.oneLiner || '';
+            pipeline?.fillField('intelligence', summaryText);
+          }
+          pipeline?.completeStage(2);
+          pipeline?.finish();
+          pipeline?.stop();
+        } catch (_) {}
+
+        // Legacy finish call for any other listeners
+        try { window.__researchPhases?.finish(); window.__researchPhases?.stop(); } catch (_) {}
+
         currentResearch = response;
         renderResults(response);
         backfillEntryFromResearch(currentSavedEntry, response);
@@ -2743,9 +2820,9 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
       <details class="jopp-dropdown">
         <summary class="jopp-summary">
           <span class="jopp-summary-left">Job Opportunity</span>
-          <span class="jopp-summary-right"><span class="jopp-loader"><span class="jopp-loader-icon">🔍</span><span class="jopp-loader-text"></span></span></span><span class="jopp-chevron">›</span>
+          <span class="jopp-summary-right"><span class="jopp-loader"><span class="skel sm"></span><span class="jopp-loader-text"></span></span></span><span class="jopp-chevron">›</span>
         </summary>
-        <div class="jopp-body"><div class="jopp-loading-area"><span class="jopp-loader-icon jopp-loader-lg">🔍</span><span class="jopp-loader-text"></span></div></div>
+        <div class="jopp-body"><div class="jopp-loading-area"><span class="skel md"></span><span class="jopp-loader-text"></span></div></div>
       </details>`;
     startLoaderTextCycle(jobOpportunityEl);
     return;
@@ -2814,88 +2891,42 @@ function startResearchLoaderCycle(company) {
   }, 1800);
 }
 
-// Phase-based loader for forced-refresh research flow. Replaces the single-icon
-// loader with a three-phase progress card (Firmographics → Leaders & reviews →
-// Synthesizing), elapsed time counter, and adaptive hints at 15s/45s thresholds.
-// Exposes window.__researchPhases.advance(phaseIdx) so triggerResearch callbacks
-// can nudge it forward on real events (e.g., QUICK_LOOKUP returning).
-function renderResearchPhases(company) {
-  const safeCompany = (company || 'company').replace(/</g, '&lt;');
-  const _thinkSvg = `<svg class="coop-thinking-face" width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="ct28"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#ct28)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M28 43Q28 27 39 21Q50 16 61 21Q72 27 72 43Q72 53 68 58L63 64L56 68L50 70L44 68L37 64Q32 58 28 53Q28 48 28 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><path d="M33 23Q38 13 50 11Q58 11 63 15" fill="#3D2A1E" opacity="0.7"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="40" cy="42.5" r="3" fill="#5B8C3E"/><circle cx="40" cy="42.5" r="2.2" fill="#4A7A30"/><circle cx="40.5" cy="41.8" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="58" cy="42.5" r="3" fill="#5B8C3E"/><circle cx="58" cy="42.5" r="2.2" fill="#4A7A30"/><circle cx="58.5" cy="41.8" r="0.8" fill="white" opacity="0.7"/><path d="M35 37Q38 35 41 35Q44 35 47 37" fill="#2D1F16" opacity="0.8"/><path d="M53 35.5Q56 33 59 33Q62 33 65 35.5" fill="#2D1F16" opacity="0.8"/><path d="M47 53Q48 55 50 55.5Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/><path d="M43 60Q47 62 50 62Q53 62 57 60" fill="none" stroke="#9B7055" stroke-width="1" stroke-linecap="round"/><path d="M65 84Q72 76 69 68Q67 63 62 62" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/><path d="M65 84Q68 80 69 76" fill="none" stroke="#364854" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/><path d="M48 66Q50 62 56 61Q62 62 63 66Q62 69 58 70Q52 71 49 68Z" fill="#E8C4A0" stroke="#D4A070" stroke-width="0.5"/><circle cx="76" cy="28" r="6" fill="rgba(255,255,255,0.7)" stroke="#ccc" stroke-width="0.5"><animate attributeName="cy" values="28;24;28" dur="2s" repeatCount="indefinite"/></circle><circle cx="71" cy="37" r="3.5" fill="rgba(255,255,255,0.5)" stroke="#ddd" stroke-width="0.4"><animate attributeName="cy" values="37;34;37" dur="2.3s" repeatCount="indefinite"/></circle><circle cx="67" cy="42" r="2" fill="rgba(255,255,255,0.4)" stroke="#ddd" stroke-width="0.3"><animate attributeName="cy" values="42;40;42" dur="1.8s" repeatCount="indefinite"/></circle></g></svg>`;
-  contentEl.innerHTML = `
-    <div class="research-phases-card" id="research-phases-card">
-      <div class="research-phases-header">
-        ${_thinkSvg}
-        <div class="research-phases-title">Researching <span class="company">${safeCompany}</span></div>
-      </div>
-      <div class="research-phase-list">
-        <div class="research-phase active" data-phase="0">
-          <span class="rp-icon"></span>
-          <span class="rp-text">Fetching firmographics</span>
-        </div>
-        <div class="research-phase pending" data-phase="1">
-          <span class="rp-icon"></span>
-          <span class="rp-text">Scanning leaders & reviews</span>
-        </div>
-        <div class="research-phase pending" data-phase="2">
-          <span class="rp-icon"></span>
-          <span class="rp-text">Synthesizing company intel</span>
-        </div>
-      </div>
-      <div class="research-elapsed">
-        <span id="research-elapsed-time">0:00</span>
-        <span class="rp-hint" id="research-elapsed-hint"></span>
-      </div>
-    </div>`;
+// Research pipeline loader — mounts the ResearchPipeline component (#241).
+// Replaces the old three-phase card with narrative chain viz: Apollo → Serper → Claude,
+// per-stage timing, sub-items, result card with skeleton-shimmer field-fill.
+//
+// Exposes window.__researchPhases with the legacy advance(n)/finish()/stop() API
+// so existing triggerResearch() callsites continue to work unchanged, while also
+// providing the richer pipeline API through window.__researchPipeline.
+function renderResearchPhases(company, domain, logoInitial) {
+  // Stop any previous pipeline instance
+  window.__researchPipeline?.stop();
 
-  const startedAt = Date.now();
-  let currentPhase = 0;
+  const pipeline = new ResearchPipeline(contentEl, {
+    company:      company  || '',
+    domain:       domain   || '',
+    logoInitial:  logoInitial || '',
+  });
 
-  const advance = (to) => {
-    if (to <= currentPhase) return;
-    const phaseEls = document.querySelectorAll('#research-phases-card .research-phase');
-    phaseEls.forEach((el, i) => {
-      el.classList.remove('active', 'pending', 'done');
-      if (i < to) el.classList.add('done');
-      else if (i === to) el.classList.add('active');
-      else el.classList.add('pending');
-    });
-    currentPhase = to;
-  };
+  window.__researchPipeline = pipeline;
 
-  const finish = () => {
-    const phaseEls = document.querySelectorAll('#research-phases-card .research-phase');
-    phaseEls.forEach(el => { el.classList.remove('active', 'pending'); el.classList.add('done'); });
-    currentPhase = 3;
-  };
-
-  // Elapsed time counter + adaptive hints
-  const timeEl = document.getElementById('research-elapsed-time');
-  const hintEl = document.getElementById('research-elapsed-hint');
-  const tick = () => {
-    if (!timeEl?.isConnected) { clearInterval(interval); return; }
-    const secs = Math.floor((Date.now() - startedAt) / 1000);
-    const mm = Math.floor(secs / 60);
-    const ss = String(secs % 60).padStart(2, '0');
-    timeEl.textContent = `${mm}:${ss}`;
-    if (hintEl) {
-      if (secs >= 45) hintEl.textContent = 'Taking longer than usual — large fallback chain is running';
-      else if (secs >= 15) hintEl.textContent = 'Still working — large companies can take up to 30s';
-      else hintEl.textContent = '';
-    }
-    // Time-based phase hints if real events don't advance us
-    if (currentPhase === 0 && secs >= 4) advance(1);
-    if (currentPhase === 1 && secs >= 12) advance(2);
-  };
-  tick();
-  const interval = setInterval(tick, 500);
-
-  // Expose advance/finish so triggerResearch can call them on real events
+  // Legacy alias: map old advance(n)/finish()/stop() onto new pipeline API.
+  // Stage index mapping: 0=Apollo, 1=Serper, 2=Claude (same as new pipeline).
   window.__researchPhases = {
-    advance,
-    finish,
-    stop: () => clearInterval(interval),
+    advance: (stageIdx) => pipeline.advance(stageIdx),
+    finish:  ()         => pipeline.finish(),
+    stop:    ()         => pipeline.stop(),
   };
+
+  // Listen for the refresh click event from the collapsed hint bar
+  // (fired by ResearchPipeline._onRefreshClick)
+  document.addEventListener('research-pipeline-refresh', function onRefresh(e) {
+    document.removeEventListener('research-pipeline-refresh', onRefresh);
+    const { company: c, domain: d } = e.detail || {};
+    triggerResearch(c || company, true);
+  }, { once: true });
+
+  return pipeline;
 }
 
 function startLoaderTextCycle(container) {
@@ -3112,23 +3143,17 @@ function renderQuickData(data) {
       ${sourceTag}
     </div>`;
 
-  // If the phase loader is active (forced refresh flow), inject the overview
-  // ABOVE it rather than replacing the entire content — preserves the visible
-  // progress UI while showing the freshly-arrived quick data.
-  const phaseCard = document.getElementById('research-phases-card');
-  if (phaseCard && window.__researchPhases) {
-    // Remove any prior quick-data overview we injected, then insert fresh
-    document.getElementById('sp-quick-overview')?.remove();
-    const holder = document.createElement('div');
-    holder.id = 'sp-quick-overview';
-    holder.innerHTML = overviewHtml;
-    contentEl.insertBefore(holder, phaseCard);
+  // If the pipeline component is active (forced refresh flow), the quick data
+  // is already being filled into the result card's value-slots via fillField()
+  // in the QUICK_LOOKUP callback. No need to inject an overview div — the
+  // pipeline result card IS the overview. Skip to avoid replacing contentEl.
+  if (window.__researchPipeline && document.getElementById('rp-pipeline-card')) {
     return;
   }
 
   contentEl.innerHTML = `
     ${overviewHtml}
-    <div class="research-loader" id="research-loader"><span class="research-loader-icon">🔍</span><span class="research-loader-text" id="research-loader-text"></span></div>`;
+    <div class="research-loader" id="research-loader"><span class="skel sm" style="margin-right:6px;vertical-align:middle;"></span><span class="research-loader-text" id="research-loader-text"></span></div>`;
   startResearchLoaderCycle(companyNameEl.textContent);
 }
 

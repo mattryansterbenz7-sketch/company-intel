@@ -1,0 +1,546 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ResearchPipeline component styles — #241 narrative motion
+   All values use design tokens from design-tokens.css.
+   Exception: .skel shimmer uses 1.4s linear (continuous ambient motion,
+   documented exception to --motion-* budget per DESIGN.md).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Pipeline card ────────────────────────────────────────────────────────── */
+.pipeline-card {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  padding: 12px 14px;
+  overflow: hidden;
+  transition:
+    max-height var(--motion-md) var(--ease-out),
+    opacity var(--motion-md) var(--ease-out),
+    padding var(--motion-md) var(--ease-out);
+}
+
+.pipeline-card.collapsing {
+  /* max-height and opacity driven by JS inline style */
+}
+
+.pipeline-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pipeline-brand {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ci-bg-header);
+  color: var(--ci-text-on-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+
+.pipeline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ci-text-primary);
+  line-height: 1.3;
+  flex: 1;
+}
+
+.pipeline-title .company {
+  color: var(--ci-accent-primary);
+}
+
+.pipeline-timer {
+  font-size: 11px;
+  color: var(--ci-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* ── Stage list ───────────────────────────────────────────────────────────── */
+.stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--ci-radius-sm);
+  transition: background var(--motion-sm) var(--ease-out);
+  position: relative;
+}
+
+.stage.active {
+  background: var(--ci-accent-primary-soft);
+}
+
+/* ── Stage dot column ─────────────────────────────────────────────────────── */
+.stage-dot-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 2px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.stage-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ci-border-strong);
+  background: var(--ci-bg-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: transparent;
+  transition: all var(--motion-sm) var(--ease-out);
+  z-index: 2;
+  position: relative;
+}
+
+.stage.active .stage-dot {
+  border-color: var(--ci-accent-primary);
+  background: var(--ci-accent-primary);
+  color: transparent;
+}
+
+/* Pulsing ring on active stage dot */
+.stage.active .stage-dot::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ci-accent-primary);
+  opacity: 0;
+  animation: stage-pulse 1.4s ease-out infinite;
+  z-index: 1;
+}
+
+@keyframes stage-pulse {
+  0%   { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+.stage.done .stage-dot {
+  background: var(--ci-accent-teal);
+  border-color: var(--ci-accent-teal);
+  color: #fff;
+}
+
+.stage.skipped .stage-dot {
+  border-color: var(--ci-text-tertiary);
+  background: var(--ci-bg-inset);
+  color: var(--ci-text-tertiary);
+}
+
+.stage.failed .stage-dot {
+  background: var(--ci-accent-red);
+  border-color: var(--ci-accent-red);
+  color: #fff;
+}
+
+.stage-connector {
+  width: 1.5px;
+  flex: 1;
+  min-height: 10px;
+  background: var(--ci-border-default);
+  margin-top: 2px;
+}
+
+.stage.done .stage-connector,
+.stage.done + .stage .stage-connector {
+  background: var(--ci-accent-teal);
+  opacity: 0.4;
+}
+
+/* ── Stage body ───────────────────────────────────────────────────────────── */
+.stage-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stage-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ci-text-primary);
+  letter-spacing: -0.002em;
+  transition:
+    color var(--motion-xs) var(--ease-out),
+    font-weight var(--motion-xs) var(--ease-out);
+}
+
+.stage.active .stage-title  { font-weight: 600; }
+.stage.done .stage-title    { color: var(--ci-text-secondary); font-weight: 500; }
+.stage.skipped .stage-title { color: var(--ci-text-tertiary); font-weight: 500; }
+.stage.failed .stage-title  { color: var(--ci-accent-red); font-weight: 500; }
+
+.stage-timing {
+  font-size: 10.5px;
+  color: var(--ci-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--motion-xs) var(--ease-out);
+}
+
+.stage.done .stage-timing,
+.stage.skipped .stage-timing,
+.stage.failed .stage-timing {
+  opacity: 1;
+}
+
+.stage.done .stage-timing  { color: var(--ci-accent-teal); }
+.stage.failed .stage-timing { color: var(--ci-accent-red); }
+
+/* ── Stage 2 sub-items ────────────────────────────────────────────────────── */
+.stage-sub {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    max-height var(--motion-md) var(--ease-out),
+    margin-top var(--motion-xs) var(--ease-out);
+}
+
+.stage.active .stage-sub,
+.stage.done .stage-sub,
+.stage.skipped .stage-sub {
+  max-height: 120px;
+}
+
+.stage-sub-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ci-text-tertiary);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity var(--motion-sm) var(--ease-out),
+    transform var(--motion-sm) var(--ease-out);
+}
+
+.stage-sub-item.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.stage-sub-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ci-accent-teal);
+  flex-shrink: 0;
+}
+
+.stage-sub-dot.skipped {
+  background: var(--ci-text-tertiary);
+}
+
+.stage-sub-item .amt {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--ci-text-secondary);
+  font-weight: 500;
+}
+
+.stage-sub-item.skipped-item .amt {
+  color: var(--ci-text-tertiary);
+}
+
+/* ── Stage 3 synthesis stream ─────────────────────────────────────────────── */
+.stage-stream {
+  font-size: 12px;
+  color: var(--ci-text-secondary);
+  line-height: 1.5;
+  margin-top: 6px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--motion-md) var(--ease-out);
+}
+
+.stage.active .stage-stream,
+.stage.done .stage-stream {
+  max-height: 160px;
+}
+
+.stage-stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 11px;
+  background: var(--ci-accent-primary);
+  vertical-align: text-bottom;
+  animation: blink 1.1s infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 50%   { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.stage.done .stage-stream-cursor {
+  display: none;
+}
+
+/* ── Hints (skip/fail inline messages) ───────────────────────────────────── */
+.pipeline-hint {
+  font-size: 11px;
+  color: var(--ci-text-tertiary);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--ci-bg-base);
+  border-radius: var(--ci-radius-sm);
+}
+
+.pipeline-hint.warn {
+  color: var(--ci-accent-amber);
+  background: rgba(245, 166, 35, 0.07);
+}
+
+.pipeline-hint.err {
+  color: var(--ci-accent-red);
+  background: var(--ci-accent-red-soft);
+}
+
+/* ── Result card ──────────────────────────────────────────────────────────── */
+.result-card {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.result-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--ci-bg-inset);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ci-text-secondary);
+  letter-spacing: 0;
+}
+
+.result-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.result-url {
+  font-size: 11px;
+  color: var(--ci-text-tertiary);
+  margin-top: 1px;
+}
+
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.result-stat {
+  background: var(--ci-bg-base);
+  padding: 8px 10px;
+  border-radius: var(--ci-radius-sm);
+}
+
+.result-stat-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ci-text-tertiary);
+}
+
+.result-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ci-text-primary);
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+
+.result-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ci-text-secondary);
+  margin-top: 4px;
+}
+
+.result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-row {
+  font-size: 12px;
+  color: var(--ci-text-secondary);
+  line-height: 1.4;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.result-row .label {
+  color: var(--ci-text-tertiary);
+}
+
+.result-row .value {
+  color: var(--ci-text-primary);
+  font-weight: 500;
+}
+
+.result-summary {
+  font-size: 12px;
+  color: var(--ci-text-primary);
+  line-height: 1.5;
+  background: var(--ci-bg-base);
+  padding: 10px 12px;
+  border-radius: var(--ci-radius-sm);
+}
+
+/* ── Skeleton shimmer ─────────────────────────────────────────────────────── */
+/* NOTE: Uses 1.4s linear — documented exception to --motion-* budget.
+   This is continuous ambient motion (not a discrete transition) — the same
+   pattern used by all major design systems for skeleton loading states. */
+.skel {
+  display: inline-block;
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--ci-bg-inset) 0%,
+    #F5F6F8 50%,
+    var(--ci-bg-inset) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.skel.sm   { height: 10px; width: 48px; }
+.skel.md   { height: 13px; width: 72px; }
+.skel.lg   { height: 13px; width: 120px; }
+.skel.line {
+  height: 10px;
+  width: 100%;
+  display: block;
+  margin-bottom: 4px;
+}
+.skel.line:last-child { width: 62%; }
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Value slot — skeleton → filled reveal ────────────────────────────────── */
+.value-slot .filled {
+  display: none;
+  opacity: 0;
+  transform: translateY(2px);
+}
+
+.value-slot.on .skel {
+  display: none;
+}
+
+.value-slot.on .filled {
+  display: inline-block;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--motion-sm) var(--ease-out),
+    transform var(--motion-sm) var(--ease-out);
+}
+
+/* Intelligence summary skeletons collapse fully — height + margin, not just
+   opacity — otherwise stacked line-skeletons reserve ~38px of empty space
+   above the filled text. */
+.value-slot.summary-slot .skel.line {
+  transition:
+    opacity var(--motion-sm) var(--ease-out),
+    max-height var(--motion-sm) var(--ease-out),
+    margin-bottom var(--motion-sm) var(--ease-out);
+  max-height: 14px;
+  overflow: hidden;
+}
+
+.value-slot.summary-slot.on .skel.line {
+  opacity: 0;
+  max-height: 0;
+  margin-bottom: 0;
+}
+
+/* ── Collapsed hint bar ("Researched in Ns · refresh") ───────────────────── */
+.pipeline-hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ci-text-tertiary);
+  padding: 6px 0 2px;
+}
+
+.pipeline-hint-bar .refresh-link {
+  color: var(--ci-accent-primary);
+  cursor: pointer;
+  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.pipeline-hint-bar .refresh-link:hover {
+  text-decoration: underline;
+}

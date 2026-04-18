@@ -2022,7 +2022,22 @@ function initIntelTab() {
       employees: null, funding: null, industry: null, founded: null,
       roleBrief: null, dataConflict: false,
     });
+
+    // Mount ResearchPipeline in the intel panel body (#241 narrative motion)
+    const intelPanelBody = document.getElementById('pbody-intel');
+    if (intelPanelBody && window.ResearchPipeline) {
+      window.__coResearchPipeline?.stop();
+      const domain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      window.__coResearchPipeline = new ResearchPipeline(intelPanelBody, {
+        company:     entry.company || '',
+        domain:      domain || '',
+        logoInitial: (entry.company || 'C').charAt(0).toUpperCase(),
+      });
+      window.__coResearchPipeline.advance(0);
+    }
+
     // Re-run research
+    const _t0 = performance.now();
     chrome.runtime.sendMessage({
       type: 'RESEARCH_COMPANY',
       company: entry.company,
@@ -2031,7 +2046,30 @@ function initIntelTab() {
       companyLinkedin: entry.companyLinkedin || null,
     }, result => {
       void chrome.runtime.lastError;
-      if (result) {
+      const pipeline = window.__coResearchPipeline;
+      const elapsed  = performance.now() - _t0;
+
+      if (result && !result.error) {
+        // Fill pipeline fields then finish
+        try {
+          if (result.employees) pipeline?.fillField('employees', result.employees);
+          if (result.funding)   pipeline?.fillField('funding',   result.funding);
+          if (result.industry)  pipeline?.fillField('industry',  result.industry);
+          pipeline?.completeStage(0, elapsed * 0.3);  // approximate Apollo timing
+          pipeline?.advance(1);
+          if (result.reviews?.length)  pipeline?.completeSubItem(1, 'reviews', result.reviews.length);
+          if (result.leaders?.length)  { pipeline?.completeSubItem(1, 'leaders', result.leaders.length); pipeline?.fillField('leaders', result.leaders); }
+          if (result.jobListings?.length) pipeline?.completeSubItem(1, 'jobs', result.jobListings.length);
+          if (result.intelligence)        pipeline?.completeSubItem(1, 'product', 1);
+          pipeline?.completeStage(1, elapsed * 0.5);
+          pipeline?.advance(2);
+          if (result.intelligence?.summary || result.intelligence?.oneLiner) {
+            pipeline?.fillField('intelligence', result.intelligence.summary || result.intelligence.oneLiner);
+          }
+          pipeline?.completeStage(2, elapsed * 0.2);
+          pipeline?.finish();
+        } catch (_) {}
+
         saveEntry({
           intelligence: result.intelligence || null,
           reviews: result.reviews || null,
@@ -2042,9 +2080,12 @@ function initIntelTab() {
           founded: result.founded || entry.founded || null,
           dataConflict: result.dataConflict || false,
         });
+      } else {
+        try { pipeline?.fail(1, result?.error || 'Research failed'); } catch (_) {}
       }
-      // Reload the page to show fresh data
-      location.reload();
+
+      // Reload the page to show fresh data (after brief delay so user sees finish state)
+      setTimeout(() => location.reload(), 2500);
     });
   });
 
