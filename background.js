@@ -408,6 +408,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.tabs.create({ url: chrome.runtime.getURL('queue.html') });
     return false;
   }
+  if (message.type === 'OPEN_PREFERENCES') {
+    const hash = message.section ? '#pref-' + message.section : '';
+    chrome.tabs.create({ url: chrome.runtime.getURL('preferences.html') + hash });
+    return false;
+  }
   if (message.type === 'OPEN_SIDE_PANEL') {
     const tabId = sender?.tab?.id;
     if (tabId) {

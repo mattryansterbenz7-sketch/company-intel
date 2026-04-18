@@ -4858,3 +4858,88 @@ if (btnBack) btnBack.addEventListener('click', (e) => {
   e.preventDefault();
   window.location.href = chrome.runtime.getURL('saved.html');
 });
+
+// ── Quick Links editor ───────────────────────────────────────────────────────
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+const _persistQL = debounce(() => persistQuickLinks(), 300);
+
+function persistQuickLinks() {
+  const rows = document.querySelectorAll('#ql-list .ql-row');
+  const links = [];
+  rows.forEach(row => {
+    const label = row.querySelector('.ql-input-label')?.value?.trim() || '';
+    const url   = row.querySelector('.ql-input-url')?.value?.trim()   || '';
+    links.push({ label, url });
+  });
+  chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
+    void chrome.runtime.lastError;
+    const prefs = Object.assign({}, existing || {}, { quickLinks: links });
+    chrome.storage.sync.set({ prefs }, () => void chrome.runtime.lastError);
+  });
+}
+
+function renderQuickLinksEditor(links) {
+  const list = document.getElementById('ql-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const defaults = [
+    { label: 'LinkedIn Profile', url: '' },
+    { label: 'Personal Website', url: '' },
+    { label: 'GitHub', url: '' },
+    { label: 'Portfolio', url: '' },
+  ];
+  const rows = (links && links.length) ? links : defaults;
+
+  rows.forEach(link => {
+    addQLRow(list, link.label, link.url);
+  });
+}
+
+function addQLRow(list, label, url) {
+  const row = document.createElement('div');
+  row.className = 'ql-row';
+  row.innerHTML =
+    `<input type="text" class="ql-input-label" placeholder="Label" value="${escapeHtml(label || '')}">` +
+    `<input type="url"  class="ql-input-url"   placeholder="https://..." value="${escapeHtml(url || '')}">` +
+    `<button class="ql-del" title="Remove">&times;</button>`;
+  row.querySelector('.ql-del').addEventListener('click', () => {
+    row.remove();
+    persistQuickLinks();
+  });
+  row.querySelector('.ql-input-label').addEventListener('input', _persistQL);
+  row.querySelector('.ql-input-url').addEventListener('input', _persistQL);
+  list.appendChild(row);
+}
+
+// Boot: load existing quickLinks (lazy-seed defaults if missing)
+chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+  void chrome.runtime.lastError;
+  renderQuickLinksEditor((prefs || {}).quickLinks);
+  // Seed defaults to storage if none exist yet
+  if (!(prefs || {}).quickLinks) persistQuickLinks();
+});
+
+// "Add link" button
+const qlAddBtn = document.getElementById('ql-add');
+if (qlAddBtn) {
+  qlAddBtn.addEventListener('click', () => {
+    const list = document.getElementById('ql-list');
+    if (list) {
+      addQLRow(list, '', '');
+      list.lastElementChild?.querySelector('.ql-input-label')?.focus();
+    }
+  });
+}
+
+// Hash-based deep-link scroll: preferences.html#pref-quicklinks
+if (window.location.hash === '#pref-quicklinks') {
+  setTimeout(() => {
+    document.getElementById('pref-quicklinks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 200);
+}

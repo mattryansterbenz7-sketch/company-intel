@@ -4993,6 +4993,90 @@ function renderContactsSection(el, contacts) {
     });
   }
 
+  // ── Quick links button ────────────────────────────────────────────────────
+  (function wireQuickLinksDropdown() {
+    const qlBtn = document.getElementById('sp-quicklinks-btn');
+    const qlDd  = document.getElementById('sp-quicklinks-dropdown');
+    if (!qlBtn || !qlDd) return;
+
+    function shortUrl(url) {
+      try {
+        const u = new URL(url);
+        return (u.hostname + u.pathname).replace(/\/$/, '').slice(0, 40);
+      } catch (_) { return url.slice(0, 40); }
+    }
+
+    function renderQuickLinksDropdown(links) {
+      const valid = (links || []).filter(l => l.label && l.url);
+      qlDd.innerHTML = '';
+      if (!valid.length) {
+        const empty = document.createElement('div');
+        empty.className = 'sp-ql-empty';
+        empty.textContent = 'No links saved yet. Add them in Preferences.';
+        qlDd.appendChild(empty);
+      } else {
+        valid.forEach(link => {
+          const btn = document.createElement('button');
+          btn.className = 'sp-ql-item';
+          btn.setAttribute('role', 'menuitem');
+          btn.innerHTML =
+            `<span class="sp-ql-label">${escapeHtml(link.label)}</span>` +
+            `<span class="sp-ql-url">${escapeHtml(shortUrl(link.url))}</span>`;
+          btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(link.url).catch(() => {});
+            showToast(`Copied ${link.label}`);
+            closeQuickLinks();
+          });
+          qlDd.appendChild(btn);
+        });
+      }
+      // Footer
+      const footer = document.createElement('div');
+      footer.className = 'sp-ql-footer';
+      const footerBtn = document.createElement('button');
+      footerBtn.className = 'sp-ql-footer-btn';
+      footerBtn.textContent = 'Edit links in Preferences';
+      footerBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'OPEN_PREFERENCES', section: 'quicklinks' });
+        closeQuickLinks();
+      });
+      footer.appendChild(footerBtn);
+      qlDd.appendChild(footer);
+    }
+
+    function openQuickLinks() {
+      chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+        void chrome.runtime.lastError;
+        renderQuickLinksDropdown((prefs || {}).quickLinks);
+        qlDd.hidden = false;
+        qlBtn.setAttribute('aria-expanded', 'true');
+        setTimeout(() => document.addEventListener('click', onOutsideQL, { once: true }), 0);
+        document.addEventListener('keydown', onEscQL);
+      });
+    }
+
+    function closeQuickLinks() {
+      qlDd.hidden = true;
+      qlBtn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('click', onOutsideQL);
+      document.removeEventListener('keydown', onEscQL);
+    }
+
+    function onOutsideQL(e) {
+      if (!qlDd.contains(e.target) && e.target !== qlBtn) closeQuickLinks();
+    }
+
+    function onEscQL(e) {
+      if (e.key === 'Escape') closeQuickLinks();
+    }
+
+    qlBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!qlDd.hidden) { closeQuickLinks(); return; }
+      openQuickLinks();
+    });
+  })();
+
   sendBtn.addEventListener('click', send);
   inputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && !mentionActive) { e.preventDefault(); send(); }
