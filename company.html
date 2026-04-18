@@ -215,11 +215,11 @@
     .notes-feed-empty { color: var(--ci-text-tertiary); font-size: 13px; font-style: italic; text-align: center; padding: 20px; }
     .note-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-radius: 8px; overflow: hidden; box-shadow: var(--ci-shadow-sm); }
     .note-card-header {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center;
       padding: 8px 12px; background: var(--ci-bg-inset); border-bottom: 1px solid var(--ci-border-subtle);
     }
     .note-card-date { font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600; }
-    .note-card-actions { display: flex; gap: 4px; }
+    .note-card-actions { display: flex; gap: 4px; margin-left: auto; }
     .note-del-btn {
       background: none; border: none; font-size: 12px; cursor: pointer; padding: 2px 4px;
       color: var(--ci-text-tertiary); border-radius: 4px;
@@ -629,17 +629,6 @@
     .thread-gmail-link { font-size: 11px; color: var(--ci-accent-primary); text-decoration: none; font-weight: 600; display: block; text-align: right; padding: 8px 14px; border-top: 1px solid var(--ci-border-subtle); background: var(--ci-bg-inset); }
     .thread-gmail-link:hover { color: var(--ci-accent-primary-hover); }
     /* ── Meetings UI ─────────────────────────────────────────────────────── */
-    /* "Ask all meetings" panel */
-    .mtg-ask-all { border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 14px 14px 10px; margin-bottom: 18px; background: var(--ci-bg-raised); }
-    .mtg-ask-all-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .mtg-ask-all-title { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.2; }
-    .mtg-ask-all-sub { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 1px; }
-    .mtg-quick-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-    .mtg-quick-btn { font-size: 11px; color: var(--ci-text-secondary); background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full); padding: 4px 11px; cursor: pointer; font-family: inherit; transition: all var(--motion-xs) var(--ease-out); }
-    .mtg-quick-btn:hover { background: var(--ci-bg-raised); border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
-    .mtg-refresh-btn { font-size: 11px; color: var(--ci-text-tertiary); background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-full); padding: 4px 11px; cursor: pointer; font-family: inherit; transition: all var(--motion-xs) var(--ease-out); margin-left: auto; }
-    .mtg-refresh-btn:hover { background: var(--ci-accent-primary-soft); border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
-    .mtg-refresh-btn:disabled { opacity: 0.5; cursor: default; }
     /* Date group dividers */
     .mtg-date-group { font-size: 12px; font-weight: 600; color: var(--ci-text-tertiary); padding: 16px 0 6px; border-bottom: 1px solid var(--ci-border-subtle); margin-bottom: 4px; }
     /* Meeting card — 3-column grid */
@@ -702,10 +691,48 @@
     .detail-meta .mtg-avatar-row { display: flex; }
     /* Detail sections */
     .detail-section { margin-bottom: 20px; }
-    .detail-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 6px; }
-    .detail-section-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; letter-spacing: 0.01em; }
+    .detail-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--ci-border-subtle); padding-bottom: 6px; }
+    .detail-section-head h3 { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; letter-spacing: 0.01em; }
+    .detail-section-head .edit-link { margin-left: auto; }
+    .detail-source-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--ci-text-muted, #888);
+      font-weight: 400;
+    }
     .edit-link { font-size: 12px; color: var(--ci-text-tertiary); text-decoration: none; transition: color var(--motion-xs) var(--ease-out); }
     .edit-link:hover { color: var(--ci-accent-primary); }
+    /* Meeting-detail My-notes composer */
+    .detail-coop-compose {
+      margin-top: 10px; border: 1px solid var(--ci-border-subtle, #e5e5e5);
+      border-radius: 8px; padding: 10px; background: #fff;
+    }
+    .detail-coop-editable {
+      min-height: 44px; outline: none; font-size: 13px; line-height: 1.5;
+      color: var(--ci-text-primary, #2d2d2d);
+    }
+    .detail-coop-editable.notes-empty-edit::before {
+      content: 'Write a note about this meeting…'; color: var(--ci-text-tertiary, #999); pointer-events: none;
+    }
+    .detail-coop-compose-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+    .detail-coop-save-btn {
+      background: var(--ci-accent-primary); color: #fff; border: none;
+      padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit;
+    }
+    .detail-coop-save-btn:hover { background: var(--ci-accent-primary-hover); }
+    .detail-coop-save-btn:disabled { opacity: 0.4; cursor: default; }
+    .detail-coop-saved-indicator {
+      font-size: 11px; color: var(--ci-text-tertiary); margin-left: auto; opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .detail-coop-notes-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .detail-coop-empty { font-size: 13px; color: var(--ci-text-tertiary); font-style: italic; }
+    /* Private-notes meeting source chip */
+    .note-card-meeting-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--ci-text-tertiary);
+      margin-left: 8px; cursor: default;
+      max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .detail-takeaways { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
     .detail-takeaways li { font-size: 14px; color: var(--ci-text-primary); line-height: 1.6; padding-left: 18px; position: relative; }
     .detail-takeaways li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-amber); }
@@ -736,13 +763,6 @@
     .detail-coop-head h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); margin: 0; }
     .coop-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); }
     .coop-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary); }
-    .detail-coop-note { font-size: 13px; color: var(--ci-text-primary); line-height: 1.65; margin-bottom: 10px; }
-    .detail-coop-empty { font-size: 12px; color: var(--ci-text-tertiary); font-style: italic; margin-bottom: 10px; }
-    .detail-coop-next { background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.25); border-radius: var(--ci-radius-sm); padding: 10px 12px; }
-    .detail-coop-next-label { font-size: 11px; font-weight: 700; color: var(--ci-accent-amber); display: block; margin-bottom: 3px; }
-    .detail-coop-next-text { font-size: 13px; color: var(--ci-text-primary); }
-    /* Meeting detail chat panel (keep class for backward compat) */
-    .mtg-detail-chat { border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 10px; background: var(--ci-bg-raised); margin-bottom: 14px; }
     /* ── Manual Meeting Form ── */
     .mtg-add-btn {
       font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-raised);

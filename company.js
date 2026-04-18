@@ -2861,7 +2861,6 @@ function loadHubMeetings(forceRefresh) {
     if (typeof setChatContext !== 'function') return;
     const allCtx = entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '';
     if (allCtx) {
-      setChatContext(`${entry.id}-meetings`, allCtx); // meetings-tab chat
       setChatContext(entry.id, allCtx);               // floating chat (uses base entry.id as key)
     }
     (entry.cachedMeetings || []).forEach(m => {
@@ -2993,7 +2992,6 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
     const da = a.date || ''; const db = b.date || '';
     return da < db ? 1 : da > db ? -1 : 0;
   });
-  const allCtx = entry.cachedMeetingTranscript || entry.cachedMeetingNotes || '';
   let html = '';
 
   // ── "+ Add meeting" button and form ────────────────────────────────────────
@@ -3018,29 +3016,6 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
       </div>
     </div>`;
 
-
-  // ── "Ask about all meetings" chat (shown if we have any data) ──────────────
-  if (meetings.length || allCtx) {
-    html += `
-      <div class="mtg-ask-all">
-        <div class="mtg-ask-all-header">
-          <div>
-            <div class="mtg-ask-all-title">${escapeHtml(entry.company)}</div>
-            <div class="mtg-ask-all-sub">${meetings.length ? meetings.length + ' meeting' + (meetings.length === 1 ? '' : 's') : 'All meetings'}</div>
-          </div>
-        </div>
-        <div data-chat-panel="${entry.id}"
-             data-chat-key="${entry.id}-meetings"
-             data-chat-placeholder="Ask about all meetings…"
-             data-chat-minimal="1"></div>
-        <div class="mtg-quick-actions">
-          <button class="mtg-quick-btn" data-prompt="Summarize all my meetings with this company">Summarize all</button>
-          <button class="mtg-quick-btn" data-prompt="What were the key decisions from my meetings with this company?">Key decisions</button>
-          <button class="mtg-quick-btn" data-prompt="List all action items from my meetings with this company">Action items</button>
-          <button class="mtg-refresh-btn" id="mtg-refresh-btn" title="Clear cached meetings and re-fetch from Granola">↻ Refresh meetings</button>
-        </div>
-      </div>`;
-  }
 
   // ── Combined meeting list (Granola + Manual, sorted by date desc) ──────────
   if (meetings.length) {
@@ -3301,46 +3276,6 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
     });
   });
 
-  // Quick-action chips → fill input and send
-  contentEl.querySelectorAll('.mtg-quick-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = contentEl.querySelector('.chat-input');
-      if (input) {
-        input.value = btn.dataset.prompt;
-        input.focus();
-        input.dispatchEvent(new Event('input'));
-        // Trigger send by clicking the send button
-        const sendBtn = contentEl.querySelector('.chat-send-btn');
-        if (sendBtn) sendBtn.click();
-      }
-    });
-  });
-
-  // Refresh meetings — clear cache and re-fetch from Granola
-  const refreshBtn = contentEl.querySelector('#mtg-refresh-btn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = '↻ Refreshing…';
-      // Rebuild Granola index to pick up latest matching logic
-      chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' }, () => { void chrome.runtime.lastError; });
-      // Clear cached meetings from saved entry
-      entry.cachedMeetings = [];
-      entry.cachedMeetingNotes = null;
-      entry.cachedMeetingNotesAt = null;
-      entry.cachedMeetingTranscript = null;
-      // Persist the cleared cache
-      saveEntry({
-        cachedMeetings: [],
-        cachedMeetingNotes: null,
-        cachedMeetingNotesAt: null,
-        cachedMeetingTranscript: null,
-      });
-      // Re-fetch by re-running loadHubMeetings with forceRefresh
-      loadHubMeetings(true);
-    });
-  }
-
   // Meeting card click → detail view (for both Granola and manual meetings)
   contentEl.querySelectorAll('.mtg-card[data-meeting-id]').forEach(card => {
     card.addEventListener('click', () => {
@@ -3391,12 +3326,6 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
   const avatarHtml = _mtgAvatarHtml(attendeeNames);
   const namesHtml = _mtgNamesHtml(attendeeNames);
 
-  // Takeaways from summaryMarkdown bullets
-  let takeaways = [];
-  if (meeting.summaryMarkdown) {
-    takeaways = meeting.summaryMarkdown.split('\n').filter(l => /^[-*•]\s/.test(l.trim())).map(l => l.replace(/^[-*•]\s+/, '').trim()).filter(Boolean);
-  }
-
   // Notes body (manual: meeting.notes; Granola: summaryMarkdown or summary)
   const notesSource = meeting._isManual
     ? (meeting.notes || '')
@@ -3440,10 +3369,6 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
     }
   }
 
-  // Coop layer: read notes from entry if available (no persistent per-meeting storage yet)
-  const coopNote = '';
-  const coopNextStep = '';
-
   contentEl.innerHTML = `
     <button class="panel-back" id="mtg-back">← Meetings</button>
     <div class="detail-head">
@@ -3460,27 +3385,15 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
       </div>
     </div>
 
-    ${takeaways.length ? `
-    <div class="detail-section">
-      <div class="detail-section-head"><h3>Key takeaways</h3></div>
-      <ul class="detail-takeaways">${takeaways.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
-    </div>` : ''}
-
     ${notesHtml ? `
     <div class="detail-section">
       <div class="detail-section-head">
-        <h3>Notes</h3>
-        ${granolaUrl ? `<a class="edit-link" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer">Edit in Granola ↗</a>` : ''}
+        <h3>Summary</h3>
+        ${!meeting._isManual ? `<span class="detail-source-badge"><span class="granola-glyph"></span>from Granola</span>` : ''}
+        ${granolaUrl ? `<a class="edit-link" href="${safeUrl(granolaUrl)}" target="_blank" rel="noopener noreferrer">View in Granola ↗</a>` : ''}
       </div>
       ${notesHtml}
     </div>` : ''}
-
-    <div class="mtg-detail-chat">
-      <div data-chat-panel="${entry.id}"
-           data-chat-key="${entry.id}-meeting-${meeting.id}"
-           data-chat-placeholder="Ask about this meeting…"
-           data-chat-minimal="1"></div>
-    </div>
 
     ${resolvedTranscript ? `
     <div class="detail-transcript" id="mtg-transcript-collapse">
@@ -3497,15 +3410,15 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
       <div class="detail-coop-head">
         <h3>My notes</h3>
         <span class="coop-label"><span class="coop-dot"></span>Coop</span>
+        <span class="detail-coop-saved-indicator" id="detail-coop-saved-indicator">✓ Saved to Private notes</span>
       </div>
-      ${coopNote
-        ? `<p class="detail-coop-note">${escapeHtml(coopNote)}</p>`
-        : `<p class="detail-coop-empty">Per-meeting notes coming soon.</p>`}
-      ${coopNextStep ? `
-      <div class="detail-coop-next">
-        <span class="detail-coop-next-label">Next step</span>
-        <span class="detail-coop-next-text">${escapeHtml(coopNextStep)}</span>
-      </div>` : ''}
+      <div class="detail-coop-compose" id="detail-coop-compose">
+        <div class="detail-coop-editable notes-empty-edit" id="detail-coop-editable" contenteditable="true"></div>
+        <div class="detail-coop-compose-actions">
+          <button class="detail-coop-save-btn" id="detail-coop-save-btn" disabled>+ Add note</button>
+        </div>
+      </div>
+      <div class="detail-coop-notes-list" id="detail-coop-notes-list"></div>
     </div>
   `;
 
@@ -3517,6 +3430,115 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
   if (transcriptCollapse && transcriptToggleBtn) {
     transcriptToggleBtn.addEventListener('click', () => {
       transcriptCollapse.classList.toggle('open');
+    });
+  }
+
+  // ── My notes composer ───────────────────────────────────────────────────────
+  const coopEditable = contentEl.querySelector('#detail-coop-editable');
+  const coopSaveBtn = contentEl.querySelector('#detail-coop-save-btn');
+  const coopNotesList = contentEl.querySelector('#detail-coop-notes-list');
+  const coopSavedIndicator = contentEl.querySelector('#detail-coop-saved-indicator');
+
+  function _renderDetailNotesList() {
+    const meetingNotes = (entry.notesFeed || [])
+      .filter(n => n.meetingId === meeting.id)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (!coopNotesList) return;
+    if (!meetingNotes.length) {
+      coopNotesList.innerHTML = '<div class="detail-coop-empty">No notes for this meeting yet.</div>';
+      return;
+    }
+    coopNotesList.innerHTML = meetingNotes.map(n => {
+      const d = new Date(n.createdAt);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      return `
+        <div class="note-card" data-detail-note-id="${escapeHtml(n.id)}">
+          <div class="note-card-header">
+            <span class="note-card-date">${dateStr} · ${timeStr}</span>
+            <span class="note-card-actions">
+              <button class="note-del-btn detail-note-del-btn" data-detail-note-id="${escapeHtml(n.id)}" title="Delete">✕</button>
+            </span>
+          </div>
+          <div class="note-card-body">${n.content}</div>
+        </div>`;
+    }).join('');
+
+    coopNotesList.querySelectorAll('.detail-note-del-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const nid = btn.dataset.detailNoteId;
+        entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== nid);
+        const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+        saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+        _renderDetailNotesList();
+        // Re-render the private notes panel if it's visible
+        if (typeof renderNotesFeed === 'function') renderNotesFeed();
+      });
+    });
+  }
+
+  _renderDetailNotesList();
+
+  if (coopEditable && coopSaveBtn) {
+    coopEditable.addEventListener('input', () => {
+      const hasContent = !!coopEditable.textContent.trim();
+      coopEditable.classList.toggle('notes-empty-edit', !hasContent);
+      coopSaveBtn.disabled = !hasContent;
+    });
+
+    coopEditable.addEventListener('focus', () => {
+      coopEditable.classList.remove('notes-empty-edit');
+    });
+
+    coopEditable.addEventListener('blur', () => {
+      if (!coopEditable.textContent.trim()) coopEditable.classList.add('notes-empty-edit');
+    });
+
+    function _saveDetailNote() {
+      const content = sanitizeNotesHtml(coopEditable.innerHTML).trim();
+      if (!content || !coopEditable.textContent.trim()) return;
+      const now = Date.now();
+      const newNote = {
+        id: 'note_' + now.toString(36) + Math.random().toString(36).substr(2),
+        content,
+        createdAt: now,
+        updatedAt: now,
+        meetingId: meeting.id,
+      };
+      entry.notesFeed = [newNote, ...(entry.notesFeed || [])];
+      const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+      saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+      coopEditable.innerHTML = '<p><br></p>';
+      coopEditable.classList.add('notes-empty-edit');
+      coopSaveBtn.disabled = true;
+      _renderDetailNotesList();
+      // Re-render the private notes panel if it's visible
+      if (typeof renderNotesFeed === 'function') renderNotesFeed();
+      // Brief flash on the saved indicator
+      if (coopSavedIndicator) {
+        coopSavedIndicator.style.opacity = '1';
+        setTimeout(() => { coopSavedIndicator.style.opacity = ''; }, 2000);
+      }
+    }
+
+    coopSaveBtn.addEventListener('click', _saveDetailNote);
+
+    coopEditable.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        _saveDetailNote();
+      }
+    });
+
+    coopEditable.addEventListener('paste', e => {
+      e.preventDefault();
+      const html = e.clipboardData.getData('text/html');
+      const text = e.clipboardData.getData('text/plain');
+      if (html) {
+        document.execCommand('insertHTML', false, sanitizeNotesHtml(html));
+      } else {
+        document.execCommand('insertText', false, text);
+      }
     });
   }
 
@@ -5243,10 +5265,21 @@ function renderNoteCard(n) {
   const d = new Date(n.createdAt);
   const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  // Resolve meeting source chip if note is tagged to a meeting
+  let meetingChipHtml = '';
+  if (n.meetingId) {
+    const allMeetings = [...(entry.cachedMeetings || []), ...(entry.manualMeetings || [])];
+    const srcMeeting = allMeetings.find(m => m.id === n.meetingId);
+    if (srcMeeting) {
+      const chipTitle = escapeHtml(srcMeeting.title || 'Meeting');
+      meetingChipHtml = `<span class="note-card-meeting-chip" title="${chipTitle}">↗ ${chipTitle}</span>`;
+    }
+  }
   return `
     <div class="note-card" data-note-id="${n.id}">
       <div class="note-card-header">
         <span class="note-card-date">${dateStr} · ${timeStr}</span>
+        ${meetingChipHtml}
         <span class="note-card-actions">
           <button class="note-del-btn" data-note-id="${n.id}" title="Delete">✕</button>
         </span>
