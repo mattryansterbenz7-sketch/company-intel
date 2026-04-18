@@ -47,10 +47,11 @@ When invoked as `/orchestrator audit`, run through these in order. Report each a
 
 **Board state coherence:**
 - ✅ Column IDs in skill files match actual GitHub column IDs (fetch via GraphQL, compare to quick-reference tables).
-- ✅ All labels referenced in skills exist on GitHub (`blocked:strategy`, `blocked:execution`, `blocked:collab`, `regression`, area labels, model labels).
-- ✅ No orphaned `blocked:collab` items stale >7 days in Blocked / Needs Matt.
-- ✅ No items in Up Next missing required labels (`model:*`, `area:*`).
-- ✅ No items in Monitoring missing a `## How to verify` comment.
+- ✅ All labels referenced in skills exist on GitHub (`blocked:collab`, `blocked:strategy`, `blocked:execution`, `review:design`, `review:strategy`, `regression`, area labels, model labels).
+- ✅ No orphaned `blocked:collab` items stale >7 days in Designer Backlog (PM nudges).
+- ✅ No stale items in Proposed Designs + Mockups >7 days without Matt's verdict (Designer or PM nudges).
+- ✅ No items in Up Next For The Doer missing required labels (`model:*`, `area:*`).
+- ✅ No items in Shipped - Matt Will Verify missing a `## How to verify` comment.
 - ✅ No open issues in the Done column (terminal state should mean closed).
 
 **Loop health:**
@@ -143,5 +144,5 @@ These are the principles we discovered building this system. Re-read before maki
 - Project: `PVT_kwHOEA1iCM4BTJyy`
 - Status field: `PVTSSF_lAHOEA1iCM4BTJyyzhAegdY`
 - Priority field: `PVTSSF_lAHOEA1iCM4BTJyyzhAekQU`
-- Columns: Needs Spec `227f3e8b`, Backlog `43f0ed97`, Blocked / Needs Matt `fb391763`, Up Next `2cee5689`, In Progress `7556d12e`, Monitoring `2eea7b72`, Done `c24e13e2`
+- Columns: Needs Spec `227f3e8b`, Backlog `43f0ed97`, Designer Backlog `fb391763`, Proposed Designs + Mockups `530392e9`, Up Next For The Doer `2cee5689`, In Progress (Doer) `7556d12e`, Shipped - Matt Will Verify `2eea7b72`, Done `c24e13e2`
 - Priorities: P1 `d1b218cb`, P2 `7f7a7752`, P3 `78404ef6`

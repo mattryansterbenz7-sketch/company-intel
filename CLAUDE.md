@@ -343,8 +343,8 @@ Coop.ai's development workflow runs on four coordinated Claude roles. Each has a
 | Role | Skill | Mode | Touches product code? | Job |
 |------|-------|------|----------------------|-----|
 | **PM** | `/pm` | Autonomous `/loop /pm` | No | Triage, prioritize, spec, route, broker Matt feedback |
-| **Doer** | `/doer` | Autonomous `/loop /doer` | **Yes — only shipping pipe** | Pull from Up Next, delegate to subagents, ship to main, move to Monitoring |
-| **Designer** | `/designer` | On-demand with Matt | No | Live strategy + design pair sessions on `blocked:collab` items; outputs detailed PRDs back to Up Next |
+| **Doer** | `/doer` | Autonomous `/loop /doer` | **Yes — only shipping pipe** | Pull from Up Next For The Doer, delegate to subagents, ship to main, move to Shipped - Matt Will Verify |
+| **Designer** | `/designer` | On-demand with Matt | No | Live strategy + design pair sessions on `blocked:collab` items; forms opinion first, workshops with Matt, parks verdict-pending items in Proposed Designs + Mockups, finalizes PRDs to Up Next For The Doer |
 | **Orchestrator** | `/orchestrator` | On-demand | No (system files only) | Meta-layer — evolves skill files, designs protocols, troubleshoots system-level breakage, audits architecture |
 
 **Communication rules:**
@@ -370,13 +370,19 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 |--------|-----------|
 | Needs Spec | `227f3e8b` |
 | Backlog | `43f0ed97` |
-| Up Next | `2cee5689` |
-| In Progress | `7556d12e` |
-| Blocked / Needs Matt | `fb391763` |
-| Monitoring | `2eea7b72` |
+| Designer Backlog | `fb391763` |
+| Proposed Designs + Mockups | `530392e9` |
+| Up Next For The Doer | `2cee5689` |
+| In Progress (Doer) | `7556d12e` |
+| Shipped - Matt Will Verify | `2eea7b72` |
 | Done | `c24e13e2` |
 
-**Note:** The "Blocked / Needs Matt" column sits between Backlog and Up Next. It's a universal "waiting on Matt" inbox — PM parks strategy/design questions (`blocked:strategy`), Doer parks mid-execution forks (`blocked:execution`), and either parks design-riff/pair-session work (`blocked:collab`). Each item must have a `**PM → Matt (strategize):**`, `**Doer → Matt (unblock):**`, or `**PM → Matt (collab):**` comment explaining the specific question.
+**Note:** The board has **two Designer-owned columns** between Backlog and Up Next:
+
+- **Designer Backlog** (`fb391763`) — Designer's inbox. PM routes `blocked:collab` items here whenever an issue needs judgment beyond pure execution: UI/visual design, strategic plans, open-ended product questions, or Doer-surfaced execution forks. Designer handles both design AND strategy items by forming an opinion first using codebase + DESIGN.md + STRATEGY.md context, then workshopping with Matt live.
+- **Proposed Designs + Mockups** (`530392e9`) — Designer's verdict queue. When a session pauses (Matt wants to think, session ends mid-iteration), Designer parks the item here with a `review:design` or `review:strategy` label plus a `**Designer → Matt (verdict):**` comment that pins the latest mockup/proposal link **at the very top** (unmissable). Matt reviews at leisure and replies "ship it" or "iterate on X." On "ship," Designer finalizes the PRD and moves to Up Next For The Doer. On "iterate," Designer moves back to Designer Backlog for the next session.
+
+The legacy labels `blocked:strategy` and `blocked:execution` still exist as origin hints — they can ride alongside `blocked:collab` to tell Designer whether the item came from PM (strategy) or Doer (execution fork) — but the column is always Designer Backlog regardless of origin.
 
 | Priority | Option ID |
 |----------|-----------|
@@ -390,19 +396,22 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 **Size:** `small`, `medium`, `large`
 **Model tier:** `model:haiku`, `model:sonnet`, `model:opus` (see Model Assignment section)
 **Area (filterable surface):** `area:chat`, `area:scoring`, `area:research`, `area:side-panel`, `area:board-ui`, `area:company-view`, `area:onboarding`, `area:integrations`, `area:preferences`, `area:design-system`
-**Blocked state (optional):** `blocked:strategy` (PM needs Matt's direction), `blocked:execution` (Doer hit mid-execution fork), `blocked:collab` (design/exploratory — pair with Matt interactively, Doer skips)
+**Designer routing:** `blocked:collab` (primary — Designer owns it; covers both UI/design and strategy work). Origin hints (optional, ride alongside): `blocked:strategy` (originated from a PM routing decision), `blocked:execution` (originated from a Doer execution fork). Doer skips all `blocked:collab` items.
+**Designer verdict queue:** `review:design` (Designer posted a visual/UI proposal in Proposed Designs + Mockups, awaiting Matt's verdict), `review:strategy` (Designer posted a strategic plan/proposal in Proposed Designs + Mockups, awaiting Matt's verdict). Designer strips these when finalizing to Up Next For The Doer.
+**Refinement marker:** `regression` (Matt rejected a prior ship; Doer treats as top of queue).
 
 Every new issue should have type + size + model + area labels. `/issue` applies these automatically.
 
 ### Column assignment
 
-- **Needs Spec** — idea without a clear implementation path; needs design or PRD before coding starts
+- **Needs Spec** — idea without a clear implementation path; needs design or PRD before coding starts.
 - **Backlog** — well-defined, no urgency; ready to pick up whenever. Also the home of parent/tracker issues (Tasks-checkbox bodies).
-- **Up Next** — prioritized, executable leaves ready for Doer. Must pass the Up Next gate (PRD + acceptance criteria + `model:` label + `area:*` label + single-session scope + not a tracker).
-- **In Progress** — actively being coded; Doer moves here before writing any code.
-- **Blocked / Needs Matt** — paused waiting on Matt's input. Three routes in: PM parks strategy/design questions (`blocked:strategy`), Doer parks mid-execution forks (`blocked:execution`), and either parks design/strategy-heavy items meant for a Designer pair session (`blocked:collab`). Each item has a `**PM → Matt (strategize):**`, `**Doer → Matt (unblock):**`, or `**PM → Matt (collab):**` comment with the specific question. Doer's loop skips `blocked:collab` items automatically; those are Designer's territory.
-- **Monitoring** — Doer-finished, closed, awaiting Matt's verification. Must have a `## How to verify` comment with reload reminder + checklist.
-- **Done** — Matt-verified; issue already closed (closure happens at Monitoring transition, not here).
+- **Designer Backlog** — Designer's inbox. All `blocked:collab` items land here, whether they're visual/UI work, strategic plans, open-ended product questions, or Doer-surfaced execution forks. Designer picks them up on `/designer <#>` and forms an opinion first (rendered mockups for design, written proposal for strategy), then workshops live with Matt. Doer and PM skip this column; it's Designer's territory.
+- **Proposed Designs + Mockups** — Designer's verdict queue. When a session pauses (Matt wants to think, session ends mid-iteration), Designer moves the item here with `review:design` or `review:strategy` label, plus a `**Designer → Matt (verdict):**` comment that pins the latest mockup/proposal link **at the very top** so Matt can't miss it. Matt reviews at leisure and replies in-thread with "ship it" (→ Designer finalizes PRD, moves to Up Next For The Doer) or "iterate on X" (→ Designer moves back to Designer Backlog for next session).
+- **Up Next For The Doer** — prioritized, executable leaves ready for Doer. Must pass the Up Next gate (PRD + acceptance criteria + `model:*` label + `area:*` label + single-session scope + not a tracker).
+- **In Progress (Doer)** — actively being coded; Doer moves here before writing any code. Designer sessions stay in Designer Backlog, not here.
+- **Shipped - Matt Will Verify** — Doer-finished, closed, awaiting Matt's verification. Must have a `## How to verify` comment with reload reminder + checklist.
+- **Done** — Matt-verified; issue already closed (closure happens at the Shipped transition, not here).
 
 ### Priority assignment
 
@@ -412,14 +421,15 @@ Every new issue should have type + size + model + area labels. `/issue` applies 
 
 ### Workflow rules
 
-1. Move issue to **In Progress** before writing any code — never after.
-2. When code is pushed to `origin/main`: move to **Monitoring**, close the GitHub issue, and post a `## How to verify` comment with reload reminder + markdown checklist. Closed + Monitoring = "Doer says done, awaiting Matt's verification."
+1. Move issue to **In Progress (Doer)** before writing any code — never after.
+2. When code is pushed to `origin/main`: move to **Shipped - Matt Will Verify**, close the GitHub issue, and post a `## How to verify` comment with reload reminder + markdown checklist. Closed + Shipped = "Doer says done, awaiting Matt's verification."
 3. The Doer never moves issues to the **Done** column. Matt drags to Done after verifying.
 4. Never leave an issue open if it is in the Done column (Done is a terminal, verified state — the issue should already be closed when it lands there).
-5. **Refinement routing: Matt → PM → Doer or Designer, never Matt → Doer directly.** Feedback on Monitoring items goes to the PM thread. PM classifies: **tweak** (reopen + concrete re-spec + promote to Up Next for Doer), **discuss** (reopen + `blocked:collab` + move to Blocked / Needs Matt for Designer pair session), or **rethink** (close + new scoped issue). Doer only accepts work that comes through Up Next; Designer only touches `blocked:collab` items.
-6. **Up Next gate.** PM must not promote an issue to Up Next unless it passes: (a) concrete PRD with acceptance criteria, (b) `model:*` label, (c) `area:*` label, (d) single-session scope (not `large` + `strategy`), (e) not a parent/tracker (Tasks-checkbox bodies stay in Backlog as navigation aids). Designer-produced PRDs land directly in Up Next (they pass the gate by construction).
-7. **Blocked routing.** PM parks strategy/design-spec questions in **Blocked / Needs Matt** with `blocked:strategy` + `**PM → Matt (strategize):**`. Doer parks mid-execution forks there with `blocked:execution` + `**Doer → Matt (unblock):**`. PM parks Designer-bound items there with `blocked:collab` + `**PM → Matt (collab):**`. Only Designer works `blocked:collab` items; PM and Doer skip them.
-8. **Single shipping pipe.** Only the Doer commits to `origin/main`. PM and Designer never ship. This guarantees no concurrent-ship coordination problems.
+5. **Refinement routing: Matt → PM → Doer or Designer, never Matt → Doer directly.** Feedback on Shipped - Matt Will Verify items goes to the PM thread. PM classifies: **tweak** (reopen + concrete re-spec + promote to Up Next For The Doer), **discuss** (reopen + `blocked:collab` + move to Designer Backlog for Designer pair session), or **rethink** (close + new scoped issue). Doer only accepts work that comes through Up Next For The Doer; Designer only touches `blocked:collab` items (across Designer Backlog and Proposed Designs + Mockups).
+6. **Up Next gate.** PM must not promote an issue to Up Next For The Doer unless it passes: (a) concrete PRD with acceptance criteria, (b) `model:*` label, (c) `area:*` label, (d) single-session scope (not `large` + `strategy`), (e) not a parent/tracker (Tasks-checkbox bodies stay in Backlog as navigation aids). Designer-finalized PRDs land directly in Up Next For The Doer (they pass the gate by construction).
+7. **Designer routing.** PM routes any item that needs judgment beyond pure execution — visual design, strategic plans, open-ended questions, Doer-surfaced execution forks — to **Designer Backlog** with `blocked:collab` + a `**PM → Matt (collab):**` comment with the framing/question. Doer routes its own mid-execution forks the same way (`blocked:collab` + `blocked:execution` as origin hint + `**Doer → Matt (unblock):**` comment). Designer picks these up on `/designer <#>` invocations, forms an opinion using codebase + DESIGN.md + STRATEGY.md context, and either ships a PRD in-session to Up Next For The Doer or parks verdict-pending work in **Proposed Designs + Mockups** with a `review:design` / `review:strategy` label.
+8. **Designer verdict cycle.** Items in Proposed Designs + Mockups are waiting on Matt's async verdict. Matt reviews the pinned mockup link at the top of the `**Designer → Matt (verdict):**` comment and replies either "ship it" or "iterate on X." On his next `/designer <#>` invocation, Designer reads the reply and either finalizes the PRD (removes `review:*` + `blocked:collab`, applies `model:*` + `area:*`, moves to Up Next For The Doer) or bounces back to Designer Backlog to re-render next session.
+9. **Single shipping pipe.** Only the Doer commits to `origin/main`. PM and Designer never ship. This guarantees no concurrent-ship coordination problems.
 
 ### Adding issues to the board
 

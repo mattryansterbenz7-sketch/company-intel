@@ -32,6 +32,7 @@ A concrete, growing list. If a change adds any of these, it doesn't ship.
 - **Highlighter-yellow field values.** Data is black text on white. Emphasis is weight, not background color.
 - **Red-flag emoji (🚩) as a visual concern marker.** If a value warrants attention, the design surfaces that — outline, color, position — not a decorative emoji after it.
 - **Rainbow gradients as "AI magic" signals.** Anthropic orange is the brand accent. We don't pretend to be magical.
+- **Uppercase letter-spaced gray labels as the section-label formula.** `text-transform: uppercase` + `letter-spacing: 0.04em+` + muted gray + bold weight is the unmistakable AI-dashboard tell — the "EMPLOYEES / NEXT STEPS / PIPELINE" look. One of those cues signals "label"; stacking all four is slop. Sentence case at 12–13px / 600–700 weight with primary or secondary color reads as a label on its own. Pick one cue, trust the reader.
 - **Linear CSS easing.** Default transitions are a tell. Everything eases.
 - **Generic spinners on operations longer than 400ms.** See motion rule 4.
 - **Three drop shadows stacked on three nested containers.** Depth is earned by layering *content*, not boxes.
@@ -43,6 +44,8 @@ A concrete, growing list. If a change adds any of these, it doesn't ship.
 Hierarchy is size, weight, spacing, and rhythm — not color, not decoration. Three headings in three shades of gray is a design failure if size and weight could have carried it.
 
 A real type scale: display / h1 / h2 / body / caption / mono. At most two weights per surface. Line-height is part of the hierarchy, not an afterthought.
+
+**Labels specifically.** A section label in sentence case at 12–13px / 600–700 with a primary or secondary text color reads as a label. The same text at 10px / 700 uppercase with 0.08em tracking and tertiary gray reads as a Bootstrap admin dashboard. Stacking label cues (uppercase + letter-spacing + bold + mute) is the shortcut people reach for when they don't trust size and weight alone to do the job — that distrust is the slop. Pick one cue. Trust the reader. If eyebrow-style micro-labels are ever genuinely needed (dense table headers, multi-level nav), use them at most once per surface and never with bold weight.
 
 ### 2 · Color is semantic, not decorative
 
