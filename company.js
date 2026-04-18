@@ -1202,11 +1202,20 @@ function buildActivityTimeline(e) {
     let ts = m.createdAt ? parseLocalDate(m.createdAt) : 0;
     if (!ts) ts = parseLocalDate(m.date);
     if (!ts || isNaN(ts)) return;
+    const transcript = m.transcript || m.notes || m.summary || '';
     events.push({
       ts, icon: '\u{1F399}\uFE0F', badgeType: 'call', badge: 'Call',
       title: m.title || 'Meeting',
       subtitle: 'Granola recording',
-      preview: m.summary ? m.summary.slice(0, 120) : 'Meeting notes available'
+      preview: transcript ? transcript.slice(0, 120) : null,
+      fullNote: transcript,
+      isExpandable: !!transcript,
+      meetingMeta: {
+        source: 'granola',
+        attendees: m.attendees || '',
+        duration: m.duration || '',
+        url: m.url || null
+      }
     });
   });
 
@@ -1220,6 +1229,7 @@ function buildActivityTimeline(e) {
       ts, icon: typeIcons[log.type] || '\u{1F4DD}', badgeType: 'activity', badge: typeNames[log.type] || 'Activity',
       title: typeNames[log.type] || 'Activity',
       fullNote: log.note || '',
+      isExpandable: !!log.note,
       isActivity: true
     });
   });
@@ -1297,8 +1307,18 @@ function buildActivityTimeline(e) {
         <button class="timeline-remove-btn" data-act-key="${escapeHtml(actKey)}" title="Remove this activity">&times;</button>
       </div>
       <div class="timeline-title">${escapeHtml(ev.title)}</div>`;
-    if (ev.isActivity) {
+
+    // Unified expandable shell for both activities and calls
+    if (ev.isExpandable && ev.fullNote) {
       const preview = escapeHtml((ev.fullNote || '').replace(/\s+/g, ' ').slice(0, 120));
+      const metaLine = ev.meetingMeta
+        ? [ev.meetingMeta.attendees, ev.meetingMeta.duration, ev.meetingMeta.source].filter(Boolean).join(' · ')
+        : '';
+      const bodyClass = ev.isActivity ? 'timeline-note-body-plain' : 'timeline-note-body-md';
+      const bodyHtml = ev.isActivity
+        ? escapeHtml(ev.fullNote)
+        : (typeof renderMarkdown === 'function' ? renderMarkdown(ev.fullNote) : escapeHtml(ev.fullNote));
+
       return `<div class="timeline-entry timeline-${ev.badgeType}">
         <div class="timeline-dot-col">
           <div class="timeline-dot">${ev.icon}</div>
@@ -1311,11 +1331,15 @@ function buildActivityTimeline(e) {
               <span class="timeline-note-chev">&#9658;</span>
               <span class="timeline-note-preview">${preview}</span>
             </div>
-            <div class="timeline-note-body" id="note-body-${idx}">${escapeHtml(ev.fullNote)}</div>
+            <div class="timeline-note-body ${bodyClass}" id="note-body-${idx}">
+              ${metaLine ? `<div class="timeline-note-meta">${escapeHtml(metaLine)}</div>` : ''}
+              ${bodyHtml}
+            </div>
           </div>
         </div>
       </div>`;
     }
+
     return `<div class="timeline-entry timeline-${ev.badgeType}${ev.isStage ? ' timeline-stage' : ''}">
       <div class="timeline-dot-col">
         <div class="timeline-dot">${ev.icon}</div>

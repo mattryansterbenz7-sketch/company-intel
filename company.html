@@ -1306,6 +1306,16 @@
       animation: timelineNoteFade 200ms var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
     }
     @keyframes timelineNoteFade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .timeline-note-body-plain { white-space: pre-wrap; }
+    .timeline-note-body-md :is(h1,h2,h3,h4) { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+    .timeline-note-body-md :is(h1,h2,h3,h4):first-child { margin-top: 0; }
+    .timeline-note-body-md p { margin-bottom: 8px; line-height: 1.6; }
+    .timeline-note-body-md p:last-child { margin-bottom: 0; }
+    .timeline-note-body-md ul, .timeline-note-body-md ol { margin: 6px 0 8px 20px; }
+    .timeline-note-body-md li { margin-bottom: 3px; line-height: 1.5; }
+    .timeline-note-body-md strong { font-weight: 600; }
+    .timeline-note-body-md code { background: var(--ci-bg-base); padding: 1px 5px; border-radius: 3px; font-family: 'SF Mono', monospace; font-size: 12px; }
+    .timeline-note-meta { font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.05); }
   </style>
 </head>
 <body>
