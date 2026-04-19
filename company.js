@@ -1172,39 +1172,136 @@ function renderColumns() {
   bindDragDrop();
 }
 
-function buildActivityTimeline(e) {
-  const events = [];
+// ── Activity feed helpers ─────────────────────────────────────────────────────
 
-  // A. Emails
+/** Format a timestamp as local time (e.g. "2:14 PM") */
+function _actFormatTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+/** Return YYYY-MM-DD string in local timezone for grouping */
+function _actDayKey(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Human-readable day label: "Today", "Yesterday", or "Apr 17, 2026" */
+function _actDayLabel(dayKey) {
+  const todayKey = _actDayKey(Date.now());
+  const yestKey  = _actDayKey(Date.now() - 86400000);
+  if (dayKey === todayKey) return 'Today';
+  if (dayKey === yestKey)  return 'Yesterday';
+  const [y, m, d] = dayKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** SVG icons (stroke-only, 18×18 viewBox 0 0 24 24) */
+const _ACT_ICONS = {
+  email:    `<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg>`,
+  meeting:  `<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>`,
+  activity: `<svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>`,
+  phone:    `<svg viewBox="0 0 24 24"><path d="M4 5c0 9 6 15 15 15l2-4-5-2-2 2c-3-1-5-3-6-6l2-2-2-5-4 2z"/></svg>`,
+  milestone:`<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+};
+
+/**
+ * Collect all events from cached data and return them sorted reverse-chrono.
+ * No API calls — purely reads from the entry object already in memory.
+ */
+function _actCollectEvents(e) {
+  const events = [];
+  const now = Date.now();
+  const removedSet = new Set((e.removedActivities || []).map(r => r));
+
+  // A. Emails — one event per thread (most recent message timestamp)
   (e.cachedEmails || []).forEach(thread => {
-    let ts = 0, senderName = '';
-    if (thread.messages && thread.messages.length) {
+    let ts = 0;
+    let senderName = '', senderEmail = '';
+    if (thread.messages?.length) {
       const lastMsg = thread.messages[thread.messages.length - 1];
       ts = new Date(lastMsg.date).getTime();
-      if (lastMsg.from) { const m = lastMsg.from.match(/^([^<]+)/); senderName = m ? m[1].trim().split(/\s+/)[0] : ''; }
+      const fromStr = lastMsg.from || thread.from || '';
+      const m = fromStr.match(/^([^<]+)<([^>]+)>/);
+      if (m) { senderName = m[1].trim(); senderEmail = m[2].trim(); }
+      else { senderEmail = fromStr.trim(); }
     }
     if (!ts || isNaN(ts)) ts = thread.date ? new Date(thread.date).getTime() : 0;
     if (!ts || isNaN(ts)) ts = thread.internalDate ? parseInt(thread.internalDate) : 0;
     if (!ts || isNaN(ts)) return;
+    const actKey = `email-${ts}-${(thread.subject || '').slice(0, 30)}`;
+    if (removedSet.has(actKey)) return;
+
+    const attribution = senderName
+      ? `from email thread with ${senderName}${senderEmail ? ' (' + senderEmail + ')' : ''}`
+      : senderEmail
+        ? `from email thread with ${senderEmail}`
+        : 'from email thread';
+
+    // Collect body from messages for expanded view
+    let fullBody = '';
+    if (thread.messages?.length) {
+      fullBody = thread.messages.map(msg => {
+        const from = msg.from || '';
+        let body;
+        if (msg.htmlBody) {
+          body = (typeof sanitizeEmailHtml === 'function') ? sanitizeEmailHtml(msg.htmlBody) : escapeHtml(msg.htmlBody);
+        } else if (msg.body) {
+          body = /<\w[\s\S]*?>/i.test(msg.body)
+            ? (typeof sanitizeEmailHtml === 'function' ? sanitizeEmailHtml(msg.body) : escapeHtml(msg.body))
+            : escapeHtml(msg.body).replace(/\n/g, '<br>');
+        } else {
+          body = escapeHtml(msg.snippet || '');
+        }
+        return `<strong>${escapeHtml(from)}</strong><br>${body}`;
+      }).join('<hr style="border:none;border-top:1px solid var(--ci-border-subtle);margin:10px 0">');
+    } else if (thread.snippet) {
+      fullBody = escapeHtml(thread.snippet);
+    }
+
     events.push({
-      ts, icon: '\u{1F4E7}', badgeType: 'email', badge: 'Email',
-      title: thread.subject || 'No subject',
-      subtitle: senderName ? 'From ' + senderName : (thread.from || '').replace(/<.*>/, '').trim() || null,
-      preview: thread.snippet ? thread.snippet.slice(0, 120) : null
+      ts, type: 'email', actKey,
+      primary: thread.subject || 'No subject',
+      attribution,
+      preview: thread.snippet ? thread.snippet.slice(0, 140) : null,
+      expandData: {
+        kv: [
+          ['From', senderName || senderEmail || '—'],
+          ['Subject', thread.subject || 'No subject'],
+          ...(thread.messages?.length ? [['Messages', String(thread.messages.length)]] : []),
+        ],
+        body: fullBody,
+        actions: (thread.threadId || thread.id) ? [{
+          label: 'Open in Gmail',
+          href: `https://mail.google.com/mail/u/0/#inbox/${thread.threadId || thread.id}`
+        }] : []
+      }
     });
   });
 
-  // B. Calendar events (past)
-  const now = Date.now();
+  // B. Calendar events (past only)
   (e.cachedCalendarEvents || []).forEach(evt => {
     const ts = new Date(evt.start).getTime();
     if (!ts || isNaN(ts) || ts > now) return;
-    const attendees = (evt.attendees || []).filter(a => !a.self).slice(0, 3).map(a => a.displayName || a.email?.split('@')[0] || '').filter(Boolean);
+    const actKey = `meeting-${ts}-${(evt.summary || evt.title || '').slice(0, 30)}`;
+    if (removedSet.has(actKey)) return;
+    const attendeeList = (evt.attendees || []).filter(a => !a.self).slice(0, 4)
+      .map(a => a.displayName || a.email?.split('@')[0] || '').filter(Boolean);
     events.push({
-      ts, icon: '\u{1F4C5}', badgeType: 'meeting', badge: 'Meeting',
-      title: evt.summary || evt.title || 'Calendar event',
-      subtitle: attendees.length ? 'with ' + attendees.join(', ') : null,
-      preview: evt.location || null
+      ts, type: 'meeting', actKey,
+      primary: evt.summary || evt.title || 'Calendar event',
+      attribution: attendeeList.length
+        ? `calendar · with ${attendeeList.join(', ')}`
+        : 'from calendar',
+      preview: evt.location || null,
+      expandData: {
+        kv: [
+          ['Attendees', attendeeList.join(', ') || '—'],
+          ['Location', evt.location || '—'],
+          ['Source', 'Google Calendar'],
+        ],
+        body: null,
+        actions: []
+      }
     });
   });
 
@@ -1213,83 +1310,114 @@ function buildActivityTimeline(e) {
     let ts = m.createdAt ? parseLocalDate(m.createdAt) : 0;
     if (!ts) ts = parseLocalDate(m.date);
     if (!ts || isNaN(ts)) return;
+    const actKey = `meeting-${ts}-${(m.title || '').slice(0, 30)}`;
+    if (removedSet.has(actKey)) return;
     const transcript = m.transcript || m.notes || m.summary || '';
+    const attendeeStr = typeof m.attendees === 'string' ? m.attendees : (Array.isArray(m.attendees) ? m.attendees.join(', ') : '');
     events.push({
-      ts, icon: '\u{1F399}\uFE0F', badgeType: 'call', badge: 'Call',
-      title: m.title || 'Meeting',
-      subtitle: 'Granola recording',
-      preview: transcript ? transcript.slice(0, 120) : null,
-      fullNote: transcript,
-      isExpandable: !!transcript,
-      meetingMeta: {
-        source: 'granola',
-        attendees: m.attendees || '',
-        duration: m.duration || '',
-        url: m.url || null
+      ts, type: 'meeting', actKey,
+      primary: m.title || 'Meeting',
+      attribution: `from meeting transcript · Granola${attendeeStr ? ' · ' + attendeeStr.slice(0, 60) : ''}`,
+      preview: transcript ? transcript.slice(0, 140) : null,
+      expandData: {
+        kv: [
+          ['Source', 'Granola transcript'],
+          ...(attendeeStr ? [['Attendees', attendeeStr]] : []),
+          ...(m.duration ? [['Duration', m.duration]] : []),
+        ],
+        body: transcript ? `<div style="white-space:pre-wrap;font-size:12px;line-height:1.55;max-height:200px;overflow-y:auto">${escapeHtml(transcript)}</div>` : null,
+        actions: m.url ? [{ label: 'Open full transcript', href: m.url }] : []
       }
     });
   });
 
-  // D. Activity log
-  const typeIcons = { linkedin_dm: '\u{1F4AC}', phone_call: '\u{1F4DE}', coffee_chat: '\u2615', text: '\u{1F4AC}', referral: '\u{1F91D}', applied: '\u2705', other: '\u{1F4DD}' };
-  const typeNames = { linkedin_dm: 'LinkedIn DM', phone_call: 'Phone Call', coffee_chat: 'Coffee Chat', text: 'Text', referral: 'Referral', applied: 'Applied', other: 'Other' };
+  // D. Activity log (manual)
+  const typeNames = {
+    linkedin_dm: 'LinkedIn DM', phone_call: 'Phone call', coffee_chat: 'Coffee chat',
+    text: 'Text message', referral: 'Referral', applied: 'Applied',
+    email_sent: 'Email sent', other: 'Note'
+  };
   (e.activityLog || []).forEach(log => {
     const ts = parseLocalDate(log.date);
     if (!ts) return;
+    const label = typeNames[log.type] || 'Activity';
+    const actKey = `activity-${ts}-${label.slice(0, 30)}`;
+    if (removedSet.has(actKey)) return;
     events.push({
-      ts, icon: typeIcons[log.type] || '\u{1F4DD}', badgeType: 'activity', badge: typeNames[log.type] || 'Activity',
-      title: typeNames[log.type] || 'Activity',
-      fullNote: log.note || '',
-      isExpandable: !!log.note,
-      isActivity: true
+      ts, type: 'activity', actKey,
+      primary: label,
+      attribution: 'logged manually',
+      preview: log.note ? log.note.slice(0, 140) : null,
+      expandData: {
+        kv: [],
+        body: log.note ? `<div style="white-space:pre-wrap">${escapeHtml(log.note)}</div>` : null,
+        actions: []
+      }
     });
   });
 
-  // E. Applied date
+  // E. Applied date (deduplicated against activity log)
   if (e.appliedDate && e.appliedDate > 0) {
-    const hasLogApplied = (e.activityLog || []).some(a => a.type === 'applied' && Math.abs(new Date(a.date).getTime() - e.appliedDate) < 86400000);
+    const hasLogApplied = (e.activityLog || []).some(a =>
+      a.type === 'applied' && Math.abs(new Date(a.date).getTime() - e.appliedDate) < 86400000);
     if (!hasLogApplied) {
-      events.push({
-        ts: e.appliedDate, icon: '\u2705', badgeType: 'milestone', badge: 'Milestone',
-        title: 'Applied',
-        subtitle: e.jobTitle ? 'for ' + e.jobTitle : null,
-        preview: null
-      });
+      const actKey = `stage-${e.appliedDate}-Applied`;
+      if (!removedSet.has(actKey)) {
+        events.push({
+          ts: e.appliedDate, type: 'stage', actKey,
+          stageKey: 'applied',
+          primary: 'Applied',
+          attribution: `stage changed to Applied`,
+          preview: e.jobTitle ? `for ${e.jobTitle}` : null,
+          expandData: null
+        });
+      }
     }
   }
 
-  // F. Stage changes
+  // F. Stage changes from stageTimestamps
   const allStages = [...(customOpportunityStages || []), ...(customCompanyStages || [])];
   for (const [key, ts] of Object.entries(e.stageTimestamps || {})) {
     if (/^\d{10,}$/.test(key)) continue;
     if (typeof ts !== 'number' || ts <= 0) continue;
     const sd = allStages.find(s => s.key === key);
+    const label = sd ? sd.label : key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const actKey = `stage-${ts}-${label.slice(0, 30)}`;
+    if (removedSet.has(actKey)) continue;
     events.push({
-      ts, icon: '\u{1F4CB}', badgeType: 'stage', badge: 'Stage',
-      title: sd ? sd.label : key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      subtitle: 'Pipeline stage reached',
-      preview: null, isStage: true
+      ts, type: 'stage', actKey,
+      stageKey: key,
+      stageColor: sd?.color || '',
+      primary: 'Stage advanced',
+      attribution: `to ${label}`,
+      preview: null,
+      expandData: null
     });
   }
 
   // Dedup: merge calendar + Granola within 24h with shared title words
   const deduped = [];
-  const used = new Set();
+  const usedIdx = new Set();
   events.sort((a, b) => b.ts - a.ts);
   for (let i = 0; i < events.length; i++) {
-    if (used.has(i)) continue;
+    if (usedIdx.has(i)) continue;
     const ev = events[i];
-    if (ev.badgeType === 'meeting' || ev.badgeType === 'call') {
+    if (ev.type === 'meeting') {
       for (let j = i + 1; j < events.length; j++) {
-        if (used.has(j)) continue;
+        if (usedIdx.has(j)) continue;
         const other = events[j];
-        if ((other.badgeType === 'meeting' || other.badgeType === 'call') && Math.abs(ev.ts - other.ts) < 86400000) {
-          const wordsA = (ev.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
-          const wordsB = (other.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        if (other.type === 'meeting' && Math.abs(ev.ts - other.ts) < 86400000) {
+          const wordsA = (ev.primary || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          const wordsB = (other.primary || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
           if (wordsA.some(w => wordsB.includes(w))) {
-            if (other.badgeType === 'call') { ev.icon = '\u{1F4C5}\u{1F399}\uFE0F'; ev.title = other.title; ev.preview = other.preview; ev.badgeType = 'call'; ev.badge = 'Call'; }
-            else { ev.icon = '\u{1F4C5}\u{1F399}\uFE0F'; ev.preview = ev.preview || other.preview; }
-            used.add(j);
+            // Prefer the Granola entry (has transcript)
+            if (other.expandData?.body) {
+              ev.primary = other.primary;
+              ev.expandData = other.expandData;
+              ev.attribution = other.attribution;
+            }
+            ev.preview = ev.preview || other.preview;
+            usedIdx.add(j);
           }
         }
       }
@@ -1297,149 +1425,256 @@ function buildActivityTimeline(e) {
     deduped.push(ev);
   }
 
-  if (!deduped.length) return '<div class="p-empty">No activity tracked yet. Emails, meetings, and manual logs will appear here as they\'re detected.</div>';
+  return deduped;
+}
 
-  // Filter out user-removed activities
-  const removedSet = new Set((e.removedActivities || []).map(r => r));
-  const filtered = deduped.filter(ev => {
-    const key = `${ev.badgeType}-${ev.ts}-${(ev.title || '').slice(0, 30)}`;
-    return !removedSet.has(key);
-  });
+/**
+ * Render the color class for a stage event based on stage color hex or key.
+ * Maps to the .act-stage-* token classes.
+ */
+function _actStageColorClass(ev) {
+  const key = (ev.stageKey || '').toLowerCase();
+  if (/offer|accept|success/.test(key)) return 'act-stage-teal';
+  if (/reject|dq|closed|archived/.test(key)) return 'act-stage-red';
+  if (/interview|round|conversation|final|panel/.test(key)) return 'act-stage-blue';
+  if (/apply|applied|want/.test(key)) return 'act-stage-amber';
+  if (/intro|network/.test(key)) return 'act-stage-blue';
+  if (/watch|researching|interested/.test(key)) return 'act-stage-amber';
+  return ''; // default coral
+}
 
-  if (!filtered.length) return '<div class="p-empty">No activity tracked yet. Emails, meetings, and manual logs will appear here as they\'re detected.</div>';
+/**
+ * Render the new grouped, weighted Activity feed HTML.
+ * Groups events by local-timezone day; labels "Today" / "Yesterday" / full date.
+ */
+function buildActivityTimeline(e) {
+  const events = _actCollectEvents(e);
 
-  return filtered.map((ev, idx) => {
-    const dateStr = new Date(ev.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const actKey = `${ev.badgeType}-${ev.ts}-${(ev.title || '').slice(0, 30)}`;
-    const headerHtml = `
-      <div class="timeline-header">
-        <span class="timeline-badge timeline-badge-${ev.badgeType}">${ev.badge}</span>
-        <span class="timeline-date">${dateStr}</span>
-        <button class="timeline-remove-btn" data-act-key="${escapeHtml(actKey)}" title="Remove this activity">&times;</button>
-      </div>
-      <div class="timeline-title">${escapeHtml(ev.title)}</div>`;
+  if (!events.length) {
+    const name = escapeHtml(e.company || e.jobTitle || 'this opportunity');
+    return `<div class="act-empty">
+      <strong>No activity yet for ${name}</strong>
+      Auto-captures: emails from the company domain, calendar events with known contacts, and stage moves.
+    </div>`;
+  }
 
-    // Unified expandable shell for both activities and calls
-    if (ev.isExpandable && ev.fullNote) {
-      const preview = escapeHtml((ev.fullNote || '').replace(/\s+/g, ' ').slice(0, 120));
-      const metaLine = ev.meetingMeta
-        ? [ev.meetingMeta.attendees, ev.meetingMeta.duration, ev.meetingMeta.source].filter(Boolean).join(' · ')
-        : '';
-      const bodyClass = ev.isActivity ? 'timeline-note-body-plain' : 'timeline-note-body-md';
-      const bodyHtml = ev.isActivity
-        ? escapeHtml(ev.fullNote)
-        : (typeof renderMarkdown === 'function' ? renderMarkdown(ev.fullNote) : escapeHtml(ev.fullNote));
+  // Group by day key (YYYY-MM-DD in local timezone)
+  const groups = new Map();
+  for (const ev of events) {
+    const dk = _actDayKey(ev.ts);
+    if (!groups.has(dk)) groups.set(dk, []);
+    groups.get(dk).push(ev);
+  }
 
-      return `<div class="timeline-entry timeline-${ev.badgeType}">
-        <div class="timeline-dot-col">
-          <div class="timeline-dot">${ev.icon}</div>
-          <div class="timeline-line"></div>
-        </div>
-        <div class="timeline-content">
-          ${headerHtml}
-          <div class="timeline-note" data-expanded="false">
-            <div class="timeline-note-head" role="button" tabindex="0" aria-expanded="false" aria-controls="note-body-${idx}">
-              <span class="timeline-note-chev">&#9658;</span>
-              <span class="timeline-note-preview">${preview}</span>
-            </div>
-            <div class="timeline-note-body ${bodyClass}" id="note-body-${idx}">
-              ${metaLine ? `<div class="timeline-note-meta">${escapeHtml(metaLine)}</div>` : ''}
-              ${bodyHtml}
-            </div>
-          </div>
-        </div>
-      </div>`;
+  const parts = [];
+  for (const [dayKey, dayEvents] of groups) {
+    parts.push(`<div class="act-day-label">${escapeHtml(_actDayLabel(dayKey))}</div>`);
+    for (const ev of dayEvents) {
+      parts.push(_actRenderEvent(ev));
     }
+  }
 
-    return `<div class="timeline-entry timeline-${ev.badgeType}${ev.isStage ? ' timeline-stage' : ''}">
-      <div class="timeline-dot-col">
-        <div class="timeline-dot">${ev.icon}</div>
-        <div class="timeline-line"></div>
+  return parts.join('');
+}
+
+/** Render a single activity event card */
+function _actRenderEvent(ev) {
+  const timeStr = escapeHtml(_actFormatTime(ev.ts));
+  const actKeyAttr = `data-act-key="${escapeHtml(ev.actKey)}"`;
+
+  // Stage change — special layout: 2-col, no icon column, coral left border
+  if (ev.type === 'stage') {
+    const colorClass = _actStageColorClass(ev);
+    return `<div class="act-event act-stage ${colorClass}" ${actKeyAttr} data-expanded="false" tabindex="0" role="button">
+      <div class="act-event-body">
+        <div class="act-stage-label">${escapeHtml(ev.primary)}</div>
+        <div class="act-event-attribution">${escapeHtml(ev.attribution)}</div>
+        ${ev.preview ? `<div class="act-event-preview">${escapeHtml(ev.preview)}</div>` : ''}
       </div>
-      <div class="timeline-content">
-        ${headerHtml}
-        ${ev.subtitle ? `<div class="timeline-subtitle">${escapeHtml(ev.subtitle)}</div>` : ''}
-        ${ev.preview ? `<div class="timeline-preview">${escapeHtml(ev.preview)}</div>` : ''}
+      <div style="display:flex;align-items:flex-start;gap:6px">
+        <span class="act-event-ts">${timeStr}</span>
+        <button class="act-remove-btn" ${actKeyAttr} title="Remove">&times;</button>
       </div>
     </div>`;
-  }).join('');
+  }
+
+  // Coop-inferred event (placeholder — no inferred events are generated today, but CSS is wired)
+  if (ev.type === 'inferred') {
+    return `<div class="act-event act-inferred" ${actKeyAttr} data-expanded="false" tabindex="0" role="button">
+      <div class="act-coop-dot">C</div>
+      <div class="act-event-body">
+        <div class="act-event-primary inferred">${escapeHtml(ev.primary)}<span class="act-inferred-tag">Inferred</span></div>
+        <div class="act-event-attribution">${escapeHtml(ev.attribution)}</div>
+        ${ev.preview ? `<div class="act-event-preview">${escapeHtml(ev.preview)}</div>` : ''}
+        ${ev.expandData ? _actExpandBody(ev) : ''}
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:6px">
+        <span class="act-event-ts">${timeStr}</span>
+        <button class="act-remove-btn" ${actKeyAttr} title="Remove">&times;</button>
+      </div>
+    </div>`;
+  }
+
+  // Standard events: email, meeting, activity
+  const cssType = ev.type === 'email' ? 'act-email' : ev.type === 'meeting' ? 'act-meeting' : '';
+  const iconHtml = `<div class="act-event-icon">${_ACT_ICONS[ev.type] || _ACT_ICONS.activity}</div>`;
+
+  return `<div class="act-event ${cssType}" ${actKeyAttr} data-expanded="false" tabindex="0" role="button">
+    ${iconHtml}
+    <div class="act-event-body">
+      <div class="act-event-primary">${escapeHtml(ev.primary)}</div>
+      <div class="act-event-attribution">${escapeHtml(ev.attribution)}</div>
+      ${ev.preview ? `<div class="act-event-preview">${escapeHtml(ev.preview)}</div>` : ''}
+      ${ev.expandData ? _actExpandBody(ev) : ''}
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:6px">
+      <span class="act-event-ts">${timeStr}</span>
+      <button class="act-remove-btn" ${actKeyAttr} title="Remove">&times;</button>
+    </div>
+  </div>`;
+}
+
+/** Render the hidden expand-body area for a card (shown when data-expanded="true") */
+function _actExpandBody(ev) {
+  if (!ev.expandData) return '';
+  const { kv, body, actions } = ev.expandData;
+  const kvHtml = kv.length
+    ? `<dl class="act-expand-kv">${kv.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`
+    : '';
+  const bodyHtml = body ? `<div class="act-expand-text">${body}</div>` : '';
+  const actionsHtml = actions.length
+    ? `<div class="act-expand-actions">${actions.map(a =>
+        a.href
+          ? `<a class="act-expand-btn" href="${escapeHtml(a.href)}" target="_blank" rel="noopener">${escapeHtml(a.label)}</a>`
+          : `<button class="act-expand-btn" data-action="${escapeHtml(a.action || '')}">${escapeHtml(a.label)}</button>`
+      ).join('')}</div>`
+    : '';
+  if (!kvHtml && !bodyHtml && !actionsHtml) return '';
+  return `<div class="act-expand-body">${kvHtml}${bodyHtml}${actionsHtml}</div>`;
 }
 
 function initActivityTab() {
-  const container = document.getElementById('activity-timeline');
-  if (!container) return;
-  container.innerHTML = buildActivityTimeline(entry);
+  const root = document.getElementById('activity-feed-root');
+  if (!root) return;
 
-  // Bind remove buttons on timeline entries
-  container.querySelectorAll('.timeline-remove-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.actKey;
-      const removed = [...new Set([...(entry.removedActivities || []), key])];
-      saveEntry({ removedActivities: removed });
-      entry.removedActivities = removed;
-      initActivityTab();
-    });
+  // Log-new types
+  const LOG_TYPES = [
+    { value: 'linkedin_dm',  label: 'LinkedIn DM' },
+    { value: 'phone_call',   label: 'Phone call' },
+    { value: 'coffee_chat',  label: 'Coffee chat' },
+    { value: 'email_sent',   label: 'Email sent' },
+    { value: 'referral',     label: 'Referral' },
+    { value: 'other',        label: 'Note' },
+  ];
+  let _logType = LOG_TYPES[0].value;
+
+  const typeButtonsHtml = LOG_TYPES.map(t =>
+    `<button class="act-log-type-btn${t.value === _logType ? ' active' : ''}" data-log-type="${t.value}">${t.label}</button>`
+  ).join('');
+
+  root.innerHTML = `
+    <button class="act-log-new-btn" id="act-log-open-btn">
+      <span style="font-size:15px;font-weight:300;line-height:1">+</span>
+      <span>Log activity</span>
+    </button>
+    <div class="act-log-form" id="act-log-form">
+      <div class="act-log-type-row" id="act-log-type-row">${typeButtonsHtml}</div>
+      <textarea class="act-log-textarea" id="act-log-note"
+        placeholder="What happened? Paste a call debrief, message, or any context…"></textarea>
+      <input type="date" style="display:none" id="act-log-date" value="${new Date().toISOString().slice(0,10)}">
+      <div class="act-log-actions">
+        <button class="act-log-cancel" id="act-log-cancel">Cancel</button>
+        <button class="act-log-save" id="act-log-save">Save</button>
+      </div>
+    </div>
+    <div id="activity-timeline">${buildActivityTimeline(entry)}</div>`;
+
+  // Wire log-new open/close
+  root.querySelector('#act-log-open-btn').addEventListener('click', () => {
+    root.querySelector('#act-log-form').classList.add('open');
+    root.querySelector('#act-log-note').focus();
+  });
+  root.querySelector('#act-log-cancel').addEventListener('click', () => {
+    root.querySelector('#act-log-form').classList.remove('open');
+    root.querySelector('#act-log-note').value = '';
   });
 
-  // Bind expand/collapse on activity note shells
-  container.querySelectorAll('.timeline-note-head').forEach(head => {
+  // Type button selection
+  root.querySelector('#act-log-type-row').addEventListener('click', e => {
+    const btn = e.target.closest('.act-log-type-btn');
+    if (!btn) return;
+    _logType = btn.dataset.logType;
+    root.querySelectorAll('.act-log-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+
+  // Save log
+  root.querySelector('#act-log-save').addEventListener('click', () => {
+    const note = root.querySelector('#act-log-note').value.trim();
+    const date = root.querySelector('#act-log-date').value || new Date().toISOString().slice(0, 10);
+    entry.activityLog = entry.activityLog || [];
+    entry.activityLog.push({ type: _logType, note, date, createdAt: Date.now() });
+    saveEntry({ activityLog: entry.activityLog });
+    root.querySelector('#act-log-form').classList.remove('open');
+    root.querySelector('#act-log-note').value = '';
+    _logType = LOG_TYPES[0].value;
+    root.querySelectorAll('.act-log-type-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    _actRebindFeed(root);
+  });
+
+  _actRebindFeed(root);
+}
+
+/** Re-render the feed and rebind all event interactions */
+function _actRebindFeed(root) {
+  const timeline = root.querySelector('#activity-timeline');
+  if (timeline) timeline.innerHTML = buildActivityTimeline(entry);
+  _actBindFeed(root);
+}
+
+/** Bind expand/collapse and remove on every .act-event card */
+function _actBindFeed(root) {
+  // Track currently expanded card for one-at-a-time behavior
+  let expandedCard = null;
+
+  root.querySelectorAll('.act-event').forEach(card => {
+    // Remove button — stop propagation so click doesn't also toggle expand
+    const removeBtn = card.querySelector('.act-remove-btn');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const key = removeBtn.dataset.actKey;
+        const removed = [...new Set([...(entry.removedActivities || []), key])];
+        saveEntry({ removedActivities: removed });
+        entry.removedActivities = removed;
+        _actRebindFeed(root);
+      });
+    }
+
+    // Expand / collapse on card click (whole card is the hit target)
+    const expandBody = card.querySelector('.act-expand-body');
+    if (!expandBody) return; // no expand data, card is not interactive
+
     const toggle = () => {
-      const shell = head.closest('.timeline-note');
-      const expanded = shell.getAttribute('data-expanded') === 'true';
-      shell.setAttribute('data-expanded', expanded ? 'false' : 'true');
-      head.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      const isOpen = card.getAttribute('data-expanded') === 'true';
+      // Collapse the previously expanded card
+      if (expandedCard && expandedCard !== card) {
+        expandedCard.setAttribute('data-expanded', 'false');
+        expandedCard.setAttribute('aria-expanded', 'false');
+      }
+      card.setAttribute('data-expanded', isOpen ? 'false' : 'true');
+      card.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      expandedCard = isOpen ? null : card;
     };
-    head.addEventListener('click', toggle);
-    head.addEventListener('keydown', (e) => {
+
+    card.addEventListener('click', e => {
+      if (e.target.closest('.act-remove-btn')) return; // remove btn handled above
+      if (e.target.tagName === 'A' || e.target.closest('a')) return; // let links open
+      toggle();
+    });
+    card.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
     });
   });
-
-  // Inject "Log activity" button + form into Activity tab
-  const logSection = document.getElementById('activity-log-section');
-  if (logSection) {
-    logSection.innerHTML = `
-      <button class="mtg-add-btn" id="activity-log-btn-act" style="margin-top:12px">+ Log activity</button>
-      <div id="activity-log-form-act" style="display:none" class="mtg-add-form">
-        <div class="mtg-add-title">Log an activity</div>
-        <div class="mtg-add-fields">
-          <select class="mtg-add-input" id="al-type-act">
-            <option value="linkedin_dm">LinkedIn DM</option>
-            <option value="phone_call">Phone Call</option>
-            <option value="coffee_chat">Coffee Chat</option>
-            <option value="text">Text Message</option>
-            <option value="referral">Referral / Intro</option>
-            <option value="email_sent">Email Sent</option>
-            <option value="other">Other</option>
-          </select>
-          <textarea class="mtg-add-input mtg-add-textarea" id="al-note-act" placeholder="What happened? Paste full message thread, call debrief, or intro context — all of it is preserved." rows="4"></textarea>
-          <input type="date" class="mtg-add-input" id="al-date-act" style="width:auto" value="${new Date().toISOString().slice(0,10)}">
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="mtg-add-save" id="al-save-act">Save</button>
-            <button class="mtg-add-cancel" id="al-cancel-act">Cancel</button>
-          </div>
-        </div>
-      </div>`;
-
-    document.getElementById('activity-log-btn-act')?.addEventListener('click', () => {
-      document.getElementById('activity-log-form-act').style.display = 'block';
-    });
-    document.getElementById('al-cancel-act')?.addEventListener('click', () => {
-      document.getElementById('activity-log-form-act').style.display = 'none';
-    });
-    document.getElementById('al-save-act')?.addEventListener('click', () => {
-      const type = document.getElementById('al-type-act').value;
-      const note = document.getElementById('al-note-act').value.trim();
-      const date = document.getElementById('al-date-act').value;
-      if (!date) return;
-      entry.activityLog = entry.activityLog || [];
-      entry.activityLog.push({ type, note, date, createdAt: Date.now() });
-      saveEntry({ activityLog: entry.activityLog });
-      document.getElementById('activity-log-form-act').style.display = 'none';
-      document.getElementById('al-note-act').value = '';
-      container.innerHTML = buildActivityTimeline(entry);
-    });
-  }
 }
 
 // E1: Email → task auto-extraction
@@ -1819,7 +2054,7 @@ function renderCompanyTasks(onRendered) {
 const DEFAULT_TAB_ORDER = ['intel', 'activity', 'tasks', 'notes', 'emails', 'meetings', 'docs'];
 const TAB_LABELS = { intel: 'Role Brief', activity: 'Activity', tasks: 'Tasks', notes: 'Notes', emails: 'Emails', meetings: 'Meetings', docs: 'Docs' };
 const TAB_PANE_HTML = {
-  activity: '<div id="activity-log-section"></div><div id="activity-timeline"></div>',
+  activity: '<div id="activity-feed-root"></div>',
   tasks: '<div id="company-tasks-container"></div>',
   intel: '', // filled by buildIntelTab()
   notes: '<div id="hub-notes-container" data-editing="0"></div>',
@@ -3216,9 +3451,9 @@ function loadHubEmails(forceRefresh) {
     if (result.extractedContacts?.length) {
       mergeExtractedContacts(result.extractedContacts);
     }
-    const activityContainer = document.getElementById('activity-timeline');
-    if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
-      activityContainer.innerHTML = buildActivityTimeline(entry);
+    const activityFeedRoot = document.getElementById('activity-feed-root');
+    if (activityFeedRoot && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
+      _actRebindFeed(activityFeedRoot);
     }
     // Check for new field suggestions
     if (entry.isOpportunity && Object.keys(generateFieldSuggestions(entry)).length) {
@@ -3285,9 +3520,9 @@ function loadHubMeetings(forceRefresh) {
       }
       statusEl.style.display = 'none';
       renderMeetingsTimeline(calEvents, entry.cachedMeetingNotes);
-      const activityContainer = document.getElementById('activity-timeline');
-      if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
-        activityContainer.innerHTML = buildActivityTimeline(entry);
+      const activityFeedRoot2 = document.getElementById('activity-feed-root');
+      if (activityFeedRoot2 && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
+        _actRebindFeed(activityFeedRoot2);
       }
       // Auto-populate next step from upcoming calendar event
       const nextStepChanges = autoPopulateNextStep(entry);
@@ -3361,9 +3596,9 @@ function loadHubMeetings(forceRefresh) {
       }
       const calEvents = entry.cachedCalendarEvents || [];
       renderMeetingsTimeline(calEvents, granolaNotes);
-      const activityContainer = document.getElementById('activity-timeline');
-      if (activityContainer && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
-        activityContainer.innerHTML = buildActivityTimeline(entry);
+      const activityFeedRoot3 = document.getElementById('activity-feed-root');
+      if (activityFeedRoot3 && document.querySelector('.hub-tab[data-tab="activity"]')?.classList.contains('active')) {
+        _actRebindFeed(activityFeedRoot3);
       }
 
       // Auto-populate next step + date if not already set
