@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#253 v2 — Side panel mode states iteration</title>
+<style>
+:root {
+  --ci-bg-base: #F0F2F5;
+  --ci-bg-raised: #FFFFFF;
+  --ci-bg-inset: #EBEDF0;
+  --ci-bg-header: #151B26;
+  --ci-text-primary: #0A0B0D;
+  --ci-text-secondary: #6F7782;
+  --ci-text-tertiary: #8A8E94;
+  --ci-text-on-dark: #F5F4F2;
+  --ci-text-link: #4573D2;
+  --ci-border-default: #E0E4E8;
+  --ci-border-subtle: #EAECEF;
+  --ci-border-strong: #C4CAD1;
+  --ci-accent-primary: #FC636B;
+  --ci-accent-primary-soft: rgba(252,99,107,0.08);
+  --ci-accent-teal: #36B37E;
+  --ci-accent-teal-soft: rgba(54,179,126,0.08);
+  --ci-accent-amber: #F5A623;
+  --ci-accent-red: #E8384F;
+  --ci-accent-purple: #7C6EF0;
+  --ci-radius-sm: 6px;
+  --ci-radius-md: 10px;
+  --ci-radius-lg: 14px;
+  --ci-radius-full: 9999px;
+  --ci-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  --ci-shadow-sm: 0 1px 3px rgba(30,31,33,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --ci-shadow-md: 0 4px 16px rgba(30,31,33,0.10), 0 1px 4px rgba(0,0,0,0.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--ci-font);
+  background: var(--ci-bg-base);
+  color: var(--ci-text-primary);
+  padding: 40px 32px 80px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.frame { max-width: 1680px; margin: 0 auto; }
+
+/* ── page head ── */
+.page-head { padding-bottom: 22px; border-bottom: 1px solid var(--ci-border-default); margin-bottom: 28px; }
+.tag-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.tag { font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary); padding: 3px 8px; border-radius: 6px; background: var(--ci-bg-inset); letter-spacing: 0.04em; }
+.v-tag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: var(--ci-accent-primary); color: #fff; }
+h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+.prompt { font-size: 14px; color: var(--ci-text-secondary); line-height: 1.55; max-width: 820px; }
+
+/* ── diff callout ── */
+.diff { background: #fff; border: 1px solid var(--ci-border-default); border-left: 4px solid var(--ci-accent-primary); border-radius: 10px; padding: 18px 22px; margin-bottom: 36px; }
+.diff h3 { font-size: 12px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+.diff-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+.diff-item { font-size: 13px; color: var(--ci-text-primary); line-height: 1.5; display: flex; gap: 10px; }
+.diff-item::before { content: '✓'; color: var(--ci-accent-teal); font-weight: 700; flex-shrink: 0; width: 14px; }
+.diff-item strong { font-weight: 600; }
+
+/* ── section head ── */
+h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--ci-text-tertiary); text-transform: uppercase; margin: 52px 0 6px; }
+.section-title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+.section-note { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55; max-width: 820px; margin-bottom: 20px; }
+
+/* ── state grid ── */
+.states-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 22px;
+}
+@media (max-width: 1500px) {
+  .states-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.state-cell { display: flex; flex-direction: column; gap: 10px; }
+.state-label {
+  font-size: 11px; font-weight: 700;
+  color: var(--ci-text-tertiary);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.state-title { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); margin-top: -4px; }
+.state-desc { font-size: 11.5px; color: var(--ci-text-secondary); line-height: 1.55; min-height: 48px; }
+
+/* ── side panel mock ── */
+.sp {
+  width: 100%;
+  height: 640px;
+  background: var(--ci-bg-base);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  box-shadow: var(--ci-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+/* Top bar (browser chrome feel) */
+.sp-topbar {
+  height: 36px;
+  background: var(--ci-bg-header);
+  padding: 0 12px;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid #000;
+}
+.sp-topbar .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); }
+.sp-url {
+  margin-left: auto;
+  font-size: 10px; color: #A3AEBE;
+  font-family: 'SF Mono', monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 60%;
+}
+.sp-coop-btn {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ci-accent-primary);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; font-weight: 700;
+}
+
+/* Context chip */
+.sp-ctx {
+  padding: 10px 14px 8px;
+  display: flex; align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+  background: var(--ci-bg-raised);
+}
+.sp-ctx.nothing { justify-content: flex-start; }
+
+.sp-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px;
+  font-size: 10px; font-weight: 600;
+  border-radius: var(--ci-radius-full);
+  background: var(--ci-bg-inset);
+  color: var(--ci-text-secondary);
+  border: 1px solid var(--ci-border-default);
+}
+.sp-chip.detected { background: rgba(69,115,210,0.08); color: #3A5FB0; border-color: rgba(69,115,210,0.25); }
+.sp-chip.in-pipeline { background: var(--ci-accent-teal-soft); color: #1B7E53; border-color: rgba(54,179,126,0.3); }
+.sp-chip.apply-mode { background: rgba(245,166,35,0.12); color: #8E5C00; border-color: rgba(245,166,35,0.3); }
+.sp-chip .chip-dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+
+/* Today/Pipeline toggle */
+.sp-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  background: var(--ci-bg-inset);
+  border-radius: var(--ci-radius-full);
+  padding: 2px;
+}
+.sp-toggle-btn {
+  font-size: 10px; font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--ci-radius-full);
+  color: var(--ci-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+.sp-toggle-btn.active {
+  background: var(--ci-bg-raised);
+  color: var(--ci-text-primary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* Body */
+.sp-body {
+  flex: 1;
+  padding: 12px 14px;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+  gap: 10px;
+  background: var(--ci-bg-base);
+}
+
+/* Today content */
+.today-section {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  padding: 10px 12px;
+}
+.today-section h4 {
+  font-size: 10px; font-weight: 700;
+  color: var(--ci-text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.today-item {
+  font-size: 11px; line-height: 1.5; padding: 4px 0;
+  border-bottom: 1px dashed var(--ci-border-subtle);
+}
+.today-item:last-child { border-bottom: none; }
+.today-item .when { color: var(--ci-accent-primary); font-weight: 600; font-size: 10px; }
+
+/* Company detected card */
+.detect-card {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  padding: 12px 14px;
+}
+.detect-logo {
+  width: 28px; height: 28px; border-radius: var(--ci-radius-sm);
+  background: var(--ci-bg-inset);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px;
+  margin-bottom: 8px;
+}
+.detect-name { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.detect-meta { font-size: 11px; color: var(--ci-text-secondary); margin-top: 2px; }
+.detect-actions { margin-top: 10px; display: flex; gap: 6px; }
+.detect-btn {
+  padding: 6px 10px;
+  font-size: 11px; font-weight: 600;
+  border-radius: var(--ci-radius-sm);
+  border: 1px solid var(--ci-border-default);
+  background: var(--ci-bg-raised);
+  color: var(--ci-text-primary);
+  cursor: pointer;
+  flex: 1;
+}
+.detect-btn.primary {
+  background: #0A0B0D; color: #fff; border-color: #0A0B0D;
+}
+
+/* Saved card */
+.saved-card .saved-score {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 3px 9px;
+  background: rgba(54,179,126,0.1);
+  color: #1B7E53;
+  border: 1px solid rgba(54,179,126,0.3);
+  border-radius: var(--ci-radius-full);
+  font-size: 11px;
+}
+.saved-card .saved-score-num { font-weight: 700; }
+.saved-meta-row {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 8px;
+}
+.saved-mini-chip {
+  font-size: 9.5px;
+  padding: 2px 7px;
+  background: var(--ci-bg-inset);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-full);
+  color: var(--ci-text-secondary);
+}
+
+/* Pipeline summary */
+.pipeline-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.pipe-stat {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  padding: 8px 6px;
+  text-align: center;
+}
+.pipe-stat-num { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pipe-stat-label { font-size: 9px; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-top: 2px; }
+
+/* Apply mode banner */
+.apply-banner {
+  background: rgba(245,166,35,0.08);
+  border: 1px solid rgba(245,166,35,0.3);
+  border-radius: var(--ci-radius-sm);
+  padding: 10px 12px;
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 8px;
+}
+.apply-banner-icon { font-size: 16px; flex-shrink: 0; margin-top: -1px; color: #8E5C00; }
+.apply-banner-body { font-size: 11px; color: var(--ci-text-primary); line-height: 1.5; }
+.apply-banner-body strong { font-weight: 600; }
+
+.apply-actions {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.apply-action {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  padding: 10px 10px;
+  font-size: 11px; font-weight: 500;
+  color: var(--ci-text-primary);
+  text-align: left;
+  display: flex; align-items: flex-start; gap: 8px;
+  cursor: pointer;
+}
+.apply-action svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; flex-shrink: 0; margin-top: 1px; }
+.apply-action-name { font-weight: 600; font-size: 11px; }
+.apply-action-desc { font-size: 10px; color: var(--ci-text-tertiary); margin-top: 1px; line-height: 1.3; }
+
+/* ── Coop docked bottom — THE CONSTANT ── */
+.coop-dock {
+  border-top: 1px solid var(--ci-border-default);
+  background: var(--ci-bg-raised);
+  flex-shrink: 0;
+}
+.coop-bar {
+  padding: 8px 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.coop-avatar-sm {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ci-accent-primary);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 9px; font-weight: 700;
+  flex-shrink: 0;
+}
+.coop-input {
+  flex: 1;
+  background: var(--ci-bg-inset);
+  border-radius: var(--ci-radius-full);
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--ci-text-tertiary);
+  border: 1px solid transparent;
+}
+.coop-tools {
+  display: flex; align-items: center; gap: 2px;
+}
+.coop-tool-btn {
+  width: 24px; height: 24px;
+  border-radius: var(--ci-radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--ci-text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.coop-tool-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.75; }
+.coop-tool-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+.coop-tool-btn.active { color: var(--ci-accent-primary); background: rgba(252,99,107,0.08); }
+.coop-tool-btn.recording { color: var(--ci-accent-red); background: rgba(232,56,79,0.08); animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.6; } }
+
+/* Coop expanded (half) */
+.coop-expanded {
+  padding: 10px 12px 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.coop-msg {
+  font-size: 11px; line-height: 1.5;
+  margin-bottom: 10px;
+  display: flex; gap: 6px;
+}
+.coop-msg .msg-avatar {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--ci-accent-primary);
+  flex-shrink: 0;
+  font-size: 8px; color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 2px;
+}
+.coop-msg.user .msg-avatar { background: var(--ci-text-primary); }
+.coop-msg-body { flex: 1; color: var(--ci-text-primary); }
+.coop-msg-body strong { font-weight: 600; }
+
+/* ══════════ CLOSE-UPS ══════════ */
+
+.closeup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 22px;
+}
+.closeup-cell {
+  background: #fff;
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-lg);
+  padding: 20px 22px;
+}
+.closeup-label {
+  font-size: 10px; font-weight: 700;
+  color: var(--ci-text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.closeup-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.closeup-note { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55; margin-bottom: 14px; }
+
+/* Toggle logic diagram */
+.logic-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.logic-table th {
+  font-size: 10px; font-weight: 700;
+  color: var(--ci-text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--ci-bg-inset);
+  border-bottom: 1px solid var(--ci-border-default);
+}
+.logic-table td {
+  font-size: 12px;
+  padding: 10px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+  color: var(--ci-text-primary);
+  vertical-align: top;
+}
+.logic-table tr:last-child td { border-bottom: none; }
+.logic-toggle-yes { color: var(--ci-accent-teal); font-weight: 600; }
+.logic-toggle-no { color: var(--ci-text-tertiary); font-weight: 500; }
+
+/* Coop bar states */
+.coop-bar-demo {
+  background: var(--ci-bg-base);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  padding: 10px 10px 0;
+  margin-top: 12px;
+}
+.coop-bar-demo-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--ci-text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 0 4px 8px;
+}
+
+/* Apply-mode zoom */
+.apply-zoom {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ══════════ QUESTIONS ══════════ */
+.q-list { display: grid; gap: 12px; }
+.q-item {
+  padding: 14px 18px;
+  background: #fff;
+  border: 1px solid var(--ci-border-default);
+  border-left: 3px solid var(--ci-accent-primary);
+  border-radius: var(--ci-radius-sm);
+  font-size: 13px; line-height: 1.55;
+}
+.q-item strong {
+  color: var(--ci-text-primary); font-weight: 600;
+  display: block; margin-bottom: 4px;
+}
+.q-item .q-body { color: var(--ci-text-secondary); }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <!-- ══════════ PAGE HEADER ══════════ -->
+  <div class="page-head">
+    <div class="tag-row">
+      <span class="tag">#253</span>
+      <span class="v-tag">V2</span>
+    </div>
+    <h1>Side panel — iteration on your three notes</h1>
+    <p class="prompt">
+      Structural direction stays (Pipeline Dashboard with Today view). This pass fixes three gaps you called out: (1) the Today / Pipeline toggle disappears when there's nothing detected (no click-fatigue when there's no pipeline context to choose), (2) Coop is docked at the bottom across <em>every</em> state — not just Apply Mode, (3) Apply Mode surfaces snip + screen share as first-class actions, not hidden inside chat.
+    </p>
+  </div>
+
+  <!-- DIFF CALLOUT -->
+  <div class="diff">
+    <h3>What changed in v2</h3>
+    <div class="diff-list">
+      <div class="diff-item"><div><strong>Toggle is now conditional.</strong> No company detected, no saved entry → no toggle. Today view shows by default; Pipeline option re-appears only when there's pipeline context to choose.</div></div>
+      <div class="diff-item"><div><strong>Coop docked bottom across ALL states.</strong> Not hidden in "empty" states, not only in Apply Mode. Minimized by default (input bar + tool buttons); expands to half or full on click.</div></div>
+      <div class="diff-item"><div><strong>Snip + screen share always accessible.</strong> Both tools live in the Coop input toolbar at the bottom of every state — available one click away regardless of detection or mode.</div></div>
+      <div class="diff-item"><div><strong>Apply Mode surfaces tool shortcuts as first-class actions.</strong> When Apply Mode is active, Coop half-expands with prominent "Snip this question" and "Share screen" actions — plus the toolbar still has both at the bottom.</div></div>
+      <div class="diff-item"><div><strong>Coop avatar in top-right of side panel chrome.</strong> Tiny persistent reminder that Coop is one click away, consistent with top-bar placement elsewhere in the product.</div></div>
+      <div class="diff-item"><div><strong>State count reduced from 8 to 5.</strong> Merged states where the only difference was the top chip. The dock + toggle logic adapts; the body doesn't need a dedicated state for every URL permutation.</div></div>
+      <div class="diff-item"><div><strong>Killed the cache / stale / refresh concept entirely.</strong> v1 had a "Fresh / Stale" state machine with a 24h `researchCache` TTL + "Refresh research" CTA. v2 removes it. The opportunity record IS the source of truth; whatever it shows (stage, context, score, chips) is what renders. No stale badge, no age indicator, no refresh button. Details in the Data freshness note below.</div></div>
+    </div>
+  </div>
+
+  <!-- DATA FRESHNESS CALLOUT — Matt specifically asked for this -->
+  <div style="background: #fff; border: 1px solid var(--ci-border-default); border-left: 4px solid var(--ci-accent-teal); border-radius: 10px; padding: 18px 22px; margin-bottom: 36px;">
+    <h3 style="font-size: 12px; font-weight: 700; color: var(--ci-text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;">Data freshness — no cache concept</h3>
+    <p style="font-size: 13px; color: var(--ci-text-primary); line-height: 1.6; margin: 0 0 10px;">
+      The side panel never shows a "stale" badge, never gates content behind a "Refresh research" button, and never displays an age ("3 days old"). Everything the side panel renders for a saved opportunity — stage, context chip, score, data chips, Next Steps — comes straight from <code style="font-family:'SF Mono',monospace;font-size:11px;background:var(--ci-bg-inset);padding:1px 5px;border-radius:4px;">savedCompanies[entryId]</code> at render time. The opportunity record IS the source of truth.
+    </p>
+    <p style="font-size: 13px; color: var(--ci-text-primary); line-height: 1.6; margin: 0 0 10px;">
+      <strong style="font-weight:600;">What about the 24-hour research cache?</strong> It still exists in <code style="font-family:'SF Mono',monospace;font-size:11px;background:var(--ci-bg-inset);padding:1px 5px;border-radius:4px;">researchCache</code> (per CLAUDE.md) — but as an <em>internal optimization</em> for when Coop re-researches a company. It's invisible to the user. The user sees the opportunity's current data, period.
+    </p>
+    <p style="font-size: 13px; color: var(--ci-text-primary); line-height: 1.6; margin: 0;">
+      <strong style="font-weight:600;">What happens when the user wants to re-research?</strong> That's a user-initiated action (click "Research" button in State 2, or "Refresh" in the Coop menu if someone wants it). Not a passive "your data is stale" nudge. No artificial 24-hour trigger.
+    </p>
+  </div>
+
+  <!-- ══════════ 1. STATES GRID ══════════ -->
+  <h2>1 · Five states with Coop docked everywhere</h2>
+  <p class="section-title">Each state shows the same Coop bar at the bottom — minimized by default</p>
+  <p class="section-note">
+    Top chrome has Coop avatar + URL (constant). Context chip and Today/Pipeline toggle adapt to state. Body content changes per state. Coop dock is a constant presence at the bottom.
+  </p>
+
+  <div class="states-grid">
+
+    <!-- STATE 1: Nothing detected -->
+    <div class="state-cell">
+      <div class="state-label">State 1</div>
+      <div class="state-title">Nothing detected</div>
+      <div class="state-desc">User is on a page Coop can't detect as a company or job (Twitter, docs, etc.). Today view shown by default · <strong>NO toggle</strong>.</div>
+      <div class="sp">
+        <div class="sp-topbar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="sp-url">twitter.com/home</div>
+          <div class="sp-coop-btn">C</div>
+        </div>
+        <div class="sp-ctx nothing">
+          <span class="sp-chip">
+            <span class="chip-dot"></span>
+            Today
+          </span>
+          <!-- NO TOGGLE -->
+        </div>
+        <div class="sp-body">
+          <div class="today-section">
+            <h4>Next up</h4>
+            <div class="today-item">
+              <span class="when">2:00 PM</span> · HM call with Anna at Topo.io
+            </div>
+            <div class="today-item">
+              <span class="when">Fri</span> · Follow up Linear recruiter
+            </div>
+          </div>
+          <div class="today-section">
+            <h4>Pipeline nudges</h4>
+            <div class="today-item">2 opportunities in Watching &gt; 7 days — review?</div>
+          </div>
+        </div>
+        <div class="coop-dock">
+          <div class="coop-bar">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Ask Coop anything…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn" title="Snip region">
+                <svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg>
+              </button>
+              <button class="coop-tool-btn" title="Share screen">
+                <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATE 2: Detected, not saved -->
+    <div class="state-cell">
+      <div class="state-label">State 2</div>
+      <div class="state-title">Detected · not saved</div>
+      <div class="state-desc">Coop detected a company or job posting. Save + Research actions surface. Toggle appears (user may want pipeline context or may want Today).</div>
+      <div class="sp">
+        <div class="sp-topbar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="sp-url">linkedin.com/jobs/view/…</div>
+          <div class="sp-coop-btn">C</div>
+        </div>
+        <div class="sp-ctx">
+          <span class="sp-chip detected">
+            <span class="chip-dot"></span>
+            Detected
+          </span>
+          <div class="sp-toggle">
+            <button class="sp-toggle-btn">Today</button>
+            <button class="sp-toggle-btn active">Pipeline</button>
+          </div>
+        </div>
+        <div class="sp-body">
+          <div class="detect-card">
+            <div class="detect-logo">T</div>
+            <div class="detect-name">Topo.io</div>
+            <div class="detect-meta">Senior Product Manager · ~35 people · Seed</div>
+            <div class="detect-actions">
+              <button class="detect-btn primary">Save</button>
+              <button class="detect-btn">Research</button>
+            </div>
+          </div>
+        </div>
+        <div class="coop-dock">
+          <div class="coop-bar">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Ask about Topo.io…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg></button>
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATE 3: In pipeline (saved + researched) -->
+    <div class="state-cell">
+      <div class="state-label">State 3</div>
+      <div class="state-title">In pipeline · saved</div>
+      <div class="state-desc">Already saved + researched. Shows entry summary, quick stage move, open-in-CRM. Toggle is there but default is Pipeline.</div>
+      <div class="sp">
+        <div class="sp-topbar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="sp-url">topo.io/about</div>
+          <div class="sp-coop-btn">C</div>
+        </div>
+        <div class="sp-ctx">
+          <span class="sp-chip in-pipeline">
+            <span class="chip-dot"></span>
+            In pipeline · HM Call
+          </span>
+          <div class="sp-toggle">
+            <button class="sp-toggle-btn">Today</button>
+            <button class="sp-toggle-btn active">Pipeline</button>
+          </div>
+        </div>
+        <div class="sp-body">
+          <div class="detect-card saved-card">
+            <div class="detect-logo">T</div>
+            <div class="detect-name">Topo.io</div>
+            <div class="detect-meta">Senior Product Manager</div>
+            <div style="margin-top: 10px;">
+              <span class="saved-score"><span class="saved-score-num">7.8</span> Strong fit</span>
+            </div>
+            <div class="saved-meta-row">
+              <span class="saved-mini-chip">Industry · AI SaaS</span>
+              <span class="saved-mini-chip">~35</span>
+              <span class="saved-mini-chip">Seed · $6M</span>
+            </div>
+            <div class="detect-actions">
+              <button class="detect-btn">Open in CRM</button>
+              <button class="detect-btn primary">Move stage</button>
+            </div>
+          </div>
+        </div>
+        <div class="coop-dock">
+          <div class="coop-bar">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Ask about Topo.io…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg></button>
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATE 4: Pipeline dashboard (toggled) -->
+    <div class="state-cell">
+      <div class="state-label">State 4</div>
+      <div class="state-title">Pipeline dashboard</div>
+      <div class="state-desc">User toggled Pipeline on any page with detection. Shows stats + recent moves + Kanban-lite view. Still has detection chip above.</div>
+      <div class="sp">
+        <div class="sp-topbar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="sp-url">topo.io/about</div>
+          <div class="sp-coop-btn">C</div>
+        </div>
+        <div class="sp-ctx">
+          <span class="sp-chip in-pipeline">
+            <span class="chip-dot"></span>
+            In pipeline
+          </span>
+          <div class="sp-toggle">
+            <button class="sp-toggle-btn">Today</button>
+            <button class="sp-toggle-btn active">Pipeline</button>
+          </div>
+        </div>
+        <div class="sp-body">
+          <div class="today-section">
+            <h4>This week</h4>
+            <div class="pipeline-stats">
+              <div class="pipe-stat"><div class="pipe-stat-num">18</div><div class="pipe-stat-label">Active</div></div>
+              <div class="pipe-stat"><div class="pipe-stat-num">4</div><div class="pipe-stat-label">Applied</div></div>
+              <div class="pipe-stat"><div class="pipe-stat-num">2</div><div class="pipe-stat-label">Offers</div></div>
+            </div>
+          </div>
+          <div class="today-section">
+            <h4>Recent moves</h4>
+            <div class="today-item">
+              <span class="when">Today</span> · Topo.io → HM Call
+            </div>
+            <div class="today-item">
+              <span class="when">Apr 18</span> · Nomad Data → Watching
+            </div>
+            <div class="today-item">
+              <span class="when">Apr 17</span> · Voxel → Applied
+            </div>
+          </div>
+        </div>
+        <div class="coop-dock">
+          <div class="coop-bar">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Ask Coop about the pipeline…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg></button>
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATE 5: Apply mode -->
+    <div class="state-cell">
+      <div class="state-label">State 5</div>
+      <div class="state-title">Apply mode · active</div>
+      <div class="state-desc">Coop detected an application form (ATS URLs). Coop auto-half-expands with snip + share as first-class shortcuts. Answer Library quick-access too.</div>
+      <div class="sp">
+        <div class="sp-topbar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="sp-url">jobs.lever.co/topo/apply</div>
+          <div class="sp-coop-btn">C</div>
+        </div>
+        <div class="sp-ctx">
+          <span class="sp-chip apply-mode">
+            <span class="chip-dot"></span>
+            Apply Mode · Topo.io
+          </span>
+        </div>
+        <div class="sp-body" style="gap: 8px;">
+          <div class="apply-banner">
+            <div class="apply-banner-icon">✦</div>
+            <div class="apply-banner-body">
+              Coop's here to help — <strong>snip a question</strong> on the form or <strong>share your screen</strong> and ask anything.
+            </div>
+          </div>
+          <div class="apply-actions">
+            <button class="apply-action">
+              <svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg>
+              <div>
+                <div class="apply-action-name">Snip question</div>
+                <div class="apply-action-desc">Drag on the form</div>
+              </div>
+            </button>
+            <button class="apply-action">
+              <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg>
+              <div>
+                <div class="apply-action-name">Share screen</div>
+                <div class="apply-action-desc">Live assist</div>
+              </div>
+            </button>
+            <button class="apply-action">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <div>
+                <div class="apply-action-name">Answer Library</div>
+                <div class="apply-action-desc">Paste saved reply</div>
+              </div>
+            </button>
+            <button class="apply-action">
+              <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              <div>
+                <div class="apply-action-name">Draft response</div>
+                <div class="apply-action-desc">Coop writes</div>
+              </div>
+            </button>
+          </div>
+        </div>
+        <div class="coop-dock">
+          <div class="coop-expanded" style="max-height: 80px;">
+            <div class="coop-msg">
+              <div class="msg-avatar">C</div>
+              <div class="coop-msg-body">This looks like the Topo.io "Why this role" question — want me to draft from your voice profile?</div>
+            </div>
+          </div>
+          <div class="coop-bar">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Ask or snip…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn active"><svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg></button>
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════ 2. CLOSE-UPS ══════════ -->
+  <h2>2 · Close-ups</h2>
+  <p class="section-title">Coop dock + toggle logic + Apply Mode zoom</p>
+
+  <div class="closeup-grid">
+    <!-- Coop bar states -->
+    <div class="closeup-cell">
+      <div class="closeup-label">Coop dock · 3 modes</div>
+      <div class="closeup-title">Minimized / Half / Full</div>
+      <div class="closeup-note">
+        The dock at the bottom is the constant across all side panel states. Three sizes, controlled by the resize handle:
+      </div>
+
+      <div class="coop-bar-demo">
+        <div class="coop-bar-demo-label">Minimized · default · 36px</div>
+        <div style="background: #fff; border-radius: 8px; overflow: hidden;">
+          <div class="coop-bar" style="border-top: 1px solid var(--ci-border-default);">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Ask Coop anything…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg></button>
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coop-bar-demo">
+        <div class="coop-bar-demo-label">Half · ~260px · messages visible</div>
+        <div style="background: #fff; border-radius: 8px; overflow: hidden;">
+          <div class="coop-expanded" style="max-height: 140px;">
+            <div class="coop-msg">
+              <div class="msg-avatar">C</div>
+              <div class="coop-msg-body">Here's Anna Rao's background — she ran the first PM team at Sendoso. Worth preparing structured stories.</div>
+            </div>
+            <div class="coop-msg user">
+              <div class="msg-avatar">M</div>
+              <div class="coop-msg-body">Pull last meeting notes and draft 3 angles.</div>
+            </div>
+          </div>
+          <div class="coop-bar">
+            <div class="coop-avatar-sm">C</div>
+            <div class="coop-input">Follow up…</div>
+            <div class="coop-tools">
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg></button>
+              <button class="coop-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coop-bar-demo">
+        <div class="coop-bar-demo-label">Full · panel height · scroll to top of thread</div>
+        <div style="background: #fff; border-radius: 8px; overflow: hidden; height: 120px; display: flex; align-items: center; justify-content: center; color: var(--ci-text-tertiary); font-size: 11px; font-style: italic;">
+          Chat occupies 100% of side panel
+        </div>
+      </div>
+    </div>
+
+    <!-- Toggle logic table -->
+    <div class="closeup-cell">
+      <div class="closeup-label">Toggle logic</div>
+      <div class="closeup-title">When does Today/Pipeline show?</div>
+      <div class="closeup-note">
+        The toggle is a <strong>context-aware affordance</strong>. Rule: only show it when the user actually has a meaningful choice. On a blank page (no detection, no saved entry), Today is the only useful view — so no toggle.
+      </div>
+
+      <table class="logic-table">
+        <thead>
+          <tr>
+            <th>Context</th>
+            <th>Default view</th>
+            <th>Toggle?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Nothing detected</strong><br><span style="color:var(--ci-text-tertiary); font-size:11px;">e.g., Twitter, Gmail</span></td>
+            <td>Today</td>
+            <td><span class="logic-toggle-no">No</span></td>
+          </tr>
+          <tr>
+            <td><strong>Detected · not saved</strong><br><span style="color:var(--ci-text-tertiary); font-size:11px;">LinkedIn job, new co page</span></td>
+            <td>Pipeline (detection card)</td>
+            <td><span class="logic-toggle-yes">Yes</span></td>
+          </tr>
+          <tr>
+            <td><strong>In pipeline · saved</strong><br><span style="color:var(--ci-text-tertiary); font-size:11px;">any saved entry's URL</span></td>
+            <td>Pipeline (entry card)</td>
+            <td><span class="logic-toggle-yes">Yes</span></td>
+          </tr>
+          <tr>
+            <td><strong>Apply mode · active</strong><br><span style="color:var(--ci-text-tertiary); font-size:11px;">Greenhouse, Lever, Ashby</span></td>
+            <td>Apply helper</td>
+            <td><span class="logic-toggle-no">No · mode is exclusive</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Apply mode zoom -->
+    <div class="closeup-cell">
+      <div class="closeup-label">Apply Mode zoom</div>
+      <div class="closeup-title">Snip + Share as first-class actions</div>
+      <div class="closeup-note">
+        In Apply Mode, the most-used Coop actions are promoted from toolbar icons to full action cards. The toolbar at the bottom still has them — first-class + toolbar = always accessible.
+      </div>
+
+      <div style="background: var(--ci-bg-base); border: 1px solid var(--ci-border-default); border-radius: 8px; padding: 14px;">
+        <div class="apply-actions">
+          <button class="apply-action">
+            <svg viewBox="0 0 24 24"><path d="M7 4H5a1 1 0 0 0-1 1v2M17 4h2a1 1 0 0 1 1 1v2M7 20H5a1 1 0 0 1-1-1v-2M17 20h2a1 1 0 0 0 1-1v-2M9 10h6v4H9z"/></svg>
+            <div>
+              <div class="apply-action-name">Snip question</div>
+              <div class="apply-action-desc">Drag on the form</div>
+            </div>
+          </button>
+          <button class="apply-action">
+            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg>
+            <div>
+              <div class="apply-action-name">Share screen</div>
+              <div class="apply-action-desc">Live assist</div>
+            </div>
+          </button>
+          <button class="apply-action">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div>
+              <div class="apply-action-name">Answer Library</div>
+              <div class="apply-action-desc">Paste saved reply</div>
+            </div>
+          </button>
+          <button class="apply-action">
+            <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            <div>
+              <div class="apply-action-name">Draft response</div>
+              <div class="apply-action-desc">Coop writes in your voice</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top: 14px; padding: 10px 12px; background: rgba(69,115,210,0.04); border-left: 2px solid var(--ci-accent-link, #4573D2); border-radius: 0 6px 6px 0; font-size: 11px; color: var(--ci-text-secondary); line-height: 1.5;">
+        Snip uses the existing flow — <code style="font-family:'SF Mono',monospace;font-size:10px;background:#fff;padding:1px 5px;border-radius:3px;">chrome.tabs.captureVisibleTab()</code> → crosshair overlay → crop → attach to next message. Screen share uses <code style="font-family:'SF Mono',monospace;font-size:10px;background:#fff;padding:1px 5px;border-radius:3px;">getDisplayMedia()</code> → frames every ~500ms. Both already live in <code style="font-family:'SF Mono',monospace;font-size:10px;background:#fff;padding:1px 5px;border-radius:3px;">sidepanel.js</code> — this redesign just surfaces them.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ 3. QUESTIONS ══════════ -->
+  <h2>3 · Remaining open questions</h2>
+
+  <div class="q-list">
+    <div class="q-item">
+      <strong>1. Toggle default when there IS detection: Pipeline or Today?</strong>
+      <div class="q-body">
+        States 2 + 3 default to Pipeline (the detection or entry is the reason they're there). State 4 is user-chose-Today on a detection page. My default: Pipeline, since detection IS the signal that you want pipeline context. But Matt gets the call — if you find yourself toggling to Today more often than Pipeline on detection pages, flip it.
+      </div>
+    </div>
+    <div class="q-item">
+      <strong>2. Coop dock default size across states — always Minimized, or Apply Mode gets Half?</strong>
+      <div class="q-body">
+        v2 mockup: default Minimized everywhere EXCEPT Apply Mode, which auto-Half so Coop can greet with a question like "want me to draft this?" Is that too presumptuous? Alternative: Minimized everywhere including Apply Mode, user expands when ready. My default is auto-Half in Apply Mode — the mode is exclusive and the user entered it intentionally, so Coop can be a bit forward.
+      </div>
+    </div>
+    <div class="q-item">
+      <strong>3. Snip + Share — also promote to Today view first-class?</strong>
+      <div class="q-body">
+        In v2 they're toolbar icons on Today (available, but not hero-prominent). Apply Mode gets hero action cards. Should Today also get them as first-class action cards somewhere? My default: no — Today should feel calm and context-light. The toolbar is enough. But worth confirming.
+      </div>
+    </div>
+    <div class="q-item">
+      <strong>4. Top-bar Coop avatar — clickable to toggle full expand, or decorative?</strong>
+      <div class="q-body">
+        Current sidepanel.js has `#coop-toggle-btn` — the avatar toggles chat open/closed. v2 keeps this. Worth confirming: click avatar → Coop expands to Half (not Full) as primary action.
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

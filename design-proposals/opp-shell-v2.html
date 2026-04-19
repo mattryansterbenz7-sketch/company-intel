@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#262 Opp shell v2 — iteration on Matt's asks</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #0A0B0D;
+    background: #F0F2F5;
+    padding: 40px 32px 80px;
+    min-height: 100vh;
+  }
+  a { color: #4573D2; text-decoration: none; }
+
+  /* ── Page header ── */
+  .page-head { max-width: 1480px; margin: 0 auto 28px; }
+  .page-head h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .page-head .issue-tag {
+    font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px;
+    background: #EBEDF0; color: #6F7782;
+    letter-spacing: 0.02em;
+  }
+  .page-head .v-tag {
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 6px;
+    background: #FC636B; color: #fff;
+    letter-spacing: 0.02em;
+  }
+  .page-head .prompt {
+    margin-top: 8px; font-size: 13px; color: #6F7782; line-height: 1.55;
+    max-width: 900px;
+  }
+
+  /* ── Diff callout ── */
+  .diff-callout {
+    max-width: 1480px; margin: 0 auto 36px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-left: 4px solid #FC636B;
+    border-radius: 10px;
+    padding: 18px 22px;
+  }
+  .diff-callout h3 {
+    font-size: 12px; font-weight: 700; color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  .diff-list {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px 24px;
+  }
+  .diff-item {
+    font-size: 13px; color: #0A0B0D; line-height: 1.5;
+    display: flex; gap: 10px;
+  }
+  .diff-item::before {
+    content: '✓';
+    color: #36B37E; font-weight: 700;
+    flex-shrink: 0; width: 14px;
+  }
+  .diff-item strong { font-weight: 600; }
+
+  /* ── Section scaffolding ── */
+  .section { max-width: 1480px; margin: 0 auto 56px; }
+  .section-head {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .section-head h2 {
+    font-size: 13px; font-weight: 700; color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .section-head .stance {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+    background: rgba(54,179,126,0.12); color: #1B7E53;
+  }
+  .section-note {
+    font-size: 13px; color: #6F7782; line-height: 1.55;
+    max-width: 860px; margin-bottom: 16px;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     1. HERO — full shell with v2 header
+     ────────────────────────────────────────────────────────────── */
+  .shell {
+    width: 100%;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    box-shadow: 0 10px 36px rgba(30,31,33,0.10), 0 2px 8px rgba(0,0,0,0.05);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .shell-chrome {
+    height: 36px;
+    background: #151B26;
+    display: flex; align-items: center; padding: 0 14px;
+    gap: 8px; flex-shrink: 0;
+  }
+  .shell-chrome .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+  }
+  .shell-chrome .url {
+    margin-left: 12px; font-size: 11px;
+    color: #A3AEBE;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    letter-spacing: 0.02em;
+  }
+  .shell-body {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    min-height: 820px;
+  }
+
+  /* ── Main column ── */
+  .main-col {
+    display: flex; flex-direction: column;
+    border-right: 1px solid #E0E4E8;
+    min-width: 0;
+  }
+
+  /* ─── Opp Header v2 ─── */
+  .opp-header {
+    padding: 22px 32px 18px;
+    border-bottom: 1px solid #EAECEF;
+  }
+
+  /* Row 1 — identity */
+  .row-identity {
+    display: flex; align-items: center; gap: 16px;
+    flex-wrap: wrap;
+  }
+  .company-name {
+    font-size: 24px; font-weight: 600;
+    letter-spacing: -0.015em;
+    color: #0A0B0D;
+  }
+  .role-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 15px; font-weight: 500;
+    color: #4573D2;
+    padding: 6px 10px;
+    margin-left: 2px;
+    border-radius: 6px;
+    background: rgba(69, 115, 210, 0.06);
+    border: 1px solid rgba(69, 115, 210, 0.14);
+    transition: background 120ms, color 120ms, border-color 120ms;
+    cursor: pointer;
+  }
+  .role-link:hover {
+    background: rgba(69, 115, 210, 0.12);
+    border-color: rgba(69, 115, 210, 0.28);
+  }
+  .role-link svg {
+    width: 12px; height: 12px;
+    stroke: currentColor; fill: none; stroke-width: 2;
+  }
+
+  /* Right-aligned status cluster */
+  .status-cluster {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+  }
+  /* Stage pill — semantic fill per stage TYPE */
+  .stage-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: rgba(245, 166, 35, 0.12);
+    color: #8E5C00;
+    border: 1px solid rgba(245, 166, 35, 0.24);
+  }
+  .stage-pill .dot-stage {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #F5A623;
+  }
+  /* Action status chip — teal = my court, amber = their court */
+  .action-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    color: #6F7782;
+  }
+  .action-chip.their-court { border-color: rgba(245, 166, 35, 0.32); }
+  .action-chip.their-court .action-dot { background: #F5A623; }
+  .action-chip.my-court { border-color: rgba(54, 179, 126, 0.32); }
+  .action-chip.my-court .action-dot { background: #36B37E; }
+  .action-chip .action-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #F5A623;
+  }
+  /* Score chip — big, bold, spectrum-colored */
+  .score-chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+  }
+  .score-chip .score-num {
+    font-size: 20px; font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #1B7E53;
+  }
+  .score-chip .score-label {
+    font-weight: 500; color: #6F7782;
+    font-size: 11px; letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  /* Row 2 — blurb */
+  .row-blurb {
+    margin-top: 10px;
+    font-size: 14px; line-height: 1.55;
+    color: #3A4049;
+    max-width: 780px;
+  }
+  .row-blurb .more-link {
+    color: #4573D2;
+    font-size: 13px; font-weight: 500;
+    margin-left: 6px;
+    cursor: pointer;
+  }
+  .row-blurb .more-link:hover { text-decoration: underline; }
+
+  /* Row 3 — data chips + actions */
+  .row-data {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .data-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12.5px; font-weight: 500;
+    padding: 5px 11px;
+    border-radius: 7px;
+    background: #F7F8FA;
+    border: 1px solid #E0E4E8;
+    color: #0A0B0D;
+  }
+  .data-chip svg {
+    width: 13px; height: 13px;
+    stroke: #8A8E94; fill: none; stroke-width: 1.75;
+    flex-shrink: 0;
+  }
+  .data-chip .dc-val { font-weight: 600; }
+  .data-chip .dc-divider {
+    color: #C4CAD1; margin: 0 1px;
+  }
+  .data-chip.funding {
+    background: rgba(54, 179, 126, 0.06);
+    border-color: rgba(54, 179, 126, 0.22);
+  }
+  .data-chip.funding svg { stroke: #1B7E53; }
+
+  /* Right-aligned action buttons */
+  .header-actions {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 2px;
+  }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    font-size: 12px; font-weight: 500;
+    color: #6F7782;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 120ms, color 120ms, border-color 120ms;
+  }
+  .ghost-btn:hover {
+    background: #EBEDF0; color: #0A0B0D;
+  }
+  .ghost-btn svg {
+    width: 14px; height: 14px;
+    stroke: currentColor; fill: none; stroke-width: 1.75;
+  }
+  .icon-only {
+    width: 30px; height: 30px; padding: 0;
+    justify-content: center;
+  }
+
+  /* ─── Next Steps strip — between header and tab bar ─── */
+  .next-steps-strip {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    align-items: center;
+    padding: 12px 32px;
+    background: linear-gradient(to right, #FAFBFC 0%, #FFF8F8 100%);
+    border-bottom: 1px solid #EAECEF;
+    gap: 18px;
+  }
+  .ns-cell {
+    display: flex; flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .ns-cell.next { border-left: 3px solid #FC636B; padding-left: 14px; }
+  .ns-label {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.10em;
+    color: #8A8E94;
+  }
+  .ns-cell.next .ns-label { color: #FC636B; }
+  .ns-row {
+    display: flex; align-items: baseline;
+    gap: 8px;
+    font-size: 13.5px;
+  }
+  .ns-what {
+    font-weight: 600; color: #0A0B0D;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ns-when {
+    color: #6F7782;
+    font-size: 12.5px;
+  }
+  .ns-cell.next .ns-when { color: #B03843; font-weight: 600; }
+  .ns-arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: #C4CAD1;
+  }
+  .ns-arrow svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.75; }
+  .ns-action-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    font-size: 12px; font-weight: 600;
+    color: #fff;
+    background: #0A0B0D;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .ns-action-btn:hover { background: #24272D; }
+  .ns-action-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  /* ─── Tab bar ─── */
+  .tab-bar {
+    display: flex; align-items: center;
+    padding: 0 32px;
+    border-bottom: 1px solid #E0E4E8;
+    background: #FFFFFF;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 12px 14px 10px;
+    font-size: 13px; font-weight: 500;
+    color: #8A8E94;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 120ms, border-color 120ms;
+  }
+  .tab:hover { color: #0A0B0D; }
+  .tab.active {
+    color: #0A0B0D; font-weight: 600;
+    border-bottom-color: #FC636B;
+  }
+  .tab .count {
+    font-size: 11px; font-weight: 500;
+    color: #8A8E94;
+    padding: 1px 6px;
+    background: #EBEDF0;
+    border-radius: 999px;
+  }
+
+  /* ── Tab content ── */
+  .tab-content {
+    padding: 24px 32px 32px;
+    flex: 1;
+    background: #F7F8FA;
+  }
+  .brief-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .brief-card {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .brief-card.wide { grid-column: 1 / -1; }
+  .brief-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #8A8E94;
+    margin-bottom: 10px;
+  }
+  .brief-primary {
+    font-size: 15px; font-weight: 600; color: #0A0B0D;
+    line-height: 1.45;
+  }
+  .brief-body {
+    font-size: 13px; color: #6F7782;
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+  .brief-bullet-list {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 8px;
+  }
+  .brief-bullet-list li {
+    font-size: 13px; color: #6F7782; line-height: 1.55;
+    padding-left: 14px; position: relative;
+  }
+  .brief-bullet-list li::before {
+    content: ''; position: absolute;
+    left: 2px; top: 9px;
+    width: 4px; height: 4px;
+    background: #C4CAD1;
+    border-radius: 50%;
+  }
+  .fit-breakdown {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .fit-cell {
+    background: #F7F8FA;
+    border: 1px solid #EAECEF;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .fit-cell .fit-label {
+    font-size: 10px; font-weight: 600; color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .fit-cell .fit-val {
+    font-size: 18px; font-weight: 700; color: #0A0B0D;
+    margin-top: 4px;
+  }
+  .fit-cell .fit-val.pos { color: #1B7E53; }
+  .fit-cell .fit-val.warn { color: #B47400; }
+
+  /* ─── Right rail — docked chat (same as v1) ─── */
+  .chat-rail {
+    display: flex; flex-direction: column;
+    background: #FFFFFF;
+    min-width: 0;
+  }
+  .chat-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #EAECEF;
+  }
+  .coop-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #FC636B;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .chat-head-identity { min-width: 0; }
+  .chat-head-title {
+    font-size: 14px; font-weight: 600; color: #0A0B0D;
+    line-height: 1.2;
+  }
+  .chat-head-sub {
+    font-size: 11px; color: #8A8E94;
+    margin-top: 2px;
+  }
+  .chat-head-ctrls { margin-left: auto; display: flex; gap: 2px; }
+  .chat-ctrl-btn {
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    color: #8A8E94;
+    background: transparent; border: none; border-radius: 6px;
+    cursor: pointer;
+  }
+  .chat-ctrl-btn:hover { background: #EBEDF0; color: #0A0B0D; }
+  .chat-ctrl-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; }
+
+  .chat-body {
+    flex: 1;
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 16px;
+    overflow-y: auto;
+    background: #FFFFFF;
+  }
+  .msg { display: flex; gap: 10px; max-width: 100%; }
+  .msg .msg-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+  }
+  .msg.coop .msg-avatar { background: #FC636B; }
+  .msg.user .msg-avatar { background: #0A0B0D; color: #F5F4F2; }
+  .msg-bubble { font-size: 13px; line-height: 1.55; color: #0A0B0D; flex: 1; }
+  .msg-name {
+    font-size: 11px; font-weight: 600; color: #6F7782;
+    margin-bottom: 2px;
+  }
+  .msg-bubble p { margin: 6px 0 0; }
+  .msg-bubble p:first-child { margin-top: 0; }
+  .msg-bubble strong { font-weight: 600; color: #0A0B0D; }
+
+  .chat-input-bar {
+    border-top: 1px solid #EAECEF;
+    padding: 12px 16px 14px;
+    background: #FFFFFF;
+  }
+  .chat-input-shell {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: #F7F8FA;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+  }
+  .chat-input {
+    flex: 1;
+    font-size: 13px; color: #0A0B0D;
+    background: transparent; border: none; outline: none;
+    font-family: inherit;
+  }
+  .chat-input::placeholder { color: #8A8E94; }
+  .send-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: #0A0B0D; color: #fff;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .send-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .chat-hint {
+    font-size: 11px; color: #8A8E94;
+    margin-top: 6px; display: flex; align-items: center; gap: 6px;
+  }
+  .chat-hint .model-tag { color: #6F7782; font-weight: 500; }
+  .chat-hint kbd {
+    font-family: 'SF Mono', monospace; font-size: 10px;
+    background: #EBEDF0; color: #6F7782;
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .header-meta-dot {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: #C4CAD1;
+    flex-shrink: 0;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     2. HEADER ANATOMY v2
+     ────────────────────────────────────────────────────────────── */
+  .anatomy-wrap {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 28px 32px;
+    position: relative;
+  }
+  .annotations {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px 28px;
+  }
+  .ann {
+    display: flex; gap: 10px;
+    font-size: 12px; line-height: 1.55;
+  }
+  .ann-num {
+    flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #FC636B; color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ann-body { color: #6F7782; }
+  .ann-body strong { color: #0A0B0D; font-weight: 600; display: block; margin-bottom: 2px; }
+  .pin { position: relative; }
+  .pin-num {
+    position: absolute;
+    top: -8px; right: -8px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #FC636B; color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    z-index: 2;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     3. NEXT STEPS — close-up + variants
+     ────────────────────────────────────────────────────────────── */
+  .ns-demo {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .ns-variant-label {
+    padding: 10px 32px;
+    font-size: 11px; font-weight: 700;
+    color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    background: #F7F8FA;
+    border-bottom: 1px solid #EAECEF;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     4. DATA CHIPS — detail
+     ────────────────────────────────────────────────────────────── */
+  .chip-demo {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .chip-row {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .chip-row:last-child { margin-bottom: 0; }
+  .chip-table {
+    margin-top: 20px;
+    border-top: 1px solid #EAECEF;
+    padding-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px 28px;
+    font-size: 12px; line-height: 1.55;
+    color: #6F7782;
+  }
+  .chip-table strong { color: #0A0B0D; font-weight: 600; display: block; margin-bottom: 3px; }
+
+  /* ──────────────────────────────────────────────────────────────
+     5. BLURB STATES
+     ────────────────────────────────────────────────────────────── */
+  .blurb-demo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .blurb-state {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .blurb-state-label {
+    font-size: 11px; font-weight: 700;
+    color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  .blurb-state .row-blurb {
+    margin-top: 0;
+  }
+  .blurb-expanded {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: #F7F8FA;
+    border-left: 2px solid #E0E4E8;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px; line-height: 1.6;
+    color: #6F7782;
+  }
+  .blurb-expanded strong { color: #0A0B0D; font-weight: 600; }
+
+  /* ──────────────────────────────────────────────────────────────
+     6. COLOR INVENTORY
+     ────────────────────────────────────────────────────────────── */
+  .color-inv {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 24px;
+  }
+  .color-item {
+    display: flex; gap: 12px;
+    align-items: flex-start;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #EAECEF;
+  }
+  .color-swatch {
+    width: 40px; height: 40px; border-radius: 8px;
+    flex-shrink: 0;
+  }
+  .color-body {
+    font-size: 12px; line-height: 1.5; color: #6F7782;
+  }
+  .color-body strong {
+    font-size: 13px; font-weight: 600; color: #0A0B0D;
+    display: block; margin-bottom: 2px;
+  }
+  .color-body code {
+    font-family: 'SF Mono', monospace; font-size: 11px;
+    color: #8A8E94;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     7. SIDE-BY-SIDE HEADER COMPARISON (v1 vs v2)
+     ────────────────────────────────────────────────────────────── */
+  .vs-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .vs-card {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .vs-label {
+    padding: 12px 20px;
+    font-size: 12px; font-weight: 700;
+    color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    border-bottom: 1px solid #EAECEF;
+  }
+  .vs-card.v1 .vs-label { background: #F7F8FA; }
+  .vs-card.v2 .vs-label {
+    background: rgba(252,99,107,0.06);
+    color: #B03843;
+  }
+  .vs-body { padding: 18px 20px; }
+
+  /* v1 simplified header for comparison */
+  .v1-mini {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .v1-row1 {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .v1-name { font-size: 18px; font-weight: 600; }
+  .v1-meta { font-size: 12px; color: #6F7782; }
+  .v1-row2 {
+    font-size: 11px; color: #8A8E94;
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* v2 mini — smaller but structurally identical */
+  .v2-mini {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .v2-mini .company-name { font-size: 18px; }
+  .v2-mini .role-link { font-size: 12px; padding: 4px 8px; }
+  .v2-mini .stage-pill,
+  .v2-mini .action-chip { font-size: 11px; padding: 3px 8px; }
+  .v2-mini .score-chip { padding: 2px 8px; }
+  .v2-mini .score-chip .score-num { font-size: 15px; }
+  .v2-mini .row-blurb { font-size: 12px; margin-top: 0; }
+  .v2-mini .data-chip {
+    font-size: 11px; padding: 3px 8px;
+  }
+  .v2-mini .data-chip svg { width: 11px; height: 11px; }
+
+</style>
+</head>
+<body>
+
+  <!-- PAGE HEADER -->
+  <div class="page-head">
+    <h1>
+      <span class="issue-tag">#262</span>
+      <span class="v-tag">V2</span>
+      Opportunity / Company shell — iteration pass
+    </h1>
+    <p class="prompt">
+      Iteration on Matt's 5 asks from the last round. Direction (two-column shell, docked chat, label-only tab bar) unchanged and approved — this pass focuses on the header block, adds a blurb slot, a Next Steps strip, and introduces semantic color where it earns its place.
+    </p>
+  </div>
+
+  <!-- DIFF CALLOUT -->
+  <div class="diff-callout">
+    <h3>What changed from v1</h3>
+    <div class="diff-list">
+      <div class="diff-item"><div><strong>Role title is top-level</strong> — inline with the company name, linked to the job posting with an arrow icon.</div></div>
+      <div class="diff-item"><div><strong>Data chips, not gray text</strong> — Industry, Employees, Funding · Stage, Location read as structured chips with icons.</div></div>
+      <div class="diff-item"><div><strong>LinkedIn duplicate removed</strong> — single LinkedIn affordance (icon button in actions cluster). Raw URL killed.</div></div>
+      <div class="diff-item"><div><strong>Company blurb slot</strong> — 1–2 sentences under the name, with an expand affordance for deeper context. Role Brief stays role-specific.</div></div>
+      <div class="diff-item"><div><strong>Next Steps strip</strong> — always-visible row between header and tabs. <em>Last</em> (recessed) → <em>Next</em> (coral accent, date-first).</div></div>
+      <div class="diff-item"><div><strong>More color, purposefully</strong> — score number is now 20px spectrum-colored; stage pill fills semantically; Next Steps uses coral for the unfinished action; funding chip tints teal.</div></div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: HERO -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Recommended — Full shell v2</h2>
+      <span class="stance">Render as hero</span>
+    </div>
+    <p class="section-note">
+      Main flex column carries header (4 rows) + Next Steps strip + tab bar + tab content. Docked 400px chat rail on the right. Header rows are: identity, blurb, data, then Next Steps spans full width before the tab bar.
+    </p>
+
+    <div class="shell">
+      <div class="shell-chrome">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <div class="url">coop.ai/opportunity/topo-io — Senior Product Manager · HM Call Thursday</div>
+      </div>
+      <div class="shell-body">
+
+        <!-- MAIN COL -->
+        <div class="main-col">
+
+          <!-- HEADER v2 -->
+          <div class="opp-header">
+
+            <!-- Row 1 — identity -->
+            <div class="row-identity">
+              <div class="company-name">Topo.io</div>
+              <a class="role-link" href="#">
+                Senior Product Manager
+                <svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H9M17 7v8"/></svg>
+              </a>
+              <div class="status-cluster">
+                <div class="stage-pill">
+                  <span class="dot-stage"></span>
+                  HM Call · Thursday
+                </div>
+                <div class="action-chip their-court">
+                  <span class="action-dot"></span>
+                  Their court
+                </div>
+                <div class="score-chip">
+                  <span class="score-num">7.8</span>
+                  <span class="score-label">Strong fit</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2 — blurb -->
+            <div class="row-blurb">
+              Topo.io builds an AI-powered outbound signals platform used by GTM teams at early-stage B2B SaaS companies. They turn product usage, intent data, and prospect research into ranked sequences their customers' SDR teams run daily.
+              <span class="more-link">Show more ↓</span>
+            </div>
+
+            <!-- Row 3 — data chips + right-aligned actions -->
+            <div class="row-data">
+              <div class="data-chip">
+                <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Industry</span>
+                <span class="dc-divider">·</span>
+                <span class="dc-val">AI / GTM SaaS</span>
+              </div>
+
+              <div class="data-chip">
+                <svg viewBox="0 0 24 24"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 20v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Employees</span>
+                <span class="dc-divider">·</span>
+                <span class="dc-val">~35</span>
+              </div>
+
+              <div class="data-chip funding">
+                <svg viewBox="0 0 24 24"><path d="M12 2v20M5 9l7-7 7 7"/></svg>
+                <span>Funding</span>
+                <span class="dc-divider">·</span>
+                <span class="dc-val">Seed · $6M · Accel</span>
+              </div>
+
+              <div class="data-chip">
+                <svg viewBox="0 0 24 24"><path d="M20 10c0 7-8 13-8 13S4 17 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span class="dc-val">San Francisco</span>
+              </div>
+
+              <!-- Right-aligned actions -->
+              <div class="header-actions">
+                <button class="ghost-btn icon-only" title="Open LinkedIn">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 10v7M9 7.5v.01M13 17v-4a2 2 0 0 1 4 0v4"/></svg>
+                </button>
+                <button class="ghost-btn icon-only" title="Open website">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+                </button>
+                <button class="ghost-btn">
+                  <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><path d="M21 4v6h-6"/></svg>
+                  Refresh
+                </button>
+                <button class="ghost-btn icon-only" title="Archive">
+                  <svg viewBox="0 0 24 24"><path d="M3 7h18"/><rect x="5" y="7" width="14" height="13" rx="2"/><path d="M10 12h4"/></svg>
+                </button>
+                <button class="ghost-btn icon-only" title="More">
+                  <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- NEXT STEPS STRIP -->
+          <div class="next-steps-strip">
+            <div class="ns-cell last">
+              <div class="ns-label">Last</div>
+              <div class="ns-row">
+                <div class="ns-what">Recruiter screen w/ Jordan</div>
+                <div class="ns-when">Apr 14 · 5d ago</div>
+              </div>
+            </div>
+            <div class="ns-arrow">
+              <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </div>
+            <div class="ns-cell next">
+              <div class="ns-label">Next</div>
+              <div class="ns-row">
+                <div class="ns-what">HM call with Anna Rao</div>
+                <div class="ns-when">Thu Apr 23 · 2:00 PM</div>
+              </div>
+            </div>
+            <button class="ns-action-btn">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              Prep with Coop
+            </button>
+          </div>
+
+          <!-- TAB BAR -->
+          <div class="tab-bar">
+            <button class="tab active">Role Brief</button>
+            <button class="tab">Activity</button>
+            <button class="tab">Emails<span class="count">12</span></button>
+            <button class="tab">Meetings<span class="count">3</span></button>
+            <button class="tab">Notes</button>
+            <button class="tab">Docs<span class="count">4</span></button>
+            <button class="tab">Tasks<span class="count">2</span></button>
+          </div>
+
+          <!-- TAB CONTENT: Role Brief sketch -->
+          <div class="tab-content">
+            <div class="brief-grid">
+              <div class="brief-card wide">
+                <div class="brief-label">Role summary</div>
+                <div class="brief-primary">Lead product for Topo's AI outbound platform — define roadmap for the signals graph and agent orchestration layer as they scale from 40 to 200 customers.</div>
+                <div class="brief-body">Reports to the CEO. One PM hire before you; first senior PM. Sits between eng, growth, and the founding account team. Equity-heavy comp, SF on-site 3x/week.</div>
+              </div>
+
+              <div class="brief-card">
+                <div class="brief-label">Why this fits</div>
+                <ul class="brief-bullet-list">
+                  <li>GTM operator profile matches the signals + outbound problem space</li>
+                  <li>Founder-led company wants 0→1 product instincts, not planning-framework PMs</li>
+                  <li>Stage (Seed+) aligns with your range — early, not chaos-early</li>
+                </ul>
+              </div>
+
+              <div class="brief-card">
+                <div class="brief-label">Watch-outs</div>
+                <ul class="brief-bullet-list">
+                  <li>On-site expectation may push against flexibility</li>
+                  <li>Cash-to-equity ratio likely lean; needs direct ask</li>
+                  <li>CEO has been founder-PM; boundary-setting is part of the job</li>
+                </ul>
+              </div>
+
+              <div class="brief-card wide">
+                <div class="brief-label">Fit breakdown</div>
+                <div class="fit-breakdown">
+                  <div class="fit-cell"><div class="fit-label">Role</div><div class="fit-val pos">8.5</div></div>
+                  <div class="fit-cell"><div class="fit-label">Stage</div><div class="fit-val pos">8.0</div></div>
+                  <div class="fit-cell"><div class="fit-label">Comp</div><div class="fit-val warn">6.5</div></div>
+                  <div class="fit-cell"><div class="fit-label">Location</div><div class="fit-val warn">6.0</div></div>
+                  <div class="fit-cell"><div class="fit-label">Mission</div><div class="fit-val pos">8.5</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT RAIL: docked chat -->
+        <div class="chat-rail">
+          <div class="chat-head">
+            <div class="coop-avatar">C</div>
+            <div class="chat-head-identity">
+              <div class="chat-head-title">Coop</div>
+              <div class="chat-head-sub">Scoped to Topo.io · Haiku 4.5</div>
+            </div>
+            <div class="chat-head-ctrls">
+              <button class="chat-ctrl-btn" title="Minimize">
+                <svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
+              </button>
+              <button class="chat-ctrl-btn" title="Open full">
+                <svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M10 21H5a2 2 0 0 1-2-2v-5"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="chat-body">
+            <div class="msg coop">
+              <div class="msg-avatar">C</div>
+              <div class="msg-bubble">
+                <div class="msg-name">Coop</div>
+                <p>Ready for the HM call with <strong>Anna Rao</strong> on Thursday. She ran the first PM team at Sendoso — so she'll probe for structured storytelling, not just ideas.</p>
+                <p>Want me to pull your notes from the recruiter screen and sketch 3 angles you should have ready?</p>
+              </div>
+            </div>
+
+            <div class="msg user">
+              <div class="msg-avatar">M</div>
+              <div class="msg-bubble">
+                <div class="msg-name">You</div>
+                <p>Yes — and flag anything you're seeing that contradicts what the recruiter said.</p>
+              </div>
+            </div>
+
+            <div class="msg coop">
+              <div class="msg-avatar">C</div>
+              <div class="msg-bubble">
+                <div class="msg-name">Coop</div>
+                <p>One gap worth surfacing: recruiter said "remote-friendly," but Anna's Loom and the job post both say <strong>3 days on-site</strong>. Ask her directly — don't assume.</p>
+                <p>Angles I'd prep: (1) signals→action, (2) agent orchestration as a product surface, (3) the PM-after-founder-PM transition.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-input-bar">
+            <div class="chat-input-shell">
+              <input class="chat-input" placeholder="Ask about Topo.io…">
+              <button class="send-btn" title="Send">
+                <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+              </button>
+            </div>
+            <div class="chat-hint">
+              <span class="model-tag">Haiku 4.5</span>
+              <div class="header-meta-dot"></div>
+              <span>Click to cycle model</span>
+              <span style="margin-left:auto;"><kbd>⌘</kbd> <kbd>↵</kbd> to send</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: HEADER ANATOMY -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Header anatomy v2</h2>
+    </div>
+    <p class="section-note">
+      Four rows, tight rhythm. Row 1 carries identity + status (right-cluster). Row 2 is the blurb. Row 3 is data + actions. Next Steps lives between header and tabs as a full-width strip.
+    </p>
+
+    <div class="anatomy-wrap">
+      <!-- Row 1 -->
+      <div class="row-identity">
+        <div class="pin">
+          <div class="pin-num">1</div>
+          <div class="company-name">Topo.io</div>
+        </div>
+        <div class="pin">
+          <div class="pin-num">2</div>
+          <a class="role-link" href="#">
+            Senior Product Manager
+            <svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H9M17 7v8"/></svg>
+          </a>
+        </div>
+        <div class="status-cluster">
+          <div class="pin">
+            <div class="pin-num">3</div>
+            <div class="stage-pill">
+              <span class="dot-stage"></span>
+              HM Call · Thursday
+            </div>
+          </div>
+          <div class="pin">
+            <div class="pin-num">4</div>
+            <div class="action-chip their-court">
+              <span class="action-dot"></span>
+              Their court
+            </div>
+          </div>
+          <div class="pin">
+            <div class="pin-num">5</div>
+            <div class="score-chip">
+              <span class="score-num">7.8</span>
+              <span class="score-label">Strong fit</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="pin" style="display: block;">
+        <div class="pin-num" style="right: auto; left: -26px; top: 14px;">6</div>
+        <div class="row-blurb">
+          Topo.io builds an AI-powered outbound signals platform used by GTM teams at early-stage B2B SaaS companies. They turn product usage, intent data, and prospect research into ranked sequences their customers' SDR teams run daily.
+          <span class="more-link">Show more ↓</span>
+        </div>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="row-data" style="position: relative;">
+        <div class="pin-num" style="position: absolute; left: -26px; top: 12px; right: auto;">7</div>
+        <div class="data-chip">
+          <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>Industry</span><span class="dc-divider">·</span><span class="dc-val">AI / GTM SaaS</span>
+        </div>
+        <div class="data-chip">
+          <svg viewBox="0 0 24 24"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 20v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Employees</span><span class="dc-divider">·</span><span class="dc-val">~35</span>
+        </div>
+        <div class="data-chip funding">
+          <svg viewBox="0 0 24 24"><path d="M12 2v20M5 9l7-7 7 7"/></svg>
+          <span>Funding</span><span class="dc-divider">·</span><span class="dc-val">Seed · $6M · Accel</span>
+        </div>
+        <div class="data-chip">
+          <svg viewBox="0 0 24 24"><path d="M20 10c0 7-8 13-8 13S4 17 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span class="dc-val">San Francisco</span>
+        </div>
+      </div>
+
+      <div class="annotations">
+        <div class="ann">
+          <div class="ann-num">1</div>
+          <div class="ann-body"><strong>Company name</strong>24px, weight 600, tight letter-spacing. Bumped from v1 (22px) so it anchors the block at any zoom.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">2</div>
+          <div class="ann-body"><strong>Role title link</strong>15px, weight 500, blue-linked with an arrow-exit icon. Hovering surfaces the hyperlink; click opens the original job posting in a new tab.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">3</div>
+          <div class="ann-body"><strong>Stage pill</strong>Semantic fill per stage type — amber for "HM Call / scheduled" (pending action), teal for offer, blue for applied, red for rejected. Not rainbow: one stage, one fill.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">4</div>
+          <div class="ann-body"><strong>Action status</strong>Border tints match dot — teal = my court, amber = their court. Chip text stays gray so it recedes under the stage pill.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">5</div>
+          <div class="ann-body"><strong>Score chip</strong>20px spectrum-colored number (green ≥ 7.5, amber 6.0–7.4, orange 4.5–5.9, red &lt; 4.5). Verdict label optional, quiet. This is the main visual anchor.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">6</div>
+          <div class="ann-body"><strong>Company blurb</strong>14px, 780px max-width, line-height 1.55. Two sentences by default; "Show more" reveals expanded context. Not the Role Brief — this is what the company <em>does</em>.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">7</div>
+          <div class="ann-body"><strong>Data chips</strong>Industry, Employees, Funding, Location. Inset background, thin border, outline icon. Funding tints teal when the round is recent (within 18 months) — signal, not decoration.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: NEXT STEPS STRIP — variants -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Next Steps strip — variants</h2>
+    </div>
+    <p class="section-note">
+      Always-visible row between header and tabs. <em>Last</em> is recessed gray. <em>Next</em> carries a coral left-accent, the date in coral, and a "Prep with Coop" CTA on the right. Dates parse from stageTimestamps + upcoming calendar events.
+    </p>
+
+    <div class="ns-demo">
+      <div class="ns-variant-label">Default — known last + known next</div>
+      <div class="next-steps-strip">
+        <div class="ns-cell last">
+          <div class="ns-label">Last</div>
+          <div class="ns-row">
+            <div class="ns-what">Recruiter screen w/ Jordan</div>
+            <div class="ns-when">Apr 14 · 5d ago</div>
+          </div>
+        </div>
+        <div class="ns-arrow">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="ns-cell next">
+          <div class="ns-label">Next</div>
+          <div class="ns-row">
+            <div class="ns-what">HM call with Anna Rao</div>
+            <div class="ns-when">Thu Apr 23 · 2:00 PM</div>
+          </div>
+        </div>
+        <button class="ns-action-btn">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          Prep with Coop
+        </button>
+      </div>
+
+      <div class="ns-variant-label">No next step defined — Coop suggests</div>
+      <div class="next-steps-strip">
+        <div class="ns-cell last">
+          <div class="ns-label">Last</div>
+          <div class="ns-row">
+            <div class="ns-what">HM call with Anna Rao</div>
+            <div class="ns-when">Thu Apr 23 · 5d ago</div>
+          </div>
+        </div>
+        <div class="ns-arrow">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="ns-cell next">
+          <div class="ns-label">Next</div>
+          <div class="ns-row">
+            <div class="ns-what" style="color: #6F7782; font-weight: 500; font-style: italic;">Undecided — Coop has 3 suggestions</div>
+          </div>
+        </div>
+        <button class="ns-action-btn">
+          <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/></svg>
+          See suggestions
+        </button>
+      </div>
+
+      <div class="ns-variant-label">Pipeline end state — rejected or offer declined</div>
+      <div class="next-steps-strip" style="background: #FAFBFC;">
+        <div class="ns-cell last">
+          <div class="ns-label">Last</div>
+          <div class="ns-row">
+            <div class="ns-what">Rejection email from Jordan</div>
+            <div class="ns-when">Apr 17 · 2d ago</div>
+          </div>
+        </div>
+        <div class="ns-arrow">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="ns-cell next" style="border-left-color: #C4CAD1;">
+          <div class="ns-label" style="color: #8A8E94;">Next</div>
+          <div class="ns-row">
+            <div class="ns-what" style="color: #6F7782; font-weight: 500;">Pipeline closed — archive or postmortem</div>
+          </div>
+        </div>
+        <button class="ns-action-btn" style="background: #6F7782;">
+          <svg viewBox="0 0 24 24"><path d="M3 7h18"/><rect x="5" y="7" width="14" height="13" rx="2"/></svg>
+          Archive
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: DATA CHIPS -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Data chips — detail</h2>
+    </div>
+    <p class="section-note">
+      Structured, labeled, scannable. Inset background + thin border so they read as data, not tags. Icon prefix keeps the eye moving across the row. Same visual treatment across all four — DESIGN.md rule against rainbow pills — with one semantic accent (funding teal) when a signal matters.
+    </p>
+
+    <div class="chip-demo">
+      <div class="chip-row">
+        <div class="data-chip">
+          <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>Industry</span><span class="dc-divider">·</span><span class="dc-val">AI / GTM SaaS</span>
+        </div>
+        <div class="data-chip">
+          <svg viewBox="0 0 24 24"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 20v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Employees</span><span class="dc-divider">·</span><span class="dc-val">~35</span>
+        </div>
+        <div class="data-chip funding">
+          <svg viewBox="0 0 24 24"><path d="M12 2v20M5 9l7-7 7 7"/></svg>
+          <span>Funding</span><span class="dc-divider">·</span><span class="dc-val">Seed · $6M · Accel</span>
+        </div>
+        <div class="data-chip">
+          <svg viewBox="0 0 24 24"><path d="M20 10c0 7-8 13-8 13S4 17 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span class="dc-val">San Francisco</span>
+        </div>
+      </div>
+
+      <div class="chip-table">
+        <div>
+          <strong>Industry</strong>
+          Label + value. Label in regular weight, value in 600. Falls back to "—" when unknown.
+        </div>
+        <div>
+          <strong>Employees</strong>
+          Always tilde-prefixed (~35). Sourced from Apollo; Coop research only if Apollo missed.
+        </div>
+        <div>
+          <strong>Funding</strong>
+          Stage · amount · lead investor. Tints teal when round is ≤ 18 months old (growth signal). Falls to neutral when older or bootstrapped.
+        </div>
+        <div>
+          <strong>Location</strong>
+          HQ city only. No label — the pin icon does the work. Remote-first shows "Remote · HQ NYC" or similar.
+        </div>
+        <div>
+          <strong>Fallback</strong>
+          Any chip with no value shows "—" instead of hiding. Empty states prompt "Research to enrich."
+        </div>
+        <div>
+          <strong>Max width</strong>
+          Chips wrap rather than overflow. Data row is flex-wrap on narrow viewports — actions cluster rewraps below.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5: BLURB STATES -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Company blurb — states</h2>
+    </div>
+    <p class="section-note">
+      This is what the company <em>does</em>, not what the role is. Role Brief tab stays intact and role-specific. Blurb is sourced from Coop research synthesis; user can edit in place.
+    </p>
+
+    <div class="blurb-demo">
+      <!-- Collapsed -->
+      <div class="blurb-state">
+        <div class="blurb-state-label">Default — collapsed</div>
+        <div class="row-blurb">
+          Topo.io builds an AI-powered outbound signals platform used by GTM teams at early-stage B2B SaaS companies. They turn product usage, intent data, and prospect research into ranked sequences their customers' SDR teams run daily.
+          <span class="more-link">Show more ↓</span>
+        </div>
+      </div>
+
+      <!-- Expanded -->
+      <div class="blurb-state">
+        <div class="blurb-state-label">Expanded — deeper context</div>
+        <div class="row-blurb">
+          Topo.io builds an AI-powered outbound signals platform used by GTM teams at early-stage B2B SaaS companies. They turn product usage, intent data, and prospect research into ranked sequences their customers' SDR teams run daily.
+          <span class="more-link">Show less ↑</span>
+        </div>
+        <div class="blurb-expanded">
+          <strong>Product.</strong> Signals graph + agent orchestration for outbound. Core insight: most SDRs burn their day choosing who to contact, not sending outreach. Topo ranks leads from usage + firmographic + intent data and auto-drafts sequences.<br><br>
+          <strong>Customers.</strong> ~40 B2B SaaS teams in the $10M–$50M ARR band. Heavy GTM leaders using Clay, Apollo, and Outreach.io alongside.<br><br>
+          <strong>Differentiator.</strong> Most competitors route through existing outbound tools. Topo owns the signal → sequence → send pipe end-to-end.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6: COLOR INVENTORY -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Color inventory — where v2 earns color</h2>
+      <span class="stance">DESIGN.md compliant</span>
+    </div>
+    <p class="section-note">
+      "More color, less grey" answered within DESIGN.md's rules: color is semantic, not decorative. Every swatch below answers <em>"what does this color mean?"</em>. No rainbow pills, no gradient badges, no decorative tints. Platform-wide color rules still sit under <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/269">#269</a> — if that workshop reaches a different bar, revisit this shell.
+    </p>
+
+    <div class="color-inv">
+      <div class="color-grid">
+        <div class="color-item">
+          <div class="color-swatch" style="background: #1B7E53;"></div>
+          <div class="color-body">
+            <strong>Score — positive</strong>
+            <code>#1B7E53</code><br>
+            Number color when score ≥ 7.5. 20px bold — the main visual anchor.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #B47400;"></div>
+          <div class="color-body">
+            <strong>Score — mid</strong>
+            <code>#B47400</code><br>
+            6.0–7.4 score color. Signals "consider carefully."
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #E8384F;"></div>
+          <div class="color-body">
+            <strong>Score — poor</strong>
+            <code>#E8384F</code><br>
+            &lt; 4.5 score color. Rare in saved pipeline; surfaces in queue triage.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #F5A623;"></div>
+          <div class="color-body">
+            <strong>Stage / attention</strong>
+            <code>#F5A623</code><br>
+            Stage pill fill when action is pending on their side. Action-chip dot when their court. One meaning per context.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #36B37E;"></div>
+          <div class="color-body">
+            <strong>Success / growth</strong>
+            <code>#36B37E</code><br>
+            Action chip when it's your court. Funding chip tint when round is recent. Diff-checkmark on shipped items.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #4573D2;"></div>
+          <div class="color-body">
+            <strong>Link / role</strong>
+            <code>#4573D2</code><br>
+            Role title link, hyperlinks, informational dots. The "take an action that leaves this page" signal.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #FC636B;"></div>
+          <div class="color-body">
+            <strong>Brand / unfinished</strong>
+            <code>#FC636B</code><br>
+            Active tab underline (2px), Next Steps accent, Coop avatar. Marks the one thing that still needs the user.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #0A0B0D;"></div>
+          <div class="color-body">
+            <strong>Primary text</strong>
+            <code>#0A0B0D</code><br>
+            Company name, data values, message text. Never muted to gray.
+          </div>
+        </div>
+        <div class="color-item">
+          <div class="color-swatch" style="background: #6F7782;"></div>
+          <div class="color-body">
+            <strong>Secondary text</strong>
+            <code>#6F7782</code><br>
+            Chip labels, blurb body, "Last" row, timestamps. Recedes so primary text reads first.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 7: SIDE-BY-SIDE v1 vs v2 -->
+  <div class="section">
+    <div class="section-head">
+      <h2>v1 vs v2 — header block side-by-side</h2>
+    </div>
+    <p class="section-note">
+      Quick visual delta. v1 on the left (what shipped as the mockup last round), v2 on the right (this iteration). Role title, data chips, blurb, and Next Steps are the four net-new blocks.
+    </p>
+
+    <div class="vs-wrap">
+      <div class="vs-card v1">
+        <div class="vs-label">v1 — previous mockup</div>
+        <div class="vs-body">
+          <div class="v1-mini">
+            <div class="v1-row1">
+              <span class="v1-name">Topo.io</span>
+              <span class="v1-meta">· AI-powered SDR platform · ~35 employees</span>
+              <span style="font-size:11px; padding:3px 8px; border-radius:999px; background:#EBEDF0; border:1px solid #E0E4E8; font-weight:600;">HM Call · Scheduled</span>
+              <span style="font-size:11px; padding:3px 8px; border-radius:6px; background:#fff; border:1px solid #E0E4E8; color:#6F7782;">Their court</span>
+              <span style="font-size:12px; padding:3px 8px; border-radius:6px; background:#fff; border:1px solid #E0E4E8;"><strong style="color:#1B7E53;">7.8</strong> <span style="color:#6F7782; font-size:11px;">Strong fit</span></span>
+            </div>
+            <div class="v1-row2">
+              Seed · $6M · Accel · San Francisco · linkedin.com/company/topo-io · topo.io
+            </div>
+          </div>
+          <div style="margin-top: 18px; padding: 14px; background: rgba(232,56,79,0.04); border-radius: 8px; border-left: 3px solid #E8384F; font-size: 12px; color: #6F7782; line-height: 1.55;">
+            <strong style="color:#0A0B0D; display:block; margin-bottom:6px;">Gaps Matt flagged</strong>
+            • Role title missing as a top-level element<br>
+            • Funding / industry / employees buried in subtle gray text<br>
+            • LinkedIn URL duplicates the LinkedIn button<br>
+            • No company blurb slot<br>
+            • No Next Steps block<br>
+            • Too muted overall
+          </div>
+        </div>
+      </div>
+
+      <div class="vs-card v2">
+        <div class="vs-label">v2 — this mockup</div>
+        <div class="vs-body">
+          <div class="v2-mini">
+            <div class="row-identity">
+              <div class="company-name">Topo.io</div>
+              <a class="role-link" href="#">Senior PM <svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H9M17 7v8"/></svg></a>
+              <div class="status-cluster">
+                <div class="stage-pill"><span class="dot-stage"></span>HM Call · Thu</div>
+                <div class="action-chip their-court"><span class="action-dot"></span>Their court</div>
+                <div class="score-chip"><span class="score-num">7.8</span></div>
+              </div>
+            </div>
+            <div class="row-blurb">
+              AI outbound signals platform. GTM teams at early-stage B2B SaaS companies.
+              <span class="more-link">Show more ↓</span>
+            </div>
+            <div class="row-data">
+              <div class="data-chip">
+                <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                AI / GTM SaaS
+              </div>
+              <div class="data-chip">
+                <svg viewBox="0 0 24 24"><circle cx="10" cy="7" r="4"/></svg>
+                ~35
+              </div>
+              <div class="data-chip funding">
+                <svg viewBox="0 0 24 24"><path d="M12 2v20M5 9l7-7 7 7"/></svg>
+                Seed · $6M
+              </div>
+            </div>
+            <div class="next-steps-strip" style="padding: 10px 14px; margin-top: 4px; border-radius: 6px; border: 1px solid #EAECEF;">
+              <div class="ns-cell last">
+                <div class="ns-label" style="font-size: 9px;">Last</div>
+                <div class="ns-row" style="font-size: 11px;"><div class="ns-what">Recruiter screen</div><div class="ns-when">5d ago</div></div>
+              </div>
+              <div class="ns-arrow"><svg viewBox="0 0 24 24" style="width:14px; height:14px;"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+              <div class="ns-cell next" style="padding-left: 10px; border-left-width: 2px;">
+                <div class="ns-label" style="font-size: 9px;">Next</div>
+                <div class="ns-row" style="font-size: 11px;"><div class="ns-what">HM call</div><div class="ns-when">Thu 2pm</div></div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top: 18px; padding: 14px; background: rgba(54,179,126,0.04); border-radius: 8px; border-left: 3px solid #36B37E; font-size: 12px; color: #6F7782; line-height: 1.55;">
+            <strong style="color:#0A0B0D; display:block; margin-bottom:6px;">Net-new</strong>
+            • Role title as a top-level linked element<br>
+            • Data chips: Industry, Employees, Funding, Location<br>
+            • Single LinkedIn affordance (icon in actions)<br>
+            • Company blurb (expandable) separate from Role Brief<br>
+            • Next Steps strip with last + next + Prep CTA<br>
+            • Score scaled 20px, spectrum-colored
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

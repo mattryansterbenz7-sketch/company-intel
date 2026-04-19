@@ -108,7 +108,7 @@ If Matt says "let me think," "park this," "come back to it," or the session ends
 **The verdict comment — critical format:**
 
 ```
-**Designer → Matt (verdict):**
+**Designer → Matt (verdict):** · *rendered YYYY-MM-DD HH:MM TZ*
 
 👉 **Latest mockup:** file:///Users/mattsterbenz/Desktop/Coding/company-intel/design-proposals/<name>.html
    (or: **Latest proposal:** <inline summary or link>)
@@ -120,7 +120,7 @@ If Matt says "let me think," "park this," "come back to it," or the session ends
 **Question for you:** <specific ask — "ship option A, or iterate the hover state?" / "approve approach X, or push back on Y?">
 ```
 
-The mockup/proposal link goes at the very top so Matt can't miss it. Everything else is context below.
+The mockup/proposal link goes at the very top so Matt can't miss it. The timestamp on the heading line tells Matt at a glance whether he's looking at the freshest rendering — critical when he bounces between tabs or returns to a prior thread. Use ISO date + 24-hour time + timezone abbrev (e.g., `rendered 2026-04-19 14:05 PDT`). Same timestamp goes on the issue body's `### 📐 Latest mockup` block (see `feedback_designer_issue_source_of_truth.md`).
 
 **Labels on move:**
 - Apply `review:design` (visual/UI proposal) or `review:strategy` (strategic plan proposal).
