@@ -468,6 +468,47 @@ gh api graphql -f query="
   }"
 ```
 
+### Reading the board (always paginate!)
+
+The project has 230+ items (mostly closed/Done historical items). A non-paginated `gh api graphql` query with `items(first: 50)` or `items(first: 100)` silently drops the rest — INCLUDING recent open items in Up Next For The Doer, In Progress (Doer), and Designer Backlog. The ordering isn't predictable; recent-by-number ≠ early-in-page.
+
+**Symptom of the bug:** you query a column, get `0 items`, but the board UI clearly shows items there. That's pagination, not a routing bug.
+
+**Canonical query — items by column option ID, with pagination:**
+
+```bash
+gh api graphql --paginate -f query='
+query($endCursor: String) {
+  node(id: "PVT_kwHOEA1iCM4BTJyy") {
+    ... on ProjectV2 {
+      items(first: 100, after: $endCursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          content {
+            ... on Issue {
+              number title state
+              labels(first: 15) { nodes { name } }
+            }
+          }
+          fieldValues(first: 10) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                optionId
+                field { ... on ProjectV2SingleSelectField { name } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}' --jq '.data.node.items.nodes[] | select(.fieldValues.nodes[]? | .optionId == "COLUMN_OPTION_ID") | {num: .content.number, title: .content.title, state: .content.state, labels: [.content.labels.nodes[].name]}'
+```
+
+Substitute the target column's option ID from the IDs table above. The `--paginate` flag is mandatory — `gh` walks pageInfo.endCursor automatically until `hasNextPage: false`.
+
+**When reporting board state to Matt, always use this pagination pattern.** If you report `0 items` anywhere and haven't paginated, you're reporting a false negative.
+
 ### Board hygiene
 
 - **Never** use `updateProjectV2Field` — it mutates field definitions and wipes all item assignments. Always use `updateProjectV2ItemFieldValue`.

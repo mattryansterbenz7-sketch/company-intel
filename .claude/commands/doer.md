@@ -139,6 +139,8 @@ When Up Next For The Doer is empty AND nothing is In Progress (Doer) yours:
 - Priority field: `PVTSSF_lAHOEA1iCM4BTJyyzhAekQU`
 - Columns: Needs Spec `227f3e8b`, Backlog `43f0ed97`, Designer Backlog `fb391763`, Proposed Designs + Mockups `530392e9`, Up Next For The Doer `2cee5689`, In Progress (Doer) `7556d12e`, Shipped - Matt Will Verify `2eea7b72`, Done `c24e13e2`
 
+**CRITICAL: always paginate board queries.** The project has 230+ items; a non-paginated GraphQL query (`items(first: 50)` or `first: 100`) silently drops later pages, including open items in Up Next For The Doer / In Progress (Doer) / Designer Backlog. If you query a column and get `0 items` but the board UI shows items, pagination is the cause. See the "Reading the board" section in `CLAUDE.md` for the canonical `gh api graphql --paginate` query. Use it every time you check board state.
+
 ## First action when invoked
 
 Confirm role in one line (`"Doer mode — ready"`), then report current state:

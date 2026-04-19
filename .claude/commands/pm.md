@@ -180,7 +180,7 @@ Confirm role in one line (`"PM mode — ready"`), then report current board stat
 
 1. **Re-read your skill file** via `Read` on `.claude/commands/pm.md`. The Orchestrator may have updated the skill since your last tick began. Your in-memory version may be stale.
 2. **Re-read `CLAUDE.md`** for the same reason.
-3. **Query the board fresh** via `gh` — do NOT serve from cached tick state. Column names, option IDs, label taxonomy, and item assignments may all have shifted since your last autonomous tick.
+3. **Query the board fresh** via `gh api graphql --paginate` — do NOT serve from cached tick state, and do NOT use non-paginated queries. The project has 230+ items; `items(first: 100)` silently drops the rest, including recent open items. See `CLAUDE.md` "Reading the board" section for the canonical query.
 4. **Then respond** using the refreshed context.
 
 Skip this only if Matt's message is a trivial acknowledgment ("thx", "ok cool"). Any substantive question — "what's the board state?", "why is Up Next empty?", Monitoring feedback (`#NNN <reason>`) — requires the refresh first.
