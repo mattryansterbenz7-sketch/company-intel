@@ -383,3 +383,98 @@ input, textarea, select { transition: border-color var(--ci-transition-fast), ba
   background: rgba(252, 99, 107, 0.10);
   color: var(--ci-accent-primary);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Email tab — thread-grouped + inline expand (#257)
+   Used by company.js (primary) and opportunity.js (shared renderer)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Date group headers */
+.et-date-group { font-size: 11.5px; font-weight: 600; color: var(--ci-text-secondary); padding: 14px 4px 8px; }
+.et-date-group:first-child { padding-top: 4px; }
+
+/* Thread row */
+.et-thread { border-bottom: 1px solid var(--ci-border-subtle); }
+.et-thread-row {
+  display: grid; grid-template-columns: 28px 1fr auto;
+  gap: 10px; padding: 12px 6px 12px 8px;
+  cursor: pointer; align-items: center;
+  border-left: 3px solid transparent;
+  transition: background var(--motion-xs) var(--ease-out);
+}
+.et-thread-row:hover { background: var(--ci-bg-inset); }
+.et-thread-expanded > .et-thread-row { background: var(--ci-bg-inset); border-left-color: var(--ci-accent-primary); padding-left: 5px; }
+
+/* Thread avatar */
+.et-thread-av { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+
+/* Thread body columns */
+.et-thread-body { min-width: 0; }
+.et-thread-row-a { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.et-thread-from { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); flex-shrink: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.et-thread-badge { font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary); padding: 1px 6px; background: var(--ci-bg-inset); border-radius: var(--ci-radius-full); flex-shrink: 0; }
+.et-thread-expanded .et-thread-badge { background: var(--ci-bg-raised); }
+.et-thread-subject { font-size: 13px; color: var(--ci-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.et-thread-preview { font-size: 12px; color: var(--ci-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.et-thread-time { font-size: 11px; color: var(--ci-text-tertiary); flex-shrink: 0; text-align: right; min-width: 56px; align-self: start; margin-top: 2px; }
+
+/* Expanded detail panel */
+.et-thread-detail { padding: 16px 18px 14px; background: var(--ci-bg-raised); border-top: 1px solid var(--ci-border-subtle); display: flex; flex-direction: column; gap: 12px; }
+
+/* Action bar */
+.et-detail-actions { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--ci-border-subtle); }
+.et-action-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 5px 10px; background: transparent; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit; text-decoration: none; transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out); }
+.et-action-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+.et-action-btn.et-action-primary { background: var(--ci-text-primary); color: #fff; border-color: var(--ci-text-primary); }
+.et-action-btn.et-action-primary:hover { background: var(--ci-bg-header); color: #fff; }
+
+/* Contact chips row */
+.et-contact-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--ci-border-subtle); }
+.et-chip-label { font-size: 11.5px; font-weight: 600; color: var(--ci-text-secondary); margin-right: 4px; }
+.et-contact-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 9px 3px 3px; background: var(--ci-bg-inset); border-radius: var(--ci-radius-full); color: var(--ci-text-primary); cursor: pointer; transition: background var(--motion-xs) var(--ease-out); }
+.et-contact-chip:hover { background: var(--ci-border-default); }
+.et-contact-chip-av { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+.et-contact-chip-add { background: transparent; border: 1px dashed var(--ci-border-strong); color: var(--ci-text-secondary); padding: 3px 10px; cursor: pointer; transition: all var(--motion-xs) var(--ease-out); }
+.et-contact-chip-add:hover { background: var(--ci-bg-inset); color: var(--ci-accent-primary); border-color: var(--ci-accent-primary); border-style: solid; }
+
+/* Individual messages */
+.et-msgs-list { display: flex; flex-direction: column; }
+.et-msg { padding: 12px 0; border-bottom: 1px solid var(--ci-border-subtle); }
+.et-msg:last-child { border-bottom: none; padding-bottom: 0; }
+.et-msg-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.et-msg-av { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.et-msg-meta { flex: 1; min-width: 0; }
+.et-msg-from { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); display: flex; align-items: center; gap: 6px; }
+.et-msg-sent-badge { font-size: 9px; font-weight: 700; color: var(--ci-accent-blue); background: rgba(69,115,210,0.10); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+.et-msg-route { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.et-msg-date { font-size: 11px; color: var(--ci-text-tertiary); flex-shrink: 0; white-space: nowrap; }
+.et-msg-body { font-size: 13px; line-height: 1.65; color: var(--ci-text-primary); max-width: 640px; overflow-wrap: break-word; word-break: break-word; }
+.et-msg-body p { margin: 0 0 0.8em; }
+.et-msg-body p:last-child { margin-bottom: 0; }
+.et-msg-body a { color: var(--ci-text-link); }
+.et-msg-body a:hover { text-decoration: underline; }
+.et-msg-body blockquote { margin: 10px 0; padding-left: 12px; border-left: 2px solid var(--ci-border-default); color: var(--ci-text-secondary); }
+.et-msg-body img { max-width: 100%; height: auto; border-radius: var(--ci-radius-sm); }
+.et-msg-body table { border-collapse: collapse; max-width: 100%; font-size: 12px; }
+.et-msg-body td, .et-msg-body th { padding: 4px 8px; border: 1px solid var(--ci-border-subtle); }
+
+/* Kebab menu */
+.et-msg-kebab-wrap { position: relative; flex-shrink: 0; }
+.et-kebab-btn { background: none; border: none; color: var(--ci-text-tertiary); cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: var(--ci-radius-sm); font-family: inherit; transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); line-height: 1; }
+.et-kebab-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+.et-kebab-menu { position: absolute; top: calc(100% + 4px); right: 0; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: var(--ci-shadow-md); min-width: 220px; z-index: 20; overflow: hidden; }
+.et-kebab-item { display: block; width: 100%; text-align: left; font-size: 12px; font-weight: 500; padding: 10px 14px; background: none; border: none; cursor: pointer; color: var(--ci-text-primary); font-family: inherit; transition: background var(--motion-xs) var(--ease-out); }
+.et-kebab-item:hover { background: var(--ci-bg-inset); }
+.et-kebab-danger { color: var(--ci-accent-primary); }
+.et-kebab-divider { height: 1px; background: var(--ci-border-subtle); margin: 0 10px; }
+
+/* Inline confirm — two-step (replaces kebab menu, no confirm() dialog) */
+.et-kebab-confirm { position: absolute; top: calc(100% + 4px); right: 0; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: var(--ci-shadow-md); min-width: 280px; z-index: 21; overflow: hidden; }
+.et-kebab-confirm-inner { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.et-kebab-confirm-msg { font-size: 12px; color: var(--ci-text-primary); line-height: 1.45; }
+.et-kebab-confirm-msg em { font-style: normal; font-weight: 600; color: var(--ci-text-secondary); }
+.et-kebab-confirm-cancel, .et-kebab-confirm-ok { font-size: 12px; font-weight: 500; padding: 5px 10px; border-radius: var(--ci-radius-sm); border: 1px solid var(--ci-border-default); background: transparent; cursor: pointer; font-family: inherit; transition: background var(--motion-xs) var(--ease-out); }
+.et-kebab-confirm-cancel { color: var(--ci-text-secondary); }
+.et-kebab-confirm-cancel:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+.et-kebab-confirm-ok { color: #fff; background: var(--ci-accent-primary); border-color: var(--ci-accent-primary); }
+.et-kebab-confirm-ok:hover { background: var(--ci-accent-primary-hover); border-color: var(--ci-accent-primary-hover); }

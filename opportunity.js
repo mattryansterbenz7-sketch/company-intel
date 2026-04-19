@@ -994,6 +994,32 @@ function renderPanelBody(pid) {
   }
 }
 
+// ── Email helpers ─────────────────────────────────────────────────────────────
+
+function renderEmailsFromData(emails) {
+  const statusEl = document.getElementById('act-emails-status');
+  const listEl   = document.getElementById('act-emails-list');
+  if (!statusEl || !listEl) return;
+  statusEl.style.display = 'none';
+
+  // Apply ignore-list filter at render time (keep raw cache; ignore-list is a user-preference layer)
+  const ignoreList = new Set((entry.emailSenderIgnoreList || []).map(a => a.toLowerCase()));
+  const visibleEmails = ignoreList.size
+    ? emails.filter(e => {
+        const addr = (e.from || '').match(/<([^>]+)>/)?.[1]?.toLowerCase() || (e.from || '').toLowerCase();
+        return !ignoreList.has(addr);
+      })
+    : emails;
+
+  if (!visibleEmails.length) {
+    listEl.innerHTML = '<div class="p-empty">No emails for this company.</div>';
+    return;
+  }
+
+  listEl.innerHTML = renderEmailThreads(visibleEmails);
+  bindThreadToggles(listEl);
+}
+
 // ── Activity panel ────────────────────────────────────────────────────────────
 
 function bindActivityPanel() {
@@ -1032,12 +1058,10 @@ function bindActivityPanel() {
     if (!statusEl || !listEl) return;
     if (result?.error === 'not_connected') { statusEl.textContent = 'Connect Gmail in Setup to see emails.'; return; }
     if (!result?.emails?.length) { statusEl.textContent = 'No emails found for this company.'; return; }
-    statusEl.style.display = 'none';
-    listEl.innerHTML = renderEmailThreads(result.emails);
-    bindThreadToggles(listEl);
 
-    // Cache emails and extract contacts
+    // Cache raw emails first, then render with ignore-list applied at render time
     saveEntry({ cachedEmails: result.emails, cachedEmailsAt: Date.now() });
+    renderEmailsFromData(result.emails);
     if (result.extractedContacts?.length) mergeExtractedContacts(result.extractedContacts);
   });
 

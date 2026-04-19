@@ -1120,126 +1120,371 @@ function _emailAddrFrom(fromStr) {
   return (m ? m[1] : fromStr).trim().toLowerCase();
 }
 
-function renderEmailThreads(emails, onDelete) {
-  // Detect user's own email from the dataset (set by gmail.js)
-  // We check the first email's "to" field patterns, or use the stored value
+// ── Avatar color palette for thread participant initials ─────────────────────
+const _AVATAR_COLORS = [
+  '#5B8DEF','#36B37E','#7C6EF0','#F5A623','#FC636B','#4573D2','#8A8E94',
+  '#E04E56','#1B7E53','#9C6A0F',
+];
+function _avatarColor(str) {
+  let h = 0;
+  for (let i = 0; i < (str || '').length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return _AVATAR_COLORS[h % _AVATAR_COLORS.length];
+}
+function _initials(name) {
+  return (name || '?').split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+}
+
+// ── Session-scoped expand state (in-memory, resets on reload) ─────────────────
+const _expandedThreadIds = new Set();
+
+function renderEmailThreads(emails, onRemoveEmail, onIgnoreSender) {
+  if (!emails || !emails.length) return '';
+
+  // Detect user's own email from the module-level variable (set by gmail.js)
   const userEmailLower = (typeof gmailUserEmail !== 'undefined' ? gmailUserEmail : '') || '';
 
-  // Group by threadId, preserving newest-first order
+  // Group by threadId (fallback: normalized subject + sender domain)
   const threads = new Map();
   emails.forEach(e => {
-    if (!threads.has(e.threadId)) threads.set(e.threadId, []);
-    threads.get(e.threadId).push(e);
+    const key = e.threadId ||
+      `${(e.subject || '').trim().toLowerCase().replace(/^re:\s*/i, '').replace(/^fwd?:\s*/i, '')}_${(_emailAddrFrom(e.from).split('@')[1] || '')}`;
+    if (!threads.has(key)) threads.set(key, []);
+    threads.get(key).push(e);
   });
 
-  return [...threads.entries()].map(([tid, msgs]) => {
+  // Sort threads by most-recent message date (newest first)
+  const sorted = [...threads.entries()].sort((a, b) => {
+    const dateA = new Date(a[1][0].date).getTime() || 0;
+    const dateB = new Date(b[1][0].date).getTime() || 0;
+    return dateB - dateA;
+  });
+
+  // Group threads by date bucket
+  const now = new Date();
+  const todayStr  = now.toDateString();
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = yesterday.toDateString();
+  const oneWeekAgo = new Date(now); oneWeekAgo.setDate(now.getDate() - 7);
+
+  function dateBucket(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return 'Earlier';
+    if (d.toDateString() === todayStr) return 'Today';
+    if (d.toDateString() === yesterdayStr) return 'Yesterday';
+    if (d >= oneWeekAgo) return 'Last week';
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  function formatThreadTime(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr || '';
+    if (d.toDateString() === todayStr) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    if (d.getFullYear() === now.getFullYear()) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  let html = '';
+  let lastBucket = '';
+
+  sorted.forEach(([tid, msgs]) => {
+    // Most recent message is first (already ordered by gmail fetch newest-first)
     const latest = msgs[0];
     const subject = latest.subject || '(no subject)';
-    const d = new Date(latest.date);
-    const dateStr = isNaN(d) ? (latest.date || '') : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const participants = [...new Set(msgs.map(m => m.from.replace(/<.*>/, '').trim()).filter(Boolean))].slice(0, 2).join(', ');
 
-    const msgsHTML = msgs.map((m, idx) => {
-      const md = new Date(m.date);
-      const mDate = isNaN(md) ? (m.date || '') : md.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const mTime = isNaN(md) ? '' : md.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const bucket = dateBucket(latest.date);
+    if (bucket !== lastBucket) {
+      html += `<div class="et-date-group">${escapeHtml(bucket)}</div>`;
+      lastBucket = bucket;
+    }
+
+    // Collect unique participants for the thread
+    const participantEmails = new Set();
+    const participantNames = new Map(); // email → display name
+    msgs.forEach(m => {
+      [m.from, m.to, m.cc].filter(Boolean).forEach(field => {
+        field.split(/,\s*/).forEach(part => {
+          const addr = _emailAddrFrom(part);
+          const name = part.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || addr;
+          if (addr) { participantEmails.add(addr); if (!participantNames.has(addr)) participantNames.set(addr, name); }
+        });
+      });
+    });
+
+    const latestFromAddr = _emailAddrFrom(latest.from);
+    const latestFromName = (latest.from || '').replace(/<[^>]+>/, '').replace(/"/g, '').trim() || latestFromAddr || '';
+    const otherCount = [...participantEmails].filter(a => a !== latestFromAddr).length;
+    const timeStr = formatThreadTime(latest.date);
+    const isExpanded = _expandedThreadIds.has(tid);
+
+    // Latest message preview (stripped)
+    const previewRaw = stripQuotedContent(latest.body || latest.snippet || '').replace(/\n/g, ' ').slice(0, 120);
+    const preview = escapeHtml(previewRaw) + (previewRaw.length >= 120 ? '…' : '');
+
+    const avatarColor = _avatarColor(latestFromAddr);
+    const avatarInitials = _initials(latestFromName);
+
+    // Build per-message HTML (shown when thread is expanded)
+    const msgsHtml = msgs.map((m, idx) => {
       const fromAddr = _emailAddrFrom(m.from);
-      const fromName = (m.from || '').replace(/<.*>/, '').replace(/"/g, '').trim() || fromAddr || '';
+      const fromName = (m.from || '').replace(/<[^>]+>/, '').replace(/"/g, '').trim() || fromAddr || '';
       const isSent = userEmailLower && (fromAddr === userEmailLower);
+      const msgColor = _avatarColor(fromAddr);
+      const msgInitials = _initials(fromName);
 
-      // Render body: prefer htmlBody, detect HTML in plain body, fall back to pre-wrapped text
+      const md = new Date(m.date);
+      const msgTimeStr = isNaN(md) ? (m.date || '') : formatThreadTime(m.date);
+      const toRaw = (m.to || '').split(/,\s*/).filter(Boolean);
+      const toNames = toRaw.map(part => {
+        const n = part.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+        return n || _emailAddrFrom(part);
+      });
+      const toDisplay = toNames.length <= 1
+        ? (toNames[0] || '')
+        : `${toNames[0]} +${toNames.length - 1}`;
+      const msgRoute = [fromName, toDisplay].filter(Boolean).join(' → ');
+
+      // Render body: prefer HTML, fall back to plain text with basic formatting
       let bodyHtml = '';
       const rawBody = m.body || m.snippet || '';
       if (m.htmlBody) {
         bodyHtml = sanitizeEmailHtml(m.htmlBody);
       } else if (/<\w[\s\S]*?>/i.test(rawBody)) {
-        // body field contains HTML markup — sanitize rather than escape (XSS guard)
         bodyHtml = sanitizeEmailHtml(rawBody);
       } else {
         const bodyText = stripQuotedContent(rawBody);
         bodyHtml = `<p>${escapeHtml(bodyText).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
       }
 
-      // Preview from plain text
-      const plainForPreview = m.body || m.snippet || '';
-      const previewText = stripQuotedContent(plainForPreview).replace(/\n/g, ' ').slice(0, 100);
-      const preview = escapeHtml(previewText) + (previewText.length >= 100 ? '…' : '');
+      const msgId = m.id || `${tid}-${idx}`;
+      const safeFromAddr = escapeHtml(fromAddr);
+      const safeFromName = escapeHtml(fromName);
 
-      const msgId = `tmsg-${tid}-${idx}`;
-      const sentClass = isSent ? ' thread-msg-sent' : '';
-      // Latest message (idx=0) starts expanded
-      return `<div class="thread-msg${sentClass} ${idx === 0 ? 'open' : ''}" id="${msgId}">
-        <div class="thread-msg-hdr" data-msg="${msgId}">
-          <div class="thread-msg-sender">
-            <span class="thread-msg-from">${escapeHtml(fromName)}</span>
-            ${isSent ? '<span class="thread-msg-sent-badge">Sent</span>' : ''}
+      return `<div class="et-msg" data-msg-id="${escapeHtml(msgId)}" data-sender-addr="${safeFromAddr}" data-sender-name="${safeFromName}">
+        <div class="et-msg-head">
+          <div class="et-msg-av" style="background:${msgColor}">${msgInitials}</div>
+          <div class="et-msg-meta">
+            <div class="et-msg-from">${safeFromName}${isSent ? '<span class="et-msg-sent-badge">Sent</span>' : ''}</div>
+            <div class="et-msg-route">${escapeHtml(msgRoute)}</div>
           </div>
-          <div class="thread-msg-ts">
-            <span class="thread-msg-date">${mDate}</span>
-            ${mTime ? `<span class="thread-msg-time">${mTime}</span>` : ''}
+          <div class="et-msg-date">${escapeHtml(msgTimeStr)}</div>
+          <div class="et-msg-kebab-wrap" style="position:relative">
+            <button class="et-kebab-btn" data-msg-id="${escapeHtml(msgId)}" data-sender-addr="${safeFromAddr}" data-sender-name="${safeFromName}" title="More options" aria-label="More options">⋯</button>
+            <div class="et-kebab-menu" id="kebab-${escapeHtml(msgId)}" hidden>
+              <button class="et-kebab-item" data-action="remove-email" data-msg-id="${escapeHtml(msgId)}">Remove this email</button>
+              <div class="et-kebab-divider"></div>
+              <button class="et-kebab-item et-kebab-danger" data-action="remove-sender" data-msg-id="${escapeHtml(msgId)}" data-sender-addr="${safeFromAddr}" data-sender-name="${safeFromName}">Remove all emails from this sender</button>
+            </div>
+            <div class="et-kebab-confirm" id="kebab-confirm-${escapeHtml(msgId)}" hidden></div>
           </div>
         </div>
-        <div class="thread-msg-preview">${preview}</div>
-        <div class="thread-msg-body email-html-body">${bodyHtml}</div>
+        <div class="et-msg-body email-html-body">${bodyHtml}</div>
       </div>`;
     }).join('');
 
+    // Build contact chips for expanded detail
+    const knownContactEmails = (typeof entry !== 'undefined' && entry?.knownContacts) || [];
+    const knownSet = new Set(knownContactEmails.map(c => (c.email || '').toLowerCase()));
+
+    const chipsHtml = [...participantEmails].map(addr => {
+      const name = participantNames.get(addr) || addr;
+      const isMe = userEmailLower && addr === userEmailLower;
+      const chipColor = _avatarColor(addr);
+      const chipInitials = _initials(name);
+      const isKnown = isMe || knownSet.has(addr);
+      if (isKnown) {
+        return `<span class="et-contact-chip" data-addr="${escapeHtml(addr)}" title="${escapeHtml(name)}">
+          <span class="et-contact-chip-av" style="background:${chipColor}">${chipInitials}</span>
+          ${escapeHtml(name.split(' ')[0])}
+        </span>`;
+      } else {
+        return `<span class="et-contact-chip et-contact-chip-add" data-addr="${escapeHtml(addr)}" data-name="${escapeHtml(name)}" title="Add ${escapeHtml(name)} to contacts">
+          + ${escapeHtml(name)}
+        </span>`;
+      }
+    }).join('');
+
     const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${tid}`;
-    const deleteBtn = onDelete ? `<button class="email-delete-btn" data-thread="${tid}" title="Delete from this company's email inbox" style="flex-shrink:0;background:none;border:none;color:var(--ci-text-tertiary,#c4c0bc);cursor:pointer;font-size:13px;padding:4px 8px;opacity:0.6;transition:opacity 0.2s;">×</button>` : '';
-    return `<div class="thread-item">
-      <div class="thread-header" data-thread="${tid}">
-        <div style="flex:1;min-width:0">
-          <div class="thread-subject">${escapeHtml(subject)}</div>
-          <div class="thread-meta">${escapeHtml(participants)} · ${dateStr}</div>
+
+    html += `<div class="et-thread${isExpanded ? ' et-thread-expanded' : ''}" data-thread-id="${escapeHtml(tid)}">
+      <div class="et-thread-row" data-thread-id="${escapeHtml(tid)}">
+        <div class="et-thread-av" style="background:${avatarColor}">${avatarInitials}</div>
+        <div class="et-thread-body">
+          <div class="et-thread-row-a">
+            <span class="et-thread-from">${escapeHtml(latestFromName)}</span>
+            ${otherCount > 0 ? `<span class="et-thread-badge">+${otherCount}</span>` : ''}
+            <span class="et-thread-subject">${escapeHtml(subject)}</span>
+          </div>
+          <div class="et-thread-preview">${preview}</div>
         </div>
-        ${msgs.length > 1 ? `<span class="thread-count">${msgs.length}</span>` : ''}
-        <span class="thread-chevron">▼</span>
-        ${deleteBtn}
+        <div class="et-thread-time">${escapeHtml(timeStr)}</div>
       </div>
-      <div class="thread-messages" id="thread-msgs-${tid}">
-        ${msgsHTML}
-        <a class="thread-gmail-link" href="${gmailUrl}" target="_blank">Open in Gmail →</a>
+      <div class="et-thread-detail" ${isExpanded ? '' : 'hidden'}>
+        <div class="et-detail-actions">
+          <a class="et-action-btn et-action-primary" href="${gmailUrl}" target="_blank" rel="noopener noreferrer">Reply in Gmail ↗</a>
+        </div>
+        <div class="et-contact-chips">
+          <span class="et-chip-label">In thread</span>
+          ${chipsHtml}
+        </div>
+        <div class="et-msgs-list">
+          ${msgsHtml}
+        </div>
       </div>
     </div>`;
-  }).join('');
+  });
+
+  return html || '<div class="p-empty">No emails for this company.</div>';
 }
 
 function bindThreadToggles(container) {
   const root = container || document;
 
-  // Thread-level expand/collapse
-  root.querySelectorAll('.thread-header').forEach(hdr => {
-    hdr.addEventListener('click', () => {
-      const tid = hdr.dataset.thread;
-      const msgsEl = document.getElementById('thread-msgs-' + tid);
-      if (!msgsEl) return;
-      const isOpen = msgsEl.classList.toggle('open');
-      hdr.classList.toggle('open', isOpen);
+  // Thread row click → expand/collapse inline detail
+  root.querySelectorAll('.et-thread-row').forEach(row => {
+    row.addEventListener('click', e => {
+      // Don't toggle if user clicked a link or button inside the row
+      if (e.target.closest('a, button')) return;
+      const tid = row.dataset.threadId;
+      if (!tid) return;
+      const thread = root.querySelector(`.et-thread[data-thread-id="${CSS.escape(tid)}"]`);
+      const detail = thread?.querySelector('.et-thread-detail');
+      if (!thread || !detail) return;
+      const isOpen = thread.classList.toggle('et-thread-expanded');
+      detail.hidden = !isOpen;
+      if (isOpen) _expandedThreadIds.add(tid);
+      else _expandedThreadIds.delete(tid);
     });
   });
 
-  // Individual message expand/collapse (click header row)
-  root.querySelectorAll('.thread-msg-hdr').forEach(hdr => {
-    hdr.addEventListener('click', e => {
+  // Kebab button → show/hide menu
+  root.querySelectorAll('.et-kebab-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
       e.stopPropagation();
-      const msgEl = document.getElementById(hdr.dataset.msg);
-      if (msgEl) msgEl.classList.toggle('open');
+      const msgId = btn.dataset.msgId;
+      // Close all other open menus first
+      root.querySelectorAll('.et-kebab-menu:not([hidden])').forEach(m => {
+        if (m.id !== `kebab-${msgId}`) m.hidden = true;
+      });
+      root.querySelectorAll('.et-kebab-confirm:not([hidden])').forEach(m => {
+        if (m.id !== `kebab-confirm-${msgId}`) m.hidden = true;
+      });
+      const menu = document.getElementById(`kebab-${msgId}`);
+      if (menu) menu.hidden = !menu.hidden;
     });
   });
 
-  // Delete button hover effects
-  root.querySelectorAll('.email-delete-btn').forEach(btn => {
-    btn.addEventListener('mouseenter', () => {
-      btn.style.opacity = '1';
-    });
-    btn.addEventListener('mouseleave', () => {
-      btn.style.opacity = '0.6';
+  // Close kebab menus when clicking outside (use document-level, only when menus are open)
+  // Remove any previously-bound handler from a prior bindThreadToggles call to prevent leak
+  if (root._etCloseMenusHandler) {
+    root.removeEventListener('click', root._etCloseMenusHandler);
+  }
+  const closeMenusHandler = () => {
+    root.querySelectorAll('.et-kebab-menu:not([hidden])').forEach(m => { m.hidden = true; });
+    root.querySelectorAll('.et-kebab-confirm:not([hidden])').forEach(m => { m.hidden = true; });
+  };
+  root._etCloseMenusHandler = closeMenusHandler;
+  root.addEventListener('click', closeMenusHandler, { passive: true });
+
+  // ── Kebab menu item: Remove this email ───────────────────────────────────
+  root.querySelectorAll('[data-action="remove-email"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (typeof entry === 'undefined' || typeof saveEntry === 'undefined') return;
+      const msgId = btn.dataset.msgId;
+      const filtered = (entry.cachedEmails || []).filter(em => em.id !== msgId);
+      saveEntry({ cachedEmails: filtered });
+      // Re-render the list via the page-level function (company.js or opportunity.js)
+      if (typeof renderEmailsFromData === 'function') renderEmailsFromData(filtered);
     });
   });
 
-  // Auto-expand first thread
-  const first = root.querySelector('.thread-header');
-  if (first) first.click();
+  // ── Kebab menu item: Remove all from sender (two-step inline confirm) ────
+  root.querySelectorAll('[data-action="remove-sender"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (typeof entry === 'undefined' || typeof saveEntry === 'undefined') return;
+      const senderAddr = (btn.dataset.senderAddr || '').toLowerCase();
+      const msgId = btn.dataset.msgId;
+      if (!senderAddr || !msgId) return;
+
+      const menuEl    = document.getElementById(`kebab-${msgId}`);
+      const confirmEl = document.getElementById(`kebab-confirm-${msgId}`);
+      if (!confirmEl) return;
+
+      const matchCount = (entry.cachedEmails || []).filter(em => {
+        const addr = (em.from || '').match(/<([^>]+)>/)?.[1]?.toLowerCase() || (em.from || '').toLowerCase();
+        return addr === senderAddr;
+      }).length;
+
+      // Hide menu, show inline confirm
+      if (menuEl) menuEl.hidden = true;
+      confirmEl.hidden = false;
+      confirmEl.innerHTML = `
+        <div class="et-kebab-confirm-inner">
+          <span class="et-kebab-confirm-msg">Remove ${matchCount} email${matchCount !== 1 ? 's' : ''} from <em>${escapeHtml(senderAddr)}</em>?</span>
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px">
+            <button class="et-kebab-confirm-cancel">Cancel</button>
+            <button class="et-kebab-confirm-ok">Remove all</button>
+          </div>
+        </div>`;
+
+      confirmEl.querySelector('.et-kebab-confirm-cancel').addEventListener('click', ev => {
+        ev.stopPropagation();
+        confirmEl.hidden = true;
+      });
+
+      confirmEl.querySelector('.et-kebab-confirm-ok').addEventListener('click', ev => {
+        ev.stopPropagation();
+        // Add sender to ignore-list
+        const currentIgnore = entry.emailSenderIgnoreList || [];
+        const updatedIgnore = [...new Set([...currentIgnore, senderAddr])];
+        // Remove all matching emails
+        const filtered = (entry.cachedEmails || []).filter(em => {
+          const addr = (em.from || '').match(/<([^>]+)>/)?.[1]?.toLowerCase() || (em.from || '').toLowerCase();
+          return addr !== senderAddr;
+        });
+        saveEntry({ emailSenderIgnoreList: updatedIgnore, cachedEmails: filtered });
+        if (typeof renderEmailsFromData === 'function') renderEmailsFromData(filtered);
+      });
+    });
+  });
+
+  // Contact chip click → navigate to contacts tab (only when the tab exists)
+  const hasContactsTab = !!document.querySelector('.hub-tab[data-tab="contacts"]');
+  if (hasContactsTab) {
+    root.querySelectorAll('.et-contact-chip:not(.et-contact-chip-add)').forEach(chip => {
+      chip.addEventListener('click', e => {
+        e.stopPropagation();
+        document.querySelector('.hub-tab[data-tab="contacts"]')?.click();
+      });
+    });
+  } else {
+    // No contacts tab on this page — remove clickable affordance
+    root.querySelectorAll('.et-contact-chip:not(.et-contact-chip-add)').forEach(chip => {
+      chip.style.cursor = 'default';
+    });
+  }
+
+  // Add-contact chip click
+  root.querySelectorAll('.et-contact-chip-add').forEach(chip => {
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      const addr = chip.dataset.addr;
+      const name = chip.dataset.name || addr;
+      if (!addr || typeof entry === 'undefined' || typeof saveEntry === 'undefined') return;
+      const existing = entry.knownContacts || [];
+      if (existing.some(c => (c.email || '').toLowerCase() === addr.toLowerCase())) return;
+      const newContact = { name, email: addr, source: 'email', detectedAt: Date.now(), matchedVia: { type: 'email-sender', detail: 'Added from email thread participant chip' } };
+      saveEntry({ knownContacts: [...existing, newContact] });
+      // Convert chip from dashed to solid inline (no scroll-jump re-render)
+      chip.classList.remove('et-contact-chip-add');
+      chip.innerHTML = `<span class="et-contact-chip-av" style="background:${_avatarColor(addr)}">${_initials(name)}</span> ${escapeHtml(name.split(' ')[0])}`;
+    });
+  });
 }
 
 // escapeHtml — provided by ui-utils.js

@@ -3388,24 +3388,23 @@ function renderEmailsFromData(emails) {
   if (!statusEl || !listEl) return;
   statusEl.style.display = 'none';
 
-  // Pass delete handler so users can remove individual emails from the cached inbox
-  const onDelete = (threadId) => {
-    const filtered = (entry.cachedEmails || []).filter(e => e.threadId !== threadId);
-    saveEntry({ cachedEmails: filtered });
-    renderEmailsFromData(filtered);
-  };
+  // Apply ignore-list filter at render time (render-path enforcement for ignored senders)
+  const ignoreList = new Set((entry.emailSenderIgnoreList || []).map(a => a.toLowerCase()));
+  const visibleEmails = ignoreList.size
+    ? emails.filter(e => {
+        const addr = (e.from || '').match(/<([^>]+)>/)?.[1]?.toLowerCase() || (e.from || '').toLowerCase();
+        return !ignoreList.has(addr);
+      })
+    : emails;
 
-  listEl.innerHTML = renderEmailThreads(emails, onDelete);
+  if (!visibleEmails.length) {
+    listEl.innerHTML = '<div class="p-empty">No emails for this company.</div>';
+    return;
+  }
+
+  listEl.innerHTML = renderEmailThreads(visibleEmails);
+  // bindThreadToggles handles expand/collapse, kebab menus, and contact chips
   bindThreadToggles(listEl);
-
-  // Bind delete buttons
-  listEl.querySelectorAll('.email-delete-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const tid = btn.dataset.thread;
-      onDelete(tid);
-    });
-  });
 }
 
 function loadHubEmails(forceRefresh) {
