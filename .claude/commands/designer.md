@@ -122,6 +122,8 @@ If Matt says "let me think," "park this," "come back to it," or the session ends
 
 The mockup/proposal link goes at the very top so Matt can't miss it. The timestamp on the heading line tells Matt at a glance whether he's looking at the freshest rendering — critical when he bounces between tabs or returns to a prior thread. Use ISO date + 24-hour time + timezone abbrev (e.g., `rendered 2026-04-19 14:05 PDT`). Same timestamp goes on the issue body's `### 📐 Latest mockup` block (see `feedback_designer_issue_source_of_truth.md`).
 
+**Re-park addendum (iteration cycles only):** When you're re-parking after an iteration round (Matt bounced the item back with feedback, you re-rendered, now parking again), append a `### Changes since last render` section to the verdict comment AND include a dismissible delta banner at the top of the HTML mockup. See [Re-render delta banner](#re-render-delta-banner-only-on-iteration-re-renders) below. First-park comments/mockups stay clean — the delta only applies to re-renders.
+
 **Labels on move:**
 - Apply `review:design` (visual/UI proposal) or `review:strategy` (strategic plan proposal).
 - Keep `blocked:collab` (Designer still owns it; Doer still skips).
@@ -134,8 +136,96 @@ The mockup/proposal link goes at the very top so Matt can't miss it. The timesta
 When Matt opens `/designer <#>` on an item already in Proposed Designs + Mockups, he's resuming with a verdict. Read Matt's most recent reply to your verdict comment, then:
 
 - **"Ship it" / "yes" / "approved" →** move through the finalization path (see Handoff below). Remove `review:*`, remove `blocked:collab`, apply `model:*` + `area:*`, move to **Up Next For The Doer**.
-- **"Iterate: <specific ask>" / "try X" / "change Y" →** acknowledge the ask in a new `**Designer →**` comment, move the item back to **Designer Backlog** (remove the `review:*` label, keep `blocked:collab`), and continue the pair loop next session. Render the revised proposal before Matt responds (same render-first principle).
+- **"Iterate: <specific ask>" / "try X" / "change Y" →** acknowledge the ask in a new `**Designer →**` comment, move the item back to **Designer Backlog** (remove the `review:*` label, keep `blocked:collab`), and continue the pair loop next session. Render the revised proposal before Matt responds (same render-first principle). **On every re-render, the delta banner + `### Changes since last render` section are mandatory** — see [Re-render delta banner](#re-render-delta-banner-only-on-iteration-re-renders) below.
 - **"Let's rethink this entirely" / "scope changed" →** treat as fresh input. Move back to Designer Backlog, remove `review:*`, restart the pair loop with new framing.
+
+## Re-render delta banner (only on iteration re-renders)
+
+**When it applies:** You're resuming a parked item with Matt's iteration feedback and shipping a revised mockup/proposal. First-render mockups stay clean — this protocol only kicks in on re-renders.
+
+**Why:** Without an anchor, Matt has to re-scan the whole mockup and try to remember what he asked for. The banner pins the diff at the top so a re-render resolves in one glance.
+
+**Two surfaces, same content:**
+
+1. **HTML banner at the top of the mockup** — dismissible, visually subordinate to the design.
+2. **`### Changes since last render` section in the `**Designer → Matt (verdict):**` comment** — mirrored content appended below the pinned mockup link, above or replacing the "Question for you" line.
+
+**Content structure (same in both surfaces):**
+
+- **Timestamp** — ISO date + 24h time + TZ abbrev (e.g., `2026-04-19 14:05 PDT`). Matches the verdict comment heading timestamp.
+- **You said:** — quoted snippet of Matt's most recent iteration feedback. One or two lines, verbatim.
+- **Your questions, answered:** — Q → one-line A pairs. **Only present if Matt asked questions in his last message.** Omit the entire block otherwise. Never manufacture questions.
+- **Changes made:** — bulleted Y → Z list tied to Matt's asks. Each bullet names the element and the before/after state.
+- **Pushed back on:** — anything Matt asked for that you deliberately didn't do, with a one-line rationale. Omit the block if nothing was pushed back.
+
+**HTML banner styling (inline CSS, warm + subordinate):**
+
+```html
+<div id="delta-banner" style="
+  position: sticky; top: 0; z-index: 10;
+  background: #fdf8f1;
+  border-left: 3px solid #c48a5f;
+  border-bottom: 1px solid #e8e2d6;
+  padding: 12px 16px 12px 20px;
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 13px;
+  color: #4a3f2f;
+  line-height: 1.5;
+">
+  <button onclick="document.getElementById('delta-banner').style.display='none'"
+    style="float: right; background: none; border: none; font-size: 18px;
+           color: #9a8870; cursor: pointer; line-height: 1; padding: 0 0 0 12px;"
+    aria-label="Dismiss">×</button>
+  <div style="font-weight: 600; margin-bottom: 6px;">
+    What changed · 2026-04-19 14:05 PDT
+  </div>
+  <div style="margin-bottom: 4px;"><strong>You said:</strong> "<em>quoted feedback</em>"</div>
+  <!-- Omit the "Your questions, answered" block if Matt didn't ask questions -->
+  <div style="margin-bottom: 4px;"><strong>Your questions, answered:</strong></div>
+  <ul style="margin: 0 0 6px 20px; padding: 0;">
+    <li>Q: &lt;Matt's question&gt; → A: &lt;one-liner&gt;</li>
+  </ul>
+  <div style="margin-bottom: 4px;"><strong>Changes made:</strong></div>
+  <ul style="margin: 0 0 6px 20px; padding: 0;">
+    <li>Header padding: 16px → 24px</li>
+    <li>Empty-state copy: "No results" → "Nothing saved yet"</li>
+  </ul>
+  <!-- Omit "Pushed back on" block if nothing was declined -->
+  <div style="margin-bottom: 4px;"><strong>Pushed back on:</strong></div>
+  <ul style="margin: 0 0 0 20px; padding: 0;">
+    <li>&lt;ask&gt; — &lt;one-line rationale&gt;</li>
+  </ul>
+</div>
+```
+
+Palette is warm-bg `#fdf8f1`, accent `#c48a5f`, text `#4a3f2f`, muted `#9a8870`. Visually quieter than the mockup — the design stays the hero.
+
+**Comment mirror (markdown):**
+
+Under the existing verdict-comment body, append:
+
+```markdown
+### Changes since last render · 2026-04-19 14:05 PDT
+
+**You said:** "<quoted feedback>"
+
+**Your questions, answered:**
+- Q: <Matt's question> → A: <one-liner>
+
+**Changes made:**
+- Header padding: 16px → 24px
+- Empty-state copy: "No results" → "Nothing saved yet"
+
+**Pushed back on:**
+- <ask> — <one-line rationale>
+```
+
+**Discipline:**
+
+- First-render: NO delta banner, NO `### Changes since last render` section. Mockup and verdict comment stay clean.
+- Every subsequent re-render: BOTH surfaces carry the delta.
+- Never fabricate questions or asks Matt didn't make. Omit empty blocks entirely — do not ship empty headings.
+- The HTML banner is dismissible so Matt can evaluate the design unobstructed; the comment version is persistent in the GitHub thread as a permanent record of the iteration.
 
 ## When subagents are allowed
 
