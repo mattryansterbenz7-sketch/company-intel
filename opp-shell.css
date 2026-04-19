@@ -1,0 +1,466 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   opp-shell.css — Shared header + Next Steps strip styles
+   Loaded by both company.html and opportunity.html, after design-tokens.css.
+   All values reference existing tokens or use hex literals that match token
+   color families (noted inline). Zero text-transform: uppercase.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Shell header container ──────────────────────────────────────────────── */
+.opp-shell-header {
+  padding: 20px 28px 16px;
+  background: var(--ci-bg-raised);
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+
+/* ── Row 1: Identity ─────────────────────────────────────────────────────── */
+.osh-row-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Company logo tile */
+.osh-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ci-radius-sm);
+  object-fit: contain;
+  flex-shrink: 0;
+  background: var(--ci-bg-inset);
+  border: 1px solid var(--ci-border-subtle);
+}
+.osh-logo-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ci-radius-sm);
+  background: var(--ci-bg-inset);
+  border: 1px solid var(--ci-border-subtle);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ci-text-tertiary);
+}
+
+/* Company name */
+.osh-company-name {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ci-text-primary);
+  line-height: 1.2;
+}
+
+/* Role link pill — only when isOpportunity && jobTitle */
+.osh-role-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ci-text-link);           /* #4573D2 */
+  padding: 6px 10px;
+  border-radius: var(--ci-radius-sm);
+  background: rgba(69, 115, 210, 0.06);
+  border: 1px solid rgba(69, 115, 210, 0.14);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  white-space: nowrap;
+}
+.osh-role-link:hover {
+  background: rgba(69, 115, 210, 0.12);
+  border-color: rgba(69, 115, 210, 0.28);
+}
+.osh-role-link svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+
+/* Status cluster — right-aligned */
+.osh-status-cluster {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Stage pill — semantic fill per stageType */
+.osh-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: var(--ci-radius-full);
+  white-space: nowrap;
+  cursor: default;
+}
+.osh-stage-pill .osh-stage-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Stage types: amber = outreach/pending; coral = active/my-court; gray = dormant;
+   teal = closed-won; muted-red = closed-lost */
+.osh-stage-pill.osh-stage-outreach {
+  background: rgba(245, 166, 35, 0.12);    /* amber tint — pending-their-action */
+  color: #8E5C00;
+  border: 1px solid rgba(245, 166, 35, 0.24);
+}
+.osh-stage-pill.osh-stage-outreach .osh-stage-dot { background: #F5A623; }
+
+.osh-stage-pill.osh-stage-active-my-court {
+  background: rgba(252, 99, 107, 0.10);    /* coral tint — my-court-active */
+  color: #A63246;
+  border: 1px solid rgba(252, 99, 107, 0.22);
+}
+.osh-stage-pill.osh-stage-active-my-court .osh-stage-dot { background: #FC636B; }
+
+.osh-stage-pill.osh-stage-active-their-court {
+  background: rgba(245, 166, 35, 0.12);    /* amber = active but their court */
+  color: #8E5C00;
+  border: 1px solid rgba(245, 166, 35, 0.24);
+}
+.osh-stage-pill.osh-stage-active-their-court .osh-stage-dot { background: #F5A623; }
+
+.osh-stage-pill.osh-stage-dormant {
+  background: #EBEDF0;                     /* neutral gray — dormant */
+  color: #6F7782;
+  border: 1px solid var(--ci-border-default);
+}
+.osh-stage-pill.osh-stage-dormant .osh-stage-dot { background: #8A8E94; }
+
+.osh-stage-pill.osh-stage-won {
+  background: rgba(54, 179, 126, 0.12);    /* teal — closed-won */
+  color: #1B7E53;
+  border: 1px solid rgba(54, 179, 126, 0.24);
+}
+.osh-stage-pill.osh-stage-won .osh-stage-dot { background: #36B37E; }
+
+.osh-stage-pill.osh-stage-lost {
+  background: rgba(232, 56, 79, 0.08);     /* muted red — closed-lost */
+  color: #8A2734;
+  border: 1px solid rgba(232, 56, 79, 0.16);
+}
+.osh-stage-pill.osh-stage-lost .osh-stage-dot { background: #E8384F; }
+
+/* Action chip — court-aware border tint */
+.osh-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--ci-radius-sm);
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  color: var(--ci-text-secondary);
+  white-space: nowrap;
+  cursor: default;
+}
+.osh-action-chip .osh-action-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ci-border-strong);
+  flex-shrink: 0;
+}
+.osh-action-chip.osh-my-court {
+  border-color: rgba(54, 179, 126, 0.32);  /* teal border */
+}
+.osh-action-chip.osh-my-court .osh-action-dot { background: #36B37E; }
+
+.osh-action-chip.osh-their-court {
+  border-color: rgba(245, 166, 35, 0.32);  /* amber border */
+}
+.osh-action-chip.osh-their-court .osh-action-dot { background: #F5A623; }
+
+/* Score chip — 20px number, spectrum-colored */
+.osh-score-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--ci-radius-sm);
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+}
+.osh-score-num {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+/* Score spectrum colors per feedback_score_color_spectrum memory:
+   ≥7.5 green / 6.0–7.4 amber / 4.5–5.9 orange / <4.5 red */
+.osh-score-num.osh-score-green  { color: #1B7E53; }   /* ≥7.5 */
+.osh-score-num.osh-score-amber  { color: #B3791A; }   /* 6.0–7.4 */
+.osh-score-num.osh-score-orange { color: #C85A1A; }   /* 4.5–5.9 */
+.osh-score-num.osh-score-red    { color: #B83249; }   /* <4.5 */
+
+.osh-score-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ci-text-secondary);
+}
+
+/* ── Row 2: Company blurb ─────────────────────────────────────────────────── */
+.osh-row-blurb {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #4A4E54;                         /* slightly warmer than text-secondary */
+  max-width: 820px;
+  line-height: 1.55;
+}
+.osh-blurb-text { display: inline; }
+
+.osh-blurb-more-btn {
+  display: inline;
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ci-text-link);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: color var(--motion-xs) var(--ease-out);
+}
+.osh-blurb-more-btn:hover { text-decoration: underline; }
+
+.osh-blurb-expanded {
+  display: none;
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--ci-bg-inset);
+  border-left: 2px solid var(--ci-border-default);
+  border-radius: 0 var(--ci-radius-sm) var(--ci-radius-sm) 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ci-text-secondary);
+  max-width: 820px;
+}
+.osh-blurb-expanded.osh-blurb-open { display: block; }
+
+/* ── Row 3: Data chips + actions ─────────────────────────────────────────── */
+.osh-row-data {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.osh-data-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--ci-radius-sm);
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  color: var(--ci-text-secondary);
+}
+.osh-data-chip svg {
+  width: 13px;
+  height: 13px;
+  stroke: var(--ci-text-tertiary);
+  fill: none;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+.osh-data-chip .osh-dc-val {
+  font-weight: 600;
+  color: var(--ci-text-primary);
+}
+.osh-data-chip .osh-dc-sep {
+  color: var(--ci-border-strong);
+}
+
+/* Recent funding tint (within 12 months) */
+.osh-data-chip.osh-funding-recent {
+  background: rgba(54, 179, 126, 0.06);
+  border-color: rgba(54, 179, 126, 0.22);
+  color: #1B7E53;
+}
+.osh-data-chip.osh-funding-recent svg { stroke: #1B7E53; }
+.osh-data-chip.osh-funding-recent .osh-dc-val { color: #1B7E53; }
+
+/* Actions cluster — right-aligned in row-data */
+.osh-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.osh-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ci-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ci-radius-sm);
+  cursor: pointer;
+  transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  font-family: inherit;
+}
+.osh-ghost-btn:hover {
+  background: var(--ci-bg-inset);
+  color: var(--ci-text-primary);
+  border-color: var(--ci-border-default);
+}
+.osh-ghost-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+}
+
+/* ── Next Steps strip ────────────────────────────────────────────────────── */
+.osh-next-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 24px;
+  align-items: start;
+  padding: 14px 28px;
+  background: #FAFBFC;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+
+/* Cell base */
+.osh-ns-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* "Next" cell — coral left border accent */
+.osh-ns-cell.osh-ns-next {
+  border-left: 3px solid var(--ci-accent-primary);
+  padding-left: 14px;
+}
+
+/* Cell label — sentence case, no uppercase */
+.osh-ns-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ci-text-secondary);
+  line-height: 1;
+}
+.osh-ns-cell.osh-ns-next .osh-ns-label {
+  color: var(--ci-accent-primary);       /* coral for "Next" */
+}
+
+/* Content row */
+.osh-ns-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.osh-ns-what {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ci-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.osh-ns-when {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ci-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.osh-ns-cell.osh-ns-next .osh-ns-when {
+  color: #B03843;                         /* darker coral for date emphasis */
+  font-weight: 600;
+}
+
+/* Empty/missing state within a cell */
+.osh-ns-empty {
+  font-size: 12.5px;
+  color: var(--ci-text-tertiary);
+  font-style: italic;
+}
+
+/* "Prep with Coop" CTA button */
+.osh-ns-cta-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.osh-prep-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ci-accent-primary);
+  background: transparent;
+  border: 1.5px solid var(--ci-accent-primary);
+  border-radius: var(--ci-radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  white-space: nowrap;
+}
+.osh-prep-btn:hover {
+  background: var(--ci-accent-primary);
+  color: #fff;
+}
+.osh-prep-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+/* Pipeline-closed / no-next states */
+.osh-ns-closed-state {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--ci-text-tertiary);
+  font-style: italic;
+  text-align: center;
+  padding: 4px 0;
+}
+.osh-ns-no-next-cta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}

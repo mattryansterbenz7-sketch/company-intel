@@ -601,11 +601,7 @@ function stageColor(key, stages) {
 // ── Header ─────────────────────────────────────────────────────────────────
 
 function renderHeader() {
-  const faviconDomain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  const favicon = faviconDomain
-    ? `<img class="hdr-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" onerror="this.style.display='none'">`
-    : '';
-
+  // ── Dark nav bar — navigation controls only ──────────────────────────
   const statusColor = stageColor(entry.status || 'co_watchlist', customCompanyStages);
   const statusOptions = customCompanyStages.map(s =>
     `<option value="${s.key}" ${(entry.status || 'co_watchlist') === s.key ? 'selected' : ''}>${s.label}</option>`
@@ -627,7 +623,6 @@ function renderHeader() {
   hdr.innerHTML = `
     <a href="saved.html" style="text-decoration:none;font-size:14px;font-weight:700;color:#f1f5f9;letter-spacing:-0.01em;margin-right:4px">Company<span style="color:#FF7A59">Intel</span></a>
     <div class="hdr-divider"></div>
-    ${favicon}
     <input class="hdr-name-input" id="hdr-name" value="${nameVal}" placeholder="Company name">
     ${entry.isOpportunity
       ? `<div class="hdr-stage-group" style="margin-left:8px"><select class="hdr-status" id="hdr-opp-stage" style="border-color:${oppStageColor}66;color:${oppStageColor}">${oppStageOptions}</select></div>`
@@ -647,6 +642,9 @@ function renderHeader() {
 
   document.getElementById('hdr-back')?.addEventListener('click', () => window.close());
 
+  // ── Shell header (v2) — white identity block with new design ────────
+  _renderShellHeader();
+
   // Editable company name
   const nameInput = document.getElementById('hdr-name');
   nameInput?.addEventListener('blur', () => {
@@ -663,6 +661,7 @@ function renderHeader() {
     const c = stageColor(sel.value, customCompanyStages);
     sel.style.borderColor = c + '66'; sel.style.color = c;
     saveEntry({ status: sel.value });
+    _renderShellHeader();
   });
 
   // Canonical stage-change handler — called from the header select AND footer action buttons
@@ -695,6 +694,8 @@ function renderHeader() {
     // Fire celebration if configured
     const celebCfg = _getCelebrationConfig(newStage);
     if (celebCfg) _fireCelebration({ ...celebCfg, stageKey: newStage });
+    // Refresh the shell header so stage pill + next steps reflect new stage
+    _renderShellHeader();
     // Auto-rescore on stage transition — unified scoring picks up all accumulated context
     if (newStage !== 'rejected' && entry.isOpportunity) {
       maybeRescore('stage_transition');
@@ -710,6 +711,7 @@ function renderHeader() {
       const val = parseInt(btn.dataset.val);
       saveEntry({ rating: val });
       document.querySelectorAll('.hdr-star').forEach((s, i) => s.classList.toggle('filled', i < val));
+      _renderShellHeader();
     });
   });
 
@@ -844,6 +846,28 @@ function renderHeader() {
       window.location.reload();
     }, 1500);
   });
+}
+
+// ── Shell header (v2) renderer ─────────────────────────────────────────────
+// Populates #co-shell-header-wrap with the shared opp-shell header + next steps.
+// Called from renderHeader() and any time entry data changes that affects the shell.
+
+function _renderShellHeader() {
+  const wrap = document.getElementById('co-shell-header-wrap');
+  if (!wrap) return;
+  // renderOppShellHeader and renderNextStepsStrip come from opp-shell.js (loaded before company.js)
+  if (typeof renderOppShellHeader !== 'function') return;
+
+  const stages = entry.isOpportunity ? customOpportunityStages : customCompanyStages;
+  const headerHtml = renderOppShellHeader(entry, { stages });
+  const nextStepsHtml = (typeof renderNextStepsStrip === 'function')
+    ? renderNextStepsStrip(entry, { stages })
+    : '';
+
+  wrap.innerHTML = headerHtml + nextStepsHtml;
+
+  // Bind shell header interactivity (blurb toggle, Prep with Coop CTA)
+  if (typeof bindOppShellEvents === 'function') bindOppShellEvents(wrap);
 }
 
 function commitUrl(field, val) {
@@ -2876,6 +2900,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         Object.assign(entry, fresh);
         const fitBlock = document.getElementById('hub-fit-block');
         if (fitBlock) fitBlock.innerHTML = buildFitSection();
+        // Refresh shell header so score chip reflects new score
+        _renderShellHeader();
       }
     });
     sendResponse({ ok: true });
