@@ -589,7 +589,16 @@
               <button class="action-btn">Archive</button>
               <button class="action-btn">Mark unread</button>
               <div class="action-btn-spacer"></div>
-              <button class="action-btn" style="color: var(--ci-accent-primary); border-color: rgba(252,99,107,0.24);">Remove this sender</button>
+              <div style="position: relative; display: inline-flex;">
+                <button class="action-btn" style="color: var(--ci-accent-primary); border-color: rgba(252,99,107,0.24); display: flex; align-items: center; gap: 5px;">
+                  Remove ⋯
+                </button>
+                <div style="position: absolute; top: calc(100% + 4px); right: 0; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.10); min-width: 220px; z-index: 10; overflow: hidden;">
+                  <button style="display: block; width: 100%; text-align: left; font-size: 12px; font-weight: 500; padding: 10px 14px; background: none; border: none; cursor: pointer; color: var(--ci-text-primary); font-family: inherit;" onmouseover="this.style.background='var(--ci-bg-inset)'" onmouseout="this.style.background='none'">Remove this email</button>
+                  <div style="height: 1px; background: var(--ci-border-subtle); margin: 0 10px;"></div>
+                  <button style="display: block; width: 100%; text-align: left; font-size: 12px; font-weight: 500; padding: 10px 14px; background: none; border: none; cursor: pointer; color: var(--ci-accent-primary); font-family: inherit;" onmouseover="this.style.background='var(--ci-bg-inset)'" onmouseout="this.style.background='none'">Remove all emails from this sender</button>
+                </div>
+              </div>
             </div>
 
             <!-- Contact chips -->
@@ -857,7 +866,16 @@
           <button class="action-btn">Archive</button>
           <button class="action-btn">Mark unread</button>
           <div class="action-btn-spacer"></div>
-          <button class="action-btn" style="color: var(--ci-accent-primary); border-color: rgba(252,99,107,0.24);">Remove this sender</button>
+          <div style="position: relative; display: inline-flex;">
+            <button class="action-btn" style="color: var(--ci-accent-primary); border-color: rgba(252,99,107,0.24); display: flex; align-items: center; gap: 5px;">
+              Remove ⋯
+            </button>
+            <div style="position: absolute; top: calc(100% + 4px); right: 0; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.10); min-width: 220px; z-index: 10; overflow: hidden;">
+              <button style="display: block; width: 100%; text-align: left; font-size: 12px; font-weight: 500; padding: 10px 14px; background: none; border: none; cursor: pointer; color: var(--ci-text-primary); font-family: inherit;">Remove this email</button>
+              <div style="height: 1px; background: var(--ci-border-subtle); margin: 0 10px;"></div>
+              <button style="display: block; width: 100%; text-align: left; font-size: 12px; font-weight: 500; padding: 10px 14px; background: none; border: none; cursor: pointer; color: var(--ci-accent-primary); font-family: inherit;">Remove all emails from this sender</button>
+            </div>
+          </div>
         </div>
 
         <div class="contact-chips">
@@ -925,7 +943,7 @@
   </div>
 
   <ul class="anno-list" style="margin-top: 18px; list-style: none; padding-left: 0;">
-    <li><strong>Action bar (top)</strong> — <code>Reply in Gmail ↗</code> is the one primary (dark button). Archive / Mark unread are ghost. Remove this sender gets a coral tint to flag destructiveness.</li>
+    <li><strong>Action bar (top)</strong> — <code>Reply in Gmail ↗</code> is the one primary (dark button). Archive / Mark unread are ghost. <strong>Remove ⋯</strong> gets a coral tint and opens a two-item dropdown: "Remove this email" and "Remove all emails from this sender."</li>
     <li><strong>Contact chips</strong> — all thread participants listed with 18px avatar + name. When a participant isn't in <code>knownContacts</code>, a dashed <code>+ Add [Name] to contacts</code> chip appears (hover fills in solid + coral).</li>
     <li><strong>Messages</strong> — chronological, oldest at bottom on first expand (newest first mode). Each: sender avatar + name + route + timestamp; body at 13px / line-height 1.65; max-width 640px so lines don't sprawl.</li>
     <li><strong>Quoted content</strong> — rolled into a small <code>▸ Show N quoted messages</code> pill. Click to inline expand.</li>
@@ -1163,6 +1181,10 @@ rob@topo.io
   <strong>Dependencies:</strong>
   Body rendering upgrade (#section 4) is a parser-only fix and can ship independently of the layout changes. Meeting cross-ref pill (#section 5) requires <code>cachedMeetings</code> to already be populated — should only ship after #262 Meetings tab lands. Contact surfacing (#section 6) writes to the existing <code>knownContacts[]</code> shape — no migration.
 </div>
+
+<p class="frame-caption" style="margin-top: 14px; font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.5; max-width: 620px;">
+  <strong style="color: var(--ci-text-primary);">Remove all from sender:</strong> misassociation rarely affects a single email — it usually affects every email from a given sender (newsletters, no-reply threads, unrelated automated emails). The bulk action makes cleanup one click instead of N.
+</p>
 
 </body>
 </html>
