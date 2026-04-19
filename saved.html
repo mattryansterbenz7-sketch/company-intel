@@ -877,6 +877,54 @@
     .task-composer-save:hover { background: var(--ci-accent-primary-hover); }
     .task-composer-cancel { background: none; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 6px 12px; font-size: 12px; color: var(--ci-text-tertiary); cursor: pointer; font-family: inherit; transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); }
     .task-composer-cancel:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+    /* ── Task inline-edit additions ── */
+    /* Ghost labels that reveal editable fields */
+    .task-row .task-no-company { font-size: 11.5px; color: var(--ci-text-tertiary); opacity: 0; cursor: pointer; transition: opacity var(--motion-xs) var(--ease-out); }
+    .task-row:hover .task-no-company { opacity: 0.5; }
+    .task-row .task-no-company:hover { opacity: 1; color: var(--ci-accent-primary); }
+    .task-row .task-no-date { font-size: 11.5px; color: var(--ci-text-tertiary); opacity: 0; cursor: pointer; transition: opacity var(--motion-xs) var(--ease-out); }
+    .task-row:hover .task-no-date { opacity: 0.5; }
+    .task-row .task-no-date:hover { opacity: 1; color: var(--ci-accent-primary); }
+    /* Editable company chip — reveal underline on hover */
+    .task-company-editable { cursor: pointer; }
+    .task-company-editable:hover { text-decoration: underline; color: var(--ci-text-secondary); }
+    /* Editable due label */
+    .task-due-editable { cursor: pointer; }
+    .task-due-editable:hover { text-decoration: underline; }
+    /* Inline company select */
+    .task-edit-company-select { font-size: 12px; border: 1.5px solid var(--ci-accent-primary); border-radius: var(--ci-radius-sm); padding: 2px 6px; color: var(--ci-text-primary); font-family: inherit; outline: none; background: var(--ci-bg-raised); }
+    /* Trash icon — always in actions area, only shows on row hover */
+    .task-trash { font-size: 13px; }
+    .task-act-btn.task-trash:hover { color: var(--ci-accent-red); background: var(--ci-accent-red-soft); }
+    /* Undo banner — fixed to bottom of tasks column, slides up */
+    .activity-tasks-col { position: relative; }
+    .task-undo-banner {
+      position: absolute; bottom: -8px; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 9px 14px;
+      background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+      border-radius: var(--ci-radius-md);
+      box-shadow: var(--ci-shadow-md);
+      font-size: 12.5px; font-weight: 500;
+      opacity: 0; transform: translateY(6px);
+      transition: opacity var(--motion-sm) var(--ease-out), transform var(--motion-sm) var(--ease-out);
+      pointer-events: none; z-index: 20;
+    }
+    .task-undo-banner.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .task-undo-btn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+      color: var(--ci-text-on-dark); border-radius: var(--ci-radius-sm);
+      padding: 3px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
+      font-family: inherit; transition: background var(--motion-xs) var(--ease-out);
+      white-space: nowrap;
+    }
+    .task-undo-btn:hover { background: rgba(255,255,255,0.25); }
+    /* Undo banner in Tasks full-view (#tasks-view) — flows inline at bottom */
+    #tasks-view { position: relative; }
+    #tasks-view .task-undo-banner {
+      position: relative; bottom: auto; left: auto; right: auto;
+      margin-top: 12px;
+    }
     /* ── Narrow viewport stack ── */
     @media (max-width: 1100px) {
       .activity-body-split { grid-template-columns: 1fr; }
@@ -1660,6 +1708,13 @@
                   color var(--motion-xs) var(--ease-out);
     }
     .smt-del:hover { opacity: 1; color: var(--ci-accent-red); }
+    /* Undo banner inside smt-section — flows inline */
+    .smt-section .task-undo-banner {
+      position: relative; bottom: auto; left: auto; right: auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 7px 12px; margin-top: 8px;
+      font-size: 12px;
+    }
     .smt-add {
       display: flex; gap: 6px; align-items: center;
       padding: 8px 0 2px; margin-top: 4px;

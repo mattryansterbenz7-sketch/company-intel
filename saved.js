@@ -565,6 +565,42 @@ function renderModalTasks(entry, tasks) {
   </div>`;
 }
 
+let _smtUndoTimer = null;
+
+function showSmtUndoBanner(entry, deletedTask, remainingTasks) {
+  const section = document.getElementById('smt-section');
+  if (!section) return;
+  const existing = section.querySelector('.task-undo-banner');
+  if (existing) existing.remove();
+  if (_smtUndoTimer) { clearTimeout(_smtUndoTimer); _smtUndoTimer = null; }
+
+  const banner = document.createElement('div');
+  banner.className = 'task-undo-banner smt-undo';
+  banner.innerHTML = `<span>Task deleted</span><button class="task-undo-btn">Undo</button>`;
+  section.appendChild(banner);
+
+  requestAnimationFrame(() => banner.classList.add('visible'));
+
+  banner.querySelector('.task-undo-btn').addEventListener('click', () => {
+    if (_smtUndoTimer) { clearTimeout(_smtUndoTimer); _smtUndoTimer = null; }
+    banner.remove();
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      if (!tasks.find(x => x.id === deletedTask.id)) tasks.push(deletedTask);
+      chrome.storage.local.set({ userTasks: tasks }, () => {
+        const sec = document.getElementById('smt-section');
+        if (sec) { sec.outerHTML = renderModalTasks(entry, tasks); attachModalTaskHandlers(entry); }
+      });
+    });
+  });
+
+  _smtUndoTimer = setTimeout(() => {
+    banner.classList.remove('visible');
+    setTimeout(() => banner.remove(), 200);
+    _smtUndoTimer = null;
+  }, 5000);
+}
+
 function attachModalTaskHandlers(entry) {
   // Toggle expand/collapse
   document.getElementById('smt-toggle')?.addEventListener('click', () => {
@@ -626,16 +662,20 @@ function attachModalTaskHandlers(entry) {
       if (check) {
         const task = tasks.find(t => t.id === taskId);
         if (task) task.completed = !task.completed;
+        chrome.storage.local.set({ userTasks: tasks }, () => {
+          const section = document.getElementById('smt-section');
+          if (section) { section.outerHTML = renderModalTasks(entry, tasks); attachModalTaskHandlers(entry); }
+        });
       } else if (del) {
-        tasks = tasks.filter(t => t.id !== taskId);
+        const deletedTask = tasks.find(t => t.id === taskId);
+        if (!deletedTask) return;
+        const remaining = tasks.filter(t => t.id !== taskId);
+        chrome.storage.local.set({ userTasks: remaining }, () => {
+          const section = document.getElementById('smt-section');
+          if (section) { section.outerHTML = renderModalTasks(entry, remaining); attachModalTaskHandlers(entry); }
+          showSmtUndoBanner(entry, deletedTask, remaining);
+        });
       }
-      chrome.storage.local.set({ userTasks: tasks }, () => {
-        const section = document.getElementById('smt-section');
-        if (section) {
-          section.outerHTML = renderModalTasks(entry, tasks);
-          attachModalTaskHandlers(entry);
-        }
-      });
     });
   });
 }
@@ -3902,7 +3942,37 @@ function taskDateLabel(dateStr) {
   return { text: `in ${diff}d`, cls: 'upcoming' };
 }
 
-function renderTasksView() {
+let _tasksViewUndoTimer = null;
+
+function showTasksViewUndoBanner(container, deletedTask) {
+  const existing = container.querySelector('.task-undo-banner');
+  if (existing) existing.remove();
+  if (_tasksViewUndoTimer) { clearTimeout(_tasksViewUndoTimer); _tasksViewUndoTimer = null; }
+
+  const banner = document.createElement('div');
+  banner.className = 'task-undo-banner';
+  banner.innerHTML = `<span>Task deleted</span><button class="task-undo-btn">Undo</button>`;
+  container.appendChild(banner);
+
+  requestAnimationFrame(() => banner.classList.add('visible'));
+
+  banner.querySelector('.task-undo-btn').addEventListener('click', () => {
+    if (_tasksViewUndoTimer) { clearTimeout(_tasksViewUndoTimer); _tasksViewUndoTimer = null; }
+    banner.remove();
+    loadTasks(all => {
+      if (!all.find(x => x.id === deletedTask.id)) all.push(deletedTask);
+      saveTasks(all, () => renderTasksView());
+    });
+  });
+
+  _tasksViewUndoTimer = setTimeout(() => {
+    banner.classList.remove('visible');
+    setTimeout(() => banner.remove(), 200);
+    _tasksViewUndoTimer = null;
+  }, 5000);
+}
+
+function renderTasksView(onRendered) {
   const container = document.getElementById('tasks-view');
   if (!container) return;
 
@@ -3957,6 +4027,8 @@ function renderTasksView() {
         </div>`;
       }).join('') || '<div style="text-align:center;color:#7c98b6;padding:40px;font-size:13px;">No tasks yet — click "+ New Task" to add one</div>'}</div>`;
 
+    if (typeof onRendered === 'function') onRendered();
+
     // Wire events
     container.querySelector('#task-add-btn')?.addEventListener('click', () => showTaskForm());
     container.querySelectorAll('.task-filter-btn').forEach(btn => {
@@ -3975,7 +4047,11 @@ function renderTasksView() {
       btn.addEventListener('click', () => {
         const id = btn.dataset.taskId;
         loadTasks(tasks => {
-          saveTasks(tasks.filter(t => t.id !== id), () => renderTasksView());
+          const deletedTask = tasks.find(t => t.id === id);
+          if (!deletedTask) return;
+          saveTasks(tasks.filter(t => t.id !== id), () => {
+            renderTasksView(() => showTasksViewUndoBanner(container, deletedTask));
+          });
         });
       });
     });
@@ -5067,23 +5143,31 @@ function populateActivityTasksPanel(section, start, end) {
     }
     const dueCls = overdue ? 'overdue' : isToday ? 'today' : '';
     const rowCls = ['task-row', overdue ? 'overdue' : '', t.completed ? 'done' : '', unreviewed ? 'has-source-dot' : ''].filter(Boolean).join(' ');
+    // Company and due-date elements get data-task-id so inline-edit clicks can find the task
+    const companyHtml = t.company
+      ? `<span class="task-company task-company-editable" data-task-id="${t.id}" data-company="${escHtml(t.company)}" title="Click to change company">${escHtml(t.company)}</span>`
+      : `<span class="task-company task-no-company task-company-editable" data-task-id="${t.id}" title="Click to add company">+ company</span>`;
+    const dueHtml = dueLabel
+      ? `<span class="task-due ${dueCls} task-due-editable" data-task-id="${t.id}" data-due="${escHtml(t.dueDate || '')}" title="Click to change date">${dueLabel}</span>`
+      : `<span class="task-no-date task-due-editable" data-task-id="${t.id}" data-due="" title="Click to set date">+ date</span>`;
     return `<div class="${rowCls}" data-task-id="${t.id}">
       ${unreviewed ? '<div class="task-source-dot" title="Suggested from email"></div>' : ''}
       <div class="task-check" data-check="${t.id}" title="${t.completed ? 'Mark incomplete' : 'Mark complete'}">${t.completed ? '&#10003;' : ''}</div>
       <div class="task-body">
-        <div class="task-text" data-field="text">${escHtml(t.text)}</div>
+        <div class="task-text task-text-editable" data-task-id="${t.id}">${escHtml(t.text)}</div>
         <div class="task-meta">
-          ${t.company ? `<span class="task-company" data-company="${escHtml(t.company)}">${escHtml(t.company)}</span>` : ''}
+          ${companyHtml}
           ${(t.company && dueLabel) ? '<span class="task-meta-sep">·</span>' : ''}
-          ${dueLabel ? `<span class="task-due ${dueCls}">${dueLabel}</span>` : ''}
+          ${dueHtml}
           ${unreviewed ? `<span class="task-review"><a class="task-keep" href="#" data-task-id="${t.id}">keep</a><span class="task-meta-sep">·</span><a class="task-dismiss" href="#" data-task-id="${t.id}">dismiss</a></span>` : ''}
         </div>
       </div>
-      ${!t.completed && !unreviewed ? `<div class="task-actions">
-        <button class="task-act-btn task-snooze" data-task-id="${t.id}" title="Snooze 1 day">&#9201;</button>
-        <button class="task-act-btn task-open" data-task-id="${t.id}" title="Open company">&#8599;</button>
-        <button class="task-act-btn task-more" data-task-id="${t.id}" title="More">&#8943;</button>
-      </div>` : ''}
+      <div class="task-actions">
+        ${!t.completed && !unreviewed ? `
+          <button class="task-act-btn task-snooze" data-task-id="${t.id}" title="Snooze 1 day">&#9201;</button>
+          <button class="task-act-btn task-open" data-task-id="${t.id}" title="Open company">&#8599;</button>` : ''}
+        <button class="task-act-btn task-trash" data-task-id="${t.id}" title="Delete task">&#128465;</button>
+      </div>
     </div>`;
   }
 
@@ -5161,6 +5245,9 @@ function populateActivityTasksPanel(section, start, end) {
     if (list.dataset.wired) return;
     list.dataset.wired = '1';
     list.addEventListener('click', e => {
+      // Skip clicks that land on an active inline edit widget
+      if (e.target.closest('[data-task-edit]')) return;
+
       // task-keep
       const keepBtn = e.target.closest('.task-keep');
       if (keepBtn) {
@@ -5211,88 +5298,28 @@ function populateActivityTasksPanel(section, start, end) {
         });
         return;
       }
-      // task-more (inline dropdown: edit / reschedule / delete)
-      const moreBtn = e.target.closest('.task-more');
-      if (moreBtn) {
+      // task-trash — delete with undo banner
+      const trashBtn = e.target.closest('.task-trash');
+      if (trashBtn) {
         e.stopPropagation();
-        const existing = list.querySelector('.task-more-menu');
-        if (existing) { existing.remove(); return; }
-        const id = moreBtn.dataset.taskId;
-        const menu = document.createElement('div');
-        menu.className = 'task-more-menu';
-        menu.innerHTML = `<button class="task-more-item" data-action="edit" data-task-id="${id}">Edit</button>
-          <button class="task-more-item" data-action="reschedule" data-task-id="${id}">Reschedule</button>
-          <button class="task-more-item task-more-delete" data-action="delete" data-task-id="${id}">Delete</button>`;
-        // Position below the button
-        const rect = moreBtn.getBoundingClientRect();
-        const listRect = list.getBoundingClientRect();
-        menu.style.cssText = `position:absolute;top:${rect.bottom - listRect.top + 4}px;right:0;z-index:100;`;
-        list.style.position = 'relative';
-        list.appendChild(menu);
-        const closeMenu = ev => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
-        setTimeout(() => document.addEventListener('click', closeMenu), 0);
-        return;
-      }
-      // task-more-item actions
-      const moreItem = e.target.closest('.task-more-item');
-      if (moreItem) {
-        const action = moreItem.dataset.action;
-        const id = moreItem.dataset.taskId;
-        moreItem.closest('.task-more-menu')?.remove();
-        if (action === 'delete') {
-          loadTasks(all => saveTasks(all.filter(t => t.id !== id), () => populateActivityTasksPanel(section, start, end)));
-        } else if (action === 'edit' || action === 'reschedule') {
-          // Open the inline edit via the task text or date field
-          const taskRow = list.querySelector(`.task-row[data-task-id="${id}"]`);
-          if (taskRow) {
-            const field = action === 'reschedule' ? 'task-due' : 'task-text';
-            // For reschedule, trigger inline date editing
-            loadTasks(all => {
-              const t = all.find(x => x.id === id);
-              if (!t) return;
-              if (action === 'reschedule') {
-                const dateInput = document.createElement('input');
-                dateInput.type = 'date';
-                dateInput.className = 'task-edit-date';
-                dateInput.value = t.dueDate || '';
-                dateInput.setAttribute('data-task-edit', '');
-                const dueLbl = taskRow.querySelector('.task-due');
-                if (dueLbl) {
-                  let saved = false;
-                  const save = () => { if (saved) return; saved = true; t.dueDate = dateInput.value || null; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); };
-                  dateInput.addEventListener('change', save);
-                  dateInput.addEventListener('blur', () => setTimeout(() => { if (!saved) save(); }, 200));
-                  dateInput.addEventListener('keydown', ev => { if (ev.key === 'Escape') { saved = true; populateActivityTasksPanel(section, start, end); ev.preventDefault(); } });
-                  dueLbl.replaceWith(dateInput);
-                  dateInput.focus();
-                }
-              } else {
-                // Edit text
-                const textEl = taskRow.querySelector('.task-text');
-                if (textEl) {
-                  const inp = document.createElement('input');
-                  inp.type = 'text';
-                  inp.className = 'task-edit-input';
-                  inp.value = t.text;
-                  inp.setAttribute('data-task-edit', '');
-                  const save = () => { const v = inp.value.trim(); if (v && v !== t.text) { t.text = v; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); } else { populateActivityTasksPanel(section, start, end); } };
-                  inp.addEventListener('blur', save);
-                  inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { save(); ev.preventDefault(); } else if (ev.key === 'Escape') { populateActivityTasksPanel(section, start, end); ev.preventDefault(); } });
-                  textEl.replaceWith(inp);
-                  inp.focus(); inp.select();
-                }
-              }
-            });
-          }
-        }
+        const id = trashBtn.dataset.taskId;
+        loadTasks(all => {
+          const idx = all.findIndex(x => x.id === id);
+          if (idx === -1) return;
+          const deletedTask = all[idx];
+          const remaining = all.filter(x => x.id !== id);
+          saveTasks(remaining, () => {
+            populateActivityTasksPanel(section, start, end);
+            showTaskUndoBanner(section, start, end, deletedTask, remaining);
+          });
+        });
         return;
       }
       // task-text inline edit (click on title)
-      const textEl = e.target.closest('.task-text');
-      if (textEl && !e.target.closest('[data-task-edit]')) {
-        const taskRow = textEl.closest('.task-row');
-        const id = taskRow?.dataset.taskId;
-        if (id) {
+      const textEl = e.target.closest('.task-text-editable');
+      if (textEl) {
+        const id = textEl.dataset.taskId;
+        if (id && !textEl.querySelector('input')) {
           loadTasks(all => {
             const t = all.find(x => x.id === id);
             if (!t) return;
@@ -5301,11 +5328,104 @@ function populateActivityTasksPanel(section, start, end) {
             inp.className = 'task-edit-input';
             inp.value = t.text;
             inp.setAttribute('data-task-edit', '');
-            const save = () => { const v = inp.value.trim(); if (v && v !== t.text) { t.text = v; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); } else { populateActivityTasksPanel(section, start, end); } };
+            let done = false;
+            const save = () => {
+              if (done) return; done = true;
+              inp.removeEventListener('blur', save);
+              const v = inp.value.trim();
+              if (v && v !== t.text) { t.text = v; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); }
+              else populateActivityTasksPanel(section, start, end);
+            };
             inp.addEventListener('blur', save);
-            inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { save(); ev.preventDefault(); } else if (ev.key === 'Escape') { populateActivityTasksPanel(section, start, end); ev.preventDefault(); } });
+            inp.addEventListener('keydown', ev => {
+              if (ev.key === 'Enter') { save(); ev.preventDefault(); }
+              else if (ev.key === 'Escape') { done = true; inp.removeEventListener('blur', save); populateActivityTasksPanel(section, start, end); ev.preventDefault(); }
+            });
             textEl.replaceWith(inp);
             inp.focus(); inp.select();
+          });
+        }
+        return;
+      }
+      // task-company-editable — inline company picker
+      const companyEl = e.target.closest('.task-company-editable');
+      if (companyEl) {
+        const id = companyEl.dataset.taskId;
+        if (id && !companyEl.querySelector('select')) {
+          loadTasks(all => {
+            const t = all.find(x => x.id === id);
+            if (!t) return;
+            const select = document.createElement('select');
+            select.className = 'task-edit-company-select';
+            select.setAttribute('data-task-edit', '');
+            const optNone = document.createElement('option');
+            optNone.value = '';
+            optNone.textContent = 'No company';
+            select.appendChild(optNone);
+            // Preserve current value even if not in allCompanies
+            if (t.company && !allCompanies.some(c => c.company === t.company)) {
+              const opt = document.createElement('option');
+              opt.value = t.company;
+              opt.textContent = t.company + ' (not in pipeline)';
+              opt.selected = true;
+              select.appendChild(opt);
+            }
+            const seen = new Set();
+            allCompanies.filter(c => c.company).forEach(c => {
+              if (seen.has(c.company)) return;
+              seen.add(c.company);
+              const opt = document.createElement('option');
+              opt.value = c.company;
+              opt.textContent = c.company;
+              opt.selected = (t.company === c.company);
+              select.appendChild(opt);
+            });
+            let done = false;
+            const save = () => {
+              if (done) return; done = true;
+              select.removeEventListener('blur', save);
+              const newVal = select.value || null;
+              const origVal = t.company || null;
+              if (newVal !== origVal) { t.company = newVal; saveTasks(all, () => populateActivityTasksPanel(section, start, end)); }
+              else populateActivityTasksPanel(section, start, end);
+            };
+            select.addEventListener('blur', save);
+            select.addEventListener('change', save);
+            select.addEventListener('keydown', ev => {
+              if (ev.key === 'Escape') { done = true; select.removeEventListener('blur', save); populateActivityTasksPanel(section, start, end); ev.preventDefault(); }
+            });
+            companyEl.replaceWith(select);
+            select.focus();
+          });
+        }
+        return;
+      }
+      // task-due-editable — inline date picker
+      const dueEl = e.target.closest('.task-due-editable');
+      if (dueEl) {
+        const id = dueEl.dataset.taskId;
+        if (id && !dueEl.querySelector('input')) {
+          loadTasks(all => {
+            const t = all.find(x => x.id === id);
+            if (!t) return;
+            const dateInput = document.createElement('input');
+            dateInput.type = 'date';
+            dateInput.className = 'task-edit-date';
+            dateInput.value = t.dueDate || '';
+            dateInput.setAttribute('data-task-edit', '');
+            let saved = false;
+            const save = () => {
+              if (saved) return; saved = true;
+              t.dueDate = dateInput.value || null;
+              saveTasks(all, () => populateActivityTasksPanel(section, start, end));
+            };
+            dateInput.addEventListener('change', save);
+            dateInput.addEventListener('blur', () => setTimeout(() => { if (!saved) save(); }, 200));
+            dateInput.addEventListener('keydown', ev => {
+              if (ev.key === 'Escape') { saved = true; populateActivityTasksPanel(section, start, end); ev.preventDefault(); }
+            });
+            dueEl.replaceWith(dateInput);
+            dateInput.focus();
           });
         }
         return;
@@ -5324,6 +5444,45 @@ function populateActivityTasksPanel(section, start, end) {
       }
     });
   });
+}
+
+let _taskUndoTimer = null;
+
+function showTaskUndoBanner(section, start, end, deletedTask, remainingTasks) {
+  // Clear any existing undo banner
+  const existing = section.querySelector('.task-undo-banner');
+  if (existing) existing.remove();
+  if (_taskUndoTimer) { clearTimeout(_taskUndoTimer); _taskUndoTimer = null; }
+
+  const tasksCol = section.querySelector('.activity-tasks-col');
+  if (!tasksCol) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'task-undo-banner';
+  banner.innerHTML = `<span>Task deleted</span><button class="task-undo-btn">Undo</button>`;
+  tasksCol.appendChild(banner);
+
+  // Fade in
+  requestAnimationFrame(() => banner.classList.add('visible'));
+
+  banner.querySelector('.task-undo-btn').addEventListener('click', () => {
+    if (_taskUndoTimer) { clearTimeout(_taskUndoTimer); _taskUndoTimer = null; }
+    banner.remove();
+    // Restore: re-add the deleted task to storage
+    loadTasks(all => {
+      // Only restore if not already present (guard against double-click)
+      if (!all.find(x => x.id === deletedTask.id)) {
+        all.push(deletedTask);
+      }
+      saveTasks(all, () => populateActivityTasksPanel(section, start, end));
+    });
+  });
+
+  _taskUndoTimer = setTimeout(() => {
+    banner.classList.remove('visible');
+    setTimeout(() => banner.remove(), 200);
+    _taskUndoTimer = null;
+  }, 5000);
 }
 
 function showOverviewTaskComposer(section, start, end, list) {

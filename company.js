@@ -1511,13 +1511,44 @@ function rescanAllEmailsForTasks() {
   maybeExtractEmailTasks(cached);
 }
 
+let _companyTaskUndoTimer = null;
+
+function showCompanyTaskUndoBanner(container, deletedTask) {
+  const existing = container.querySelector('.task-undo-banner');
+  if (existing) existing.remove();
+  if (_companyTaskUndoTimer) { clearTimeout(_companyTaskUndoTimer); _companyTaskUndoTimer = null; }
+
+  const banner = document.createElement('div');
+  banner.className = 'task-undo-banner';
+  banner.innerHTML = `<span>Task deleted</span><button class="task-undo-btn">Undo</button>`;
+  container.appendChild(banner);
+
+  requestAnimationFrame(() => banner.classList.add('visible'));
+
+  banner.querySelector('.task-undo-btn').addEventListener('click', () => {
+    if (_companyTaskUndoTimer) { clearTimeout(_companyTaskUndoTimer); _companyTaskUndoTimer = null; }
+    banner.remove();
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      if (!tasks.find(x => x.id === deletedTask.id)) tasks.push(deletedTask);
+      chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+    });
+  });
+
+  _companyTaskUndoTimer = setTimeout(() => {
+    banner.classList.remove('visible');
+    setTimeout(() => banner.remove(), 200);
+    _companyTaskUndoTimer = null;
+  }, 5000);
+}
+
 function initTasksTab() {
   const container = document.getElementById('company-tasks-container');
   if (!container) return;
   renderCompanyTasks();
 }
 
-function renderCompanyTasks() {
+function renderCompanyTasks(onRendered) {
   const container = document.getElementById('company-tasks-container');
   if (!container) return;
   const companyName = entry.company;
@@ -1579,6 +1610,8 @@ function renderCompanyTasks() {
           </div>`;
         }).join('') : '<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No tasks for this company yet</div>'}
       </div>`;
+
+    if (typeof onRendered === 'function') onRendered();
 
     container.querySelector('#company-task-rescan-btn')?.addEventListener('click', () => {
       const btn = container.querySelector('#company-task-rescan-btn');
@@ -1676,8 +1709,12 @@ function renderCompanyTasks() {
       btn.addEventListener('click', () => {
         const id = btn.dataset.taskId;
         chrome.storage.local.get(['userTasks'], d => {
-          const tasks = (d.userTasks || []).filter(t => t.id !== id);
-          chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+          const allTasks = d.userTasks || [];
+          const deletedTask = allTasks.find(t => t.id === id);
+          if (!deletedTask) return;
+          chrome.storage.local.set({ userTasks: allTasks.filter(t => t.id !== id) }, () => {
+            renderCompanyTasks(() => showCompanyTaskUndoBanner(container, deletedTask));
+          });
         });
       });
     });
