@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#258 Notes tab redesign — Coop.ai</title>
+<style>
+  :root {
+    --bg: #F0F2F5;
+    --panel: #FFFFFF;
+    --text: #0A0B0D;
+    --text-sec: #6F7782;
+    --text-ter: #8A8E94;
+    --border: #E0E4E8;
+    --border-sub: #EAECEF;
+    --inset: #EBEDF0;
+    --coral: #FC636B;
+    --coral-soft: rgba(252, 99, 107, 0.08);
+    --teal: #36B37E;
+    --blue: #4573D2;
+    --amber: #F5A623;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ── Header ── */
+  .page-hd {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 32px;
+  }
+  .page-hd .num {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-ter);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .page-hd h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 4px 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .page-hd .prompt {
+    font-size: 14px;
+    color: var(--text-sec);
+    max-width: 760px;
+  }
+
+  /* ── Section framing ── */
+  .section {
+    margin-bottom: 48px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-ter);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+  .section-sub {
+    font-size: 14px;
+    color: var(--text-sec);
+    margin: 0 0 20px;
+    max-width: 720px;
+  }
+  .section-hero { margin-bottom: 16px; }
+
+  /* ══ OPP-SHELL ══ */
+  .shell {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .shell-main {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: 720px;
+    display: flex;
+    flex-direction: column;
+  }
+  .shell-side {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Opp header strip ── */
+  .opp-hd {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border-sub);
+  }
+  .opp-hd .breadcrumb {
+    font-size: 11px;
+    color: var(--text-ter);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .opp-hd h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .opp-hd .role {
+    font-size: 13px;
+    color: var(--text-sec);
+  }
+
+  /* ── Tab bar ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border-sub);
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-sec);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    color: var(--text);
+    font-weight: 600;
+    border-bottom-color: var(--coral);
+  }
+
+  /* ── Notes body ── */
+  .notes-body {
+    flex: 1;
+    padding: 28px 36px 40px;
+    position: relative;
+  }
+  .saved-indicator {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    font-size: 11px;
+    color: var(--text-ter);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.02em;
+  }
+  .saved-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+  }
+
+  .doc h1.doc-h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .doc h2.doc-h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 24px 0 8px;
+    letter-spacing: -0.005em;
+  }
+  .doc h3.doc-h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sec);
+    margin: 18px 0 6px;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+  .doc p {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+    margin: 0 0 12px;
+  }
+  .doc ul, .doc ol {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+    margin: 0 0 12px;
+    padding-left: 22px;
+  }
+  .doc ul li, .doc ol li { margin-bottom: 2px; }
+  .doc blockquote {
+    margin: 10px 0 14px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--border);
+    color: var(--text-sec);
+    font-size: 13.5px;
+    line-height: 1.6;
+    background: transparent;
+  }
+  .doc code.inline {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 1px 5px;
+    background: var(--inset);
+    border-radius: 4px;
+    color: var(--text);
+  }
+  .doc pre.code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 12px 14px;
+    background: var(--inset);
+    border-radius: 6px;
+    color: var(--text);
+    overflow-x: auto;
+    margin: 0 0 14px;
+    line-height: 1.55;
+  }
+  .doc strong { font-weight: 650; }
+
+  /* ── Coop's notes section ── */
+  .coop-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 40px 0 16px;
+    font-size: 11px;
+    color: var(--text-ter);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .coop-divider .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .coop-entry {
+    padding: 14px 16px;
+    border-top: 1px solid var(--border-sub);
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .coop-entry:first-of-type { border-top: none; }
+  .coop-entry .avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--coral);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+  .coop-entry .body { flex: 1; min-width: 0; }
+  .coop-entry .meta {
+    font-size: 11px;
+    color: var(--text-ter);
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+  }
+  .coop-entry .content {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .coop-entry .content p { margin: 0 0 6px; font-size: 13.5px; }
+  .coop-entry .content ul { margin: 4px 0 6px; padding-left: 18px; font-size: 13.5px; }
+  .coop-entry .content ul li { margin-bottom: 2px; }
+  .coop-entry .promote {
+    font-size: 11px;
+    color: var(--text-sec);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-family: var(--font);
+    align-self: flex-start;
+    margin-top: 1px;
+    white-space: nowrap;
+  }
+  .coop-entry .promote:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+  }
+
+  /* ── Right rail chat ── */
+  .chat-hd {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-sub);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .chat-hd .avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--coral);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .chat-hd .name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .chat-hd .status {
+    font-size: 11px;
+    color: var(--text-ter);
+    margin-left: auto;
+  }
+  .chat-body {
+    flex: 1;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--text-sec);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 400px;
+  }
+  .chat-msg {
+    padding: 10px 12px;
+    background: var(--inset);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .chat-msg.coop {
+    background: var(--coral-soft);
+  }
+  .chat-input {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border-sub);
+    font-size: 12.5px;
+    color: var(--text-ter);
+  }
+  .chat-input .fake {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--text-ter);
+    font-size: 12.5px;
+  }
+
+  /* ══ ZOOMED CLOSE-UP FRAMES ══ */
+  .zoom-frame {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 28px;
+    max-width: 720px;
+  }
+  .zoom-caption {
+    font-size: 12px;
+    color: var(--text-ter);
+    margin-top: 10px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Live markdown rendering storyboard ── */
+  .editor-steps {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .editor-step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    position: relative;
+  }
+  .step-label {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    font-size: 10px;
+    color: var(--text-ter);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .step-prose {
+    font-size: 11px;
+    color: var(--text-ter);
+    margin-top: 12px;
+  }
+  .cursor-block {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--coral);
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .raw-md {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-sec);
+  }
+
+  /* ── Paste storyboard ── */
+  .paste-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  .paste-step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    font-size: 13px;
+    min-height: 220px;
+    position: relative;
+  }
+  .paste-step .step-n {
+    font-size: 10px;
+    color: var(--text-ter);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .paste-step .step-desc {
+    font-size: 11px;
+    color: var(--text-sec);
+    margin-top: 10px;
+  }
+  .paste-step .raw-paste {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text);
+    font-family: var(--font);
+  }
+  .unquote-btn {
+    position: absolute;
+    top: 64px;
+    right: 20px;
+    font-size: 10px;
+    color: var(--text-sec);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 7px;
+    cursor: pointer;
+  }
+
+  /* ── Coop's notes close-up ── */
+  .coop-closeup {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    max-width: 720px;
+  }
+
+  /* ── Side-by-side distinction ── */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .compare-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 22px;
+    min-height: 360px;
+  }
+  .compare-card .head {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-sub);
+    margin-bottom: 14px;
+  }
+  .compare-card .head h4 {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 2px;
+  }
+  .compare-card .head .desc {
+    font-size: 12px;
+    color: var(--text-sec);
+  }
+
+  /* Activity log entries */
+  .log-entry {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-sub);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .log-date {
+    font-size: 10px;
+    color: var(--text-ter);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .log-entry .log-body { color: var(--text); }
+  .log-entry .log-body .log-type {
+    font-weight: 600;
+    color: var(--text-sec);
+  }
+
+  /* Notes preview (inside compare card) */
+  .compare-notes {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .compare-notes h5 {
+    font-size: 13px;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  .compare-notes h5.sub { margin-top: 14px; }
+  .compare-notes p { margin: 0 0 8px; }
+  .compare-notes ul {
+    margin: 4px 0 8px;
+    padding-left: 18px;
+  }
+  .compare-notes ul li { margin-bottom: 2px; }
+
+  /* ── Empty state ── */
+  .empty-frame {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 60px 40px 40px;
+    max-width: 720px;
+    min-height: 380px;
+    position: relative;
+  }
+  .empty-placeholder {
+    font-size: 14px;
+    color: var(--text-ter);
+    font-style: italic;
+  }
+  .md-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 40px;
+    right: 40px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-sub);
+    font-size: 11px;
+    color: var(--text-ter);
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .md-hint span {
+    font-family: var(--mono);
+  }
+  .md-hint .k {
+    color: var(--text-sec);
+    font-weight: 600;
+  }
+
+  /* ── Open questions ── */
+  .q-list {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 0;
+  }
+  .q-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-sub);
+    font-size: 13.5px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .q-item:last-child { border-bottom: none; }
+  .q-item .q-n {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-ter);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    width: 28px;
+  }
+  .q-item .q-body { flex: 1; }
+  .q-item .q-q {
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .q-item .q-ctx {
+    font-size: 12px;
+    color: var(--text-sec);
+    line-height: 1.5;
+  }
+
+  /* Keyboard hint pills */
+  .kbd {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--inset);
+    color: var(--text-sec);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ═══ PAGE HEADER ═══ -->
+  <header class="page-hd">
+    <div class="num">Issue #258 · Design proposal</div>
+    <h1>Notes tab redesign</h1>
+    <p class="prompt">
+      Matt: "Unclear today whether Notes is single doc or multi-entry, and how it relates to Activity '+ Log activity' notes. Render a recommended stance."
+    </p>
+  </header>
+
+  <!-- ═══ RECOMMENDED HERO ═══ -->
+  <section class="section section-hero">
+    <div class="section-label">Recommended</div>
+    <h2 class="section-title">Single scrolling markdown doc</h2>
+    <p class="section-sub">
+      One long doc scoped to this opportunity. Free-form markdown, live-rendered. User writes; autosave on pause + blur. Coop's auto-generated content lives below a divider and can be promoted to the main body in one action.
+    </p>
+
+    <div class="shell">
+      <!-- Main column -->
+      <div class="shell-main">
+        <div class="opp-hd">
+          <div class="breadcrumb">Opportunity</div>
+          <h2>Topo.io</h2>
+          <div class="role">Senior GTM Lead · Remote · Seed stage</div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab">Overview</div>
+          <div class="tab">Activity</div>
+          <div class="tab active">Notes</div>
+          <div class="tab">Meetings</div>
+          <div class="tab">Emails</div>
+          <div class="tab">Contacts</div>
+        </div>
+
+        <div class="notes-body">
+          <div class="saved-indicator">
+            <span class="saved-dot"></span>
+            <span>Saved · 2s ago</span>
+          </div>
+
+          <div class="doc">
+            <h1 class="doc-h1">Topo.io</h1>
+
+            <h2 class="doc-h2">My take</h2>
+            <p>
+              Strong product instinct in the founding team — Jane's done this playbook twice before and <strong>knows where the bodies are buried</strong>. Concerned that Seed-stage GTM hire gets diluted into doing support + ops for the first 6 months. Need to pressure-test whether this is actually "build a GTM motion" or "hold the founders' laps."
+            </p>
+            <p>
+              Compensation signal is positive — they've been transparent about band early, which usually correlates with a company that respects leverage.
+            </p>
+
+            <h2 class="doc-h2">Research questions</h2>
+            <ul>
+              <li>What's the ARR today, what's the growth curve?</li>
+              <li>Who's the person writing the checks — founder, or have they hired someone?</li>
+              <li>What went wrong with the last GTM lead? (There was one — Sarah M., per LinkedIn.)</li>
+              <li>Is the product actually ready for sales-led, or is it still founder-led?</li>
+            </ul>
+
+            <h2 class="doc-h2">Interview prep</h2>
+            <p>
+              Loop is front-loaded with Jane (CEO) and Marcus (CTO). Skip-level with Board observer after. Prep angles:
+            </p>
+            <ul>
+              <li><strong>Jane:</strong> has a "show me a plan" bias — bring the 30/60/90 written up, not verbal.</li>
+              <li><strong>Marcus:</strong> hates salespeople, loves builders. Frame GTM as product work.</li>
+              <li><strong>Board:</strong> pattern-match on GTM hires they've seen fail; have a story for what makes this different.</li>
+            </ul>
+
+            <p>Draft framing for the 30/60/90:</p>
+            <pre class="code">30: Listen. 20 customer calls. Win-loss teardown.
+60: Ship 1 motion change. One metric, one owner.
+90: Rewrite the ICP doc. Kill anything that doesn't fit.</pre>
+
+            <h2 class="doc-h2">Open loops</h2>
+            <p>Pasted from Jane's email on Tue re: compensation band:</p>
+            <blockquote>
+              We're targeting $185–215 base with 0.5–1.0% equity on a standard 4-year vest. Happy to run through the details on our next call — we're flexible on the mix between cash and equity depending on where you net out on risk tolerance.
+            </blockquote>
+            <p>
+              Need to come back with an ask. Starting assumption: <code class="inline">$210 base + 0.85% + signing</code>. Justification is the market rate comp they're missing.
+            </p>
+          </div>
+
+          <!-- Coop's notes divider -->
+          <div class="coop-divider">
+            <div class="line"></div>
+            <span>Coop's notes</span>
+            <div class="line"></div>
+          </div>
+
+          <div class="coop-entry">
+            <div class="avatar">C</div>
+            <div class="body">
+              <div class="meta">Meeting summary · 2026-04-10 · Jane Park (CEO)</div>
+              <div class="content">
+                <p><strong>What Jane said she's looking for:</strong> someone who can own GTM end-to-end without waiting for headcount. Mentioned the last GTM lead "stalled on hiring" — she wants an operator, not a manager.</p>
+                <p>Three things she kept coming back to:</p>
+                <ul>
+                  <li>Speed of first customer conversation after joining</li>
+                  <li>Clarity on what to kill vs. keep from existing motion</li>
+                  <li>Willingness to do support + demos personally for first 90 days</li>
+                </ul>
+              </div>
+            </div>
+            <button class="promote">Promote ↑</button>
+          </div>
+
+          <div class="coop-entry">
+            <div class="avatar">C</div>
+            <div class="body">
+              <div class="meta">Suggested task · based on your "Open loops" section</div>
+              <div class="content">
+                <p>You mentioned following up on compensation — want to add a task to draft the counter by Friday? I can pre-fill with your $210 + 0.85% starting point.</p>
+              </div>
+            </div>
+            <button class="promote">Promote ↑</button>
+          </div>
+
+          <div class="coop-entry">
+            <div class="avatar">C</div>
+            <div class="body">
+              <div class="meta">Related past-note · Nimbus AI · 2026-02-14</div>
+              <div class="content">
+                <p>Your Nimbus notes had a similar "Seed GTM lead vs. founder lap-holder" framing — same worry, different company. Want me to surface the resolution from that one?</p>
+              </div>
+            </div>
+            <button class="promote">Promote ↑</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right rail chat -->
+      <aside class="shell-side">
+        <div class="chat-hd">
+          <div class="avatar">C</div>
+          <div class="name">Coop</div>
+          <div class="status">Topo.io context</div>
+        </div>
+        <div class="chat-body">
+          <div class="chat-msg coop">
+            I've got your notes, the meeting transcript, and Jane's email thread loaded. What do you want to work on?
+          </div>
+          <div class="chat-msg" style="align-self: flex-end; max-width: 80%;">
+            What's missing from my interview prep?
+          </div>
+          <div class="chat-msg coop">
+            You haven't written anything about the Board observer. Based on the LinkedIn research, it's Peter Chen — ex-Okta GTM. Different pattern-match than Jane/Marcus. Want a prep angle for him?
+          </div>
+        </div>
+        <div class="chat-input">
+          <div class="fake">Ask Coop…</div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═══ EDITOR BEHAVIOR ═══ -->
+  <section class="section">
+    <div class="section-label">Editor behavior</div>
+    <h2 class="section-title">Live markdown rendering</h2>
+    <p class="section-sub">
+      Typing markdown syntax renders inline as the user types. No separate "edit" vs. "view" mode. Keyboard shortcuts for bold / italic / link / code.
+    </p>
+
+    <div class="editor-steps">
+      <div class="editor-step">
+        <div class="step-label">As you type</div>
+        <div class="raw-md">## Interview prep<span class="cursor-block"></span></div>
+        <div class="step-prose">User is mid-type. Still shows raw markdown syntax.</div>
+      </div>
+      <div class="editor-step">
+        <div class="step-label">On space / newline</div>
+        <h2 class="doc-h2" style="margin: 0 0 4px; font-size: 16px;">Interview prep<span class="cursor-block"></span></h2>
+        <div class="step-prose">Immediately renders as H2. No re-parse, no flicker.</div>
+      </div>
+    </div>
+
+    <div class="zoom-caption" style="margin-top: 14px;">
+      Shortcuts: <span class="kbd">⌘B</span> bold ·
+      <span class="kbd">⌘I</span> italic ·
+      <span class="kbd">⌘K</span> link ·
+      <span class="kbd">⌘E</span> code ·
+      Autosave on blur + 500ms pause
+    </div>
+  </section>
+
+  <!-- ═══ PASTE BLOCKQUOTE ═══ -->
+  <section class="section">
+    <div class="section-label">Paste handling</div>
+    <h2 class="section-title">Long pastes auto-wrap in blockquote</h2>
+    <p class="section-sub">
+      Interview transcripts, email clips, job descriptions — pasted text over a length threshold auto-wraps as a blockquote to visually distinguish it from your own writing. One-click unquote if it's not what you wanted.
+    </p>
+
+    <div class="paste-grid">
+      <div class="paste-step">
+        <div class="step-n">a · Paste</div>
+        <div class="raw-paste">
+          We're targeting $185–215 base with 0.5–1.0% equity on a standard 4-year vest. Happy to run through the details on our next call — we're flexible on the mix…
+        </div>
+        <div class="step-desc">User pastes from Jane's email. Plain text drops into the doc.</div>
+      </div>
+      <div class="paste-step">
+        <div class="step-n">b · Auto-wrap</div>
+        <blockquote style="margin: 0; padding: 6px 12px; border-left: 3px solid var(--border); color: var(--text-sec); font-size: 12.5px; line-height: 1.55;">
+          We're targeting $185–215 base with 0.5–1.0% equity on a standard 4-year vest. Happy to run through the details on our next call…
+        </blockquote>
+        <div class="step-desc">On detection of a long paste, Coop auto-wraps the content in a blockquote. Visual delineation from user's own writing.</div>
+      </div>
+      <div class="paste-step">
+        <div class="step-n">c · Unquote option</div>
+        <blockquote style="margin: 0; padding: 6px 12px; border-left: 3px solid var(--border); color: var(--text-sec); font-size: 12.5px; line-height: 1.55;">
+          We're targeting $185–215 base with 0.5–1.0% equity on a standard 4-year vest…
+        </blockquote>
+        <button class="unquote-btn">Unquote ↑</button>
+        <div class="step-desc">Hovering or focusing the quote reveals an Unquote action. One click strips the blockquote, content stays.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ COOP'S NOTES CLOSE-UP ═══ -->
+  <section class="section">
+    <div class="section-label">Coop's notes section</div>
+    <h2 class="section-title">Auto-summaries with a promote action</h2>
+    <p class="section-sub">
+      After a meeting or significant email thread, Coop drops a structured summary below the divider. If it's useful, one click promotes it to the main body where you own and edit it.
+    </p>
+
+    <div class="coop-closeup">
+      <div class="coop-divider" style="margin-top: 0;">
+        <div class="line"></div>
+        <span>Coop's notes</span>
+        <div class="line"></div>
+      </div>
+
+      <div class="coop-entry" style="padding: 16px 0; border-top: none;">
+        <div class="avatar">C</div>
+        <div class="body">
+          <div class="meta">Meeting summary · 2026-04-10 · 28 min · Jane Park (CEO)</div>
+          <div class="content">
+            <p><strong>What Jane said she's looking for:</strong> someone who can own GTM end-to-end without waiting for headcount. Mentioned the last GTM lead "stalled on hiring" — she wants an operator, not a manager.</p>
+            <p>Three things she kept coming back to:</p>
+            <ul>
+              <li>Speed of first customer conversation after joining</li>
+              <li>Clarity on what to kill vs. keep from existing motion</li>
+              <li>Willingness to do support + demos personally for first 90 days</li>
+            </ul>
+            <p style="color: var(--text-sec); font-size: 12.5px;">Pulled from Granola transcript · <span style="text-decoration: underline; cursor: pointer;">Open full transcript</span></p>
+          </div>
+        </div>
+        <button class="promote">Promote ↑</button>
+      </div>
+    </div>
+
+    <div class="zoom-caption" style="margin-top: 10px;">
+      Promote ↑ moves the entry to the end of the main doc under an H2 heading. The Coop entry below the divider clears. User owns it from that point forward.
+    </div>
+  </section>
+
+  <!-- ═══ DISTINCTION FROM ACTIVITY LOG ═══ -->
+  <section class="section">
+    <div class="section-label">Distinction</div>
+    <h2 class="section-title">Activity log vs. Notes</h2>
+    <p class="section-sub">
+      Two surfaces, two jobs. Activity is the timeline of what happened. Notes is the space for how you're thinking about it.
+    </p>
+
+    <div class="compare-grid">
+      <div class="compare-card">
+        <div class="head">
+          <h4>Activity log</h4>
+          <div class="desc">Dated events. Point-in-time facts. Searchable as a timeline.</div>
+        </div>
+
+        <div class="log-entry">
+          <div class="log-date">Apr 12 · 2:14 PM</div>
+          <div class="log-body"><span class="log-type">Coffee with</span> Jane Park. She said the role was "90% mine" but wants to do one more session with Marcus.</div>
+        </div>
+        <div class="log-entry">
+          <div class="log-date">Apr 10 · 11:00 AM</div>
+          <div class="log-body"><span class="log-type">Meeting</span> — 1:1 with Jane. 28 min. Discussed 30/60/90, comp band, team structure.</div>
+        </div>
+        <div class="log-entry">
+          <div class="log-date">Apr 8 · 9:42 AM</div>
+          <div class="log-body"><span class="log-type">Email received</span> from jane@topo.io · "Next steps + comp"</div>
+        </div>
+        <div class="log-entry">
+          <div class="log-date">Apr 5</div>
+          <div class="log-body"><span class="log-type">Stage change</span> → Interview</div>
+        </div>
+
+        <div style="margin-top: 14px; font-size: 11.5px; color: var(--text-ter); line-height: 1.55;">
+          Shape: terse, dated, each entry is atomic. Answers "what happened with this opp, when?"
+        </div>
+      </div>
+
+      <div class="compare-card">
+        <div class="head">
+          <h4>Notes</h4>
+          <div class="desc">Long-form thinking. Undated synthesis. Your working document.</div>
+        </div>
+
+        <div class="compare-notes">
+          <h5>My take</h5>
+          <p>Strong product instinct in the founding team. Concerned that Seed-stage GTM hire gets diluted into support + ops for the first 6 months…</p>
+
+          <h5 class="sub">Research questions</h5>
+          <ul>
+            <li>What's the ARR today, what's the growth curve?</li>
+            <li>Who's writing the checks?</li>
+            <li>What went wrong with the last GTM lead?</li>
+          </ul>
+
+          <h5 class="sub">Open loops</h5>
+          <p>Need to come back on compensation. Starting assumption $210 + 0.85% + signing…</p>
+        </div>
+
+        <div style="margin-top: 14px; font-size: 11.5px; color: var(--text-ter); line-height: 1.55;">
+          Shape: structured thought, evolving. Answers "what do I think about this opp, and what do I still need to figure out?"
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ EMPTY STATE ═══ -->
+  <section class="section">
+    <div class="section-label">Empty state</div>
+    <h2 class="section-title">First visit to Notes</h2>
+    <p class="section-sub">
+      No instruction modal, no onboarding overlay. Just a cursor waiting and a small footer hint for anyone unfamiliar with markdown.
+    </p>
+
+    <div class="empty-frame">
+      <div class="saved-indicator" style="position: absolute; top: 16px; right: 20px;">
+        <span class="saved-dot" style="background: var(--text-ter);"></span>
+        <span>Empty</span>
+      </div>
+
+      <div class="empty-placeholder">Start typing your notes about Topo.io<span class="cursor-block"></span></div>
+
+      <div class="md-hint">
+        <span><span class="k">#</span> heading</span>
+        <span><span class="k">##</span> subheading</span>
+        <span><span class="k">-</span> list</span>
+        <span><span class="k">&gt;</span> quote</span>
+        <span><span class="k">`code`</span></span>
+        <span><span class="k">**bold**</span></span>
+        <span><span class="k">*italic*</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ OPEN QUESTIONS ═══ -->
+  <section class="section" style="margin-bottom: 0;">
+    <div class="section-label">Open questions</div>
+    <h2 class="section-title">Matt, need your call on these</h2>
+    <p class="section-sub">
+      Everything above is a specific stance. These three items I didn't decide unilaterally.
+    </p>
+
+    <div class="q-list">
+      <div class="q-item">
+        <div class="q-n">Q1</div>
+        <div class="q-body">
+          <div class="q-q">Markdown-only, or also WYSIWYG toggle?</div>
+          <div class="q-ctx">
+            Pure-markdown is the Granola / Notion-lite / Obsidian paradigm — fastest for power users, mildly intimidating for everyone else. A WYSIWYG toggle adds surface area and a small decision every session. <strong>Lean: markdown-only with inline live rendering</strong> (what's shown above). The live rendering already hides the syntax visually — raw md only appears when editing that line.
+          </div>
+        </div>
+      </div>
+
+      <div class="q-item">
+        <div class="q-n">Q2</div>
+        <div class="q-body">
+          <div class="q-q">Coop's notes: always visible, or hidden until Coop has something?</div>
+          <div class="q-ctx">
+            Always-visible means an empty "Coop's notes" section sits under every opp, which is a dead zone on new saves. Hidden-until-populated is cleaner but means the user has to learn the section exists. <strong>Lean: hidden until populated</strong>, with a subtle auto-scroll when the first Coop entry lands so the user sees it happen.
+          </div>
+        </div>
+      </div>
+
+      <div class="q-item">
+        <div class="q-n">Q3</div>
+        <div class="q-body">
+          <div class="q-q">Long doc: TOC sidebar at some length threshold, or never?</div>
+          <div class="q-ctx">
+            If notes stay under ~500 words most of the time, a TOC is over-engineering. If they grow to several screens (likely on an active opp over months), a floating TOC pulled from H2 headings is genuinely useful. <strong>Lean: auto-reveal at 3+ H2 headings</strong>, docked on the right edge of the notes panel, collapses when user scrolls past the last heading.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inbox redesign (#235)</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-on-dark-muted: #A3AEBE;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252,99,107,0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-purple: #7C6EF0;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-blue: #4573D2;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 28px;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 860px; line-height: 1.5; margin-bottom: 10px; }
+  .rec { display: inline-flex; align-items: center; gap: 6px; background: rgba(54,179,126,0.12); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; margin-bottom: 24px; }
+
+  .section-label { font-size: 13px; font-weight: 700; color: var(--ci-text-secondary); margin: 28px 0 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .section-label:first-of-type { margin-top: 10px; }
+
+  /* ── Inbox shell ── */
+  .inbox {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    height: 720px;
+    max-width: 1360px;
+  }
+
+  /* Header */
+  .ib-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 20px;
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    flex-shrink: 0;
+  }
+  .ib-back {
+    font-size: 12px; font-weight: 500; color: var(--ci-text-on-dark-muted);
+    padding: 4px 10px; border-radius: 5px;
+    cursor: pointer;
+    transition: background var(--motion-xs);
+  }
+  .ib-back:hover { background: rgba(255,255,255,0.08); color: var(--ci-text-on-dark); }
+  .ib-divider { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+  .ib-title { font-size: 13px; font-weight: 700; letter-spacing: -0.005em; }
+  .ib-title span { color: var(--ci-accent-primary); font-weight: 400; }
+  .ib-stats { font-size: 11px; color: var(--ci-text-on-dark-muted); margin-left: 8px; }
+  .ib-spacer { flex: 1; }
+  .ib-refresh {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: transparent; border: 1px solid rgba(255,255,255,0.15);
+    color: var(--ci-text-on-dark-muted); font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: 5px;
+    cursor: pointer; font-family: inherit;
+    transition: all var(--motion-xs);
+  }
+  .ib-refresh:hover { background: rgba(255,255,255,0.08); color: var(--ci-text-on-dark); }
+
+  /* 3-column body */
+  .ib-body { display: grid; grid-template-columns: 240px minmax(360px, 1fr) minmax(380px, 1.2fr); flex: 1; min-height: 0; }
+
+  /* ── Sidebar — grouped companies, quiet, unread counts ── */
+  .sidebar {
+    background: var(--ci-bg-base);
+    border-right: 1px solid var(--ci-border-subtle);
+    overflow-y: auto;
+    padding: 14px 0;
+  }
+  .sb-section { margin-bottom: 16px; }
+  .sb-section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 16px;
+    font-size: 10px; font-weight: 700; color: var(--ci-text-tertiary);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    cursor: pointer; user-select: none;
+  }
+  .sb-section-head .caret { font-size: 8px; opacity: 0.6; }
+  .sb-section-head:hover { color: var(--ci-text-secondary); }
+  .sb-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: var(--ci-text-secondary);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background var(--motion-xs), border-color var(--motion-xs);
+    position: relative;
+  }
+  .sb-item:hover { background: var(--ci-bg-raised); color: var(--ci-text-primary); }
+  .sb-item.active {
+    background: var(--ci-bg-raised);
+    border-left-color: var(--ci-accent-primary);
+    color: var(--ci-text-primary);
+    font-weight: 600;
+  }
+  .sb-item-logo {
+    width: 20px; height: 20px; border-radius: var(--ci-radius-sm);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+  }
+  .sb-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-item-count {
+    font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary);
+    flex-shrink: 0;
+  }
+  .sb-item.unread .sb-item-count { color: var(--ci-accent-primary); }
+  .sb-item .unread-dot {
+    position: absolute; left: 7px; top: 50%; transform: translateY(-50%);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ci-accent-primary);
+    display: none;
+  }
+  .sb-item.unread .unread-dot { display: block; }
+  .sb-all {
+    padding: 6px 16px;
+    font-size: 13px; font-weight: 600;
+    color: var(--ci-text-primary);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sb-all:hover { background: var(--ci-bg-raised); }
+  .sb-all.active { background: var(--ci-bg-raised); border-left-color: var(--ci-accent-primary); }
+
+  /* ── Email list ── */
+  .list {
+    border-right: 1px solid var(--ci-border-subtle);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .list-head {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    background: var(--ci-bg-raised);
+    flex-shrink: 0;
+  }
+  .list-head-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .list-title { font-size: 15px; font-weight: 700; letter-spacing: -0.005em; }
+  .list-count { font-size: 12px; color: var(--ci-text-tertiary); font-weight: 500; }
+  .list-mark-all {
+    margin-left: auto;
+    font-size: 12px; color: var(--ci-text-secondary);
+    background: transparent; border: none;
+    cursor: pointer; padding: 4px 6px; border-radius: 4px;
+    font-family: inherit;
+  }
+  .list-mark-all:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+
+  .list-controls {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .list-search {
+    flex: 1;
+    font-size: 13px;
+    padding: 6px 10px;
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-primary);
+    font-family: inherit;
+  }
+  .list-search:focus { outline: none; border-color: var(--ci-accent-primary); box-shadow: 0 0 0 2px var(--ci-accent-primary-soft); }
+
+  /* Unified filter dropdown (the #232 pattern) */
+  .list-filter {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 500;
+    padding: 6px 10px;
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-primary);
+    cursor: pointer; font-family: inherit;
+    white-space: nowrap;
+    transition: all var(--motion-xs);
+  }
+  .list-filter:hover { background: var(--ci-bg-inset); }
+  .list-filter .caret { font-size: 8px; color: var(--ci-text-tertiary); }
+
+  .list-tabs {
+    display: flex; gap: 2px; margin-top: 12px;
+  }
+  .list-tab {
+    font-size: 12px; font-weight: 500;
+    padding: 5px 12px;
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-tertiary);
+    cursor: pointer;
+    transition: all var(--motion-xs);
+  }
+  .list-tab:hover { color: var(--ci-text-primary); }
+  .list-tab.active { color: var(--ci-text-primary); background: var(--ci-bg-inset); font-weight: 600; }
+
+  /* Email rows */
+  .list-body { overflow-y: auto; flex: 1; }
+
+  .date-group {
+    padding: 10px 16px 6px;
+    font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    background: var(--ci-bg-raised);
+    position: sticky; top: 0; z-index: 1;
+  }
+
+  .email-row {
+    display: grid; grid-template-columns: 28px 1fr 60px;
+    gap: 10px;
+    padding: 10px 16px 10px 12px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    transition: background var(--motion-xs);
+    align-items: center;
+  }
+  .email-row:hover { background: var(--ci-bg-inset); }
+  .email-row.active {
+    background: var(--ci-accent-primary-soft);
+    border-left-color: var(--ci-accent-primary);
+  }
+  .email-row.unread { font-weight: 600; }
+  .email-row.unread .email-subject { color: var(--ci-text-primary); }
+  .email-row.read .email-subject { color: var(--ci-text-secondary); font-weight: 500; }
+
+  .email-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 10px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .email-body { min-width: 0; }
+
+  /* Row layout — strong line + muted line */
+  .email-row-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .email-from { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); flex-shrink: 0; }
+  .email-row.read .email-from { font-weight: 500; color: var(--ci-text-secondary); }
+  .email-subject { font-size: 13px; color: var(--ci-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .email-row.read .email-subject { font-weight: 400; }
+
+  .email-row-sub { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 12px; color: var(--ci-text-tertiary); }
+  .email-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+
+  .email-company-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
+    padding: 1px 6px; background: var(--ci-bg-inset); border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .email-time {
+    font-size: 11px; color: var(--ci-text-tertiary); text-align: right;
+    flex-shrink: 0; align-self: start; margin-top: 2px;
+  }
+  .email-row.unread .email-time { color: var(--ci-accent-primary); font-weight: 600; }
+
+  /* Unread marker */
+  .email-row.unread { position: relative; }
+  .email-row.unread::before {
+    content: ''; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ci-accent-primary);
+  }
+
+  /* ── Detail pane ── */
+  .detail {
+    background: var(--ci-bg-raised);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .detail-head {
+    padding: 22px 28px 16px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    flex-shrink: 0;
+  }
+  .detail-subject { font-size: 20px; font-weight: 700; line-height: 1.3; color: var(--ci-text-primary); letter-spacing: -0.01em; margin-bottom: 12px; }
+  .detail-from-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .detail-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .detail-from-body { flex: 1; min-width: 0; }
+  .detail-from-name { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); }
+  .detail-from-meta { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 1px; }
+  .detail-date { font-size: 12px; color: var(--ci-text-tertiary); align-self: flex-start; flex-shrink: 0; padding-top: 4px; }
+
+  .detail-tags-row { display: flex; gap: 6px; margin-top: 8px; }
+  .detail-tag {
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 99px;
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+  }
+  .detail-tag.stage { background: rgba(69,115,210,0.08); color: var(--ci-accent-blue); }
+  .detail-tag.company { background: rgba(54,179,126,0.08); color: #1B7E53; }
+
+  .detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 28px;
+    font-size: 14px; line-height: 1.65;
+    color: var(--ci-text-primary);
+    white-space: pre-wrap; word-break: break-word;
+    max-width: 720px;
+  }
+
+  /* Contextual actions — appear bottom right on hover, Granola-style */
+  .detail-actions {
+    position: sticky; bottom: 0;
+    background: linear-gradient(to top, var(--ci-bg-raised) 60%, rgba(255,255,255,0));
+    padding: 12px 28px 18px;
+    display: flex; gap: 8px; justify-content: flex-end;
+    flex-shrink: 0;
+  }
+  .action-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500;
+    padding: 6px 12px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-secondary);
+    cursor: pointer; font-family: inherit;
+    transition: all var(--motion-xs);
+  }
+  .action-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+  .action-btn.primary { background: var(--ci-text-primary); color: #fff; border-color: var(--ci-text-primary); }
+  .action-btn.primary:hover { background: var(--ci-bg-header); }
+
+  /* Demo avatar colors */
+  .av-a { background: #5B8DEF; } .av-b { background: #36B37E; } .av-c { background: #7C6EF0; }
+  .av-d { background: #F5A623; } .av-e { background: #FC636B; } .av-f { background: #8A8E94; }
+
+  .caption { font-size: 11px; color: var(--ci-text-tertiary); font-style: italic; margin-top: 12px; max-width: 1360px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h1>Inbox redesign (#235)</h1>
+<p class="page-sub">Three-column stays, but each column earns its space. Sidebar groups companies by active pipeline stage with unread dots. List gets Superhuman-style typographic hierarchy. Detail pane gets Granola-quality reading posture. Stage pill sprawl replaced with the #232 dropdown pattern.</p>
+<div class="rec">✓ Recommended: keep 3 columns, tighten each. Bigger rebalance = hero middle list, quiet sidebar, reading-posture detail.</div>
+
+<div class="section-label">Full inbox</div>
+
+<div class="inbox">
+
+  <!-- Header — counts consolidated -->
+  <div class="ib-header">
+    <div class="ib-back">← Pipeline</div>
+    <div class="ib-divider"></div>
+    <div class="ib-title">Coop<span>.ai</span> · Inbox</div>
+    <div class="ib-stats">868 emails · 126 companies</div>
+    <div class="ib-spacer"></div>
+    <button class="ib-refresh">↻ Refresh</button>
+  </div>
+
+  <div class="ib-body">
+
+    <!-- Sidebar — grouped by pipeline stage, quiet -->
+    <div class="sidebar">
+      <div class="sb-all active">
+        <span>All Mail</span>
+        <span class="sb-item-count" style="color:var(--ci-accent-primary);font-weight:700;">12</span>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-section-head">
+          <span>Active · 8</span>
+          <span class="caret">▾</span>
+        </div>
+        <div class="sb-item unread">
+          <span class="unread-dot"></span>
+          <span class="sb-item-logo av-a">T</span>
+          <span class="sb-item-name">Transform VXR</span>
+          <span class="sb-item-count">4</span>
+        </div>
+        <div class="sb-item unread">
+          <span class="unread-dot"></span>
+          <span class="sb-item-logo av-b">B</span>
+          <span class="sb-item-name">Bretton AI</span>
+          <span class="sb-item-count">2</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-item-logo av-c">U</span>
+          <span class="sb-item-name">Unitbase, Inc.</span>
+          <span class="sb-item-count">1</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-item-logo av-d">P</span>
+          <span class="sb-item-name">PolyAI</span>
+          <span class="sb-item-count">3</span>
+        </div>
+        <div class="sb-item">
+          <span class="sb-item-logo av-e">W</span>
+          <span class="sb-item-name">Warmly</span>
+          <span class="sb-item-count">2</span>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-section-head">
+          <span>Monitoring · 15</span>
+          <span class="caret">▸</span>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-section-head">
+          <span>Closed · 103</span>
+          <span class="caret">▸</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle list — typography carries -->
+    <div class="list">
+      <div class="list-head">
+        <div class="list-head-row">
+          <div class="list-title">All Mail</div>
+          <div class="list-count">499</div>
+          <button class="list-mark-all">Mark all read</button>
+        </div>
+        <div class="list-controls">
+          <input class="list-search" type="text" placeholder="Search emails by sender, subject, or body…">
+          <button class="list-filter">
+            <span>Active</span>
+            <span class="caret">▾</span>
+          </button>
+        </div>
+        <div class="list-tabs">
+          <div class="list-tab active">All Mail</div>
+          <div class="list-tab">Inbox</div>
+          <div class="list-tab">Sent</div>
+        </div>
+      </div>
+
+      <div class="list-body">
+        <div class="date-group">Today</div>
+
+        <div class="email-row unread active">
+          <div class="email-avatar av-a">RW</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Rob Weeks</span>
+              <span class="email-subject">Re: Interview for Founding EAE Role with Transform VXR</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Matt — pulling together the comp doc we discussed. Will share Wed morning so you have a day to review before HM round…</span>
+              <span class="email-company-tag">Transform VXR</span>
+            </div>
+          </div>
+          <div class="email-time">10:14 AM</div>
+        </div>
+
+        <div class="email-row unread">
+          <div class="email-avatar av-b">KB</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Krisztian Berecz</span>
+              <span class="email-subject">Catching up — got a min tomorrow?</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Sorry it has been such a busy week. Would love to catch up briefly before connecting you with Alex on the Bretton GTM team…</span>
+              <span class="email-company-tag">Bretton AI</span>
+            </div>
+          </div>
+          <div class="email-time">9:22 AM</div>
+        </div>
+
+        <div class="email-row read">
+          <div class="email-avatar av-c">EL</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Eric Linde</span>
+              <span class="email-subject">Intro: Sarah Thompson, our head of product</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Matt, introducing you to Sarah ahead of Thursday — she handles the hiring loop for founding roles. Sarah — Matt is the candidate I…</span>
+              <span class="email-company-tag">Transform VXR</span>
+            </div>
+          </div>
+          <div class="email-time">7:58 AM</div>
+        </div>
+
+        <div class="date-group">Yesterday</div>
+
+        <div class="email-row read">
+          <div class="email-avatar av-d">SM</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Shelby Marron</span>
+              <span class="email-subject">Following up from Enterprise Sales Summit</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Really enjoyed your panel on founding motion design. PolyAI is building something similar — would love to put you in front of…</span>
+              <span class="email-company-tag">PolyAI</span>
+            </div>
+          </div>
+          <div class="email-time">4:42 PM</div>
+        </div>
+
+        <div class="email-row read">
+          <div class="email-avatar av-e">AM</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Alex Morrow</span>
+              <span class="email-subject">Warmly — founding Growth role</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Hey Matt, saw you were exploring — Warmly just opened a founding Growth seat with a focus on PLG-to-sales-led motion design…</span>
+              <span class="email-company-tag">Warmly</span>
+            </div>
+          </div>
+          <div class="email-time">2:18 PM</div>
+        </div>
+
+        <div class="email-row read">
+          <div class="email-avatar av-f">KN</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Kate Nussman</span>
+              <span class="email-subject">Re: Loyal · Founding Partner Sales</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Matt, Mike passed along your note — we're moving quickly on this role. Would Friday at 11 work for a 30-min with me…</span>
+              <span class="email-company-tag">Loyal</span>
+            </div>
+          </div>
+          <div class="email-time">11:04 AM</div>
+        </div>
+
+        <div class="email-row read">
+          <div class="email-avatar av-a">RW</div>
+          <div class="email-body">
+            <div class="email-row-head">
+              <span class="email-from">Rob Weeks</span>
+              <span class="email-subject">Confirmed — Thursday 1:30pm ET with Eric &amp; Sarah</span>
+            </div>
+            <div class="email-row-sub">
+              <span class="email-preview">Matt — confirmed. Eric and Sarah both blocked 45 min. I'll send a formal calendar invite this afternoon with the meeting link…</span>
+              <span class="email-company-tag">Transform VXR</span>
+            </div>
+          </div>
+          <div class="email-time">9:30 AM</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail -->
+    <div class="detail">
+      <div class="detail-head">
+        <div class="detail-subject">Re: Interview for Founding EAE Role with Transform VXR</div>
+        <div class="detail-from-row">
+          <div class="detail-avatar av-a">RW</div>
+          <div class="detail-from-body">
+            <div class="detail-from-name">Rob Weeks</div>
+            <div class="detail-from-meta">rob@transformvxr.com → mattryansterbenz7@gmail.com</div>
+          </div>
+          <div class="detail-date">Today, 10:14 AM</div>
+        </div>
+        <div class="detail-tags-row">
+          <span class="detail-tag company">Transform VXR</span>
+          <span class="detail-tag stage">Hiring Manager Call</span>
+        </div>
+      </div>
+
+      <div class="detail-body">Matt —
+
+Pulling together the comp doc we discussed. Will share Wed morning so you have a day to review before HM round on Thursday.
+
+The structure we're landing on:
+
+• Base: $135k
+• Target OTE: $185k (variable driven by pipeline creation + closed-won in your first half)
+• Equity: 0.4% with 4-year vest, 1-year cliff
+• Signing: $15k paid over first two months
+
+I've also outlined the first-90-days picture since you asked about it Monday. Let me know Wed morning if you want to push for any tweaks — we have some flex.
+
+Excited for Thursday.
+
+Rob</div>
+
+      <div class="detail-actions">
+        <button class="action-btn">Open in Gmail ↗</button>
+        <button class="action-btn">View company</button>
+        <button class="action-btn">Mark unread</button>
+        <button class="action-btn primary">Draft reply in Coop</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="caption">
+  <strong>Key changes:</strong>
+  Sidebar groups companies by pipeline stage · shows unread dots · collapsed stages get a count pill only.
+  List row: strong (sender + subject) then muted (preview · company-tag) — Superhuman-style.
+  Header stats consolidate to one line. Stage filter → dropdown (port of #232).
+  Detail: 20px subject · 14px body · line-height 1.65 · proper email body reset.
+  Actions bar gets a "Draft reply in Coop" primary — the entire point of having this inbox in-app.
+</div>
+
+<div class="section-label">Detailed callouts</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1360px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55;">
+
+  <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px;">Sidebar is grouped by <em>active pipeline stage</em></div>
+    Only companies with ≥1 email show up. Groups: Active (current pipeline activity) · Monitoring · Closed. Stage groups collapse to a count pill for triage speed. Unread dot → the company has an unread email.
+  </div>
+
+  <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px;">Stage pill sprawl → dropdown (#232 pattern)</div>
+    Same change #232 shipped for Table view. Pill row of 15 stages replaced with a single <code>Active ▾</code> button next to the search bar. Consistent filter UX across inbox, board, and inbox.
+  </div>
+
+  <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px;">Row typography — Superhuman hierarchy</div>
+    Line 1: <strong>Sender name</strong> + subject (muted). Line 2: preview + <code>company-tag</code>. Unread = bold + coral dot + coral timestamp. Read = normal + muted.
+  </div>
+
+  <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px;">Detail pane — Granola reading posture</div>
+    20px subject · 14px body at line-height 1.65 · preserves paragraphs and bullets via <code>white-space: pre-wrap</code>. Max body width 720px so long lines don't stretch across a wide monitor.
+  </div>
+
+  <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px;">Actions get a primary</div>
+    <em>"Draft reply in Coop"</em> is the primary CTA — it's the whole reason this inbox lives in-app. Secondary: Open in Gmail · View company · Mark unread. Sticky at bottom with a gradient fade so they're always reachable.
+  </div>
+
+  <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 16px 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 6px;">Header — one counter line, quiet refresh</div>
+    "868 emails · 126 companies" as one muted stat line. Refresh is a secondary pill, not a big button. Search moves down to the list header where it belongs.
+  </div>
+
+</div>
+
+</body>
+</html>

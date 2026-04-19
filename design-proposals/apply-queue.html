@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#265 Apply Queue — full design pass</title>
+<style>
+  /* Inlined from ../design-tokens.css — standalone file. */
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-on-dark-muted: #A3AEBE;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-hover: #E04E56;
+    --ci-accent-primary-soft: rgba(252, 99, 107, 0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-teal-soft: rgba(54, 179, 126, 0.08);
+    --ci-accent-blue: #4573D2;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232, 56, 79, 0.07);
+    --ci-shadow-sm: 0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --ci-shadow-md: 0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+    --ci-shadow-lg: 0 10px 36px rgba(30, 31, 33, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --ci-radius-lg: 14px;
+    --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --motion-md: 300ms;
+    --motion-lg: 400ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    background: var(--ci-bg-base);
+    padding: 40px 40px 80px;
+    font-family: var(--ci-font-family);
+    color: var(--ci-text-primary);
+    margin: 0;
+  }
+  .frame { max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub { font-size: 13px; color: var(--ci-text-secondary); margin: 0 0 28px; line-height: 1.55; }
+  h2 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--ci-text-tertiary);
+    text-transform: uppercase;
+    margin: 56px 0 16px;
+  }
+  .section-note { font-size: 13px; color: var(--ci-text-secondary); margin: -10px 0 18px; line-height: 1.55; max-width: 820px; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Queue hero — full-page mockup
+     ═══════════════════════════════════════════════════════════════════════ */
+  .queue-hero {
+    width: 100%;
+    height: 900px;
+    background: var(--ci-bg-base);
+    position: relative;
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    overflow: hidden;
+    /* subtle vignette */
+    box-shadow: inset 0 0 140px rgba(30, 31, 33, 0.06);
+  }
+  .q-topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 52px;
+    padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--ci-bg-raised);
+    border-bottom: 1px solid var(--ci-border-default);
+    z-index: 5;
+  }
+  .q-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700; letter-spacing: -0.005em;
+  }
+  .q-brand-mark {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ci-accent-primary);
+    position: relative;
+    display: inline-block;
+  }
+  .q-brand-mark::before, .q-brand-mark::after {
+    content: ''; position: absolute;
+    width: 4px; height: 4px; border-radius: 50%; background: #fff;
+    top: 8px;
+  }
+  .q-brand-mark::before { left: 5px; }
+  .q-brand-mark::after { right: 5px; }
+  .q-counter {
+    font-size: 12px;
+    color: var(--ci-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .q-counter strong { color: var(--ci-text-primary); font-weight: 600; }
+  .q-exit {
+    font-size: 13px; color: var(--ci-text-secondary);
+    background: transparent; border: none;
+    cursor: pointer; font-weight: 500;
+    padding: 6px 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: var(--ci-radius-sm);
+  }
+  .q-exit:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .q-exit svg { width: 12px; height: 12px; }
+
+  .q-stage {
+    position: absolute; top: 52px; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     The card stack
+     ═══════════════════════════════════════════════════════════════════════ */
+  .card-stack {
+    position: relative;
+    width: 520px; height: 780px;
+  }
+  .bg-card {
+    position: absolute;
+    inset: 0;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .bg-card.b2 { transform: rotate(-2deg) translateY(-6px) scale(0.985); z-index: 1; opacity: 0.8; }
+  .bg-card.b1 { transform: rotate( 1.2deg) translateY(-3px) scale(0.992); z-index: 2; opacity: 0.92; }
+
+  .apply-card {
+    position: absolute;
+    inset: 0;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    box-shadow: var(--ci-shadow-lg);
+    z-index: 3;
+    padding: 28px 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* Lockup */
+  .ac-lockup { display: flex; align-items: flex-start; gap: 14px; }
+  .ac-logo {
+    width: 40px; height: 40px;
+    border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-inset);
+    border: 1px solid var(--ci-border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--ci-text-primary);
+    letter-spacing: -0.02em;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .ac-lockup-text { min-width: 0; flex: 1; padding-top: 2px; }
+  .ac-company {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
+    line-height: 1.1;
+    color: var(--ci-text-primary);
+  }
+  .ac-role {
+    font-size: 14px; color: var(--ci-text-secondary);
+    margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Score hero */
+  .ac-score-block {
+    margin-top: 22px;
+    display: flex; align-items: flex-end; gap: 16px;
+  }
+  .ac-score {
+    font-size: 56px; font-weight: 700; line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .ac-score .d {
+    font-size: 22px; color: var(--ci-text-tertiary); font-weight: 500;
+    letter-spacing: 0;
+  }
+  .ac-score.s-green  { color: #36B37E; }
+  .ac-score.s-amber  { color: #F5A623; }
+  .ac-score.s-orange { color: #D97706; }
+  .ac-score.s-red    { color: #E8384F; }
+  .ac-verdict {
+    padding-bottom: 8px;
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 0; flex: 1;
+  }
+  .ac-verdict-title { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); }
+  .ac-verdict-reason { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.45; }
+
+  /* Micro-bars: 5 dimensions */
+  .ac-dims {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .ac-dim { display: flex; flex-direction: column; gap: 5px; }
+  .ac-dim-bar {
+    height: 4px; border-radius: 2px;
+    background: var(--ci-bg-inset);
+    overflow: hidden;
+  }
+  .ac-dim-fill { height: 100%; background: var(--ci-text-primary); border-radius: 2px; }
+  .ac-dim-fill.s-green { background: #36B37E; }
+  .ac-dim-fill.s-amber { background: #F5A623; }
+  .ac-dim-fill.s-orange { background: #D97706; }
+  .ac-dim-fill.s-red { background: #E8384F; }
+  .ac-dim-label {
+    font-size: 10px; color: var(--ci-text-tertiary);
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 1.2;
+  }
+
+  /* Key details strip */
+  .ac-chips {
+    margin-top: 22px;
+    display: flex; gap: 8px;
+  }
+  .ac-chip {
+    flex: 1;
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 2px;
+    background: var(--ci-bg-raised);
+    min-width: 0;
+  }
+  .ac-chip-label {
+    font-size: 10px; color: var(--ci-text-tertiary);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .ac-chip-value {
+    font-size: 13px; font-weight: 600; color: var(--ci-text-primary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Collapsible sections */
+  .ac-collapsible {
+    margin-top: 14px;
+    border-top: 1px solid var(--ci-border-subtle);
+    padding-top: 14px;
+  }
+  .ac-collapsible + .ac-collapsible { margin-top: 10px; padding-top: 10px; }
+  .ac-coll-head {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+  }
+  .ac-coll-title {
+    font-size: 12px; font-weight: 600; color: var(--ci-text-primary);
+  }
+  .ac-coll-meta {
+    font-size: 12px; color: var(--ci-text-secondary);
+  }
+  .ac-coll-chev {
+    width: 14px; height: 14px; color: var(--ci-text-tertiary);
+    margin-left: 8px;
+    transition: transform var(--motion-xs) var(--ease-out);
+  }
+  .ac-coll-head[aria-expanded="true"] .ac-coll-chev { transform: rotate(90deg); }
+
+  .ac-coll-body {
+    margin-top: 10px;
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .ac-flag-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 12px; line-height: 1.5;
+    color: var(--ci-text-primary);
+  }
+  .ac-flag-mark {
+    font-size: 11px; font-weight: 700;
+    width: 14px; text-align: center; flex-shrink: 0;
+    margin-top: 1px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+  }
+  .ac-flag-item.pos .ac-flag-mark { color: var(--ci-accent-teal); }
+  .ac-flag-item.neg .ac-flag-mark { color: var(--ci-accent-red); }
+
+  /* Spacer so actions sit at bottom */
+  .ac-spacer { flex: 1; min-height: 8px; }
+
+  /* Action bar */
+  .ac-actions {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .ac-btn {
+    font: inherit;
+    font-size: 14px; font-weight: 600;
+    padding: 14px 16px;
+    border-radius: var(--ci-radius-md);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background var(--motion-xs) var(--ease-out),
+                border-color var(--motion-xs) var(--ease-out),
+                color var(--motion-xs) var(--ease-out);
+  }
+  .ac-btn-reject {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-accent-red);
+    color: var(--ci-accent-red);
+  }
+  .ac-btn-reject:hover { background: var(--ci-accent-red-soft); }
+  .ac-btn-apply {
+    background: var(--ci-accent-teal);
+    border: 1px solid var(--ci-accent-teal);
+    color: #fff;
+  }
+  .ac-btn-apply:hover { background: #2FA070; border-color: #2FA070; }
+  .ac-btn-undo {
+    background: transparent;
+    border: 1px solid var(--ci-border-default);
+    color: var(--ci-text-tertiary);
+    padding: 14px 12px;
+    min-width: 48px;
+  }
+  .ac-btn-undo:hover {
+    color: var(--ci-text-primary);
+    border-color: var(--ci-border-strong);
+  }
+  .ac-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Annotation callouts
+     ═══════════════════════════════════════════════════════════════════════ */
+  .annotated-row {
+    display: grid;
+    grid-template-columns: 520px 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  .annotations { padding-top: 10px; }
+  .anno {
+    position: relative;
+    padding: 10px 0 12px 28px;
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .anno:last-child { border-bottom: none; }
+  .anno-num {
+    position: absolute; top: 12px; left: 0;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    letter-spacing: 0;
+  }
+  .anno strong {
+    color: var(--ci-text-primary); font-weight: 600;
+    display: block; margin-bottom: 2px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Zoom close-ups
+     ═══════════════════════════════════════════════════════════════════════ */
+  .zoom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+  .zoom-panel {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 32px;
+  }
+  .zoom-label {
+    font-size: 11px; color: var(--ci-text-tertiary); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 16px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Swipe states
+     ═══════════════════════════════════════════════════════════════════════ */
+  .swipe-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .swipe-panel {
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    height: 520px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .swipe-card {
+    width: 300px; height: 440px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    box-shadow: var(--ci-shadow-md);
+    padding: 20px;
+    display: flex; flex-direction: column;
+    gap: 12px;
+    position: relative;
+    transition: transform var(--motion-sm) var(--ease-out);
+  }
+  .swipe-card.tilt-right {
+    transform: rotate(6deg) translateX(40px);
+    box-shadow: var(--ci-shadow-lg);
+  }
+  .swipe-card.tilt-left {
+    transform: rotate(-6deg) translateX(-40px);
+    box-shadow: var(--ci-shadow-lg);
+  }
+  .swipe-card .mini-logo {
+    width: 32px; height: 32px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .swipe-card .mini-co { font-size: 16px; font-weight: 700; }
+  .swipe-card .mini-role { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }
+  .swipe-card .mini-score { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; color: #36B37E; }
+  .swipe-card .mini-score .d { font-size: 18px; color: var(--ci-text-tertiary); font-weight: 500; }
+  .swipe-card .mini-chips { display: flex; gap: 6px; margin-top: 4px; }
+  .swipe-card .mini-chip {
+    flex: 1; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm);
+    padding: 6px 8px; font-size: 10px; color: var(--ci-text-secondary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .swipe-card .mini-actions {
+    margin-top: auto;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .swipe-card .mini-btn {
+    padding: 10px; border-radius: var(--ci-radius-sm);
+    font-size: 12px; font-weight: 600;
+  }
+  .swipe-card .mini-btn.rej {
+    background: var(--ci-bg-raised); border: 1px solid var(--ci-accent-red); color: var(--ci-accent-red);
+  }
+  .swipe-card .mini-btn.app {
+    background: var(--ci-accent-teal); border: 1px solid var(--ci-accent-teal); color: #fff;
+  }
+
+  /* Tint overlays */
+  .tint-right, .tint-left {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tint-right {
+    background: linear-gradient(270deg, rgba(54, 179, 126, 0.22) 0%, rgba(54, 179, 126, 0) 55%);
+  }
+  .tint-left {
+    background: linear-gradient(90deg, rgba(232, 56, 79, 0.22) 0%, rgba(232, 56, 79, 0) 55%);
+  }
+  .swipe-panel.on-right .tint-right { opacity: 1; }
+  .swipe-panel.on-left .tint-left { opacity: 1; }
+  .ghost-label {
+    position: absolute;
+    font-size: 48px; font-weight: 800; letter-spacing: 0.06em;
+    opacity: 0.85;
+    border: 3px solid currentColor;
+    padding: 8px 18px;
+    border-radius: var(--ci-radius-sm);
+    transform: rotate(-12deg);
+  }
+  .ghost-label.apply { right: 28px; top: 60px; color: #36B37E; transform: rotate(-12deg); }
+  .ghost-label.reject { left: 28px; top: 60px; color: #E8384F; transform: rotate(12deg); }
+
+  .swipe-caption {
+    position: absolute; bottom: 14px; left: 0; right: 0;
+    text-align: center;
+    font-size: 11px; color: var(--ci-text-secondary);
+  }
+  .swipe-caption strong { color: var(--ci-text-primary); font-weight: 600; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Post-swipe storyboard
+     ═══════════════════════════════════════════════════════════════════════ */
+  .story-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .story-panel {
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    height: 440px;
+    position: relative; overflow: hidden;
+    padding: 18px;
+  }
+  .story-card {
+    position: absolute;
+    width: 240px; height: 340px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    box-shadow: var(--ci-shadow-md);
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 12px;
+  }
+  .story-card .sl-co { font-size: 14px; font-weight: 700; }
+  .story-card .sl-role { font-size: 11px; color: var(--ci-text-secondary); }
+  .story-card .sl-score { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; margin-top: 4px; }
+  .story-center { top: 34px; left: 50%; transform: translateX(-50%); }
+  .story-flying {
+    top: 34px; left: calc(100% - 10px); transform: translateX(0) rotate(18deg);
+    opacity: 0.35;
+  }
+  .story-arrow-right {
+    position: absolute; top: 190px; right: 18px;
+    color: var(--ci-accent-red); font-size: 28px; opacity: 0.6;
+  }
+  .story-next-below {
+    top: calc(100% - 40px); left: 50%; transform: translateX(-50%);
+    opacity: 0.4;
+  }
+  .story-up-arrow {
+    position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
+    color: var(--ci-text-tertiary); font-size: 20px;
+    opacity: 0.7;
+  }
+  .story-next-in-place {
+    top: 34px; left: 50%; transform: translateX(-50%);
+  }
+  .undo-chip {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    padding: 8px 12px; border-radius: var(--ci-radius-full);
+    font-size: 12px; display: flex; align-items: center; gap: 10px;
+    box-shadow: var(--ci-shadow-md);
+    font-weight: 500;
+  }
+  .undo-chip .undo-btn {
+    font: inherit;
+    background: transparent; border: none; color: var(--ci-accent-primary);
+    font-weight: 600; cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .undo-chip .undo-sep {
+    width: 1px; height: 10px; background: var(--ci-text-on-dark-muted); opacity: 0.4;
+  }
+  .story-caption {
+    position: absolute; bottom: -28px; left: 0; right: 0;
+    text-align: center;
+    font-size: 12px; color: var(--ci-text-secondary);
+    margin-top: 0;
+  }
+  .story-wrap { position: relative; padding-bottom: 36px; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Expanded sections
+     ═══════════════════════════════════════════════════════════════════════ */
+  .expanded-card-holder {
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 32px;
+    display: flex; justify-content: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Empty state
+     ═══════════════════════════════════════════════════════════════════════ */
+  .empty-hero {
+    width: 100%;
+    height: 640px;
+    background: var(--ci-bg-base);
+    position: relative;
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    overflow: hidden;
+    box-shadow: inset 0 0 140px rgba(30, 31, 33, 0.04);
+  }
+  .empty-inner {
+    position: absolute; top: 52px; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .empty-box {
+    width: 480px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    box-shadow: var(--ci-shadow-sm);
+    padding: 40px 32px 28px;
+    text-align: center;
+  }
+  .empty-coop {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--ci-accent-primary);
+    margin: 0 auto 18px;
+    position: relative;
+  }
+  .empty-coop::before, .empty-coop::after {
+    content: ''; position: absolute; top: 24px;
+    width: 10px; height: 10px; border-radius: 50%; background: #fff;
+  }
+  .empty-coop::before { left: 16px; }
+  .empty-coop::after  { right: 16px; }
+  .empty-mouth {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    width: 22px; height: 10px;
+    border-bottom: 3px solid #fff;
+    border-radius: 0 0 18px 18px;
+  }
+  .empty-title {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
+    color: var(--ci-text-primary);
+    margin-bottom: 6px;
+  }
+  .empty-body {
+    font-size: 14px; color: var(--ci-text-secondary); line-height: 1.55;
+    margin-bottom: 22px;
+  }
+  .empty-stats {
+    display: flex; align-items: stretch; gap: 0;
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .empty-stat {
+    flex: 1; padding: 14px 6px;
+    display: flex; flex-direction: column; gap: 2px;
+    border-right: 1px solid var(--ci-border-default);
+  }
+  .empty-stat:last-child { border-right: none; }
+  .empty-stat-num {
+    font-size: 20px; font-weight: 700; color: var(--ci-text-primary);
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .empty-stat-num.applied { color: #36B37E; }
+  .empty-stat-num.rejected { color: #E8384F; }
+  .empty-stat-num.saved { color: var(--ci-text-secondary); }
+  .empty-stat-label {
+    font-size: 11px; color: var(--ci-text-tertiary);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+  .empty-btn {
+    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
+    border: none;
+    padding: 12px 24px; border-radius: var(--ci-radius-md);
+    font: inherit; font-weight: 600; font-size: 14px;
+    cursor: pointer;
+  }
+  .empty-btn:hover { background: #1F2A3C; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Keyboard shortcuts
+     ═══════════════════════════════════════════════════════════════════════ */
+  .kbd-panel {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 24px 28px;
+    max-width: 520px;
+  }
+  .kbd-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    font-size: 13px;
+    color: var(--ci-text-primary);
+  }
+  .kbd-row:last-child { border-bottom: none; }
+  .kbd-row .label { color: var(--ci-text-secondary); }
+  .kbd-row .keys { display: inline-flex; gap: 6px; }
+  kbd {
+    display: inline-block;
+    font-family: var(--ci-font-family);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    background: var(--ci-bg-inset);
+    border: 1px solid var(--ci-border-default);
+    border-bottom-width: 2px;
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-primary);
+    min-width: 24px; text-align: center;
+    line-height: 1.3;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Open questions
+     ═══════════════════════════════════════════════════════════════════════ */
+  .oq-list {
+    display: flex; flex-direction: column; gap: 14px;
+    max-width: 820px;
+  }
+  .oq-item {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-left: 3px solid var(--ci-accent-primary);
+    border-radius: var(--ci-radius-sm);
+    padding: 14px 18px;
+    font-size: 13px; line-height: 1.55;
+  }
+  .oq-item strong {
+    color: var(--ci-text-primary); font-weight: 600;
+    display: block; margin-bottom: 4px;
+    font-size: 13px;
+  }
+  .oq-item .q-body { color: var(--ci-text-secondary); }
+
+  /* Small monochrome icons (drawn inline) */
+  .ico { display: inline-block; vertical-align: middle; width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <h1>#265 Apply Queue — full design pass</h1>
+  <p class="sub">Tinder-style swipe triage at <code>queue.html</code>. Card stack, swipe mechanics (<a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/140">#140</a> fling shipped), score + flags + comp + intel on card, quick actions. <strong>Matt prompt:</strong> <em>"render RECOMMENDED — big score hero, 5-dimension micro-bars, collapsible flags/intel, red/green action bar, undo chip after swipe."</em></p>
+
+  <!-- ════════════════════════════ 1. HERO ════════════════════════════ -->
+  <h2>1 · Recommended — full page</h2>
+  <p class="section-note">Card stack centered on the page, 2 ghosts fanned behind the active card (-2deg / +1.2deg). Top bar keeps the surface minimal: brand left, queue counter center-right, exit right. Dark backdrop uses the base canvas with a soft inset vignette — no gradients, no page chrome competing with the card.</p>
+
+  <div class="queue-hero">
+    <div class="q-topbar">
+      <div class="q-brand">
+        <span class="q-brand-mark"></span>
+        Coop.ai
+      </div>
+      <div class="q-counter">Card <strong>5</strong> of <strong>32</strong></div>
+      <button class="q-exit">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 2 L10 10 M10 2 L2 10"/></svg>
+        Exit queue
+      </button>
+    </div>
+
+    <div class="q-stage">
+      <div class="card-stack">
+        <div class="bg-card b2"></div>
+        <div class="bg-card b1"></div>
+
+        <div class="apply-card">
+          <!-- 1. Lockup -->
+          <div class="ac-lockup">
+            <div class="ac-logo">T</div>
+            <div class="ac-lockup-text">
+              <div class="ac-company">Topo.io</div>
+              <div class="ac-role">Senior Product Manager, Revenue GTM</div>
+            </div>
+          </div>
+
+          <!-- 2. Score hero -->
+          <div class="ac-score-block">
+            <div class="ac-score s-green">7.8<span class="d">/10</span></div>
+            <div class="ac-verdict">
+              <div class="ac-verdict-title">Strong fit</div>
+              <div class="ac-verdict-reason">Exceeds salary floor, role matches revenue-GTM focus, Series A with runway.</div>
+            </div>
+          </div>
+
+          <!-- Micro-bars -->
+          <div class="ac-dims">
+            <div class="ac-dim">
+              <div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:82%"></div></div>
+              <div class="ac-dim-label">Comp</div>
+            </div>
+            <div class="ac-dim">
+              <div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:88%"></div></div>
+              <div class="ac-dim-label">Role fit</div>
+            </div>
+            <div class="ac-dim">
+              <div class="ac-dim-bar"><div class="ac-dim-fill s-amber" style="width:65%"></div></div>
+              <div class="ac-dim-label">Stage</div>
+            </div>
+            <div class="ac-dim">
+              <div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:76%"></div></div>
+              <div class="ac-dim-label">Scope</div>
+            </div>
+            <div class="ac-dim">
+              <div class="ac-dim-bar"><div class="ac-dim-fill s-amber" style="width:70%"></div></div>
+              <div class="ac-dim-label">Growth</div>
+            </div>
+          </div>
+
+          <!-- 3. Key details -->
+          <div class="ac-chips">
+            <div class="ac-chip">
+              <div class="ac-chip-label">Comp</div>
+              <div class="ac-chip-value">$180–260K</div>
+            </div>
+            <div class="ac-chip">
+              <div class="ac-chip-label">Location</div>
+              <div class="ac-chip-value">Remote US</div>
+            </div>
+            <div class="ac-chip">
+              <div class="ac-chip-label">Stage</div>
+              <div class="ac-chip-value">Series B · 50–200</div>
+            </div>
+          </div>
+
+          <!-- 4. Flags -->
+          <div class="ac-collapsible">
+            <div class="ac-coll-head">
+              <div class="ac-coll-title">Qualifications</div>
+              <div style="display:flex;align-items:center;">
+                <span class="ac-coll-meta">3 match · 1 concern</span>
+                <svg class="ac-coll-chev" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 10,7 5,11"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Intel -->
+          <div class="ac-collapsible">
+            <div class="ac-coll-head">
+              <div class="ac-coll-title">What Coop found</div>
+              <div style="display:flex;align-items:center;">
+                <span class="ac-coll-meta">3 sentences</span>
+                <svg class="ac-coll-chev" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 10,7 5,11"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="ac-spacer"></div>
+
+          <!-- 6. Action bar -->
+          <div class="ac-actions">
+            <button class="ac-btn ac-btn-reject">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3 L11 11 M11 3 L3 11"/></svg>
+              Reject
+            </button>
+            <button class="ac-btn ac-btn-undo" title="Undo last swipe">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7 A4 4 0 1 1 7 11"/>
+                <polyline points="3,4 3,7 6,7"/>
+              </svg>
+            </button>
+            <button class="ac-btn ac-btn-apply">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,7 6,10 11,4"/></svg>
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 2. CARD ANATOMY ════════════════════════════ -->
+  <h2>2 · Card anatomy</h2>
+  <p class="section-note">Top-to-bottom flow: lockup → score → dimensions → key details → flags → intel → actions. The score is the visual anchor. Everything below is supporting evidence; the user doesn't need to scroll or click to decide on the 60% of cards where the score alone tells the story.</p>
+
+  <div class="annotated-row">
+    <div class="card-stack" style="margin: 0; width: 520px; height: 780px;">
+      <div class="apply-card" style="position: relative; box-shadow: var(--ci-shadow-md);">
+        <div class="ac-lockup" data-anno="1">
+          <div class="ac-logo">T</div>
+          <div class="ac-lockup-text">
+            <div class="ac-company">Topo.io</div>
+            <div class="ac-role">Senior Product Manager, Revenue GTM</div>
+          </div>
+        </div>
+        <div class="ac-score-block" data-anno="2">
+          <div class="ac-score s-green">7.8<span class="d">/10</span></div>
+          <div class="ac-verdict">
+            <div class="ac-verdict-title">Strong fit</div>
+            <div class="ac-verdict-reason">Exceeds salary floor, role matches revenue-GTM focus, Series A with runway.</div>
+          </div>
+        </div>
+        <div class="ac-dims" data-anno="3">
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:82%"></div></div><div class="ac-dim-label">Comp</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:88%"></div></div><div class="ac-dim-label">Role fit</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-amber" style="width:65%"></div></div><div class="ac-dim-label">Stage</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:76%"></div></div><div class="ac-dim-label">Scope</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-amber" style="width:70%"></div></div><div class="ac-dim-label">Growth</div></div>
+        </div>
+        <div class="ac-chips" data-anno="4">
+          <div class="ac-chip"><div class="ac-chip-label">Comp</div><div class="ac-chip-value">$180–260K</div></div>
+          <div class="ac-chip"><div class="ac-chip-label">Location</div><div class="ac-chip-value">Remote US</div></div>
+          <div class="ac-chip"><div class="ac-chip-label">Stage</div><div class="ac-chip-value">Series B · 50–200</div></div>
+        </div>
+        <div class="ac-collapsible" data-anno="5">
+          <div class="ac-coll-head">
+            <div class="ac-coll-title">Qualifications</div>
+            <div style="display:flex;align-items:center;"><span class="ac-coll-meta">3 match · 1 concern</span>
+              <svg class="ac-coll-chev" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 10,7 5,11"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="ac-collapsible" data-anno="6">
+          <div class="ac-coll-head">
+            <div class="ac-coll-title">What Coop found</div>
+            <div style="display:flex;align-items:center;"><span class="ac-coll-meta">3 sentences</span>
+              <svg class="ac-coll-chev" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 10,7 5,11"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="ac-spacer"></div>
+        <div class="ac-actions" data-anno="7">
+          <button class="ac-btn ac-btn-reject">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3 L11 11 M11 3 L3 11"/></svg>
+            Reject
+          </button>
+          <button class="ac-btn ac-btn-undo" title="Undo last swipe">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7 A4 4 0 1 1 7 11"/>
+              <polyline points="3,4 3,7 6,7"/>
+            </svg>
+          </button>
+          <button class="ac-btn ac-btn-apply">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,7 6,10 11,4"/></svg>
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="annotations">
+      <div class="anno"><div class="anno-num">1</div><strong>Company lockup</strong>40px logo + company name (20px / 700) + role title (14px secondary, single line, ellipsis if long).</div>
+      <div class="anno"><div class="anno-num">2</div><strong>Score hero</strong>Big number (56px / 700) colored per spectrum: ≥7.5 green, 6.0–7.4 amber, 4.5–5.9 orange, &lt;4.5 red. Verdict line describes the reason in one sentence.</div>
+      <div class="anno"><div class="anno-num">3</div><strong>5-dimension micro-bars</strong>Comp · Role fit · Stage · Scope · Growth. Each 4px horizontal bar colored by its own sub-score. Gives an at-a-glance breakdown without clicking through.</div>
+      <div class="anno"><div class="anno-num">4</div><strong>Key details strip</strong>Three equal-width chips: Comp / Location / Stage. Single border, no background tint. Value in monospace-tabular for quick scanning.</div>
+      <div class="anno"><div class="anno-num">5</div><strong>Flags (collapsed by default)</strong>Summary reads "3 match · 1 concern". Click to expand into green ✓ / red ✗ bullets.</div>
+      <div class="anno"><div class="anno-num">6</div><strong>Intel snippet (collapsed)</strong>Reveals Coop's 3-sentence synthesis of the company. Escape valve for when the score alone isn't enough.</div>
+      <div class="anno"><div class="anno-num">7</div><strong>Action bar</strong>Red-outline Reject (44% width) · Undo icon (small, faded) · Green-fill Apply (44% width). Mouse users get three big targets; keyboard users get ←/→ (see section 8).</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 3. SCORE ZOOM ════════════════════════════ -->
+  <h2>3 · Score + dimensions (zoom)</h2>
+  <p class="section-note">Only the number takes color from the spectrum. Verdict stays primary text; reason stays secondary. Sub-dimension bars each take the color of their own score — if the composite is green but Stage is amber, that amber bar is the single signal of where to look.</p>
+
+  <div class="zoom-panel" style="max-width: 820px;">
+    <div class="zoom-label">Score hero — green composite with mixed sub-dimensions</div>
+    <div style="display: flex; align-items: flex-end; gap: 20px;">
+      <div class="ac-score s-green" style="font-size: 88px;">7.8<span class="d" style="font-size: 32px;">/10</span></div>
+      <div class="ac-verdict" style="padding-bottom: 18px;">
+        <div class="ac-verdict-title" style="font-size: 16px;">Strong fit</div>
+        <div class="ac-verdict-reason" style="font-size: 14px;">Exceeds salary floor, role matches revenue-GTM focus, Series A with runway.</div>
+      </div>
+    </div>
+    <div style="margin-top: 32px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
+      <div class="ac-dim"><div class="ac-dim-bar" style="height: 6px;"><div class="ac-dim-fill s-green" style="width:82%"></div></div><div class="ac-dim-label" style="margin-top: 8px;">Comp</div><div style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #36B37E; margin-top: 2px;">8.2</div></div>
+      <div class="ac-dim"><div class="ac-dim-bar" style="height: 6px;"><div class="ac-dim-fill s-green" style="width:88%"></div></div><div class="ac-dim-label" style="margin-top: 8px;">Role fit</div><div style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #36B37E; margin-top: 2px;">8.8</div></div>
+      <div class="ac-dim"><div class="ac-dim-bar" style="height: 6px;"><div class="ac-dim-fill s-amber" style="width:65%"></div></div><div class="ac-dim-label" style="margin-top: 8px;">Stage</div><div style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #F5A623; margin-top: 2px;">6.5</div></div>
+      <div class="ac-dim"><div class="ac-dim-bar" style="height: 6px;"><div class="ac-dim-fill s-green" style="width:76%"></div></div><div class="ac-dim-label" style="margin-top: 8px;">Scope</div><div style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #36B37E; margin-top: 2px;">7.6</div></div>
+      <div class="ac-dim"><div class="ac-dim-bar" style="height: 6px;"><div class="ac-dim-fill s-amber" style="width:70%"></div></div><div class="ac-dim-label" style="margin-top: 8px;">Growth</div><div style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #F5A623; margin-top: 2px;">7.0</div></div>
+    </div>
+    <div style="margin-top: 28px; font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.55; padding-top: 20px; border-top: 1px solid var(--ci-border-subtle);">
+      <strong style="color: var(--ci-text-primary); font-weight: 600;">Rule:</strong> only the number colors. Bars color. Labels and verdict stay default text. No glow, no gradient, no tinted card background.
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 4. SWIPE STATES ════════════════════════════ -->
+  <h2>4 · Swipe states</h2>
+  <p class="section-note">Drag tilts the card (max 6deg) with a directional color tint proportional to drag distance. Past a threshold (~30% width), a ghost "APPLY" / "REJECT" label fades in over the tint direction. No cartoonish emoji overlays, no screen shake.</p>
+
+  <div class="swipe-row">
+    <!-- At rest -->
+    <div class="swipe-panel">
+      <div class="swipe-card">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="mini-logo">T</div>
+          <div>
+            <div class="mini-co">Topo.io</div>
+            <div class="mini-role">Senior PM, Revenue GTM</div>
+          </div>
+        </div>
+        <div class="mini-score">7.8<span class="d">/10</span></div>
+        <div style="font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4;">Strong fit · Exceeds salary floor, role matches.</div>
+        <div class="mini-chips">
+          <div class="mini-chip">$180–260K</div>
+          <div class="mini-chip">Remote US</div>
+          <div class="mini-chip">Series B</div>
+        </div>
+        <div class="mini-actions">
+          <div class="mini-btn rej" style="text-align:center;">Reject</div>
+          <div class="mini-btn app" style="text-align:center;">Apply</div>
+        </div>
+      </div>
+      <div class="swipe-caption"><strong>At rest</strong> — neutral</div>
+    </div>
+
+    <!-- Tilted right (Apply) -->
+    <div class="swipe-panel on-right">
+      <div class="tint-right"></div>
+      <div class="swipe-card tilt-right">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="mini-logo">T</div>
+          <div>
+            <div class="mini-co">Topo.io</div>
+            <div class="mini-role">Senior PM, Revenue GTM</div>
+          </div>
+        </div>
+        <div class="mini-score">7.8<span class="d">/10</span></div>
+        <div style="font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4;">Strong fit · Exceeds salary floor, role matches.</div>
+        <div class="mini-chips">
+          <div class="mini-chip">$180–260K</div>
+          <div class="mini-chip">Remote US</div>
+          <div class="mini-chip">Series B</div>
+        </div>
+        <div class="mini-actions">
+          <div class="mini-btn rej" style="text-align:center;">Reject</div>
+          <div class="mini-btn app" style="text-align:center;">Apply</div>
+        </div>
+      </div>
+      <div class="ghost-label apply">APPLY</div>
+      <div class="swipe-caption"><strong>Tilted right</strong> — green tint + APPLY label at ~30% threshold</div>
+    </div>
+
+    <!-- Tilted left (Reject) -->
+    <div class="swipe-panel on-left">
+      <div class="tint-left"></div>
+      <div class="swipe-card tilt-left">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="mini-logo">T</div>
+          <div>
+            <div class="mini-co">Topo.io</div>
+            <div class="mini-role">Senior PM, Revenue GTM</div>
+          </div>
+        </div>
+        <div class="mini-score">7.8<span class="d">/10</span></div>
+        <div style="font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4;">Strong fit · Exceeds salary floor, role matches.</div>
+        <div class="mini-chips">
+          <div class="mini-chip">$180–260K</div>
+          <div class="mini-chip">Remote US</div>
+          <div class="mini-chip">Series B</div>
+        </div>
+        <div class="mini-actions">
+          <div class="mini-btn rej" style="text-align:center;">Reject</div>
+          <div class="mini-btn app" style="text-align:center;">Apply</div>
+        </div>
+      </div>
+      <div class="ghost-label reject">REJECT</div>
+      <div class="swipe-caption"><strong>Tilted left</strong> — red tint + REJECT label at ~30% threshold</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 5. POST-SWIPE FLOW ════════════════════════════ -->
+  <h2>5 · Post-swipe storyboard</h2>
+  <p class="section-note">On release past threshold: active card flings 300ms ease-spring to off-screen · next card slides up from below 200ms ease-out · undo chip appears at bottom, auto-dismisses after 5s.</p>
+
+  <div class="story-row">
+    <div class="story-wrap">
+      <div class="story-panel">
+        <div class="story-card story-center" style="opacity:0.15;">
+          <div class="sl-co">Topo.io</div>
+          <div class="sl-role">Senior PM</div>
+          <div class="sl-score" style="color: #E8384F;">7.8<span style="color: var(--ci-text-tertiary); font-size:14px; font-weight:500;">/10</span></div>
+        </div>
+        <div class="story-card story-flying">
+          <div class="sl-co">Topo.io</div>
+          <div class="sl-role">Senior PM</div>
+          <div class="sl-score" style="color: #E8384F;">7.8<span style="color: var(--ci-text-tertiary); font-size:14px; font-weight:500;">/10</span></div>
+        </div>
+        <div class="story-arrow-right">→</div>
+      </div>
+      <div class="story-caption"><strong>Step 1</strong> · card flies out (300ms ease-spring)</div>
+    </div>
+
+    <div class="story-wrap">
+      <div class="story-panel">
+        <div class="story-card" style="top: 50%; left: 50%; transform: translate(-50%, -35%);">
+          <div class="sl-co">Nomad Data</div>
+          <div class="sl-role">Product Lead, Data</div>
+          <div class="sl-score" style="color: #F5A623;">6.4<span style="color: var(--ci-text-tertiary); font-size:14px; font-weight:500;">/10</span></div>
+        </div>
+        <div class="story-up-arrow">↑</div>
+      </div>
+      <div class="story-caption"><strong>Step 2</strong> · next card slides up (200ms ease-out)</div>
+    </div>
+
+    <div class="story-wrap">
+      <div class="story-panel">
+        <div class="story-card story-next-in-place">
+          <div class="sl-co">Nomad Data</div>
+          <div class="sl-role">Product Lead, Data</div>
+          <div class="sl-score" style="color: #F5A623;">6.4<span style="color: var(--ci-text-tertiary); font-size:14px; font-weight:500;">/10</span></div>
+        </div>
+        <div class="undo-chip">
+          <svg style="width:12px;height:12px;" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7 A4 4 0 1 1 7 11"/>
+            <polyline points="3,4 3,7 6,7"/>
+          </svg>
+          Rejected Topo.io
+          <span class="undo-sep"></span>
+          <button class="undo-btn">Undo</button>
+        </div>
+      </div>
+      <div class="story-caption"><strong>Step 3</strong> · undo chip, auto-dismisses in 5s</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 6. EXPANDED SECTIONS ════════════════════════════ -->
+  <h2>6 · Expanded flags + intel</h2>
+  <p class="section-note">Both collapsibles open. Flags list green ✓ matches and red ✗ concerns; Coop's 3-sentence synthesis lives below. Expanding both pushes the action bar down ~140px but keeps it on the card — no scroll hijack.</p>
+
+  <div class="expanded-card-holder">
+    <div class="card-stack" style="width: 520px; height: auto; min-height: 940px;">
+      <div class="apply-card" style="position: relative; box-shadow: var(--ci-shadow-md); min-height: 940px;">
+        <div class="ac-lockup">
+          <div class="ac-logo">T</div>
+          <div class="ac-lockup-text">
+            <div class="ac-company">Topo.io</div>
+            <div class="ac-role">Senior Product Manager, Revenue GTM</div>
+          </div>
+        </div>
+        <div class="ac-score-block">
+          <div class="ac-score s-green">7.8<span class="d">/10</span></div>
+          <div class="ac-verdict">
+            <div class="ac-verdict-title">Strong fit</div>
+            <div class="ac-verdict-reason">Exceeds salary floor, role matches revenue-GTM focus, Series A with runway.</div>
+          </div>
+        </div>
+        <div class="ac-dims">
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:82%"></div></div><div class="ac-dim-label">Comp</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:88%"></div></div><div class="ac-dim-label">Role fit</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-amber" style="width:65%"></div></div><div class="ac-dim-label">Stage</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-green" style="width:76%"></div></div><div class="ac-dim-label">Scope</div></div>
+          <div class="ac-dim"><div class="ac-dim-bar"><div class="ac-dim-fill s-amber" style="width:70%"></div></div><div class="ac-dim-label">Growth</div></div>
+        </div>
+        <div class="ac-chips">
+          <div class="ac-chip"><div class="ac-chip-label">Comp</div><div class="ac-chip-value">$180–260K</div></div>
+          <div class="ac-chip"><div class="ac-chip-label">Location</div><div class="ac-chip-value">Remote US</div></div>
+          <div class="ac-chip"><div class="ac-chip-label">Stage</div><div class="ac-chip-value">Series B · 50–200</div></div>
+        </div>
+
+        <!-- Flags expanded -->
+        <div class="ac-collapsible">
+          <div class="ac-coll-head" aria-expanded="true">
+            <div class="ac-coll-title">Qualifications</div>
+            <div style="display:flex;align-items:center;">
+              <span class="ac-coll-meta">3 match · 1 concern</span>
+              <svg class="ac-coll-chev" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 10,7 5,11"/></svg>
+            </div>
+          </div>
+          <div class="ac-coll-body">
+            <div class="ac-flag-item pos"><span class="ac-flag-mark">✓</span><span>Revenue GTM scope matches senior-IC preference</span></div>
+            <div class="ac-flag-item pos"><span class="ac-flag-mark">✓</span><span>OTE top-end ($260K) clears salary floor by 15%</span></div>
+            <div class="ac-flag-item pos"><span class="ac-flag-mark">✓</span><span>Remote US — no relocation required</span></div>
+            <div class="ac-flag-item neg"><span class="ac-flag-mark">✗</span><span>Series B stage — some investor reporting overhead likely</span></div>
+          </div>
+        </div>
+
+        <!-- Intel expanded -->
+        <div class="ac-collapsible">
+          <div class="ac-coll-head" aria-expanded="true">
+            <div class="ac-coll-title">What Coop found</div>
+            <div style="display:flex;align-items:center;">
+              <span class="ac-coll-meta">3 sentences</span>
+              <svg class="ac-coll-chev" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 10,7 5,11"/></svg>
+            </div>
+          </div>
+          <div class="ac-coll-body">
+            <p style="margin:0;">Topo.io is a Series B revenue intelligence platform ($65M raised, Accel-led, 140 employees) competing with Gong in the mid-market SDR productivity space.</p>
+            <p style="margin:0;">The role reports into the CRO and focuses on lifecycle and activation — matches Matt's revenue-GTM specialization better than the usual "platform PM" variant.</p>
+            <p style="margin:0;">Glassdoor 4.2, with recent reviews citing strong product culture and a founder who's accessible. No burnout signal in the last 6 months.</p>
+          </div>
+        </div>
+
+        <div class="ac-spacer"></div>
+
+        <div class="ac-actions">
+          <button class="ac-btn ac-btn-reject">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3 L11 11 M11 3 L3 11"/></svg>
+            Reject
+          </button>
+          <button class="ac-btn ac-btn-undo">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7 A4 4 0 1 1 7 11"/>
+              <polyline points="3,4 3,7 6,7"/>
+            </svg>
+          </button>
+          <button class="ac-btn ac-btn-apply">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,7 6,10 11,4"/></svg>
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 7. EMPTY STATE ════════════════════════════ -->
+  <h2>7 · Empty state — queue cleared</h2>
+  <p class="section-note">After the last swipe: Coop avatar, short congratulatory line, numeric scorecard of what just happened, single path back.</p>
+
+  <div class="empty-hero">
+    <div class="q-topbar">
+      <div class="q-brand"><span class="q-brand-mark"></span>Coop.ai</div>
+      <div class="q-counter">Card <strong>32</strong> of <strong>32</strong></div>
+      <button class="q-exit">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 2 L10 10 M10 2 L2 10"/></svg>
+        Exit queue
+      </button>
+    </div>
+    <div class="empty-inner">
+      <div class="empty-box">
+        <div class="empty-coop">
+          <div class="empty-mouth"></div>
+        </div>
+        <div class="empty-title">Queue clear</div>
+        <div class="empty-body">Matt, you've triaged all 32 roles in your queue. Next batch arrives as Coop scores them.</div>
+        <div class="empty-stats">
+          <div class="empty-stat">
+            <div class="empty-stat-num applied">18</div>
+            <div class="empty-stat-label">Applied</div>
+          </div>
+          <div class="empty-stat">
+            <div class="empty-stat-num rejected">11</div>
+            <div class="empty-stat-label">Rejected</div>
+          </div>
+          <div class="empty-stat">
+            <div class="empty-stat-num saved">3</div>
+            <div class="empty-stat-label">Saved</div>
+          </div>
+        </div>
+        <button class="empty-btn">Back to dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 8. KEYBOARD ════════════════════════════ -->
+  <h2>8 · Keyboard shortcuts</h2>
+  <p class="section-note">Desktop power-user path. Mouse users never have to learn these — but once discovered (small hint under action bar, or ? modal) they turn triage into 3-keystroke rhythm.</p>
+
+  <div class="kbd-panel">
+    <div class="kbd-row">
+      <span class="label">Reject</span>
+      <span class="keys"><kbd>←</kbd></span>
+    </div>
+    <div class="kbd-row">
+      <span class="label">Apply</span>
+      <span class="keys"><kbd>→</kbd></span>
+    </div>
+    <div class="kbd-row">
+      <span class="label">Skip (defer)</span>
+      <span class="keys"><kbd>↑</kbd></span>
+    </div>
+    <div class="kbd-row">
+      <span class="label">Save for later</span>
+      <span class="keys"><kbd>↓</kbd></span>
+    </div>
+    <div class="kbd-row">
+      <span class="label">Toggle flags / intel expand</span>
+      <span class="keys"><kbd>space</kbd></span>
+    </div>
+    <div class="kbd-row">
+      <span class="label">Undo last swipe</span>
+      <span class="keys"><kbd>U</kbd></span>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════ 9. OPEN QUESTIONS ════════════════════════════ -->
+  <h2>9 · Open questions</h2>
+  <div class="oq-list">
+    <div class="oq-item">
+      <strong><kbd style="margin-right:6px;">↑</kbd> Skip behavior</strong>
+      <div class="q-body">Does "skip" push to end of queue, defer by N days, or mark as "come back later in this session"? Unclear whether it should persist across sessions. Current stance: push to end of current queue, reset on next queue-load.</div>
+    </div>
+    <div class="oq-item">
+      <strong><kbd style="margin-right:6px;">↓</kbd> Save-for-later bucket</strong>
+      <div class="q-body">Does this create a separate "Snoozed" bucket, visible from the dashboard? Or does it just add to the existing pipeline in a new stage ("Watching")? The existing Kanban has a Watching column — suggest reusing it rather than inventing a parallel concept.</div>
+    </div>
+    <div class="oq-item">
+      <strong>Card back-side for full JD</strong>
+      <div class="q-body">Should there be a flip-to-see-JD affordance (card back shows raw job description)? Or is the "What Coop found" expand enough? Flipping feels delightful but adds a mechanic; suggest holding off until we see Matt skipping cards because he wants more detail before deciding.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

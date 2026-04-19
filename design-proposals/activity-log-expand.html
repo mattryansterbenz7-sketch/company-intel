@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Activity log: expand to read full (#219)</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-accent-primary: #FC636B;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .page-sub { color: var(--ci-text-secondary); font-size: 13px; max-width: 800px; line-height: 1.5; margin-bottom: 28px; }
+  .recommendation {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(54,179,126,0.12); color: #1B7E53;
+    font-size: 12px; font-weight: 600;
+    padding: 4px 10px; border-radius: 99px;
+    margin-bottom: 18px;
+  }
+
+  .scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1360px; }
+  .scene { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; }
+  .scene-head { padding: 12px 18px; background: var(--ci-bg-inset); border-bottom: 1px solid var(--ci-border-default); font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); letter-spacing: 0.02em; }
+  .scene-body { padding: 20px 20px 24px; }
+
+  /* ── Log form (above timeline, per #218) ── */
+  .log-section { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px dashed var(--ci-border-default); }
+  .log-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px dashed var(--ci-border-default);
+    color: var(--ci-text-secondary); font-size: 13px; font-weight: 500;
+    padding: 8px 14px; border-radius: var(--ci-radius-sm);
+    cursor: pointer; font-family: inherit;
+    transition: all var(--motion-xs) var(--ease-out);
+  }
+  .log-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); border-color: var(--ci-border-default); }
+  .log-form {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 14px; background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+  }
+  .log-form-title { font-size: 12px; font-weight: 700; color: var(--ci-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+  .log-form select, .log-form input[type="date"], .log-form textarea {
+    font-family: inherit; font-size: 13px; padding: 7px 10px;
+    border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm);
+    background: var(--ci-bg-raised); color: var(--ci-text-primary);
+    resize: vertical;
+  }
+  .log-form textarea { min-height: 80px; line-height: 1.5; }
+  .log-form textarea:focus, .log-form select:focus, .log-form input:focus {
+    outline: none; border-color: var(--ci-accent-primary); box-shadow: 0 0 0 2px rgba(252,99,107,0.15);
+  }
+  .log-form-row { display: flex; gap: 8px; }
+  .log-form-row select { flex: 0 0 160px; }
+  .log-form-row input { flex: 0 0 140px; }
+  .log-form-actions { display: flex; gap: 8px; }
+  .log-save { font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: var(--ci-radius-sm); background: var(--ci-text-primary); color: #fff; border: none; cursor: pointer; font-family: inherit; }
+  .log-cancel { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--ci-radius-sm); background: transparent; color: var(--ci-text-secondary); border: 1px solid var(--ci-border-default); cursor: pointer; font-family: inherit; }
+
+  /* ── Timeline ── */
+  .timeline { display: flex; flex-direction: column; }
+  .entry { display: flex; gap: 14px; position: relative; }
+  .dot-col { display: flex; flex-direction: column; align-items: center; width: 32px; flex-shrink: 0; }
+  .dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--ci-bg-inset); border: 2px solid var(--ci-border-default); flex-shrink: 0; }
+  .line { width: 2px; flex: 1; background: #e8ecf1; min-height: 16px; }
+  .entry:last-child .line { display: none; }
+  .content { flex: 1; padding-bottom: 20px; min-width: 0; }
+  .head-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; }
+  .badge-activity { background: #d1fae5; color: #065f46; }
+  .badge-email { background: #dbeafe; color: #1e40af; }
+  .badge-meeting { background: #fef3c7; color: #92400e; }
+  .date-str { font-size: 12px; color: var(--ci-text-tertiary); }
+  .title { font-size: 14px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.4; }
+  .subtitle { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 2px; }
+
+  /* ── Expandable note (the new bit) ── */
+  .note-shell {
+    margin-top: 6px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    border-left: 3px solid var(--ci-border-default);
+    overflow: hidden;
+    transition: border-color var(--motion-xs) var(--ease-out);
+  }
+  .note-shell:hover { border-left-color: var(--ci-text-tertiary); }
+  .note-shell[data-expanded="true"] { border-left-color: var(--ci-accent-primary); }
+  .note-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--ci-text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .note-header:hover { background: rgba(0,0,0,0.02); }
+  .note-chevron {
+    flex-shrink: 0;
+    width: 14px; height: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ci-text-tertiary);
+    font-size: 10px;
+    transition: transform var(--motion-xs) var(--ease-out);
+  }
+  .note-shell[data-expanded="true"] .note-chevron { transform: rotate(90deg); }
+
+  .note-preview {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .note-shell[data-expanded="true"] .note-preview { display: none; }
+
+  .note-body {
+    padding: 0 12px 12px 32px;
+    font-size: 13px; line-height: 1.6;
+    color: var(--ci-text-primary);
+    white-space: pre-wrap;
+    display: none;
+  }
+  .note-shell[data-expanded="true"] .note-body { display: block; animation: noteFade 200ms var(--ease-out); }
+  @keyframes noteFade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .note-meta {
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.05);
+    display: flex; gap: 12px; align-items: center;
+    font-size: 11px; color: var(--ci-text-tertiary);
+  }
+
+  /* ── Note ── */
+  .caption { font-size: 11px; color: var(--ci-text-tertiary); font-style: italic; margin-top: 16px; }
+
+  .cursor-demo { color: var(--ci-accent-primary); font-weight: 600; font-size: 11px; background: rgba(252,99,107,0.08); padding: 1px 6px; border-radius: 99px; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<h1>Activity log: expand to read full (#219)</h1>
+<p class="page-sub">Click any activity's note row to expand. Full content is preserved (LinkedIn DM threads, call debriefs, multi-message exchanges). Form gets a textarea so multi-line content can be entered.</p>
+
+<div class="recommendation">✓ Recommended: inline accordion — preserves timeline flow, no modal nav cost</div>
+
+<div class="scenes">
+
+  <!-- ═════════ BEFORE ═════════ -->
+  <div class="scene">
+    <div class="scene-head">BEFORE — current state</div>
+    <div class="scene-body">
+      <div class="log-section">
+        <button class="log-btn">+ Log activity</button>
+      </div>
+
+      <div class="timeline">
+        <div class="entry">
+          <div class="dot-col"><div class="dot">💬</div><div class="line"></div></div>
+          <div class="content">
+            <div class="head-row">
+              <span class="badge badge-activity">LinkedIn DM</span>
+              <span class="date-str">Apr 15, 2026</span>
+            </div>
+            <div class="title">LinkedIn DM</div>
+            <div class="subtitle">Krisztian Berecz Krisztian Berecz 10:00 AM Sorry - it has been a really busy w…</div>
+          </div>
+        </div>
+        <div class="entry">
+          <div class="dot-col"><div class="dot">📞</div><div class="line"></div></div>
+          <div class="content">
+            <div class="head-row">
+              <span class="badge badge-activity">Phone Call</span>
+              <span class="date-str">Apr 12, 2026</span>
+            </div>
+            <div class="title">Phone Call</div>
+            <div class="subtitle">Rob wants to move quickly to the HM call. Strong signal on…</div>
+          </div>
+        </div>
+        <div class="entry">
+          <div class="dot-col"><div class="dot">🤝</div></div>
+          <div class="content">
+            <div class="head-row">
+              <span class="badge badge-activity">Referral</span>
+              <span class="date-str">Apr 09, 2026</span>
+            </div>
+            <div class="title">Referral / Intro</div>
+            <div class="subtitle">Intro from Alex to Sarah on the founding team…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="caption">Single 80-char slice. After saving, full text is unreachable. Form input is single-line <code>&lt;input type="text"&gt;</code>, so multi-line content can't be entered to begin with.</div>
+    </div>
+  </div>
+
+  <!-- ═════════ AFTER ═════════ -->
+  <div class="scene">
+    <div class="scene-head">AFTER — expandable entries + textarea form</div>
+    <div class="scene-body">
+      <div class="log-section">
+        <div class="log-form">
+          <div class="log-form-title">Log an activity</div>
+          <div class="log-form-row">
+            <select>
+              <option>💬 LinkedIn DM</option>
+              <option>📞 Phone Call</option>
+              <option>☕ Coffee Chat</option>
+              <option>📱 Text Message</option>
+              <option>🤝 Referral / Intro</option>
+              <option>📧 Email Sent</option>
+              <option>📌 Other</option>
+            </select>
+            <input type="date" value="2026-04-17">
+          </div>
+          <textarea placeholder="What happened? Paste full message thread, call debrief, or intro context — all of it is preserved and searchable.">Krisztian Berecz — LinkedIn DM thread
+
+4/14  8:42 AM
+Matt: Hey Krisztian — saw you just joined Bretton. Would love 20 min to hear how you're approaching the launch phase.
+
+4/14  3:12 PM
+Krisztian: Matt! Great to hear from you. Next week looks tight but happy to chat. Friday 2pm work?
+
+4/15  10:00 AM
+Krisztian: Sorry — it has been a really busy week. Can we push to next Tuesday? Also, have you spoken with Alex? He'd be the one to bring you in.</textarea>
+          <div class="log-form-actions">
+            <button class="log-save">Save activity</button>
+            <button class="log-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline">
+
+        <!-- Expanded entry (the new state) -->
+        <div class="entry">
+          <div class="dot-col"><div class="dot">💬</div><div class="line"></div></div>
+          <div class="content">
+            <div class="head-row">
+              <span class="badge badge-activity">LinkedIn DM</span>
+              <span class="date-str">Apr 15, 2026</span>
+            </div>
+            <div class="title">LinkedIn DM</div>
+            <div class="note-shell" data-expanded="true">
+              <div class="note-header">
+                <span class="note-chevron">▸</span>
+                <span class="note-preview">Krisztian Berecz — LinkedIn DM thread 4/14 8:42 AM Matt: Hey Krisztian — saw you just joined Bret…</span>
+              </div>
+              <div class="note-body">Krisztian Berecz — LinkedIn DM thread
+
+4/14  8:42 AM
+Matt: Hey Krisztian — saw you just joined Bretton. Would love 20 min to hear how you're approaching the launch phase.
+
+4/14  3:12 PM
+Krisztian: Matt! Great to hear from you. Next week looks tight but happy to chat. Friday 2pm work?
+
+4/15  10:00 AM
+Krisztian: Sorry — it has been a really busy week. Can we push to next Tuesday? Also, have you spoken with Alex? He'd be the one to bring you in.
+<span class="note-meta">
+                  <span>Logged 4/15 · 4 messages · 189 words</span>
+                </span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsed entries (default state) -->
+        <div class="entry">
+          <div class="dot-col"><div class="dot">📞</div><div class="line"></div></div>
+          <div class="content">
+            <div class="head-row">
+              <span class="badge badge-activity">Phone Call</span>
+              <span class="date-str">Apr 12, 2026</span>
+            </div>
+            <div class="title">Phone Call<span class="cursor-demo">hover</span></div>
+            <div class="note-shell">
+              <div class="note-header">
+                <span class="note-chevron">▸</span>
+                <span class="note-preview">Rob wants to move quickly to the HM call. Strong signal on comp floor at $180k OTE…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="dot-col"><div class="dot">🤝</div></div>
+          <div class="content">
+            <div class="head-row">
+              <span class="badge badge-activity">Referral</span>
+              <span class="date-str">Apr 09, 2026</span>
+            </div>
+            <div class="title">Referral / Intro</div>
+            <div class="note-shell">
+              <div class="note-header">
+                <span class="note-chevron">▸</span>
+                <span class="note-preview">Intro from Alex to Sarah on the founding team — she runs GTM and handles partner hiring directly…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="caption">
+        Click anywhere on the note row → expands inline with full preserved formatting. Chevron rotates. Subtle border accent on expanded state. Collapse on click. Multiple entries can be open at once.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.note-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const shell = h.closest('.note-shell');
+      const expanded = shell.getAttribute('data-expanded') === 'true';
+      shell.setAttribute('data-expanded', expanded ? 'false' : 'true');
+    });
+  });
+</script>
+
+</body>
+</html>

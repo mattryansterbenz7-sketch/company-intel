@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>#264 — Integrations redesign</title>
+<style>
+  /* ── Tokens (inlined subset) ── */
+  :root {
+    --bg-base:       #F0F2F5;
+    --bg-raised:     #FFFFFF;
+    --bg-inset:      #EBEDF0;
+    --text-primary:  #0A0B0D;
+    --text-secondary:#6F7782;
+    --text-tertiary: #8A8E94;
+    --text-link:     #4573D2;
+    --border:        #E0E4E8;
+    --border-subtle: #EAECEF;
+    --coral:         #FC636B;
+    --teal:          #36B37E;
+    --amber:         #F5A623;
+    --red:           #E8384F;
+    --blue:          #4573D2;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --shadow-sm: 0 1px 3px rgba(30,31,33,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(30,31,33,0.10), 0 1px 4px rgba(0,0,0,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg-base); color: var(--text-primary); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  a { color: var(--text-link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Layout ── */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 48px 32px 120px; }
+  .page-header { margin-bottom: 40px; }
+  .page-header .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px; }
+  .page-header h1 { font-size: 28px; font-weight: 700; margin: 0 0 12px; letter-spacing: -0.01em; }
+  .page-header .prompt { font-size: 14px; color: var(--text-secondary); max-width: 720px; line-height: 1.55; padding: 14px 16px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .page-header .prompt b { color: var(--text-primary); font-weight: 600; }
+
+  .section { margin-top: 56px; }
+  .section > .section-head { margin-bottom: 20px; }
+  .section-head h2 { font-size: 18px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.005em; }
+  .section-head p { font-size: 13px; color: var(--text-secondary); margin: 0; max-width: 640px; line-height: 1.55; }
+
+  /* ═══════════════════════════════════════════════════════
+     Hero: Full integrations page mockup
+     ═══════════════════════════════════════════════════════ */
+  .hero-frame {
+    width: 1000px;
+    margin: 0 auto;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+  }
+  .hero-chrome {
+    background: #151B26;
+    color: #F5F4F2;
+    padding: 10px 18px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #000;
+  }
+  .hero-chrome .dots { display: flex; gap: 6px; }
+  .hero-chrome .dots span { width: 10px; height: 10px; border-radius: 50%; background: #2C3545; display: block; }
+  .hero-chrome .path { color: #A3AEBE; font-family: var(--mono); font-size: 11px; margin-left: 8px; }
+
+  .hero-body { padding: 40px 56px 56px; }
+
+  .crumb { font-size: 12px; color: var(--text-tertiary); margin-bottom: 14px; }
+  .crumb a { color: var(--text-tertiary); }
+  .crumb .sep { margin: 0 6px; opacity: 0.5; }
+  .crumb .current { color: var(--text-primary); }
+
+  .page-title { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 12px; }
+  .page-intro { font-size: 14px; color: var(--text-secondary); line-height: 1.6; max-width: 720px; margin: 0 0 32px; }
+  .page-intro b { color: var(--text-primary); font-weight: 600; }
+
+  /* Tier group (collapsible) */
+  .tier {
+    background: transparent;
+    margin-bottom: 28px;
+  }
+  .tier-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 4px 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .tier-head .num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bg-inset);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+  }
+  .tier-head h3 {
+    font-size: 14px; font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.005em;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .tier-head .tier-meta {
+    font-size: 12px; color: var(--text-tertiary); font-weight: 500;
+  }
+  .tier-head .toggle {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+  }
+  .tier-head .caret {
+    width: 10px; height: 10px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    display: inline-block;
+  }
+  .tier-head .caret.up { transform: rotate(-135deg); }
+
+  .tier.required .num { background: rgba(252,99,107,0.12); color: var(--coral); }
+
+  /* Provider card */
+  .prov {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 20px 22px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    gap: 16px;
+    position: relative;
+  }
+  .prov-logo {
+    width: 44px; height: 44px;
+    border-radius: var(--r-sm);
+    background: var(--bg-inset);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+  .prov-logo.anthropic { background: #0A0B0D; color: #F5F4F2; }
+  .prov-logo.openai { background: #F5F4F2; color: #0A0B0D; border: 1px solid var(--border); }
+  .prov-logo.serper { background: #F5F4F2; color: #0A0B0D; border: 1px solid var(--border); font-family: var(--mono); }
+  .prov-logo.granola { background: #F5F4F2; color: #0A0B0D; border: 1px solid var(--border); }
+  .prov-logo.gmail { background: #F5F4F2; color: #0A0B0D; border: 1px solid var(--border); }
+  .prov-logo.calendar { background: #F5F4F2; color: #0A0B0D; border: 1px solid var(--border); }
+  .prov-logo.apollo { background: var(--bg-inset); color: var(--text-tertiary); }
+
+  .prov-main { min-width: 0; }
+  .prov-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 4px;
+  }
+  .prov-head h4 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    margin: 0;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    background: transparent;
+  }
+  .chip.required { border-color: var(--coral); color: var(--coral); }
+  .chip.recommended { border-color: var(--border); color: var(--text-secondary); }
+  .chip.optional { border-color: var(--border-subtle); color: var(--text-tertiary); }
+  .chip.deprecated { border-color: var(--border-subtle); color: var(--text-tertiary); background: var(--bg-inset); }
+
+  .prov-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin: 0 0 10px;
+    max-width: 620px;
+  }
+  .prov-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 14px;
+  }
+  .prov-meta a { color: var(--text-link); font-weight: 500; }
+  .prov-meta .cost { color: var(--text-tertiary); }
+
+  /* Status indicator */
+  .status {
+    position: absolute;
+    top: 20px; right: 22px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-tertiary);
+    flex: 0 0 auto;
+  }
+  .status.connected .dot { background: var(--teal); box-shadow: 0 0 0 3px rgba(54,179,126,0.12); }
+  .status.connected { color: var(--teal); }
+  .status.none .dot { background: #C4CAD1; }
+  .status.expired .dot { background: var(--amber); box-shadow: 0 0 0 3px rgba(245,166,35,0.12); }
+  .status.expired { color: var(--amber); }
+  .status.invalid .dot { background: var(--red); box-shadow: 0 0 0 3px rgba(232,56,79,0.10); }
+  .status.invalid { color: var(--red); }
+  .status.rate .dot { background: var(--amber); }
+  .status.rate { color: var(--amber); }
+
+  /* Input row */
+  .key-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    margin-bottom: 10px;
+  }
+  .key-input {
+    flex: 1 1 auto;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--bg-raised);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    min-width: 0;
+  }
+  .key-input.filled { letter-spacing: 0.5px; }
+  .key-input::placeholder { color: var(--text-tertiary); font-family: var(--mono); }
+  .btn {
+    height: 36px;
+    padding: 0 14px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    cursor: default;
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .btn.primary { background: var(--text-primary); color: #F5F4F2; border-color: var(--text-primary); }
+  .btn.ghost { background: transparent; border-color: var(--border); color: var(--text-secondary); }
+  .btn.oauth { background: #F5F4F2; color: var(--text-primary); }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; font-weight: 500; }
+
+  .actions-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .test-result {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+  }
+  .test-result.ok { color: var(--teal); background: rgba(54,179,126,0.08); }
+  .test-result.fail { color: var(--red); background: rgba(232,56,79,0.07); }
+  .test-result.warn { color: var(--amber); background: rgba(245,166,35,0.08); }
+  .test-result .check { width: 12px; height: 12px; display: inline-block; }
+  .test-result .check svg { width: 12px; height: 12px; }
+
+  /* OAuth scope list */
+  .scope-list {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex; flex-wrap: wrap; gap: 0 14px;
+  }
+  .scope-list li {
+    position: relative; padding-left: 14px;
+  }
+  .scope-list li::before {
+    content: ''; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #C4CAD1;
+  }
+
+  /* Deprecated collapsed state */
+  .prov.deprecated-collapsed {
+    background: var(--bg-inset);
+    border-style: dashed;
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .prov.deprecated-collapsed .prov-logo { width: 32px; height: 32px; font-size: 12px; }
+  .prov.deprecated-collapsed .dep-text { flex: 1; font-size: 13px; color: var(--text-secondary); }
+  .prov.deprecated-collapsed .dep-text b { color: var(--text-primary); font-weight: 600; }
+  .prov.deprecated-collapsed .expand { font-size: 12px; color: var(--text-link); font-weight: 500; }
+
+  /* ═══════════════════════════════════════════════════════
+     Section: Card anatomy (annotated)
+     ═══════════════════════════════════════════════════════ */
+  .anatomy-stage {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 48px 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .anatomy-stage .prov { margin: 0 auto; max-width: 680px; }
+  .anatomy-annotations {
+    position: relative;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  .ann {
+    position: absolute;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-inset);
+    padding: 4px 8px;
+    border-radius: var(--r-sm);
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .ann::before {
+    content: '';
+    position: absolute;
+    width: 40px; height: 1px;
+    background: var(--text-tertiary);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     Section: Status states
+     ═══════════════════════════════════════════════════════ */
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+  }
+  .status-mini {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px 16px;
+    text-align: left;
+  }
+  .status-mini .status {
+    position: static;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .status-mini .name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .status-mini .detail { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+
+  /* ═══════════════════════════════════════════════════════
+     Section: OAuth vs key
+     ═══════════════════════════════════════════════════════ */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .split-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 10px;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     Section: Test connection storyboards
+     ═══════════════════════════════════════════════════════ */
+  .story-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .story {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px 18px 20px;
+  }
+  .story .story-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+  }
+  .story h5 {
+    font-size: 14px;
+    margin: 0 0 4px;
+    font-weight: 600;
+  }
+  .story p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 14px;
+    line-height: 1.5;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     Section: Deprecated treatment
+     ═══════════════════════════════════════════════════════ */
+  .dep-stack { display: flex; flex-direction: column; gap: 18px; }
+  .dep-expanded-warning {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--amber);
+    background: rgba(245,166,35,0.08);
+    border-radius: var(--r-sm);
+    padding: 8px 12px;
+    border: 1px solid rgba(245,166,35,0.25);
+    line-height: 1.5;
+  }
+  .dep-expanded-warning b { color: var(--text-primary); font-weight: 600; }
+
+  /* ═══════════════════════════════════════════════════════
+     Section: Open questions
+     ═══════════════════════════════════════════════════════ */
+  .questions {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 28px 32px;
+  }
+  .questions ol {
+    padding-left: 20px;
+    margin: 0;
+  }
+  .questions li {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    line-height: 1.55;
+  }
+  .questions li:last-child { margin-bottom: 0; }
+  .questions li .ask { font-weight: 600; display: block; margin-bottom: 4px; }
+  .questions li .context { font-size: 13px; color: var(--text-secondary); }
+
+  /* ── Subtle label block that separates major mockup stages ── */
+  .stage-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+  }
+
+  /* small "callout" row used in Apollo's deprecated box */
+  .callout-row {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  /* fine print under the page intro */
+  .privacy-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-tertiary);
+    padding: 4px 10px; border: 1px solid var(--border); border-radius: 99px;
+    margin-top: 4px;
+  }
+
+  /* key input trailing tail */
+  .key-input.reveal { color: var(--text-secondary); }
+
+  /* tiny left border accent only on 'Required' tier */
+  .tier.required .tier-head { border-bottom-color: var(--coral); border-bottom-width: 1.5px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ───────────────────────── Page header ───────────────────────── -->
+  <header class="page-header">
+    <div class="eyebrow">Design proposal · Throwaway</div>
+    <h1>#264 Integrations redesign</h1>
+    <div class="prompt">
+      <b>Today:</b> flat form list, no grouping, no "required vs optional" signal. Apollo is effectively unused (credits ran out day 2).
+      <b>Proposal:</b> tier the page by importance — Required → Enhance (AI / research / meetings / email) → Deprecated.
+      Each provider gets a card with a tier chip, status indicator, cost hint, key paste or OAuth connect, and an inline test-connection result.
+    </div>
+  </header>
+
+  <!-- ───────────────────────── 1. RECOMMENDED hero ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Recommended · full page at 1000px</div>
+      <h2>Tiered Integrations page</h2>
+      <p>Five groups, ordered by importance. Each group has a numbered marker. Deprecated collapses by default so it doesn't compete for attention.</p>
+    </div>
+
+    <div class="hero-frame">
+      <div class="hero-chrome">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <div class="path">chrome-extension://coop.ai/integrations.html</div>
+      </div>
+      <div class="hero-body">
+
+        <div class="crumb">
+          <a>Settings</a><span class="sep">/</span><span class="current">Integrations</span>
+        </div>
+        <h2 class="page-title">Integrations</h2>
+        <p class="page-intro">
+          Coop uses these integrations to research companies, score opportunities, and surface meeting notes and email history.
+          <b>Set your own keys — Coop never stores them on a server</b>, they live only in this browser.
+        </p>
+        <span class="privacy-pill">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--teal);"></span>
+          Keys stored locally in chrome.storage
+        </span>
+
+        <!-- ── Tier 1: Required ── -->
+        <div style="height:28px;"></div>
+
+        <div class="tier required">
+          <div class="tier-head">
+            <span class="num">1</span>
+            <h3>Required <span class="tier-meta">· Core AI · without this, Coop can't research or score</span></h3>
+            <span class="toggle">Expanded <span class="caret up"></span></span>
+          </div>
+
+          <!-- Anthropic card -->
+          <div class="prov">
+            <div class="prov-logo anthropic">A</div>
+            <div class="prov-main">
+              <div class="prov-head">
+                <h4>Anthropic (Claude)</h4>
+                <span class="chip required">Required</span>
+              </div>
+              <p class="prov-desc">Coop uses Claude for research synthesis, opportunity scoring, chat, and passive memory extraction. This is the one key Coop can't run without.</p>
+              <div class="prov-meta">
+                <a>Get a key on console.anthropic.com &rarr;</a>
+                <span class="cost">Usage-based · typically &lt;$5/mo for personal use</span>
+              </div>
+              <div class="key-row">
+                <input class="key-input filled reveal" type="text" value="sk-ant-api03-••••••••••••••••••••••••••••f3Ka" />
+                <button class="btn ghost">Replace</button>
+                <button class="btn">Test</button>
+              </div>
+              <div class="actions-row">
+                <span class="test-result ok">
+                  <span class="check">
+                    <svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  Connected · Claude Sonnet 4.6 responded in 420ms
+                </span>
+              </div>
+            </div>
+            <span class="status connected">
+              <span class="dot"></span>Connected
+            </span>
+          </div>
+        </div>
+
+        <!-- ── Tier 2: Enhance AI ── -->
+        <div class="tier">
+          <div class="tier-head">
+            <span class="num">2</span>
+            <h3>Enhance AI <span class="tier-meta">· Fallback chain · Coop flips to OpenAI if Claude is rate-limited</span></h3>
+            <span class="toggle">Expanded <span class="caret up"></span></span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-logo openai">AI</div>
+            <div class="prov-main">
+              <div class="prov-head">
+                <h4>OpenAI</h4>
+                <span class="chip recommended">Recommended</span>
+              </div>
+              <p class="prov-desc">GPT-4.1 mini is the default chat model and the first fallback when Claude rate-limits. Skipping this works but chat can fail during spikes.</p>
+              <div class="prov-meta">
+                <a>Get a key on platform.openai.com &rarr;</a>
+                <span class="cost">Usage-based · typically &lt;$2/mo for personal use</span>
+              </div>
+              <div class="key-row">
+                <input class="key-input filled reveal" type="text" value="sk-proj-••••••••••••••••••••••••••••V9oc" />
+                <button class="btn ghost">Replace</button>
+                <button class="btn">Test</button>
+              </div>
+              <div class="actions-row">
+                <span class="test-result ok">
+                  <span class="check"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  Connected · GPT-4.1 mini responded in 310ms
+                </span>
+              </div>
+            </div>
+            <span class="status connected">
+              <span class="dot"></span>Connected
+            </span>
+          </div>
+        </div>
+
+        <!-- ── Tier 3: Enhance research ── -->
+        <div class="tier">
+          <div class="tier-head">
+            <span class="num">3</span>
+            <h3>Enhance research <span class="tier-meta">· Web search for reviews, leadership, product overviews</span></h3>
+            <span class="toggle">Expanded <span class="caret up"></span></span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-logo serper">S</div>
+            <div class="prov-main">
+              <div class="prov-head">
+                <h4>Serper</h4>
+                <span class="chip recommended">Recommended</span>
+              </div>
+              <p class="prov-desc">Runs the four parallel Google searches (reviews, leadership, job listings, product overview) that feed Claude's company synthesis. Without this, research falls back to a thinner model-only summary.</p>
+              <div class="prov-meta">
+                <a>Get a key on serper.dev &rarr;</a>
+                <span class="cost">2,500 free searches · then $0.30/1k</span>
+              </div>
+              <div class="key-row">
+                <input class="key-input filled reveal" type="text" value="8e••••••••••••••••••••••••••••9c2a" />
+                <button class="btn ghost">Replace</button>
+                <button class="btn">Test</button>
+              </div>
+              <div class="actions-row">
+                <span class="test-result ok">
+                  <span class="check"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  Connected · 1,842 searches remaining this month
+                </span>
+              </div>
+            </div>
+            <span class="status connected">
+              <span class="dot"></span>Connected
+            </span>
+          </div>
+        </div>
+
+        <!-- ── Tier 4: Enhance meetings ── -->
+        <div class="tier">
+          <div class="tier-head">
+            <span class="num">4</span>
+            <h3>Enhance meetings <span class="tier-meta">· Meeting notes &amp; transcripts</span></h3>
+            <span class="toggle">Expanded <span class="caret up"></span></span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-logo granola">G</div>
+            <div class="prov-main">
+              <div class="prov-head">
+                <h4>Granola</h4>
+                <span class="chip optional">Optional</span>
+              </div>
+              <p class="prov-desc">Surfaces Granola meeting notes and transcripts on the matching company's page. Coop indexes on a schedule and rate-limits requests so it stays inside free-tier limits.</p>
+              <div class="prov-meta">
+                <a>Get a key in Granola Settings &rarr;</a>
+                <span class="cost">Included with your Granola plan</span>
+              </div>
+              <div class="key-row">
+                <input class="key-input" type="text" placeholder="gran-••••••••••••••••" />
+                <button class="btn primary">Save</button>
+                <button class="btn" disabled style="opacity:0.5;">Test</button>
+              </div>
+            </div>
+            <span class="status none">
+              <span class="dot"></span>Not connected
+            </span>
+          </div>
+        </div>
+
+        <!-- ── Tier 5: Enhance email ── -->
+        <div class="tier">
+          <div class="tier-head">
+            <span class="num">5</span>
+            <h3>Enhance email &amp; calendar <span class="tier-meta">· OAuth via Google</span></h3>
+            <span class="toggle">Expanded <span class="caret up"></span></span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-logo gmail">M</div>
+            <div class="prov-main">
+              <div class="prov-head">
+                <h4>Gmail</h4>
+                <span class="chip optional">Optional</span>
+              </div>
+              <p class="prov-desc">Pulls email threads by company domain so conversations surface on the company page and in Coop's chat context. Nothing leaves your browser.</p>
+              <div class="prov-meta">
+                <span class="cost">OAuth via Chrome · no key required</span>
+              </div>
+              <div class="actions-row">
+                <button class="btn oauth">
+                  <span style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#EA4335,#FBBC05);display:inline-block;"></span>
+                  Connect Google account
+                </button>
+              </div>
+              <ul class="scope-list">
+                <li>Read email metadata</li>
+                <li>Read email contents</li>
+                <li>Read-only · never send</li>
+              </ul>
+            </div>
+            <span class="status none">
+              <span class="dot"></span>Not connected
+            </span>
+          </div>
+
+          <div class="prov">
+            <div class="prov-logo calendar">C</div>
+            <div class="prov-main">
+              <div class="prov-head">
+                <h4>Google Calendar</h4>
+                <span class="chip optional">Optional</span>
+              </div>
+              <p class="prov-desc">Matches calendar events to saved companies by attendee domain — interview prep surfaces the right meetings automatically.</p>
+              <div class="prov-meta">
+                <span class="cost">OAuth via Chrome · no key required</span>
+              </div>
+              <div class="actions-row">
+                <button class="btn oauth">
+                  <span style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#4285F4,#34A853);display:inline-block;"></span>
+                  Connect Google account
+                </button>
+                <span class="test-result ok">
+                  <span class="check"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  Connected as matt@gmail.com
+                </span>
+              </div>
+              <ul class="scope-list">
+                <li>Read calendar events</li>
+                <li>Read attendee emails</li>
+                <li>Read-only · never modify</li>
+              </ul>
+            </div>
+            <span class="status connected">
+              <span class="dot"></span>Connected
+            </span>
+          </div>
+        </div>
+
+        <!-- ── Tier 6: Deprecated (collapsed) ── -->
+        <div class="tier">
+          <div class="tier-head">
+            <span class="num" style="background:var(--bg-inset); color:var(--text-tertiary);">6</span>
+            <h3 style="color:var(--text-tertiary); font-weight:600;">Deprecated <span class="tier-meta">· No longer used by Coop</span></h3>
+            <span class="toggle">Collapsed <span class="caret"></span></span>
+          </div>
+
+          <div class="prov deprecated-collapsed">
+            <div class="prov-logo apollo">A</div>
+            <div class="dep-text">
+              <b>Apollo</b> — Free credits exhausted · Coop no longer uses this provider for enrichment.
+            </div>
+            <span class="expand">Expand &rarr;</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 2. Card anatomy ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Section 2</div>
+      <h2>Per-provider card anatomy</h2>
+      <p>One card holds: logo, name, tier chip, description, signup link, cost hint, key/OAuth input, test button, inline result, and a top-right status pill.</p>
+    </div>
+
+    <div class="anatomy-stage">
+      <div class="prov" style="margin-top: 20px; margin-bottom: 60px;">
+        <div class="prov-logo serper">S</div>
+        <div class="prov-main">
+          <div class="prov-head">
+            <h4>Serper</h4>
+            <span class="chip recommended">Recommended</span>
+          </div>
+          <p class="prov-desc">Runs the four parallel Google searches that feed Claude's company synthesis.</p>
+          <div class="prov-meta">
+            <a>Get a key on serper.dev &rarr;</a>
+            <span class="cost">2,500 free searches · then $0.30/1k</span>
+          </div>
+          <div class="key-row">
+            <input class="key-input filled reveal" type="text" value="8e••••••••••••••••••••••••••••9c2a" />
+            <button class="btn ghost">Replace</button>
+            <button class="btn">Test</button>
+          </div>
+          <div class="actions-row">
+            <span class="test-result ok">
+              <span class="check"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              Connected · 1,842 searches remaining
+            </span>
+          </div>
+        </div>
+        <span class="status connected">
+          <span class="dot"></span>Connected
+        </span>
+      </div>
+
+      <!-- Annotations layer -->
+      <div style="max-width: 680px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; font-size: 11px; color: var(--text-secondary);">
+        <div><b style="display:block; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-bottom:2px;">01 LOGO</b>Monochrome mark, 44px. No provider brand colors — calm first.</div>
+        <div><b style="display:block; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-bottom:2px;">02 TIER CHIP</b>Outline pill. Required = coral outline, rest neutral.</div>
+        <div><b style="display:block; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-bottom:2px;">03 STATUS</b>Top-right. Dot + label. Color carries state, not shape.</div>
+        <div><b style="display:block; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-bottom:2px;">04 DESCRIPTION</b>One line, plain English, answers "what is this for?"</div>
+        <div><b style="display:block; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-bottom:2px;">05 META ROW</b>Where-to-get link + cost hint. Both small, both tertiary.</div>
+        <div><b style="display:block; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-bottom:2px;">06 INPUT + TEST</b>Key or OAuth button. Test result lives inline — never as a toast.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 3. Status states ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Section 3</div>
+      <h2>Status states</h2>
+      <p>Five discrete states, each visible at a glance from the status pill. Color signals severity; the label tells the truth.</p>
+    </div>
+
+    <div class="status-grid">
+      <div class="status-mini">
+        <span class="status connected"><span class="dot"></span>Connected</span>
+        <div class="name">Healthy</div>
+        <div class="detail">Last test passed within the session.</div>
+      </div>
+      <div class="status-mini">
+        <span class="status none"><span class="dot"></span>Not connected</span>
+        <div class="name">No key yet</div>
+        <div class="detail">Never tested. Field empty.</div>
+      </div>
+      <div class="status-mini">
+        <span class="status expired"><span class="dot"></span>Expired</span>
+        <div class="name">OAuth token expired</div>
+        <div class="detail">Google token lapsed. Reconnect.</div>
+      </div>
+      <div class="status-mini">
+        <span class="status invalid"><span class="dot"></span>Invalid</span>
+        <div class="name">Bad key</div>
+        <div class="detail">401 from provider. Paste a fresh key.</div>
+      </div>
+      <div class="status-mini">
+        <span class="status rate"><span class="dot"></span>Rate-limited</span>
+        <div class="name">429 in last call</div>
+        <div class="detail">Key works, quota hit. Will retry.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 4. OAuth vs key ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Section 4</div>
+      <h2>OAuth vs API key</h2>
+      <p>Same card shell, different input. Gmail and Calendar swap the paste field for a Google Connect button and a small scope list.</p>
+    </div>
+
+    <div class="split">
+      <div>
+        <div class="split-label">API key</div>
+        <div class="prov">
+          <div class="prov-logo anthropic">A</div>
+          <div class="prov-main">
+            <div class="prov-head">
+              <h4>Anthropic (Claude)</h4>
+              <span class="chip required">Required</span>
+            </div>
+            <p class="prov-desc">Coop uses Claude for research synthesis, opportunity scoring, and chat.</p>
+            <div class="prov-meta">
+              <a>Get a key &rarr;</a>
+              <span class="cost">&lt;$5/mo typical</span>
+            </div>
+            <div class="key-row">
+              <input class="key-input" type="text" placeholder="sk-ant-••••••••••••••••" />
+              <button class="btn primary">Save</button>
+            </div>
+          </div>
+          <span class="status none"><span class="dot"></span>Not connected</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="split-label">OAuth</div>
+        <div class="prov">
+          <div class="prov-logo gmail">M</div>
+          <div class="prov-main">
+            <div class="prov-head">
+              <h4>Gmail</h4>
+              <span class="chip optional">Optional</span>
+            </div>
+            <p class="prov-desc">Pulls email threads by company domain. Nothing leaves your browser.</p>
+            <div class="prov-meta">
+              <span class="cost">OAuth via Chrome · no key required</span>
+            </div>
+            <div class="actions-row">
+              <button class="btn oauth">
+                <span style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#EA4335,#FBBC05);display:inline-block;"></span>
+                Connect Google account
+              </button>
+            </div>
+            <ul class="scope-list">
+              <li>Read email metadata</li>
+              <li>Read email contents</li>
+              <li>Read-only · never send</li>
+            </ul>
+          </div>
+          <span class="status none"><span class="dot"></span>Not connected</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 5. Test connection results ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Section 5</div>
+      <h2>Test connection · inline results</h2>
+      <p>Result appears directly below the input row, not as a toast. Three canonical outcomes.</p>
+    </div>
+
+    <div class="story-grid">
+      <div class="story">
+        <div class="story-label">Success</div>
+        <h5>Anthropic</h5>
+        <p>Key accepted · model responded.</p>
+        <div class="key-row">
+          <input class="key-input filled reveal" type="text" value="sk-ant-••••••f3Ka" />
+          <button class="btn sm">Test</button>
+        </div>
+        <div class="actions-row" style="margin-top: 10px;">
+          <span class="test-result ok">
+            <span class="check"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Connected · Claude responded in 420ms
+          </span>
+        </div>
+      </div>
+
+      <div class="story">
+        <div class="story-label">Invalid key</div>
+        <h5>Serper</h5>
+        <p>401 from provider · check your key.</p>
+        <div class="key-row">
+          <input class="key-input filled" type="text" value="8e-••••••wrong" style="border-color: var(--red);" />
+          <button class="btn sm">Test</button>
+        </div>
+        <div class="actions-row" style="margin-top: 10px;">
+          <span class="test-result fail">
+            <span class="check"><svg viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+            Invalid key · 401 Unauthorized
+          </span>
+        </div>
+      </div>
+
+      <div class="story">
+        <div class="story-label">Network / rate limit</div>
+        <h5>OpenAI</h5>
+        <p>Key is valid but quota hit.</p>
+        <div class="key-row">
+          <input class="key-input filled reveal" type="text" value="sk-proj-••••••V9oc" />
+          <button class="btn sm">Test</button>
+        </div>
+        <div class="actions-row" style="margin-top: 10px;">
+          <span class="test-result warn">
+            <span class="check"><svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5M6 8.2v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+            Rate-limited · 429 · retry in 30s
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 6. Deprecated treatment ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Section 6</div>
+      <h2>Deprecated treatment</h2>
+      <p>Apollo collapses to a single muted row. Expanding reveals the full card with a dampening warning — not a scary error.</p>
+    </div>
+
+    <div class="dep-stack">
+      <div>
+        <div class="split-label">Default · collapsed</div>
+        <div class="prov deprecated-collapsed">
+          <div class="prov-logo apollo">A</div>
+          <div class="dep-text">
+            <b>Apollo</b> — Free credits exhausted · Coop no longer uses this provider.
+          </div>
+          <span class="expand">Expand &rarr;</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="split-label">Expanded · user opted in anyway</div>
+        <div class="prov">
+          <div class="prov-logo apollo">A</div>
+          <div class="prov-main">
+            <div class="prov-head">
+              <h4 style="color: var(--text-secondary);">Apollo</h4>
+              <span class="chip deprecated">Deprecated</span>
+            </div>
+            <p class="prov-desc">Previously used for firmographic enrichment (employees, funding, industry). Coop's free Apollo credits exhausted early in the project; the research pipeline now hits Serper → Claude directly and produces comparable output.</p>
+            <div class="prov-meta">
+              <a>Get a key on apollo.io &rarr;</a>
+              <span class="cost">Paid plans start at $59/mo</span>
+            </div>
+            <div class="key-row">
+              <input class="key-input" type="text" placeholder="Paste an Apollo key if you want to try it" />
+              <button class="btn ghost">Save</button>
+            </div>
+            <div class="dep-expanded-warning">
+              <b>Heads up:</b> Coop's enrichment chain already handles firmographics via Serper + Claude. Setting a key here will let Apollo run first, but most data will match what you'd get without it.
+            </div>
+          </div>
+          <span class="status none"><span class="dot"></span>Not connected</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 7. Open questions ───────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="stage-tag">Section 7</div>
+      <h2>Open questions</h2>
+      <p>Three calls that shape the build.</p>
+    </div>
+
+    <div class="questions">
+      <ol>
+        <li>
+          <span class="ask">OpenAI — Required or Recommended?</span>
+          <span class="context">Chat functions without it when Claude is up, but the fallback chain degrades. Current mockup shows <b>Recommended</b>. Upgrade to <b>Required</b> if we treat fallback as non-optional.</span>
+        </li>
+        <li>
+          <span class="ask">First-time-user guidance — inline or dedicated flow?</span>
+          <span class="context">The tiered page itself tells the story. Option A: lean on the page (this mockup). Option B: wrap a first-run setup modal that hands users off to this page once Anthropic is in.</span>
+        </li>
+        <li>
+          <span class="ask">Cost hints — static copy or pulled from real usage?</span>
+          <span class="context">Current design shows hardcoded ranges ("&lt;$5/mo"). We have per-model cost tracking in api.js — could surface the user's actual 30-day spend instead, which is more honest but more complex.</span>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

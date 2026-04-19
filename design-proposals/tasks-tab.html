@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>#260 Tasks tab redesign — Coop.ai design proposal</title>
+<style>
+  :root {
+    --bg-base: #F0F2F5;
+    --bg-raised: #FFFFFF;
+    --bg-inset: #EBEDF0;
+    --bg-header: #151B26;
+    --text-primary: #0A0B0D;
+    --text-secondary: #6F7782;
+    --text-tertiary: #8A8E94;
+    --text-on-dark: #F5F4F2;
+    --text-on-dark-muted: #A3AEBE;
+    --border: #E0E4E8;
+    --border-subtle: #EAECEF;
+    --border-strong: #C4CAD1;
+    --coral: #FC636B;
+    --coral-soft: rgba(252, 99, 107, 0.08);
+    --red: #E8384F;
+    --red-soft: rgba(232, 56, 79, 0.07);
+    --amber: #F5A623;
+    --amber-soft: rgba(245, 166, 35, 0.10);
+    --teal: #36B37E;
+    --teal-soft: rgba(54, 179, 126, 0.10);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
+  }
+
+  /* ───── Page frame ───── */
+  .page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px 32px 96px;
+  }
+  .page-header {
+    margin-bottom: 32px;
+  }
+  .page-kicker {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+  }
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+  .page-prompt {
+    font-size: 14px;
+    color: var(--text-secondary);
+    max-width: 720px;
+    line-height: 1.55;
+  }
+  .page-prompt strong { color: var(--text-primary); font-weight: 600; }
+
+  /* ───── Section ───── */
+  section {
+    margin-top: 56px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+  }
+  .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+  .section-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+  }
+  .hero-marker {
+    display: inline-block;
+    background: var(--coral);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     OPP SHELL
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .shell {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(30, 31, 33, 0.08);
+  }
+  .shell-topbar {
+    background: var(--bg-header);
+    color: var(--text-on-dark);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .shell-topbar .crumb {
+    color: var(--text-on-dark-muted);
+    font-size: 12px;
+  }
+  .shell-topbar .crumb strong {
+    color: var(--text-on-dark);
+    font-weight: 600;
+  }
+  .shell-topbar-spacer { flex: 1; }
+  .shell-topbar .pill {
+    font-size: 11px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.10);
+    color: var(--text-on-dark-muted);
+    padding: 3px 8px;
+    border-radius: var(--radius-full, 9999px);
+  }
+
+  .shell-header {
+    padding: 18px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .shell-logo {
+    width: 40px; height: 40px;
+    border-radius: var(--radius-md);
+    background: var(--bg-inset);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--text-secondary);
+    font-size: 14px;
+    letter-spacing: -0.02em;
+  }
+  .shell-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .shell-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .shell-header-spacer { flex: 1; }
+  .shell-stage {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full, 9999px);
+  }
+  .shell-stage strong { color: var(--text-primary); font-weight: 600; }
+
+  .shell-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-raised);
+  }
+  .shell-tab {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+    margin-bottom: -1px;
+  }
+  .shell-tab:hover { color: var(--text-primary); }
+  .shell-tab.active {
+    color: var(--text-primary);
+    font-weight: 600;
+    border-bottom-color: var(--coral);
+  }
+  .shell-tab .count {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    background: var(--bg-inset);
+    padding: 1px 6px;
+    border-radius: var(--radius-full, 9999px);
+    font-weight: 500;
+  }
+  .shell-tab.active .count { color: var(--coral); background: var(--coral-soft); }
+
+  .shell-body {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    min-height: 680px;
+  }
+  .shell-main {
+    padding: 24px 28px 40px;
+    overflow: hidden;
+  }
+  .shell-rail {
+    border-left: 1px solid var(--border);
+    background: var(--bg-raised);
+    display: flex;
+    flex-direction: column;
+  }
+  .rail-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .coop-avatar {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--coral);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -0.01em;
+  }
+  .rail-body {
+    flex: 1;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .rail-msg {
+    background: var(--bg-inset);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+  .rail-msg.from-coop {
+    background: var(--coral-soft);
+    border: 1px solid rgba(252, 99, 107, 0.14);
+  }
+  .rail-footer {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rail-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full, 9999px);
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-tertiary);
+    background: var(--bg-raised);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TASKS TAB
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .tasks-toolbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .tasks-toolbar-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+  }
+  .tasks-toolbar-meta {
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+
+  /* Add task row */
+  .add-task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    font-size: 13px;
+    cursor: text;
+    transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  }
+  .add-task-row:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+    background: var(--coral-soft);
+  }
+  .add-task-row .plus {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .add-task-row .hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    background: var(--bg-inset);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: monospace;
+  }
+
+  /* Active/typing state of add row */
+  .add-task-row.active {
+    border-style: solid;
+    border-color: var(--border-strong);
+    background: var(--bg-raised);
+    color: var(--text-primary);
+  }
+  .add-task-row.active .add-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    font-family: var(--font);
+    color: var(--text-primary);
+  }
+  .add-task-row .add-kbd {
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* Group */
+  .task-group {
+    margin-bottom: 22px;
+  }
+  .task-group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-group-caret {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    width: 10px;
+    display: inline-block;
+    transition: transform 120ms ease;
+  }
+  .task-group-caret.collapsed { transform: rotate(-90deg); }
+  .task-group-name {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  .task-group-count {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    background: var(--bg-inset);
+    padding: 1px 7px;
+    border-radius: 9999px;
+    font-weight: 500;
+  }
+  .task-group.overdue .task-group-name { color: var(--red); }
+  .task-group.overdue .task-group-count { background: var(--red-soft); color: var(--red); }
+
+  .task-group-body {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .task-group.overdue .task-group-body {
+    border-left: 2px solid var(--red);
+    padding-left: 10px;
+    border-top: none;
+    margin-top: 2px;
+  }
+
+  /* Task row */
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 4px 10px 4px;
+    border-bottom: 1px solid var(--border-subtle);
+    position: relative;
+    transition: background 120ms ease;
+  }
+  .task-group-body > .task-row:last-child { border-bottom: none; }
+  .task-row:hover { background: var(--bg-inset); border-radius: 4px; }
+  .task-row:hover .task-more { opacity: 1; }
+  .task-row.done .task-title { color: var(--text-tertiary); text-decoration: line-through; }
+
+  .task-check {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: border-color 120ms ease, background 120ms ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .task-check:hover { border-color: var(--coral); }
+  .task-check.checked {
+    border-color: var(--teal);
+    background: var(--teal);
+  }
+  .task-check.checked::after {
+    content: '';
+    width: 8px; height: 5px;
+    border-left: 1.5px solid #fff;
+    border-bottom: 1.5px solid #fff;
+    transform: rotate(-45deg) translate(1px, -1px);
+  }
+
+  .task-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.005em;
+    min-width: 0;
+    cursor: text;
+    padding: 2px 4px;
+    margin-left: -4px;
+    border-radius: 3px;
+    transition: background 120ms ease;
+  }
+  .task-title:hover { background: rgba(10, 11, 13, 0.04); }
+
+  .task-title-edit {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.005em;
+    border: 1px solid var(--coral);
+    border-radius: 4px;
+    background: var(--bg-raised);
+    padding: 2px 5px;
+    margin-left: -6px;
+    outline: none;
+    font-family: var(--font);
+    box-shadow: 0 0 0 2px var(--coral-soft);
+  }
+
+  .task-suggested {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .task-suggested .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--coral);
+  }
+
+  /* Due-date chip */
+  .task-due {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: 9999px;
+    background: var(--bg-inset);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease;
+  }
+  .task-due:hover { background: var(--border); }
+  .task-due.today { color: var(--amber); background: var(--amber-soft); }
+  .task-due.overdue { color: var(--red); background: var(--red-soft); }
+  .task-due.tomorrow { color: var(--text-primary); background: var(--bg-inset); }
+
+  .task-more {
+    width: 20px; height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease, background 120ms ease;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .task-more:hover { background: var(--border); color: var(--text-primary); }
+
+  /* Coop-suggestion inline affordances */
+  .task-row.coop-proposed {
+    background: var(--coral-soft);
+    border-radius: 4px;
+    border-bottom: none;
+    margin: 4px 0;
+  }
+  .task-row.coop-proposed:hover { background: rgba(252, 99, 107, 0.12); }
+  .task-accept-row {
+    display: flex;
+    gap: 6px;
+    margin-left: 6px;
+  }
+  .btn-accept, .btn-dismiss {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-family: var(--font);
+    white-space: nowrap;
+  }
+  .btn-accept {
+    color: var(--coral);
+    border-color: var(--coral);
+    background: var(--bg-raised);
+  }
+  .btn-accept:hover {
+    background: var(--coral);
+    color: #fff;
+  }
+  .btn-dismiss {
+    color: var(--text-secondary);
+    background: transparent;
+  }
+  .btn-dismiss:hover { color: var(--text-primary); background: var(--bg-inset); }
+
+  /* Empty state */
+  .empty-state {
+    padding: 72px 32px;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+  .empty-state .empty-icon {
+    width: 48px; height: 48px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 10px;
+    margin: 0 auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+  }
+  .empty-state .empty-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+  .empty-state .empty-sub {
+    font-size: 13px;
+    max-width: 360px;
+    margin: 0 auto 20px;
+    line-height: 1.55;
+  }
+  .empty-state .empty-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 7px 14px;
+    border: 1px solid var(--coral);
+    color: var(--coral);
+    border-radius: 9999px;
+    cursor: pointer;
+  }
+  .empty-state .empty-add:hover {
+    background: var(--coral);
+    color: #fff;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     Section: anatomy / storyboards
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .anatomy-wrap {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 36px 48px;
+    position: relative;
+  }
+  .anatomy-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 10px;
+    background: var(--bg-inset);
+    border-radius: 8px;
+    position: relative;
+  }
+  .ann {
+    position: absolute;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+  }
+  .ann .label {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+    font-size: 11px;
+  }
+  .ann .line {
+    border-left: 1px dashed var(--border-strong);
+    width: 1px;
+    position: absolute;
+  }
+  .ann.ann-tl { top: -46px; }
+  .ann.ann-bl { bottom: -52px; }
+
+  /* Storyboard */
+  .storyboard {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .frame {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .frame-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .frame-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+  .frame-step {
+    font-size: 10px;
+    background: var(--bg-inset);
+    padding: 2px 7px;
+    border-radius: 9999px;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .frame-arrow {
+    position: absolute;
+    top: 50%;
+    right: -18px;
+    width: 24px;
+    height: 1px;
+    background: var(--border-strong);
+    transform: translateY(-50%);
+  }
+  .frame-arrow::after {
+    content: '';
+    position: absolute;
+    right: 0; top: -3px;
+    border-left: 6px solid var(--border-strong);
+    border-top: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+  }
+  .frame-body {
+    padding: 16px;
+    flex: 1;
+    position: relative;
+  }
+  .frame-wrap {
+    position: relative;
+  }
+  .frame-caption {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 0 14px 12px;
+    line-height: 1.5;
+  }
+
+  /* Create-flow helpers */
+  .create-row-rest {
+    padding: 10px 12px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Questions section */
+  .questions {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px 28px;
+  }
+  .q-item {
+    padding: 14px 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .q-item:first-child { border-top: none; padding-top: 0; }
+  .q-item:last-child { padding-bottom: 0; }
+  .q-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+  }
+  .q-text {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.55;
+  }
+  .q-text .stance {
+    color: var(--coral);
+    font-weight: 600;
+  }
+
+  /* Zoom badge */
+  .zoom {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    background: var(--bg-inset);
+    padding: 3px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- ═══════════════════════════════════════════ PAGE HEADER ═══════════════════════════════════════ -->
+    <header class="page-header">
+      <div class="page-kicker">Design proposal — throwaway mockup</div>
+      <h1 class="page-title">#260 Tasks tab redesign</h1>
+      <p class="page-prompt">
+        Opp-scoped tasks inside the new shell (#262). Tasks are stored globally and filtered to <strong>opportunityId === currentOpp.id</strong>; same treatment across Pipeline Overview (#239). Inline-editable rows, grouped by due status, with Coop-suggested tasks folded directly into the list. No typing, no button-heavy chrome — just a list you can live in.
+      </p>
+    </header>
+
+    <!-- ═══════════════════════════════════════════ RECOMMENDED HERO ═══════════════════════════════════ -->
+    <section>
+      <div class="section-label">1 — Recommended</div>
+      <h2 class="section-title">Tasks tab, populated<span class="hero-marker">Hero</span></h2>
+      <p class="section-sub">Grouped by status. Overdue carries a red left-border rail; Upcoming defaults collapsed after 7 days; Done is collapsed by default.</p>
+
+      <div class="shell">
+        <!-- Top breadcrumb strip -->
+        <div class="shell-topbar">
+          <span class="crumb">Pipeline</span>
+          <span class="crumb">›</span>
+          <span class="crumb"><strong>Topo.io</strong> — Head of GTM</span>
+          <div class="shell-topbar-spacer"></div>
+          <span class="pill">Stage: Interviewing</span>
+        </div>
+
+        <!-- Opp header -->
+        <div class="shell-header">
+          <div class="shell-logo">Tp</div>
+          <div>
+            <div class="shell-title">Topo.io</div>
+            <div class="shell-sub">Head of GTM &middot; 42 employees &middot; Series A</div>
+          </div>
+          <div class="shell-header-spacer"></div>
+          <div class="shell-stage">Action On <strong>Your court</strong></div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="shell-tabs">
+          <div class="shell-tab">Overview</div>
+          <div class="shell-tab">Activity <span class="count">14</span></div>
+          <div class="shell-tab active">Tasks <span class="count">10</span></div>
+          <div class="shell-tab">Meetings <span class="count">3</span></div>
+          <div class="shell-tab">Emails <span class="count">22</span></div>
+          <div class="shell-tab">Contacts <span class="count">6</span></div>
+        </div>
+
+        <!-- Two-column body: main + rail -->
+        <div class="shell-body">
+          <div class="shell-main">
+            <div class="tasks-toolbar">
+              <div class="tasks-toolbar-title">Tasks for Topo.io</div>
+              <div class="tasks-toolbar-meta">2 overdue &middot; 3 today &middot; 5 upcoming &middot; 8 done</div>
+            </div>
+
+            <!-- Add task inline row -->
+            <div class="add-task-row">
+              <span class="plus">+</span>
+              <span>Add task</span>
+              <span class="hint">N</span>
+            </div>
+
+            <!-- OVERDUE -->
+            <div class="task-group overdue">
+              <div class="task-group-head">
+                <span class="task-group-caret">▼</span>
+                <span class="task-group-name">Overdue</span>
+                <span class="task-group-count">2</span>
+              </div>
+              <div class="task-group-body">
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Send thank-you note to Priya after Thursday call</div>
+                  <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+                  <div class="task-due overdue">3d overdue</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Review comp range before recruiter call</div>
+                  <div class="task-due overdue">1d overdue</div>
+                  <div class="task-more">⋯</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TODAY -->
+            <div class="task-group">
+              <div class="task-group-head">
+                <span class="task-group-caret">▼</span>
+                <span class="task-group-name">Today</span>
+                <span class="task-group-count">3</span>
+              </div>
+              <div class="task-group-body">
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <input class="task-title-edit" value="Draft answer to 'why Topo' application question" />
+                  <div class="task-due today">Today</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Prep questions for Amira interview</div>
+                  <div class="task-due today">Today</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Confirm Tuesday panel time with recruiter</div>
+                  <div class="task-due today">Today</div>
+                  <div class="task-more">⋯</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- UPCOMING -->
+            <div class="task-group">
+              <div class="task-group-head">
+                <span class="task-group-caret">▼</span>
+                <span class="task-group-name">Upcoming</span>
+                <span class="task-group-count">5</span>
+              </div>
+              <div class="task-group-body">
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Research Topo's Series A investors</div>
+                  <div class="task-due tomorrow">Tomorrow</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Follow up with Jordan on intro to VP Sales</div>
+                  <div class="task-due">Fri Apr 25</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Send case-study doc to hiring manager</div>
+                  <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+                  <div class="task-due">Mon Apr 28</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Panel interview prep doc</div>
+                  <div class="task-due">Tue Apr 29</div>
+                  <div class="task-more">⋯</div>
+                </div>
+                <div class="task-row">
+                  <div class="task-check"></div>
+                  <div class="task-title">Send updated references list</div>
+                  <div class="task-due">Thu May 1</div>
+                  <div class="task-more">⋯</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DONE (collapsed) -->
+            <div class="task-group">
+              <div class="task-group-head">
+                <span class="task-group-caret collapsed">▼</span>
+                <span class="task-group-name">Done</span>
+                <span class="task-group-count">8 done</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right rail -->
+          <aside class="shell-rail">
+            <div class="rail-header">
+              <span class="coop-avatar">C</span>
+              Coop
+            </div>
+            <div class="rail-body">
+              <div class="rail-msg from-coop">
+                Amira's interview is tomorrow. Want me to draft prep questions from her LinkedIn and your role brief?
+              </div>
+              <div class="rail-msg">
+                Yes — and pull the top 3 from the Granola notes.
+              </div>
+              <div class="rail-msg from-coop">
+                On it. I also noticed you haven't sent a thank-you to Priya — added that as an overdue task.
+              </div>
+            </div>
+            <div class="rail-footer">
+              <div class="rail-input">Ask Coop anything about Topo.io…</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ TASK ROW ANATOMY ═════════════════════════════════════ -->
+    <section>
+      <div class="section-label">2 — Anatomy</div>
+      <h2 class="section-title">Task row</h2>
+      <p class="section-sub">One row, four load-bearing elements. Everything else is secondary, revealed on hover.</p>
+
+      <div class="anatomy-wrap">
+        <div class="anatomy-row" style="margin-top: 50px; margin-bottom: 80px;">
+          <div class="task-check"></div>
+          <div class="task-title" style="flex: 1;">Send case-study doc to hiring manager</div>
+          <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+          <div class="task-due today">Today</div>
+          <div class="task-more" style="opacity: 1;">⋯</div>
+          <!-- annotations -->
+          <div class="ann ann-tl" style="left: 4px; top: -42px;">
+            <span class="label">Checkbox</span>
+            Click to complete. Teal fill when checked.
+          </div>
+          <div class="ann ann-tl" style="left: 130px; top: -42px;">
+            <span class="label">Title</span>
+            13px / 500. Click to inline-edit.
+          </div>
+          <div class="ann ann-bl" style="left: 320px; bottom: -50px;">
+            <span class="label">Coop marker</span>
+            Coral dot + label. Audit trail after accept.
+          </div>
+          <div class="ann ann-bl" style="right: 120px; bottom: -50px;">
+            <span class="label">Due chip</span>
+            Amber today, red overdue. Click to repick date.
+          </div>
+          <div class="ann ann-tl" style="right: 4px; top: -42px; text-align: right;">
+            <span class="label">More (hover)</span>
+            Reschedule, reassign, delete.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ INLINE EDIT STATES ═══════════════════════════════════ -->
+    <section>
+      <div class="section-label">3 — Inline edit</div>
+      <h2 class="section-title">Click the title to edit it</h2>
+      <p class="section-sub">Same field, two states. No modal, no detail panel. Enter saves, Esc cancels.</p>
+
+      <div class="storyboard">
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">A</span><span class="frame-label">At rest</span></div>
+            <div class="frame-body">
+              <div class="task-row">
+                <div class="task-check"></div>
+                <div class="task-title">Draft answer to 'why Topo' question</div>
+                <div class="task-due today">Today</div>
+              </div>
+            </div>
+            <div class="frame-caption">Reads as plain text. Hover nudges the background to hint it's editable.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">B</span><span class="frame-label">Click to edit</span></div>
+            <div class="frame-body">
+              <div class="task-row">
+                <div class="task-check"></div>
+                <input class="task-title-edit" value="Draft answer to 'why Topo' question" />
+                <div class="task-due today">Today</div>
+              </div>
+            </div>
+            <div class="frame-caption">Title becomes an input bordered coral, focused, caret at click position.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame">
+          <div class="frame-head"><span class="frame-step">C</span><span class="frame-label">Enter to save</span></div>
+          <div class="frame-body">
+            <div class="task-row">
+              <div class="task-check"></div>
+              <div class="task-title">Draft answer to 'why Topo' question — lead with Granola insight</div>
+              <div class="task-due today">Today</div>
+            </div>
+          </div>
+          <div class="frame-caption">Returns to rest state with the new value. Esc reverts.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ AI-SUGGESTED FLOW ════════════════════════════════════ -->
+    <section>
+      <div class="section-label">4 — Coop-suggested flow</div>
+      <h2 class="section-title">Coop proposes, Matt accepts</h2>
+      <p class="section-sub">Suggestions appear inline in the list with Accept / Dismiss affordances. Accepting keeps the marker as an audit trail.</p>
+
+      <div class="storyboard">
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">A</span><span class="frame-label">Coop proposes</span></div>
+            <div class="frame-body">
+              <div class="task-row coop-proposed">
+                <div class="task-check"></div>
+                <div class="task-title">Send thank-you to Priya after the call</div>
+                <div class="task-accept-row">
+                  <button class="btn-accept">Accept</button>
+                  <button class="btn-dismiss">Dismiss</button>
+                </div>
+              </div>
+            </div>
+            <div class="frame-caption">Proposed tasks sit in a coral-tinted row with inline Accept / Dismiss.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">B</span><span class="frame-label">Matt clicks Accept</span></div>
+            <div class="frame-body">
+              <div class="task-row coop-proposed" style="outline: 1.5px solid var(--coral); outline-offset: -1px;">
+                <div class="task-check"></div>
+                <div class="task-title">Send thank-you to Priya after the call</div>
+                <div class="task-accept-row">
+                  <button class="btn-accept" style="background: var(--coral); color: #fff;">Accept</button>
+                  <button class="btn-dismiss">Dismiss</button>
+                </div>
+              </div>
+            </div>
+            <div class="frame-caption">Accept button fills coral. Brief press-state flashes before the row transforms.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame">
+          <div class="frame-head"><span class="frame-step">C</span><span class="frame-label">Becomes a task</span></div>
+          <div class="frame-body">
+            <div class="task-row">
+              <div class="task-check"></div>
+              <div class="task-title">Send thank-you to Priya after the call</div>
+              <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+              <div class="task-due today">Today</div>
+            </div>
+          </div>
+          <div class="frame-caption">Row settles into the group. Coral dot persists as audit trail — "Coop's idea."</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ CREATE FLOW ══════════════════════════════════════════ -->
+    <section>
+      <div class="section-label">5 — Create flow</div>
+      <h2 class="section-title">+ Add task</h2>
+      <p class="section-sub">No modal. Inline blank row that upgrades itself on click. Defaults to due-today, Enter to save, Esc to discard.</p>
+
+      <div class="storyboard">
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">A</span><span class="frame-label">Rest</span></div>
+            <div class="frame-body">
+              <div class="create-row-rest">
+                <span style="font-size: 15px;">+</span>
+                <span>Add task</span>
+                <span style="margin-left: auto; font-size: 10px; color: var(--text-tertiary); font-family: monospace; background: var(--bg-inset); padding: 2px 6px; border-radius: 4px;">N</span>
+              </div>
+            </div>
+            <div class="frame-caption">Dashed ghost row at top of tab. N shortcut focuses it from anywhere in tab.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">B</span><span class="frame-label">Active</span></div>
+            <div class="frame-body">
+              <div class="add-task-row active">
+                <span class="plus" style="color: var(--text-tertiary);">+</span>
+                <input class="add-input" placeholder="What's the task?" value="Write one-pager on GTM strategy" />
+                <span class="add-kbd">Enter</span>
+              </div>
+            </div>
+            <div class="frame-caption">Field activates with focus ring, placeholder fades once typing begins.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame">
+          <div class="frame-head"><span class="frame-step">C</span><span class="frame-label">Saved</span></div>
+          <div class="frame-body">
+            <div style="margin-bottom: 10px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.04em; text-transform: uppercase;">Today</div>
+            <div class="task-row" style="background: var(--coral-soft); border-radius: 4px;">
+              <div class="task-check"></div>
+              <div class="task-title">Write one-pager on GTM strategy</div>
+              <div class="task-due today">Today</div>
+            </div>
+          </div>
+          <div class="frame-caption">Row lands in Today group with a soft coral flash, then settles to neutral.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ EMPTY STATE ══════════════════════════════════════════ -->
+    <section>
+      <div class="section-label">6 — Empty state</div>
+      <h2 class="section-title">Tasks tab, no tasks yet</h2>
+      <p class="section-sub">Shown first time an opp has no tasks. Coop is positioned as a collaborator, not a nag.</p>
+
+      <div class="shell">
+        <div class="shell-topbar">
+          <span class="crumb">Pipeline</span>
+          <span class="crumb">›</span>
+          <span class="crumb"><strong>Topo.io</strong> — Head of GTM</span>
+          <div class="shell-topbar-spacer"></div>
+          <span class="pill">Stage: Applied</span>
+        </div>
+        <div class="shell-header">
+          <div class="shell-logo">Tp</div>
+          <div>
+            <div class="shell-title">Topo.io</div>
+            <div class="shell-sub">Head of GTM &middot; 42 employees &middot; Series A</div>
+          </div>
+          <div class="shell-header-spacer"></div>
+          <div class="shell-stage">Action On <strong>Your court</strong></div>
+        </div>
+        <div class="shell-tabs">
+          <div class="shell-tab">Overview</div>
+          <div class="shell-tab">Activity <span class="count">2</span></div>
+          <div class="shell-tab active">Tasks <span class="count">0</span></div>
+          <div class="shell-tab">Meetings</div>
+          <div class="shell-tab">Emails <span class="count">1</span></div>
+          <div class="shell-tab">Contacts</div>
+        </div>
+        <div class="shell-body">
+          <div class="shell-main">
+            <div class="empty-state">
+              <div class="empty-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="4" y="5" width="16" height="15" rx="2"/>
+                  <path d="M9 3v4M15 3v4M4 10h16"/>
+                </svg>
+              </div>
+              <div class="empty-title">No tasks for Topo.io yet</div>
+              <div class="empty-sub">Add one now, or Coop will suggest them as conversations develop — from meetings, emails, and open threads.</div>
+              <div class="empty-add"><span style="font-size: 15px; line-height: 1;">+</span> Add a task</div>
+            </div>
+          </div>
+          <aside class="shell-rail">
+            <div class="rail-header"><span class="coop-avatar">C</span>Coop</div>
+            <div class="rail-body">
+              <div class="rail-msg from-coop">
+                You just saved Topo.io. Want me to pull 3 suggested next steps based on their job description?
+              </div>
+            </div>
+            <div class="rail-footer">
+              <div class="rail-input">Ask Coop anything about Topo.io…</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ OPEN QUESTIONS ═══════════════════════════════════════ -->
+    <section>
+      <div class="section-label">7 — Open questions</div>
+      <h2 class="section-title">Three decisions before build</h2>
+      <p class="section-sub">Each one shifts visible chrome in the design above. Flagging them now.</p>
+
+      <div class="questions">
+        <div class="q-item">
+          <div class="q-label">Q1 — Default group state</div>
+          <div class="q-text">
+            Should first-visit show only <strong>Overdue + Today</strong> expanded, with Upcoming collapsed? Keeps the opp page quiet and keeps Coop's "what's due now" the hero.
+            <span class="stance">Stance: yes, collapse Upcoming by default.</span>
+          </div>
+        </div>
+        <div class="q-item">
+          <div class="q-label">Q2 — Assignee</div>
+          <div class="q-text">
+            Coop is single-user. Should tasks have no assignee at all — drop the concept, stop reserving column space for it? Simplifies the row.
+            <span class="stance">Stance: remove assignee entirely. Re-add only if we ship multi-user.</span>
+          </div>
+        </div>
+        <div class="q-item">
+          <div class="q-label">Q3 — Dismissal memory scope</div>
+          <div class="q-text">
+            When Matt dismisses a Coop-suggested task, should Coop learn the lesson <strong>globally</strong> ("he hates 'send a thank-you' suggestions") or <strong>per-opp</strong> ("he already handled it for Topo, but other opps are fine")?
+            <span class="stance">Stance: per-opp by default. Global only if dismissed ≥3 times across different opps.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

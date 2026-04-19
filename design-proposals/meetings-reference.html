@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Meetings tab — list + detail flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #0A0B0D;
+    background: #F0F2F5;
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .page-sub { color: #6F7782; font-size: 13px; margin: 0 0 28px; max-width: 880px; line-height: 1.5; }
+
+  .label-row { display: flex; align-items: baseline; gap: 12px; margin: 32px 0 12px; }
+  .label-row:first-of-type { margin-top: 0; }
+  .label-row h2 {
+    font-size: 13px; font-weight: 700; color: #8A8E94; letter-spacing: -0.005em;
+  }
+  .label-badge {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+    background: rgba(54,179,126,0.12); color: #1B7E53;
+  }
+
+  .flow-arrow {
+    text-align: center; color: #8A8E94; font-size: 16px;
+    margin: 18px 0; font-weight: 500;
+  }
+
+  /* ─── Tab frame ─── */
+  .frame {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 12px;
+    width: 880px;
+    overflow: hidden;
+  }
+  .tabs {
+    display: flex; padding: 0 24px;
+    border-bottom: 1px solid #EAECEF;
+    background: #FFFFFF;
+  }
+  .tab {
+    padding: 14px 18px;
+    font-size: 14px; font-weight: 500; color: #8A8E94;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    color: #0A0B0D; font-weight: 700;
+    border-bottom-color: #FC636B;
+  }
+  .tab-body { padding: 20px 24px; background: #F9FAFB; }
+
+  .action-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+  .btn {
+    padding: 7px 14px; background: #FFFFFF;
+    border: 1px solid #E0E4E8; border-radius: 8px;
+    font-size: 13px; font-weight: 500; color: #0A0B0D;
+    cursor: pointer;
+  }
+  .btn:hover { border-color: #C4CAD1; }
+
+  /* ─── Panel ─── */
+  .panel {
+    background: #FFFFFF; border: 1px solid #E0E4E8;
+    border-radius: 12px; padding: 24px 28px;
+  }
+
+  .panel-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-bottom: 14px; margin-bottom: 4px;
+  }
+  .panel-head h3 {
+    font-size: 16px; font-weight: 700; color: #0A0B0D;
+    letter-spacing: -0.01em;
+  }
+  .panel-head .count { font-size: 13px; color: #8A8E94; font-weight: 500; }
+
+  /* ─── List view ─── */
+  .date-group {
+    font-size: 12px; font-weight: 600; color: #6F7782;
+    padding: 18px 0 10px;
+    border-top: 1px solid #EAECEF;
+    margin-top: 4px;
+  }
+  .date-group:first-of-type { border-top: none; padding-top: 10px; margin-top: 0; }
+
+  .meeting {
+    display: grid; grid-template-columns: 64px 1fr auto;
+    gap: 20px; padding: 14px 0; cursor: pointer;
+    border-top: 1px solid #EAECEF;
+    transition: background 120ms;
+  }
+  .meeting:first-of-type { border-top: none; padding-top: 10px; }
+  .meeting:hover { background: #F9FAFB; }
+
+  .mt-date-day { font-size: 22px; font-weight: 700; color: #0A0B0D; letter-spacing: -0.02em; line-height: 1; }
+  .mt-date-mon { font-size: 12px; color: #8A8E94; font-weight: 500; margin-top: 4px; }
+  .mt-date-time { font-size: 12px; color: #8A8E94; margin-top: 10px; }
+
+  .mt-title-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .mt-title { font-size: 15px; font-weight: 600; color: #0A0B0D; letter-spacing: -0.01em; }
+  .mt-kind { font-size: 12px; color: #8A8E94; font-weight: 500; }
+  .mt-participants { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+
+  .avatar-row { display: flex; }
+  .avatar-row .avatar + .avatar { margin-left: -4px; }
+  .avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #FC636B; color: #fff; font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 2px solid #FFFFFF;
+  }
+  .avatar.a2 { background: #4573D2; }
+  .avatar.a3 { background: #36B37E; }
+
+  .mt-names { font-size: 12px; color: #6F7782; }
+
+  .mt-takeaways { list-style: none; padding: 0; margin: 0; }
+  .mt-takeaways li {
+    font-size: 13px; color: #0A0B0D; line-height: 1.55;
+    padding-left: 16px; position: relative; margin-bottom: 4px;
+  }
+  .mt-takeaways li::before {
+    content: ''; position: absolute; left: 4px; top: 9px;
+    width: 4px; height: 4px; border-radius: 50%; background: #F5A623;
+  }
+
+  .mt-granola-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px; border-radius: 6px;
+    background: #F5F7F9;
+    font-size: 11px; color: #6F7782; font-weight: 500;
+    align-self: start; padding-top: 4px;
+  }
+  .mt-granola-glyph { width: 12px; height: 12px; background: #F5A623; border-radius: 3px; position: relative; }
+  .mt-granola-glyph::after { content: ''; position: absolute; inset: 3px; background: #fff; border-radius: 1px; }
+
+  /* ─── Detail view ─── */
+  .panel-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #6F7782; font-weight: 500;
+    margin-bottom: 18px; cursor: pointer; background: none; border: none;
+    padding: 0; font-family: inherit;
+  }
+  .panel-back:hover { color: #0A0B0D; }
+
+  .detail-head {
+    padding-bottom: 18px; border-bottom: 1px solid #EAECEF; margin-bottom: 22px;
+  }
+  .detail-title-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; margin-bottom: 10px;
+  }
+  .detail-title {
+    font-size: 22px; font-weight: 700; color: #0A0B0D;
+    letter-spacing: -0.02em; line-height: 1.25; flex: 1;
+  }
+  .detail-granola-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; background: #FFFFFF; border: 1px solid #E0E4E8;
+    border-radius: 8px; font-size: 13px; font-weight: 600; color: #6F7782;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .detail-granola-btn:hover { border-color: #C4CAD1; color: #0A0B0D; background: #F9FAFB; }
+  .granola-logo-lg { width: 14px; height: 14px; background: #F5A623; border-radius: 3px; position: relative; }
+  .granola-logo-lg::after { content: ''; position: absolute; inset: 3.5px; background: #fff; border-radius: 1px; }
+
+  .detail-meta {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px; color: #6F7782; flex-wrap: wrap;
+  }
+  .detail-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: #C4CAD1; }
+
+  .detail-section { margin-bottom: 28px; }
+  .detail-section h4 {
+    font-size: 13px; font-weight: 700; color: #0A0B0D;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .source-badge {
+    font-size: 10px; font-weight: 500; color: #8A8E94;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 6px; border: 1px solid #EAECEF; border-radius: 4px;
+  }
+  .source-badge .glyph { width: 9px; height: 9px; background: #F5A623; border-radius: 2px; position: relative; }
+  .source-badge .glyph::after { content: ''; position: absolute; inset: 2px; background: #fff; border-radius: 1px; }
+  .edit-link {
+    font-size: 11px; font-weight: 500; color: #8A8E94;
+    margin-left: auto; text-decoration: none; cursor: pointer;
+  }
+  .edit-link:hover { color: #6F7782; }
+
+  .detail-summary { font-size: 14px; color: #0A0B0D; line-height: 1.7; }
+  .detail-summary h5 { font-size: 13px; font-weight: 700; margin: 16px 0 6px; color: #0A0B0D; }
+  .detail-summary h5:first-child { margin-top: 0; }
+  .detail-summary ul { padding-left: 20px; margin-bottom: 12px; }
+  .detail-summary ul li { margin-bottom: 4px; line-height: 1.55; }
+  .detail-summary strong { font-weight: 600; }
+
+  .detail-transcript {
+    border: 1px solid #EAECEF; border-radius: 10px;
+    overflow: hidden; margin-top: 12px;
+  }
+  .detail-transcript-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: #F9FAFB; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: #0A0B0D;
+  }
+  .detail-transcript-head:hover { background: #EBEDF0; }
+  .detail-transcript-head .chev { font-size: 11px; color: #8A8E94; }
+
+  .detail-coop {
+    margin-top: 28px; padding-top: 22px;
+    border-top: 1px dashed #E0E4E8;
+  }
+  .detail-coop-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .detail-coop-title { display: flex; align-items: baseline; gap: 8px; }
+  .detail-coop-title h4 { font-size: 13px; font-weight: 700; color: #0A0B0D; }
+  .detail-coop-title .pill {
+    font-size: 10px; font-weight: 600; color: #fff;
+    background: #FC636B; padding: 2px 6px; border-radius: 4px;
+  }
+  .detail-coop-sync { font-size: 11px; color: #8A8E94; }
+  .detail-coop-note {
+    font-size: 13px; color: #0A0B0D; line-height: 1.55;
+    padding: 10px 12px; background: #F9FAFB;
+    border: 1px solid #EAECEF; border-left: 2px solid #FC636B;
+    border-radius: 6px; margin-bottom: 6px;
+  }
+  .detail-coop-hint { font-size: 11px; color: #8A8E94; margin-bottom: 14px; }
+  .detail-coop-next {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; background: rgba(245,166,35,0.08);
+    border-radius: 8px; font-size: 13px; color: #0A0B0D;
+  }
+  .detail-coop-next-label { font-size: 11px; font-weight: 700; color: #F5A623; }
+
+</style>
+</head>
+<body>
+
+  <h1>Meetings tab — list + detail flow</h1>
+  <p class="page-sub">"+ Log activity" removed (it doesn't belong on the Meetings tab). And below: what happens when you click a meeting card — detail view replaces the list in the same tab body, with "← Meetings" back link. Real Krossings data for continuity with what you just saw.</p>
+
+  <!-- ═════════════ LIST VIEW ═════════════ -->
+
+  <div class="label-row">
+    <h2>1. List view</h2>
+    <span class="label-badge">"+ Add meeting" only</span>
+  </div>
+
+  <div class="frame">
+    <div class="tabs">
+      <div class="tab">Role Brief</div>
+      <div class="tab">Activity</div>
+      <div class="tab">Emails</div>
+      <div class="tab active">Meetings</div>
+      <div class="tab">Notes</div>
+      <div class="tab">Docs</div>
+      <div class="tab">Tasks</div>
+    </div>
+
+    <div class="tab-body">
+      <div class="action-bar">
+        <div class="btn">+ Add meeting</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Meetings</h3>
+          <span class="count">2 with Krossings</span>
+        </div>
+
+        <div class="date-group">This week</div>
+
+        <div class="meeting">
+          <div>
+            <div class="mt-date-day">15</div>
+            <div class="mt-date-mon">Apr</div>
+            <div class="mt-date-time">2:00p</div>
+          </div>
+          <div>
+            <div class="mt-title-row">
+              <div class="mt-title">Krossings · product deep dive</div>
+              <div class="mt-kind">second call</div>
+            </div>
+            <div class="mt-participants">
+              <div class="avatar-row">
+                <span class="avatar">JK</span>
+                <span class="avatar a2">MS</span>
+                <span class="avatar a3">ME</span>
+              </div>
+              <div class="mt-names">Jake Kim, Maya Stone, Me</div>
+            </div>
+            <ul class="mt-takeaways">
+              <li>Pitching their vertical wedge into retail — first real Fortune 500 in pipe.</li>
+              <li>Maya wants a GTM lead who can also "close the first 10 logos personally."</li>
+              <li>Next — send two-page GTM plan by EOW.</li>
+            </ul>
+          </div>
+          <div class="mt-granola-link"><span class="mt-granola-glyph"></span>Granola ↗</div>
+        </div>
+
+        <div class="date-group">Last week</div>
+
+        <div class="meeting">
+          <div>
+            <div class="mt-date-day">10</div>
+            <div class="mt-date-mon">Apr</div>
+            <div class="mt-date-time">11:00a</div>
+          </div>
+          <div>
+            <div class="mt-title-row">
+              <div class="mt-title">First intro — Jake (Krossings founder)</div>
+              <div class="mt-kind">intro</div>
+            </div>
+            <div class="mt-participants">
+              <div class="avatar-row">
+                <span class="avatar">JK</span>
+                <span class="avatar a3">ME</span>
+              </div>
+              <div class="mt-names">Jake Kim, Me</div>
+            </div>
+            <ul class="mt-takeaways">
+              <li>Recent Series A ($6M). Mostly engineers. Jake needs a commercial co-pilot.</li>
+              <li>Jake is the decision maker. No board on the hire yet.</li>
+            </ul>
+          </div>
+          <div class="mt-granola-link"><span class="mt-granola-glyph"></span>Granola ↗</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">↓ click "Krossings · product deep dive" ↓</div>
+
+  <!-- ═════════════ DETAIL VIEW ═════════════ -->
+
+  <div class="label-row">
+    <h2>2. Detail view</h2>
+    <span class="label-badge">same tab · replaces list</span>
+  </div>
+
+  <div class="frame">
+    <div class="tabs">
+      <div class="tab">Role Brief</div>
+      <div class="tab">Activity</div>
+      <div class="tab">Emails</div>
+      <div class="tab active">Meetings</div>
+      <div class="tab">Notes</div>
+      <div class="tab">Docs</div>
+      <div class="tab">Tasks</div>
+    </div>
+
+    <div class="tab-body">
+      <div class="action-bar">
+        <div class="btn">+ Add meeting</div>
+      </div>
+
+      <div class="panel">
+        <button class="panel-back">← Meetings</button>
+
+        <!-- Hero -->
+        <div class="detail-head">
+          <div class="detail-title-row">
+            <div class="detail-title">Krossings · product deep dive</div>
+            <a class="detail-granola-btn" href="#">
+              <span class="granola-logo-lg"></span>
+              Open in Granola
+            </a>
+          </div>
+          <div class="detail-meta">
+            <div class="avatar-row">
+              <span class="avatar">JK</span>
+              <span class="avatar a2">MS</span>
+              <span class="avatar a3">ME</span>
+            </div>
+            <span>Jake Kim, Maya Stone, Me</span>
+            <span class="dot"></span>
+            <span>Wed, Apr 15 · 2:00 PM</span>
+            <span class="dot"></span>
+            <span>second call</span>
+          </div>
+        </div>
+
+        <!-- Summary from Granola -->
+        <div class="detail-section">
+          <h4>
+            Summary
+            <span class="source-badge"><span class="glyph"></span> from Granola</span>
+            <a class="edit-link" href="#">View in Granola ↗</a>
+          </h4>
+          <div class="detail-summary">
+
+            <h5>Product & market</h5>
+            <ul>
+              <li>Krossings is pitching their vertical wedge into <strong>retail</strong> — first real Fortune 500 in pipeline (Target pilot starting May).</li>
+              <li>Their differentiator is fine-tuned models trained on client-specific inventory data, sold as SaaS + implementation.</li>
+              <li>Current ARR $1.1M, mostly Series A lighthouse accounts. Maya wants to 5× by EOY.</li>
+            </ul>
+
+            <h5>Role scope</h5>
+            <ul>
+              <li>Head of GTM owns both marketing and sales at this stage.</li>
+              <li>Maya explicitly: "I want someone who can also <strong>close the first 10 logos personally</strong>, not just manage AEs."</li>
+              <li>Reports to Jake (founder/CEO). Jake stays close but expects the Head of GTM to own the number.</li>
+            </ul>
+
+            <h5>Open questions</h5>
+            <ul>
+              <li>Compensation not yet discussed — Maya mentioned "startup-appropriate" which typically codes for $200-240 base.</li>
+              <li>Timeline: Jake wants hire in seat by June 1 to ramp before Target pilot launches.</li>
+            </ul>
+
+            <h5>Action items</h5>
+            <ul>
+              <li>Send two-page GTM plan by <strong>Friday 4/18</strong>.</li>
+              <li>Propose pricing framework for their retail vertical (ties to Dan's prior pricing ask).</li>
+            </ul>
+
+          </div>
+        </div>
+
+        <!-- Transcript collapse -->
+        <div class="detail-section" style="margin-bottom: 0;">
+          <h4>Transcript <span class="source-badge"><span class="glyph"></span> from Granola</span></h4>
+          <div class="detail-transcript">
+            <div class="detail-transcript-head">
+              <span>Full transcript · 38 min</span>
+              <span class="chev">▸</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Coop layer -->
+        <div class="detail-coop">
+          <div class="detail-coop-head">
+            <div class="detail-coop-title">
+              <h4>My notes</h4>
+              <span class="pill">Coop</span>
+            </div>
+            <div class="detail-coop-sync">↑ Saved to Private notes</div>
+          </div>
+
+          <div class="detail-coop-note">
+            Maya's "close first 10 personally" is either a filter for candidates who can actually sell, or a rationalization for not hiring AEs yet. Need to clarify during the GTM plan call. June 1 start is tight but doable if pricing/GTM plan land this week.
+          </div>
+          <p class="detail-coop-hint">Written here? It also appears in <strong>Krossings → Private notes</strong> with a link back to this meeting.</p>
+
+          <div class="detail-coop-next">
+            <span class="detail-coop-next-label">Next step:</span>
+            <span>Ship GTM plan + pricing framework by Fri 4/18. Frame it so it also answers "can you close 10 personally."</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#262 Opportunity/Company shell redesign</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #0A0B0D;
+    background: #F0F2F5;
+    padding: 40px 32px 80px;
+    min-height: 100vh;
+  }
+  a { color: #4573D2; text-decoration: none; }
+
+  /* ── Page header ── */
+  .page-head { max-width: 1480px; margin: 0 auto 36px; }
+  .page-head h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .page-head .issue-tag {
+    font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px;
+    background: #EBEDF0; color: #6F7782;
+    letter-spacing: 0.02em;
+  }
+  .page-head .prompt {
+    margin-top: 8px; font-size: 13px; color: #6F7782; line-height: 1.55;
+    max-width: 900px;
+  }
+
+  /* ── Section scaffolding ── */
+  .section {
+    max-width: 1480px; margin: 0 auto 56px;
+  }
+  .section-head {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .section-head h2 {
+    font-size: 13px; font-weight: 700; color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .section-head .stance {
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+    background: rgba(54,179,126,0.12); color: #1B7E53;
+  }
+  .section-head .stance.reject {
+    background: rgba(232,56,79,0.08); color: #B52B3F;
+  }
+  .section-note {
+    font-size: 13px; color: #6F7782; line-height: 1.55;
+    max-width: 860px; margin-bottom: 16px;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     1. HERO — full shell mockup
+     ────────────────────────────────────────────────────────────── */
+  .shell {
+    width: 100%;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    box-shadow: 0 10px 36px rgba(30,31,33,0.10), 0 2px 8px rgba(0,0,0,0.05);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  /* Browser-like chrome strip so this reads as a full page */
+  .shell-chrome {
+    height: 36px;
+    background: #151B26;
+    display: flex; align-items: center; padding: 0 14px;
+    gap: 8px; flex-shrink: 0;
+  }
+  .shell-chrome .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+  }
+  .shell-chrome .url {
+    margin-left: 12px; font-size: 11px;
+    color: #A3AEBE;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .shell-body {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    min-height: 720px;
+  }
+
+  /* ── Main column ── */
+  .main-col {
+    display: flex; flex-direction: column;
+    border-right: 1px solid #E0E4E8;
+    min-width: 0;
+  }
+
+  /* Header block */
+  .opp-header {
+    padding: 24px 32px 18px;
+    border-bottom: 1px solid #EAECEF;
+  }
+  .header-row-1 {
+    display: flex; align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .company-name {
+    font-size: 22px; font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #0A0B0D;
+  }
+  .header-meta-dot {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: #C4CAD1;
+  }
+  .header-meta {
+    font-size: 13px; color: #6F7782;
+  }
+  /* Stage pill — flat, monochrome-first */
+  .stage-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #EBEDF0; color: #0A0B0D;
+    border: 1px solid #E0E4E8;
+  }
+  .stage-pill .dot-stage {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #4573D2;
+  }
+  /* Action status chip */
+  .action-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    color: #6F7782;
+  }
+  .action-chip .action-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #F5A623;
+  }
+  /* Score chip */
+  .score-chip {
+    display: inline-flex; align-items: baseline; gap: 5px;
+    font-size: 13px; font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    color: #0A0B0D;
+  }
+  .score-chip .score-num { color: #1B7E53; font-weight: 700; font-size: 14px; }
+  .score-chip .score-label { font-weight: 500; color: #6F7782; font-size: 11px; letter-spacing: 0.02em; }
+
+  /* Right-cluster ghost buttons */
+  .header-actions {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 2px;
+  }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    font-size: 12px; font-weight: 500;
+    color: #6F7782;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 120ms, color 120ms, border-color 120ms;
+  }
+  .ghost-btn:hover {
+    background: #EBEDF0; color: #0A0B0D;
+  }
+  .ghost-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; }
+  .icon-only {
+    width: 30px; height: 30px; padding: 0;
+    justify-content: center;
+  }
+
+  .header-row-2 {
+    margin-top: 8px;
+    display: flex; align-items: center; gap: 14px;
+    font-size: 12px; color: #6F7782;
+    flex-wrap: wrap;
+  }
+  .header-row-2 .link-icon {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: #6F7782;
+  }
+  .header-row-2 .link-icon svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.75; }
+  .header-row-2 .link-icon:hover { color: #4573D2; }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    display: flex; align-items: center;
+    padding: 0 32px;
+    border-bottom: 1px solid #E0E4E8;
+    background: #FFFFFF;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 12px 14px 10px;
+    font-size: 13px; font-weight: 500;
+    color: #8A8E94;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+    transition: color 120ms, border-color 120ms;
+  }
+  .tab:hover { color: #0A0B0D; }
+  .tab.active {
+    color: #0A0B0D; font-weight: 600;
+    border-bottom-color: #FC636B;
+  }
+  .tab .count {
+    font-size: 11px; font-weight: 500;
+    color: #8A8E94;
+    padding: 1px 6px;
+    background: #EBEDF0;
+    border-radius: 999px;
+  }
+  .tab.active .count { background: #EBEDF0; color: #6F7782; }
+
+  /* ── Tab content (Role Brief sketch) ── */
+  .tab-content {
+    padding: 24px 32px 32px;
+    flex: 1;
+    background: #F7F8FA;
+  }
+  .brief-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .brief-card {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .brief-card.wide { grid-column: 1 / -1; }
+  .brief-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #8A8E94;
+    margin-bottom: 10px;
+  }
+  .brief-primary {
+    font-size: 15px; font-weight: 600; color: #0A0B0D;
+    line-height: 1.45;
+  }
+  .brief-body {
+    font-size: 13px; color: #6F7782;
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+  .brief-bullet-list {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 8px;
+  }
+  .brief-bullet-list li {
+    font-size: 13px; color: #6F7782; line-height: 1.55;
+    padding-left: 14px; position: relative;
+  }
+  .brief-bullet-list li::before {
+    content: ''; position: absolute;
+    left: 2px; top: 9px;
+    width: 4px; height: 4px;
+    background: #C4CAD1;
+    border-radius: 50%;
+  }
+  .fit-breakdown {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .fit-cell {
+    background: #F7F8FA;
+    border: 1px solid #EAECEF;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .fit-cell .fit-label {
+    font-size: 10px; font-weight: 600; color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .fit-cell .fit-val {
+    font-size: 16px; font-weight: 700; color: #0A0B0D;
+    margin-top: 4px;
+  }
+  .fit-cell .fit-val.pos { color: #1B7E53; }
+  .fit-cell .fit-val.warn { color: #B47400; }
+
+  /* ── Right rail — docked chat ── */
+  .chat-rail {
+    display: flex; flex-direction: column;
+    background: #FFFFFF;
+    min-width: 0;
+  }
+  .chat-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #EAECEF;
+  }
+  .coop-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #FC636B;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .chat-head-identity { min-width: 0; }
+  .chat-head-title {
+    font-size: 14px; font-weight: 600; color: #0A0B0D;
+    line-height: 1.2;
+  }
+  .chat-head-sub {
+    font-size: 11px; color: #8A8E94;
+    margin-top: 2px;
+  }
+  .chat-head-ctrls {
+    margin-left: auto;
+    display: flex; gap: 2px;
+  }
+  .chat-ctrl-btn {
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    color: #8A8E94;
+    background: transparent; border: none; border-radius: 6px;
+    cursor: pointer;
+  }
+  .chat-ctrl-btn:hover { background: #EBEDF0; color: #0A0B0D; }
+  .chat-ctrl-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; }
+
+  .chat-body {
+    flex: 1;
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 16px;
+    overflow-y: auto;
+    background: #FFFFFF;
+  }
+  .msg {
+    display: flex; gap: 10px;
+    max-width: 100%;
+  }
+  .msg .msg-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+  }
+  .msg.coop .msg-avatar { background: #FC636B; }
+  .msg.user .msg-avatar { background: #0A0B0D; color: #F5F4F2; }
+  .msg-bubble {
+    font-size: 13px; line-height: 1.55; color: #0A0B0D;
+    flex: 1;
+  }
+  .msg.user .msg-bubble { color: #0A0B0D; }
+  .msg-name {
+    font-size: 11px; font-weight: 600; color: #6F7782;
+    margin-bottom: 2px;
+  }
+  .msg-bubble p { margin: 6px 0 0; }
+  .msg-bubble p:first-child { margin-top: 0; }
+  .msg-bubble strong { font-weight: 600; color: #0A0B0D; }
+
+  /* Input bar */
+  .chat-input-bar {
+    border-top: 1px solid #EAECEF;
+    padding: 12px 16px 14px;
+    background: #FFFFFF;
+  }
+  .chat-input-shell {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: #F7F8FA;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+  }
+  .chat-input-shell:focus-within {
+    border-color: #C4CAD1;
+    background: #FFFFFF;
+  }
+  .chat-input {
+    flex: 1;
+    font-size: 13px; color: #0A0B0D;
+    background: transparent; border: none; outline: none;
+    font-family: inherit;
+  }
+  .chat-input::placeholder { color: #8A8E94; }
+  .send-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: #0A0B0D; color: #fff;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .send-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .chat-hint {
+    font-size: 11px; color: #8A8E94;
+    margin-top: 6px; display: flex; align-items: center; gap: 6px;
+  }
+  .chat-hint .model-tag {
+    color: #6F7782; font-weight: 500;
+  }
+  .chat-hint kbd {
+    font-family: 'SF Mono', monospace; font-size: 10px;
+    background: #EBEDF0; color: #6F7782;
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     2. HEADER ANATOMY
+     ────────────────────────────────────────────────────────────── */
+  .anatomy-wrap {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 28px 32px;
+    position: relative;
+  }
+  .anatomy-header {
+    padding: 0 0 16px;
+  }
+  .annotations {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px 28px;
+  }
+  .ann {
+    display: flex; gap: 10px;
+    font-size: 12px; line-height: 1.55;
+  }
+  .ann-num {
+    flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #FC636B; color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ann-body { color: #6F7782; }
+  .ann-body strong { color: #0A0B0D; font-weight: 600; display: block; margin-bottom: 2px; }
+  .ann-body code {
+    font-family: 'SF Mono', monospace; font-size: 11px;
+    color: #0A0B0D;
+  }
+  .anatomy-header .pin {
+    position: relative;
+  }
+  .pin-num {
+    position: absolute;
+    top: -8px; right: -8px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #FC636B; color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    z-index: 2;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     3. SCROLLED COMPACT HEADER
+     ────────────────────────────────────────────────────────────── */
+  .sticky-wrap {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .sticky-mock-chrome {
+    height: 30px; background: #151B26;
+    display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  }
+  .sticky-mock-chrome .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+  }
+  .sticky-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 24px;
+    border-bottom: 1px solid #EAECEF;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(8px);
+  }
+  .sticky-name { font-size: 15px; font-weight: 600; color: #0A0B0D; }
+  .sticky-header .stage-pill { font-size: 11px; padding: 3px 8px; }
+  .sticky-header .score-chip { font-size: 12px; padding: 3px 8px; }
+  .sticky-header .actions { margin-left: auto; display: flex; gap: 2px; }
+  /* Tab bar shown compressed below sticky */
+  .sticky-tab-bar {
+    display: flex;
+    padding: 0 24px;
+    gap: 4px;
+    border-bottom: 1px solid #E0E4E8;
+  }
+  .sticky-tab-bar .tab { padding: 10px 12px 8px; font-size: 12px; }
+  .sticky-fake-body {
+    height: 260px;
+    background: linear-gradient(180deg, #F7F8FA 0%, #F0F2F5 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: #C4CAD1; font-size: 12px;
+    font-style: italic;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     4. TAB BAR DETAIL
+     ────────────────────────────────────────────────────────────── */
+  .tab-detail-wrap {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 24px 0 0;
+    overflow: hidden;
+  }
+  .tab-detail-wrap .tab-bar {
+    padding: 0 28px;
+  }
+  .tab-detail-wrap .tab-detail-below {
+    padding: 16px 28px 20px;
+    background: #F7F8FA;
+    font-size: 12px; color: #8A8E94;
+  }
+  .tab-detail-notes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 28px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: #6F7782;
+  }
+  .tab-detail-notes .note {
+    display: flex; gap: 8px;
+  }
+  .tab-detail-notes .bar {
+    width: 3px; border-radius: 2px; background: #E0E4E8;
+    flex-shrink: 0;
+  }
+  .tab-detail-notes strong { color: #0A0B0D; font-weight: 600; display: block; }
+
+  /* ──────────────────────────────────────────────────────────────
+     5. CHAT STATES — 3 mini mockups
+     ────────────────────────────────────────────────────────────── */
+  .chat-states {
+    display: grid;
+    grid-template-columns: 340px 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .state-card {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 14px 14px 18px;
+  }
+  .state-label {
+    font-size: 12px; font-weight: 600; color: #0A0B0D;
+    margin-bottom: 4px;
+  }
+  .state-sub {
+    font-size: 11px; color: #8A8E94;
+    margin-bottom: 12px;
+  }
+
+  /* Docked mini */
+  .docked-mini {
+    height: 380px;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+    background: #FFFFFF;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .docked-mini .mini-head {
+    padding: 10px 12px; border-bottom: 1px solid #EAECEF;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .docked-mini .coop-avatar { width: 22px; height: 22px; font-size: 10px; }
+  .docked-mini .mini-title { font-size: 12px; font-weight: 600; }
+  .docked-mini .mini-body {
+    flex: 1; padding: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .docked-mini .mini-msg {
+    font-size: 11px; line-height: 1.5; color: #6F7782;
+  }
+  .docked-mini .mini-msg strong { color: #0A0B0D; }
+  .docked-mini .mini-input {
+    padding: 8px 10px; border-top: 1px solid #EAECEF;
+    display: flex; gap: 6px; background: #F7F8FA;
+    font-size: 11px; color: #8A8E94;
+    align-items: center;
+  }
+
+  /* Minimized chip mini */
+  .minimized-mini {
+    height: 380px;
+    background: #F7F8FA;
+    border-radius: 10px;
+    border: 1px dashed #E0E4E8;
+    position: relative;
+    display: flex; align-items: flex-end; justify-content: flex-end;
+    padding: 18px;
+    overflow: hidden;
+  }
+  .minimized-mini::before {
+    content: 'page behind';
+    position: absolute;
+    top: 14px; left: 18px;
+    font-size: 10px; color: #C4CAD1;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .fake-content {
+    position: absolute;
+    top: 40px; left: 18px; right: 18px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .fake-content .bar {
+    height: 8px; background: #E0E4E8;
+    border-radius: 4px;
+  }
+  .fake-content .bar.w-70 { width: 70%; }
+  .fake-content .bar.w-90 { width: 90%; }
+  .fake-content .bar.w-50 { width: 50%; }
+  .chat-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #0A0B0D;
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 999px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    font-size: 12px; font-weight: 500;
+    z-index: 2;
+  }
+  .chat-chip .coop-avatar { width: 20px; height: 20px; font-size: 9px; }
+
+  /* Overlay narrow */
+  .overlay-mini {
+    height: 380px;
+    background: #F7F8FA;
+    border-radius: 10px;
+    border: 1px dashed #E0E4E8;
+    position: relative;
+    overflow: hidden;
+  }
+  .overlay-mini::before {
+    content: '<1100px — chat as overlay';
+    position: absolute;
+    top: 14px; left: 16px;
+    font-size: 10px; color: #C4CAD1;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .overlay-mini .fake-content {
+    top: 40px; left: 16px; right: 16px;
+  }
+  .overlay-panel {
+    position: absolute;
+    left: 14px; right: 14px; bottom: 14px;
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.14);
+    display: flex; flex-direction: column;
+    max-height: 68%;
+    overflow: hidden;
+  }
+  .overlay-panel .mini-head {
+    padding: 10px 12px; border-bottom: 1px solid #EAECEF;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .overlay-panel .mini-head .coop-avatar { width: 22px; height: 22px; font-size: 10px; }
+  .overlay-panel .mini-head .mini-title { font-size: 12px; font-weight: 600; }
+  .overlay-panel .mini-head .close-dot {
+    margin-left: auto; width: 16px; height: 16px; border-radius: 50%;
+    background: #EBEDF0; color: #6F7782;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+  }
+  .overlay-panel .mini-body {
+    padding: 10px 12px;
+    font-size: 11px; color: #6F7782; line-height: 1.5;
+  }
+  .overlay-panel .mini-input {
+    padding: 8px 10px; border-top: 1px solid #EAECEF;
+    font-size: 11px; color: #8A8E94;
+    background: #F7F8FA;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     6. WHY NOT THREE COLUMNS
+     ────────────────────────────────────────────────────────────── */
+  .reject-wrap {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  .reject-thumb {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 10px;
+    padding: 10px;
+    height: 210px;
+    display: grid;
+    grid-template-columns: 64px 1fr 86px;
+    gap: 6px;
+    position: relative;
+  }
+  .reject-thumb::after {
+    content: ''; position: absolute; inset: 10px;
+    pointer-events: none;
+    background: rgba(232,56,79,0.05);
+    border: 2px dashed #E8384F;
+    border-radius: 6px;
+  }
+  .reject-col {
+    background: #F7F8FA;
+    border: 1px solid #EAECEF;
+    border-radius: 6px;
+    padding: 8px 6px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .reject-col .rc-bar {
+    height: 8px; background: #E0E4E8; border-radius: 3px;
+  }
+  .reject-col .rc-bar.short { width: 50%; }
+  .reject-col .rc-bar.xs { width: 30%; height: 6px; }
+  .reject-body {
+    font-size: 13px; color: #6F7782; line-height: 1.6;
+    padding-top: 4px;
+  }
+  .reject-body strong { color: #0A0B0D; font-weight: 600; }
+
+  /* ──────────────────────────────────────────────────────────────
+     7. OPEN QUESTIONS
+     ────────────────────────────────────────────────────────────── */
+  .questions {
+    background: #FFFFFF;
+    border: 1px solid #E0E4E8;
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .q-list {
+    display: flex; flex-direction: column;
+    gap: 18px;
+  }
+  .q {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #EAECEF;
+  }
+  .q:last-child { border-bottom: none; padding-bottom: 0; }
+  .q-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #0A0B0D; color: #F5F4F2;
+    font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .q-body {}
+  .q-body .q-head {
+    font-size: 14px; font-weight: 600; color: #0A0B0D;
+    margin-bottom: 6px;
+  }
+  .q-body .q-detail {
+    font-size: 13px; color: #6F7782; line-height: 1.55;
+  }
+  .q-options {
+    display: flex; gap: 10px; margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .q-opt {
+    font-size: 12px; padding: 6px 10px;
+    border: 1px solid #E0E4E8;
+    border-radius: 6px;
+    background: #F7F8FA;
+    color: #0A0B0D;
+  }
+  .q-opt .opt-tag {
+    font-size: 10px; font-weight: 700; color: #8A8E94;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-right: 6px;
+  }
+
+</style>
+</head>
+<body>
+
+  <!-- PAGE HEADER -->
+  <div class="page-head">
+    <h1><span class="issue-tag">#262</span> Opportunity / Company shell redesign</h1>
+    <p class="prompt">
+      The shell wraps every per-tab design (Role Brief / Activity / Emails / Meetings / Notes / Docs / Tasks). Get the shell right and every tab inherits.
+      Stance: two-column layout, one-line identity header, label-only tab bar, docked chat rail by default.
+    </p>
+  </div>
+
+  <!-- SECTION 1: HERO -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Recommended — Full shell</h2>
+      <span class="stance">Render as hero</span>
+    </div>
+    <p class="section-note">
+      Two columns. Main flex, right rail fixed 400px for docked Coop chat. Header is one-line identity + a secondary line of thin context. Tab bar sits below header with a coral underline on active. Count badges only where count carries meaning.
+    </p>
+
+    <div class="shell">
+      <div class="shell-chrome">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <div class="url">coop.ai/opportunity/topo-io — Senior Product Manager · HM Call scheduled</div>
+      </div>
+      <div class="shell-body">
+
+        <!-- MAIN COL -->
+        <div class="main-col">
+
+          <!-- HEADER -->
+          <div class="opp-header">
+            <div class="header-row-1">
+              <div class="company-name">Topo.io</div>
+              <div class="header-meta-dot"></div>
+              <div class="header-meta">AI-powered SDR platform</div>
+              <div class="header-meta-dot"></div>
+              <div class="header-meta">~35 employees</div>
+
+              <div class="stage-pill">
+                <span class="dot-stage"></span>
+                HM Call · Scheduled
+              </div>
+
+              <div class="action-chip">
+                <span class="action-dot"></span>
+                Their court
+              </div>
+
+              <div class="score-chip">
+                <span class="score-num">7.8</span>
+                <span class="score-label">Strong fit</span>
+              </div>
+
+              <div class="header-actions">
+                <button class="ghost-btn">
+                  <svg viewBox="0 0 24 24"><path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+                  LinkedIn
+                </button>
+                <button class="ghost-btn">
+                  <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><path d="M21 4v6h-6"/></svg>
+                  Refresh
+                </button>
+                <button class="ghost-btn icon-only" title="Archive">
+                  <svg viewBox="0 0 24 24"><path d="M3 7h18"/><rect x="5" y="7" width="14" height="13" rx="2"/><path d="M10 12h4"/></svg>
+                </button>
+                <button class="ghost-btn icon-only" title="More">
+                  <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="header-row-2">
+              <span>Seed · $6M · Accel</span>
+              <div class="header-meta-dot"></div>
+              <span>San Francisco, CA</span>
+              <div class="header-meta-dot"></div>
+              <a href="#" class="link-icon">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 10v7M9 7.5v.01M13 17v-4a2 2 0 0 1 4 0v4"/></svg>
+                linkedin.com/company/topo-io
+              </a>
+              <div class="header-meta-dot"></div>
+              <a href="#" class="link-icon">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+                topo.io
+              </a>
+            </div>
+          </div>
+
+          <!-- TAB BAR -->
+          <div class="tab-bar">
+            <button class="tab active">Role Brief</button>
+            <button class="tab">Activity</button>
+            <button class="tab">Emails<span class="count">12</span></button>
+            <button class="tab">Meetings<span class="count">3</span></button>
+            <button class="tab">Notes</button>
+            <button class="tab">Docs<span class="count">4</span></button>
+            <button class="tab">Tasks<span class="count">2</span></button>
+          </div>
+
+          <!-- TAB CONTENT: Role Brief sketch -->
+          <div class="tab-content">
+            <div class="brief-grid">
+              <div class="brief-card wide">
+                <div class="brief-label">Role summary</div>
+                <div class="brief-primary">Lead product for Topo's AI outbound platform — define roadmap for the signals graph and agent orchestration layer as they scale from 40 to 200 customers.</div>
+                <div class="brief-body">Reports to the CEO. One PM hire before you; first senior PM. Sits between eng, growth, and the founding account team. Equity-heavy comp, SF on-site 3x/week.</div>
+              </div>
+
+              <div class="brief-card">
+                <div class="brief-label">Why this fits</div>
+                <ul class="brief-bullet-list">
+                  <li>GTM operator profile matches the signals + outbound problem space</li>
+                  <li>Founder-led company wants 0→1 product instincts, not planning-framework PMs</li>
+                  <li>Stage (Seed+) aligns with your range — early, not chaos-early</li>
+                </ul>
+              </div>
+
+              <div class="brief-card">
+                <div class="brief-label">Watch-outs</div>
+                <ul class="brief-bullet-list">
+                  <li>On-site expectation may push against flexibility</li>
+                  <li>Cash-to-equity ratio likely lean; needs direct ask</li>
+                  <li>CEO has been founder-PM; boundary-setting is part of the job</li>
+                </ul>
+              </div>
+
+              <div class="brief-card wide">
+                <div class="brief-label">Fit breakdown</div>
+                <div class="fit-breakdown">
+                  <div class="fit-cell"><div class="fit-label">Role</div><div class="fit-val pos">8.5</div></div>
+                  <div class="fit-cell"><div class="fit-label">Stage</div><div class="fit-val pos">8.0</div></div>
+                  <div class="fit-cell"><div class="fit-label">Comp</div><div class="fit-val warn">6.5</div></div>
+                  <div class="fit-cell"><div class="fit-label">Location</div><div class="fit-val warn">6.0</div></div>
+                  <div class="fit-cell"><div class="fit-label">Mission</div><div class="fit-val pos">8.5</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT RAIL: docked chat -->
+        <div class="chat-rail">
+          <div class="chat-head">
+            <div class="coop-avatar">C</div>
+            <div class="chat-head-identity">
+              <div class="chat-head-title">Coop</div>
+              <div class="chat-head-sub">Scoped to Topo.io · Haiku 4.5</div>
+            </div>
+            <div class="chat-head-ctrls">
+              <button class="chat-ctrl-btn" title="Minimize">
+                <svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
+              </button>
+              <button class="chat-ctrl-btn" title="Open full">
+                <svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M10 21H5a2 2 0 0 1-2-2v-5"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="chat-body">
+            <div class="msg coop">
+              <div class="msg-avatar">C</div>
+              <div class="msg-bubble">
+                <div class="msg-name">Coop</div>
+                <p>Ready for the HM call with <strong>Anna Rao</strong> on Thursday. She ran the first PM team at Sendoso — so she'll probe for structured storytelling, not just ideas.</p>
+                <p>Want me to pull your notes from the recruiter screen and sketch 3 angles you should have ready?</p>
+              </div>
+            </div>
+
+            <div class="msg user">
+              <div class="msg-avatar">M</div>
+              <div class="msg-bubble">
+                <div class="msg-name">You</div>
+                <p>Yes — and flag anything you're seeing that contradicts what the recruiter said.</p>
+              </div>
+            </div>
+
+            <div class="msg coop">
+              <div class="msg-avatar">C</div>
+              <div class="msg-bubble">
+                <div class="msg-name">Coop</div>
+                <p>One gap worth surfacing: recruiter said "remote-friendly," but Anna's Loom and the job post both say <strong>3 days on-site</strong>. Ask her directly — don't assume.</p>
+                <p>Angles I'd prep: (1) signals→action, (2) agent orchestration as a product surface, (3) the PM-after-founder-PM transition.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-input-bar">
+            <div class="chat-input-shell">
+              <input class="chat-input" placeholder="Ask about Topo.io…">
+              <button class="send-btn" title="Send">
+                <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+              </button>
+            </div>
+            <div class="chat-hint">
+              <span class="model-tag">Haiku 4.5</span>
+              <div class="header-meta-dot"></div>
+              <span>Click to cycle model</span>
+              <span style="margin-left:auto;"><kbd>⌘</kbd> <kbd>↵</kbd> to send</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: HEADER ANATOMY -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Header anatomy</h2>
+    </div>
+    <p class="section-note">
+      One dense line carries identity, status, and actions. Secondary line is context (funding / location / links). No avatars, no logos — keep the weight on the name.
+    </p>
+
+    <div class="anatomy-wrap">
+      <div class="anatomy-header">
+        <div class="header-row-1">
+          <div class="pin">
+            <div class="pin-num">1</div>
+            <div class="company-name">Topo.io</div>
+          </div>
+          <div class="header-meta-dot"></div>
+          <div class="header-meta">AI-powered SDR platform</div>
+          <div class="header-meta-dot"></div>
+          <div class="header-meta">~35 employees</div>
+
+          <div class="pin">
+            <div class="pin-num">2</div>
+            <div class="stage-pill">
+              <span class="dot-stage"></span>
+              HM Call · Scheduled
+            </div>
+          </div>
+
+          <div class="pin">
+            <div class="pin-num">3</div>
+            <div class="action-chip">
+              <span class="action-dot"></span>
+              Their court
+            </div>
+          </div>
+
+          <div class="pin">
+            <div class="pin-num">4</div>
+            <div class="score-chip">
+              <span class="score-num">7.8</span>
+              <span class="score-label">Strong fit</span>
+            </div>
+          </div>
+
+          <div class="pin" style="margin-left: auto;">
+            <div class="pin-num">5</div>
+            <div class="header-actions" style="margin:0;">
+              <button class="ghost-btn">LinkedIn</button>
+              <button class="ghost-btn">Refresh</button>
+              <button class="ghost-btn icon-only">
+                <svg viewBox="0 0 24 24"><path d="M3 7h18"/><rect x="5" y="7" width="14" height="13" rx="2"/></svg>
+              </button>
+              <button class="ghost-btn icon-only">
+                <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-row-2" style="margin-top: 10px;">
+          <div class="pin">
+            <div class="pin-num">6</div>
+            <span>Seed · $6M · Accel</span>
+          </div>
+          <div class="header-meta-dot"></div>
+          <span>San Francisco, CA</span>
+          <div class="header-meta-dot"></div>
+          <a href="#" class="link-icon">linkedin.com/company/topo-io</a>
+          <div class="header-meta-dot"></div>
+          <a href="#" class="link-icon">topo.io</a>
+        </div>
+      </div>
+
+      <div class="annotations">
+        <div class="ann">
+          <div class="ann-num">1</div>
+          <div class="ann-body"><strong>Company name</strong>22px, weight 600, tight letter-spacing. Only thing over 15px in the header.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">2</div>
+          <div class="ann-body"><strong>Stage pill</strong>Flat. Inset dot carries the color cue (blue = active). No gradient, no shadow. Reads as structured text, not a badge.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">3</div>
+          <div class="ann-body"><strong>Action status</strong>Secondary chip. Dot color encodes whose court (amber = theirs, teal = yours). Text stays gray so it recedes.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">4</div>
+          <div class="ann-body"><strong>Score chip</strong>Number colored per spectrum (green ≥7.5). Verdict label optional — see open question #1.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">5</div>
+          <div class="ann-body"><strong>Action cluster</strong>Ghost buttons, compact. Two labeled (the common ones) + two icon-only for Archive / ⋯.</div>
+        </div>
+        <div class="ann">
+          <div class="ann-num">6</div>
+          <div class="ann-body"><strong>Context line</strong>All 13px, secondary color. Funding → location → links. Links render as outline-icon + domain.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: SCROLLED COMPACT -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Scrolled — compact sticky</h2>
+    </div>
+    <p class="section-note">
+      When user scrolls past the header, it collapses to name + stage + score. Context line and actions hide. Tab bar remains sticky below. Animate with 200ms ease-out.
+    </p>
+
+    <div class="sticky-wrap">
+      <div class="sticky-mock-chrome">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+      <div class="sticky-header">
+        <div class="sticky-name">Topo.io</div>
+        <div class="stage-pill">
+          <span class="dot-stage"></span>
+          HM Call · Scheduled
+        </div>
+        <div class="score-chip">
+          <span class="score-num">7.8</span>
+        </div>
+        <div class="actions">
+          <button class="ghost-btn icon-only">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="sticky-tab-bar">
+        <button class="tab active">Role Brief</button>
+        <button class="tab">Activity</button>
+        <button class="tab">Emails<span class="count">12</span></button>
+        <button class="tab">Meetings<span class="count">3</span></button>
+        <button class="tab">Notes</button>
+        <button class="tab">Docs<span class="count">4</span></button>
+        <button class="tab">Tasks<span class="count">2</span></button>
+      </div>
+      <div class="sticky-fake-body">scrolled content…</div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: TAB BAR DETAIL -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Tab bar detail</h2>
+    </div>
+    <p class="section-note">
+      Label-only. No icons. Active tab gets a 2px coral underline and weight 600. Count badges appear only on Emails, Meetings, Docs, Tasks — where count has meaning.
+    </p>
+
+    <div class="tab-detail-wrap">
+      <div class="tab-bar">
+        <button class="tab active">Role Brief</button>
+        <button class="tab">Activity</button>
+        <button class="tab">Emails<span class="count">12</span></button>
+        <button class="tab">Meetings<span class="count">3</span></button>
+        <button class="tab">Notes</button>
+        <button class="tab">Docs<span class="count">4</span></button>
+        <button class="tab">Tasks<span class="count">2</span></button>
+      </div>
+      <div class="tab-detail-below">
+        <div class="tab-detail-notes">
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Role Brief</strong>The permalink. Fit breakdown + why/why-not. No count.</div>
+          </div>
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Activity</strong>Unified timeline — stage moves, emails, meetings, notes. Counts are ambiguous, so no badge.</div>
+          </div>
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Emails (12)</strong>Threaded, most-recent-first. Unread count is the number.</div>
+          </div>
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Meetings (3)</strong>Past + upcoming Granola/Calendar events.</div>
+          </div>
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Notes</strong>Free-form. No count — one document, always.</div>
+          </div>
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Docs (4)</strong>Attached docs: job post, resume tailored, prep sheet, etc.</div>
+          </div>
+          <div class="note">
+            <div class="bar"></div>
+            <div><strong>Tasks (2)</strong>Open tasks. Badge hides when zero.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5: CHAT STATES -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Chat states</h2>
+    </div>
+    <p class="section-note">
+      Three states: docked rail by default, minimize-to-chip for focus, overlay for narrow windows. Always reachable, never in the way.
+    </p>
+
+    <div class="chat-states">
+
+      <!-- Docked -->
+      <div class="state-card">
+        <div class="state-label">Docked — default</div>
+        <div class="state-sub">400px right rail. Always visible on ≥1100px.</div>
+        <div class="docked-mini">
+          <div class="mini-head">
+            <div class="coop-avatar">C</div>
+            <div class="mini-title">Coop</div>
+            <div style="margin-left:auto; font-size:10px; color:#C4CAD1;">—  ⤢</div>
+          </div>
+          <div class="mini-body">
+            <div class="mini-msg"><strong>Coop</strong><br>Ready for the HM call with Anna Rao Thursday. Want 3 angles prepared?</div>
+            <div class="mini-msg" style="align-self:flex-end; max-width:70%; background:#F7F8FA; border-radius:8px; padding:6px 10px;"><strong>You</strong><br>Yes — and flag contradictions.</div>
+            <div class="mini-msg"><strong>Coop</strong><br>Recruiter said "remote-friendly"; post says 3 days on-site. Ask directly.</div>
+          </div>
+          <div class="mini-input">
+            <span style="flex:1;">Ask about Topo.io…</span>
+            <span style="background:#0A0B0D;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;">↑</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimized -->
+      <div class="state-card">
+        <div class="state-label">Minimized — chip</div>
+        <div class="state-sub">Click to re-expand. Keeps focus on page.</div>
+        <div class="minimized-mini">
+          <div class="fake-content">
+            <div class="bar w-90"></div>
+            <div class="bar w-70"></div>
+            <div class="bar w-50"></div>
+            <div class="bar w-90"></div>
+            <div class="bar w-70"></div>
+          </div>
+          <div class="chat-chip">
+            <div class="coop-avatar">C</div>
+            Chat with Coop
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlay -->
+      <div class="state-card">
+        <div class="state-label">Narrow — overlay</div>
+        <div class="state-sub">Below 1100px. Triggered by bottom-right FAB.</div>
+        <div class="overlay-mini">
+          <div class="fake-content">
+            <div class="bar w-90"></div>
+            <div class="bar w-70"></div>
+            <div class="bar w-50"></div>
+            <div class="bar w-90"></div>
+          </div>
+          <div class="overlay-panel">
+            <div class="mini-head">
+              <div class="coop-avatar">C</div>
+              <div class="mini-title">Coop</div>
+              <div class="close-dot">×</div>
+            </div>
+            <div class="mini-body">
+              <strong style="color:#0A0B0D;">Coop</strong><br>
+              Ready for the HM call Thursday — want prep?
+            </div>
+            <div class="mini-input">Ask about Topo.io…</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION 6: WHY NOT THREE COLUMNS -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Why not three columns</h2>
+      <span class="stance reject">Reject</span>
+    </div>
+
+    <div class="reject-wrap">
+      <div class="reject-thumb">
+        <div class="reject-col">
+          <div class="rc-bar xs"></div>
+          <div class="rc-bar short"></div>
+          <div class="rc-bar short"></div>
+          <div class="rc-bar short"></div>
+          <div class="rc-bar xs"></div>
+          <div class="rc-bar short"></div>
+        </div>
+        <div class="reject-col">
+          <div class="rc-bar"></div>
+          <div class="rc-bar short"></div>
+          <div class="rc-bar"></div>
+          <div class="rc-bar short"></div>
+          <div class="rc-bar"></div>
+        </div>
+        <div class="reject-col">
+          <div class="rc-bar xs"></div>
+          <div class="rc-bar short"></div>
+          <div class="rc-bar xs"></div>
+          <div class="rc-bar short"></div>
+        </div>
+      </div>
+      <div class="reject-body">
+        <p><strong>Three columns turn into decoration panels.</strong> A left rail for stage nav or related companies eats horizontal space that tab content actually needs — Activity timelines, email threads, meeting transcripts all want width to breathe.</p>
+        <p style="margin-top:10px;">DESIGN.md rule 4 says one separator, not three. A left rail on top of the tab bar and the chat rail gives you <em>three</em> vertical edges competing for the eye. The tab bar already navigates; stage lives in the header; related companies belong in the Activity feed. No left rail earns its weight.</p>
+        <p style="margin-top:10px;">Main column gets the surface. Chat rail earns its 400px because it's the product's unique edge.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 7: OPEN QUESTIONS -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Open questions</h2>
+    </div>
+
+    <div class="questions">
+      <div class="q-list">
+        <div class="q">
+          <div class="q-num">1</div>
+          <div class="q-body">
+            <div class="q-head">Score chip — number only, or number + verdict?</div>
+            <div class="q-detail">Verdict words give context to people still learning the scale. Number-only is tighter and matches the density principle.</div>
+            <div class="q-options">
+              <div class="q-opt"><span class="opt-tag">A</span><span class="score-chip" style="padding:0;border:none;background:none;"><span class="score-num">7.8</span></span></div>
+              <div class="q-opt"><span class="opt-tag">B</span><span class="score-chip" style="padding:0;border:none;background:none;"><span class="score-num">7.8</span><span class="score-label">Strong fit</span></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="q">
+          <div class="q-num">2</div>
+          <div class="q-body">
+            <div class="q-head">Count badges — all tabs, or only where count matters?</div>
+            <div class="q-detail">Current proposal: only Emails, Meetings, Docs, Tasks. Role Brief / Activity / Notes don't have a meaningful count.</div>
+            <div class="q-options">
+              <div class="q-opt"><span class="opt-tag">A</span>Counting tabs only (current)</div>
+              <div class="q-opt"><span class="opt-tag">B</span>All tabs (Activity shows total events; Notes shows character count; etc.)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="q">
+          <div class="q-num">3</div>
+          <div class="q-body">
+            <div class="q-head">Sticky header on scroll — full collapse, or shrink padding?</div>
+            <div class="q-detail">Full collapse (current proposal) drops to just name + stage + score — most compact. Shrink-padding keeps the full identity + context line but squeezes it.</div>
+            <div class="q-options">
+              <div class="q-opt"><span class="opt-tag">A</span>Full collapse (current)</div>
+              <div class="q-opt"><span class="opt-tag">B</span>Shrink padding only</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

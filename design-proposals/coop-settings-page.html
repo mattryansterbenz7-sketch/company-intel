@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>#266 — Coop Settings redesign</title>
+<style>
+/* ──────────────── TOKENS ──────────────── */
+:root {
+  --ci-bg-base: #F0F2F5;
+  --ci-bg-raised: #FFFFFF;
+  --ci-bg-inset: #EBEDF0;
+  --ci-bg-sidebar: #EEF1F3;
+  --ci-bg-header: #151B26;
+  --ci-text-primary: #0A0B0D;
+  --ci-text-secondary: #6F7782;
+  --ci-text-tertiary: #8A8E94;
+  --ci-text-on-dark: #F5F4F2;
+  --ci-text-on-dark-muted: #A3AEBE;
+  --ci-border-default: #E0E4E8;
+  --ci-border-subtle: #EAECEF;
+  --ci-border-strong: #C4CAD1;
+  --ci-accent-primary: #FC636B;
+  --ci-accent-primary-soft: rgba(252,99,107,0.08);
+  --ci-accent-teal: #36B37E;
+  --ci-accent-blue: #4573D2;
+  --ci-accent-amber: #F5A623;
+  --ci-accent-purple: #7C6EF0;
+  --ci-shadow-sm: 0 1px 3px rgba(30,31,33,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --ci-shadow-md: 0 4px 16px rgba(30,31,33,0.10), 0 1px 4px rgba(0,0,0,0.06);
+  --ci-radius-sm: 6px;
+  --ci-radius-md: 10px;
+  --ci-radius-lg: 14px;
+  --ci-radius-full: 9999px;
+  --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  --ci-font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--ci-font-family);
+  -webkit-font-smoothing: antialiased;
+  color: var(--ci-text-primary);
+  background: var(--ci-bg-base);
+  padding: 48px 32px 96px;
+}
+
+/* ──────────────── PAGE HEADER ──────────────── */
+.page-wrap { max-width: 1280px; margin: 0 auto; }
+.page-head {
+  margin-bottom: 40px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--ci-border-default);
+}
+.page-head .tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ci-text-tertiary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.page-head h1 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+}
+.page-head .prompt {
+  font-size: 14px;
+  color: var(--ci-text-secondary);
+  line-height: 1.55;
+  max-width: 760px;
+}
+
+/* ──────────────── SECTION HEADS ──────────────── */
+.section {
+  margin-top: 64px;
+}
+.section-head {
+  margin-bottom: 20px;
+}
+.section-head .label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ci-text-tertiary);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.section-head h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 4px 0 4px;
+}
+.section-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ci-text-secondary);
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+/* ──────────────── APP CHROME ──────────────── */
+.app {
+  background: var(--ci-bg-base);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-lg);
+  box-shadow: var(--ci-shadow-md);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 760px;
+}
+.app-nav {
+  background: var(--ci-bg-sidebar);
+  border-right: 1px solid var(--ci-border-default);
+  padding: 20px 12px;
+}
+.app-nav .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 18px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--ci-border-default);
+}
+.coop-face {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--ci-accent-primary);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 12px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.brand-text { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-text .sub { display: block; font-size: 11px; color: var(--ci-text-tertiary); font-weight: 500; }
+.nav-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ci-text-tertiary);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 12px 10px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ci-text-primary);
+  border-radius: var(--ci-radius-sm);
+  cursor: pointer;
+  margin-bottom: 1px;
+}
+.nav-item:hover { background: rgba(0,0,0,0.04); }
+.nav-item.active {
+  background: var(--ci-bg-raised);
+  font-weight: 600;
+  box-shadow: var(--ci-shadow-sm);
+}
+.nav-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-text-tertiary); }
+.nav-item.active .dot { background: var(--ci-accent-primary); }
+
+/* main */
+.app-main {
+  display: flex; flex-direction: column;
+  background: var(--ci-bg-base);
+}
+
+.main-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 32px 16px;
+  background: var(--ci-bg-raised);
+  border-bottom: 1px solid var(--ci-border-default);
+}
+.main-head h2 {
+  font-size: 18px; font-weight: 600; margin: 0;
+  letter-spacing: -0.01em;
+}
+.main-head .sub { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; display: block; }
+
+/* tabs */
+.tabs {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 32px;
+  background: var(--ci-bg-raised);
+  border-bottom: 1px solid var(--ci-border-default);
+  position: relative;
+}
+.tab {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 14px 16px;
+  color: var(--ci-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--ci-text-primary); }
+.tab.active {
+  color: var(--ci-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--ci-accent-primary);
+}
+.apply-indicator {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  padding: 6px 11px;
+  border-radius: var(--ci-radius-full);
+  background: var(--ci-accent-primary-soft);
+  color: var(--ci-accent-primary);
+  border: 1px solid var(--ci-accent-primary);
+}
+.apply-indicator::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ci-accent-primary);
+  box-shadow: 0 0 0 3px rgba(252,99,107,0.18);
+}
+
+/* main content */
+.main-body {
+  padding: 32px;
+  flex: 1;
+}
+
+/* ──────────────── CARD ──────────────── */
+.card {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+}
+.card + .card { margin-top: 20px; }
+.card-head {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.card-head h3 {
+  font-size: 14px; font-weight: 600; margin: 0; letter-spacing: -0.005em;
+}
+.card-head p {
+  font-size: 12px; color: var(--ci-text-secondary); margin: 3px 0 0;
+  line-height: 1.5;
+}
+.card-body { padding: 22px; }
+
+/* ──────────────── PERSONALITY TAB — hero ──────────────── */
+.personality-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 20px;
+}
+
+.dials .dial {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.dials .dial:last-child { border-bottom: none; padding-bottom: 4px; }
+.dials .dial:first-child { padding-top: 4px; }
+.dial-label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 12px;
+}
+.dial-name {
+  font-size: 13px; font-weight: 600;
+}
+.dial-value {
+  font-size: 12px; color: var(--ci-text-secondary); font-family: var(--ci-font-mono);
+}
+.dial-track {
+  position: relative;
+  height: 4px;
+  background: var(--ci-bg-inset);
+  border-radius: var(--ci-radius-full);
+  margin: 0 2px;
+}
+.dial-fill {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  background: var(--ci-text-primary);
+  border-radius: var(--ci-radius-full);
+}
+.dial-thumb {
+  position: absolute; top: 50%;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--ci-text-primary);
+  transform: translate(-50%, -50%);
+  box-shadow: var(--ci-shadow-sm);
+}
+.dial-ends {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--ci-text-tertiary);
+  margin-top: 8px;
+}
+
+.preview-note {
+  font-size: 11px; color: var(--ci-text-tertiary);
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.preview-note::after {
+  content: ''; flex: 1; height: 1px; background: var(--ci-border-subtle);
+}
+
+.preview-out {
+  padding: 14px 16px;
+  background: var(--ci-bg-inset);
+  border-radius: var(--ci-radius-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ci-text-primary);
+  border-left: 2px solid var(--ci-accent-primary);
+  margin-bottom: 12px;
+}
+.preview-out .meta {
+  font-size: 11px; color: var(--ci-text-tertiary);
+  margin-bottom: 6px; font-family: var(--ci-font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* ──────────────── TEXTAREA ──────────────── */
+.textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--ci-bg-inset);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  resize: vertical;
+  color: var(--ci-text-primary);
+}
+
+/* ──────────────── MINI MOCKUPS ──────────────── */
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.mini {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  min-height: 380px;
+}
+.mini-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.mini-head .title {
+  font-size: 12px; font-weight: 700; letter-spacing: -0.005em;
+}
+.mini-head .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ci-accent-primary);
+}
+.mini-body {
+  padding: 16px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ci-text-secondary);
+  flex: 1;
+  display: flex; flex-direction: column;
+}
+
+/* ──────────────── TABLE ──────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ci-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.data-table td {
+  font-size: 13px;
+  padding: 14px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+  color: var(--ci-text-primary);
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table .task-name { font-weight: 600; }
+.data-table .task-desc { font-size: 11px; color: var(--ci-text-secondary); margin-top: 2px; }
+.data-table .num {
+  font-family: var(--ci-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────── PICKER CHIP ──────────────── */
+.picker {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  font-size: 12px; font-weight: 500;
+  background: #fff;
+  cursor: pointer;
+}
+.picker .provider-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.picker .provider-dot.anthropic { background: var(--ci-accent-primary); }
+.picker .provider-dot.openai { background: var(--ci-accent-teal); }
+.picker .caret {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-right: 1.5px solid var(--ci-text-tertiary);
+  border-bottom: 1.5px solid var(--ci-text-tertiary);
+  transform: rotate(45deg);
+  margin-left: 2px; margin-top: -3px;
+}
+
+/* ──────────────── FALLBACK CHAIN ──────────────── */
+.fallback-chain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+.fallback-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-full);
+  background: #fff;
+}
+.fallback-chip .provider-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.fallback-chip.primary {
+  border-color: var(--ci-text-primary);
+  font-weight: 600;
+}
+.fallback-arrow {
+  color: var(--ci-text-tertiary);
+  font-size: 12px;
+}
+
+.expandable {
+  margin-top: 16px;
+  border-top: 1px solid var(--ci-border-subtle);
+  padding-top: 14px;
+  font-size: 12px; color: var(--ci-text-secondary);
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.expandable::before {
+  content: '+';
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--ci-bg-inset);
+  font-size: 13px; font-weight: 600;
+  color: var(--ci-text-secondary);
+}
+
+/* ──────────────── TOGGLE ──────────────── */
+.toggle-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ci-border-subtle);
+  gap: 24px;
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-row:first-child { padding-top: 4px; }
+.toggle-info .name { font-size: 13px; font-weight: 600; }
+.toggle-info .desc { font-size: 12px; color: var(--ci-text-secondary); margin-top: 3px; line-height: 1.5; }
+.toggle {
+  flex-shrink: 0;
+  width: 36px; height: 20px;
+  background: var(--ci-bg-inset);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-full);
+  position: relative;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 1px; left: 1px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: var(--ci-shadow-sm);
+}
+.toggle.on {
+  background: var(--ci-text-primary);
+  border-color: var(--ci-text-primary);
+}
+.toggle.on::after { left: 17px; }
+
+/* ──────────────── INSIGHT LIST ──────────────── */
+.insight-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.insight-row:last-child { border-bottom: none; }
+.insight-text {
+  font-size: 13px;
+  color: var(--ci-text-primary);
+  line-height: 1.5;
+}
+.insight-text .cat {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ci-text-tertiary);
+  margin-right: 8px;
+}
+.insight-date {
+  font-size: 11px;
+  color: var(--ci-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.icon-btn {
+  width: 24px; height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--ci-text-tertiary);
+  cursor: pointer;
+  border-radius: var(--ci-radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.icon-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+
+/* profile snapshot */
+.snapshot {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.snapshot-label {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.snapshot-label .t {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ci-text-tertiary);
+}
+.snapshot-body {
+  font-size: 13px; color: var(--ci-text-primary); line-height: 1.6;
+}
+
+/* search row */
+.mem-toolbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+  background: var(--ci-bg-inset);
+}
+.search-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: #fff;
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  color: var(--ci-text-primary);
+}
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-sm);
+  background: #fff;
+  cursor: pointer;
+}
+.btn-primary {
+  padding: 8px 14px;
+  font-size: 12px; font-weight: 600;
+  color: #fff;
+  background: var(--ci-text-primary);
+  border: none;
+  border-radius: var(--ci-radius-sm);
+  cursor: pointer;
+}
+
+/* usage summary */
+.summary-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.summary-stat .label {
+  font-size: 11px; color: var(--ci-text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.summary-stat .value {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+.summary-stat .delta {
+  font-size: 11px; color: var(--ci-text-secondary);
+  margin-top: 2px;
+}
+.summary-stat .delta.up { color: var(--ci-accent-teal); }
+.summary-stat .delta.down { color: var(--ci-accent-primary); }
+
+/* line chart */
+.chart {
+  width: 100%; height: 140px;
+  margin: 0; padding: 0;
+}
+.chart-wrap {
+  padding: 22px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.chart-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+.chart-title { font-size: 13px; font-weight: 600; }
+.chart-legend {
+  display: flex; gap: 14px; font-size: 11px; color: var(--ci-text-secondary);
+}
+.chart-legend .swatch {
+  display: inline-block;
+  width: 10px; height: 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+/* ──────────────── APPLY MODE placeholder ──────────────── */
+.apply-placeholder {
+  padding: 32px;
+  text-align: center;
+  background: var(--ci-bg-inset);
+  border-radius: var(--ci-radius-md);
+  border: 1px dashed var(--ci-border-default);
+  color: var(--ci-text-secondary);
+  font-size: 13px;
+}
+.apply-placeholder h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--ci-text-primary);
+}
+.apply-placeholder a { color: var(--ci-accent-primary); }
+
+/* ──────────────── ZOOM / CLOSEUP SHELL ──────────────── */
+.closeup {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-lg);
+  box-shadow: var(--ci-shadow-md);
+  overflow: hidden;
+}
+.closeup-head {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--ci-border-default);
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--ci-bg-inset);
+}
+.closeup-head .crumb {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ci-text-tertiary);
+}
+.closeup-head h3 {
+  font-size: 14px; font-weight: 600; margin: 3px 0 0;
+}
+
+/* ──────────────── NOTE / CALLOUT ──────────────── */
+.vision-note {
+  padding: 24px 28px;
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  border-left: 3px solid var(--ci-accent-primary);
+}
+.vision-note .hd {
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ci-accent-primary);
+  margin-bottom: 8px;
+}
+.vision-note p {
+  margin: 0 0 10px;
+  font-size: 13px; color: var(--ci-text-primary); line-height: 1.6;
+}
+.vision-note p:last-child { margin-bottom: 0; color: var(--ci-text-secondary); }
+
+/* ──────────────── OPEN QUESTIONS ──────────────── */
+.q-list {
+  display: grid; gap: 14px;
+}
+.q-item {
+  padding: 16px 20px;
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+}
+.q-item .q {
+  font-size: 13px; font-weight: 600; margin-bottom: 4px;
+}
+.q-item .a {
+  font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
+}
+
+/* ──────────────── ROW / PER-TASK LAYOUT ──────────────── */
+.task-stack { display: grid; gap: 0; }
+
+/* zoom size helper */
+.zoom-section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+/* small text helpers */
+.text-muted { color: var(--ci-text-secondary); }
+.text-dim { color: var(--ci-text-tertiary); }
+.mono { font-family: var(--ci-font-mono); }
+
+/* ──────────────── MINI TAB VIEWS ──────────────── */
+.mini-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--ci-border-subtle);
+  font-size: 11px;
+}
+.mini-row:last-child { border-bottom: none; }
+.mini-row .label { font-weight: 500; color: var(--ci-text-primary); }
+.mini-pill {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: var(--ci-radius-full);
+  background: var(--ci-bg-inset);
+  color: var(--ci-text-secondary);
+  border: 1px solid var(--ci-border-default);
+  font-weight: 500;
+}
+.mini-toggle {
+  width: 26px; height: 14px;
+  background: var(--ci-bg-inset);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-full);
+  position: relative;
+  flex-shrink: 0;
+}
+.mini-toggle::after {
+  content: ''; position: absolute; top: 1px; left: 1px;
+  width: 10px; height: 10px; background: #fff; border-radius: 50%;
+}
+.mini-toggle.on { background: var(--ci-text-primary); border-color: var(--ci-text-primary); }
+.mini-toggle.on::after { left: 13px; }
+.mini-bar {
+  height: 3px; background: var(--ci-bg-inset); border-radius: 2px; position: relative;
+}
+.mini-bar::after {
+  content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+  width: 55%; background: var(--ci-text-primary); border-radius: 2px;
+}
+.mini-chart {
+  width: 100%; height: 80px; margin-top: 8px;
+}
+
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ══════════ PAGE HEADER ══════════ -->
+  <div class="page-head">
+    <div class="tag">Design proposal · Throwaway</div>
+    <h1>#266 — Coop Settings page redesign</h1>
+    <p class="prompt">
+      Home for Coop's identity knobs — model, voice, memory, behavior, usage. Recommend
+      6 horizontal tabs: <b>Models · Personality · Memory · Behavior · Usage · Apply Mode</b>.
+      3-column Coop-centric vision deferred. Apply Mode indicator pill lives top-right per
+      the #246 spec.
+    </p>
+  </div>
+
+  <!-- ══════════ 1. HERO — Personality tab active ══════════ -->
+  <div class="section-head">
+    <div class="label">Recommended · Hero</div>
+    <h2>Full Coop Settings — Personality tab active</h2>
+    <p>Shown at ~1200px. Six top-tabs, Apply Mode indicator pill top-right, Personality
+    tab chosen for the hero since it's the most visually interesting (dial + live preview).</p>
+  </div>
+
+  <div class="app">
+
+    <!-- sidebar -->
+    <aside class="app-nav">
+      <div class="brand">
+        <div class="coop-face">C</div>
+        <div class="brand-text">
+          Coop.ai
+          <span class="sub">Settings</span>
+        </div>
+      </div>
+      <div class="nav-group-label">You</div>
+      <div class="nav-item"><span class="dot"></span>Profile & Story Time</div>
+      <div class="nav-item"><span class="dot"></span>Job Preferences</div>
+      <div class="nav-item"><span class="dot"></span>Pipeline Stages</div>
+      <div class="nav-group-label">Coop</div>
+      <div class="nav-item active"><span class="dot"></span>Coop Settings</div>
+      <div class="nav-item"><span class="dot"></span>Integrations</div>
+      <div class="nav-item"><span class="dot"></span>Data & Privacy</div>
+      <div class="nav-group-label">Help</div>
+      <div class="nav-item"><span class="dot"></span>Docs</div>
+    </aside>
+
+    <!-- main column -->
+    <div class="app-main">
+
+      <div class="main-head">
+        <div>
+          <h2>Coop Settings</h2>
+          <span class="sub">Identity, voice, memory, and behavior for your AI assistant</span>
+        </div>
+      </div>
+
+      <!-- tab strip -->
+      <div class="tabs">
+        <div class="tab">Models</div>
+        <div class="tab active">Personality</div>
+        <div class="tab">Memory</div>
+        <div class="tab">Behavior</div>
+        <div class="tab">Usage</div>
+        <div class="tab">Apply Mode</div>
+        <div class="apply-indicator">Apply Mode</div>
+      </div>
+
+      <!-- body -->
+      <div class="main-body">
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Voice</h3>
+            <p>Three dials control how Coop talks. Changes update the live preview below.</p>
+          </div>
+          <div class="card-body">
+            <div class="personality-grid">
+
+              <!-- dials -->
+              <div class="dials">
+                <div class="dial">
+                  <div class="dial-label">
+                    <span class="dial-name">Tone</span>
+                    <span class="dial-value">Warm 0.62</span>
+                  </div>
+                  <div class="dial-track">
+                    <div class="dial-fill" style="width: 62%"></div>
+                    <div class="dial-thumb" style="left: 62%"></div>
+                  </div>
+                  <div class="dial-ends"><span>Direct</span><span>Warm</span></div>
+                </div>
+
+                <div class="dial">
+                  <div class="dial-label">
+                    <span class="dial-name">Brevity</span>
+                    <span class="dial-value">Terse 0.28</span>
+                  </div>
+                  <div class="dial-track">
+                    <div class="dial-fill" style="width: 28%"></div>
+                    <div class="dial-thumb" style="left: 28%"></div>
+                  </div>
+                  <div class="dial-ends"><span>Terse</span><span>Expansive</span></div>
+                </div>
+
+                <div class="dial">
+                  <div class="dial-label">
+                    <span class="dial-name">Formality</span>
+                    <span class="dial-value">Casual 0.35</span>
+                  </div>
+                  <div class="dial-track">
+                    <div class="dial-fill" style="width: 35%"></div>
+                    <div class="dial-thumb" style="left: 35%"></div>
+                  </div>
+                  <div class="dial-ends"><span>Casual</span><span>Formal</span></div>
+                </div>
+              </div>
+
+              <!-- preview -->
+              <div class="preview">
+                <div class="preview-note">Live sample · on dial change</div>
+
+                <div class="preview-out">
+                  <div class="meta">Reply · nudge recruiter after 7 days</div>
+                  Hey Sam — circling back on the Head of GTM role we talked about last
+                  week. Any update on timing? Happy to grab 15 minutes if it'd help move
+                  things along.
+                </div>
+                <div class="preview-out">
+                  <div class="meta">Summary · company research</div>
+                  Series B logistics player, 180 people, healthy hiring pace. Strong
+                  Glassdoor ratings. Warning flag on leadership churn — 3 VP exits in
+                  the last 18 months.
+                </div>
+                <div class="preview-out">
+                  <div class="meta">Chat · open-ended question</div>
+                  Short answer: worth a first call. The comp ceiling concerns me a bit
+                  but the stage matches what you said you want. Want to sketch a pitch?
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Operating principles</h3>
+            <p>Things Coop should always do — or avoid. Applied as system-prompt
+            constraints on every call.</p>
+          </div>
+          <div class="card-body">
+            <textarea class="textarea" readonly>• Never use em-dashes in drafts (Matt's personal quirk)
+• Push back if I ask about a role that's clearly a downgrade
+• When summarizing calls, lead with what's actionable, not what happened
+• Don't hedge — give me a recommendation, explain the tradeoff after</textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ 2. MINI MOCKUPS — all 6 tabs ══════════ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="label">All 6 tabs · 3×2 grid</div>
+      <h2>Tab content at a glance</h2>
+      <p>Every tab populated with representative content. Each tile is the main-body
+      region of the Coop Settings shell.</p>
+    </div>
+
+    <div class="mini-grid">
+
+      <!-- Models -->
+      <div class="mini">
+        <div class="mini-head">
+          <div class="title">Models</div>
+          <div class="dot"></div>
+        </div>
+        <div class="mini-body">
+          <div class="mini-row">
+            <div>
+              <div class="label">Research synthesis</div>
+              <div class="text-dim">Company enrichment</div>
+            </div>
+            <span class="mini-pill">Claude Haiku</span>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Scoring</div>
+              <div class="text-dim">Job match</div>
+            </div>
+            <span class="mini-pill">Claude Sonnet</span>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Chat (default)</div>
+              <div class="text-dim">Coop conversations</div>
+            </div>
+            <span class="mini-pill">GPT-4.1 mini</span>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Apply mode drafts</div>
+              <div class="text-dim">Cover letters, answers</div>
+            </div>
+            <span class="mini-pill">Claude Sonnet</span>
+          </div>
+          <div style="margin-top:auto; padding-top:14px; border-top:1px solid var(--ci-border-subtle);">
+            <div class="text-dim" style="font-size:10px; text-transform:uppercase; letter-spacing:0.08em; font-weight:600; margin-bottom:8px;">
+              Fallback chain
+            </div>
+            <div class="fallback-chain" style="font-size:10px;">
+              <span class="fallback-chip" style="font-size:10px; padding:3px 7px;">4.1-mini</span>
+              <span class="fallback-arrow">→</span>
+              <span class="fallback-chip" style="font-size:10px; padding:3px 7px;">Haiku</span>
+              <span class="fallback-arrow">→</span>
+              <span class="fallback-chip" style="font-size:10px; padding:3px 7px;">Sonnet</span>
+              <span class="fallback-arrow">→</span>
+              <span class="fallback-chip" style="font-size:10px; padding:3px 7px;">GPT-4.1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Personality -->
+      <div class="mini">
+        <div class="mini-head">
+          <div class="title">Personality</div>
+          <div class="dot"></div>
+        </div>
+        <div class="mini-body">
+          <div style="margin-bottom:18px;">
+            <div class="mini-row">
+              <span class="label">Tone</span>
+              <span class="text-dim">Warm 0.62</span>
+            </div>
+            <div class="mini-bar" style="margin-top:6px;"></div>
+          </div>
+          <div style="margin-bottom:18px;">
+            <div class="mini-row">
+              <span class="label">Brevity</span>
+              <span class="text-dim">Terse 0.28</span>
+            </div>
+            <div class="mini-bar" style="margin-top:6px;"><style>.m-b-2::after{width:28% !important;}</style></div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div class="mini-row">
+              <span class="label">Formality</span>
+              <span class="text-dim">Casual 0.35</span>
+            </div>
+            <div class="mini-bar" style="margin-top:6px;"></div>
+          </div>
+          <div style="padding:10px 12px; background:var(--ci-bg-inset); border-radius:var(--ci-radius-sm); border-left:2px solid var(--ci-accent-primary); font-size:10px; line-height:1.5; margin-top:auto;">
+            <div style="font-family:var(--ci-font-mono); font-size:9px; color:var(--ci-text-tertiary); margin-bottom:4px;">Preview</div>
+            "Circling back on the GTM role — any update on timing?"
+          </div>
+        </div>
+      </div>
+
+      <!-- Memory -->
+      <div class="mini">
+        <div class="mini-head">
+          <div class="title">Memory</div>
+          <div class="dot"></div>
+        </div>
+        <div class="mini-body">
+          <div style="padding:10px 12px; background:var(--ci-bg-inset); border-radius:var(--ci-radius-sm); margin-bottom:12px;">
+            <div class="text-dim" style="font-size:9px; text-transform:uppercase; letter-spacing:0.08em; font-weight:600; margin-bottom:4px;">Profile snapshot</div>
+            <div style="font-size:10px; line-height:1.5; color:var(--ci-text-primary);">
+              GTM leader targeting Head-of-Sales roles at Series B–D SaaS companies. $280K+
+              OTE floor, remote preferred. Strong preference for PLG businesses.
+            </div>
+          </div>
+          <div class="mini-row">
+            <span class="label">Prefers async over meetings</span>
+            <span class="text-dim">Mar 8</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">Bear case: logistics SaaS</span>
+            <span class="text-dim">Mar 11</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">Targeting ≥ $320K OTE in NYC</span>
+            <span class="text-dim">Mar 14</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">Former colleague Jamie at Ramp</span>
+            <span class="text-dim">Mar 16</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">Will not take IC roles</span>
+            <span class="text-dim">Mar 19</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Behavior -->
+      <div class="mini">
+        <div class="mini-head">
+          <div class="title">Behavior</div>
+          <div class="dot"></div>
+        </div>
+        <div class="mini-body">
+          <div class="mini-row">
+            <div>
+              <div class="label">Rescore on profile changes</div>
+              <div class="text-dim">Refit all scored entries</div>
+            </div>
+            <div class="mini-toggle"></div>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Rescore on comp changes</div>
+              <div class="text-dim">When salary/OTE moves</div>
+            </div>
+            <div class="mini-toggle"></div>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Rescore on new interaction</div>
+              <div class="text-dim">Email, meeting, note</div>
+            </div>
+            <div class="mini-toggle"></div>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Sound feedback</div>
+              <div class="text-dim">Coop UI chimes</div>
+            </div>
+            <div class="mini-toggle on"></div>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Auto-scroll chat</div>
+              <div class="text-dim">Pin to newest message</div>
+            </div>
+            <div class="mini-toggle on"></div>
+          </div>
+          <div class="mini-row">
+            <div>
+              <div class="label">Cache TTL</div>
+              <div class="text-dim">Research freshness</div>
+            </div>
+            <span class="mini-pill">24h</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Usage -->
+      <div class="mini">
+        <div class="mini-head">
+          <div class="title">Usage</div>
+          <div class="dot"></div>
+        </div>
+        <div class="mini-body">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+            <div style="padding:10px 12px; background:var(--ci-bg-inset); border-radius:var(--ci-radius-sm);">
+              <div class="text-dim" style="font-size:9px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Tokens (MTD)</div>
+              <div style="font-size:18px; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; margin-top:2px;">3.42M</div>
+            </div>
+            <div style="padding:10px 12px; background:var(--ci-bg-inset); border-radius:var(--ci-radius-sm);">
+              <div class="text-dim" style="font-size:9px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Cost (MTD)</div>
+              <div style="font-size:18px; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; margin-top:2px;">$18.62</div>
+            </div>
+          </div>
+          <svg viewBox="0 0 200 60" class="mini-chart" preserveAspectRatio="none">
+            <polyline points="0,45 20,38 40,42 60,32 80,28 100,25 120,22 140,15 160,12 180,9 200,5"
+              fill="none" stroke="var(--ci-accent-primary)" stroke-width="1.5"/>
+            <line x1="0" y1="58" x2="200" y2="58" stroke="var(--ci-border-subtle)" stroke-width="0.5"/>
+          </svg>
+          <div class="mini-row" style="margin-top:8px;">
+            <span class="label">Haiku</span>
+            <span class="text-dim">1.82M · $3.20</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">Sonnet</span>
+            <span class="text-dim">980K · $11.44</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">GPT-4.1 mini</span>
+            <span class="text-dim">620K · $3.98</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Apply Mode -->
+      <div class="mini">
+        <div class="mini-head">
+          <div class="title">Apply Mode</div>
+          <div class="dot"></div>
+        </div>
+        <div class="mini-body">
+          <div class="text-dim" style="font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">Activation</div>
+          <div class="mini-row">
+            <span class="label">Auto-enter on ATS pages</span>
+            <div class="mini-toggle on"></div>
+          </div>
+          <div class="mini-row">
+            <span class="label">Manual toggle (side panel)</span>
+            <span class="mini-pill">⌘ + K</span>
+          </div>
+          <div class="text-dim" style="font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin:12px 0 6px;">Draft behavior</div>
+          <div class="mini-row">
+            <span class="label">Draft length</span>
+            <span class="mini-pill">Medium</span>
+          </div>
+          <div class="mini-row">
+            <span class="label">Use my voice</span>
+            <div class="mini-toggle on"></div>
+          </div>
+          <div class="mini-row">
+            <span class="label">Cite source paragraph</span>
+            <div class="mini-toggle on"></div>
+          </div>
+          <div style="margin-top:auto; padding:10px 12px; background:var(--ci-accent-primary-soft); border:1px solid var(--ci-accent-primary); border-radius:var(--ci-radius-sm); font-size:10px; color:var(--ci-text-primary); line-height:1.5;">
+            See <b>#246</b> for the full Apply Mode design
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ 3. MODELS TAB — zoom ══════════ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="label">Zoom · Models tab</div>
+      <h2>Per-task model picker + fallback chain</h2>
+      <p>Each task-type picks its own primary model. Fallback chain visualized below
+      shows the global safety net when the primary fails (rate limit, quota, network).</p>
+    </div>
+
+    <div class="closeup">
+      <div class="closeup-head">
+        <div>
+          <div class="crumb">Coop Settings · Models</div>
+          <h3>Task-type assignments</h3>
+        </div>
+        <div class="text-dim" style="font-size:12px;">4 task types · 4 models</div>
+      </div>
+
+      <div style="padding:0;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Task type</th>
+              <th>Primary model</th>
+              <th>Est. cost / call</th>
+              <th>Why this default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="task-name">Research synthesis</div>
+                <div class="task-desc">Apollo + Serper → structured JSON</div>
+              </td>
+              <td>
+                <div class="picker">
+                  <span class="provider-dot anthropic"></span>
+                  Claude Haiku
+                  <span class="caret"></span>
+                </div>
+              </td>
+              <td class="num">$0.008</td>
+              <td class="text-muted" style="font-size:12px;">Fast, cheap, good at structured output</td>
+            </tr>
+            <tr>
+              <td>
+                <div class="task-name">Scoring</div>
+                <div class="task-desc">Job match · 5 dimensions</div>
+              </td>
+              <td>
+                <div class="picker">
+                  <span class="provider-dot anthropic"></span>
+                  Claude Sonnet
+                  <span class="caret"></span>
+                </div>
+              </td>
+              <td class="num">$0.032</td>
+              <td class="text-muted" style="font-size:12px;">Reasoning quality matters here</td>
+            </tr>
+            <tr>
+              <td>
+                <div class="task-name">Chat (default)</div>
+                <div class="task-desc">Coop conversations w/ tool-use</div>
+              </td>
+              <td>
+                <div class="picker">
+                  <span class="provider-dot openai"></span>
+                  GPT-4.1 mini
+                  <span class="caret"></span>
+                </div>
+              </td>
+              <td class="num">$0.012</td>
+              <td class="text-muted" style="font-size:12px;">Best latency + cost for conversational</td>
+            </tr>
+            <tr>
+              <td>
+                <div class="task-name">Apply mode drafts</div>
+                <div class="task-desc">Cover letters, open-ended answers</div>
+              </td>
+              <td>
+                <div class="picker">
+                  <span class="provider-dot anthropic"></span>
+                  Claude Sonnet
+                  <span class="caret"></span>
+                </div>
+              </td>
+              <td class="num">$0.048</td>
+              <td class="text-muted" style="font-size:12px;">Voice matching needs stronger model</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="padding:22px 24px; border-top:1px solid var(--ci-border-subtle); background:var(--ci-bg-inset);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <div style="font-size:13px; font-weight:600;">Fallback chain</div>
+            <div class="text-muted" style="font-size:11px; margin-top:2px;">Order Coop cycles when the primary model fails</div>
+          </div>
+          <div class="text-dim" style="font-size:11px; font-family:var(--ci-font-mono);">Global default</div>
+        </div>
+
+        <div class="fallback-chain">
+          <span class="fallback-chip primary">
+            <span class="provider-dot openai"></span>GPT-4.1 mini
+          </span>
+          <span class="fallback-arrow">→</span>
+          <span class="fallback-chip">
+            <span class="provider-dot anthropic"></span>Claude Haiku
+          </span>
+          <span class="fallback-arrow">→</span>
+          <span class="fallback-chip">
+            <span class="provider-dot anthropic"></span>Claude Sonnet
+          </span>
+          <span class="fallback-arrow">→</span>
+          <span class="fallback-chip">
+            <span class="provider-dot openai"></span>GPT-4.1
+          </span>
+        </div>
+
+        <div class="expandable">When does fallback fire? — rate limits, 5xx errors, timeout &gt; 10s</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ 4. PERSONALITY TAB — zoom ══════════ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="label">Zoom · Personality tab</div>
+      <h2>Voice dials with live sample output</h2>
+      <p>Three dials, three example outputs at different dial positions so Matt can see
+      how each lever actually reshapes the voice — not just labels.</p>
+    </div>
+
+    <div class="closeup">
+      <div class="closeup-head">
+        <div>
+          <div class="crumb">Coop Settings · Personality</div>
+          <h3>Voice dials — live preview</h3>
+        </div>
+        <div class="text-dim" style="font-size:12px;">Changes save automatically</div>
+      </div>
+
+      <div style="padding: 28px 30px;">
+        <div class="personality-grid">
+
+          <!-- dials -->
+          <div class="dials">
+            <div class="dial">
+              <div class="dial-label">
+                <span class="dial-name">Tone</span>
+                <span class="dial-value">Warm 0.62</span>
+              </div>
+              <div class="dial-track">
+                <div class="dial-fill" style="width: 62%"></div>
+                <div class="dial-thumb" style="left: 62%"></div>
+              </div>
+              <div class="dial-ends"><span>Direct</span><span>Warm</span></div>
+            </div>
+
+            <div class="dial">
+              <div class="dial-label">
+                <span class="dial-name">Brevity</span>
+                <span class="dial-value">Terse 0.28</span>
+              </div>
+              <div class="dial-track">
+                <div class="dial-fill" style="width: 28%"></div>
+                <div class="dial-thumb" style="left: 28%"></div>
+              </div>
+              <div class="dial-ends"><span>Terse</span><span>Expansive</span></div>
+            </div>
+
+            <div class="dial">
+              <div class="dial-label">
+                <span class="dial-name">Formality</span>
+                <span class="dial-value">Casual 0.35</span>
+              </div>
+              <div class="dial-track">
+                <div class="dial-fill" style="width: 35%"></div>
+                <div class="dial-thumb" style="left: 35%"></div>
+              </div>
+              <div class="dial-ends"><span>Casual</span><span>Formal</span></div>
+            </div>
+          </div>
+
+          <!-- 3 examples at different positions -->
+          <div>
+            <div class="preview-note">3 sample outputs · same prompt, different dials</div>
+
+            <div class="preview-out">
+              <div class="meta">Direct · Terse · Casual — "What should I say back?"</div>
+              Tell him yes, 30 min Thursday. Ask for a short read-ahead. Done.
+            </div>
+            <div class="preview-out" style="border-left-color: var(--ci-text-primary);">
+              <div class="meta">Current settings — Warm 0.62 · Terse 0.28 · Casual 0.35</div>
+              Yes, Thursday works. A 30-min call would be great — mind sharing a short
+              read-ahead beforehand so I come prepared?
+            </div>
+            <div class="preview-out" style="border-left-color: var(--ci-text-tertiary);">
+              <div class="meta">Warm · Expansive · Formal — max on every dial</div>
+              Hi Sam — thank you for following up. Thursday at the proposed time works
+              well on my end; I'd very much welcome a 30-minute conversation. If you
+              had a chance, would you mind sharing a brief read-ahead so I can make the
+              most of our time together?
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ 5. MEMORY TAB — zoom ══════════ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="label">Zoom · Memory tab</div>
+      <h2>Profile snapshot + insight list</h2>
+      <p>Auto-consolidated summary of Matt's profile at top; browsable list of raw
+      insights below. Search and filter. Manual add for things Coop didn't catch.</p>
+    </div>
+
+    <div class="closeup">
+      <div class="closeup-head">
+        <div>
+          <div class="crumb">Coop Settings · Memory</div>
+          <h3>What Coop knows about you</h3>
+        </div>
+        <button class="btn-primary">+ Add insight</button>
+      </div>
+
+      <!-- Snapshot -->
+      <div class="snapshot">
+        <div class="snapshot-label">
+          <span class="t">Profile snapshot — auto-consolidated</span>
+          <span class="text-dim" style="font-size:11px;">Last refreshed Apr 16 · regenerate</span>
+        </div>
+        <div class="snapshot-body">
+          GTM leader targeting Head-of-Sales and VP-GTM roles at Series B–D SaaS companies.
+          Compensation floor is $280K OTE with a strong preference for $320K+ in NYC metro.
+          Remote or hybrid only — no relocation. Prefers PLG / developer-tools businesses
+          over traditional enterprise sales motions. Values async work, writes bluntly, and
+          pushes back on vague strategic questions. Has prior relationships at Ramp,
+          Vercel, and Linear.
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="mem-toolbar">
+        <input class="search-input" placeholder="Search insights…">
+        <span class="filter-chip">All topics <span class="caret"></span></span>
+        <span class="filter-chip">Last 30 days <span class="caret"></span></span>
+      </div>
+
+      <!-- Insights -->
+      <div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Work style</span>
+            Prefers async comms over meetings — writes "just send me a Loom" in &gt; 70%
+            of scheduling threads
+          </div>
+          <div class="insight-date">Mar 08</div>
+          <button class="icon-btn">×</button>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Industry · avoid</span>
+            Bearish on logistics SaaS — called out sales motion as "knife fight" after
+            3 consecutive interview loops
+          </div>
+          <div class="insight-date">Mar 11</div>
+          <button class="icon-btn">×</button>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Compensation</span>
+            Targeting ≥ $320K OTE in NYC after Fabric offer. Earlier floor of $280K is
+            for non-NYC only.
+          </div>
+          <div class="insight-date">Mar 14</div>
+          <button class="icon-btn">×</button>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Network</span>
+            Former colleague Jamie Park now Head of Ops at Ramp — warm intro possible
+            for GTM roles
+          </div>
+          <div class="insight-date">Mar 16</div>
+          <button class="icon-btn">×</button>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Role fit</span>
+            Will not consider IC sales roles even at top comp. Wants leadership only —
+            "I'm past carrying bag."
+          </div>
+          <div class="insight-date">Mar 19</div>
+          <button class="icon-btn">×</button>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Writing</span>
+            Never uses em-dashes. Uses single-dash hyphenation. Flagged as a personal
+            tell on drafts.
+          </div>
+          <div class="insight-date">Mar 22</div>
+          <button class="icon-btn">×</button>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <span class="cat">Stage fit</span>
+            Series A is too early — "no playbook yet, no leverage." Strong preference
+            Series B → late-stage.
+          </div>
+          <div class="insight-date">Apr 02</div>
+          <button class="icon-btn">×</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ 6. CAREER OS NOTE ══════════ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="label">Scope note</div>
+      <h2>Career OS 3-column vision — deferred</h2>
+    </div>
+
+    <div class="vision-note">
+      <div class="hd">On hold for this pass</div>
+      <p>
+        The Career OS restructure (noted in memory) imagines a 3-column Coop-centric
+        layout with a persistent memory rail on the right, pipeline in the middle, and
+        primary nav on the left. This pass keeps the existing 2-column settings shell
+        and only restructures the Coop Settings page contents into tabs.
+      </p>
+      <p>
+        Rationale: tabs are a low-risk change that can ship inside the current IA
+        without touching any other page. The 3-column vision requires rewriting the
+        sidebar and saved.js chrome — a much bigger swing that deserves its own issue.
+        If this tab structure tests well we can promote Memory / Usage / Personality
+        into full sidebar destinations later.
+      </p>
+    </div>
+  </div>
+
+  <!-- ══════════ 7. OPEN QUESTIONS ══════════ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="label">For Matt</div>
+      <h2>Open questions</h2>
+    </div>
+
+    <div class="q-list">
+      <div class="q-item">
+        <div class="q">1. OpenAI surfacing — first-class or fallback only?</div>
+        <div class="a">
+          Keep OpenAI as a provider-level option inside the Models tab (fully pickable
+          per task-type), or only ever show it as a fallback chip and make the primary
+          picker Anthropic-only? My default renders it as a peer — feels honest since
+          GPT-4.1 mini is the current chat default.
+        </div>
+      </div>
+      <div class="q-item">
+        <div class="q">2. Personality dials — 3 or 4?</div>
+        <div class="a">
+          Current: Tone / Brevity / Formality. Candidate 4th dial:
+          Confidence (Measured ⟷ Assertive). Feels distinct from tone, but risks
+          overlap with "push back if I ask about a downgrade" in operating principles.
+        </div>
+      </div>
+      <div class="q-item">
+        <div class="q">3. Memory tab — raw insights or just snapshot?</div>
+        <div class="a">
+          Show both (my default) so Matt can delete bad captures, or only show the
+          consolidated profile snapshot and hide the raw list behind an "Advanced"
+          disclosure? Raw list is noisier but gives real control.
+        </div>
+      </div>
+      <div class="q-item">
+        <div class="q">4. Usage chart — 30-day default or toggle?</div>
+        <div class="a">
+          Default: 30-day line chart. Better to let Matt switch between Day / Week /
+          Month at the top right? Day view would surface runaway-cost incidents faster.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Side panel mode state machine — #253</title>
+<style>
+  :root {
+    --ci-bg-base:          #F0F2F5;
+    --ci-bg-raised:        #FFFFFF;
+    --ci-bg-inset:         #EBEDF0;
+    --ci-bg-header:        #151B26;
+    --ci-text-primary:     #0A0B0D;
+    --ci-text-secondary:   #6F7782;
+    --ci-text-tertiary:    #8A8E94;
+    --ci-text-on-dark:     #F5F4F2;
+    --ci-text-on-dark-muted: #A3AEBE;
+    --ci-text-link:        #4573D2;
+    --ci-border-default:   #E0E4E8;
+    --ci-border-subtle:    #EAECEF;
+    --ci-border-strong:    #C4CAD1;
+    --ci-accent-primary:       #FC636B;
+    --ci-accent-primary-soft:  rgba(252, 99, 107, 0.08);
+    --ci-accent-teal:          #36B37E;
+    --ci-accent-teal-soft:     rgba(54, 179, 126, 0.08);
+    --ci-accent-amber:         #F5A623;
+    --ci-accent-red:           #E8384F;
+    --ci-accent-purple:        #7C6EF0;
+    --ci-radius-sm:   6px;
+    --ci-radius-md:   10px;
+    --ci-radius-lg:   14px;
+    --ci-radius-full: 9999px;
+    --ci-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    --ci-shadow-sm:   0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --ci-shadow-md:   0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: var(--ci-font-family);
+    background: var(--ci-bg-base);
+    color: var(--ci-text-primary);
+    -webkit-font-smoothing: antialiased;
+    padding: 40px 32px 80px;
+  }
+
+  /* ── Page header ── */
+  .page-wrap { max-width: 1720px; margin: 0 auto; }
+  .page-head { margin-bottom: 36px; border-bottom: 1px solid var(--ci-border-default); padding-bottom: 20px; }
+  .page-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ci-text-tertiary); margin-bottom: 8px; }
+  .page-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--ci-text-primary); margin-bottom: 8px; }
+  .page-sub { font-size: 14px; color: var(--ci-text-secondary); max-width: 780px; line-height: 1.5; }
+  .page-prompt {
+    margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ci-text-secondary);
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-full);
+    padding: 6px 14px;
+  }
+  .page-prompt strong { color: var(--ci-text-primary); font-weight: 700; }
+
+  /* ── Section heading ── */
+  .sec-head { margin: 40px 0 20px; }
+  .sec-head h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--ci-text-primary); margin-bottom: 4px; }
+  .sec-head p { font-size: 13px; color: var(--ci-text-secondary); max-width: 780px; line-height: 1.5; }
+  .sec-stamp { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ci-accent-primary); margin-bottom: 6px; }
+
+  /* ── Grid of 8 ── */
+  .grid-8 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 28px 24px;
+    max-width: 1720px;
+  }
+  .mock-cell { display: flex; flex-direction: column; gap: 10px; }
+  .mock-label { font-size: 12px; line-height: 1.4; }
+  .mock-num { font-weight: 700; color: var(--ci-text-primary); }
+  .mock-name { color: var(--ci-text-primary); font-weight: 600; }
+  .mock-fires { color: var(--ci-text-tertiary); font-size: 11px; margin-top: 2px; }
+
+  /* ── Side panel mockup shell ── */
+  .sp {
+    width: 100%;
+    max-width: 380px;
+    height: 640px;
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    box-shadow: var(--ci-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .sp-identity {
+    background: var(--ci-bg-header);
+    color: var(--ci-text-on-dark);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .sp-id-left { display: flex; align-items: center; gap: 10px; }
+  .sp-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(135deg, #FC636B 0%, #F89B29 100%);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sp-avatar svg { width: 14px; height: 14px; }
+  .sp-logo { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: #fff; }
+  .sp-logo .dot { color: var(--ci-accent-primary); font-weight: 400; }
+  .sp-spend {
+    font-size: 10px; font-weight: 600;
+    color: var(--ci-text-on-dark-muted);
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--ci-radius-full);
+    padding: 2px 8px;
+  }
+
+  /* ── Detection chip row ── */
+  .sp-chip-row {
+    background: var(--ci-bg-raised);
+    border-bottom: 1px solid var(--ci-border-default);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .sp-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 600;
+    color: var(--ci-text-primary);
+    min-width: 0;
+  }
+  .sp-chip-kicker {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ci-accent-primary);
+  }
+  .sp-chip-kicker.muted { color: var(--ci-text-tertiary); }
+  .sp-chip-kicker.amber { color: var(--ci-accent-amber); }
+  .sp-chip-kicker.red   { color: var(--ci-accent-red); }
+  .sp-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-teal); flex-shrink: 0; }
+  .sp-chip-dot.muted { background: var(--ci-text-tertiary); }
+  .sp-chip-dot.amber { background: var(--ci-accent-amber); }
+  .sp-chip-dot.red   { background: var(--ci-accent-red); }
+  .sp-chip-dot.shimmer { background: var(--ci-text-tertiary); animation: shimmer 1.2s ease-in-out infinite; }
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.35; }
+    50%      { opacity: 1; }
+  }
+  .sp-chip-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+  .sp-chip-name { font-size: 12px; font-weight: 700; color: var(--ci-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sp-chip-domain { font-size: 10px; color: var(--ci-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sp-chip-esc {
+    font-size: 10px; font-weight: 600; color: var(--ci-text-link);
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+
+  /* ── Body ── */
+  .sp-body {
+    flex: 1;
+    overflow: hidden;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--ci-bg-base);
+  }
+
+  /* ── Chat input ── */
+  .sp-chat {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    background: var(--ci-bg-raised);
+    border-top: 1px solid var(--ci-border-default);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sp-chat-input {
+    flex: 1;
+    background: var(--ci-bg-inset);
+    border: 1px solid transparent;
+    border-radius: var(--ci-radius-full);
+    padding: 7px 12px;
+    font-size: 12px;
+    color: var(--ci-text-tertiary);
+  }
+  .sp-chat-send {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--ci-accent-primary);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .sp-chat-send svg { width: 14px; height: 14px; }
+
+  /* ── Common body pieces ── */
+  .card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 12px;
+  }
+  .card-title {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 8px;
+  }
+  .card-row + .card-row { margin-top: 6px; }
+  .card-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-size: 12px;
+  }
+  .card-row .k { color: var(--ci-text-secondary); }
+  .card-row .v { color: var(--ci-text-primary); font-weight: 600; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 10px 12px;
+  }
+  .stat-label {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+  }
+  .stat-value {
+    font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+    color: var(--ci-text-primary); margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-sub { font-size: 10px; color: var(--ci-text-secondary); margin-top: 2px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--ci-radius-md);
+    font-size: 13px; font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-hero {
+    width: 100%;
+    background: var(--ci-accent-primary);
+    color: #fff;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .btn-secondary {
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-primary);
+    border: 1px solid var(--ci-border-default);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ci-text-link);
+    border: none;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+  .btn-refresh {
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-primary);
+    border: 1px solid var(--ci-border-default);
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .btn-row { display: flex; gap: 8px; }
+
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-full);
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--ci-text-tertiary);
+  }
+
+  /* Stage pill */
+  .stage-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 10px;
+    border-radius: var(--ci-radius-full);
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-primary);
+  }
+  .stage-pill .d { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-purple); }
+  .court-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600;
+    padding: 3px 10px;
+    border-radius: var(--ci-radius-full);
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+  }
+  .court-chip .d { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-amber); }
+
+  /* Stale badge */
+  .stale-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ci-accent-amber);
+    padding: 3px 8px;
+    border-radius: var(--ci-radius-sm);
+    background: rgba(245, 166, 35, 0.1);
+  }
+
+  /* Apply mode pill */
+  .apply-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: #fff;
+    background: var(--ci-accent-red);
+    padding: 4px 12px;
+    border-radius: var(--ci-radius-full);
+  }
+
+  /* Starter prompt chips */
+  .starter-chips { display: flex; flex-direction: column; gap: 6px; }
+  .starter {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 9px 12px;
+    font-size: 12px;
+    color: var(--ci-text-primary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .starter svg { width: 12px; height: 12px; color: var(--ci-text-tertiary); flex-shrink: 0; }
+
+  /* Research summary row */
+  .avatars {
+    display: flex;
+  }
+  .ava {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--ci-bg-inset);
+    border: 2px solid var(--ci-bg-raised);
+    font-size: 9px; font-weight: 700;
+    color: var(--ci-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    margin-left: -6px;
+  }
+  .ava:first-child { margin-left: 0; }
+
+  /* Task list */
+  .task-list { display: flex; flex-direction: column; gap: 6px; }
+  .task {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    font-size: 12px;
+  }
+  .task-box {
+    width: 13px; height: 13px;
+    border: 1.5px solid var(--ci-border-strong);
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .task-text { flex: 1; color: var(--ci-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-meta { font-size: 10px; color: var(--ci-text-tertiary); flex-shrink: 0; }
+
+  /* Subdued overlay for muted states */
+  .sp-body.subdued { opacity: 0.78; }
+  .sp-body.subdued .card { background: rgba(255,255,255,0.65); }
+
+  /* Hero description under CTA */
+  .hero-desc {
+    font-size: 12px;
+    color: var(--ci-text-secondary);
+    line-height: 1.5;
+    text-align: center;
+    padding: 0 8px;
+  }
+
+  /* Hero block wrap for state 2 */
+  .hero-wrap {
+    flex: 1;
+    display: flex; flex-direction: column; justify-content: center;
+    gap: 16px;
+    padding: 4px 4px 20px;
+  }
+  .hero-company {
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .hero-logo {
+    width: 48px; height: 48px;
+    border-radius: var(--ci-radius-md);
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--ci-text-primary);
+  }
+  .hero-name { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .hero-firmo { font-size: 11px; color: var(--ci-text-tertiary); }
+
+  .hero-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 0 4px;
+  }
+  .hero-meta-item {
+    font-size: 11px;
+    color: var(--ci-text-secondary);
+    padding: 6px 10px;
+    background: var(--ci-bg-raised);
+    border-radius: var(--ci-radius-sm);
+    border: 1px solid var(--ci-border-subtle);
+  }
+  .hero-meta-item strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ci-text-tertiary); font-weight: 700; margin-bottom: 1px; }
+
+  /* Job listing — state 5 */
+  .job-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 12px;
+  }
+  .job-src {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 8px;
+  }
+  .job-title { font-size: 14px; font-weight: 700; color: var(--ci-text-primary); line-height: 1.3; margin-bottom: 4px; }
+  .job-co { font-size: 12px; color: var(--ci-text-secondary); margin-bottom: 10px; }
+  .job-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+  .job-pill {
+    font-size: 10px; font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--ci-radius-full);
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+  }
+
+  /* Snip hint */
+  .snip-hint {
+    background: var(--ci-bg-raised);
+    border: 1px dashed var(--ci-border-strong);
+    border-radius: var(--ci-radius-md);
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--ci-text-secondary);
+    line-height: 1.4;
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .snip-hint svg { width: 14px; height: 14px; color: var(--ci-text-tertiary); flex-shrink: 0; margin-top: 1px; }
+  .snip-hint strong { color: var(--ci-text-primary); font-weight: 700; }
+
+  /* Queue item */
+  .q-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    font-size: 12px;
+  }
+  .q-score {
+    font-size: 12px; font-weight: 700;
+    color: var(--ci-accent-teal);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .q-score.amber { color: var(--ci-accent-amber); }
+  .q-co { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ci-text-primary); font-weight: 500; }
+  .q-arr { color: var(--ci-text-tertiary); font-size: 14px; flex-shrink: 0; }
+
+  /* ── State Machine Diagram ── */
+  .diagram {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .diagram-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    position: relative;
+    z-index: 2;
+  }
+  .node {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 16px;
+    font-size: 12px;
+    position: relative;
+    z-index: 2;
+  }
+  .node.primary {
+    border-color: var(--ci-accent-primary);
+    box-shadow: 0 0 0 3px rgba(252,99,107,0.08);
+  }
+  .node.muted {
+    background: var(--ci-bg-inset);
+    border-color: var(--ci-border-subtle);
+  }
+  .node-num {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 4px;
+  }
+  .node-title { font-size: 12px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 3px; }
+  .node-desc { font-size: 11px; color: var(--ci-text-secondary); line-height: 1.3; }
+  .diagram-legend {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--ci-text-secondary);
+  }
+  .leg-item { display: flex; align-items: center; gap: 6px; }
+  .leg-swatch { width: 20px; height: 3px; border-radius: 2px; }
+  .leg-swatch.solid { background: var(--ci-text-primary); }
+  .leg-swatch.accent { background: var(--ci-accent-primary); }
+  .leg-swatch.dashed { background: repeating-linear-gradient(90deg, var(--ci-text-tertiary) 0 4px, transparent 4px 7px); height: 2px; }
+
+  .edge-list {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+  }
+  .edge {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    font-size: 12px;
+  }
+  .edge .from, .edge .to { color: var(--ci-text-primary); font-weight: 600; }
+  .edge .arrow { color: var(--ci-text-tertiary); }
+  .edge .trigger { color: var(--ci-text-secondary); margin-left: auto; font-size: 11px; }
+
+  /* ── Why not B/C ── */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .compare-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 20px;
+  }
+  .compare-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .compare-title { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--ci-text-primary); }
+  .compare-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-accent-red);
+    padding: 3px 8px;
+    border-radius: var(--ci-radius-sm);
+    background: rgba(232,56,79,0.08);
+  }
+  .compare-thumb {
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    padding: 14px;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    height: 190px;
+    overflow: hidden;
+  }
+  .thumb-col { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .thumb-bar { background: var(--ci-bg-raised); border-radius: 3px; height: 12px; }
+  .thumb-bar.short { width: 60%; }
+  .thumb-bar.tall { height: 32px; }
+  .thumb-bar.accent { background: var(--ci-accent-primary); height: 20px; }
+  .thumb-bar.dark { background: var(--ci-bg-header); height: 20px; }
+  .thumb-chip {
+    background: var(--ci-bg-raised);
+    border-radius: var(--ci-radius-full);
+    height: 16px;
+    width: 70%;
+  }
+  .compare-text { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; }
+
+  /* ── Open questions ── */
+  .qlist {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 0;
+    overflow: hidden;
+  }
+  .q {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .q:last-child { border-bottom: none; }
+  .q-title { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 3px; letter-spacing: -0.01em; }
+  .q-body { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; }
+
+  /* Responsive squeeze — just so 4-col scales on narrower windows */
+  @media (max-width: 1680px) {
+    .grid-8 { grid-template-columns: repeat(4, minmax(300px, 1fr)); gap: 24px 18px; }
+    .sp { max-width: 100%; }
+  }
+  @media (max-width: 1280px) {
+    .grid-8 { grid-template-columns: repeat(2, 1fr); }
+    .diagram-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- ═════════════════════════════════════════════════════════
+       PAGE HEADER
+       ═════════════════════════════════════════════════════════ -->
+  <header class="page-head">
+    <div class="page-kicker">Design proposal · Recommendation stance</div>
+    <h1 class="page-title">Side panel mode state machine — #253</h1>
+    <p class="page-sub">
+      Codify the eight modes the side panel can land in. Option A (skeleton-stable, content-swapping) is recommended below —
+      chrome never dances, content swaps, a persistent detection chip makes the panel's current guess unambiguous.
+      Kills the #243 "wrong mode on detected page" class of bugs.
+    </p>
+    <div class="page-prompt">
+      <strong>Matt:</strong> yes / try B / mix A+B / next
+    </div>
+  </header>
+
+  <!-- ═════════════════════════════════════════════════════════
+       SECTION — RECOMMENDED OPTION A
+       ═════════════════════════════════════════════════════════ -->
+  <div class="sec-head">
+    <div class="sec-stamp">Recommended — Option A</div>
+    <h2>Skeleton-stable, content-swapping</h2>
+    <p>
+      Identity bar on top, chat input on bottom — constant in every state. Between them, a persistent <strong>detection chip</strong> declares what the panel thinks the current context is, with a <em>Show pipeline</em> escape hatch. The content block under the chip swaps per state. All 8 states rendered below at actual side-panel width.
+    </p>
+  </div>
+
+  <div class="grid-8">
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 1 — Global Dashboard
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">01</span> · <span class="mock-name">Global dashboard</span></div>
+        <div class="mock-fires">Fires when: no company detected, or user clicked Show pipeline</div>
+      </div>
+      <div class="sp">
+        <!-- Identity -->
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Chip row -->
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot muted"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker muted">No company detected</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">&nbsp;</span>
+        </div>
+        <!-- Body -->
+        <div class="sp-body">
+          <div class="search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Search pipeline…</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-label">Active</div>
+              <div class="stat-value">17</div>
+              <div class="stat-sub">3 their court</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Queue</div>
+              <div class="stat-value">4</div>
+              <div class="stat-sub">Unscored</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Today</div>
+            <div class="task-list">
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Follow up w/ Topo.io — Pia</div>
+                <div class="task-meta">Due</div>
+              </div>
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Prep Q&A — Hex interview</div>
+                <div class="task-meta">Thu</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Scoring queue</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div class="q-item">
+                <span class="q-score">8.2</span>
+                <span class="q-co">Retool — Senior PMM</span>
+                <span class="q-arr">&rsaquo;</span>
+              </div>
+              <div class="q-item">
+                <span class="q-score amber">6.4</span>
+                <span class="q-co">Ramp — Lifecycle Lead</span>
+                <span class="q-arr">&rsaquo;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Chat -->
+        <div class="sp-chat">
+          <div class="sp-chat-input">Ask about your pipeline…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 2 — Detected, Not Saved
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">02</span> · <span class="mock-name">Detected, not saved</span></div>
+        <div class="mock-fires">Fires when: company page detected, entry not in pipeline</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker">Detected</span>
+              <span class="sp-chip-name">Topo.io</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">Show pipeline</span>
+        </div>
+        <div class="sp-body">
+          <div class="hero-wrap">
+            <div class="hero-company">
+              <div class="hero-logo">T</div>
+              <div>
+                <div class="hero-name">Topo.io</div>
+                <div class="hero-firmo">topo.io</div>
+              </div>
+            </div>
+            <button class="btn btn-hero">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"/></svg>
+              Research Topo.io
+            </button>
+            <div class="hero-desc">Runs Apollo → Serper → Claude. Takes ~20 seconds and burns a few API calls. Nothing happens until you tap.</div>
+            <div class="hero-meta">
+              <div class="hero-meta-item"><strong>Source</strong>topo.io/careers</div>
+              <div class="hero-meta-item"><strong>Detected via</strong>og:site_name</div>
+            </div>
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Research first for best context</div>
+          <div class="sp-chat-send" style="opacity:.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 3 — Detected, Saved, Fresh
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">03</span> · <span class="mock-name">Detected, saved, fresh</span></div>
+        <div class="mock-fires">Fires when: in pipeline, researchCache TTL &lt; 24h</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker">In pipeline</span>
+              <span class="sp-chip-name">Topo.io</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">Show pipeline</span>
+        </div>
+        <div class="sp-body">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <span class="stage-pill"><span class="d"></span> Intro Call</span>
+            <span class="court-chip"><span class="d"></span> Their court</span>
+          </div>
+          <div class="card">
+            <div class="card-title">Firmographics</div>
+            <div class="card-row"><span class="k">Employees</span><span class="v">38</span></div>
+            <div class="card-row"><span class="k">Funding</span><span class="v">$12M Seed</span></div>
+            <div class="card-row"><span class="k">Industry</span><span class="v">Sales GTM tooling</span></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Leadership</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="avatars">
+                <div class="ava">SL</div>
+                <div class="ava">NK</div>
+                <div class="ava">PF</div>
+              </div>
+              <div style="font-size:11px; color: var(--ci-text-secondary); line-height:1.3;">
+                <div style="color:var(--ci-text-primary); font-weight:600;">3 leaders surfaced</div>
+                <div>CEO, Head of Product, VP Sales</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Reviews</div>
+            <div class="card-row"><span class="k">Glassdoor</span><span class="v">4.4 · 23 reviews</span></div>
+            <div class="card-row"><span class="k">Sentiment</span><span class="v">Fast-paced, flat team</span></div>
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Ask about Topo.io…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 4 — Detected, Saved, Stale
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">04</span> · <span class="mock-name">Detected, saved, stale</span></div>
+        <div class="mock-fires">Fires when: in pipeline, researchCache TTL ≥ 24h</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot amber"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker amber">In pipeline · stale</span>
+              <span class="sp-chip-name">Topo.io</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">Show pipeline</span>
+        </div>
+        <div class="sp-body">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <span class="stage-pill"><span class="d"></span> Intro Call</span>
+            <span class="stale-badge">Research 3 days old</span>
+          </div>
+          <button class="btn btn-refresh" style="align-self: flex-start;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            Refresh research
+          </button>
+          <div class="card">
+            <div class="card-title">Firmographics <span style="color:var(--ci-accent-amber); font-weight:700;">· stale</span></div>
+            <div class="card-row"><span class="k">Employees</span><span class="v">38</span></div>
+            <div class="card-row"><span class="k">Funding</span><span class="v">$12M Seed</span></div>
+            <div class="card-row"><span class="k">Industry</span><span class="v">Sales GTM tooling</span></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Leadership</div>
+            <div class="card-row"><span class="k">CEO</span><span class="v">Sarah Lin</span></div>
+            <div class="card-row"><span class="k">Head of Product</span><span class="v">Naveen K.</span></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Reviews</div>
+            <div class="card-row"><span class="k">Glassdoor</span><span class="v">4.4 · 23 reviews</span></div>
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Ask about Topo.io…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 5 — Job Listing on ATS
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">05</span> · <span class="mock-name">Job listing on ATS</span></div>
+        <div class="mock-fires">Fires when: Greenhouse / Lever / Ashby / Workday / LinkedIn job</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker">Job detected · Greenhouse</span>
+              <span class="sp-chip-name">Retool</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">Show pipeline</span>
+        </div>
+        <div class="sp-body">
+          <div class="job-card">
+            <div class="job-src">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              boards.greenhouse.io
+            </div>
+            <div class="job-title">Senior Product Marketing Manager</div>
+            <div class="job-co">Retool · San Francisco (Remote-friendly)</div>
+            <div class="job-pills">
+              <span class="job-pill">Full-time</span>
+              <span class="job-pill">$180–220k</span>
+              <span class="job-pill">IC5</span>
+            </div>
+          </div>
+          <button class="btn btn-hero">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save as opportunity
+          </button>
+          <div class="card">
+            <div class="card-title">Retool · Quick look</div>
+            <div class="card-row"><span class="k">Employees</span><span class="v">~500</span></div>
+            <div class="card-row"><span class="k">Funding</span><span class="v">$201M Series C</span></div>
+            <div class="card-row"><span class="k">Cached research</span><span class="v">Yes · 4h ago</span></div>
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Save to score & chat with context</div>
+          <div class="sp-chat-send" style="opacity:.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 6 — Apply Mode Active
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">06</span> · <span class="mock-name">Apply Mode active</span></div>
+        <div class="mock-fires">Fires when: user toggled Apply Mode (can overlay any state)</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="apply-pill">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+              Apply Mode
+            </span>
+            <div class="sp-chip-text" style="margin-left:4px;">
+              <span class="sp-chip-name" style="font-weight:600; color:var(--ci-text-secondary); font-size:11px;">Retool application</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">Exit</span>
+        </div>
+        <div class="sp-body">
+          <div style="font-size: 11px; color: var(--ci-text-secondary); line-height: 1.5; padding: 2px 2px 0;">
+            I'm watching form fields on this page. Highlight text anywhere and I'll offer a rewrite, or pick a prompt below.
+          </div>
+          <div>
+            <div style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--ci-text-tertiary); margin-bottom:8px;">Starter prompts</div>
+            <div class="starter-chips">
+              <div class="starter">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                Draft my answer
+              </div>
+              <div class="starter">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                What's the story here?
+              </div>
+              <div class="starter">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Tighten this paragraph
+              </div>
+              <div class="starter">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+                Rewrite in my voice
+              </div>
+            </div>
+          </div>
+          <div class="snip-hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 11-4-7-4 7"/><path d="M17 11v3"/><circle cx="6" cy="18" r="3"/><path d="M8.1 16.3 21 2"/></svg>
+            <div><strong>Tip:</strong> press <kbd style="font-family:var(--ci-font-mono); background:var(--ci-bg-inset); padding:1px 5px; border-radius:3px; font-size:10px;">⌘ ⇧ S</kbd> to snip any question and auto-send.</div>
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Paste a question or ask for a draft…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 7 — Non-company page
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">07</span> · <span class="mock-name">Non-company page</span></div>
+        <div class="mock-fires">Fires when: Gmail, Calendar, news sites, anywhere detection fails</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot muted"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker muted">Not a company page</span>
+              <span class="sp-chip-name" style="font-weight:500; color:var(--ci-text-secondary); font-size:10px;">mail.google.com</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">&nbsp;</span>
+        </div>
+        <div class="sp-body subdued">
+          <div class="search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Search pipeline…</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-label">Active</div>
+              <div class="stat-value">17</div>
+              <div class="stat-sub">3 their court</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Queue</div>
+              <div class="stat-value">4</div>
+              <div class="stat-sub">Unscored</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Today</div>
+            <div class="task-list">
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Follow up w/ Topo.io — Pia</div>
+                <div class="task-meta">Due</div>
+              </div>
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Prep Q&A — Hex interview</div>
+                <div class="task-meta">Thu</div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:var(--ci-text-tertiary); text-align:center; padding:4px;">
+            Navigate to a company page to see it here
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Ask about your pipeline…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         STATE 8 — Extension-internal page
+         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="mock-cell">
+      <div class="mock-label">
+        <div><span class="mock-num">08</span> · <span class="mock-name">Extension-internal</span></div>
+        <div class="mock-fires">Fires when: saved.html, company.html, preferences.html, etc.</div>
+      </div>
+      <div class="sp">
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <div class="sp-chip-row">
+          <div class="sp-chip">
+            <span class="sp-chip-dot muted"></span>
+            <div class="sp-chip-text">
+              <span class="sp-chip-kicker muted">Coop internal · Saved</span>
+              <span class="sp-chip-name" style="font-weight:500; color:var(--ci-text-secondary); font-size:10px;">Viewing pipeline board</span>
+            </div>
+          </div>
+          <span class="sp-chip-esc">&nbsp;</span>
+        </div>
+        <div class="sp-body subdued">
+          <div style="font-size:12px; color:var(--ci-text-secondary); line-height:1.5; padding: 4px 4px 0;">
+            You're already inside Coop. The side panel is keeping out of the way — use the main page for full view.
+          </div>
+          <div class="card">
+            <div class="card-title">Keyboard shortcuts</div>
+            <div style="display:flex; flex-direction:column; gap:8px; font-size:11px;">
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--ci-text-secondary);">New entry</span>
+                <kbd style="font-family:var(--ci-font-mono); background:var(--ci-bg-inset); padding:2px 6px; border-radius:4px; font-size:10px;">N</kbd>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--ci-text-secondary);">Apply Mode</span>
+                <kbd style="font-family:var(--ci-font-mono); background:var(--ci-bg-inset); padding:2px 6px; border-radius:4px; font-size:10px;">⌘ ⇧ A</kbd>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--ci-text-secondary);">Search</span>
+                <kbd style="font-family:var(--ci-font-mono); background:var(--ci-bg-inset); padding:2px 6px; border-radius:4px; font-size:10px;">⌘ K</kbd>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Recent activity</div>
+            <div style="font-size:11px; color:var(--ci-text-secondary); line-height:1.5;">
+              <div>Topo.io → Intro Call (1h ago)</div>
+              <div>Ramp → saved (3h ago)</div>
+              <div>Hex → scored 8.4 (4h ago)</div>
+            </div>
+          </div>
+        </div>
+        <div class="sp-chat">
+          <div class="sp-chat-input">Ask Coop anything…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- /grid-8 -->
+
+  <!-- ═════════════════════════════════════════════════════════
+       SECTION — STATE MACHINE DIAGRAM
+       ═════════════════════════════════════════════════════════ -->
+  <div class="sec-head" style="margin-top: 56px;">
+    <h2>State machine diagram</h2>
+    <p>How states connect. Solid lines are automatic transitions fired by the detection layer. Coral lines are user-initiated. The Apply Mode overlay can activate from any state and returns to whichever state was underneath.</p>
+  </div>
+
+  <div class="diagram">
+    <div class="diagram-grid">
+      <!-- Row 1 -->
+      <div class="node muted">
+        <div class="node-num">07</div>
+        <div class="node-title">Non-company</div>
+        <div class="node-desc">Gmail, Calendar, other. Subdued global dashboard.</div>
+      </div>
+      <div class="node">
+        <div class="node-num">01</div>
+        <div class="node-title">Global dashboard</div>
+        <div class="node-desc">No detection. Stats, search, tasks, queue, chat.</div>
+      </div>
+      <div class="node">
+        <div class="node-num">02</div>
+        <div class="node-title">Detected · not saved</div>
+        <div class="node-desc">Hero: Research [company] button. No auto-firing.</div>
+      </div>
+      <div class="node primary">
+        <div class="node-num">03</div>
+        <div class="node-title">Detected · saved · fresh</div>
+        <div class="node-desc">Cache &lt; 24h. Research cards, stage, context chat.</div>
+      </div>
+      <!-- Row 2 -->
+      <div class="node muted">
+        <div class="node-num">08</div>
+        <div class="node-title">Extension-internal</div>
+        <div class="node-desc">saved.html etc. Subdued helper view.</div>
+      </div>
+      <div class="node muted">
+        <div class="node-num">06</div>
+        <div class="node-title">Apply Mode <span style="color:var(--ci-accent-red); font-size:10px;">(overlay)</span></div>
+        <div class="node-desc">Overlays any state. Starter prompts + snip hint.</div>
+      </div>
+      <div class="node">
+        <div class="node-num">05</div>
+        <div class="node-title">Job listing on ATS</div>
+        <div class="node-desc">Greenhouse / Lever / Ashby / Workday / LinkedIn job.</div>
+      </div>
+      <div class="node">
+        <div class="node-num">04</div>
+        <div class="node-title">Detected · saved · stale</div>
+        <div class="node-desc">Cache ≥ 24h. Amber badge + Refresh CTA.</div>
+      </div>
+    </div>
+
+    <div class="diagram-legend">
+      <div class="leg-item"><span class="leg-swatch solid"></span> Auto (detection / time-based)</div>
+      <div class="leg-item"><span class="leg-swatch accent"></span> User-initiated action</div>
+      <div class="leg-item"><span class="leg-swatch dashed"></span> Overlay / fallback</div>
+    </div>
+
+    <div class="edge-list">
+      <div class="edge"><span class="from">01 Global</span><span class="arrow">&rarr;</span><span class="to">02 Not saved</span><span class="trigger">nav to company page</span></div>
+      <div class="edge"><span class="from">02 Not saved</span><span class="arrow">&rarr;</span><span class="to">03 Fresh</span><span class="trigger">Save + Research</span></div>
+      <div class="edge"><span class="from">03 Fresh</span><span class="arrow">&rarr;</span><span class="to">04 Stale</span><span class="trigger">24h elapses</span></div>
+      <div class="edge"><span class="from">04 Stale</span><span class="arrow">&rarr;</span><span class="to">03 Fresh</span><span class="trigger">Refresh research</span></div>
+      <div class="edge"><span class="from">05 Job ATS</span><span class="arrow">&rarr;</span><span class="to">03 Fresh</span><span class="trigger">Save as opportunity</span></div>
+      <div class="edge"><span class="from">Any</span><span class="arrow">&rarr;</span><span class="to">06 Apply Mode</span><span class="trigger">toggle ⌘⇧A</span></div>
+      <div class="edge"><span class="from">07 Non-company</span><span class="arrow">&rarr;</span><span class="to">01 Global</span><span class="trigger">default fallback</span></div>
+      <div class="edge"><span class="from">Any detected</span><span class="arrow">&rarr;</span><span class="to">01 Global</span><span class="trigger">click Show pipeline</span></div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════
+       SECTION — WHY NOT B OR C
+       ═════════════════════════════════════════════════════════ -->
+  <div class="sec-head" style="margin-top: 56px;">
+    <h2>Why not B or C</h2>
+    <p>Two alternatives considered and rejected. Kept tight — this isn't the hero.</p>
+  </div>
+
+  <div class="compare">
+
+    <!-- Option B -->
+    <div class="compare-card">
+      <div class="compare-head">
+        <div class="compare-title">Option B — Radically different layouts per state</div>
+        <span class="compare-tag">Rejected</span>
+      </div>
+      <div class="compare-thumb">
+        <div class="thumb-col">
+          <div class="thumb-bar dark"></div>
+          <div class="thumb-bar tall accent" style="flex:1; height:auto;"></div>
+          <div class="thumb-bar"></div>
+        </div>
+        <div class="thumb-col">
+          <div class="thumb-bar dark"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar short"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar short"></div>
+          <div class="thumb-bar"></div>
+        </div>
+        <div class="thumb-col">
+          <div class="thumb-bar dark"></div>
+          <div class="thumb-chip"></div>
+          <div class="thumb-bar tall"></div>
+          <div class="thumb-bar tall"></div>
+        </div>
+      </div>
+      <div class="compare-text">
+        Each state would be purpose-built — a single-CTA takeover for Not Saved, a stats-heavy dashboard for Global, a dense research dump when Saved. Rejected because transitions between states feel jarring, users lose spatial anchoring, and the panel turns into a pile of different apps. DESIGN.md rule 4 (one treatment) argues against it.
+      </div>
+    </div>
+
+    <!-- Option C -->
+    <div class="compare-card">
+      <div class="compare-head">
+        <div class="compare-title">Option C — Silent swap, no detection chip</div>
+        <span class="compare-tag">Rejected</span>
+      </div>
+      <div class="compare-thumb">
+        <div class="thumb-col">
+          <div class="thumb-bar dark"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar short"></div>
+          <div class="thumb-bar"></div>
+        </div>
+        <div class="thumb-col">
+          <div class="thumb-bar dark"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar tall"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar short"></div>
+        </div>
+        <div class="thumb-col">
+          <div class="thumb-bar dark"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar"></div>
+          <div class="thumb-bar short"></div>
+        </div>
+      </div>
+      <div class="compare-text">
+        Minimal chrome — content just swaps underneath without any indicator of what state the panel is in. Rejected because it re-creates the #243 bug: user can't tell the panel guessed wrong (or guessed right) until they read the body. Detection must be surfaced as a label, not implied by content.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════
+       SECTION — OPEN QUESTIONS
+       ═════════════════════════════════════════════════════════ -->
+  <div class="sec-head" style="margin-top: 56px;">
+    <h2>Open questions</h2>
+    <p>Three things still up for debate before writing the code.</p>
+  </div>
+
+  <div class="qlist">
+    <div class="q">
+      <div class="q-title">User override — is Show pipeline enough?</div>
+      <div class="q-body">
+        One-click escape to global dashboard from any detected state is in Option A. Do we also need a <em>Don't detect this domain</em> setting for sites where detection is consistently wrong? Leaning no until we see a repeat offender — but if LinkedIn job-vs-company keeps misfiring, this becomes essential.
+      </div>
+    </div>
+    <div class="q">
+      <div class="q-title">Loading states — what does the chip say mid-detection?</div>
+      <div class="q-body">
+        LinkedIn in particular takes a beat (React hydration) before the content script finds selectors. Proposal: the chip shows "Checking…" with a subtle shimmer on the dot (the muted-pulse animation shown in state 1 if we force an example). Resolve or fall back to state 7 after ~1.5s timeout.
+      </div>
+    </div>
+    <div class="q">
+      <div class="q-title">Transition motion — fade or swap?</div>
+      <div class="q-body">
+        When state changes mid-session (user navigates from a company page to Gmail), does the content block fade out (200ms ease-out) before the new one fades in, or hard-swap? Leaning crossfade at <code style="background:var(--ci-bg-inset); padding:1px 4px; border-radius:3px; font-family:var(--ci-font-mono); font-size:11px;">var(--motion-sm)</code> — matches the "tab switch" cadence in design tokens and avoids motion sickness on fast nav.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

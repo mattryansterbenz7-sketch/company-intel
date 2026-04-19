@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Apply Mode Q&A pairings — #244 Phase A</title>
+<style>
+  :root {
+    --ci-bg-base: #F0F2F5;
+    --ci-bg-raised: #FFFFFF;
+    --ci-bg-inset: #EBEDF0;
+    --ci-bg-header: #151B26;
+    --ci-bg-sidebar: #EEF1F3;
+    --ci-text-primary: #0A0B0D;
+    --ci-text-secondary: #6F7782;
+    --ci-text-tertiary: #8A8E94;
+    --ci-text-on-dark: #F5F4F2;
+    --ci-text-on-dark-muted: #A3AEBE;
+    --ci-text-link: #4573D2;
+    --ci-border-default: #E0E4E8;
+    --ci-border-subtle: #EAECEF;
+    --ci-border-strong: #C4CAD1;
+    --ci-accent-primary: #FC636B;
+    --ci-accent-primary-soft: rgba(252, 99, 107, 0.08);
+    --ci-accent-teal: #36B37E;
+    --ci-accent-teal-soft: rgba(54, 179, 126, 0.08);
+    --ci-accent-blue: #4573D2;
+    --ci-accent-amber: #F5A623;
+    --ci-accent-red: #E8384F;
+    --ci-accent-red-soft: rgba(232, 56, 79, 0.07);
+    --ci-accent-purple: #7C6EF0;
+    --ci-radius-sm: 6px;
+    --ci-radius-md: 10px;
+    --ci-radius-lg: 14px;
+    --ci-radius-full: 9999px;
+    --ci-shadow-sm: 0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --ci-shadow-md: 0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+    --ci-shadow-lg: 0 10px 36px rgba(30, 31, 33, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+    --motion-xs: 120ms;
+    --motion-sm: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--ci-text-primary);
+    background: var(--ci-bg-base);
+    padding: 32px 32px 64px;
+    min-height: 100vh;
+  }
+
+  /* ── Page chrome ── */
+  .page-head { max-width: 1240px; margin-bottom: 32px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .page-sub { font-size: 13px; color: var(--ci-text-secondary); max-width: 820px; line-height: 1.55; margin-bottom: 14px; }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rec { display: inline-flex; align-items: center; gap: 6px; background: var(--ci-accent-teal-soft); color: #1B7E53; font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 99px; }
+  .rec::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #1B7E53; }
+  .phase-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--ci-bg-raised); color: var(--ci-text-secondary); font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 99px; border: 1px solid var(--ci-border-default); }
+  .prompt-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--ci-accent-primary-soft); color: var(--ci-accent-primary); font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 99px; }
+
+  /* ── Section labels ── */
+  .section {
+    max-width: 1240px;
+    margin-top: 44px;
+  }
+  .section-head {
+    display: flex; align-items: baseline; gap: 14px;
+    padding-bottom: 10px; margin-bottom: 20px;
+    border-bottom: 1px solid var(--ci-border-default);
+  }
+  .section-label {
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+  }
+  .section-title {
+    font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .section-note { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; margin-left: auto; max-width: 420px; text-align: right; }
+
+  /* ═══ SECTION 1: Bucket taxonomy ═══ */
+  .tax-wrap { display: grid; grid-template-columns: 1fr 340px; gap: 32px; align-items: start; }
+  .tax-buckets { display: flex; flex-wrap: wrap; gap: 14px 12px; }
+  .bucket-pill {
+    display: inline-flex; flex-direction: column; gap: 4px;
+    padding: 10px 14px 11px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-full);
+    min-width: 180px;
+  }
+  .bucket-pill-name { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.005em; }
+  .bucket-pill-desc { font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4; }
+
+  .collapse-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 16px 18px;
+  }
+  .collapse-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .collapse-card .sub { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; }
+
+  /* ═══ SECTION 2: Library UI ═══ */
+  .settings-shell {
+    display: grid; grid-template-columns: 220px 1fr;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--ci-shadow-sm);
+    min-height: 560px;
+  }
+  .settings-side {
+    background: var(--ci-bg-sidebar);
+    border-right: 1px solid var(--ci-border-default);
+    padding: 20px 0;
+  }
+  .settings-side-group { padding: 0 10px; margin-bottom: 18px; }
+  .settings-side-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ci-text-tertiary); padding: 0 10px 8px; }
+  .settings-side-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--ci-text-secondary);
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+  }
+  .settings-side-item:hover { background: rgba(255,255,255,0.6); color: var(--ci-text-primary); }
+  .settings-side-item.active {
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-primary);
+    font-weight: 600;
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .settings-side-item svg { color: var(--ci-text-tertiary); flex-shrink: 0; }
+  .settings-side-item.active svg { color: var(--ci-accent-primary); }
+
+  .settings-main { padding: 24px 28px; overflow: hidden; }
+  .settings-crumbs { font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 6px; }
+  .settings-crumbs a { color: var(--ci-text-tertiary); text-decoration: none; }
+  .settings-crumbs .sep { margin: 0 6px; }
+  .settings-main h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+  .settings-main .lede { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.5; margin-bottom: 22px; max-width: 660px; }
+
+  .lib-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .lib-head h3 { font-size: 14px; font-weight: 700; }
+  .lib-head-meta { font-size: 12px; color: var(--ci-text-tertiary); }
+  .lib-search {
+    position: relative; width: 260px;
+  }
+  .lib-search input {
+    width: 100%; font-family: inherit; font-size: 13px;
+    padding: 7px 10px 7px 30px;
+    background: var(--ci-bg-inset);
+    border: 1px solid transparent;
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-primary);
+  }
+  .lib-search input::placeholder { color: var(--ci-text-tertiary); }
+  .lib-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ci-text-tertiary); }
+
+  /* Library rows */
+  .lib-list { border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; }
+  .lib-row {
+    display: grid; grid-template-columns: 180px 1fr 70px 32px;
+    gap: 18px;
+    align-items: center;
+    padding: 13px 18px;
+    background: var(--ci-bg-raised);
+    border-bottom: 1px solid var(--ci-border-subtle);
+    cursor: pointer;
+    transition: background var(--motion-xs);
+  }
+  .lib-row:last-child { border-bottom: none; }
+  .lib-row:hover { background: #FAFBFC; }
+  .lib-row.expanded { background: #F7F9FB; }
+  .lib-row-name { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); letter-spacing: -0.005em; }
+  .lib-row-preview { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+  .lib-row-preview.empty { font-style: normal; color: var(--ci-text-tertiary); }
+  .lib-row-count { font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); text-align: right; }
+  .lib-row-count .n { font-size: 13px; color: var(--ci-text-primary); }
+  .lib-row-caret { color: var(--ci-text-tertiary); transition: transform var(--motion-sm) var(--ease-out); }
+  .lib-row.expanded .lib-row-caret { transform: rotate(90deg); color: var(--ci-text-primary); }
+
+  /* Expanded area */
+  .lib-expanded {
+    padding: 8px 18px 18px;
+    background: #F7F9FB;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .lib-expanded-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 2px 14px;
+  }
+  .lib-expanded-head .h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ci-text-tertiary);
+  }
+  .lib-add-btn {
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    padding: 5px 10px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-secondary);
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .lib-add-btn:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+
+  /* Pairing cards */
+  .pair-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    position: relative;
+    transition: box-shadow var(--motion-xs), border-color var(--motion-xs);
+  }
+  .pair-card:hover { box-shadow: var(--ci-shadow-sm); border-color: var(--ci-border-strong); }
+  .pair-card:last-child { margin-bottom: 0; }
+  .pair-card.editing { border-color: var(--ci-accent-primary); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft); }
+
+  .pair-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+  .pair-pattern-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary); margin-bottom: 4px;
+  }
+  .pair-pattern {
+    font-size: 13px; font-weight: 600; color: var(--ci-text-primary); line-height: 1.4;
+    letter-spacing: -0.005em;
+  }
+  .pair-actions {
+    display: flex; gap: 2px; flex-shrink: 0;
+    opacity: 0; transition: opacity var(--motion-xs);
+  }
+  .pair-card:hover .pair-actions, .pair-card.hover .pair-actions { opacity: 1; }
+  .pair-action-btn {
+    width: 28px; height: 28px;
+    background: transparent; border: none;
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-tertiary);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pair-action-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .pair-action-btn.danger:hover { background: var(--ci-accent-red-soft); color: var(--ci-accent-red); }
+
+  .pair-examples-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary); margin-bottom: 6px; margin-top: 10px;
+  }
+  .pair-examples { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pair-example-tag {
+    font-size: 11px; color: var(--ci-text-secondary);
+    padding: 3px 9px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-full);
+  }
+
+  .pair-answer-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary); margin-bottom: 6px;
+  }
+  .pair-answer {
+    font-size: 13px; color: var(--ci-text-primary); line-height: 1.55;
+    padding: 10px 12px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    border: 1px solid var(--ci-border-subtle);
+  }
+  .pair-answer strong { font-weight: 600; }
+  .pair-answer ul { margin-left: 18px; margin-top: 4px; }
+  .pair-answer li { line-height: 1.5; }
+
+  .pair-meta {
+    display: flex; align-items: center; gap: 14px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ci-border-subtle);
+  }
+  .pair-tone-label { font-size: 11px; color: var(--ci-text-tertiary); }
+  .tone-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600;
+    padding: 3px 9px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-full);
+    color: var(--ci-text-primary);
+  }
+  .tone-tag svg { color: var(--ci-accent-purple); }
+  .pair-updated { margin-left: auto; font-size: 11px; color: var(--ci-text-tertiary); }
+
+  /* Edit form */
+  .pair-edit-field { margin-bottom: 14px; }
+  .pair-edit-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary); display: block; margin-bottom: 6px;
+  }
+  .pair-edit-input {
+    width: 100%; font-family: inherit; font-size: 13px; color: var(--ci-text-primary);
+    padding: 9px 11px;
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    line-height: 1.5;
+  }
+  .pair-edit-input:focus { outline: none; border-color: var(--ci-accent-primary); box-shadow: 0 0 0 3px var(--ci-accent-primary-soft); background: var(--ci-bg-raised); }
+  textarea.pair-edit-input { resize: vertical; min-height: 84px; font-family: inherit; }
+  .pair-edit-examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pair-edit-examples .pair-example-tag { padding: 4px 10px; cursor: default; }
+  .pair-edit-examples .pair-example-tag .x { color: var(--ci-text-tertiary); margin-left: 6px; cursor: pointer; }
+  .pair-edit-examples .add {
+    font-family: inherit; font-size: 11px; color: var(--ci-text-tertiary);
+    padding: 3px 9px; background: transparent;
+    border: 1px dashed var(--ci-border-default);
+    border-radius: var(--ci-radius-full);
+    cursor: pointer;
+  }
+  .pair-edit-row { display: grid; grid-template-columns: 1fr 200px; gap: 14px; }
+  .tone-select {
+    font-family: inherit; font-size: 13px;
+    padding: 8px 11px;
+    background: var(--ci-bg-base);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-primary);
+  }
+
+  .pair-edit-foot {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--ci-border-subtle);
+  }
+  .autosave-hint {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--ci-accent-teal);
+  }
+  .autosave-hint .dot { width: 6px; height: 6px; background: var(--ci-accent-teal); border-radius: 50%; }
+  .pair-edit-foot .done-btn {
+    margin-left: auto;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    padding: 6px 14px;
+    background: var(--ci-text-primary);
+    color: var(--ci-bg-raised);
+    border: none;
+    border-radius: var(--ci-radius-sm);
+    cursor: pointer;
+  }
+  .pair-delete-inline {
+    font-size: 11px; color: var(--ci-accent-red);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pair-delete-inline button {
+    font-family: inherit; font-size: 11px;
+    padding: 3px 8px; border-radius: var(--ci-radius-sm);
+    background: var(--ci-accent-red); color: #fff;
+    border: none; cursor: pointer;
+  }
+  .pair-delete-inline .cancel {
+    background: transparent; color: var(--ci-text-secondary);
+    border: 1px solid var(--ci-border-default);
+  }
+
+  /* ═══ SECTION 3: In-chat transparency ═══ */
+  .chat-wrap { display: grid; grid-template-columns: 420px 1fr; gap: 28px; align-items: start; }
+  .sp {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--ci-shadow-md);
+    display: flex; flex-direction: column;
+  }
+  .sp-head { padding: 10px 14px; background: var(--ci-bg-header); color: var(--ci-text-on-dark); display: flex; align-items: center; gap: 10px; }
+  .sp-head-title { font-size: 13px; font-weight: 700; }
+  .sp-app-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px;
+    background: rgba(232,56,79,0.22);
+    color: #FF7785;
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .sp-app-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-red); box-shadow: 0 0 0 0 rgba(232,56,79,0.5); animation: pulseDot 1.8s ease-in-out infinite; }
+  @keyframes pulseDot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(232,56,79,0.5); }
+    50% { box-shadow: 0 0 0 5px rgba(232,56,79,0); }
+  }
+
+  .sp-msgs { padding: 16px; background: var(--ci-bg-base); flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .msg { font-size: 13px; line-height: 1.55; padding: 10px 14px; border-radius: var(--ci-radius-md); max-width: 92%; }
+  .msg-user { background: var(--ci-bg-header); color: var(--ci-text-on-dark); align-self: flex-end; border-radius: 14px 14px 4px 14px; padding: 8px 13px; max-width: 82%; }
+  .msg-user em { color: var(--ci-text-on-dark-muted); font-style: italic; font-size: 12px; display: block; margin-bottom: 4px; }
+
+  .msg-assistant-wrap { align-self: flex-start; max-width: 92%; display: flex; flex-direction: column; gap: 6px; }
+  .msg-assistant {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-subtle);
+    color: var(--ci-text-primary);
+    padding: 10px 14px;
+    border-radius: var(--ci-radius-md);
+    font-size: 13px; line-height: 1.55;
+  }
+  .msg-assistant small { display: block; color: var(--ci-text-tertiary); font-size: 10px; margin-top: 6px; font-family: 'SF Mono', monospace; }
+
+  /* Classification chip */
+  .class-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 3px 10px 3px 8px;
+    background: var(--ci-accent-primary-soft);
+    color: var(--ci-accent-primary);
+    border-radius: var(--ci-radius-full);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: -0.005em;
+    align-self: flex-start;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all var(--motion-xs);
+  }
+  .class-chip:hover { border-color: rgba(252,99,107,0.3); }
+  .class-chip svg { color: var(--ci-accent-primary); }
+  .class-chip .sep { color: var(--ci-accent-primary); opacity: 0.45; }
+  .class-chip .src { color: var(--ci-accent-primary); opacity: 0.8; font-weight: 500; }
+  .class-chip.no-match {
+    background: var(--ci-bg-inset);
+    color: var(--ci-text-secondary);
+  }
+  .class-chip.no-match svg { color: var(--ci-text-tertiary); }
+  .class-chip.no-match .sep, .class-chip.no-match .src { color: var(--ci-text-tertiary); }
+
+  /* Expanded chip state */
+  .class-expanded {
+    align-self: flex-start;
+    max-width: 92%;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+  .class-expanded-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    margin-bottom: 10px;
+  }
+  .class-expanded-head .close { color: var(--ci-text-tertiary); cursor: pointer; }
+  .class-referenced {
+    display: flex; gap: 10px;
+    padding: 10px 12px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+    border-left: 2px solid var(--ci-accent-primary);
+  }
+  .class-referenced-body { flex: 1; }
+  .class-referenced-q { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); margin-bottom: 4px; }
+  .class-referenced-a { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; font-style: italic; }
+  .class-meta {
+    font-size: 11px; color: var(--ci-text-tertiary); margin-top: 8px;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .class-meta a { color: var(--ci-text-link); text-decoration: none; }
+
+  /* Transparency copy */
+  .transparency-copy {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 22px 24px;
+  }
+  .transparency-copy h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .transparency-copy p { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; margin-bottom: 12px; }
+  .transparency-copy p:last-child { margin-bottom: 0; }
+  .transparency-copy .kbd {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: 'SF Mono', monospace; font-size: 11px;
+    padding: 1px 7px; background: var(--ci-bg-inset);
+    border: 1px solid var(--ci-border-default);
+    border-radius: 4px;
+    color: var(--ci-text-primary);
+  }
+  .transparency-copy ul { margin-left: 18px; margin-top: 6px; }
+  .transparency-copy li { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; margin-bottom: 4px; }
+  .transparency-copy strong { color: var(--ci-text-primary); font-weight: 600; }
+
+  /* ═══ SECTION 4: Correction workflow ═══ */
+  .storyboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .story-step {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .story-num {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+  }
+  .story-num .n {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--ci-accent-primary); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .story-caption { font-size: 11px; color: var(--ci-text-tertiary); font-style: italic; line-height: 1.5; }
+
+  /* Inline edit */
+  .edit-msg {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--ci-text-primary);
+    line-height: 1.55;
+    max-width: 92%;
+    align-self: flex-start;
+    position: relative;
+  }
+  .edit-msg.editing {
+    border-color: var(--ci-accent-primary);
+    box-shadow: 0 0 0 3px var(--ci-accent-primary-soft);
+  }
+  .edit-msg .edit-before { color: var(--ci-text-tertiary); text-decoration: line-through; margin-right: 4px; }
+  .edit-msg .edit-after { background: var(--ci-accent-teal-soft); padding: 1px 4px; border-radius: 3px; }
+  .edit-meta { font-size: 10px; color: var(--ci-text-tertiary); margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+
+  /* Save-as chip */
+  .save-chip {
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-accent-primary);
+    border-radius: var(--ci-radius-full);
+    font-size: 12px; font-weight: 600;
+    color: var(--ci-text-primary);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(252,99,107,0.12);
+    transition: all var(--motion-xs);
+  }
+  .save-chip:hover { background: var(--ci-accent-primary-soft); }
+  .save-chip svg { color: var(--ci-accent-primary); }
+  .save-chip .bucket-tag {
+    color: var(--ci-accent-primary);
+    font-weight: 700;
+  }
+  .save-chip .arrow { color: var(--ci-text-tertiary); }
+
+  /* Save preview */
+  .save-preview {
+    align-self: flex-start;
+    max-width: 92%;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-accent-primary);
+    border-radius: var(--ci-radius-md);
+    padding: 14px;
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .save-preview-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .save-preview-head h5 { font-size: 13px; font-weight: 700; }
+  .save-preview-bucket-select {
+    font-family: inherit; font-size: 11px; font-weight: 600;
+    padding: 3px 8px 3px 10px;
+    background: var(--ci-accent-primary-soft);
+    color: var(--ci-accent-primary);
+    border: 1px solid rgba(252,99,107,0.3);
+    border-radius: var(--ci-radius-full);
+    cursor: pointer;
+  }
+  .save-preview-field { margin-bottom: 10px; }
+  .save-preview-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ci-text-tertiary); margin-bottom: 4px; }
+  .save-preview-value {
+    font-size: 12px; color: var(--ci-text-primary); line-height: 1.5;
+    padding: 8px 10px;
+    background: var(--ci-bg-base);
+    border-radius: var(--ci-radius-sm);
+  }
+  .save-preview-foot {
+    display: flex; gap: 8px; padding-top: 10px;
+    border-top: 1px solid var(--ci-border-subtle);
+  }
+  .save-preview-foot .btn {
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: var(--ci-radius-sm);
+    cursor: pointer; border: none;
+  }
+  .save-preview-foot .btn.primary { background: var(--ci-accent-primary); color: #fff; }
+  .save-preview-foot .btn.primary:hover { background: #E04E56; }
+  .save-preview-foot .btn.ghost { background: transparent; color: var(--ci-text-secondary); border: 1px solid var(--ci-border-default); }
+
+  /* Toast */
+  .toast-msg {
+    align-self: flex-start;
+    background: var(--ci-text-primary);
+    color: #fff;
+    font-size: 12px; font-weight: 500;
+    padding: 8px 14px;
+    border-radius: var(--ci-radius-sm);
+    box-shadow: var(--ci-shadow-md);
+    display: inline-flex; align-items: center; gap: 8px;
+    max-width: max-content;
+  }
+  .toast-msg .check {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--ci-accent-teal);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+
+  /* ═══ SECTION 5: Collapse rationale table ═══ */
+  .rationale-card {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+  .rationale-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  .rationale-table thead th {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    text-align: left; padding: 12px 18px;
+    background: var(--ci-bg-inset);
+    border-bottom: 1px solid var(--ci-border-default);
+  }
+  .rationale-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    vertical-align: top;
+  }
+  .rationale-table tr:last-child td { border-bottom: none; }
+  .rationale-col-from { width: 220px; color: var(--ci-text-secondary); font-size: 12px; }
+  .rationale-col-from .orig { display: block; font-weight: 500; color: var(--ci-text-primary); font-size: 13px; margin-bottom: 2px; }
+  .rationale-col-arrow { width: 32px; color: var(--ci-text-tertiary); text-align: center; }
+  .rationale-col-to { width: 200px; font-weight: 700; color: var(--ci-text-primary); }
+  .rationale-col-why { color: var(--ci-text-secondary); font-size: 12px; line-height: 1.55; }
+
+  /* ═══ SECTION 6: Open questions ═══ */
+  .q-list {
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-radius: var(--ci-radius-md);
+    overflow: hidden;
+  }
+  .q-item {
+    display: grid; grid-template-columns: 20px 1fr;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+  }
+  .q-item:last-child { border-bottom: none; }
+  .q-num { font-size: 11px; font-weight: 700; color: var(--ci-accent-primary); font-family: 'SF Mono', monospace; padding-top: 2px; }
+  .q-body h5 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 4px; letter-spacing: -0.005em; }
+  .q-body p { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55; }
+  .q-body .phase-b-tag {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--ci-text-tertiary);
+    padding: 1px 7px;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-sm);
+    vertical-align: 1px;
+  }
+
+  /* ═══ Utility ═══ */
+  .caption {
+    font-size: 11px; color: var(--ci-text-tertiary); font-style: italic;
+    line-height: 1.5; margin-top: 10px;
+  }
+  .col-note {
+    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
+    margin-top: 10px;
+  }
+  .col-note .hl { color: var(--ci-text-primary); font-weight: 600; }
+
+</style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<div class="page-head">
+  <h1>Apply Mode Q&A pairings &middot; #244 Phase A</h1>
+  <p class="page-sub">
+    Coop is leaking <em>scoring</em> preferences (used to qualify a role) into <em>answering</em> context (used to draft strategic application answers). These are different talk tracks. Phase A lands the UX for an Answer Library Matt curates once, then references automatically when drafting answers in Apply mode. Phase B covers the classification architecture.
+  </p>
+  <div class="badge-row">
+    <span class="rec">Recommended approach rendered</span>
+    <span class="phase-badge">Phase A: UX design</span>
+    <span class="phase-badge">Phase B: architecture (PM follow-up)</span>
+    <span class="prompt-badge">Matt prompt: "Draft the Phase A design"</span>
+  </div>
+</div>
+
+<!-- ══════════ SECTION 1: Bucket taxonomy ══════════ -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">1</span>
+    <span class="section-title">Bucket taxonomy &mdash; 7 buckets</span>
+    <span class="section-note">Collapsed from the original 9. Fewer buckets &equals; less routing confusion, still granular enough that answers don&rsquo;t bleed between talk tracks.</span>
+  </div>
+
+  <div class="tax-wrap">
+    <div>
+      <div class="tax-buckets">
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Compensation</span>
+          <span class="bucket-pill-desc">Base, OTE, equity, bonus expectations</span>
+        </div>
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Sponsorship &amp; Location</span>
+          <span class="bucket-pill-desc">Work authorization, visa, relocation, remote</span>
+        </div>
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Availability</span>
+          <span class="bucket-pill-desc">Start date, notice period, timeline</span>
+        </div>
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Experience</span>
+          <span class="bucket-pill-desc">Years in role, specific skills, proof points</span>
+        </div>
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Motivation</span>
+          <span class="bucket-pill-desc">Career story, drivers, what you&rsquo;re after</span>
+        </div>
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Why this opportunity</span>
+          <span class="bucket-pill-desc">Why this role, this company, this moment</span>
+        </div>
+
+        <div class="bucket-pill">
+          <span class="bucket-pill-name">Other</span>
+          <span class="bucket-pill-desc">Catch-all for novel questions</span>
+        </div>
+
+      </div>
+
+      <p class="col-note">
+        Each pill is a routing target. When a question comes in, the classifier (Phase B) decides which bucket applies, pulls the relevant pairing, and drafts from it. If nothing matches, Coop falls back to the profile.
+      </p>
+    </div>
+
+    <div class="collapse-card">
+      <h4>Why 7 instead of 9</h4>
+      <p class="sub">
+        &ldquo;Sponsorship&rdquo; and &ldquo;Location/work arrangement&rdquo; frequently co-occur in one question (&ldquo;Are you authorized to work in X and willing to relocate?&rdquo;) &mdash; splitting them forces awkward routing. &ldquo;Culture/motivation&rdquo; and &ldquo;Why this role/company&rdquo; collapse into <span style="color: var(--ci-text-primary); font-weight: 600;">Motivation</span> (how you talk about yourself) and <span style="color: var(--ci-text-primary); font-weight: 600;">Why this opportunity</span> (how you talk about them). The talk-track boundary stays clean.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ SECTION 2: Answer Library UI ══════════ -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">2</span>
+    <span class="section-title">Answer Library UI</span>
+    <span class="section-note">&ldquo;Library&rdquo; &mdash; signals retrieval, not config. Lives under Coop Settings &rsaquo; Apply Mode (ties to #246).</span>
+  </div>
+
+  <div class="settings-shell">
+
+    <!-- Sidebar -->
+    <div class="settings-side">
+      <div class="settings-side-group">
+        <div class="settings-side-label">Coop Settings</div>
+        <div class="settings-side-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Identity
+        </div>
+        <div class="settings-side-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Models
+        </div>
+        <div class="settings-side-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 10l2-7 3 8 2-5 3 4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          Memory
+        </div>
+      </div>
+      <div class="settings-side-group">
+        <div class="settings-side-label">Apply Mode</div>
+        <div class="settings-side-item active">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Answer Library
+        </div>
+        <div class="settings-side-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h10M3 12h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Behavior
+        </div>
+        <div class="settings-side-item">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M3 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Voice samples
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="settings-main">
+      <div class="settings-crumbs"><a href="#">Coop Settings</a><span class="sep">&rsaquo;</span><a href="#">Apply Mode</a><span class="sep">&rsaquo;</span>Answer Library</div>
+      <h2>Answer Library</h2>
+      <p class="lede">Your standard answers to the questions applications ask over and over. Coop pulls from this library when you&rsquo;re in Apply Mode &mdash; so the draft sounds like you, not like a profile summary. Organized by bucket.</p>
+
+      <div class="lib-head">
+        <div>
+          <h3>7 buckets &middot; 18 answers</h3>
+        </div>
+        <div class="lib-search">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <input placeholder="Search questions, answers, buckets&hellip;">
+        </div>
+      </div>
+
+      <!-- LIBRARY LIST -->
+      <div class="lib-list">
+
+        <!-- Compensation: EXPANDED with pairings -->
+        <div class="lib-row expanded">
+          <div class="lib-row-name">Compensation</div>
+          <div class="lib-row-preview">&ldquo;What are your salary expectations?&rdquo;</div>
+          <div class="lib-row-count"><span class="n">3</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Expanded detail -->
+        <div class="lib-expanded">
+          <div class="lib-expanded-head">
+            <span class="h">3 pairings in Compensation</span>
+            <button class="lib-add-btn">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Add pairing
+            </button>
+          </div>
+
+          <!-- Pairing 1 -->
+          <div class="pair-card hover">
+            <div class="pair-head">
+              <div style="flex:1;">
+                <div class="pair-pattern-label">Question pattern</div>
+                <div class="pair-pattern">Base salary / total compensation expectation</div>
+              </div>
+              <div class="pair-actions">
+                <button class="pair-action-btn" title="Edit">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 14l3-1 8-8-2-2-8 8-1 3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="pair-action-btn" title="Duplicate">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="4" y="4" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M11 4V3a1 1 0 00-1-1H3a1 1 0 00-1 1v7a1 1 0 001 1h1" stroke="currentColor" stroke-width="1.3"/></svg>
+                </button>
+                <button class="pair-action-btn danger" title="Delete">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 5h10M5 5V3h6v2M6 8v4M10 8v4M4 5l1 8h6l1-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="pair-examples-label">Matched example questions</div>
+            <div class="pair-examples">
+              <span class="pair-example-tag">&ldquo;What are your salary expectations?&rdquo;</span>
+              <span class="pair-example-tag">&ldquo;Desired base salary?&rdquo;</span>
+              <span class="pair-example-tag">&ldquo;What&rsquo;s your comp target?&rdquo;</span>
+            </div>
+
+            <div class="pair-answer-label">Your answer</div>
+            <div class="pair-answer">
+              I&rsquo;m targeting <strong>$180&ndash;210K base with OTE in the $260&ndash;310K range</strong>, though the right stage and equity story can shift that. I&rsquo;d rather have the conversation about total package &mdash; stage, equity grant, and upside &mdash; than fix on one number upfront.
+            </div>
+
+            <div class="pair-meta">
+              <span class="pair-tone-label">Tone</span>
+              <span class="tone-tag">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="3"/></svg>
+                Direct
+              </span>
+              <span class="pair-updated">Updated 4 days ago</span>
+            </div>
+          </div>
+
+          <!-- Pairing 2 -->
+          <div class="pair-card">
+            <div class="pair-head">
+              <div style="flex:1;">
+                <div class="pair-pattern-label">Question pattern</div>
+                <div class="pair-pattern">Equity expectations</div>
+              </div>
+              <div class="pair-actions">
+                <button class="pair-action-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 14l3-1 8-8-2-2-8 8-1 3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></button>
+                <button class="pair-action-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="4" y="4" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M11 4V3a1 1 0 00-1-1H3a1 1 0 00-1 1v7a1 1 0 001 1h1" stroke="currentColor" stroke-width="1.3"/></svg></button>
+                <button class="pair-action-btn danger"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 5h10M5 5V3h6v2M6 8v4M10 8v4M4 5l1 8h6l1-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div>
+            </div>
+            <div class="pair-examples-label">Matched example questions</div>
+            <div class="pair-examples">
+              <span class="pair-example-tag">&ldquo;What equity are you looking for?&rdquo;</span>
+              <span class="pair-example-tag">&ldquo;Desired equity percentage?&rdquo;</span>
+            </div>
+            <div class="pair-answer-label">Your answer</div>
+            <div class="pair-answer">
+              At founding-GTM stage, I&rsquo;m thinking <strong>0.5&ndash;1.5% equity</strong> depending on seniority of the role (Head vs. first AE) and how baked the motion is. Earlier &ndash; higher end; established playbook &ndash; lower end with a stronger base. Vesting standard: 4yr / 1yr cliff.
+            </div>
+            <div class="pair-meta">
+              <span class="pair-tone-label">Tone</span>
+              <span class="tone-tag">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="3"/></svg>
+                Measured
+              </span>
+              <span class="pair-updated">Updated 2 weeks ago</span>
+            </div>
+          </div>
+
+          <!-- Pairing 3: EDIT MODE -->
+          <div class="pair-card editing">
+            <div class="pair-head">
+              <div style="flex:1;">
+                <div class="pair-pattern-label">Question pattern</div>
+                <input class="pair-edit-input" value="Current compensation &middot; last role">
+              </div>
+            </div>
+
+            <div class="pair-edit-field">
+              <span class="pair-edit-label">Matched example questions</span>
+              <div class="pair-edit-examples">
+                <span class="pair-example-tag">&ldquo;What&rsquo;s your current base?&rdquo;<span class="x">&times;</span></span>
+                <span class="pair-example-tag">&ldquo;What did you make last year?&rdquo;<span class="x">&times;</span></span>
+                <button class="add">+ Add example</button>
+              </div>
+            </div>
+
+            <div class="pair-edit-field">
+              <span class="pair-edit-label">Your answer</span>
+              <textarea class="pair-edit-input">At Turnstyle I was at $165K base / $240K OTE. That was a seed-stage founding AE role &mdash; comp reflected stage. I&rsquo;d rather anchor the next conversation on the level and stage, not the last number, since those shape the range more than history does.</textarea>
+            </div>
+
+            <div class="pair-edit-field">
+              <span class="pair-edit-label">Talking points (optional)</span>
+              <textarea class="pair-edit-input" style="min-height: 56px;">&ndash; Lead with stage context, not number&#10;&ndash; Avoid under-anchoring for higher-level roles</textarea>
+            </div>
+
+            <div class="pair-edit-row">
+              <div class="pair-edit-field" style="margin-bottom:0;">
+                <span class="pair-edit-label">Tone preference</span>
+                <select class="tone-select" style="width:100%;">
+                  <option>Direct</option>
+                  <option>Warm</option>
+                  <option selected>Measured</option>
+                  <option>Assertive</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="pair-edit-foot">
+              <span class="autosave-hint">
+                <span class="dot"></span>
+                Autosaves on blur
+              </span>
+              <span class="pair-delete-inline">
+                <button class="cancel">Cancel</button>
+                <button>Delete pairing</button>
+              </span>
+              <button class="done-btn">Done</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Sponsorship & Location: COLLAPSED -->
+        <div class="lib-row">
+          <div class="lib-row-name">Sponsorship &amp; Location</div>
+          <div class="lib-row-preview">&ldquo;Are you authorized to work in the US without sponsorship?&rdquo;</div>
+          <div class="lib-row-count"><span class="n">2</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Availability -->
+        <div class="lib-row">
+          <div class="lib-row-name">Availability</div>
+          <div class="lib-row-preview">&ldquo;How soon can you start?&rdquo;</div>
+          <div class="lib-row-count"><span class="n">2</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Experience -->
+        <div class="lib-row">
+          <div class="lib-row-name">Experience</div>
+          <div class="lib-row-preview">&ldquo;Describe a time you built a GTM motion from zero.&rdquo;</div>
+          <div class="lib-row-count"><span class="n">4</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Motivation -->
+        <div class="lib-row">
+          <div class="lib-row-name">Motivation</div>
+          <div class="lib-row-preview">&ldquo;What are you looking for in your next role?&rdquo;</div>
+          <div class="lib-row-count"><span class="n">3</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Why this opportunity -->
+        <div class="lib-row">
+          <div class="lib-row-name">Why this opportunity</div>
+          <div class="lib-row-preview empty">Template answer &middot; personalized per company at draft time</div>
+          <div class="lib-row-count"><span class="n">2</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Other -->
+        <div class="lib-row">
+          <div class="lib-row-name">Other</div>
+          <div class="lib-row-preview empty">Catch-all for novel questions &mdash; 2 answers saved</div>
+          <div class="lib-row-count"><span class="n">2</span> answers</div>
+          <div class="lib-row-caret">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="caption">
+        Rows click to expand. Inline edit on hover (pattern + memory <span style="font-family:'SF Mono',monospace;background:var(--ci-bg-inset);padding:1px 5px;border-radius:3px;">feedback_inline_editable_pattern</span>). Autosaves on blur. Delete confirms inline, never modal. Keyboard: Tab through fields, Enter to commit, Esc to cancel.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ SECTION 3: In-chat transparency ══════════ -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">3</span>
+    <span class="section-title">In-chat transparency</span>
+    <span class="section-note">Matt needs to see <em>which</em> pairing Coop leaned on &mdash; otherwise the library is a black box.</span>
+  </div>
+
+  <div class="chat-wrap">
+
+    <!-- Side panel chat -->
+    <div class="sp">
+      <div class="sp-head">
+        <span class="sp-head-title">Coop</span>
+        <span class="sp-app-badge">Apply mode</span>
+      </div>
+      <div class="sp-msgs">
+
+        <!-- User snips question -->
+        <div class="msg msg-user">
+          <em>Snipped question &middot; 358&times;160</em>
+          "What are your salary expectations for this role?"
+        </div>
+
+        <!-- Coop answers with classification chip -->
+        <div class="msg-assistant-wrap">
+          <span class="class-chip">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3h10v10H3zM3 7h10M7 3v10" stroke="currentColor" stroke-width="1.3"/></svg>
+            Compensation answer
+            <span class="sep">&middot;</span>
+            <span class="src">from your answer library</span>
+          </span>
+          <div class="msg-assistant">
+            I&rsquo;m targeting $180&ndash;210K base with OTE in the $260&ndash;310K range, though the right stage and equity story can shift that. Given Transform VXR is at the founding-GTM stage, I&rsquo;d rather have the conversation about total package &mdash; stage, equity grant, and upside &mdash; than fix on one number upfront.
+            <small>gpt-4.1-mini &middot; 1,842 tok &middot; $0.0008</small>
+          </div>
+        </div>
+
+        <!-- Expanded state -->
+        <div class="class-expanded">
+          <div class="class-expanded-head">
+            <span>Pairing referenced</span>
+            <span class="close">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </span>
+          </div>
+          <div class="class-referenced">
+            <div class="class-referenced-body">
+              <div class="class-referenced-q">Compensation &middot; Base salary / total compensation expectation</div>
+              <div class="class-referenced-a">&ldquo;I&rsquo;m targeting $180&ndash;210K base with OTE in the $260&ndash;310K range, though the right stage and equity story can shift that&hellip;&rdquo;</div>
+            </div>
+          </div>
+          <div class="class-meta">
+            Tone: <strong style="color:var(--ci-text-primary);">Direct</strong>
+            <span style="color:var(--ci-border-strong);">&bull;</span>
+            Classifier confidence: 94%
+            <span style="color:var(--ci-border-strong);">&bull;</span>
+            <a href="#">Edit pairing &rsaquo;</a>
+          </div>
+        </div>
+
+        <!-- Unmatched example -->
+        <div class="msg msg-user" style="margin-top: 12px;">
+          <em>Snipped question &middot; 358&times;160</em>
+          "If you could only measure one thing in your first 90 days, what would it be and why?"
+        </div>
+        <div class="msg-assistant-wrap">
+          <span class="class-chip no-match">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5M8 11v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            No saved answer
+            <span class="sep">&middot;</span>
+            <span class="src">drafted from profile</span>
+          </span>
+          <div class="msg-assistant">
+            One metric: <strong>meeting-to-qualified-opp conversion on net-new accounts</strong>. It&rsquo;s the tightest signal that the motion is actually working &mdash; you can run it weekly, it catches both the ICP hypothesis and the pitch, and you can&rsquo;t fake it with activity volume the way you can with email count or call count&hellip;
+            <small>gpt-4.1-mini &middot; 1,214 tok &middot; $0.0005</small>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Copy -->
+    <div class="transparency-copy">
+      <h4>How the chip behaves</h4>
+      <p>
+        When Coop uses a pairing to draft the answer, a <span class="kbd">Compensation answer</span> chip sits above the drafted message. Flat fill at 10% coral, 11px, no gradient &mdash; calm, readable, doesn&rsquo;t steal the eye from the answer body.
+      </p>
+      <p>Click the chip to expand the full pairing reference inline. The expanded state shows:</p>
+      <ul>
+        <li><strong>Question pattern matched</strong> &mdash; the specific pairing, not the bucket</li>
+        <li><strong>Tone preference applied</strong> &mdash; what voice Coop leaned into</li>
+        <li><strong>Classifier confidence</strong> &mdash; low confidence = a signal to Matt to add an example to the pairing</li>
+        <li><strong>Edit pairing link</strong> &mdash; one-click jump to Settings if the draft missed</li>
+      </ul>
+      <p style="margin-top: 14px;">
+        When no pairing matches, the chip switches to the neutral state: <span class="kbd">No saved answer &middot; drafted from profile</span>. Same visual footprint, monochrome gray. This is the moment Matt would most want to save an answer &mdash; see the Correction workflow below.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ SECTION 4: Correction workflow ══════════ -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">4</span>
+    <span class="section-title">Correction workflow</span>
+    <span class="section-note">When Coop&rsquo;s draft misses, Matt edits inline. A single chip offers to fold that edit back into the library &mdash; one click away from compounding improvement.</span>
+  </div>
+
+  <div class="storyboard">
+
+    <!-- Step 1: Matt edits -->
+    <div class="story-step">
+      <div class="story-num"><span class="n">1</span> Matt edits the draft</div>
+      <div class="sp">
+        <div class="sp-head">
+          <span class="sp-head-title">Coop</span>
+          <span class="sp-app-badge">Apply mode</span>
+        </div>
+        <div class="sp-msgs">
+          <span class="class-chip" style="align-self:flex-start;">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3h10v10H3zM3 7h10M7 3v10" stroke="currentColor" stroke-width="1.3"/></svg>
+            Compensation answer
+            <span class="sep">&middot;</span>
+            <span class="src">from your answer library</span>
+          </span>
+          <div class="edit-msg editing">
+            I&rsquo;m targeting <span class="edit-before">$180&ndash;210K base</span><span class="edit-after">$200&ndash;230K base</span> with OTE in the <span class="edit-before">$260&ndash;310K</span><span class="edit-after">$290&ndash;330K</span> range, though the right stage and equity story can shift that&hellip;
+            <div class="edit-meta">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="2"/></svg>
+              Editing inline &middot; Cmd+Enter to save
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="story-caption">Matt rewrites the comp range upward. The pairing is stale &mdash; he&rsquo;s been hearing higher offers.</div>
+    </div>
+
+    <!-- Step 2: Save-as chip appears -->
+    <div class="story-step">
+      <div class="story-num"><span class="n">2</span> Save-as chip appears under the edit</div>
+      <div class="sp">
+        <div class="sp-head">
+          <span class="sp-head-title">Coop</span>
+          <span class="sp-app-badge">Apply mode</span>
+        </div>
+        <div class="sp-msgs">
+          <div class="edit-msg">
+            I&rsquo;m targeting <strong>$200&ndash;230K base with OTE in the $290&ndash;330K range</strong>, though the right stage and equity story can shift that. I&rsquo;d rather have the conversation about total package&hellip;
+          </div>
+          <div class="save-chip">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M12 3H4a1 1 0 00-1 1v9l3-2h6a1 1 0 001-1V4a1 1 0 00-1-1z" stroke="currentColor" stroke-width="1.3"/></svg>
+            Save as your standard answer for
+            <span class="bucket-tag">[Compensation]</span>
+            <span class="arrow">&rsaquo;</span>
+          </div>
+          <div class="caption" style="margin-top:4px; color: var(--ci-text-tertiary); font-style:italic; font-size:10px;">Auto-classified to Compensation. Matt can change bucket in preview.</div>
+        </div>
+      </div>
+      <div class="story-caption">Non-intrusive &mdash; appears under the edit, not as a modal. Dismissable by ignoring.</div>
+    </div>
+
+    <!-- Step 3: Preview + confirm + toast -->
+    <div class="story-step">
+      <div class="story-num"><span class="n">3</span> Preview, confirm, toast</div>
+      <div class="sp">
+        <div class="sp-head">
+          <span class="sp-head-title">Coop</span>
+          <span class="sp-app-badge">Apply mode</span>
+        </div>
+        <div class="sp-msgs">
+          <div class="save-preview">
+            <div class="save-preview-head">
+              <h5>Save as standard answer</h5>
+              <button class="save-preview-bucket-select">Compensation &rsaquo;</button>
+            </div>
+            <div class="save-preview-field">
+              <div class="save-preview-label">Question pattern</div>
+              <div class="save-preview-value">What are your salary expectations for this role?</div>
+            </div>
+            <div class="save-preview-field">
+              <div class="save-preview-label">Your answer</div>
+              <div class="save-preview-value">I&rsquo;m targeting $200&ndash;230K base with OTE in the $290&ndash;330K range&hellip;</div>
+            </div>
+            <div class="save-preview-foot">
+              <button class="btn primary">Save to library</button>
+              <button class="btn ghost">Cancel</button>
+            </div>
+          </div>
+          <div class="toast-msg" style="margin-top: 10px;">
+            <span class="check">
+              <svg width="9" height="9" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            Saved to Compensation
+          </div>
+        </div>
+      </div>
+      <div class="story-caption">Preview shows what&rsquo;s being saved. Bucket is editable. Toast lives 1.6s, dropdown auto-closes.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ SECTION 5: Rationale table ══════════ -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">5</span>
+    <span class="section-title">Why these collapses</span>
+    <span class="section-note">Original 9 proposed &rarr; collapsed 7. Rationale per merge.</span>
+  </div>
+
+  <div class="rationale-card">
+    <table class="rationale-table">
+      <thead>
+        <tr>
+          <th class="rationale-col-from">Original buckets</th>
+          <th class="rationale-col-arrow"></th>
+          <th class="rationale-col-to">Collapsed to</th>
+          <th class="rationale-col-why">Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Sponsorship</span><span class="orig">Location / work arrangement</span></td>
+          <td class="rationale-col-arrow">&rarr;</td>
+          <td class="rationale-col-to">Sponsorship &amp; Location</td>
+          <td class="rationale-col-why">These co-occur in one compound question more often than not (&ldquo;Authorized to work in X? Willing to relocate?&rdquo;). Splitting them forces awkward routing when the question spans both.</td>
+        </tr>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Culture / motivation</span><span class="orig" style="color:var(--ci-text-tertiary);">(partial merge)</span></td>
+          <td class="rationale-col-arrow">&rarr;</td>
+          <td class="rationale-col-to">Motivation</td>
+          <td class="rationale-col-why">&ldquo;Culture fit&rdquo; questions are really &ldquo;what are you looking for&rdquo; questions in disguise. One bucket, clearer talk track: how you talk about yourself.</td>
+        </tr>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Why this role</span><span class="orig">Why this company</span></td>
+          <td class="rationale-col-arrow">&rarr;</td>
+          <td class="rationale-col-to">Why this opportunity</td>
+          <td class="rationale-col-why">Both require the same move: connect your story to their story. The answer needs company-specific context injected at draft time either way &mdash; the saved template is structurally identical.</td>
+        </tr>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Compensation</span></td>
+          <td class="rationale-col-arrow">=</td>
+          <td class="rationale-col-to">Compensation</td>
+          <td class="rationale-col-why">Kept. Distinct enough to warrant its own bucket &mdash; tone and numerics rarely cross over into other answer types.</td>
+        </tr>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Start date / availability</span></td>
+          <td class="rationale-col-arrow">=</td>
+          <td class="rationale-col-to">Availability</td>
+          <td class="rationale-col-why">Renamed, not merged. &ldquo;Availability&rdquo; is tighter shorthand for the same answers.</td>
+        </tr>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Experience</span></td>
+          <td class="rationale-col-arrow">=</td>
+          <td class="rationale-col-to">Experience</td>
+          <td class="rationale-col-why">Kept. Behavioral / proof-point answers that reference specific past roles. No clean merge candidate.</td>
+        </tr>
+        <tr>
+          <td class="rationale-col-from"><span class="orig">Other</span></td>
+          <td class="rationale-col-arrow">=</td>
+          <td class="rationale-col-to">Other</td>
+          <td class="rationale-col-why">Kept as catch-all. If &ldquo;Other&rdquo; starts growing past ~4 answers, that&rsquo;s a signal a new bucket is emerging.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════ SECTION 6: Open questions ══════════ -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">6</span>
+    <span class="section-title">Open questions for Matt</span>
+    <span class="section-note">Low-confidence decisions where I want a read before wiring Phase B.</span>
+  </div>
+
+  <div class="q-list">
+
+    <div class="q-item">
+      <div class="q-num">Q1</div>
+      <div class="q-body">
+        <h5>Is &ldquo;Why this opportunity&rdquo; right, or keep as two separate buckets?</h5>
+        <p>
+          I collapsed &ldquo;Why this role&rdquo; and &ldquo;Why this company&rdquo; because both require the same structural move &mdash; connect your story to their story. But the talk tracks <em>can</em> diverge (role = skills/scope fit, company = mission/stage fit). If you find yourself writing meaningfully different templates, we split them back out.
+        </p>
+      </div>
+    </div>
+
+    <div class="q-item">
+      <div class="q-num">Q2</div>
+      <div class="q-body">
+        <h5>Tone preference &mdash; per-pairing, per-bucket, or global?</h5>
+        <p>
+          Currently rendered as per-pairing (max flexibility). But per-pairing may be overkill &mdash; you might want all Compensation answers Direct and all Motivation answers Measured, without setting it 6 times. Alternative: default at bucket level, override at pairing level when needed.
+        </p>
+      </div>
+    </div>
+
+    <div class="q-item">
+      <div class="q-num">Q3</div>
+      <div class="q-body">
+        <h5>&ldquo;No saved answer&rdquo; chip &mdash; passive or prompting?</h5>
+        <p>
+          Today the chip just reads <em>&ldquo;No saved answer &middot; drafted from profile&rdquo;</em> (passive). Alternative: append <em>&ldquo;Want to save one?&rdquo;</em> with a small button &mdash; a gentle nudge to build up the library after every unmatched draft. Risk: noisy. Upside: the library fills itself.
+        </p>
+      </div>
+    </div>
+
+    <div class="q-item">
+      <div class="q-num">Q4</div>
+      <div class="q-body">
+        <h5>Classification mechanism <span class="phase-b-tag">Phase B</span></h5>
+        <p>
+          Regex + keyword match is cheaper and deterministic. Haiku classifier is smarter but spends tokens on every question. My instinct: regex-first for obvious matches (e.g. &ldquo;salary&rdquo; &rarr; Compensation), Haiku fallback for ambiguous. Flagging here so Phase B scopes it &mdash; not a Phase A blocker.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
