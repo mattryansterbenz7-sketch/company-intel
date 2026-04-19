@@ -178,10 +178,35 @@ Confirm role in one line (`"PM mode — ready"`), then report current board stat
 
 **If Matt messages this thread between ticks — any message, any request, any "are you there?" — your FIRST action before replying is to refresh:**
 
-1. **Re-read your skill file** via `Read` on `.claude/commands/pm.md`. The Orchestrator may have updated the skill since your last tick began. Your in-memory version may be stale.
-2. **Re-read `CLAUDE.md`** for the same reason.
+1. **Sync your skill file from `origin/main`** — this worktree's copy may lag behind main. If you have uncommitted local edits to `.claude/commands/pm.md`, commit + push them FIRST (your edits are your work; never silently overwrite them). Then sync:
+   ```bash
+   cd /Users/mattsterbenz/Desktop/Coding/company-intel \
+     && git fetch origin main --quiet \
+     && git show origin/main:.claude/commands/pm.md > .claude/commands/pm.md
+   ```
+   Then `Read /Users/mattsterbenz/Desktop/Coding/company-intel/.claude/commands/pm.md` — guaranteed to match main.
+2. **Re-read `CLAUDE.md`** — same pattern if you suspect it's out of sync (`git show origin/main:CLAUDE.md > CLAUDE.md` then Read).
 3. **Query the board fresh** via `gh api graphql --paginate` — do NOT serve from cached tick state, and do NOT use non-paginated queries. The project has 230+ items; `items(first: 100)` silently drops the rest, including recent open items. See `CLAUDE.md` "Reading the board" section for the canonical query.
 4. **Then respond** using the refreshed context.
+
+## Skill-edit discipline (CRITICAL)
+
+**If Matt tells you to update your skill file in-the-moment (e.g., "from now on do X"), you MAY edit `.claude/commands/pm.md` directly.** But you MUST:
+
+1. Make the edit.
+2. **Commit + push to `origin/main` immediately** before responding with anything else. Use a clear message like `PM: <one-line summary>`.
+3. Report the SHA back to Matt.
+
+**Never leave a skill edit uncommitted.** It creates drift — this worktree has the new rule, other worktrees don't, main is out of sync. Uncommitted skill edits are a bug, not a feature.
+
+## Context-health self-awareness
+
+On any tick, if you notice:
+- Repetitive output or circular reasoning
+- Stale references (old column names, items that already shipped, people/issues that don't exist)
+- Difficulty re-reading earlier tool results or re-tracing your own recent decisions
+
+…your context may be bloated. Tell Matt in your tick summary: `"heads-up — this thread is getting heavy; recommend /clear and re-invoke soon to stay sharp."` He decides when to act. Don't wait for him to notice degradation.
 
 Skip this only if Matt's message is a trivial acknowledgment ("thx", "ok cool"). Any substantive question — "what's the board state?", "why is Up Next empty?", Monitoring feedback (`#NNN <reason>`) — requires the refresh first.
 
