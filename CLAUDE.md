@@ -336,23 +336,29 @@ Simplicity. Raw HTML/JS/CSS loads directly as an unpacked Chrome extension. No w
 - Export/import backup
 - Analytics dashboard (funnel conversion, response rate)
 
-## Agent architecture (four roles)
+## Agent architecture (five roles)
 
-Coop.ai's development workflow runs on four coordinated Claude roles. Each has a distinct job and a skill file that defines its protocol. The roles only communicate via GitHub issue comments (never directly thread-to-thread).
+Coop.ai's development workflow runs on five coordinated Claude roles. Each has a distinct job and a skill file that defines its protocol. The roles only communicate via GitHub issue comments (never directly thread-to-thread).
 
 | Role | Skill | Mode | Touches product code? | Job |
 |------|-------|------|----------------------|-----|
-| **PM** | `/pm` | Autonomous `/loop /pm` | No | Triage, prioritize, spec, route, broker Matt feedback |
+| **PM** | `/pm` | Autonomous `/loop /pm` | No | Triage, prioritize, spec, route by altitude, broker Matt feedback |
 | **Doer** | `/doer` | Autonomous `/loop /doer` | **Yes — only shipping pipe** | Pull from Up Next For The Doer, delegate to subagents, ship to main, move to Shipped - Matt Will Verify |
-| **Designer** | `/designer` | On-demand with Matt | No | Live strategy + design pair sessions on `blocked:collab` items; forms opinion first, workshops with Matt, parks verdict-pending items in Proposed Designs + Mockups, finalizes PRDs to Up Next For The Doer |
+| **Designer** | `/designer` | On-demand with Matt | No | Live design + bounded-strategy pair sessions on `blocked:collab` items in Designer Backlog; forms opinion first (mockup for design, written proposal for bounded strategy), workshops with Matt, parks verdict-pending items in Proposed Designs + Mockups, finalizes PRDs to Up Next For The Doer |
+| **Strategist** | `/strategist` | On-demand with Matt | No (STRATEGY.md + issues only) | Live product-strategy workshop on `blocked:collab` items in Strategic Backlog — unbounded / meta-strategic topics (MCP, GTM, feature-existence, architecture philosophy). Frames fuzzy spaces, converges on verdicts, commits STRATEGY.md positions, spawns child issues routed by flavor |
 | **Orchestrator** | `/orchestrator` | On-demand | No (system files only) | Meta-layer — evolves skill files, designs protocols, troubleshoots system-level breakage, audits architecture |
 
 **Communication rules:**
-- Agents talk via `**PM →**`, `**Doer →**`, `**Designer →**` comments on issues.
-- Matt → PM → Doer/Designer for refinements. Matt never routes directly to Doer or Designer.
+- Agents talk via `**PM →**`, `**Doer →**`, `**Designer →**`, `**Strategist →**` comments on issues.
+- Matt → PM → Doer / Designer / Strategist for refinements. Matt never routes directly to Doer, Designer, or Strategist.
 - Orchestrator is invoked by Matt only. No agent talks to Orchestrator; the Orchestrator updates skill files, and changes propagate via next-tick skill re-read.
 
-**Single shipping pipe:** only the Doer commits product code to `origin/main`. PM and Designer never touch source. The Orchestrator commits system files (`.claude/commands/*.md`, `CLAUDE.md`, label/column changes) — never product code.
+**Single shipping pipe:** only the Doer commits **product code** (`saved.js`, `company.js`, `background.js`, etc.) to `origin/main`. PM, Designer, and Strategist never touch product source. The Strategist MAY commit `STRATEGY.md` edits directly (same latitude as Orchestrator for system/strategy files). The Orchestrator commits system files (`.claude/commands/*.md`, `CLAUDE.md`, label/column changes) — never product code.
+
+**Strategy-altitude boundary:**
+- **Designer** handles strategy that lives INSIDE a design decision — "how should this flow work?", "drag-drop or click-to-move?", bounded design/scope questions with a concrete surface on the table.
+- **Strategist** handles strategy ABOVE design — "should this feature exist at all?", "what's our GTM?", "MCP vs. API keys?", platform/architecture philosophy. Opens fuzzy spaces, converges on decisions that either close on a verdict or spawn child issues for Designer/Doer to execute.
+- If unsure: err toward Strategic Backlog. Strategist can escalate back to Designer by spawning a design-ready child.
 
 ## GitHub Board Management
 
@@ -368,7 +374,7 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 
 | Column | Option ID |
 |--------|-----------|
-| Needs Spec | `227f3e8b` |
+| Strategic Backlog (renamed from Needs Spec) | `227f3e8b` |
 | Backlog | `43f0ed97` |
 | Designer Backlog | `fb391763` |
 | Proposed Designs + Mockups | `530392e9` |
@@ -377,7 +383,12 @@ All issues live on the [Coop.ai project board](https://github.com/users/mattryan
 | Shipped - Matt Will Verify | `2eea7b72` |
 | Done | `c24e13e2` |
 
-**Note:** The board has **two Designer-owned columns** between Backlog and Up Next:
+**Note:** The option ID `227f3e8b` stays the same — only the human-readable name changes from "Needs Spec" → "Strategic Backlog" (renamed in the GitHub UI; never via API, per the `feedback_never_modify_board_fields` memory).
+
+**Column ownership:**
+- **Strategic Backlog** (`227f3e8b`) — Strategist's column. `blocked:collab` items awaiting `/strategist <#>` pickup, or workshopping in progress, or paused (`review:strategy` label). Fresh items routed here by PM when the topic is unbounded / meta-strategic.
+- **Designer Backlog** (`fb391763`) — Designer's inbox. `blocked:collab` items for design or bounded design-adjacent strategy.
+- **Proposed Designs + Mockups** (`530392e9`) — Designer's verdict queue.
 
 - **Designer Backlog** (`fb391763`) — Designer's inbox. PM routes `blocked:collab` items here whenever an issue needs judgment beyond pure execution: UI/visual design, strategic plans, open-ended product questions, or Doer-surfaced execution forks. Designer handles both design AND strategy items by forming an opinion first using codebase + DESIGN.md + STRATEGY.md context, then workshopping with Matt live.
 - **Proposed Designs + Mockups** (`530392e9`) — Designer's verdict queue. When a session pauses (Matt wants to think, session ends mid-iteration), Designer parks the item here with a `review:design` or `review:strategy` label plus a `**Designer → Matt (verdict):**` comment that pins the latest mockup/proposal link **at the very top** (unmissable). Matt reviews at leisure and replies "ship it" or "iterate on X." On "ship," Designer finalizes the PRD and moves to Up Next For The Doer. On "iterate," Designer moves back to Designer Backlog for the next session.
@@ -404,9 +415,9 @@ Every new issue should have type + size + model + area labels. `/issue` applies 
 
 ### Column assignment
 
-- **Needs Spec** — idea without a clear implementation path; needs design or PRD before coding starts.
-- **Backlog** — well-defined, no urgency; ready to pick up whenever. Also the home of parent/tracker issues (Tasks-checkbox bodies).
-- **Designer Backlog** — Designer's inbox. All `blocked:collab` items land here, whether they're visual/UI work, strategic plans, open-ended product questions, or Doer-surfaced execution forks. Designer picks them up on `/designer <#>` and forms an opinion first (rendered mockups for design, written proposal for strategy), then workshops live with Matt. Doer and PM skip this column; it's Designer's territory.
+- **Strategic Backlog** — Strategist's column (renamed from Needs Spec; option ID `227f3e8b` unchanged). Unbounded / meta-strategic topics: feature-existence questions, GTM, platform/architecture philosophy, anything fuzzy that needs framing before it can be designed or specced. PM routes items here; Strategist workshops them live with Matt via `/strategist <#>`. One column for the full lifecycle — fresh items, in-progress workshops, and verdict-pending items (`review:strategy` label) all live here. Items close when converged, optionally spawning children into other columns.
+- **Backlog** — well-defined, no urgency; ready to pick up whenever. Also the home of parent/tracker issues (Tasks-checkbox bodies) and the "ideas pool" of nice-to-haves PM curates.
+- **Designer Backlog** — Designer's inbox. Design items and bounded design-adjacent strategy items (where a concrete design/scope surface is on the table). Designer picks them up on `/designer <#>`, forms an opinion first (mockup for design, written proposal for bounded strategy), then workshops live with Matt. Doer skips this column; it's Designer's territory. If the question turns out to be unbounded/meta-strategic, Designer escalates to Strategic Backlog.
 - **Proposed Designs + Mockups** — Designer's verdict queue. When a session pauses (Matt wants to think, session ends mid-iteration), Designer moves the item here with `review:design` or `review:strategy` label, plus a `**Designer → Matt (verdict):**` comment that pins the latest mockup/proposal link **at the very top** so Matt can't miss it. Matt reviews at leisure and replies in-thread with "ship it" (→ Designer finalizes PRD, moves to Up Next For The Doer) or "iterate on X" (→ Designer moves back to Designer Backlog for next session).
 - **Up Next For The Doer** — prioritized, executable leaves ready for Doer. Must pass the Up Next gate (PRD + acceptance criteria + `model:*` label + `area:*` label + single-session scope + not a tracker).
 - **In Progress (Doer)** — actively being coded; Doer moves here before writing any code. Designer sessions stay in Designer Backlog, not here.
@@ -425,7 +436,7 @@ Every new issue should have type + size + model + area labels. `/issue` applies 
 2. When code is pushed to `origin/main`: move to **Shipped - Matt Will Verify**, close the GitHub issue, and post a `## How to verify` comment with reload reminder + markdown checklist. Closed + Shipped = "Doer says done, awaiting Matt's verification."
 3. The Doer never moves issues to the **Done** column. Matt drags to Done after verifying.
 4. Never leave an issue open if it is in the Done column (Done is a terminal, verified state — the issue should already be closed when it lands there).
-5. **Refinement routing: Matt → PM → Doer or Designer, never Matt → Doer directly.** Feedback on Shipped - Matt Will Verify items goes to the PM thread. PM classifies: **tweak** (reopen + concrete re-spec + promote to Up Next For The Doer), **discuss** (reopen + `blocked:collab` + move to Designer Backlog for Designer pair session), or **rethink** (close + new scoped issue). Doer only accepts work that comes through Up Next For The Doer; Designer only touches `blocked:collab` items (across Designer Backlog and Proposed Designs + Mockups).
+5. **Refinement routing: Matt → PM → Doer / Designer / Strategist, never Matt → Doer directly.** Feedback on Shipped - Matt Will Verify items goes to the PM thread. PM classifies: **tweak** (reopen + concrete re-spec + promote to Up Next For The Doer), **discuss-design** (reopen + `blocked:collab` + move to Designer Backlog), **discuss-strategy** (reopen + `blocked:collab` + move to Strategic Backlog for Strategist workshop), or **rethink** (close + new scoped issue). Doer only accepts work that comes through Up Next For The Doer; Designer only touches `blocked:collab` items in Designer Backlog / Proposed Designs + Mockups; Strategist only touches `blocked:collab` items in Strategic Backlog.
 6. **Up Next gate.** PM must not promote an issue to Up Next For The Doer unless it passes: (a) concrete PRD with acceptance criteria, (b) `model:*` label, (c) `area:*` label, (d) single-session scope (not `large` + `strategy`), (e) not a parent/tracker (Tasks-checkbox bodies stay in Backlog as navigation aids). Designer-finalized PRDs land directly in Up Next For The Doer (they pass the gate by construction).
 7. **Designer routing.** PM routes any item that needs judgment beyond pure execution — visual design, strategic plans, open-ended questions, Doer-surfaced execution forks — to **Designer Backlog** with `blocked:collab` + a `**PM → Matt (collab):**` comment with the framing/question. Doer routes its own mid-execution forks the same way (`blocked:collab` + `blocked:execution` as origin hint + `**Doer → Matt (unblock):**` comment). Designer picks these up on `/designer <#>` invocations, forms an opinion using codebase + DESIGN.md + STRATEGY.md context, and either ships a PRD in-session to Up Next For The Doer or parks verdict-pending work in **Proposed Designs + Mockups** with a `review:design` / `review:strategy` label.
 8. **Designer verdict cycle.** Items in Proposed Designs + Mockups are waiting on Matt's async verdict. Matt reviews the pinned mockup link at the top of the `**Designer → Matt (verdict):**` comment and replies either "ship it" or "iterate on X." On his next `/designer <#>` invocation, Designer reads the reply and either finalizes the PRD (removes `review:*` + `blocked:collab`, applies `model:*` + `area:*`, moves to Up Next For The Doer) or bounces back to Designer Backlog to re-render next session.
@@ -526,7 +537,7 @@ Every issue must be labeled with the most efficient Claude model to action it. A
 |-------|-------|----------|
 | `model:haiku` | Claude Haiku 4.5 | Task is isolated, well-defined, and fits in one file. Small bugs with obvious causes, copy/text changes, CSS tweaks, adding a simple field to existing UI. |
 | `model:sonnet` | Claude Sonnet 4.6 | Standard feature development (1–3 files), moderate debugging, API integration following an existing pattern, most board tasks. Default when uncertain. |
-| `model:opus` | Claude Opus 4.7 | Complex architecture spanning many files/systems, bugs with unclear root cause, Needs Spec issues requiring design thinking, P1s with high stakes, performance/cost analysis. |
+| `model:opus` | Claude Opus 4.7 | Complex architecture spanning many files/systems, bugs with unclear root cause, Strategic Backlog items requiring deep thinking, P1s with high stakes, performance/cost analysis. |
 
 ### Assignment heuristics
 
