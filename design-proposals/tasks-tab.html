@@ -407,7 +407,61 @@
     width: 5px; height: 5px;
     border-radius: 50%;
     background: var(--coral);
-  }/* Due-date chip */
+  }
+
+  /* Priority — inline editable, colored badge + click-to-cycle */
+  .task-priority {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    margin-right: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px; font-weight: 700;
+    color: transparent;
+    background: transparent;
+    border: 1px solid var(--border);
+    transition: border-color 120ms ease, color 120ms ease;
+    flex-shrink: 0;
+  }
+  .task-priority:hover { border-color: var(--border-strong); color: var(--text-tertiary); }
+  .task-priority.p1 { background: var(--red-soft); border-color: rgba(232,56,79,0.35); color: var(--red); }
+  .task-priority.p2 { background: var(--amber-soft); border-color: rgba(245,166,35,0.35); color: var(--amber); }
+  .task-priority.p3 { background: transparent; border-color: var(--border); color: var(--text-tertiary); }
+  .task-priority.p1::before { content: "P1"; }
+  .task-priority.p2::before { content: "P2"; }
+  .task-priority.p3::before { content: "P3"; }
+  .task-priority.none::before { content: "—"; color: var(--text-tertiary); }
+
+  /* Priority picker popover */
+  .priority-picker {
+    position: absolute; z-index: 10;
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 140px;
+  }
+  .priority-picker-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .priority-picker-item:hover { background: var(--bg-inset); }
+  .priority-picker-item.active { background: rgba(252,99,107,0.06); }
+  .priority-picker-item .tag {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 18px; border-radius: 4px;
+    font-size: 10px; font-weight: 700;
+  }
+  .priority-picker-item .tag.p1 { background: var(--red-soft); color: var(--red); border: 1px solid rgba(232,56,79,0.35); }
+  .priority-picker-item .tag.p2 { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,166,35,0.35); }
+  .priority-picker-item .tag.p3 { background: transparent; color: var(--text-tertiary); border: 1px solid var(--border); }
+
+  /* Due-date chip */
   .task-due {
     font-size: 11px;
     font-weight: 500;
@@ -619,7 +673,34 @@
   }.q-text .stance {
     color: var(--coral);
     font-weight: 600;
-  }/* Zoom badge */
+  }
+
+  /* Coop source attribution */
+  .coop-source {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 3px;
+    letter-spacing: -0.005em;
+  }
+  .coop-source strong { font-weight: 600; color: var(--text-secondary); }
+
+  /* Tab badge (past-due count) */
+  .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    margin-left: 6px;
+    border-radius: 99px;
+    background: var(--red);
+    color: #FFFFFF;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: -0.005em;
+    font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+  }
+  .tab-badge.amber { background: var(--amber); }
+  .tab-badge.subtle { background: var(--bg-inset); color: var(--text-secondary); }
+
+  /* Zoom badge */
   .zoom {
     position: absolute;
     top: 12px;
@@ -677,7 +758,7 @@
         <div class="shell-tabs">
           <div class="shell-tab">Overview</div>
           <div class="shell-tab">Activity <span class="count">14</span></div>
-          <div class="shell-tab active">Tasks <span class="count">10</span></div>
+          <div class="shell-tab active">Tasks<span class="tab-badge" title="2 overdue">2</span> <span class="count">10</span></div>
           <div class="shell-tab">Meetings <span class="count">3</span></div>
           <div class="shell-tab">Emails <span class="count">22</span></div>
           <div class="shell-tab">Contacts <span class="count">6</span></div>
@@ -708,13 +789,15 @@
               <div class="task-group-body">
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p1" title="Click to change priority"></span>
                   <div class="task-title">Send thank-you note to Priya after Thursday call</div>
-                  <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+                  <span class="task-suggested"><span class="dot"></span>Coop · from Priya email thread (3-day silence)</span>
                   <div class="task-due overdue">3d overdue</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p1" title="Click to change priority"></span>
                   <div class="task-title">Review comp range before recruiter call</div>
                   <div class="task-due overdue">1d overdue</div>
                   <div class="task-more">⋯</div>
@@ -732,18 +815,21 @@
               <div class="task-group-body">
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p1" title="Click to change priority"></span>
                   <input class="task-title-edit" value="Draft answer to 'why Topo' application question" />
                   <div class="task-due today">Today</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p1" title="Click to change priority"></span>
                   <div class="task-title">Prep questions for Amira interview</div>
                   <div class="task-due today">Today</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p2" title="Click to change priority"></span>
                   <div class="task-title">Confirm Tuesday panel time with recruiter</div>
                   <div class="task-due today">Today</div>
                   <div class="task-more">⋯</div>
@@ -761,31 +847,36 @@
               <div class="task-group-body">
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p2" title="Click to change priority"></span>
                   <div class="task-title">Research Topo's Series A investors</div>
                   <div class="task-due tomorrow">Tomorrow</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p2" title="Click to change priority"></span>
                   <div class="task-title">Follow up with Jordan on intro to VP Sales</div>
                   <div class="task-due">Fri Apr 25</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p2" title="Click to change priority"></span>
                   <div class="task-title">Send case-study doc to hiring manager</div>
-                  <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+                  <span class="task-suggested"><span class="dot"></span>Coop · from Topo job description requirements</span>
                   <div class="task-due">Mon Apr 28</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p3" title="Click to change priority"></span>
                   <div class="task-title">Panel interview prep doc</div>
                   <div class="task-due">Tue Apr 29</div>
                   <div class="task-more">⋯</div>
                 </div>
                 <div class="task-row">
                   <div class="task-check"></div>
+                  <span class="task-priority p3" title="Click to change priority"></span>
                   <div class="task-title">Send updated references list</div>
                   <div class="task-due">Thu May 1</div>
                   <div class="task-more">⋯</div>
@@ -826,6 +917,9 @@
           </aside>
         </div>
       </div>
+      <p class="frame-caption" style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary); line-height: 1.5; max-width: 600px;">
+        <strong style="color: var(--text-primary);">Past-due badge:</strong> the tab shows a red badge with the overdue count when there are overdue tasks. Counts items only — not "unread" (tasks aren't messages). Disappears when everything overdue is completed or rescheduled.
+      </p>
     </section>
 
     <!-- ═══════════════════════════════════════════ TASK ROW ANATOMY ═════════════════════════════════════ -->
@@ -837,8 +931,9 @@
       <div class="anatomy-wrap">
         <div class="anatomy-row" style="margin-top: 50px; margin-bottom: 80px;">
           <div class="task-check"></div>
+          <span class="task-priority p2" title="Click to change priority"></span>
           <div class="task-title" style="flex: 1;">Send case-study doc to hiring manager</div>
-          <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+          <span class="task-suggested"><span class="dot"></span>Coop · from Topo job description requirements</span>
           <div class="task-due today">Today</div>
           <div class="task-more" style="opacity: 1;">⋯</div>
           <!-- annotations -->
@@ -855,8 +950,8 @@
             Coral dot + label. Audit trail after accept.
           </div>
           <div class="ann ann-bl" style="right: 120px; bottom: -50px;">
-            <span class="label">Due chip</span>
-            Amber today, red overdue. Click to repick date.
+            <span class="label">Due chip — click to reschedule</span>
+            Amber today, red overdue. Pointer cursor + hover tint signal clickability. Opens quick-pick popover.
           </div>
           <div class="ann ann-tl" style="right: 4px; top: -42px; text-align: right;">
             <span class="label">More (hover)</span>
@@ -879,6 +974,7 @@
             <div class="frame-body">
               <div class="task-row">
                 <div class="task-check"></div>
+                <span class="task-priority p1" title="Click to change priority"></span>
                 <div class="task-title">Draft answer to 'why Topo' question</div>
                 <div class="task-due today">Today</div>
               </div>
@@ -893,6 +989,7 @@
             <div class="frame-body">
               <div class="task-row">
                 <div class="task-check"></div>
+                <span class="task-priority p1" title="Click to change priority"></span>
                 <input class="task-title-edit" value="Draft answer to 'why Topo' question" />
                 <div class="task-due today">Today</div>
               </div>
@@ -906,11 +1003,129 @@
           <div class="frame-body">
             <div class="task-row">
               <div class="task-check"></div>
+              <span class="task-priority p1" title="Click to change priority"></span>
               <div class="task-title">Draft answer to 'why Topo' question — lead with Granola insight</div>
               <div class="task-due today">Today</div>
             </div>
           </div>
           <div class="frame-caption">Returns to rest state with the new value. Esc reverts.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ DUE DATE EDIT ══════════════════════════════════════════ -->
+    <section>
+      <div class="section-label">3b — Inline edit</div>
+      <h2 class="section-title">Click the due date to change it</h2>
+      <p class="section-sub">Due-date chip is always clickable. Cursor pointer + hover tint make it obvious. No separate "edit" button.</p>
+
+      <div class="storyboard">
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">A</span><span class="frame-label">At rest</span></div>
+            <div class="frame-body">
+              <div class="task-row">
+                <div class="task-check"></div>
+                <span class="task-priority p1" title="Click to change priority"></span>
+                <div class="task-title">Prep questions for Amira interview</div>
+                <div class="task-due today" style="cursor: pointer;">Today</div>
+              </div>
+            </div>
+            <div class="frame-caption">Due chip reads as plain text. Pointer cursor and background tint on hover signal it's clickable.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">B</span><span class="frame-label">Click → date picker</span></div>
+            <div class="frame-body" style="position: relative; min-height: 120px;">
+              <div class="task-row" style="margin-bottom: 8px;">
+                <div class="task-check"></div>
+                <span class="task-priority p1" title="Click to change priority"></span>
+                <div class="task-title">Prep questions for Amira interview</div>
+                <div class="task-due today" style="outline: 1.5px solid var(--amber); outline-offset: 1px;">Today ▾</div>
+              </div>
+              <div style="position: absolute; top: 44px; right: 16px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); font-size: 12px; color: var(--text-primary); line-height: 1.8; min-width: 130px;">
+                <div style="font-weight: 600; font-size: 11px; color: var(--text-tertiary); margin-bottom: 6px;">Reschedule to</div>
+                <div style="padding: 3px 6px; border-radius: 4px; background: var(--amber-soft); color: var(--amber); font-weight: 600;">Today</div>
+                <div style="padding: 3px 6px; border-radius: 4px;">Tomorrow</div>
+                <div style="padding: 3px 6px; border-radius: 4px;">In 3 days</div>
+                <div style="padding: 3px 6px; border-radius: 4px; color: var(--text-tertiary);">Pick a date…</div>
+              </div>
+            </div>
+            <div class="frame-caption">Quick-pick popover with Today / Tomorrow / In 3 days / Pick a date.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame">
+          <div class="frame-head"><span class="frame-step">C</span><span class="frame-label">New date applied</span></div>
+          <div class="frame-body">
+            <div class="task-row">
+              <div class="task-check"></div>
+              <span class="task-priority p1" title="Click to change priority"></span>
+              <div class="task-title">Prep questions for Amira interview</div>
+              <div class="task-due tomorrow">Tomorrow</div>
+            </div>
+          </div>
+          <div class="frame-caption">Chip updates in place. Amber tint drops if no longer Today; red if still overdue.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ PRIORITY EDIT ════════════════════════════════════════ -->
+    <section>
+      <div class="section-label">3c — Inline edit</div>
+      <h2 class="section-title">Click the priority to change it</h2>
+      <p class="section-sub">Small badge left of the title. Click cycles through P1 → P2 → P3 → none, or opens a picker. No priority = grey outline placeholder.</p>
+
+      <div class="storyboard">
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">A</span><span class="frame-label">At rest</span></div>
+            <div class="frame-body">
+              <div class="task-row">
+                <div class="task-check"></div>
+                <span class="task-priority p2" title="Click to change priority"></span>
+                <div class="task-title">Follow up with Jordan on intro to VP Sales</div>
+                <div class="task-due">Fri Apr 25</div>
+              </div>
+            </div>
+            <div class="frame-caption">Priority badge sits left of title. Amber = P2. Hover reveals border highlight to hint it's clickable.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame-wrap">
+          <div class="frame">
+            <div class="frame-head"><span class="frame-step">B</span><span class="frame-label">Click → picker</span></div>
+            <div class="frame-body" style="position: relative; min-height: 130px;">
+              <div class="task-row" style="margin-bottom: 8px;">
+                <div class="task-check"></div>
+                <span class="task-priority p2" style="outline: 1.5px solid var(--amber); outline-offset: 1px;" title="Click to change priority"></span>
+                <div class="task-title">Follow up with Jordan on intro to VP Sales</div>
+                <div class="task-due">Fri Apr 25</div>
+              </div>
+              <div class="priority-picker" style="top: 44px; left: 28px;">
+                <div class="priority-picker-item"><span class="tag p1">P1</span> Urgent</div>
+                <div class="priority-picker-item active"><span class="tag p2">P2</span> Normal</div>
+                <div class="priority-picker-item"><span class="tag p3">P3</span> Low</div>
+                <div class="priority-picker-item" style="color: var(--text-tertiary);"><span class="tag p3" style="opacity: 0.4;">—</span> No priority</div>
+              </div>
+            </div>
+            <div class="frame-caption">Picker shows all four levels. Current level highlighted. Click to switch.</div>
+          </div>
+          <div class="frame-arrow"></div>
+        </div>
+        <div class="frame">
+          <div class="frame-head"><span class="frame-step">C</span><span class="frame-label">Priority updated</span></div>
+          <div class="frame-body">
+            <div class="task-row">
+              <div class="task-check"></div>
+              <span class="task-priority p1" title="Click to change priority"></span>
+              <div class="task-title">Follow up with Jordan on intro to VP Sales</div>
+              <div class="task-due">Fri Apr 25</div>
+            </div>
+          </div>
+          <div class="frame-caption">Badge snaps to P1 red. No page reload, no modal — just the badge updates.</div>
         </div>
       </div>
     </section>
@@ -928,14 +1143,18 @@
             <div class="frame-body">
               <div class="task-row coop-proposed">
                 <div class="task-check"></div>
-                <div class="task-title">Send thank-you to Priya after the call</div>
+                <span class="task-priority p2" title="Click to change priority"></span>
+                <div>
+                  <div class="task-title">Send thank-you to Priya after the call</div>
+                  <div class="coop-source">Coop · <strong>from Priya email thread (3-day silence)</strong></div>
+                </div>
                 <div class="task-accept-row">
                   <button class="btn-accept">Accept</button>
                   <button class="btn-dismiss">Dismiss</button>
                 </div>
               </div>
             </div>
-            <div class="frame-caption">Proposed tasks sit in a coral-tinted row with inline Accept / Dismiss.</div>
+            <div class="frame-caption">Proposed tasks sit in a coral-tinted row with inline Accept / Dismiss. Source line explains why Coop flagged it.</div>
           </div>
           <div class="frame-arrow"></div>
         </div>
@@ -945,7 +1164,11 @@
             <div class="frame-body">
               <div class="task-row coop-proposed" style="outline: 1.5px solid var(--coral); outline-offset: -1px;">
                 <div class="task-check"></div>
-                <div class="task-title">Send thank-you to Priya after the call</div>
+                <span class="task-priority p2" title="Click to change priority"></span>
+                <div>
+                  <div class="task-title">Send thank-you to Priya after the call</div>
+                  <div class="coop-source">Coop · <strong>from Priya email thread (3-day silence)</strong></div>
+                </div>
                 <div class="task-accept-row">
                   <button class="btn-accept" style="background: var(--coral); color: #fff;">Accept</button>
                   <button class="btn-dismiss">Dismiss</button>
@@ -961,12 +1184,13 @@
           <div class="frame-body">
             <div class="task-row">
               <div class="task-check"></div>
+              <span class="task-priority p2" title="Click to change priority"></span>
               <div class="task-title">Send thank-you to Priya after the call</div>
-              <span class="task-suggested"><span class="dot"></span>Suggested by Coop</span>
+              <span class="task-suggested"><span class="dot"></span>Coop · from Priya email thread (3-day silence)</span>
               <div class="task-due today">Today</div>
             </div>
           </div>
-          <div class="frame-caption">Row settles into the group. Coral dot persists as audit trail — "Coop's idea."</div>
+          <div class="frame-caption">Row settles into the group. Coral dot + source persists as audit trail — "Coop's idea, here's why."</div>
         </div>
       </div>
     </section>
@@ -1012,6 +1236,7 @@
             <div style="margin-bottom: 10px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); letter-spacing: -0.005em;">Today</div>
             <div class="task-row" style="background: var(--coral-soft); border-radius: 4px;">
               <div class="task-check"></div>
+              <span class="task-priority p2" title="Click to change priority"></span>
               <div class="task-title">Write one-pager on GTM strategy</div>
               <div class="task-due today">Today</div>
             </div>
@@ -1084,29 +1309,26 @@
     <!-- ═══════════════════════════════════════════ OPEN QUESTIONS ═══════════════════════════════════════ -->
     <section>
       <div class="section-label">7 — Open questions</div>
-      <h2 class="section-title">Three decisions before build</h2>
-      <p class="section-sub">Each one shifts visible chrome in the design above. Flagging them now.</p>
+      <h2 class="section-title">Three decisions — resolved</h2>
+      <p class="section-sub">Matt's verdicts from the first mockup review. All three are locked; design above reflects them.</p>
 
       <div class="questions">
         <div class="q-item">
-          <div class="q-label">Q1 — Default group state</div>
+          <div class="q-label">✅ Q1 — Default group state</div>
           <div class="q-text">
-            Should first-visit show only <strong>Overdue + Today</strong> expanded, with Upcoming collapsed? Keeps the opp page quiet and keeps Coop's "what's due now" the hero.
-            <span class="stance">Stance: yes, collapse Upcoming by default.</span>
+            <strong>Matt: yes, collapse Upcoming by default.</strong> First-visit shows Overdue + Today expanded, Upcoming collapsed (counted in the header), Done collapsed. Keeps the hero quiet. Disclosure is cheap.
           </div>
         </div>
         <div class="q-item">
-          <div class="q-label">Q2 — Assignee</div>
+          <div class="q-label">✅ Q2 — Task sourcing & assignment</div>
           <div class="q-text">
-            Coop is single-user. Should tasks have no assignee at all — drop the concept, stop reserving column space for it? Simplifies the row.
-            <span class="stance">Stance: remove assignee entirely. Re-add only if we ship multi-user.</span>
+            <strong>Matt: drop "assignee" entirely, but differentiate Coop's suggestions by source.</strong> Coop is single-user, so no "assign to" concept. But every Coop-suggested task shows <em>why</em> Coop thinks it matters — "Coop · from Amira meeting transcript", "Coop · from Priya email thread (3-day silence)", "Coop · detected inactivity", etc. The source line replaces the vague "Coop suggested" with something diagnostic. See the updated suggestion cards.
           </div>
         </div>
         <div class="q-item">
-          <div class="q-label">Q3 — Dismissal memory scope</div>
+          <div class="q-label">✅ Q3 — Dismissal memory scope</div>
           <div class="q-text">
-            When Matt dismisses a Coop-suggested task, should Coop learn the lesson <strong>globally</strong> ("he hates 'send a thank-you' suggestions") or <strong>per-opp</strong> ("he already handled it for Topo, but other opps are fine")?
-            <span class="stance">Stance: per-opp by default. Global only if dismissed ≥3 times across different opps.</span>
+            <strong>Matt: per-opp only, no global learning for now.</strong> When Matt dismisses a Coop-suggested task, it disappears from <em>that opp</em> permanently. Coop doesn't generalize the dismissal to other opps — too slippery, feels presumptuous when the situation differs. If global-dismissal utility emerges later, we'll add an explicit "Dismiss this type of task globally" option to the dismiss action. For now: per-opp is the contract.
           </div>
         </div>
       </div>
