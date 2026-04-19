@@ -254,7 +254,94 @@
   }.coop-entry .promote:hover {
     border-color: var(--coral);
     color: var(--coral);
-  }/* ── Right rail chat ── */
+  }
+
+  /* NEW (iteration 2): Pinned-bottom Coop notes pane — stays visible while user scrolls own notes */
+  .notes-body.v2 {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 200px);
+    min-height: 560px;
+    max-height: 760px;
+    overflow: hidden;
+  }
+  .notes-body.v2 .doc-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-bottom: 24px;
+  }
+  .notes-body.v2 .coop-pinned {
+    flex: 0 0 auto;
+    max-height: 280px;
+    min-height: 120px;
+    overflow-y: auto;
+    border-top: 2px solid var(--border);
+    background: var(--bg-raised, #FFFFFF);
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.03);
+    position: relative;
+  }
+  .coop-pinned-head {
+    position: sticky; top: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px 8px;
+    background: var(--bg-raised, #FFFFFF);
+    border-bottom: 1px solid var(--border-sub);
+    z-index: 2;
+  }
+  .coop-pinned-head-left {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11.5px; font-weight: 600; color: var(--text-sec);
+    letter-spacing: -0.005em;
+  }
+  .coop-pinned-head-left .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--coral);
+  }
+  .coop-pinned-head-count {
+    font-size: 10px; font-weight: 600; color: var(--text-ter);
+    padding: 1px 7px; border-radius: 99px;
+    background: var(--bg-inset, #F0F2F5);
+  }
+  .coop-pinned-head-actions {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .coop-pinned-head-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-ter); font-size: 11px;
+    padding: 4px 7px; border-radius: 4px;
+  }
+  .coop-pinned-head-btn:hover { background: var(--bg-inset, #F0F2F5); color: var(--text); }
+
+  .coop-entry .dismiss {
+    font-size: 11px;
+    color: var(--text-ter);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    margin-left: 4px;
+  }
+  .coop-entry .dismiss:hover {
+    border-color: var(--border);
+    color: var(--text-sec);
+  }
+  .coop-entry-actions {
+    display: flex; align-items: flex-start; gap: 2px;
+  }
+
+  /* Resize handle between panes */
+  .coop-pinned-resize {
+    position: absolute; top: -3px; left: 0; right: 0;
+    height: 6px;
+    cursor: row-resize;
+    background: transparent;
+  }
+  .coop-pinned-resize:hover {
+    background: rgba(252,99,107,0.08);
+  }
+
+  /* ── Right rail chat ── */
   .chat-hd {
     padding: 14px 16px;
     border-bottom: 1px solid var(--border-sub);
@@ -558,100 +645,119 @@
           <div class="tab">Contacts</div>
         </div>
 
-        <div class="notes-body">
-          <div class="saved-indicator">
-            <span class="saved-dot"></span>
-            <span>Saved · 2s ago</span>
-          </div>
+        <div class="notes-body v2">
+          <div class="doc-scroll">
+            <div class="saved-indicator">
+              <span class="saved-dot"></span>
+              <span>Saved · 2s ago</span>
+            </div>
 
-          <div class="doc">
-            <h1 class="doc-h1">Topo.io</h1>
+            <div class="doc">
+              <h1 class="doc-h1">Topo.io</h1>
 
-            <h2 class="doc-h2">My take</h2>
-            <p>
-              Strong product instinct in the founding team — Jane's done this playbook twice before and <strong>knows where the bodies are buried</strong>. Concerned that Seed-stage GTM hire gets diluted into doing support + ops for the first 6 months. Need to pressure-test whether this is actually "build a GTM motion" or "hold the founders' laps."
-            </p>
-            <p>
-              Compensation signal is positive — they've been transparent about band early, which usually correlates with a company that respects leverage.
-            </p>
+              <h2 class="doc-h2">My take</h2>
+              <p>
+                Strong product instinct in the founding team — Jane's done this playbook twice before and <strong>knows where the bodies are buried</strong>. Concerned that Seed-stage GTM hire gets diluted into doing support + ops for the first 6 months. Need to pressure-test whether this is actually "build a GTM motion" or "hold the founders' laps."
+              </p>
+              <p>
+                Compensation signal is positive — they've been transparent about band early, which usually correlates with a company that respects leverage.
+              </p>
 
-            <h2 class="doc-h2">Research questions</h2>
-            <ul>
-              <li>What's the ARR today, what's the growth curve?</li>
-              <li>Who's the person writing the checks — founder, or have they hired someone?</li>
-              <li>What went wrong with the last GTM lead? (There was one — Sarah M., per LinkedIn.)</li>
-              <li>Is the product actually ready for sales-led, or is it still founder-led?</li>
-            </ul>
+              <h2 class="doc-h2">Research questions</h2>
+              <ul>
+                <li>What's the ARR today, what's the growth curve?</li>
+                <li>Who's the person writing the checks — founder, or have they hired someone?</li>
+                <li>What went wrong with the last GTM lead? (There was one — Sarah M., per LinkedIn.)</li>
+                <li>Is the product actually ready for sales-led, or is it still founder-led?</li>
+              </ul>
 
-            <h2 class="doc-h2">Interview prep</h2>
-            <p>
-              Loop is front-loaded with Jane (CEO) and Marcus (CTO). Skip-level with Board observer after. Prep angles:
-            </p>
-            <ul>
-              <li><strong>Jane:</strong> has a "show me a plan" bias — bring the 30/60/90 written up, not verbal.</li>
-              <li><strong>Marcus:</strong> hates salespeople, loves builders. Frame GTM as product work.</li>
-              <li><strong>Board:</strong> pattern-match on GTM hires they've seen fail; have a story for what makes this different.</li>
-            </ul>
+              <h2 class="doc-h2">Interview prep</h2>
+              <p>
+                Loop is front-loaded with Jane (CEO) and Marcus (CTO). Skip-level with Board observer after. Prep angles:
+              </p>
+              <ul>
+                <li><strong>Jane:</strong> has a "show me a plan" bias — bring the 30/60/90 written up, not verbal.</li>
+                <li><strong>Marcus:</strong> hates salespeople, loves builders. Frame GTM as product work.</li>
+                <li><strong>Board:</strong> pattern-match on GTM hires they've seen fail; have a story for what makes this different.</li>
+              </ul>
 
-            <p>Draft framing for the 30/60/90:</p>
-            <pre class="code">30: Listen. 20 customer calls. Win-loss teardown.
+              <p>Draft framing for the 30/60/90:</p>
+              <pre class="code">30: Listen. 20 customer calls. Win-loss teardown.
 60: Ship 1 motion change. One metric, one owner.
 90: Rewrite the ICP doc. Kill anything that doesn't fit.</pre>
 
-            <h2 class="doc-h2">Open loops</h2>
-            <p>Pasted from Jane's email on Tue re: compensation band:</p>
-            <blockquote>
-              We're targeting $185–215 base with 0.5–1.0% equity on a standard 4-year vest. Happy to run through the details on our next call — we're flexible on the mix between cash and equity depending on where you net out on risk tolerance.
-            </blockquote>
-            <p>
-              Need to come back with an ask. Starting assumption: <code class="inline">$210 base + 0.85% + signing</code>. Justification is the market rate comp they're missing.
-            </p>
+              <h2 class="doc-h2">Open loops</h2>
+              <p>Pasted from Jane's email on Tue re: compensation band:</p>
+              <blockquote>
+                We're targeting $185–215 base with 0.5–1.0% equity on a standard 4-year vest. Happy to run through the details on our next call — we're flexible on the mix between cash and equity depending on where you net out on risk tolerance.
+              </blockquote>
+              <p>
+                Need to come back with an ask. Starting assumption: <code class="inline">$210 base + 0.85% + signing</code>. Justification is the market rate comp they're missing.
+              </p>
+            </div>
           </div>
 
-          <!-- Coop's notes divider -->
-          <div class="coop-divider">
-            <div class="line"></div>
-            <span>Coop's notes</span>
-            <div class="line"></div>
-          </div>
-
-          <div class="coop-entry">
-            <div class="avatar">C</div>
-            <div class="body">
-              <div class="meta">Meeting summary · 2026-04-10 · Jane Park (CEO)</div>
-              <div class="content">
-                <p><strong>What Jane said she's looking for:</strong> someone who can own GTM end-to-end without waiting for headcount. Mentioned the last GTM lead "stalled on hiring" — she wants an operator, not a manager.</p>
-                <p>Three things she kept coming back to:</p>
-                <ul>
-                  <li>Speed of first customer conversation after joining</li>
-                  <li>Clarity on what to kill vs. keep from existing motion</li>
-                  <li>Willingness to do support + demos personally for first 90 days</li>
-                </ul>
+          <div class="coop-pinned">
+            <div class="coop-pinned-resize"></div>
+            <div class="coop-pinned-head">
+              <div class="coop-pinned-head-left">
+                <span class="dot"></span>
+                <span>Coop's notes</span>
+                <span class="coop-pinned-head-count">3 new</span>
+              </div>
+              <div class="coop-pinned-head-actions">
+                <button class="coop-pinned-head-btn">Dismiss all</button>
+                <button class="coop-pinned-head-btn" title="Collapse pane">&#9662;</button>
               </div>
             </div>
-            <button class="promote">Promote ↑</button>
-          </div>
 
-          <div class="coop-entry">
-            <div class="avatar">C</div>
-            <div class="body">
-              <div class="meta">Suggested task · based on your "Open loops" section</div>
-              <div class="content">
-                <p>You mentioned following up on compensation — want to add a task to draft the counter by Friday? I can pre-fill with your $210 + 0.85% starting point.</p>
+            <div class="coop-entry">
+              <div class="avatar">C</div>
+              <div class="body">
+                <div class="meta">Meeting summary · 2026-04-10 · Jane Park (CEO)</div>
+                <div class="content">
+                  <p><strong>What Jane said she's looking for:</strong> someone who can own GTM end-to-end without waiting for headcount. Mentioned the last GTM lead "stalled on hiring" — she wants an operator, not a manager.</p>
+                  <p>Three things she kept coming back to:</p>
+                  <ul>
+                    <li>Speed of first customer conversation after joining</li>
+                    <li>Clarity on what to kill vs. keep from existing motion</li>
+                    <li>Willingness to do support + demos personally for first 90 days</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="coop-entry-actions">
+                <button class="promote">Promote ↑</button>
+                <button class="dismiss" title="Dismiss">Dismiss</button>
               </div>
             </div>
-            <button class="promote">Promote ↑</button>
-          </div>
 
-          <div class="coop-entry">
-            <div class="avatar">C</div>
-            <div class="body">
-              <div class="meta">Related past-note · Nimbus AI · 2026-02-14</div>
-              <div class="content">
-                <p>Your Nimbus notes had a similar "Seed GTM lead vs. founder lap-holder" framing — same worry, different company. Want me to surface the resolution from that one?</p>
+            <div class="coop-entry">
+              <div class="avatar">C</div>
+              <div class="body">
+                <div class="meta">Suggested task · based on your "Open loops" section</div>
+                <div class="content">
+                  <p>You mentioned following up on compensation — want to add a task to draft the counter by Friday? I can pre-fill with your $210 + 0.85% starting point.</p>
+                </div>
+              </div>
+              <div class="coop-entry-actions">
+                <button class="promote">Promote ↑</button>
+                <button class="dismiss" title="Dismiss">Dismiss</button>
               </div>
             </div>
-            <button class="promote">Promote ↑</button>
+
+            <div class="coop-entry">
+              <div class="avatar">C</div>
+              <div class="body">
+                <div class="meta">Related past-note · Nimbus AI · 2026-02-14</div>
+                <div class="content">
+                  <p>Your Nimbus notes had a similar "Seed GTM lead vs. founder lap-holder" framing — same worry, different company. Want me to surface the resolution from that one?</p>
+                </div>
+              </div>
+              <div class="coop-entry-actions">
+                <button class="promote">Promote ↑</button>
+                <button class="dismiss" title="Dismiss">Dismiss</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -681,33 +787,108 @@
     </div>
   </section>
 
-  <!-- ═══ EDITOR BEHAVIOR ═══ -->
+  <!-- ═══ EDITOR BEHAVIOR (iteration 2) ═══ -->
   <section class="section">
-    <div class="section-label">Editor behavior</div>
-    <h2 class="section-title">Live markdown rendering</h2>
+    <div class="section-label">Editor behavior · iteration 2</div>
+    <h2 class="section-title">WYSIWYG — never see a raw asterisk</h2>
     <p class="section-sub">
-      Typing markdown syntax renders inline as the user types. No separate "edit" vs. "view" mode. Keyboard shortcuts for bold / italic / link / code.
+      Default view is the rendered doc. Users format three ways: <strong>selection toolbar</strong> (Medium/Notion-style floating bubble on selection), <strong>keyboard shortcuts</strong> (Cmd+B, Cmd+I, Cmd+K link, Cmd+Shift+1/2/3 for H1/H2/H3), and <strong>slash commands</strong> (type "/" anywhere). Underlying storage is plain markdown; a "View source" toggle lives top-right for the occasional inspection. No "Write / Preview" tabs — GitHub's pattern is a 2015 UI, and the user should never feel like they're writing code.
     </p>
 
-    <div class="editor-steps">
-      <div class="editor-step">
-        <div class="step-label">As you type</div>
-        <div class="raw-md">## Interview prep<span class="cursor-block"></span></div>
-        <div class="step-prose">User is mid-type. Still shows raw markdown syntax.</div>
-      </div>
-      <div class="editor-step">
-        <div class="step-label">On space / newline</div>
-        <h2 class="doc-h2" style="margin: 0 0 4px; font-size: 16px;">Interview prep<span class="cursor-block"></span></h2>
-        <div class="step-prose">Immediately renders as H2. No re-parse, no flicker.</div>
-      </div>
-    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px;">
 
-    <div class="zoom-caption" style="margin-top: 14px;">
-      Shortcuts: <span class="kbd">⌘B</span> bold ·
-      <span class="kbd">⌘I</span> italic ·
-      <span class="kbd">⌘K</span> link ·
-      <span class="kbd">⌘E</span> code ·
-      Autosave on blur + 500ms pause
+      <!-- Selection toolbar demo -->
+      <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; padding: 18px;">
+        <div style="font-size: 11.5px; font-weight: 600; color: var(--text-sec); margin-bottom: 12px; letter-spacing: -0.005em;">Selection toolbar</div>
+        <div style="position: relative; padding: 22px 18px; background: var(--bg-raised, #FAFBFC); border: 1px solid var(--border-sub); border-radius: 8px;">
+          <p style="font-size: 14px; line-height: 1.55; color: var(--text); margin: 0;">
+            Jane has a <span style="background: rgba(252,99,107,0.2); border-radius: 2px;">show me a plan</span> bias — bring the 30/60/90 written up.
+          </p>
+          <!-- Floating toolbar -->
+          <div style="position: absolute; top: -18px; left: 85px; background: #151B26; color: #F5F4F2; border-radius: 7px; padding: 2px; display: flex; align-items: center; gap: 0; box-shadow: 0 6px 16px rgba(0,0,0,0.25);">
+            <button style="background: none; border: none; color: inherit; padding: 6px 10px; font-weight: 700; font-family: inherit; cursor: pointer; border-radius: 5px;">B</button>
+            <button style="background: none; border: none; color: inherit; padding: 6px 10px; font-style: italic; font-family: inherit; cursor: pointer; border-radius: 5px;">I</button>
+            <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15); margin: 0 2px;"></div>
+            <button style="background: none; border: none; color: inherit; padding: 6px 10px; font-family: inherit; cursor: pointer; border-radius: 5px;">&#128279;</button>
+            <button style="background: none; border: none; color: inherit; padding: 6px 10px; font-family: inherit; cursor: pointer; border-radius: 5px;" title="Code">&lt;/&gt;</button>
+            <button style="background: none; border: none; color: inherit; padding: 6px 10px; font-family: inherit; cursor: pointer; border-radius: 5px;" title="Quote">&#10077;</button>
+          </div>
+        </div>
+        <p style="font-size: 12px; color: var(--text-ter); margin-top: 12px; line-height: 1.5;">
+          Select any text, toolbar appears floating above. Bold, italic, link, code, quote. Click and go. Underlying doc picks up markdown syntax; user never sees it.
+        </p>
+      </div>
+
+      <!-- Keyboard shortcuts demo -->
+      <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; padding: 18px;">
+        <div style="font-size: 11.5px; font-weight: 600; color: var(--text-sec); margin-bottom: 12px; letter-spacing: -0.005em;">Keyboard shortcuts</div>
+        <div style="background: var(--bg-raised, #FAFBFC); border: 1px solid var(--border-sub); border-radius: 8px; padding: 14px 16px;">
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 12.5px; line-height: 1.6;">
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984; B</kbd>
+            <span style="color: var(--text-sec);">Bold</span>
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984; I</kbd>
+            <span style="color: var(--text-sec);">Italic</span>
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984; K</kbd>
+            <span style="color: var(--text-sec);">Link</span>
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984; E</kbd>
+            <span style="color: var(--text-sec);">Inline code</span>
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984;&#8679; 1-3</kbd>
+            <span style="color: var(--text-sec);">H1 / H2 / H3</span>
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984;&#8679; 7</kbd>
+            <span style="color: var(--text-sec);">Bulleted list</span>
+            <kbd style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #EBEDF0; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">&#8984;&#8679; 9</kbd>
+            <span style="color: var(--text-sec);">Task checkbox</span>
+          </div>
+        </div>
+        <p style="font-size: 12px; color: var(--text-ter); margin-top: 12px; line-height: 1.5;">
+          Standard shortcuts across Apple/GitHub/Notion. No learning curve for anyone who's used a modern editor.
+        </p>
+      </div>
+
+      <!-- Slash commands demo -->
+      <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; padding: 18px;">
+        <div style="font-size: 11.5px; font-weight: 600; color: var(--text-sec); margin-bottom: 12px; letter-spacing: -0.005em;">Slash commands</div>
+        <div style="position: relative; padding: 14px 16px; background: var(--bg-raised, #FAFBFC); border: 1px solid var(--border-sub); border-radius: 8px; min-height: 120px;">
+          <p style="font-size: 14px; line-height: 1.55; color: var(--text); margin: 0;">
+            Interview prep<br><span style="color: var(--text-ter); font-size: 13px;">/h</span>
+          </p>
+          <div style="position: absolute; top: 56px; left: 40px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; padding: 4px; min-width: 220px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); z-index: 5;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: rgba(252,99,107,0.06); border-radius: 5px; font-size: 12.5px;">
+              <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: var(--text-ter); width: 22px;">H2</span>
+              <span style="color: var(--text); font-weight: 500;">Heading 2</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 12.5px;">
+              <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: var(--text-ter); width: 22px;">H3</span>
+              <span style="color: var(--text-sec);">Heading 3</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 12.5px;">
+              <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: var(--text-ter); width: 22px;">—</span>
+              <span style="color: var(--text-sec);">Horizontal divider</span>
+            </div>
+          </div>
+        </div>
+        <p style="font-size: 12px; color: var(--text-ter); margin-top: 12px; line-height: 1.5;">
+          Type "/" anywhere to insert blocks: headings, lists, tasks, quotes, code, dividers, tables. Filters as you type. Notion-style.
+        </p>
+      </div>
+
+      <!-- View source toggle demo -->
+      <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; padding: 18px;">
+        <div style="font-size: 11.5px; font-weight: 600; color: var(--text-sec); margin-bottom: 12px; letter-spacing: -0.005em;">View source · for the rare case</div>
+        <div style="background: var(--bg-raised, #FAFBFC); border: 1px solid var(--border-sub); border-radius: 8px; padding: 14px 16px; position: relative;">
+          <button style="position: absolute; top: 8px; right: 8px; background: var(--bg-inset, #F0F2F5); border: 1px solid var(--border); font-size: 10px; font-weight: 600; color: var(--text-sec); padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: inherit;">View source</button>
+          <pre style="font-family: 'SF Mono', Menlo, monospace; font-size: 11.5px; line-height: 1.55; color: var(--text-sec); margin: 0; white-space: pre-wrap;">## Interview prep
+
+Jane has a **show me a plan** bias — bring the 30/60/90 written up, not verbal.
+
+- Loop front-loaded with Jane and Marcus
+- Skip-level with Board observer after</pre>
+        </div>
+        <p style="font-size: 12px; color: var(--text-ter); margin-top: 12px; line-height: 1.5;">
+          Toggle reveals raw markdown. For exporting, debugging, or users who think in source. Hidden by default — not a primary mode.
+        </p>
+      </div>
+
     </div>
   </section>
 
@@ -877,47 +1058,58 @@
     </div>
   </section>
 
-  <!-- ═══ OPEN QUESTIONS ═══ -->
+  <!-- ═══ OPEN QUESTIONS (resolved) ═══ -->
   <section class="section" style="margin-bottom: 0;">
-    <div class="section-label">Open questions</div>
-    <h2 class="section-title">Matt, need your call on these</h2>
-    <p class="section-sub">
-      Everything above is a specific stance. These three items I didn't decide unilaterally.
-    </p>
+    <div class="section-label">Open questions — resolved</div>
+    <h2 class="section-title">What Matt verdicted</h2>
 
     <div class="q-list">
       <div class="q-item">
-        <div class="q-n">Q1</div>
+        <div class="q-n">&#10003;</div>
         <div class="q-body">
-          <div class="q-q">Markdown-only, or also WYSIWYG toggle?</div>
+          <div class="q-q">&#10003; Markdown storage — approved</div>
           <div class="q-ctx">
-            Pure-markdown is the Granola / Notion-lite / Obsidian paradigm — fastest for power users, mildly intimidating for everyone else. A WYSIWYG toggle adds surface area and a small decision every session. <strong>Lean: markdown-only with inline live rendering</strong> (what's shown above). The live rendering already hides the syntax visually — raw md only appears when editing that line.
+            <strong>Matt: good call.</strong> Plain markdown in <code style="font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--inset); border-radius: 4px;">chrome.storage.local</code>. Portable, diffable, AI-native, plays well with future features (export, search, sync).
           </div>
         </div>
       </div>
-
       <div class="q-item">
-        <div class="q-n">Q2</div>
+        <div class="q-n">&#10003;</div>
         <div class="q-body">
-          <div class="q-q">Coop's notes: always visible, or hidden until Coop has something?</div>
+          <div class="q-q">&#10003; TOC sidebar — approved (assuming structure)</div>
           <div class="q-ctx">
-            Always-visible means an empty "Coop's notes" section sits under every opp, which is a dead zone on new saves. Hidden-until-populated is cleaner but means the user has to learn the section exists. <strong>Lean: hidden until populated</strong>, with a subtle auto-scroll when the first Coop entry lands so the user sees it happen.
+            <strong>Matt: works if notes have structure.</strong> Structure comes from the WYSIWYG editor — slash commands + shortcuts push users toward proper headings. TOC auto-populates from <code style="font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--inset); border-radius: 4px;">h1</code> / <code style="font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--inset); border-radius: 4px;">h2</code> / <code style="font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--inset); border-radius: 4px;">h3</code> blocks. Flat notes → empty sidebar, graceful degradation.
           </div>
         </div>
       </div>
-
       <div class="q-item">
-        <div class="q-n">Q3</div>
+        <div class="q-n">&#10003;</div>
         <div class="q-body">
-          <div class="q-q">Long doc: TOC sidebar at some length threshold, or never?</div>
+          <div class="q-q">&#10003; WYSIWYG — never see raw asterisks</div>
           <div class="q-ctx">
-            If notes stay under ~500 words most of the time, a TOC is over-engineering. If they grow to several screens (likely on an active opp over months), a floating TOC pulled from H2 headings is genuinely useful. <strong>Lean: auto-reveal at 3+ H2 headings</strong>, docked on the right edge of the notes panel, collapses when user scrolls past the last heading.
+            <strong>Matt: users shouldn't have to know markdown syntax.</strong> Resolution: inline live-render + selection toolbar + keyboard shortcuts + slash commands. Source toggle for the rare case. No "Write / Preview" tabs — GitHub's pattern is a 2015 UI. See the Editor behavior section for the full treatment.
+          </div>
+        </div>
+      </div>
+      <div class="q-item">
+        <div class="q-n">&#10003;</div>
+        <div class="q-body">
+          <div class="q-q">&#10003; Coop's notes: always visible, or hidden until Coop has something?</div>
+          <div class="q-ctx">
+            <strong>Hidden until populated, pinned to the bottom when it exists.</strong> Empty "Coop's notes" section on new saves is dead weight. Once populated, it anchors to the bottom of the Notes pane and stays visible while the user scrolls their own notes. Subtle auto-scroll animation on first entry so it's discoverable.
+          </div>
+        </div>
+      </div>
+      <div class="q-item">
+        <div class="q-n">&#10003;</div>
+        <div class="q-body">
+          <div class="q-q">&#10003; Coop's notes: dismiss in addition to promote</div>
+          <div class="q-ctx">
+            <strong>Yes, both actions.</strong> Dismiss hides the entry and logs it; Coop uses the signal to learn which kinds of contributions aren't valuable (meeting summaries dismissed frequently → reduce meeting auto-summaries). Promote lifts the content into the user's own notes at cursor position or end-of-doc.
           </div>
         </div>
       </div>
     </div>
-  </section>
-
-</div>
+  </section></div>
 </body>
 </html>
