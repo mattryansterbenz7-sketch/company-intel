@@ -1,0 +1,226 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   settings-shell.css — Shared settings page chrome
+   Used by: coop-settings.html (#266), preferences.html (#263)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page wrapper ── */
+.settings-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 32px 60px;
+}
+
+/* ── Page title / subtitle ── */
+.settings-page-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ci-text-primary);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+.settings-page-subtitle {
+  font-size: 14px;
+  color: var(--ci-text-tertiary);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* ── Top-tab strip ── */
+.settings-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--ci-border-default);
+  margin-bottom: 28px;
+  padding: 0 4px;
+}
+.settings-tab {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ci-text-secondary);
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.settings-tab:hover {
+  color: var(--ci-text-primary);
+}
+.settings-tab.active {
+  color: var(--ci-accent-primary);
+  border-bottom-color: var(--ci-accent-primary);
+}
+
+/* Apply Mode pill — floats to the right of the tab strip */
+.settings-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  background: var(--ci-accent-red-soft);
+  color: var(--ci-accent-red);
+  border-radius: var(--ci-radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(232, 56, 79, 0.3);
+  white-space: nowrap;
+}
+.settings-tab-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ci-accent-red);
+  box-shadow: 0 0 0 2px rgba(232, 56, 79, 0.18);
+}
+
+/* ── Tab panel ── */
+.settings-panel {
+  display: none;
+}
+.settings-panel.active {
+  display: block;
+}
+
+/* ── Saved chip (shown after autoSaveOnBlur fires) ── */
+.settings-saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--ci-accent-teal-soft);
+  color: var(--ci-accent-teal);
+  border-radius: var(--ci-radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity var(--motion-sm) var(--ease-out);
+  pointer-events: none;
+}
+.settings-saved-chip.visible {
+  opacity: 1;
+}
+
+/* ── Settings section header ── */
+.settings-section-head {
+  margin-bottom: 16px;
+}
+.settings-section-head h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ci-text-primary);
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.settings-section-head p {
+  font-size: 13px;
+  color: var(--ci-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Settings card ── */
+.settings-card {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-radius: var(--ci-radius-md);
+  box-shadow: var(--ci-shadow-sm);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.settings-card-head {
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.settings-card-head h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ci-text-primary);
+  letter-spacing: -0.005em;
+  margin: 0 0 3px;
+}
+.settings-card-head p {
+  font-size: 12px;
+  color: var(--ci-text-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+.settings-card-body {
+  padding: 20px;
+}
+
+/* ── Field row (label + input inline) ── */
+.settings-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ci-border-subtle);
+}
+.settings-field-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.settings-field-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.settings-field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ci-text-primary);
+}
+.settings-field-desc {
+  font-size: 12px;
+  color: var(--ci-text-secondary);
+  line-height: 1.4;
+}
+
+/* ── Toggle switch (shared) ── */
+.settings-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.settings-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.settings-toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--ci-border-default);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background var(--motion-xs) var(--ease-out);
+}
+.settings-toggle-track::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--ci-bg-raised);
+  border-radius: 50%;
+  transition: transform var(--motion-xs) var(--ease-out);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.settings-toggle input:checked + .settings-toggle-track {
+  background: var(--ci-accent-teal);
+}
+.settings-toggle input:checked + .settings-toggle-track::before {
+  transform: translateX(18px);
+}

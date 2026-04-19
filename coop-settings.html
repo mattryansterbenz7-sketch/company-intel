@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="icons/coop-monogram.svg">
   <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="settings-shell.css">
   <title>Coop.ai — Coop</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -185,18 +186,6 @@
     .pipeline-count-label { font-size: 12px; color: var(--ci-text-primary); }
     .pipeline-cascade-arrow { text-align: center; font-size: 10px; color: var(--ci-text-tertiary); padding: 2px 0; }
     .pipeline-warn { font-size: 11px; color: #d97706; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: var(--ci-radius-sm); padding: 6px 10px; margin-top: 8px; }
-
-    /* ── Page tabs ── */
-    .page-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--ci-border-subtle); margin-bottom: 28px; }
-    .page-tab {
-      padding: 10px 20px; font-size: 14px; font-weight: 600; color: var(--ci-text-tertiary);
-      border: none; background: none; cursor: pointer; font-family: inherit;
-      border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s;
-    }
-    .page-tab:hover { color: var(--ci-text-primary); }
-    .page-tab.active { color: var(--ci-text-primary); border-bottom-color: var(--ci-accent-primary); }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
 
     /* ── Settings sidebar nav ── */
     .settings-shell { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 28px; align-items: start; }
@@ -529,6 +518,111 @@
     @media (max-width: 600px) {
       .cost-summary-row { grid-template-columns: 1fr; }
       .cost-provider-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Personality dials ── */
+    .dial-section { margin-bottom: 28px; }
+    .dial-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 36px;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--ci-border-subtle);
+    }
+    .dial-row:last-child { border-bottom: none; }
+    .dial-label { font-size: 13px; font-weight: 600; color: var(--ci-text-primary); }
+    .dial-slider-wrap { position: relative; }
+    .dial-slider {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 4px;
+      background: var(--ci-border-default);
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    .dial-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--ci-accent-primary);
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      cursor: pointer; transition: transform 0.12s;
+    }
+    .dial-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+    .dial-slider::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--ci-accent-primary); border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2); cursor: pointer;
+    }
+    .dial-anchor-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 4px;
+      font-size: 10px; color: var(--ci-text-tertiary);
+    }
+    .dial-value {
+      font-size: 13px; font-weight: 700; color: var(--ci-text-secondary);
+      text-align: right; min-width: 28px;
+    }
+
+    /* Anchor table (revealed on hover/focus of slider area) */
+    .dial-anchor-table {
+      margin-top: 8px; display: none;
+      border: 1px solid var(--ci-border-subtle);
+      border-radius: var(--ci-radius-sm);
+      overflow: hidden; font-size: 12px;
+    }
+    .dial-row:hover .dial-anchor-table,
+    .dial-row:focus-within .dial-anchor-table { display: block; }
+    .dial-anchor-row {
+      display: grid; grid-template-columns: 72px 1fr;
+      gap: 10px; align-items: start;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--ci-border-subtle);
+      background: var(--ci-bg-base);
+      transition: background 0.1s;
+    }
+    .dial-anchor-row:last-child { border-bottom: none; }
+    .dial-anchor-row.current { background: rgba(252,99,107,0.05); }
+    .dial-anchor-range {
+      font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
+      white-space: nowrap; padding-top: 1px;
+    }
+    .dial-anchor-text {
+      color: var(--ci-text-primary); line-height: 1.4;
+    }
+    .dial-anchor-edit {
+      width: 100%; border: none; background: transparent;
+      font: inherit; color: var(--ci-text-primary); line-height: 1.4;
+      outline: none; resize: none; min-height: 1.4em; cursor: text;
+    }
+    .dial-anchor-edit:focus {
+      background: var(--ci-bg-raised);
+      border-radius: 3px; padding: 2px 4px;
+      box-shadow: 0 0 0 2px var(--ci-accent-purple-soft);
+    }
+    .dial-anchor-reset {
+      display: none; font-size: 10px; color: var(--ci-accent-purple);
+      background: none; border: none; cursor: pointer; padding: 0;
+    }
+    .dial-anchor-row.overridden .dial-anchor-reset { display: inline; }
+
+    /* Voice profile proof block */
+    .voice-proof {
+      background: var(--ci-bg-inset);
+      border: 1px solid var(--ci-border-subtle);
+      border-radius: var(--ci-radius-md);
+      padding: 14px 16px;
+      margin-top: 16px;
+    }
+    .voice-proof-head {
+      font-size: 12px; font-weight: 600; color: var(--ci-text-secondary);
+      margin-bottom: 8px;
+    }
+    .voice-proof-pre {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 11px; color: var(--ci-text-primary); line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+      background: var(--ci-bg-raised); border-radius: 6px;
+      padding: 10px 12px; border: 1px solid var(--ci-border-subtle);
     }
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -1220,106 +1314,166 @@
     </div>
   </div>
 
-  <div class="page-tabs">
-    <button class="page-tab active" data-tab="settings">Settings</button>
-    <button class="page-tab" data-tab="memory">Memory</button>
-    <button class="page-tab" data-tab="apply-mode">Apply Mode</button>
-    <button class="page-tab" data-tab="usage">Usage &amp; Costs</button>
+  <!-- ── Top-tab strip ── -->
+  <div class="settings-tabs" id="coop-top-tabs">
+    <button class="settings-tab active" data-panel="panel-models">Models</button>
+    <button class="settings-tab" data-panel="panel-personality">Personality</button>
+    <button class="settings-tab" data-panel="panel-memory">Memory</button>
+    <button class="settings-tab" data-panel="panel-behavior">Behavior</button>
+    <button class="settings-tab" data-panel="panel-usage">Usage</button>
+    <button class="settings-tab" data-panel="panel-apply-mode">Apply Mode</button>
   </div>
 
-  <div id="tab-settings" class="tab-panel active">
-  <div class="settings-shell">
-    <nav class="settings-nav" id="coop-settings-nav">
-      <button class="settings-nav-item active" data-section="ai-models-section">AI Models</button>
-      <button class="settings-nav-item" data-section="personality-section">Personality</button>
-      <button class="settings-nav-item" data-section="behavior-section">Behavior</button>
-    </nav>
-    <div class="settings-main">
-
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- SECTION 1: AI MODELS (hero)                                        -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="ai-models-hero" id="ai-models-section">
-    <div class="pipeline-sub-title" style="margin-bottom:2px;">AI Models</div>
-    <div class="pipeline-sub-desc" style="margin-bottom:14px;">Choose which models power each Coop task. Changes apply immediately.</div>
-    <!-- JS populates model selector rows here -->
-  </div>
-
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- SECTION 2: PERSONALITY                                              -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="card" id="personality-section" data-card="personality">
-    <div class="card-header">
-      <div class="card-header-text">
-        <div class="card-title">Personality &amp; voice</div>
-        <div class="card-subtitle">Choose how Coop communicates — pick a preset and optionally add custom instructions</div>
-      </div>
-      <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PANEL 1: MODELS                                                         -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="settings-panel active" id="panel-models">
+    <div class="ai-models-hero" id="ai-models-section">
+      <div class="pipeline-sub-title" style="margin-bottom:2px;">AI Models</div>
+      <div class="pipeline-sub-desc" style="margin-bottom:14px;">Choose which models power each Coop task. Changes apply immediately.</div>
+      <!-- JS populates model selector rows here -->
     </div>
-    <div class="card-body">
-      <!-- Presets -->
-      <div class="field-label" style="margin-bottom:8px;">Preset</div>
-      <div class="coop-presets" id="coop-presets">
-        <button class="coop-preset-btn active" data-preset="sharp-colleague">
-          <span class="coop-preset-label">Sharp Colleague</span>
-          <span class="coop-preset-subtitle">Direct, opinionated, Slack-style</span>
-        </button>
-        <button class="coop-preset-btn" data-preset="strategic-advisor">
-          <span class="coop-preset-label">Strategic Advisor</span>
-          <span class="coop-preset-subtitle">Measured, analytical, long-term thinking</span>
-        </button>
-        <button class="coop-preset-btn" data-preset="hype-man">
-          <span class="coop-preset-label">Hype Man</span>
-          <span class="coop-preset-subtitle">Encouraging, confidence-building</span>
-        </button>
-        <button class="coop-preset-btn" data-preset="formal-analyst">
-          <span class="coop-preset-label">Formal Analyst</span>
-          <span class="coop-preset-subtitle">Structured, data-driven, report-style</span>
-        </button>
-      </div>
+  </div>
 
-      <!-- Prompt preview -->
-      <div class="coop-prompt-preview" id="coop-prompt-preview">
-        <div class="coop-prompt-preview-header">
-          <span class="coop-prompt-preview-title">System prompt — sent to Coop on every message</span>
-          <button class="coop-prompt-preview-reset" id="coop-prompt-reset" title="Reset to preset default">Reset to default</button>
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PANEL 2: PERSONALITY                                                    -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="settings-panel" id="panel-personality">
+
+    <!-- Voice dials -->
+    <div class="card" style="margin-bottom:10px;">
+      <div class="card-header" style="cursor:default;">
+        <div class="card-header-text">
+          <div class="card-title">Voice dials</div>
+          <div class="card-subtitle">Tune how Coop responds. Hover a dial row to see and edit the prompt that fires at that position.</div>
         </div>
-        <div style="font-size:11px;color:var(--ci-text-tertiary);margin-bottom:8px;">Edit these to change exactly what Coop receives. Changes apply immediately.</div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div>
-            <div class="coop-prompt-field-label">Tone instruction — "You're [this text]"</div>
-            <textarea class="coop-prompt-field" id="coop-prompt-tone" rows="3"></textarea>
+      </div>
+      <div class="card-body">
+        <div class="dial-section" id="dial-section">
+          <!-- Tone -->
+          <div class="dial-row" data-dial="tone">
+            <div class="dial-label">Tone</div>
+            <div class="dial-slider-wrap">
+              <input type="range" class="dial-slider" id="dial-tone" min="0" max="1" step="0.01" value="0.5">
+              <div class="dial-anchor-labels">
+                <span>Direct</span><span>Warm</span>
+              </div>
+              <div class="dial-anchor-table" id="anchor-table-tone"></div>
+            </div>
+            <div class="dial-value" id="dial-tone-val">0.5</div>
           </div>
-          <div>
-            <div class="coop-prompt-field-label">Style instruction — "Response style: [this text]"</div>
-            <textarea class="coop-prompt-field" id="coop-prompt-style" rows="3"></textarea>
+          <!-- Brevity -->
+          <div class="dial-row" data-dial="brevity">
+            <div class="dial-label">Brevity</div>
+            <div class="dial-slider-wrap">
+              <input type="range" class="dial-slider" id="dial-brevity" min="0" max="1" step="0.01" value="0.5">
+              <div class="dial-anchor-labels">
+                <span>Terse</span><span>Thorough</span>
+              </div>
+              <div class="dial-anchor-table" id="anchor-table-brevity"></div>
+            </div>
+            <div class="dial-value" id="dial-brevity-val">0.5</div>
+          </div>
+          <!-- Formality -->
+          <div class="dial-row" data-dial="formality">
+            <div class="dial-label">Formality</div>
+            <div class="dial-slider-wrap">
+              <input type="range" class="dial-slider" id="dial-formality" min="0" max="1" step="0.01" value="0.5">
+              <div class="dial-anchor-labels">
+                <span>Casual</span><span>Formal</span>
+              </div>
+              <div class="dial-anchor-table" id="anchor-table-formality"></div>
+            </div>
+            <div class="dial-value" id="dial-formality-val">0.5</div>
           </div>
         </div>
-      </div>
 
-      <!-- Operating Principles -->
-      <div class="field" style="margin-top:16px;padding:14px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-md);background:var(--ci-bg-raised);">
-        <label class="field-label" for="coop-operating-principles" style="font-weight:700;">Coop's Operating Principles</label>
-        <div style="font-size:12px;color:var(--ci-text-secondary);margin:4px 0 8px;">Tell Coop how to interpret your data — your floors, dealbreakers, and preferences. He reads these in every conversation. <strong>This is the single source of truth for how Coop forms opinions.</strong> Edit anytime — no code changes needed.</div>
-        <textarea class="field-input" id="coop-operating-principles" rows="10" placeholder="(Default principles will load — edit freely.)" style="resize:vertical;min-height:180px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-          <div style="font-size:11px;color:var(--ci-text-tertiary);">Empty = use defaults.</div>
-          <button id="coop-principles-reset" type="button" style="font-size:11px;padding:4px 10px;background:var(--ci-bg-inset);border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);">Reset to default</button>
+        <!-- Voice profile proof -->
+        <div class="voice-proof">
+          <div class="voice-proof-head">Prompt that fires at current dial positions</div>
+          <pre class="voice-proof-pre" id="voice-proof-pre">(adjust dials above to see)</pre>
         </div>
       </div>
+    </div>
 
-      <!-- Custom instructions -->
-      <div class="field" style="margin-top:12px;">
-        <label class="field-label" for="coop-custom-instructions">Custom instructions (optional)</label>
-        <textarea class="field-input" id="coop-custom-instructions" rows="4" placeholder="Misc one-off tweaks. Most users won't need this — put interpretation rules in Operating Principles above." style="resize:vertical;min-height:80px;"></textarea>
-        <div style="font-size:11px;color:#A09A94;margin-top:4px;">Appended to the preset alongside operating principles.</div>
+    <!-- Presets + prompt preview (existing) -->
+    <div class="card" id="personality-section" data-card="personality">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Personality preset</div>
+          <div class="card-subtitle">Choose how Coop communicates — pick a preset and optionally add custom instructions</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
       </div>
+      <div class="card-body">
+        <div class="field-label" style="margin-bottom:8px;">Preset</div>
+        <div class="coop-presets" id="coop-presets">
+          <button class="coop-preset-btn active" data-preset="sharp-colleague">
+            <span class="coop-preset-label">Sharp Colleague</span>
+            <span class="coop-preset-subtitle">Direct, opinionated, Slack-style</span>
+          </button>
+          <button class="coop-preset-btn" data-preset="strategic-advisor">
+            <span class="coop-preset-label">Strategic Advisor</span>
+            <span class="coop-preset-subtitle">Measured, analytical, long-term thinking</span>
+          </button>
+          <button class="coop-preset-btn" data-preset="hype-man">
+            <span class="coop-preset-label">Hype Man</span>
+            <span class="coop-preset-subtitle">Encouraging, confidence-building</span>
+          </button>
+          <button class="coop-preset-btn" data-preset="formal-analyst">
+            <span class="coop-preset-label">Formal Analyst</span>
+            <span class="coop-preset-subtitle">Structured, data-driven, report-style</span>
+          </button>
+        </div>
 
-      <!-- Voice profile -->
-      <div class="field" style="margin-top:16px;padding:14px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-md);background:var(--ci-bg-raised);">
-        <label class="field-label" style="font-weight:700;">Coop voice profile</label>
-        <div style="font-size:12px;color:var(--ci-text-secondary);margin:4px 0 12px;">Tunes the ambient writing assistant on any page. Coop flags phrases that aren't your voice and rewrites on request.</div>
+        <div class="coop-prompt-preview" id="coop-prompt-preview">
+          <div class="coop-prompt-preview-header">
+            <span class="coop-prompt-preview-title">System prompt — sent to Coop on every message</span>
+            <button class="coop-prompt-preview-reset" id="coop-prompt-reset" title="Reset to preset default">Reset to default</button>
+          </div>
+          <div style="font-size:11px;color:var(--ci-text-tertiary);margin-bottom:8px;">Edit these to change exactly what Coop receives. Changes apply immediately.</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <div class="coop-prompt-field-label">Tone instruction — "You're [this text]"</div>
+              <textarea class="coop-prompt-field" id="coop-prompt-tone" rows="3"></textarea>
+            </div>
+            <div>
+              <div class="coop-prompt-field-label">Style instruction — "Response style: [this text]"</div>
+              <textarea class="coop-prompt-field" id="coop-prompt-style" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
 
+        <!-- Operating Principles -->
+        <div class="field" style="margin-top:16px;padding:14px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-md);background:var(--ci-bg-raised);">
+          <label class="field-label" for="coop-operating-principles" style="font-weight:700;">Coop's Operating Principles</label>
+          <div style="font-size:12px;color:var(--ci-text-secondary);margin:4px 0 8px;">Tell Coop how to interpret your data — your floors, dealbreakers, and preferences. He reads these in every conversation. <strong>This is the single source of truth for how Coop forms opinions.</strong> Edit anytime — no code changes needed.</div>
+          <textarea class="field-input" id="coop-operating-principles" rows="10" placeholder="(Default principles will load — edit freely.)" style="resize:vertical;min-height:180px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <div style="font-size:11px;color:var(--ci-text-tertiary);">Empty = use defaults.</div>
+            <button id="coop-principles-reset" type="button" style="font-size:11px;padding:4px 10px;background:var(--ci-bg-inset);border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);">Reset to default</button>
+          </div>
+        </div>
+
+        <!-- Custom instructions -->
+        <div class="field" style="margin-top:12px;">
+          <label class="field-label" for="coop-custom-instructions">Custom instructions (optional)</label>
+          <textarea class="field-input" id="coop-custom-instructions" rows="4" placeholder="Misc one-off tweaks. Most users won't need this — put interpretation rules in Operating Principles above." style="resize:vertical;min-height:80px;"></textarea>
+          <div style="font-size:11px;color:#A09A94;margin-top:4px;">Appended to the preset alongside operating principles.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voice profile (writing assistant) -->
+    <div class="card" data-card="voice-profile">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Writing voice profile</div>
+          <div class="card-subtitle">Tunes the ambient writing assistant on any page. Coop flags phrases that aren't your voice and rewrites on request.</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label class="field-label" for="coop-voice-tone" style="font-size:12px;">Tone</label>
@@ -1340,192 +1494,35 @@
             </select>
           </div>
         </div>
-
         <div style="margin-bottom:12px;">
           <label class="field-label" for="coop-voice-anti-phrases" style="font-size:12px;">Anti-phrases</label>
           <div style="font-size:11px;color:var(--ci-text-tertiary);margin:2px 0 6px;">Phrases Coop will flag as off-voice. One per line.</div>
           <textarea class="field-input" id="coop-voice-anti-phrases" rows="8" style="resize:vertical;min-height:140px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
         </div>
-
         <div style="margin-bottom:12px;">
           <label class="field-label" for="coop-voice-max-exclamations" style="font-size:12px;">Max exclamations per field</label>
           <input class="field-input" id="coop-voice-max-exclamations" type="number" min="0" max="5" step="1" style="width:90px;">
         </div>
-
         <div style="margin-bottom:6px;">
           <label class="field-label" for="coop-voice-signoffs" style="font-size:12px;">Preferred signoffs</label>
           <div style="font-size:11px;color:var(--ci-text-tertiary);margin:2px 0 6px;">One per line.</div>
           <textarea class="field-input" id="coop-voice-signoffs" rows="5" style="resize:vertical;min-height:90px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;line-height:1.5;"></textarea>
         </div>
-
         <div style="display:flex;justify-content:flex-end;margin-top:6px;">
           <button id="coop-voice-reset" type="button" style="font-size:11px;padding:4px 10px;background:var(--ci-bg-inset);border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);">Reset to defaults</button>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Memory section lives in tab-memory -->
-  <div id="memory-section" style="display:none;"></div>
+  </div><!-- /panel-personality -->
 
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- SECTION 4: BEHAVIOR                                                 -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="card" id="behavior-section" data-card="behavior">
-    <div class="card-header">
-      <div class="card-header-text">
-        <div class="card-title">Behavior</div>
-        <div class="card-subtitle">Automations, quick prompts, and the ambient writing assistant</div>
-      </div>
-      <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
-    </div>
-    <div class="card-body">
-
-      <!-- Automations -->
-      <div id="coop-automations" style="margin-bottom:20px;">
-        <div class="section-label">Automations</div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Learn from conversations</span>
-            <span class="toggle-desc">Coop extracts insights from every chat to build your profile over time</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-insights" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Auto-fetch URLs in chat</span>
-            <span class="toggle-desc">When you paste a link, Coop fetches and summarizes the page content</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-urls" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Application mode auto-detection</span>
-            <span class="toggle-desc">Coop automatically switches to app-helper mode on career pages</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-appmode" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Contextual suggestions</span>
-            <span class="toggle-desc">Show context-aware quick prompts when the chat is empty</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-auto-suggestions" checked><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Sound effects</span>
-            <span class="toggle-desc">Play subtle audio feedback for send, receive, screen share, and snip</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-sounds" checked><span class="toggle-track"></span></label>
-        </div>
-      </div>
-
-      <!-- Quick Prompts -->
-      <div id="coop-quick-prompts" style="margin-bottom:20px;">
-        <div class="section-label">Quick Prompts</div>
-        <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:10px;">One-tap starters that appear in Coop's chat — customize for your workflow</div>
-        <div class="qp-list" id="qp-list"></div>
-        <button class="qp-add-btn" id="qp-add-btn">+ Add quick prompt</button>
-      </div>
-
-      <!-- Coop Assist -->
-      <div id="coop-assist">
-        <div class="section-label">Coop Assist (Writing Helper)</div>
-        <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:12px;line-height:1.4;">Ambient suggestions in any text field across the web — heuristics + LLM rewrites.</div>
-        <div class="toggle-row" style="margin-bottom:12px;">
-          <div class="toggle-info">
-            <span class="toggle-label-text">Enable Coop Assist</span>
-            <span class="toggle-desc">Show suggestions when writing in text fields on any site</span>
-          </div>
-          <label class="toggle-switch"><input type="checkbox" id="coop-assist-enabled" checked><span class="toggle-track"></span></label>
-        </div>
-        <div style="padding:4px 0;">
-          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;">Blocked domains (one per line)</label>
-          <textarea id="coop-assist-blocklist" rows="4" placeholder="bank.com&#10;mychart.com" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--ci-border-strong);border-radius:6px;background:var(--ci-bg-base);color:var(--ci-text-primary);"></textarea>
-          <div style="font-size:11px;color:var(--ci-text-secondary);margin-top:4px;">Banking, healthcare, and gov domains are always excluded by default.</div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-    </div><!-- /settings-main -->
-  </div><!-- /settings-shell -->
-  </div><!-- /tab-settings -->
-
-  <div id="tab-usage" class="tab-panel">
-
-      <!-- API Usage (provider rows with date picker) -->
-      <div id="usage-container"></div>
-
-      <!-- Summary cards -->
-      <div class="cost-summary-row">
-        <div class="cost-summary-card">
-          <div class="cost-summary-card-label" id="cost-sum-total-label">Today's Total</div>
-          <div class="cost-summary-card-value" id="cost-sum-total">$0.00</div>
-          <div class="cost-summary-card-detail" id="cost-sum-total-detail"></div>
-        </div>
-        <div class="cost-summary-card">
-          <div class="cost-summary-card-label">Calls Today</div>
-          <div class="cost-summary-card-value" id="cost-sum-calls" style="color:var(--ci-text-primary);">0</div>
-          <div class="cost-summary-card-detail" id="cost-sum-calls-detail"></div>
-        </div>
-        <div class="cost-summary-card">
-          <div class="cost-summary-card-label">Most Expensive Op</div>
-          <div class="cost-summary-card-value" id="cost-sum-expensive" style="font-size:18px;color:var(--ci-text-primary);">--</div>
-          <div class="cost-summary-card-detail" id="cost-sum-expensive-detail"></div>
-        </div>
-        <div class="cost-summary-card">
-          <div class="cost-summary-card-label">Avg Cost per Chat</div>
-          <div class="cost-summary-card-value" id="cost-sum-avg-chat" style="color:var(--ci-text-primary);">$0.000</div>
-          <div class="cost-summary-card-detail" id="cost-sum-avg-chat-detail"></div>
-        </div>
-      </div>
-
-      <!-- Operation breakdown -->
-      <div class="cost-section-header">Breakdown by Operation</div>
-      <div class="cost-op-table">
-        <div class="cost-op-row cost-op-row-header">
-          <div>Operation</div>
-          <div>Calls</div>
-          <div>Total Cost</div>
-          <div>Avg / Call</div>
-          <div>Share of Spend</div>
-        </div>
-        <div id="cost-op-rows"></div>
-      </div>
-
-      <!-- Provider breakdown -->
-      <div class="cost-section-header">Breakdown by Provider</div>
-      <div class="cost-provider-grid" id="cost-provider-grid"></div>
-
-      <!-- Recent activity -->
-      <div class="cost-section-header">Recent Activity</div>
-      <div class="cost-log-table">
-        <div class="cost-log-row cost-log-row-header">
-          <div>Time</div>
-          <div>Operation</div>
-          <div>Provider</div>
-          <div>Model</div>
-          <div>Tokens</div>
-          <div>Cost</div>
-        </div>
-        <div id="cost-log-rows"></div>
-      </div>
-
-      <!-- 30-day history -->
-      <div class="cost-section-header">30-Day Cost History</div>
-      <div class="cost-chart-container" id="cost-chart-container"></div>
-
-      <div class="cost-refresh-note" id="cost-refresh-note">Last updated: --</div>
-
-  </div><!-- /tab-usage -->
-
-  <div id="tab-memory" class="tab-panel">
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PANEL 3: MEMORY                                                         -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="settings-panel" id="panel-memory">
     <div style="max-width:860px;">
 
-      <!-- Sub-card A: Context Narrative -->
+      <!-- Sub-card A: Context Narrative (from old tab-memory) -->
       <div style="margin-bottom:20px;padding:16px;border:1px solid var(--ci-accent-primary);border-width:1.5px;border-radius:var(--ci-radius-md);background:var(--ci-bg-raised);">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
           <div style="font-size:14px;font-weight:700;color:var(--ci-text-primary);">Context narrative</div>
@@ -1602,79 +1599,210 @@
       </div>
 
     </div>
-  </div><!-- /tab-memory -->
+  </div><!-- /panel-memory -->
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- APPLY MODE TAB                                                        -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div id="tab-apply-mode" class="tab-panel">
-    <div class="am-shell">
-
-      <!-- Left nav -->
-      <nav class="am-nav">
-        <div class="am-nav-label">Apply Mode</div>
-        <button class="am-nav-item active" data-am-section="answer-library">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-          Answer Library
-        </button>
-      </nav>
-
-      <!-- Main pane -->
-      <div class="am-main">
-        <!-- Answer Library section -->
-        <div id="am-answer-library">
-          <div class="am-crumbs">Coop Settings &rsaquo; Apply Mode &rsaquo; Answer Library</div>
-          <h2 class="am-title">Answer Library</h2>
-          <p class="am-lede">Your standard answers to the questions applications ask over and over. Coop pulls from this library when you're in Apply Mode — so the draft sounds like you, not like a profile summary. Organized by bucket.</p>
-
-          <!-- Section 1: Bucket taxonomy -->
-          <div class="am-tax-wrap">
-            <div class="am-tax-main">
-              <div class="am-tax-pills" id="am-tax-pills">
-                <div class="am-bucket-pill b-comp"><span class="am-pill-name">Compensation</span><span class="am-pill-desc">Base, OTE, equity, bonus expectations</span></div>
-                <div class="am-bucket-pill b-spon"><span class="am-pill-name">Sponsorship &amp; Location</span><span class="am-pill-desc">Work authorization, visa, relocation, remote</span></div>
-                <div class="am-bucket-pill b-avail"><span class="am-pill-name">Availability</span><span class="am-pill-desc">Start date, notice period, timeline</span></div>
-                <div class="am-bucket-pill b-exp"><span class="am-pill-name">Experience</span><span class="am-pill-desc">Years in role, specific skills, proof points</span></div>
-                <div class="am-bucket-pill b-mot"><span class="am-pill-name">Motivation</span><span class="am-pill-desc">Career story, drivers, what you're after</span></div>
-                <div class="am-bucket-pill b-why"><span class="am-pill-name">Why this opportunity</span><span class="am-pill-desc">Why this role, this company, this moment</span></div>
-                <div class="am-bucket-pill b-other"><span class="am-pill-name">Other</span><span class="am-pill-desc">Catch-all for novel questions</span></div>
-              </div>
-              <div class="am-matching-note">
-                <div class="am-matching-note-title">How matching works (semantic, not regex)</div>
-                <p>When a form question comes in, <strong>Claude reads it and routes by meaning</strong>. &ldquo;What&rsquo;s your target OTE?&rdquo; &middot; &ldquo;Salary expectations incl. commission?&rdquo; &middot; &ldquo;Total comp year one?&rdquo; all land in <span class="b-mini b-comp">Compensation</span> &mdash; and Coop <strong>re-writes</strong> a fresh answer from the stored pairings to fit the exact phrasing being asked. Nothing robotic, nothing regex-bound.</p>
-                <p class="am-mn-sub">Verbatim paste only if you mark a pairing &ldquo;Use literally.&rdquo; No bucket match &rarr; falls back to your profile.</p>
-              </div>
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PANEL 4: BEHAVIOR                                                       -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="settings-panel" id="panel-behavior">
+    <div class="card" id="behavior-section" data-card="behavior">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Behavior</div>
+          <div class="card-subtitle">Automations, quick prompts, and the ambient writing assistant</div>
+        </div>
+        <svg class="card-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <!-- Automations -->
+        <div id="coop-automations" style="margin-bottom:20px;">
+          <div class="section-label">Automations</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Learn from conversations</span>
+              <span class="toggle-desc">Coop extracts insights from every chat to build your profile over time</span>
             </div>
-            <div class="am-why7-card">
-              <div class="am-why7-title">Why 7 instead of 9</div>
-              <p class="am-why7-body">&ldquo;Sponsorship&rdquo; and &ldquo;Location/work arrangement&rdquo; frequently co-occur in one question (&ldquo;Are you authorized to work in X and willing to relocate?&rdquo;) &mdash; splitting them forces awkward routing. &ldquo;Culture/motivation&rdquo; and &ldquo;Why this role/company&rdquo; collapse into <strong>Motivation</strong> (how you talk about yourself) and <strong>Why this opportunity</strong> (how you talk about them). The talk-track boundary stays clean.</p>
+            <label class="toggle-switch"><input type="checkbox" id="coop-auto-insights" checked><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Auto-fetch URLs in chat</span>
+              <span class="toggle-desc">When you paste a link, Coop fetches and summarizes the page content</span>
             </div>
+            <label class="toggle-switch"><input type="checkbox" id="coop-auto-urls" checked><span class="toggle-track"></span></label>
           </div>
-
-          <!-- Section 2: Answer Library -->
-          <div class="am-lib-head">
-            <div class="am-lib-counter" id="am-lib-counter">7 buckets &middot; 0 answers</div>
-            <div class="am-lib-search">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-              <input id="am-search" type="text" placeholder="Search questions, answers, buckets&hellip;" autocomplete="off">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Application mode auto-detection</span>
+              <span class="toggle-desc">Coop automatically switches to app-helper mode on career pages</span>
             </div>
+            <label class="toggle-switch"><input type="checkbox" id="coop-auto-appmode" checked><span class="toggle-track"></span></label>
           </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Contextual suggestions</span>
+              <span class="toggle-desc">Show context-aware quick prompts when the chat is empty</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="coop-auto-suggestions" checked><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Sound effects</span>
+              <span class="toggle-desc">Play subtle audio feedback for send, receive, screen share, and snip</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="coop-sounds" checked><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <!-- Quick Prompts -->
+        <div id="coop-quick-prompts" style="margin-bottom:20px;">
+          <div class="section-label">Quick Prompts</div>
+          <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:10px;">One-tap starters that appear in Coop's chat — customize for your workflow</div>
+          <div class="qp-list" id="qp-list"></div>
+          <button class="qp-add-btn" id="qp-add-btn">+ Add quick prompt</button>
+        </div>
+        <!-- Auto-rescore triggers -->
+        <div id="coop-auto-rescore-section" style="margin-bottom:20px;">
+          <div class="section-label">Auto-rescore triggers</div>
+          <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:10px;line-height:1.5;">All off by default. Re-scores only opportunities in your active stages. Scoring uses ~$0.003–0.007 per entry.</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Profile changes</span>
+              <span class="toggle-desc">Re-score when you update flags, skills, resume, or preferences</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="rescore-on-profile-change"><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Salary / work pref changes</span>
+              <span class="toggle-desc">Re-score when salary floors or work arrangement change</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="rescore-on-pref-change"><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label-text">New interaction data</span>
+              <span class="toggle-desc">Re-score when new emails, meetings, or transcripts are added (15s debounce)</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="rescore-on-new-data"><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <!-- Coop Assist -->
+        <div id="coop-assist">
+          <div class="section-label">Coop Assist (Writing Helper)</div>
+          <div style="font-size:12px;color:var(--ci-text-secondary);margin-bottom:12px;line-height:1.4;">Ambient suggestions in any text field across the web — heuristics + LLM rewrites.</div>
+          <div class="toggle-row" style="margin-bottom:12px;">
+            <div class="toggle-info">
+              <span class="toggle-label-text">Enable Coop Assist</span>
+              <span class="toggle-desc">Show suggestions when writing in text fields on any site</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="coop-assist-enabled" checked><span class="toggle-track"></span></label>
+          </div>
+          <div style="padding:4px 0;">
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;">Blocked domains (one per line)</label>
+            <textarea id="coop-assist-blocklist" rows="4" placeholder="bank.com&#10;mychart.com" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--ci-border-strong);border-radius:6px;background:var(--ci-bg-base);color:var(--ci-text-primary);"></textarea>
+            <div style="font-size:11px;color:var(--ci-text-secondary);margin-top:4px;">Banking, healthcare, and gov domains are always excluded by default.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /panel-behavior -->
 
-          <!-- Library list (JS-rendered) -->
-          <div class="am-lib-list" id="am-lib-list">
-            <!-- Skeleton rows shown during load -->
-            <div class="am-skeleton-row"></div>
-            <div class="am-skeleton-row"></div>
-            <div class="am-skeleton-row"></div>
-            <div class="am-skeleton-row"></div>
-            <div class="am-skeleton-row"></div>
-            <div class="am-skeleton-row"></div>
-            <div class="am-skeleton-row"></div>
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PANEL 5: USAGE                                                          -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="settings-panel" id="panel-usage">
+
+      <!-- API Usage (provider rows with date picker) -->
+      <div id="usage-container"></div>
+
+      <!-- Summary cards -->
+      <div class="cost-summary-row" style="margin-top:8px;">
+        <div class="cost-summary-card">
+          <div class="cost-summary-card-label" id="cost-sum-total-label">Today's Total</div>
+          <div class="cost-summary-card-value" id="cost-sum-total">$0.00</div>
+          <div class="cost-summary-card-detail" id="cost-sum-total-detail"></div>
+        </div>
+        <div class="cost-summary-card">
+          <div class="cost-summary-card-label">Calls Today</div>
+          <div class="cost-summary-card-value" id="cost-sum-calls" style="color:var(--ci-text-primary);">0</div>
+          <div class="cost-summary-card-detail" id="cost-sum-calls-detail"></div>
+        </div>
+        <div class="cost-summary-card">
+          <div class="cost-summary-card-label">Most Expensive Op</div>
+          <div class="cost-summary-card-value" id="cost-sum-expensive" style="font-size:18px;color:var(--ci-text-primary);">--</div>
+          <div class="cost-summary-card-detail" id="cost-sum-expensive-detail"></div>
+        </div>
+        <div class="cost-summary-card">
+          <div class="cost-summary-card-label">Avg Cost per Chat</div>
+          <div class="cost-summary-card-value" id="cost-sum-avg-chat" style="color:var(--ci-text-primary);">$0.000</div>
+          <div class="cost-summary-card-detail" id="cost-sum-avg-chat-detail"></div>
+        </div>
+      </div>
+
+      <!-- Operation breakdown -->
+      <div class="cost-section-header">Breakdown by Operation</div>
+      <div class="cost-op-table">
+        <div class="cost-op-row cost-op-row-header">
+          <div>Operation</div>
+          <div>Calls</div>
+          <div>Total Cost</div>
+          <div>Avg / Call</div>
+          <div>Share of Spend</div>
+        </div>
+        <div id="cost-op-rows"></div>
+      </div>
+
+      <!-- Provider breakdown -->
+      <div class="cost-section-header">Breakdown by Provider</div>
+      <div class="cost-provider-grid" id="cost-provider-grid"></div>
+
+      <!-- Recent activity -->
+      <div class="cost-section-header">Recent Activity</div>
+      <div class="cost-log-table">
+        <div class="cost-log-row cost-log-row-header">
+          <div>Time</div>
+          <div>Operation</div>
+          <div>Provider</div>
+          <div>Model</div>
+          <div>Tokens</div>
+          <div>Cost</div>
+        </div>
+        <div id="cost-log-rows"></div>
+      </div>
+
+      <!-- 30-day history -->
+      <div class="cost-section-header">30-Day Cost History</div>
+      <div class="cost-chart-container" id="cost-chart-container"></div>
+
+      <div class="cost-refresh-note" id="cost-refresh-note">Last updated: --</div>
+
+  </div><!-- /panel-usage -->
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PANEL 6: APPLY MODE                                                     -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="settings-panel" id="panel-apply-mode">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-text">
+          <div class="card-title">Apply Mode</div>
+          <div class="card-subtitle">Quick Links, Q&amp;A pairings, and snip settings</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center;gap:16px;">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="opacity:0.35;">
+            <rect x="6" y="8" width="28" height="24" rx="3" stroke="var(--ci-text-secondary)" stroke-width="1.5"/>
+            <path d="M12 16h16M12 21h10M12 26h7" stroke="var(--ci-text-secondary)" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--ci-text-primary);margin-bottom:6px;">Apply Mode is in development.</div>
+            <div style="font-size:13px;color:var(--ci-text-secondary);line-height:1.55;max-width:380px;">Configuration for Quick Links, Q&amp;A pairings, and snip settings will live here once <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/246" target="_blank" rel="noopener" style="color:var(--ci-accent-primary);text-decoration:none;">#246</a> ships.</div>
           </div>
-        </div><!-- /am-answer-library -->
-      </div><!-- /am-main -->
-    </div><!-- /am-shell -->
-  </div><!-- /tab-apply-mode -->
+        </div>
+      </div>
+    </div>
+  </div><!-- /panel-apply-mode -->
 
 </div>
 

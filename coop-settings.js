@@ -161,11 +161,29 @@ function renderAIModels(config, configuredProviders) {
 
 // ── Chat Model Fallback rendering ────────────────────────────────────────────
 
-function renderChatFallbackSection(config) {
+function renderChatFallbackSection(config, rateLimitedModel) {
   const fb = config.chatFallback || { enabled: true, allowExpensive: false, showIndicator: true };
+
+  // Detect single-model (degraded) state
+  const integrations = window._cachedIntegrations || {};
+  const providerCount = [integrations.anthropic_key, integrations.openai_key, integrations.gemini_key].filter(Boolean).length;
+  const isSingleModel = providerCount <= 1;
 
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">Chat Model Fallback</div>';
   html += '<div class="pipeline-sub-desc">When the primary chat model fails (rate limit, outage), Coop can try other models. Control which models are allowed.</div>';
+
+  // Degraded-mode banner
+  if (isSingleModel) {
+    if (rateLimitedModel) {
+      html += `<div style="margin-bottom:12px;padding:10px 12px;background:var(--ci-bg-raised);border:1px solid #d97706;border-radius:var(--ci-radius-md);font-size:12px;color:var(--ci-text-primary);line-height:1.5;">
+        <strong>${escapeHtml(rateLimitedModel)}</strong> is over its rate limit. Add another model in <a href="#" onclick="chrome.runtime.openOptionsPage();return false;" style="color:var(--ci-accent-primary);text-decoration:none;">Integrations</a> to keep Coop responsive.
+      </div>`;
+    } else {
+      html += `<div style="margin-bottom:12px;padding:10px 12px;background:var(--ci-bg-raised);border:1px solid #d97706;border-radius:var(--ci-radius-md);font-size:12px;color:var(--ci-text-primary);line-height:1.5;">
+        Only one model is configured — Coop has no fallback. Add another in <a href="integrations.html" style="color:var(--ci-accent-primary);text-decoration:none;">Integrations</a>.
+      </div>`;
+    }
+  }
 
   // Fallback enabled toggle
   html += `<div class="pipeline-count-row" style="margin-bottom:8px">
@@ -228,14 +246,24 @@ async function loadAIModelsSection() {
 
   // Check which providers have API keys configured
   const integrations = await new Promise(r => chrome.storage.local.get('integrations', d => r(d.integrations || {})));
+  window._cachedIntegrations = integrations; // cache for renderChatFallbackSection degraded-mode banner
   const configuredProviders = new Set();
   if (integrations.anthropic_key) configuredProviders.add('anthropic');
   if (integrations.openai_key) configuredProviders.add('openai');
   if (integrations.gemini_key) configuredProviders.add('gemini');
 
+  // Fetch rate-limit state from service worker for degraded-mode banner
+  const rateLimitResp = await new Promise(r => {
+    chrome.runtime.sendMessage({ type: 'GET_LAST_RATE_LIMITED_MODEL' }, resp => {
+      void chrome.runtime.lastError;
+      r(resp || {});
+    });
+  });
+  const rateLimitedModel = rateLimitResp.model || null;
+
   body.innerHTML =
     renderAIModels(config, configuredProviders) +
-    renderChatFallbackSection(config);
+    renderChatFallbackSection(config, rateLimitedModel);
 
   // ── All model dropdowns ──
   body.querySelectorAll('[data-model-key]').forEach(select => {
@@ -1998,82 +2026,363 @@ function renderCostChart(usage) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Tab switching
+// Tab switching (v2 — .settings-tabs / .settings-panel)
 // ═══════════════════════════════════════════════════════════════════════════
 
 function initTabs() {
-  const tabs = document.querySelectorAll('.page-tab');
-  const panels = document.querySelectorAll('.tab-panel');
+  const tabs = document.querySelectorAll('.settings-tab');
+  const panels = document.querySelectorAll('.settings-panel');
   let costLoaded = false;
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const target = tab.dataset.tab;
-      tabs.forEach(t => t.classList.toggle('active', t === tab));
-      panels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + target));
+  function activateTab(tab) {
+    const panelId = tab.dataset.panel;
+    tabs.forEach(t => t.classList.toggle('active', t === tab));
+    panels.forEach(p => p.classList.toggle('active', p.id === panelId));
 
-      if (target === 'usage' && !costLoaded) {
-        costLoaded = true;
-        loadAndRenderCosts();
-      }
-    });
-  });
-
-  // Auto-select tab if URL hash matches
-  if (location.hash) {
-    const target = location.hash.slice(1);
-    const tab = document.querySelector(`[data-tab="${target}"]`);
-    if (tab) tab.click();
+    if (panelId === 'panel-usage' && !costLoaded) {
+      costLoaded = true;
+      loadAndRenderCosts();
+    }
   }
 
-  // Settings sidebar nav — scroll-to-section + active tracking
-  const navItems = document.querySelectorAll('.settings-nav-item');
-  if (navItems.length) {
-    navItems.forEach(item => {
-      item.addEventListener('click', () => {
-        const el = document.getElementById(item.dataset.section);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-    const sections = [...navItems].map(n => ({ nav: n, el: document.getElementById(n.dataset.section) })).filter(s => s.el);
-    window.addEventListener('scroll', () => {
-      let current = sections[0];
-      for (const s of sections) {
-        if (s.el.getBoundingClientRect().top <= 100) current = s;
-      }
-      navItems.forEach(n => n.classList.remove('active'));
-      if (current) current.nav.classList.add('active');
-    }, { passive: true });
+  tabs.forEach(tab => tab.addEventListener('click', () => activateTab(tab)));
+
+  // Auto-select tab from URL hash (e.g. #panel-memory)
+  if (location.hash) {
+    const target = location.hash.slice(1);
+    const tab = document.querySelector(`.settings-tab[data-panel="${target}"]`);
+    if (tab) activateTab(tab);
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Personality dials
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Mirror of _DIAL_ANCHORS in api.js — kept in sync manually.
+const DIAL_ANCHORS = {
+  tone: {
+    '0_0_to_0_2': 'Lead with the conclusion. No preamble, no softeners.',
+    '0_2_to_0_4': 'Lead with the conclusion. Minimal acknowledgment before the point.',
+    '0_4_to_0_6': 'Balance directness with acknowledgment.',
+    '0_6_to_0_8': 'Lead with acknowledgment or context. Frame recommendations as suggestions when possible.',
+    '0_8_to_1_0': 'Always start with acknowledgment. Avoid anything that reads as blunt or corrective.',
+  },
+  brevity: {
+    '0_0_to_0_2': 'Answer in the fewest words possible. 1 sentence when you can.',
+    '0_2_to_0_4': 'Keep responses tight — 1 to 3 sentences unless the user explicitly asks for detail.',
+    '0_4_to_0_6': 'Match response length to question complexity.',
+    '0_6_to_0_8': 'Provide context and reasoning alongside answers.',
+    '0_8_to_1_0': 'Be thorough — unpack reasoning, alternatives, and edge cases even when not asked.',
+  },
+  formality: {
+    '0_0_to_0_2': 'Use contractions, incomplete sentences when natural, informal vocabulary.',
+    '0_2_to_0_4': 'Casual but complete. Contractions fine; slang OK.',
+    '0_4_to_0_6': 'Neutral register.',
+    '0_6_to_0_8': 'Proper grammar, complete sentences, professional vocabulary. No slang.',
+    '0_8_to_1_0': 'Formal business register. No contractions. Complete, measured sentences.',
+  },
+};
+
+const DIAL_RANGE_ORDER = ['0_0_to_0_2', '0_2_to_0_4', '0_4_to_0_6', '0_6_to_0_8', '0_8_to_1_0'];
+const DIAL_RANGE_LABELS = ['0–0.2', '0.2–0.4', '0.4–0.6', '0.6–0.8', '0.8–1.0'];
+
+function dialRangeKey(v) {
+  const n = parseFloat(v) || 0;
+  if (n < 0.2) return '0_0_to_0_2';
+  if (n < 0.4) return '0_2_to_0_4';
+  if (n < 0.6) return '0_4_to_0_6';
+  if (n < 0.8) return '0_6_to_0_8';
+  return '0_8_to_1_0';
+}
+
+function composeVoiceProofLocal(dials, overrides) {
+  const ov = overrides || {};
+  const tk = dialRangeKey(dials.tone ?? 0.5);
+  const bk = dialRangeKey(dials.brevity ?? 0.5);
+  const fk = dialRangeKey(dials.formality ?? 0.5);
+  const tone = ov[`tone.${tk}`] || DIAL_ANCHORS.tone[tk] || '';
+  const brevity = ov[`brevity.${bk}`] || DIAL_ANCHORS.brevity[bk] || '';
+  const formality = ov[`formality.${fk}`] || DIAL_ANCHORS.formality[fk] || '';
+  return `# Voice profile\ntone: ${tone}\nlength: ${brevity}\nregister: ${formality}`;
+}
+
+function renderAnchorTable(dialKey, currentVal, overrides) {
+  const tableEl = document.getElementById(`anchor-table-${dialKey}`);
+  if (!tableEl) return;
+  const currentRange = dialRangeKey(currentVal);
+  const ov = overrides || {};
+
+  tableEl.innerHTML = DIAL_RANGE_ORDER.map((rangeKey, i) => {
+    const storageKey = `${dialKey}.${rangeKey}`;
+    const defaultText = DIAL_ANCHORS[dialKey][rangeKey];
+    const overrideText = ov[storageKey];
+    const isCurrent = rangeKey === currentRange;
+    const isOverridden = !!overrideText;
+
+    return `<div class="dial-anchor-row ${isCurrent ? 'current' : ''} ${isOverridden ? 'overridden' : ''}" data-dial="${dialKey}" data-range="${rangeKey}">
+      <div class="dial-anchor-range">${DIAL_RANGE_LABELS[i]}</div>
+      <div>
+        <textarea class="dial-anchor-edit" rows="2" data-storage-key="${storageKey}">${escapeHtml(overrideText || defaultText)}</textarea>
+        <button class="dial-anchor-reset" title="Reset to default" data-storage-key="${storageKey}" data-default="${escapeHtml(defaultText)}">Reset</button>
+      </div>
+    </div>`;
+  }).join('');
+  // Event binding is handled by rewireAnchorHandlers() in initPersonalityDials(),
+  // which uses autoSaveOnBlur + Enter/Esc keydown + mutable _overrides ref.
+}
+
+function updateVoiceProof(tone, brevity, formality, overrides) {
+  const el = document.getElementById('voice-proof-pre');
+  if (!el) return;
+  el.textContent = composeVoiceProofLocal({ tone, brevity, formality }, overrides);
+}
+
+// Update only the .current CSS class on anchor rows without re-rendering the table.
+// Prevents in-progress textarea edits from being destroyed on slider change.
+function updateCurrentAnchorRow(dialKey, newVal) {
+  const tableEl = document.getElementById(`anchor-table-${dialKey}`);
+  if (!tableEl) return;
+  const targetRange = dialRangeKey(newVal);
+  tableEl.querySelectorAll('.dial-anchor-row').forEach(row => {
+    if (row.dataset.range === targetRange) {
+      row.classList.add('current');
+    } else {
+      row.classList.remove('current');
+    }
+  });
+}
+
+function initPersonalityDials() {
+  chrome.storage.local.get(['coop'], d => {
+    const coop = d.coop || {};
+    const dials = coop.personalityDials || { tone: 0.5, brevity: 0.5, formality: 0.5 };
+    // Use a mutable reference so blur/reset handlers can update it in place
+    let _overrides = { ...(dials.anchorOverrides || {}) };
+
+    let currentTone = parseFloat(dials.tone ?? 0.5);
+    let currentBrevity = parseFloat(dials.brevity ?? 0.5);
+    let currentFormality = parseFloat(dials.formality ?? 0.5);
+
+    // Hydrate sliders
+    ['tone', 'brevity', 'formality'].forEach(key => {
+      const slider = document.getElementById(`dial-${key}`);
+      const valEl = document.getElementById(`dial-${key}-val`);
+      if (slider) slider.value = dials[key] ?? 0.5;
+      if (valEl) valEl.textContent = parseFloat(dials[key] ?? 0.5).toFixed(2);
+    });
+
+    // Render anchor tables with mutable overrides ref
+    renderAnchorTable('tone', currentTone, _overrides);
+    renderAnchorTable('brevity', currentBrevity, _overrides);
+    renderAnchorTable('formality', currentFormality, _overrides);
+
+    // Initial proof render
+    updateVoiceProof(currentTone, currentBrevity, currentFormality, _overrides);
+
+    // Wire sliders
+    function bindSlider(key) {
+      const slider = document.getElementById(`dial-${key}`);
+      const valEl = document.getElementById(`dial-${key}-val`);
+      if (!slider) return;
+
+      slider.addEventListener('input', () => {
+        const v = parseFloat(slider.value);
+        if (valEl) valEl.textContent = v.toFixed(2);
+        if (key === 'tone') currentTone = v;
+        if (key === 'brevity') currentBrevity = v;
+        if (key === 'formality') currentFormality = v;
+        // Use _overrides (mutable ref) so proof always reflects latest saved overrides
+        updateVoiceProof(currentTone, currentBrevity, currentFormality, _overrides);
+      });
+
+      slider.addEventListener('change', () => {
+        const v = parseFloat(slider.value);
+        chrome.storage.local.get(['coop'], d2 => {
+          const coop2 = d2.coop || {};
+          const dials2 = coop2.personalityDials || { tone: 0.5, brevity: 0.5, formality: 0.5 };
+          dials2[key] = v;
+          chrome.storage.local.set({ coop: { ...coop2, personalityDials: dials2 } }, () => {
+            showSaveStatus();
+            // Only update the .current row highlight — don't re-render the whole table,
+            // which would destroy any in-progress textarea edits.
+            updateCurrentAnchorRow(key, v);
+          });
+        });
+      });
+    }
+
+    bindSlider('tone');
+    bindSlider('brevity');
+    bindSlider('formality');
+
+    // Expose _overrides updater so renderAnchorTable's blur/reset handlers can refresh it.
+    // Patch: after the anchor tables are rendered, re-bind blur and reset with the mutable ref.
+    // We use a document-level delegated approach: re-wire after initial render.
+    function rewireAnchorHandlers() {
+      ['tone', 'brevity', 'formality'].forEach(dialKey => {
+        const tableEl = document.getElementById(`anchor-table-${dialKey}`);
+        if (!tableEl) return;
+
+        tableEl.querySelectorAll('.dial-anchor-edit').forEach(ta => {
+          // Remove old listeners by cloning (renderAnchorTable already attached stale-closure ones)
+          const fresh = ta.cloneNode(true);
+          ta.parentNode.replaceChild(fresh, ta);
+        });
+        tableEl.querySelectorAll('.dial-anchor-reset').forEach(btn => {
+          const fresh = btn.cloneNode(true);
+          btn.parentNode.replaceChild(fresh, btn);
+        });
+
+        // Re-bind blur → save, with _overrides update after save
+        tableEl.querySelectorAll('.dial-anchor-edit').forEach(ta => {
+          let _focusValue = ta.value;
+          ta.addEventListener('focus', () => { _focusValue = ta.value; });
+
+          // Enter saves, Escape reverts
+          ta.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              ta.blur();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              ta.value = _focusValue;
+              ta.blur();
+            }
+          });
+
+          autoSaveOnBlur(ta, value => new Promise(resolve => {
+            const sk = ta.dataset.storageKey;
+            const [dKey, rKey] = sk.split('.');
+            const defaultText = DIAL_ANCHORS[dKey]?.[rKey] || '';
+            const val = value.trim();
+            chrome.storage.local.get(['coop'], d3 => {
+              const coop3 = d3.coop || {};
+              const ao = { ...(coop3.personalityDials?.anchorOverrides || {}) };
+              if (val && val !== defaultText) {
+                ao[sk] = val;
+                ta.closest('.dial-anchor-row').classList.add('overridden');
+              } else {
+                delete ao[sk];
+                ta.closest('.dial-anchor-row').classList.remove('overridden');
+              }
+              const savedDials = coop3.personalityDials || { tone: 0.5, brevity: 0.5, formality: 0.5 };
+              savedDials.anchorOverrides = ao;
+              chrome.storage.local.set({ coop: { ...coop3, personalityDials: savedDials } }, () => {
+                // Update mutable ref so next slider input uses fresh overrides
+                _overrides = { ...ao };
+                updateVoiceProof(currentTone, currentBrevity, currentFormality, _overrides);
+                resolve();
+              });
+            });
+          }), { chipTarget: ta.closest('.dial-anchor-row') });
+        });
+
+        // Re-bind reset buttons with _overrides update after reset
+        tableEl.querySelectorAll('.dial-anchor-reset').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const sk = btn.dataset.storageKey;
+            const defaultText = btn.dataset.default;
+            const ta = tableEl.querySelector(`[data-storage-key="${sk}"]`);
+            if (ta) ta.value = defaultText;
+            chrome.storage.local.get(['coop'], d4 => {
+              const coop4 = d4.coop || {};
+              const savedDials = coop4.personalityDials || { tone: 0.5, brevity: 0.5, formality: 0.5 };
+              const ao = { ...(savedDials.anchorOverrides || {}) };
+              delete ao[sk];
+              savedDials.anchorOverrides = ao;
+              chrome.storage.local.set({ coop: { ...coop4, personalityDials: savedDials } }, () => {
+                showSaveStatus();
+                btn.closest('.dial-anchor-row').classList.remove('overridden');
+                // Update mutable ref so next slider input uses fresh overrides
+                _overrides = { ...ao };
+                updateVoiceProof(currentTone, currentBrevity, currentFormality, _overrides);
+              });
+            });
+          });
+        });
+      });
+    }
+
+    // Run after initial render so we can replace the stale-closure handlers
+    rewireAnchorHandlers();
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Auto-rescore toggles (Behavior tab)
+// Reads/writes coopConfig.automations — same storage keys as integrations.js
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initAutoRescoreToggles() {
+  const DEFAULT_AUTOMATIONS = {
+    rescoreOnProfileChange: false,
+    rescoreOnPrefChange: false,
+    rescoreOnNewData: false,
+  };
+
+  chrome.storage.local.get(['coopConfig'], data => {
+    const automations = { ...DEFAULT_AUTOMATIONS, ...(data.coopConfig?.automations || {}) };
+
+    const profileCb = document.getElementById('rescore-on-profile-change');
+    const prefCb    = document.getElementById('rescore-on-pref-change');
+    const newDataCb = document.getElementById('rescore-on-new-data');
+
+    if (profileCb) profileCb.checked = !!automations.rescoreOnProfileChange;
+    if (prefCb)    prefCb.checked    = !!automations.rescoreOnPrefChange;
+    if (newDataCb) newDataCb.checked = !!automations.rescoreOnNewData;
+
+    function saveAutomations() {
+      chrome.storage.local.get(['coopConfig'], d2 => {
+        const cfg = d2.coopConfig || {};
+        cfg.automations = {
+          ...(cfg.automations || {}),
+          rescoreOnProfileChange: profileCb ? profileCb.checked : false,
+          rescoreOnPrefChange:    prefCb    ? prefCb.checked    : false,
+          rescoreOnNewData:       newDataCb ? newDataCb.checked : false,
+        };
+        chrome.storage.local.set({ coopConfig: cfg }, showSaveStatus);
+      });
+    }
+
+    if (profileCb) profileCb.addEventListener('change', saveAutomations);
+    if (prefCb)    prefCb.addEventListener('change', saveAutomations);
+    if (newDataCb) newDataCb.addEventListener('change', saveAutomations);
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Section 1: AI Models + Chat Fallback
+  // Panel 1: AI Models + Chat Fallback
   loadAIModelsSection();
 
-  // Section 2: Personality (presets, tone/style, operating principles, custom instructions)
-  // Section 4: Behavior (automations, Coop Assist, tool-use, sounds)
-  // Both are initialized inside initCoopSettings() — it handles personality + behavior toggles
+  // Panel 2: Personality — presets, operating principles, custom instructions
+  // Panel 4: Behavior — automations, Coop Assist, tool-use, sounds
   initCoopSettings();
 
-  // Section 3: Memory
+  // Panel 2: Voice dials (new in v2)
+  initPersonalityDials();
+
+  // Panel 3: Memory
   initCompiledProfileViewer();
   initCoopContextWindow();
   initKnowledgeDocsViewer();
   initCoopMemory();
 
-  // Section 4: Behavior — quick prompts
+  // Panel 4: Behavior — quick prompts
   initCoopQuickPrompts();
 
-  // Section 5: Usage & Costs
+  // Panel 4: Behavior — auto-rescore toggles
+  initAutoRescoreToggles();
+
+  // Panel 5: Usage & Costs
   loadUsageDashboard();
 
-  // Tab switching
+  // Tab switching (v2)
   initTabs();
 
   // Refresh dashboards every 30s — but only when tab is visible
@@ -2081,7 +2390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.hidden) return;
     loadUsageDashboard();
     // Only refresh cost dashboard if the usage tab is active
-    if (document.getElementById('tab-usage')?.classList.contains('active')) {
+    if (document.getElementById('panel-usage')?.classList.contains('active')) {
       loadAndRenderCosts();
     }
   }, 30000);

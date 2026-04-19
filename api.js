@@ -2,6 +2,90 @@
 
 import { state, DEFAULT_PIPELINE_CONFIG } from './bg-state.js';
 
+// ── Voice profile prompt composition (#266) ───────────────────────────────────
+//
+// Reads personality dials from state.personalityDials and composes a
+// "# Voice profile" block that prepends every Coop chat system prompt.
+//
+// Default anchor fragments for 3 dials × 5 ranges each.
+// Keys are "{dial}.{range}" e.g. "tone.0_0_to_0_2"
+const _DIAL_ANCHORS = {
+  tone: {
+    '0_0_to_0_2': 'Lead with the conclusion. No preamble, no softeners.',
+    '0_2_to_0_4': 'Lead with the conclusion. Minimal acknowledgment before the point.',
+    '0_4_to_0_6': 'Balance directness with acknowledgment.',
+    '0_6_to_0_8': 'Lead with acknowledgment or context. Frame recommendations as suggestions when possible.',
+    '0_8_to_1_0': 'Always start with acknowledgment. Avoid anything that reads as blunt or corrective.',
+  },
+  brevity: {
+    '0_0_to_0_2': 'Answer in the fewest words possible. 1 sentence when you can.',
+    '0_2_to_0_4': 'Keep responses tight — 1 to 3 sentences unless the user explicitly asks for detail.',
+    '0_4_to_0_6': 'Match response length to question complexity.',
+    '0_6_to_0_8': 'Provide context and reasoning alongside answers.',
+    '0_8_to_1_0': 'Be thorough — unpack reasoning, alternatives, and edge cases even when not asked.',
+  },
+  formality: {
+    '0_0_to_0_2': 'Use contractions, incomplete sentences when natural, informal vocabulary.',
+    '0_2_to_0_4': 'Casual but complete. Contractions fine; slang OK.',
+    '0_4_to_0_6': 'Neutral register.',
+    '0_6_to_0_8': 'Proper grammar, complete sentences, professional vocabulary. No slang.',
+    '0_8_to_1_0': 'Formal business register. No contractions. Complete, measured sentences.',
+  },
+};
+
+/**
+ * Map a dial value 0.0–1.0 to the anchor range key.
+ * Ranges: [0,0.2) [0.2,0.4) [0.4,0.6) [0.6,0.8) [0.8,1.0]
+ */
+function _dialRangeKey(v) {
+  const val = Math.max(0, Math.min(1, v));
+  if (val < 0.2) return '0_0_to_0_2';
+  if (val < 0.4) return '0_2_to_0_4';
+  if (val < 0.6) return '0_4_to_0_6';
+  if (val < 0.8) return '0_6_to_0_8';
+  return '0_8_to_1_0';
+}
+
+/**
+ * Compose a "Voice profile" system-prompt block from the three personality dials.
+ * Returns empty string if dials are missing or malformed (safe fallback).
+ *
+ * @param {{ tone?: number, brevity?: number, formality?: number, anchorOverrides?: Object }} dials
+ * @returns {string}
+ */
+export function composeVoiceProfilePrompt(dials) {
+  try {
+    if (!dials || typeof dials !== 'object') return '';
+    const overrides = dials.anchorOverrides || {};
+
+    const toneKey = _dialRangeKey(dials.tone ?? 0.5);
+    const brevityKey = _dialRangeKey(dials.brevity ?? 0.5);
+    const formalityKey = _dialRangeKey(dials.formality ?? 0.5);
+
+    const toneText     = overrides[`tone.${toneKey}`]     || _DIAL_ANCHORS.tone[toneKey];
+    const brevityText  = overrides[`brevity.${brevityKey}`] || _DIAL_ANCHORS.brevity[brevityKey];
+    const formalText   = overrides[`formality.${formalityKey}`] || _DIAL_ANCHORS.formality[formalityKey];
+
+    if (!toneText || !brevityText || !formalText) return '';
+
+    return `# Voice profile\ntone: ${toneText}\nlength: ${brevityText}\nregister: ${formalText}\n`;
+  } catch (err) {
+    console.error('[composeVoiceProfilePrompt] error:', err);
+    return '';
+  }
+}
+
+// ── Rate-limit state (for degraded-mode banner in coop-settings) ──────────────
+let _lastRateLimitedModel = null;
+
+/**
+ * Returns the model name that last hit a 429, or null if no rate limit has
+ * occurred this session or the most recent call to that model succeeded.
+ */
+export function getLastRateLimitedModel() {
+  return _lastRateLimitedModel;
+}
+
 // ── Cost model ─────────────────────────────────────────────────────────────
 export const MODEL_COST_PER_MTok = {
   'claude-haiku-4-5-20251001':  { input: 1.00, output: 5.00 },
@@ -178,11 +262,13 @@ export async function claudeApiCall(body, maxRetries = 3, opTag, context) {
     });
     trackApiCall('anthropic', res.clone(), body.model, opTag, context);
     if (res.status === 429 && attempt < maxRetries) {
+      _lastRateLimitedModel = body.model;
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[Claude] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delay));
       continue;
     }
+    if (res.ok) _lastRateLimitedModel = null;
     return res;
   }
 }
@@ -214,11 +300,13 @@ export async function openAiChatCall({ model, system, messages, max_tokens, opTa
     });
     trackApiCall('openai', res.clone(), model, opTag, context);
     if (res.status === 429 && attempt < maxRetries) {
+      _lastRateLimitedModel = model;
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[OpenAI] Rate limited (429), retrying in ${delay/1000}s... (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delay));
       continue;
     }
+    if (res.ok) _lastRateLimitedModel = null;
     return res;
   }
 }
@@ -275,11 +363,13 @@ export async function geminiApiCall({ model, messages, system, max_tokens, tools
     });
     trackApiCall('gemini', res.clone(), model, opTag, context);
     if (res.status === 429 && attempt < maxRetries) {
+      _lastRateLimitedModel = model;
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[Gemini] Rate limited (429), retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delay));
       continue;
     }
+    if (res.ok) _lastRateLimitedModel = null;
     return res;
   }
 }

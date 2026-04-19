@@ -420,6 +420,44 @@ function injectContextManifestStyles(_prefix) {
   document.head.appendChild(style);
 }
 
+// ── Auto-save on blur ────────────────────────────────────────────────────────
+//
+// Hook autosave-on-blur to an input. On blur, calls `callback(value)`.
+// Shows a ".settings-saved-chip" element near the input on successful save.
+//
+// @param {HTMLElement} input - the input/textarea/contenteditable element
+// @param {(value: string) => Promise<void> | void} callback - save handler
+// @param {Object} [options]
+// @param {HTMLElement} [options.chipTarget] - element to attach chip to (defaults to input.parentElement)
+// @param {string} [options.chipLabel='Saved'] - label text
+// @param {number} [options.chipMs=1500] - how long to show the chip
+function autoSaveOnBlur(input, callback, options = {}) {
+  const chipLabel = options.chipLabel || 'Saved';
+  const chipMs = options.chipMs || 1500;
+  let lastValue = input.value;
+  input.addEventListener('blur', async () => {
+    const v = input.value;
+    if (v === lastValue) return;
+    lastValue = v;
+    const chipTarget = options.chipTarget || input.parentElement;
+    try {
+      await Promise.resolve(callback(v));
+      let chip = chipTarget.querySelector(':scope > .settings-saved-chip');
+      if (!chip) {
+        chip = document.createElement('span');
+        chip.className = 'settings-saved-chip';
+        chip.textContent = '\u2713 ' + chipLabel;
+        chipTarget.appendChild(chip);
+      }
+      chip.classList.add('visible');
+      clearTimeout(chip._hideTimer);
+      chip._hideTimer = setTimeout(() => chip.classList.remove('visible'), chipMs);
+    } catch (err) {
+      console.error('[autoSaveOnBlur] save failed:', err);
+    }
+  });
+}
+
 // ── Flag display ─────────────────────────────────────────────────────────────
 
 function boldKeyPhrase(text) {

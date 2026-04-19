@@ -1,7 +1,7 @@
 // ── ES Module imports ──────────────────────────────────────────────────────
-import { state, DEFAULT_PIPELINE_CONFIG, QUEUE_AUTO_PROCESS, initKeysFromConfig, initKeysFromStorage, initCoopConfig, initCachedUserName, initPipelineConfig } from './bg-state.js';
+import { state, DEFAULT_PIPELINE_CONFIG, QUEUE_AUTO_PROCESS, initKeysFromConfig, initKeysFromStorage, initCoopConfig, initCachedUserName, initPipelineConfig, initPersonalityDials } from './bg-state.js';
 import { dlog } from './utils.js';
-import { claudeApiCall, getApiUsage } from './api.js';
+import { claudeApiCall, getApiUsage, getLastRateLimitedModel } from './api.js';
 import { fetchLeaderPhoto, testApiKey } from './search.js';
 import { gmailAuth, gmailRevoke, fetchGmailEmails, detectRejectionEmailBg, enrichContactsFromGoogle } from './gmail.js';
 import { fetchCalendarEvents } from './calendar.js';
@@ -193,6 +193,7 @@ initCoopConfig();
 initCachedUserName();
 
 initPipelineConfig();
+initPersonalityDials(); // #266 — load personality dials for voice profile composition
 initProfileCompiler();
 initKnowledge();
 
@@ -203,6 +204,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (area === 'local' && changes.coopConfig) {
     state.coopConfig = changes.coopConfig.newValue || {};
+  }
+  // Live-update personality dials when coop namespace changes (#266)
+  if (area === 'local' && changes.coop) {
+    const newCoop = changes.coop.newValue || {};
+    if (newCoop.personalityDials) state.personalityDials = newCoop.personalityDials;
   }
   if (area === 'sync' && changes.prefs) {
     const p = changes.prefs.newValue || {};
@@ -765,6 +771,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'GET_PIPELINE_CONFIG') {
     sendResponse(state.pipelineConfig);
+    return true;
+  }
+  if (message.type === 'GET_LAST_RATE_LIMITED_MODEL') {
+    sendResponse({ model: getLastRateLimitedModel() });
     return true;
   }
   if (message.type === 'SET_PIPELINE_CONFIG') {

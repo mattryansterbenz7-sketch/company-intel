@@ -3,7 +3,7 @@
 
 import { state } from './bg-state.js';
 import { dlog, getUserName, truncateToTokenBudget, buildIdentityPrompt, coopInterp } from './utils.js';
-import { claudeApiCall, chatWithFallback, getModelForTask, trackApiCall } from './api.js';
+import { claudeApiCall, chatWithFallback, getModelForTask, trackApiCall, composeVoiceProfilePrompt } from './api.js';
 import { applyCoopMemoryActions } from './memory.js';
 import { COOP_TOOLS, COOP_TOOLS_OPENAI, runCoopTool, serializeToolResult } from './coop-tools.js';
 import { buildProfileManifestString } from './knowledge.js';
@@ -101,7 +101,20 @@ ${existingIndex}` }]
 function _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, questionArchetype, careerOSChat, voiceProfile }) {
   const principles = coopInterp.principlesBlock() +
     (applicationMode ? coopInterp.draftHint?.() || '' : '');
+
+  // Personality dials voice profile prepend (#266)
+  // Defensive: if dials are missing or compose throws, fall back gracefully
+  let voiceProfileBlock = '';
+  try {
+    if (state.personalityDials) {
+      voiceProfileBlock = composeVoiceProfilePrompt(state.personalityDials);
+    }
+  } catch (vpErr) {
+    console.error('[Coop] composeVoiceProfilePrompt failed, skipping prepend:', vpErr);
+  }
+
   const base = [
+    voiceProfileBlock ? `${voiceProfileBlock}\n` : '',
     buildIdentityPrompt(state.coopConfig, { globalChat: isGlobalChat, contextType: 'company', userName: getUserName() }),
     `\n=== TODAY ===\n${todayStr}\n\n=== TEMPORAL LANGUAGE ===\nWhen referencing past events, use precise relative language:\n- Same day: "earlier today"\n- 1 day ago: "yesterday"\n- 2–3 days ago: "<N> days ago" or the day name ("on Tuesday")\n- 4–6 days ago: "earlier this week"\n- 7–13 days ago: "last week"\n- 14+ days ago: "a couple weeks ago" or the specific date\nTool results already include relative labels like "(2 days ago)" next to each date — USE those labels. Never guess; never compute.`,
     principles,

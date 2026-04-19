@@ -24,6 +24,11 @@ export const state = {
   // Coop config (personality, flags, automations)
   coopConfig: {},
 
+  // Coop personality dials — loaded from chrome.storage.local.coop.personalityDials
+  // Shape: { tone: 0.5, brevity: 0.5, formality: 0.5, anchorOverrides: { 'tone.0_6_to_0_8': '...' } }
+  // Loaded at boot; undefined until storage is read. Composed into API system prompts defensively.
+  personalityDials: undefined,
+
   // Cached user name
   cachedUserName: '',
 
@@ -135,6 +140,19 @@ export function initCachedUserName() {
   chrome.storage.sync.get(['prefs'], d => {
     const p = d.prefs || {};
     state.cachedUserName = p.name || p.fullName || '';
+  });
+}
+
+/**
+ * Load personalityDials from chrome.storage.local into state.
+ * Stored as chrome.storage.local.coop.personalityDials
+ * Shape: { tone: 0.5, brevity: 0.5, formality: 0.5, anchorOverrides: {} }
+ */
+export function initPersonalityDials() {
+  chrome.storage.local.get(['coop'], d => {
+    if (d.coop?.personalityDials) {
+      state.personalityDials = d.coop.personalityDials;
+    }
   });
 }
 
