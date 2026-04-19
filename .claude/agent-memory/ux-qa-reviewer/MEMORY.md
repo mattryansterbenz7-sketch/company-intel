@@ -1,3 +1,13 @@
 - [Queue page patterns](queue_patterns.md) -- Score breakdown UI: bar rows + segmented toggle + detail panels
 - [CSS toggle patterns](css_toggle_patterns.md) -- How segmented toggles are styled across the app
 - [Cost display patterns](css_cost_patterns.md) -- Cost pill data shape, provider coverage, sparkline approach
+- [Async rerender race pattern](pitfalls_async_rerender_race.md) -- Appending banners after async innerHTML rerender gets wiped
+- [Shared class cascade pitfall](pitfalls_shared_class_cascade.md) -- `.task-no-company` spans .task-row and .task-item surfaces
+- [Label stacked-cue purge](project_label_purge_pattern.md) -- DESIGN.md bans uppercase+tracking+tertiary+800 on labels; keep on display/hero typography
+- [Retry duplicates user msg](pitfalls_retry_duplicate_user_msg.md) -- chat.js #251 retry pushes a fresh user turn instead of reusing the last one
+- [User-name async race](pitfalls_user_name_race.md) -- _chatUserFirstName loads async; no onChanged listener and initial render can miss the value
+- [Score color hex divergence](pitfalls_score_color_hex_divergence.md) -- Same 4-tier spectrum; saved.js darker hex, company.js rb2 token-bright hex
+- [Stage-dropdown dual-sync](pitfalls_stage_update_header_sync.md) -- hdr-opp-stage + opp-stage-select both exist; direct stage mutations miss celebration+rescore
+- [Email htmlBody XSS](pitfalls_email_htmlbody_xss.md) -- Gmail htmlBody needs sanitizeEmailHtml, not escapeHtml, before innerHTML
+- [Stage color hex matching](pitfalls_stage_color_hex_match.md) -- DEFAULT stage hexes don't match design-token hexes; hex-equality branch is dead code
+- [Contacts tab assumption](pitfalls_contacts_tab_assumption.md) -- opportunity.html has no .hub-tab[data-tab=contacts]; shared chat.js chip clicks no-op there
