@@ -90,8 +90,62 @@
     border-radius: var(--ci-radius-full);
     min-width: 180px;
   }
-  .bucket-pill-name { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.005em; }
-  .bucket-pill-desc { font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4; }
+  .bucket-pill-name { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.005em; display: inline-flex; align-items: center; gap: 7px; }
+  .bucket-pill-name::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--b, var(--ci-border-strong)); flex-shrink: 0;
+  }
+  .bucket-pill-desc { font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4; padding-left: 14px; }
+
+  /* Bucket semantic colors — one hue per talk track, matches stage-color conventions.
+     Subtle: a 7px dot + 2px colored edge. No background washes. */
+  .b-comp   { --b: var(--ci-accent-teal); }    /* Compensation */
+  .b-spon   { --b: var(--ci-accent-blue); }    /* Sponsorship & Location */
+  .b-avail  { --b: var(--ci-accent-amber); }   /* Availability */
+  .b-exp    { --b: var(--ci-accent-purple); }  /* Experience */
+  .b-mot    { --b: var(--ci-accent-primary); } /* Motivation — coral */
+  .b-why    { --b: var(--ci-accent-red); }     /* Why this opportunity */
+  .b-other  { --b: var(--ci-text-tertiary); }  /* Other */
+
+  .bucket-pill[class*="b-"] { border-left: 2px solid var(--b); padding-left: 13px; border-radius: 4px var(--ci-radius-full) var(--ci-radius-full) 4px; }
+
+  /* Library rows pick up the same hue via left border + dot before the name */
+  .lib-row.b-comp, .lib-row.b-spon, .lib-row.b-avail, .lib-row.b-exp,
+  .lib-row.b-mot, .lib-row.b-why, .lib-row.b-other {
+    border-left: 3px solid var(--b); padding-left: 15px;
+  }
+  .lib-row[class*="b-"] .lib-row-name { display: inline-flex; align-items: center; gap: 8px; }
+  .lib-row[class*="b-"] .lib-row-name::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--b); flex-shrink: 0;
+  }
+
+  /* Matching-works callout */
+  .matching-note {
+    margin-top: 18px;
+    background: var(--ci-bg-raised);
+    border: 1px solid var(--ci-border-default);
+    border-left: 3px solid var(--ci-accent-primary);
+    border-radius: var(--ci-radius-md);
+    padding: 14px 18px;
+    max-width: 720px;
+  }
+  .matching-note h4 { font-size: 12px; font-weight: 700; color: var(--ci-text-primary); letter-spacing: -0.005em; margin-bottom: 6px; }
+  .matching-note p { font-size: 12.5px; color: var(--ci-text-secondary); line-height: 1.55; margin-bottom: 6px; }
+  .matching-note p:last-child { margin-bottom: 0; }
+  .matching-note p.sub { font-size: 11.5px; color: var(--ci-text-tertiary); }
+  .matching-note b { color: var(--ci-text-primary); font-weight: 600; }
+  .b-mini {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 1px 7px 1px 8px;
+    border-radius: 99px;
+    border: 1px solid var(--ci-border-default);
+    font-size: 11px; font-weight: 600; color: var(--ci-text-primary);
+    background: var(--ci-bg-raised);
+  }
+  .b-mini::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--b, var(--ci-border-strong));
+  }
 
   .collapse-card {
     background: var(--ci-bg-raised);
@@ -718,46 +772,48 @@
     <div>
       <div class="tax-buckets">
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-comp">
           <span class="bucket-pill-name">Compensation</span>
           <span class="bucket-pill-desc">Base, OTE, equity, bonus expectations</span>
         </div>
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-spon">
           <span class="bucket-pill-name">Sponsorship &amp; Location</span>
           <span class="bucket-pill-desc">Work authorization, visa, relocation, remote</span>
         </div>
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-avail">
           <span class="bucket-pill-name">Availability</span>
           <span class="bucket-pill-desc">Start date, notice period, timeline</span>
         </div>
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-exp">
           <span class="bucket-pill-name">Experience</span>
           <span class="bucket-pill-desc">Years in role, specific skills, proof points</span>
         </div>
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-mot">
           <span class="bucket-pill-name">Motivation</span>
           <span class="bucket-pill-desc">Career story, drivers, what you&rsquo;re after</span>
         </div>
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-why">
           <span class="bucket-pill-name">Why this opportunity</span>
           <span class="bucket-pill-desc">Why this role, this company, this moment</span>
         </div>
 
-        <div class="bucket-pill">
+        <div class="bucket-pill b-other">
           <span class="bucket-pill-name">Other</span>
           <span class="bucket-pill-desc">Catch-all for novel questions</span>
         </div>
 
       </div>
 
-      <p class="col-note">
-        Each pill is a routing target. When a question comes in, the classifier (Phase B) decides which bucket applies, pulls the relevant pairing, and drafts from it. If nothing matches, Coop falls back to the profile.
-      </p>
+      <div class="matching-note">
+        <h4>How matching works (semantic, not regex)</h4>
+        <p>When a form question comes in, <b>Claude reads it and routes by meaning</b>. &ldquo;What&rsquo;s your target OTE?&rdquo; &middot; &ldquo;Salary expectations incl. commission?&rdquo; &middot; &ldquo;Total comp year one?&rdquo; all land in <span class="b-mini b-comp">Compensation</span> &mdash; and Coop <b>re-writes</b> a fresh answer from the stored pairings to fit the exact phrasing being asked. Nothing robotic, nothing regex-bound.</p>
+        <p class="sub">Verbatim paste only if you mark a pairing &ldquo;use literally.&rdquo; Low-confidence questions surface the top 2 candidates inline so you pick. No bucket match &rarr; fall back to the profile.</p>
+      </div>
     </div>
 
     <div class="collapse-card">
@@ -834,7 +890,7 @@
       <div class="lib-list">
 
         <!-- Compensation: EXPANDED with pairings -->
-        <div class="lib-row expanded">
+        <div class="lib-row expanded b-comp">
           <div class="lib-row-name">Compensation</div>
           <div class="lib-row-preview">&ldquo;What are your salary expectations?&rdquo;</div>
           <div class="lib-row-count"><span class="n">3</span> answers</div>
@@ -983,7 +1039,7 @@
         </div>
 
         <!-- Sponsorship & Location: COLLAPSED -->
-        <div class="lib-row">
+        <div class="lib-row b-spon">
           <div class="lib-row-name">Sponsorship &amp; Location</div>
           <div class="lib-row-preview">&ldquo;Are you authorized to work in the US without sponsorship?&rdquo;</div>
           <div class="lib-row-count"><span class="n">2</span> answers</div>
@@ -993,7 +1049,7 @@
         </div>
 
         <!-- Availability -->
-        <div class="lib-row">
+        <div class="lib-row b-avail">
           <div class="lib-row-name">Availability</div>
           <div class="lib-row-preview">&ldquo;How soon can you start?&rdquo;</div>
           <div class="lib-row-count"><span class="n">2</span> answers</div>
@@ -1003,7 +1059,7 @@
         </div>
 
         <!-- Experience -->
-        <div class="lib-row">
+        <div class="lib-row b-exp">
           <div class="lib-row-name">Experience</div>
           <div class="lib-row-preview">&ldquo;Describe a time you built a GTM motion from zero.&rdquo;</div>
           <div class="lib-row-count"><span class="n">4</span> answers</div>
@@ -1013,7 +1069,7 @@
         </div>
 
         <!-- Motivation -->
-        <div class="lib-row">
+        <div class="lib-row b-mot">
           <div class="lib-row-name">Motivation</div>
           <div class="lib-row-preview">&ldquo;What are you looking for in your next role?&rdquo;</div>
           <div class="lib-row-count"><span class="n">3</span> answers</div>
@@ -1023,7 +1079,7 @@
         </div>
 
         <!-- Why this opportunity -->
-        <div class="lib-row">
+        <div class="lib-row b-why">
           <div class="lib-row-name">Why this opportunity</div>
           <div class="lib-row-preview empty">Template answer &middot; personalized per company at draft time</div>
           <div class="lib-row-count"><span class="n">2</span> answers</div>
@@ -1033,7 +1089,7 @@
         </div>
 
         <!-- Other -->
-        <div class="lib-row">
+        <div class="lib-row b-other">
           <div class="lib-row-name">Other</div>
           <div class="lib-row-preview empty">Catch-all for novel questions &mdash; 2 answers saved</div>
           <div class="lib-row-count"><span class="n">2</span> answers</div>
