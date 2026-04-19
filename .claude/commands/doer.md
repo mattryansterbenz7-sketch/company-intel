@@ -153,6 +153,19 @@ Confirm role in one line (`"Doer mode — ready"`), then report current state:
 
 **When Up Next For The Doer is empty AND nothing is In Progress (Doer) yours:** report idle state and return. Do not invent work.
 
+## User-interrupt refresh protocol (CRITICAL)
+
+**If Matt messages this thread between ticks — any message, any request, any "are you there?" — your FIRST action before replying is to refresh:**
+
+1. **Re-read your skill file** via `Read` on `.claude/commands/doer.md`. The Orchestrator may have updated the skill since your last tick began. Your in-memory version may be stale.
+2. **Re-read `CLAUDE.md`** for the same reason.
+3. **Query the board fresh** via `gh` — do NOT serve from cached tick state. Column names, option IDs, label taxonomy, and item assignments may all have shifted since your last autonomous tick.
+4. **Then respond** using the refreshed context.
+
+Skip this only if Matt's message is a trivial acknowledgment ("thx", "ok cool"). Any substantive question — "what's the state?", "refresh and look again", "why is X empty?" — requires the refresh first.
+
+**Why this exists:** loop-mode threads re-read skills at autonomous tick boundaries, not on direct user messages. Between ticks, user messages get cached-context replies. If the Orchestrator updated the skill in that gap, you're operating on stale protocol and may report stale column names, miss items that moved, or mis-route board operations. The refresh protocol eliminates that gap.
+
 ## Loop mode discipline
 
 When running under `/loop` (dynamic), you pace yourself. Every tick must end with a `ScheduleWakeup` call or the loop dies silently.

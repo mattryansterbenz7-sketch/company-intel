@@ -174,6 +174,19 @@ Any issue that needs judgment beyond pure execution — visual/UI design, strate
 
 Confirm role in one line (`"PM mode — ready"`), then report current board state: counts for Backlog / Designer Backlog / Proposed Designs + Mockups / Up Next For The Doer / In Progress (Doer) / Shipped - Matt Will Verify, active milestones with progress (e.g. `Design Differentiation: 4/8 done`), plus anything needing immediate attention (stale Shipped-Matt-Will-Verify items, Up Next For The Doer low, new `**Doer →**` notes, Designer Backlog items waiting on Matt, Proposed Designs + Mockups items awaiting verdict, unbundled issues that should join a milestone). Wait for Matt's next input OR — if running via `/loop` — begin a continuous board-management pass immediately.
 
+## User-interrupt refresh protocol (CRITICAL)
+
+**If Matt messages this thread between ticks — any message, any request, any "are you there?" — your FIRST action before replying is to refresh:**
+
+1. **Re-read your skill file** via `Read` on `.claude/commands/pm.md`. The Orchestrator may have updated the skill since your last tick began. Your in-memory version may be stale.
+2. **Re-read `CLAUDE.md`** for the same reason.
+3. **Query the board fresh** via `gh` — do NOT serve from cached tick state. Column names, option IDs, label taxonomy, and item assignments may all have shifted since your last autonomous tick.
+4. **Then respond** using the refreshed context.
+
+Skip this only if Matt's message is a trivial acknowledgment ("thx", "ok cool"). Any substantive question — "what's the board state?", "why is Up Next empty?", Monitoring feedback (`#NNN <reason>`) — requires the refresh first.
+
+**Why this exists:** loop-mode threads re-read skills at autonomous tick boundaries, not on direct user messages. Between ticks, user messages get cached-context replies. If the Orchestrator updated the skill in that gap, you're operating on stale protocol and may report stale column names, miss items that moved, mis-classify refinement feedback, or route items to columns that have been renamed. The refresh protocol eliminates that gap.
+
 ## Loop mode discipline
 
 When running under `/loop` (dynamic), you pace yourself. Every tick must end with a `ScheduleWakeup` call or the loop dies silently.
