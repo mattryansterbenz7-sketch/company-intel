@@ -206,6 +206,7 @@
       <a href="#screen-share">Screen Share</a>
       <a href="#inbox">Inbox</a>
       <a href="#celebrations">Celebrations</a>
+      <a href="#stage-types">Stage Types</a>
       <div class="doc-nav-divider"></div>
       <a href="#integrations">Integrations</a>
       <a href="#data">Data & Storage</a>
@@ -1275,6 +1276,87 @@
           <li><strong>Rejected / DQ'd</strong> -- peace signs + farewell voice</li>
           <li>Set any stage to "None" to disable. Use "Reset to defaults" to restore.</li>
         </ul>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════ Stage Types ════════════════════════════════ -->
+    <div class="doc-section">
+      <span class="doc-section-anchor" id="stage-types"></span>
+      <div class="doc-section-title">Stage Types</div>
+      <p class="doc-section-lead">Every pipeline stage has a <strong>type</strong> — a hardcoded design-system category that drives visual treatment across every surface (Kanban headers, inbox chips, opportunity detail, side panel). Stage names are fully editable; types are the contract.</p>
+
+      <h3 class="sub">The 5 types</h3>
+      <div class="info-block">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--ci-border-default);">
+              <th style="text-align:left;padding:6px 10px 8px 0;font-weight:600;color:var(--ci-text-secondary);font-size:11px;">Type</th>
+              <th style="text-align:left;padding:6px 10px 8px 0;font-weight:600;color:var(--ci-text-secondary);font-size:11px;">Dot color</th>
+              <th style="text-align:left;padding:6px 0 8px 0;font-weight:600;color:var(--ci-text-secondary);font-size:11px;">Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--ci-border-subtle);">
+              <td style="padding:8px 10px 8px 0;font-weight:600;"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ci-stage-queue);display:inline-block;flex-shrink:0;"></span>queue</span></td>
+              <td style="padding:8px 10px 8px 0;color:var(--ci-text-secondary);">Neutral gray</td>
+              <td style="padding:8px 0;color:var(--ci-text-secondary);">Pre-apply triage. Used by queue.html surfaces. Default stages: Coop's AI Scoring Queue, I Want to Apply.</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-subtle);">
+              <td style="padding:8px 10px 8px 0;font-weight:600;"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ci-stage-outreach);display:inline-block;flex-shrink:0;"></span>outreach</span></td>
+              <td style="padding:8px 10px 8px 0;color:var(--ci-text-secondary);">Blue</td>
+              <td style="padding:8px 0;color:var(--ci-text-secondary);">Outbound or submitted, awaiting first response. Auto-collapses on Kanban when &gt;10 entries. Default stages: Applied, Intro Requested.</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-subtle);">
+              <td style="padding:8px 10px 8px 0;font-weight:600;"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ci-stage-active);display:inline-block;flex-shrink:0;"></span>active</span></td>
+              <td style="padding:8px 10px 8px 0;color:var(--ci-text-secondary);">Amber</td>
+              <td style="padding:8px 0;color:var(--ci-text-secondary);">Live dialogue, interview process, or terminal-positive. Default stages: Conversations in Progress, Offer Stage, Accepted.</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--ci-border-subtle);">
+              <td style="padding:8px 10px 8px 0;font-weight:600;"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ci-stage-paused);display:inline-block;flex-shrink:0;"></span>paused</span></td>
+              <td style="padding:8px 10px 8px 0;color:var(--ci-text-secondary);">Muted gray</td>
+              <td style="padding:8px 0;color:var(--ci-text-secondary);">Stalled or on hold — not terminal. Company pipeline only by default: Archived.</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 10px 8px 0;font-weight:600;"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ci-stage-lost);display:inline-block;flex-shrink:0;"></span>closed_lost</span></td>
+              <td style="padding:8px 10px 8px 0;color:var(--ci-text-secondary);">Red</td>
+              <td style="padding:8px 0;color:var(--ci-text-secondary);">Hardcoded terminal negative. Always rendered last on Kanban. Cannot be deleted. Default stage: Rejected / DQ'd.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">How types drive visual treatment</h3>
+      <div class="info-block">
+        <ul>
+          <li><strong>Kanban column headers</strong> — colored dot matches the stage type color token</li>
+          <li><strong>Inbox stage chips</strong> — dot + label in the email detail panel</li>
+          <li><strong>Opportunity detail / company detail</strong> — stage selector border and text color</li>
+          <li><strong>Pipeline settings editor</strong> — terminal stage shows a "Terminal" badge; delete and reorder controls are disabled</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Closed Lost enforcement</h3>
+      <div class="info-block">
+        <ul>
+          <li>The <code>closed_lost</code>-typed stage always renders as the last column on the Kanban board, regardless of storage order.</li>
+          <li>You cannot delete this stage or drag it out of the last position.</li>
+          <li>The stage name is editable — rename "Rejected / DQ'd" to "Dead" or anything else. The type and its enforcement behavior stay fixed.</li>
+          <li>If the stage is removed from storage by direct tampering, Coop re-creates it on next load.</li>
+        </ul>
+      </div>
+
+      <h3 class="sub">Applied quiet-column behavior</h3>
+      <div class="info-block">
+        <ul>
+          <li>Any <code>outreach</code>-type column with more than 10 entries automatically collapses to a compact view — just the stage name, count, and an Expand button.</li>
+          <li>Click Expand to see all cards. The expanded state is session-only and resets when you reload.</li>
+          <li>All functionality (drag-drop, action status, scoring) is unchanged — the column just reduces visual noise for high-volume stages like Applied.</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">i</span>
+        <span>Stage type is not currently editable in the UI — it's assigned at creation based on the key name. Future versions may expose a type selector in Pipeline Settings.</span>
       </div>
     </div>
 

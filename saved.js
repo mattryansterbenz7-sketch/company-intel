@@ -1,6 +1,8 @@
 // escapeHtml — provided by ui-utils.js
 
 const QUEUE_STAGE = 'needs_review';
+// DISMISS_STAGE: fallback constant; prefer getDismissStageKey(stages) from ui-utils.js
+// so custom pipelines with a renamed closed_lost stage still work.
 const DISMISS_STAGE = 'rejected';
 const DISMISS_TAG = "Didn't apply";
 const SCORE_THRESHOLDS = { green: 7, amber: 5 };
@@ -173,22 +175,22 @@ function getActiveCols() {
 function setActiveCols(keys) { localStorage.setItem('ci_tblCols', JSON.stringify(keys)); }
 
 const DEFAULT_OPPORTUNITY_STAGES = [
-  { key: 'needs_review',    label: "Coop's AI Scoring Queue",           color: '#64748b' },
-  { key: 'want_to_apply',   label: 'I Want to Apply',           color: '#22d3ee' },
-  { key: 'applied',         label: 'Applied',                   color: '#60a5fa' },
-  { key: 'intro_requested', label: 'Intro Requested',           color: '#a78bfa' },
-  { key: 'conversations',   label: 'Conversations in Progress', color: '#fb923c' },
-  { key: 'offer_stage',     label: 'Offer Stage',               color: '#a3e635' },
-  { key: 'accepted',        label: 'Accepted',                  color: '#4ade80' },
-  { key: 'rejected',        label: "Rejected / DQ'd",           color: '#f87171' },
+  { key: 'needs_review',    label: "Coop's AI Scoring Queue",  color: '#64748b', stageType: 'queue'       },
+  { key: 'want_to_apply',   label: 'I Want to Apply',          color: '#22d3ee', stageType: 'queue'       },
+  { key: 'applied',         label: 'Applied',                  color: '#60a5fa', stageType: 'outreach'    },
+  { key: 'intro_requested', label: 'Intro Requested',          color: '#a78bfa', stageType: 'outreach'    },
+  { key: 'conversations',   label: 'Conversations in Progress',color: '#fb923c', stageType: 'active'      },
+  { key: 'offer_stage',     label: 'Offer Stage',              color: '#a3e635', stageType: 'active'      },
+  { key: 'accepted',        label: 'Accepted',                 color: '#4ade80', stageType: 'active'      },
+  { key: 'rejected',        label: "Rejected / DQ'd",          color: '#f87171', stageType: 'closed_lost' },
 ];
 const DEFAULT_COMPANY_STAGES = [
-  { key: 'co_watchlist',   label: 'Watch List',      color: '#64748b' },
-  { key: 'co_researching', label: 'Researching',     color: '#22d3ee' },
-  { key: 'co_networking',  label: 'Networking',      color: '#a78bfa' },
-  { key: 'co_interested',  label: 'Strong Interest', color: '#fb923c' },
-  { key: 'co_applied',     label: 'Applied There',   color: '#60a5fa' },
-  { key: 'co_archived',    label: 'Archived',        color: '#374151' },
+  { key: 'co_watchlist',   label: 'Watch List',      color: '#64748b', stageType: 'queue'  },
+  { key: 'co_researching', label: 'Researching',     color: '#22d3ee', stageType: 'active' },
+  { key: 'co_networking',  label: 'Networking',      color: '#a78bfa', stageType: 'active' },
+  { key: 'co_interested',  label: 'Strong Interest', color: '#fb923c', stageType: 'active' },
+  { key: 'co_applied',     label: 'Applied There',   color: '#60a5fa', stageType: 'outreach'},
+  { key: 'co_archived',    label: 'Archived',        color: '#374151', stageType: 'paused' },
 ];
 let customOpportunityStages = [...DEFAULT_OPPORTUNITY_STAGES];
 let customCompanyStages = [...DEFAULT_COMPANY_STAGES];
@@ -209,6 +211,8 @@ let customActionStatuses = null; // loaded from storage, falls back to DEFAULT
 let _userWorkArrangement = []; // loaded from chrome.storage.sync prefs
 let _stalenessThresholdDays = 7; // loaded from chrome.storage.sync prefs.stalenessThresholdDays
 const _collapsedCols = new Set(JSON.parse(sessionStorage.getItem('ci_collapsed_cols') || '[]'));
+// Tracks which outreach-type quiet columns the user has manually expanded this session.
+const _expandedQuietCols = new Set();
 let activityPeriod = localStorage.getItem('ci_activityPeriod') || 'weekly';
 let activityCustomRange = JSON.parse(localStorage.getItem('ci_activityCustomRange') || 'null'); // {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} or null
 let activityGoals = {
@@ -356,14 +360,35 @@ function currentStages() {
   return activePipeline === 'company' ? customCompanyStages : customOpportunityStages;
 }
 function stageMap() { return Object.fromEntries(currentStages().map(s => [s.key, s.label])); }
+// stageColor: returns the type-driven dot color (from design-tokens.css) for a given stage key.
+// Delegates to stageTypeVisual() from ui-utils.js — no per-file copy of the lookup table.
 function stageColor(key) {
   const all = [...customOpportunityStages, ...customCompanyStages];
-  return (all.find(s => s.key === key) || currentStages()[0]).color;
+  const stageObj = all.find(s => s.key === key) || currentStages()[0];
+  if (stageObj && stageObj.stageType && typeof stageTypeVisual === 'function') {
+    return stageTypeVisual(stageObj.stageType).dotColor;
+  }
+  return stageObj?.color || '#64748b';
 }
 function stageStyle(key) {
   const c = stageColor(key);
-  const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16);
-  return { border: c, color: c, bg: `rgba(${r},${g},${b},0.1)` };
+  if (c && c.startsWith('#') && c.length >= 7) {
+    const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16);
+    return { border: c, color: c, bg: `rgba(${r},${g},${b},0.1)` };
+  }
+  // Token reference (var(--ci-stage-*)) — resolve to actual hex via getComputedStyle
+  // so we can build the same rgba(...,0.1) tinted bg used everywhere stageStyle renders.
+  if (c && c.startsWith('var(') && typeof getComputedStyle === 'function') {
+    const m = c.match(/var\((--[a-zA-Z0-9-]+)\)/);
+    if (m) {
+      const resolved = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
+      if (resolved.startsWith('#') && resolved.length >= 7) {
+        const r = parseInt(resolved.slice(1,3),16), g = parseInt(resolved.slice(3,5),16), b = parseInt(resolved.slice(5,7),16);
+        return { border: c, color: c, bg: `rgba(${r},${g},${b},0.1)` };
+      }
+    }
+  }
+  return { border: c, color: c, bg: 'transparent' };
 }
 function updateStageDynamicCSS() {
   let el = document.getElementById('dynamic-stage-css');
@@ -836,7 +861,7 @@ function openScoreModal(entry) {
       <button class="score-modal-rescore" id="score-modal-rescore-btn">Re-score with latest criteria</button>
     </div>
     <div class="score-modal-actions">
-      <button class="score-modal-dismiss" id="score-modal-dismiss-btn">${(() => { const s = customOpportunityStages.find(s => s.key === DISMISS_STAGE); return s ? s.label : 'Pass'; })()}</button>
+      <button class="score-modal-dismiss" id="score-modal-dismiss-btn">${(() => { const s = customOpportunityStages.find(s => s.stageType === 'closed_lost') || customOpportunityStages.find(s => s.key === DISMISS_STAGE); return s ? s.label : 'Pass'; })()}</button>
       <button class="score-modal-apply" id="score-modal-apply-btn">${(() => { const curS = entry.jobStage || 'needs_review'; const stages = customOpportunityStages; const idx = stages.findIndex(s => s.key === curS); const next = idx >= 0 && idx + 1 < stages.length ? stages[idx + 1] : null; return next ? next.label : 'Advance'; })()}</button>
     </div>
   `;
@@ -1112,7 +1137,7 @@ function initSwipeGesture(entry) {
   const stages = customOpportunityStages;
   const curIdx = stages.findIndex(s => s.key === curStage);
   const nextStage = curIdx >= 0 && curIdx + 1 < stages.length ? stages[curIdx + 1] : null;
-  const rejectedStage = stages.find(s => s.key === DISMISS_STAGE);
+  const rejectedStage = stages.find(s => s.stageType === 'closed_lost') || stages.find(s => s.key === DISMISS_STAGE);
   if (applyLabel) applyLabel.textContent = nextStage ? nextStage.label : 'Advance';
   if (passLabel) passLabel.textContent = rejectedStage ? rejectedStage.label : 'Pass';
 
@@ -1168,8 +1193,9 @@ function initSwipeGesture(entry) {
         } else {
           const existingTags = entry.tags || [];
           const tags = existingTags.includes(DISMISS_TAG) ? existingTags : [...existingTags, DISMISS_TAG];
-          const changes = { jobStage: DISMISS_STAGE, tags, ...stageEnterTimestamp(entry, DISMISS_STAGE) };
-          applyAutoStage(entry, DISMISS_STAGE, changes);
+          const dismissKey = (typeof getDismissStageKey === 'function') ? getDismissStageKey(customOpportunityStages) : DISMISS_STAGE;
+          const changes = { jobStage: dismissKey, tags, ...stageEnterTimestamp(entry, dismissKey) };
+          applyAutoStage(entry, dismissKey, changes);
           updateCompany(entry.id, changes);
         }
       }, 300);
@@ -1365,7 +1391,7 @@ function load() {
     _userWorkArrangement = (prefs?.workArrangement) || [];
     if (prefs?.stalenessThresholdDays != null) _stalenessThresholdDays = parseInt(prefs.stalenessThresholdDays) || 7;
   });
-  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs', 'actionStatuses'], (data) => {
+  chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'companyStages', 'customStages', 'tagColors', 'activityGoals', 'stageCelebrations', 'statCardConfigs', 'actionStatuses', '_migratedStageTypes'], (data) => {
     const { savedCompanies, allTags } = data;
     // Migration: old customStages → opportunityStages
     const storedOpp = data.opportunityStages || data.customStages;
@@ -1385,6 +1411,62 @@ function load() {
       customOpportunityStages = storedOpp;
     }
     if (data.companyStages && data.companyStages.length > 0) customCompanyStages = data.companyStages;
+
+    // ── stageType migration (one-time, idempotent) ───────────────────────────
+    // Backfills stageType on any stage entry that is missing it.
+    // Never overwrites an existing user-set stageType.
+    // Guard flag _migratedStageTypes prevents re-running after the first pass.
+    if (!data._migratedStageTypes) {
+      const OPP_TYPE_MAP = {
+        needs_review: 'queue', want_to_apply: 'queue',
+        applied: 'outreach', intro_requested: 'outreach',
+        conversations: 'active', offer_stage: 'active', accepted: 'active',
+        rejected: 'closed_lost',
+      };
+      const CO_TYPE_MAP = {
+        co_watchlist: 'queue',
+        co_researching: 'active', co_networking: 'active', co_interested: 'active',
+        co_applied: 'outreach',
+        co_archived: 'paused',
+      };
+      let stagesDirty = false;
+      customOpportunityStages.forEach(s => {
+        if (!s.stageType) {
+          s.stageType = OPP_TYPE_MAP[s.key] || 'active';
+          stagesDirty = true;
+        }
+      });
+      customCompanyStages.forEach(s => {
+        if (!s.stageType) {
+          s.stageType = CO_TYPE_MAP[s.key] || 'active';
+          stagesDirty = true;
+        }
+      });
+      if (stagesDirty) {
+        chrome.storage.local.set({
+          opportunityStages: customOpportunityStages,
+          companyStages: customCompanyStages,
+        });
+      }
+      chrome.storage.local.set({ _migratedStageTypes: true });
+    }
+
+    // ── Closed Lost guard ─────────────────────────────────────────────────────
+    // If opportunityStages has no closed_lost-typed stage (e.g. direct storage
+    // tamper or pre-migration data), append the default rejected entry.
+    const hasClosedLost = customOpportunityStages.some(s => s.stageType === 'closed_lost');
+    if (!hasClosedLost) {
+      customOpportunityStages.push({ key: 'rejected', label: "Rejected / DQ'd", color: '#f87171', stageType: 'closed_lost' });
+      chrome.storage.local.set({ opportunityStages: customOpportunityStages });
+    }
+
+    // ── Ensure closed_lost-typed stage is always last in opportunityStages ───
+    const clIdx = customOpportunityStages.findIndex(s => s.stageType === 'closed_lost');
+    if (clIdx !== -1 && clIdx !== customOpportunityStages.length - 1) {
+      const [clStage] = customOpportunityStages.splice(clIdx, 1);
+      customOpportunityStages.push(clStage);
+    }
+
     if (data.tagColors) customTagColors = data.tagColors;
     if (data.activityGoals) {
       activityGoals.daily     = { ...activityGoals.daily,     ...(data.activityGoals.daily     || {}) };
@@ -2681,8 +2763,17 @@ function renderKanban(filtered) {
   const stages = currentStages();
   const validKeys = new Set(stages.map(s => s.key));
   // Skip the scoring queue + apply queue columns in opportunity pipeline — they have dedicated pages
-  const renderStages = (activePipeline === 'opportunity') ? stages.filter(s => s.key !== QUEUE_STAGE && s.key !== 'want_to_apply') : stages;
-  board.innerHTML = renderStages.map(({ key: statusKey, label: statusLabel }) => {
+  // Always render closed_lost stage last regardless of storage order
+  const stagesForRender = [...stages].sort((a, b) => {
+    const aTerminal = stageTypeVisual(a.stageType).isTerminal ? 1 : 0;
+    const bTerminal = stageTypeVisual(b.stageType).isTerminal ? 1 : 0;
+    return aTerminal - bTerminal;
+  });
+
+  const renderStages = (activePipeline === 'opportunity') ? stagesForRender.filter(s => s.key !== QUEUE_STAGE && s.key !== 'want_to_apply') : stagesForRender;
+  board.innerHTML = renderStages.map((stageObj) => {
+    const statusKey = stageObj.key;
+    const statusLabel = stageObj.label;
     const cards = filtered.filter(c => {
       const s = (activePipeline === 'opportunity' ? c.jobStage : c.status) || stages[0].key;
       return validKeys.has(s) ? s === statusKey : statusKey === stages[0].key;
@@ -2717,24 +2808,42 @@ function renderKanban(filtered) {
         return (computeLastActivity(b).timestamp || b.savedAt || 0) - (computeLastActivity(a).timestamp || a.savedAt || 0);
       });
     }
-    const s = stageStyle(statusKey);
+
+    // Stage type visual — drives dot color and quiet-column logic
+    const typeVisual = stageTypeVisual(stageObj.stageType);
+    const dotColor = typeVisual.dotColor;
+
     const isCollapsed = _collapsedCols.has(statusKey);
     const colMode = getColViewMode(statusKey);
     const toggleIcon = colMode === 'compact' ? '☰' : '▤';
     const toggleTitle = colMode === 'compact' ? 'Switch to standard view' : 'Switch to compact view';
     const renderCard = colMode === 'compact' ? renderCompactCard : renderKanbanCard;
+
+    // Applied quiet-column: outreach-type columns with >10 entries collapse by default.
+    // User can expand per-session. State tracked in _expandedQuietCols (session-only).
+    const QUIET_THRESHOLD = 10;
+    const isQuietCandidate = typeVisual.isQuietColumn && cards.length > QUIET_THRESHOLD;
+    const isExpanded = _expandedQuietCols.has(statusKey);
+    const showQuietMode = isQuietCandidate && !isExpanded;
+
     return `
-      <div class="kanban-col${isCollapsed ? ' collapsed' : ''}" data-col-key="${statusKey}">
-        <div class="kanban-col-header" data-status="${statusKey}" style="border-top-color:${s.border};border-left-color:${s.border}">
-          <div class="col-color-dot" data-col="${statusKey}" style="background:${s.border}"></div>
-          <span class="kanban-col-title">${statusLabel}</span>
+      <div class="kanban-col${isCollapsed ? ' collapsed' : ''}${showQuietMode ? ' quiet-col' : ''}" data-col-key="${statusKey}">
+        <div class="kanban-col-header" data-status="${statusKey}" style="border-top-color:${dotColor};border-left-color:${dotColor}">
+          <div class="col-color-dot" data-col="${statusKey}" style="background:${dotColor}"></div>
+          <span class="kanban-col-title">${escapeHtml(statusLabel)}</span>
           <span class="kanban-col-count">${cards.length}</span>
           ${statusKey === QUEUE_STAGE && activePipeline === 'opportunity' ? `<button class="col-rescore-btn" data-col="${statusKey}" title="Re-score all entries in queue">↻ Re-score</button>` : ''}
-          <button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>
+          ${showQuietMode ? `<button class="col-quiet-expand" data-col="${statusKey}" title="Show all ${cards.length} entries in this column">Expand</button>` : ''}
+          ${!showQuietMode ? `<button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>` : ''}
           <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4L6 8l4 4"/></svg></button>
         </div>
         <div class="kanban-cards" data-status="${statusKey}">
-          ${cards.length ? cards.map(c => renderCard(c)).join('') : '<div class="kanban-empty">Empty</div>'}
+          ${showQuietMode
+            ? `<div class="kanban-quiet-info">
+                 <span style="font-size:13px;color:var(--ci-text-secondary)">${cards.length} entries — high volume</span>
+                 <button class="col-quiet-expand-inline" data-col="${statusKey}" style="margin-top:8px;padding:6px 14px;font-size:12px;font-weight:600;background:transparent;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);font-family:inherit;">Show all ${cards.length}</button>
+               </div>`
+            : (cards.length ? cards.map(c => renderCard(c)).join('') : '<div class="kanban-empty">Empty</div>')}
         </div>
       </div>`;
   }).join('');
@@ -3029,6 +3138,16 @@ function renderKanbanCard(c) {
 function bindKanbanEvents(board) {
   // Column collapse/expand (delegated — works for dynamic state changes)
   board.addEventListener('click', e => {
+    // Quiet-column expand button (in header or inline in cards area)
+    const quietExpandBtn = e.target.closest('.col-quiet-expand, .col-quiet-expand-inline');
+    if (quietExpandBtn) {
+      e.stopPropagation();
+      const key = quietExpandBtn.dataset.col;
+      _expandedQuietCols.add(key);
+      render(); // re-render with this column now expanded
+      return;
+    }
+
     // Collapse button click
     const collapseBtn = e.target.closest('.kanban-col-collapse');
     if (collapseBtn) {
@@ -3404,10 +3523,11 @@ function bindKanbanEvents(board) {
       if (!entry) return;
       const existingTags = entry.tags || [];
       const tags = existingTags.includes(DISMISS_TAG) ? existingTags : [...existingTags, DISMISS_TAG];
+      const dismissKey = (typeof getDismissStageKey === 'function') ? getDismissStageKey(customOpportunityStages) : DISMISS_STAGE;
       updateCompany(id, {
-        jobStage: DISMISS_STAGE,
+        jobStage: dismissKey,
         tags,
-        ...stageEnterTimestamp(entry, DISMISS_STAGE),
+        ...stageEnterTimestamp(entry, dismissKey),
       });
     });
   });
@@ -3657,11 +3777,12 @@ function bindKanbanEvents(board) {
                 applyAutoStage(entry, interestedKey, changes);
                 updateCompany(entryId, changes);
               } else {
-                const ts = { ...(entry.stageTimestamps || {}) }; ts[DISMISS_STAGE] = now;
+                const dismissKey = (typeof getDismissStageKey === 'function') ? getDismissStageKey(customOpportunityStages) : DISMISS_STAGE;
+                const ts = { ...(entry.stageTimestamps || {}) }; ts[dismissKey] = now;
                 const tags = [...new Set([...(entry.tags || []), DISMISS_TAG])];
                 if (!allKnownTags.includes(DISMISS_TAG)) { allKnownTags.push(DISMISS_TAG); chrome.storage.local.set({ allTags: allKnownTags }); }
-                const changes = { jobStage: DISMISS_STAGE, stageTimestamps: ts, tags };
-                applyAutoStage(entry, DISMISS_STAGE, changes);
+                const changes = { jobStage: dismissKey, stageTimestamps: ts, tags };
+                applyAutoStage(entry, dismissKey, changes);
                 updateCompany(entryId, changes);
               }
             }, 300);
@@ -4376,6 +4497,18 @@ function saveStages() {
       updateStageDynamicCSS(); updateStatusToolbar(); render(); closeStageEditor();
     });
   } else {
+    // Closed Lost guard — opportunity pipeline must always retain a closed_lost-typed
+    // terminal stage. If the user emptied its label or removed the stageType field,
+    // re-append the default rather than letting the system lose its terminal-negative.
+    if (!saved.some(s => s.stageType === 'closed_lost')) {
+      saved.push({ key: 'rejected', label: "Rejected / DQ'd", color: '#f87171', stageType: 'closed_lost' });
+    }
+    // Always sort closed_lost-typed stage to the end, matching boot-time enforcement.
+    const clIdx = saved.findIndex(s => s.stageType === 'closed_lost');
+    if (clIdx !== -1 && clIdx !== saved.length - 1) {
+      const [cl] = saved.splice(clIdx, 1);
+      saved.push(cl);
+    }
     customOpportunityStages = saved;
     chrome.storage.local.set({ opportunityStages: saved }, () => {
       updateStageDynamicCSS(); updateStatusToolbar(); render(); closeStageEditor();
@@ -4457,21 +4590,39 @@ function renderCelebrationEditor() {
 
 function renderStageEditor() {
   const list = document.getElementById('stage-editor-list');
-  list.innerHTML = editingStages.map((s, i) => `
+  list.innerHTML = editingStages.map((s, i) => {
+    // closed_lost-typed stage: cannot be deleted or moved out of last position
+    const isTerminal = s.stageType === 'closed_lost';
+    const isLast = i === editingStages.length - 1;
+    const canMoveDown = !isLast && !isTerminal;
+    // Can't move up into a position that would put a closed_lost stage before the last slot
+    const targetAbove = i - 1;
+    const canMoveUp = i > 0 && !isTerminal && editingStages[targetAbove]?.stageType !== 'closed_lost';
+    return `
     <div class="stage-row" data-i="${i}">
-      <span class="stage-drag-handle">⠿</span>
+      <span class="stage-drag-handle" ${isTerminal ? 'style="opacity:0.3;cursor:default;"' : ''}>⠿</span>
       <button class="stage-color-swatch" data-i="${i}" style="background:${s.color};border-color:${s.color}" title="Click to change color"></button>
-      <input class="stage-label-input" data-i="${i}" value="${s.label}" placeholder="Stage name">
+      <input class="stage-label-input" data-i="${i}" value="${escapeHtml(s.label)}" placeholder="Stage name"${isTerminal ? ' data-terminal="1" title="Terminal stage label cannot be blank"' : ''}>
+      ${isTerminal ? '<span style="font-size:11px;color:var(--ci-stage-lost);font-weight:600;white-space:nowrap;padding:0 2px;">Terminal</span>' : ''}
       <div style="display:flex;gap:4px">
-        <button class="stage-move-btn" data-i="${i}" data-dir="-1" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
-        <button class="stage-move-btn" data-i="${i}" data-dir="1" title="Move down" ${i === editingStages.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="stage-move-btn" data-i="${i}" data-dir="-1" title="Move up" ${!canMoveUp ? 'disabled' : ''}>↑</button>
+        <button class="stage-move-btn" data-i="${i}" data-dir="1" title="Move down" ${!canMoveDown ? 'disabled' : ''}>↓</button>
       </div>
-      <button class="stage-delete-btn" data-i="${i}" title="Delete stage">✕</button>
-    </div>
-  `).join('');
+      <button class="stage-delete-btn" data-i="${i}" title="${isTerminal ? 'Terminal stage cannot be deleted' : 'Delete stage'}" ${isTerminal ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}>✕</button>
+    </div>`;
+  }).join('');
 
   list.querySelectorAll('.stage-label-input').forEach(inp => {
     inp.addEventListener('input', () => { editingStages[inp.dataset.i].label = inp.value; });
+    // Terminal stage: prevent blank label on blur (snap back to default if cleared).
+    if (inp.dataset.terminal === '1') {
+      inp.addEventListener('blur', () => {
+        if (!inp.value.trim()) {
+          inp.value = "Rejected / DQ'd";
+          editingStages[inp.dataset.i].label = inp.value;
+        }
+      });
+    }
   });
   list.querySelectorAll('.stage-color-swatch').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -4486,28 +4637,32 @@ function renderStageEditor() {
     });
   });
   list.querySelectorAll('.stage-move-btn').forEach(btn => {
+    if (btn.disabled) return;
     btn.addEventListener('click', () => {
       const i = parseInt(btn.dataset.i), dir = parseInt(btn.dataset.dir);
       const j = i + dir;
       if (j < 0 || j >= editingStages.length) return;
+      // Never allow a move that would displace a closed_lost stage from last position
+      if (editingStages[j]?.stageType === 'closed_lost') return;
       [editingStages[i], editingStages[j]] = [editingStages[j], editingStages[i]];
       renderStageEditor();
     });
   });
-  list.querySelectorAll('.stage-delete-btn').forEach(btn => {
+  list.querySelectorAll('.stage-delete-btn:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
       const i = parseInt(btn.dataset.i);
       if (editingStages.length <= 1) return;
+      if (editingStages[i]?.stageType === 'closed_lost') return; // extra guard
       editingStages.splice(i, 1);
       renderStageEditor();
     });
   });
 }
 document.getElementById('stage-editor-add').addEventListener('click', () => {
-  const terminalKeys = activePipeline === 'company' ? ['co_archived'] : ['rejected'];
-  const terminalIdx = editingStages.findIndex(s => terminalKeys.includes(s.key));
+  // Always insert new stages before the terminal (closed_lost) stage if one exists
+  const terminalIdx = editingStages.findIndex(s => s.stageType === 'closed_lost');
   const insertIdx = terminalIdx === -1 ? editingStages.length : terminalIdx;
-  const newStage = { key: 'stage_' + Date.now(), label: 'New Stage', color: STAGE_COLOR_PALETTE[editingStages.length % STAGE_COLOR_PALETTE.length] };
+  const newStage = { key: 'stage_' + Date.now(), label: 'New Stage', color: STAGE_COLOR_PALETTE[editingStages.length % STAGE_COLOR_PALETTE.length], stageType: 'active' };
   editingStages.splice(insertIdx, 0, newStage);
   renderStageEditor();
 });

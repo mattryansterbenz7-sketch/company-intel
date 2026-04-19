@@ -248,6 +248,11 @@ function init() {
       customOpportunityStages[0].label = 'AI Scoring Queue';
       chrome.storage.local.set({ opportunityStages: customOpportunityStages });
     }
+    // Lazy-fill stageType for pre-migration data (canonical migration runs in saved.js).
+    const OPP_TYPE_MAP_CO = { needs_review: 'queue', want_to_apply: 'queue', applied: 'outreach', intro_requested: 'outreach', conversations: 'active', offer_stage: 'active', accepted: 'active', rejected: 'closed_lost' };
+    const CO_TYPE_MAP_CO  = { co_watchlist: 'queue', co_researching: 'active', co_networking: 'active', co_interested: 'active', co_applied: 'outreach', co_archived: 'paused' };
+    customOpportunityStages.forEach(s => { if (!s.stageType) s.stageType = OPP_TYPE_MAP_CO[s.key] || 'active'; });
+    customCompanyStages.forEach(s => { if (!s.stageType) s.stageType = CO_TYPE_MAP_CO[s.key] || 'active'; });
     customFieldDefs = data.companyFieldDefs || [];
     entry = allCompanies.find(c => c.id === id);
     if (!entry) { showError('Company not found.'); return; }
@@ -583,9 +588,14 @@ function saveCollapsed() {
   localStorage.setItem('ci_co_collapsed_' + entry.id, JSON.stringify(collapsedPanels));
 }
 
+// stageColor: returns the type-driven dot color for a given stage key.
+// Delegates to stageTypeVisual() from ui-utils.js (loaded as a global before this file).
 function stageColor(key, stages) {
-  const s = stages.find(s => s.key === key);
-  return s ? s.color : '#64748b';
+  const s = stages && stages.find(st => st.key === key);
+  if (s && s.stageType && typeof stageTypeVisual === 'function') {
+    return stageTypeVisual(s.stageType).dotColor;
+  }
+  return s ? (s.color || '#64748b') : '#64748b';
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────

@@ -2632,6 +2632,11 @@ function renderOppFields(savedEntry) {
     void chrome.runtime.lastError;
     const oppStages = data.opportunityStages || data.customStages || Object.entries(JOB_STATUSES).map(([key, label]) => ({ key, label }));
     const coStages = data.companyStages || Object.entries(COMPANY_STATUSES).map(([key, label]) => ({ key, label }));
+    // Lazy-fill stageType for pre-migration data (canonical migration runs in saved.js).
+    const OPP_TYPE_MAP_SP = { needs_review: 'queue', want_to_apply: 'queue', applied: 'outreach', intro_requested: 'outreach', conversations: 'active', offer_stage: 'active', accepted: 'active', rejected: 'closed_lost' };
+    const CO_TYPE_MAP_SP = { co_watchlist: 'queue', co_researching: 'active', co_networking: 'active', co_interested: 'active', co_applied: 'outreach', co_archived: 'paused' };
+    oppStages.forEach(s => { if (!s.stageType) s.stageType = OPP_TYPE_MAP_SP[s.key] || 'active'; });
+    coStages.forEach(s => { if (!s.stageType) s.stageType = CO_TYPE_MAP_SP[s.key] || 'active'; });
 
     // Only show stage dropdowns and next step — other fields are in Company Overview below
     const fields = [];

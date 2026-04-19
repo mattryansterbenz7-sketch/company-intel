@@ -49,6 +49,66 @@ function applyExcitementModifier(baseScore, rating) {
   return { final, mod };
 }
 
+// ── Stage type taxonomy ──────────────────────────────────────────────────────
+//
+// 5 hardcoded types drive visual treatment across all stage-label render sites.
+// Types are the design-system contract; stage names stay fully user-editable.
+//
+// Type → visual spec:
+//   queue       → neutral gray dot  (pre-apply triage, queue.html surfaces)
+//   outreach    → blue dot          (outbound/submitted, awaiting first response)
+//   active      → amber dot         (live dialogue, interview process, terminal-positive)
+//   paused      → muted gray dot    (stalled, not terminal)
+//   closed_lost → red dot           (hardcoded terminal — always last, cannot be deleted)
+
+/**
+ * Given a stageType string, return { dotColor, isQuietColumn, isTerminal }.
+ * Falls back to 'active' visual for unknown types.
+ */
+function stageTypeVisual(type) {
+  return ({
+    queue:       { dotColor: 'var(--ci-stage-queue)',    isQuietColumn: false, isTerminal: false },
+    outreach:    { dotColor: 'var(--ci-stage-outreach)', isQuietColumn: true,  isTerminal: false },
+    active:      { dotColor: 'var(--ci-stage-active)',   isQuietColumn: false, isTerminal: false },
+    paused:      { dotColor: 'var(--ci-stage-paused)',   isQuietColumn: false, isTerminal: false },
+    closed_lost: { dotColor: 'var(--ci-stage-lost)',     isQuietColumn: false, isTerminal: true  },
+  })[type] || { dotColor: 'var(--ci-stage-active)', isQuietColumn: false, isTerminal: false };
+}
+
+/**
+ * Consolidated stageColor — replaces the per-file copies in saved.js, company.js, opportunity.js.
+ *
+ * @param {string|Object} keyOrStage  Stage key string OR a stage object with .key/.stageType
+ * @param {Array}         [stagesArr] Optional stages array to look up the object when a key is passed.
+ *                                    If omitted, falls through to dotColor from stageTypeVisual().
+ * @returns {string} CSS color string (token var() or hex fallback)
+ */
+function stageColor(keyOrStage, stagesArr) {
+  let stageObj = null;
+  if (keyOrStage && typeof keyOrStage === 'object') {
+    stageObj = keyOrStage;
+  } else if (stagesArr) {
+    stageObj = stagesArr.find(s => s.key === keyOrStage);
+  }
+  if (stageObj && stageObj.stageType) {
+    return stageTypeVisual(stageObj.stageType).dotColor;
+  }
+  // Legacy fallback: return the stage's custom hex color if present, or active token
+  if (stageObj && stageObj.color) return stageObj.color;
+  return 'var(--ci-stage-active)';
+}
+
+/**
+ * Derive the dismiss/reject stage key from a stages array.
+ * Looks for the first closed_lost-typed stage; falls back to the literal 'rejected' key.
+ *
+ * @param {Array} stages  Array of stage objects with .key and .stageType
+ * @returns {string}
+ */
+function getDismissStageKey(stages) {
+  return (stages && stages.find(s => s.stageType === 'closed_lost'))?.key || 'rejected';
+}
+
 // ── Pipeline stage helpers ───────────────────────────────────────────────────
 
 function defaultActionStatus(stageKey) {

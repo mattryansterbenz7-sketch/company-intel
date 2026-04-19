@@ -39,6 +39,13 @@
   --ci-accent-purple:        #7C6EF0;   /* Electric purple — Asana's signature, used for focus */
   --ci-accent-purple-soft:   rgba(124, 110, 240, 0.08);
 
+  /* ── Stage type colors (drive dot color in Kanban, chips, labels) ── */
+  --ci-stage-queue:    #8A8E94;    /* queue — neutral gray (pre-apply triage) */
+  --ci-stage-outreach: #4573D2;    /* outreach — blue (submitted, awaiting response) */
+  --ci-stage-active:   #F5A623;    /* active — amber (live dialogue, interview process) */
+  --ci-stage-paused:   #6F7782;    /* paused — muted gray (stalled, not terminal) */
+  --ci-stage-lost:     #E8384F;    /* closed_lost — red (terminal negative) */
+
   /* ── Shadows (visible depth on gray bg) ── */
   --ci-shadow-sm:   0 1px 3px rgba(30, 31, 33, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
   --ci-shadow-md:   0 4px 16px rgba(30, 31, 33, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);

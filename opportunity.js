@@ -226,10 +226,15 @@ function tagColor(tag) {
   return OPP_TAG_PALETTE[Math.abs(hash) % OPP_TAG_PALETTE.length];
 }
 
-// scoreToVerdict — provided by ui-utils.js
+// scoreToVerdict, stageTypeVisual — provided by ui-utils.js
 
+// stageColor: returns the type-driven dot color for a given stage key.
 function stageColor(key) {
-  return (stages.find(s => s.key === key) || stages[0] || DEFAULT_STAGES[0]).color;
+  const s = stages.find(st => st.key === key) || stages[0] || DEFAULT_STAGES[0];
+  if (s && s.stageType && typeof stageTypeVisual === 'function') {
+    return stageTypeVisual(s.stageType).dotColor;
+  }
+  return s ? s.color : '#64748b';
 }
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -253,6 +258,16 @@ function init() {
     allTags = data.allTags || [];
     const storedStages = data.opportunityStages || data.customStages;
     stages  = (storedStages && storedStages.length) ? storedStages : DEFAULT_STAGES;
+
+    // Lazy-fill stageType for any stage still missing it (defensive against pre-migration data).
+    // The canonical migration runs in saved.js on load; this is a safety net only.
+    const OPP_TYPE_MAP = {
+      needs_review: 'queue', want_to_apply: 'queue',
+      applied: 'outreach', intro_requested: 'outreach',
+      conversations: 'active', offer_stage: 'active', accepted: 'active',
+      rejected: 'closed_lost',
+    };
+    stages.forEach(s => { if (!s.stageType) s.stageType = OPP_TYPE_MAP[s.key] || 'active'; });
     const allCompanies = data.savedCompanies || [];
     entry = allCompanies.find(c => c.id === entryId);
 

@@ -386,6 +386,13 @@
     .kanban-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; padding: 8px 4px; border: none; background: transparent; transition: background 0.15s; border-radius: 0; }
     .kanban-cards.drag-over { background: rgba(255,122,89,0.07) !important; border-radius: 6px; box-shadow: inset 0 0 0 1.5px rgba(255,122,89,0.35); }
     .kanban-col-header.drag-over { background: rgba(255,122,89,0.10); box-shadow: inset 0 -2px 0 rgba(255,122,89,0.4); }
+    /* Quiet column — outreach-type stages with > 10 entries collapse to compressed width */
+    .kanban-col.quiet-col { width: 200px; opacity: 0.85; transition: width 0.25s ease, opacity 0.18s ease; }
+    .kanban-col.quiet-col:hover { opacity: 1; }
+    .kanban-col.quiet-col .kanban-cards { padding: 14px 10px; }
+    .kanban-quiet-info { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 28px 10px 32px; text-align: center; min-height: 120px; border: 1px dashed var(--ci-border-default); border-radius: var(--ci-radius-md); background: var(--ci-bg-inset); }
+    .col-quiet-expand { font-size: 11px; font-weight: 600; padding: 3px 9px; background: transparent; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); color: var(--ci-text-secondary); cursor: pointer; font-family: inherit; transition: background 0.15s, color 0.15s, border-color 0.15s; margin-left: 2px; }
+    .col-quiet-expand:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
     .col-color-dot {
       width: 8px; height: 8px; border-radius: 50%; cursor: pointer;
       flex-shrink: 0; transition: transform 0.1s;

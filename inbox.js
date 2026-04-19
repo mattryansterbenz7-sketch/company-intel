@@ -239,7 +239,10 @@ chrome.storage.local.get(['savedCompanies', 'lastInboxViewedAt', 'gmailUserEmail
   allCompanies = data.savedCompanies || [];
   savedCompaniesCache = allCompanies;
   const stages = data.opportunityStages || data.customStages || [];
-  configuredStages = stages.map(s => ({ key: s.key, label: s.label || s.name || s.key }));
+  // Lazy-fill stageType for pre-migration data (canonical migration runs in saved.js).
+  const OPP_TYPE_MAP_INB = { needs_review: 'queue', want_to_apply: 'queue', applied: 'outreach', intro_requested: 'outreach', conversations: 'active', offer_stage: 'active', accepted: 'active', rejected: 'closed_lost' };
+  stages.forEach(s => { if (!s.stageType) s.stageType = OPP_TYPE_MAP_INB[s.key] || 'active'; });
+  configuredStages = stages.map(s => ({ key: s.key, label: s.label || s.name || s.key, stageType: s.stageType || 'active' }));
   readEmailKeys = new Set(Array.isArray(data.readEmailKeys) ? data.readEmailKeys : []);
   const isFirstOpen = data.lastInboxViewedAt === undefined || data.lastInboxViewedAt === null;
   lastViewedAt = isFirstOpen ? Date.now() : data.lastInboxViewedAt;
@@ -254,7 +257,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (changes.opportunityStages || changes.customStages) {
     const v = (changes.opportunityStages?.newValue) || (changes.customStages?.newValue) || [];
-    configuredStages = v.map(s => ({ key: s.key, label: s.label || s.name || s.key }));
+    const OPP_TYPE_MAP_INB2 = { needs_review: 'queue', want_to_apply: 'queue', applied: 'outreach', intro_requested: 'outreach', conversations: 'active', offer_stage: 'active', accepted: 'active', rejected: 'closed_lost' };
+    v.forEach(s => { if (!s.stageType) s.stageType = OPP_TYPE_MAP_INB2[s.key] || 'active'; });
+    configuredStages = v.map(s => ({ key: s.key, label: s.label || s.name || s.key, stageType: s.stageType || 'active' }));
     if (typeof renderEmailList === 'function') renderEmailList();
   }
   if (changes.savedCompanies?.newValue) {
@@ -669,6 +674,18 @@ function stageLabel(stageKey) {
   return found ? found.label : stageKey.replace(/_/g, ' ');
 }
 
+/** Returns an HTML stage chip: ● Label */
+function stageLabelHtml(stageKey) {
+  const found = configuredStages.find(s => s.key === stageKey);
+  const label = found ? found.label : stageKey.replace(/_/g, ' ');
+  const dotColor = (typeof stageTypeVisual === 'function' && found?.stageType)
+    ? stageTypeVisual(found.stageType).dotColor
+    : 'var(--ci-stage-active)';
+  return `<span class="detail-tag stage" style="display:inline-flex;align-items:center;gap:5px;">` +
+    `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>` +
+    `${escHtml(label)}</span>`;
+}
+
 function renderDetail(email) {
   const detailEl = document.getElementById('inbox-detail');
 
@@ -701,7 +718,7 @@ function renderDetail(email) {
     <img class="detail-tag-logo" src="${escHtml(companyLogoUrl(email._company) || '')}" alt="" loading="lazy" onerror="this.remove();">
     ${escHtml(email._company)}
   </span>` : '';
-  const stageTagHtml = email._stage ? `<span class="detail-tag stage">${escHtml(stageLabel(email._stage))}</span>` : '';
+  const stageTagHtml = email._stage ? stageLabelHtml(email._stage) : '';
   const tagsRowHtml = (companyTagHtml || stageTagHtml) ? `<div class="detail-tags-row">${companyTagHtml}${stageTagHtml}</div>` : '';
 
   let bodyHtml = '';
