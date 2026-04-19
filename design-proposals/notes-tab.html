@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>#258 Notes tab redesign — Coop.ai</title>
-<style>
-  :root {
+<style>:root {
     --bg: #F0F2F5;
     --panel: #FFFFFF;
     --text: #0A0B0D;
@@ -20,74 +19,56 @@
     --amber: #F5A623;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
     --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
-  }
-  *, *::before, *::after { box-sizing: border-box; }
-  body {
+  }*, *::before, *::after { box-sizing: border-box; }body {
     margin: 0;
     font-family: var(--font);
     background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     line-height: 1.5;
-  }
-  .page {
+  }.page {
     max-width: 1280px;
     margin: 0 auto;
     padding: 40px 24px 80px;
-  }
-
-  /* ── Header ── */
+  }/* ── Header ── */
   .page-hd {
     border-bottom: 1px solid var(--border);
     padding-bottom: 20px;
     margin-bottom: 32px;
-  }
-  .page-hd .num {
+  }.page-hd .num {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-ter);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .page-hd h1 {
+    letter-spacing: -0.005em;
+  }.page-hd h1 {
     font-size: 28px;
     font-weight: 700;
     margin: 4px 0 8px;
     letter-spacing: -0.01em;
-  }
-  .page-hd .prompt {
+  }.page-hd .prompt {
     font-size: 14px;
     color: var(--text-sec);
     max-width: 760px;
-  }
-
-  /* ── Section framing ── */
+  }/* ── Section framing ── */
   .section {
     margin-bottom: 48px;
-  }
-  .section-label {
+  }.section-label {
     font-size: 11px;
     font-weight: 600;
     color: var(--text-ter);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     margin-bottom: 10px;
-  }
-  .section-title {
+  }.section-title {
     font-size: 20px;
     font-weight: 700;
     margin: 0 0 4px;
     letter-spacing: -0.005em;
-  }
-  .section-sub {
+  }.section-sub {
     font-size: 14px;
     color: var(--text-sec);
     margin: 0 0 20px;
     max-width: 720px;
-  }
-  .section-hero { margin-bottom: 16px; }
-
-  /* ══ OPP-SHELL ══ */
+  }.section-hero { margin-bottom: 16px; }/* ══ OPP-SHELL ══ */
   .shell {
     display: grid;
     grid-template-columns: 1fr 360px;
@@ -96,53 +77,42 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px;
-  }
-  .shell-main {
+  }.shell-main {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     min-height: 720px;
     display: flex;
     flex-direction: column;
-  }
-  .shell-side {
+  }.shell-side {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-  }
-
-  /* ── Opp header strip ── */
+  }/* ── Opp header strip ── */
   .opp-hd {
     padding: 16px 20px 12px;
     border-bottom: 1px solid var(--border-sub);
-  }
-  .opp-hd .breadcrumb {
+  }.opp-hd .breadcrumb {
     font-size: 11px;
     color: var(--text-ter);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     margin-bottom: 4px;
-  }
-  .opp-hd h2 {
+  }.opp-hd h2 {
     font-size: 18px;
     font-weight: 700;
     margin: 0 0 4px;
-  }
-  .opp-hd .role {
+  }.opp-hd .role {
     font-size: 13px;
     color: var(--text-sec);
-  }
-
-  /* ── Tab bar ── */
+  }/* ── Tab bar ── */
   .tabs {
     display: flex;
     gap: 0;
     padding: 0 20px;
     border-bottom: 1px solid var(--border-sub);
-  }
-  .tab {
+  }.tab {
     padding: 10px 14px;
     font-size: 13px;
     font-weight: 500;
@@ -150,20 +120,16 @@
     border-bottom: 2px solid transparent;
     cursor: pointer;
     margin-bottom: -1px;
-  }
-  .tab.active {
+  }.tab.active {
     color: var(--text);
     font-weight: 600;
     border-bottom-color: var(--coral);
-  }
-
-  /* ── Notes body ── */
+  }/* ── Notes body ── */
   .notes-body {
     flex: 1;
     padding: 28px 36px 40px;
     position: relative;
-  }
-  .saved-indicator {
+  }.saved-indicator {
     position: absolute;
     top: 16px;
     right: 20px;
@@ -173,50 +139,40 @@
     align-items: center;
     gap: 6px;
     letter-spacing: 0.02em;
-  }
-  .saved-dot {
+  }.saved-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--teal);
-  }
-
-  .doc h1.doc-h1 {
+  }.doc h1.doc-h1 {
     font-size: 22px;
     font-weight: 700;
     margin: 0 0 8px;
     letter-spacing: -0.01em;
-  }
-  .doc h2.doc-h2 {
+  }.doc h2.doc-h2 {
     font-size: 16px;
     font-weight: 700;
     margin: 24px 0 8px;
     letter-spacing: -0.005em;
-  }
-  .doc h3.doc-h3 {
+  }.doc h3.doc-h3 {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-sec);
     margin: 18px 0 6px;
     letter-spacing: 0.01em;
-    text-transform: uppercase;
     font-size: 11px;
-  }
-  .doc p {
+  }.doc p {
     font-size: 14px;
     line-height: 1.65;
     color: var(--text);
     margin: 0 0 12px;
-  }
-  .doc ul, .doc ol {
+  }.doc ul, .doc ol {
     font-size: 14px;
     line-height: 1.65;
     color: var(--text);
     margin: 0 0 12px;
     padding-left: 22px;
-  }
-  .doc ul li, .doc ol li { margin-bottom: 2px; }
-  .doc blockquote {
+  }.doc ul li, .doc ol li { margin-bottom: 2px; }.doc blockquote {
     margin: 10px 0 14px;
     padding: 10px 14px;
     border-left: 3px solid var(--border);
@@ -224,16 +180,14 @@
     font-size: 13.5px;
     line-height: 1.6;
     background: transparent;
-  }
-  .doc code.inline {
+  }.doc code.inline {
     font-family: var(--mono);
     font-size: 12.5px;
     padding: 1px 5px;
     background: var(--inset);
     border-radius: 4px;
     color: var(--text);
-  }
-  .doc pre.code {
+  }.doc pre.code {
     font-family: var(--mono);
     font-size: 12.5px;
     padding: 12px 14px;
@@ -243,10 +197,7 @@
     overflow-x: auto;
     margin: 0 0 14px;
     line-height: 1.55;
-  }
-  .doc strong { font-weight: 650; }
-
-  /* ── Coop's notes section ── */
+  }.doc strong { font-weight: 650; }/* ── Coop's notes section ── */
   .coop-divider {
     display: flex;
     align-items: center;
@@ -254,24 +205,19 @@
     margin: 40px 0 16px;
     font-size: 11px;
     color: var(--text-ter);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     font-weight: 600;
-  }
-  .coop-divider .line {
+  }.coop-divider .line {
     flex: 1;
     height: 1px;
     background: var(--border);
-  }
-  .coop-entry {
+  }.coop-entry {
     padding: 14px 16px;
     border-top: 1px solid var(--border-sub);
     display: flex;
     gap: 14px;
     align-items: flex-start;
-  }
-  .coop-entry:first-of-type { border-top: none; }
-  .coop-entry .avatar {
+  }.coop-entry:first-of-type { border-top: none; }.coop-entry .avatar {
     width: 22px;
     height: 22px;
     border-radius: 50%;
@@ -284,23 +230,16 @@
     font-size: 10px;
     font-weight: 700;
     margin-top: 1px;
-  }
-  .coop-entry .body { flex: 1; min-width: 0; }
-  .coop-entry .meta {
+  }.coop-entry .body { flex: 1; min-width: 0; }.coop-entry .meta {
     font-size: 11px;
     color: var(--text-ter);
     margin-bottom: 4px;
     letter-spacing: 0.02em;
-  }
-  .coop-entry .content {
+  }.coop-entry .content {
     font-size: 13.5px;
     line-height: 1.55;
     color: var(--text);
-  }
-  .coop-entry .content p { margin: 0 0 6px; font-size: 13.5px; }
-  .coop-entry .content ul { margin: 4px 0 6px; padding-left: 18px; font-size: 13.5px; }
-  .coop-entry .content ul li { margin-bottom: 2px; }
-  .coop-entry .promote {
+  }.coop-entry .content p { margin: 0 0 6px; font-size: 13.5px; }.coop-entry .content ul { margin: 4px 0 6px; padding-left: 18px; font-size: 13.5px; }.coop-entry .content ul li { margin-bottom: 2px; }.coop-entry .promote {
     font-size: 11px;
     color: var(--text-sec);
     background: none;
@@ -312,21 +251,17 @@
     align-self: flex-start;
     margin-top: 1px;
     white-space: nowrap;
-  }
-  .coop-entry .promote:hover {
+  }.coop-entry .promote:hover {
     border-color: var(--coral);
     color: var(--coral);
-  }
-
-  /* ── Right rail chat ── */
+  }/* ── Right rail chat ── */
   .chat-hd {
     padding: 14px 16px;
     border-bottom: 1px solid var(--border-sub);
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-  .chat-hd .avatar {
+  }.chat-hd .avatar {
     width: 26px;
     height: 26px;
     border-radius: 50%;
@@ -337,17 +272,14 @@
     color: #fff;
     font-size: 11px;
     font-weight: 700;
-  }
-  .chat-hd .name {
+  }.chat-hd .name {
     font-size: 13px;
     font-weight: 600;
-  }
-  .chat-hd .status {
+  }.chat-hd .status {
     font-size: 11px;
     color: var(--text-ter);
     margin-left: auto;
-  }
-  .chat-body {
+  }.chat-body {
     flex: 1;
     padding: 16px;
     font-size: 13px;
@@ -356,77 +288,63 @@
     flex-direction: column;
     gap: 12px;
     min-height: 400px;
-  }
-  .chat-msg {
+  }.chat-msg {
     padding: 10px 12px;
     background: var(--inset);
     border-radius: 8px;
     font-size: 13px;
     color: var(--text);
     line-height: 1.5;
-  }
-  .chat-msg.coop {
+  }.chat-msg.coop {
     background: var(--coral-soft);
-  }
-  .chat-input {
+  }.chat-input {
     padding: 12px 14px;
     border-top: 1px solid var(--border-sub);
     font-size: 12.5px;
     color: var(--text-ter);
-  }
-  .chat-input .fake {
+  }.chat-input .fake {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--panel);
     color: var(--text-ter);
     font-size: 12.5px;
-  }
-
-  /* ══ ZOOMED CLOSE-UP FRAMES ══ */
+  }/* ══ ZOOMED CLOSE-UP FRAMES ══ */
   .zoom-frame {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 24px 28px;
     max-width: 720px;
-  }
-  .zoom-caption {
+  }.zoom-caption {
     font-size: 12px;
     color: var(--text-ter);
     margin-top: 10px;
     letter-spacing: 0.02em;
-  }
-
-  /* ── Live markdown rendering storyboard ── */
+  }/* ── Live markdown rendering storyboard ── */
   .editor-steps {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
-  }
-  .editor-step {
+  }.editor-step {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 20px 24px;
     position: relative;
-  }
-  .step-label {
+  }.step-label {
     position: absolute;
     top: 10px;
     right: 14px;
-    font-size: 10px;
+    font-size: 11.5px;
     color: var(--text-ter);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     font-weight: 600;
-  }
-  .step-prose {
+  }.step-prose {
     font-size: 11px;
     color: var(--text-ter);
     margin-top: 12px;
-  }
-  .cursor-block {
+  }.cursor-block {
     display: inline-block;
     width: 2px;
     height: 14px;
@@ -434,21 +352,16 @@
     vertical-align: middle;
     animation: blink 1s step-end infinite;
     margin-left: 1px;
-  }
-  @keyframes blink { 50% { opacity: 0; } }
-  .raw-md {
+  }@keyframes blink { 50% { opacity: 0; } }.raw-md {
     font-family: var(--mono);
     font-size: 13px;
     color: var(--text-sec);
-  }
-
-  /* ── Paste storyboard ── */
+  }/* ── Paste storyboard ── */
   .paste-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 14px;
-  }
-  .paste-step {
+  }.paste-step {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -456,27 +369,22 @@
     font-size: 13px;
     min-height: 220px;
     position: relative;
-  }
-  .paste-step .step-n {
-    font-size: 10px;
+  }.paste-step .step-n {
+    font-size: 11.5px;
     color: var(--text-ter);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     font-weight: 600;
     margin-bottom: 10px;
-  }
-  .paste-step .step-desc {
+  }.paste-step .step-desc {
     font-size: 11px;
     color: var(--text-sec);
     margin-top: 10px;
-  }
-  .paste-step .raw-paste {
+  }.paste-step .raw-paste {
     font-size: 12.5px;
     line-height: 1.55;
     color: var(--text);
     font-family: var(--font);
-  }
-  .unquote-btn {
+  }.unquote-btn {
     position: absolute;
     top: 64px;
     right: 20px;
@@ -487,86 +395,62 @@
     border-radius: 4px;
     padding: 3px 7px;
     cursor: pointer;
-  }
-
-  /* ── Coop's notes close-up ── */
+  }/* ── Coop's notes close-up ── */
   .coop-closeup {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 20px 24px;
     max-width: 720px;
-  }
-
-  /* ── Side-by-side distinction ── */
+  }/* ── Side-by-side distinction ── */
   .compare-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
-  }
-  .compare-card {
+  }.compare-card {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 20px 22px;
     min-height: 360px;
-  }
-  .compare-card .head {
+  }.compare-card .head {
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-sub);
     margin-bottom: 14px;
-  }
-  .compare-card .head h4 {
+  }.compare-card .head h4 {
     font-size: 14px;
     font-weight: 700;
     margin: 0 0 2px;
-  }
-  .compare-card .head .desc {
+  }.compare-card .head .desc {
     font-size: 12px;
     color: var(--text-sec);
-  }
-
-  /* Activity log entries */
+  }/* Activity log entries */
   .log-entry {
     padding: 10px 0;
     border-bottom: 1px solid var(--border-sub);
     font-size: 12.5px;
     line-height: 1.5;
-  }
-  .log-entry:last-child { border-bottom: none; }
-  .log-entry .log-date {
-    font-size: 10px;
+  }.log-entry:last-child { border-bottom: none; }.log-entry .log-date {
+    font-size: 11.5px;
     color: var(--text-ter);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     margin-bottom: 2px;
-  }
-  .log-entry .log-body { color: var(--text); }
-  .log-entry .log-body .log-type {
+  }.log-entry .log-body { color: var(--text); }.log-entry .log-body .log-type {
     font-weight: 600;
     color: var(--text-sec);
-  }
-
-  /* Notes preview (inside compare card) */
+  }/* Notes preview (inside compare card) */
   .compare-notes {
     font-size: 12.5px;
     line-height: 1.6;
     color: var(--text);
-  }
-  .compare-notes h5 {
+  }.compare-notes h5 {
     font-size: 13px;
     font-weight: 700;
     margin: 0 0 6px;
-  }
-  .compare-notes h5.sub { margin-top: 14px; }
-  .compare-notes p { margin: 0 0 8px; }
-  .compare-notes ul {
+  }.compare-notes h5.sub { margin-top: 14px; }.compare-notes p { margin: 0 0 8px; }.compare-notes ul {
     margin: 4px 0 8px;
     padding-left: 18px;
-  }
-  .compare-notes ul li { margin-bottom: 2px; }
-
-  /* ── Empty state ── */
+  }.compare-notes ul li { margin-bottom: 2px; }/* ── Empty state ── */
   .empty-frame {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -575,13 +459,11 @@
     max-width: 720px;
     min-height: 380px;
     position: relative;
-  }
-  .empty-placeholder {
+  }.empty-placeholder {
     font-size: 14px;
     color: var(--text-ter);
     font-style: italic;
-  }
-  .md-hint {
+  }.md-hint {
     position: absolute;
     bottom: 16px;
     left: 40px;
@@ -593,51 +475,39 @@
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
-  }
-  .md-hint span {
+  }.md-hint span {
     font-family: var(--mono);
-  }
-  .md-hint .k {
+  }.md-hint .k {
     color: var(--text-sec);
     font-weight: 600;
-  }
-
-  /* ── Open questions ── */
+  }/* ── Open questions ── */
   .q-list {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px 0;
-  }
-  .q-item {
+  }.q-item {
     padding: 14px 20px;
     border-bottom: 1px solid var(--border-sub);
     font-size: 13.5px;
     display: flex;
     gap: 14px;
     align-items: flex-start;
-  }
-  .q-item:last-child { border-bottom: none; }
-  .q-item .q-n {
+  }.q-item:last-child { border-bottom: none; }.q-item .q-n {
     font-size: 11px;
     font-weight: 700;
     color: var(--text-ter);
     letter-spacing: 0.04em;
     flex-shrink: 0;
     width: 28px;
-  }
-  .q-item .q-body { flex: 1; }
-  .q-item .q-q {
+  }.q-item .q-body { flex: 1; }.q-item .q-q {
     font-weight: 600;
     margin-bottom: 2px;
-  }
-  .q-item .q-ctx {
+  }.q-item .q-ctx {
     font-size: 12px;
     color: var(--text-sec);
     line-height: 1.5;
-  }
-
-  /* Keyboard hint pills */
+  }/* Keyboard hint pills */
   .kbd {
     display: inline-block;
     font-family: var(--mono);

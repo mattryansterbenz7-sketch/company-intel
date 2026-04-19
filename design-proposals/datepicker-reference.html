@@ -3,121 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <title>Coop date picker — 3 anchors (v3)</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
+<style>* { box-sizing: border-box; margin: 0; padding: 0; }body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
     color: #0A0B0D;
     background: #F0F2F5;
     padding: 48px;
     min-height: 100vh;
-  }
-  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
-  .sub { color: #6F7782; font-size: 14px; margin: 0 0 48px; }
-
-  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; align-items: start; }
-  .variant h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #8A8E94; margin: 0 0 6px; }
-  .variant .tag { font-size: 15px; font-weight: 700; color: #0A0B0D; margin: 0 0 6px; letter-spacing: -0.01em; }
-  .variant .desc { font-size: 13px; color: #6F7782; margin: 0 0 24px; line-height: 1.5; }
-
-  .input-demo {
+  }h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }.sub { color: #6F7782; font-size: 14px; margin: 0 0 48px; }.row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; align-items: start; }
+  .variant h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #8A8E94; margin: 0 0 6px; }.variant .tag { font-size: 15px; font-weight: 700; color: #0A0B0D; margin: 0 0 6px; letter-spacing: -0.01em; }.variant .desc { font-size: 13px; color: #6F7782; margin: 0 0 24px; line-height: 1.5; }.input-demo {
     display: inline-flex; align-items: center; gap: 10px;
     padding: 9px 14px; background: #FFFFFF;
     border: 1px solid #E0E4E8; border-radius: 8px;
     font-size: 14px; color: #0A0B0D; margin-bottom: 14px;
-  }
-
-  .cal { width: 288px; padding: 14px; border-radius: 12px; }
-  .cal-header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px; }
-  .cal-title { font-size: 14px; font-weight: 600; }
-  .cal-nav { display: flex; gap: 2px; }
-  .cal-nav button {
+  }.cal { width: 288px; padding: 14px; border-radius: 12px; }.cal-header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px; }.cal-title { font-size: 14px; font-weight: 600; }.cal-nav { display: flex; gap: 2px; }.cal-nav button {
     width: 26px; height: 26px; background: transparent; border: none; border-radius: 6px;
     cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-  }
-  .cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); padding: 4px 0 8px; }
-  .cal-dow span { text-align: center; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-  .cal-day {
+  }.cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); padding: 4px 0 8px; }.cal-dow span { text-align: center; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }.cal-day {
     aspect-ratio: 1; display: inline-flex; align-items: center; justify-content: center;
     font-size: 13px; border-radius: 6px; cursor: pointer; border: none;
     background: transparent; font-family: inherit; position: relative;
-  }
-  .cal-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px 2px; margin-top: 10px; }
-  .cal-footer button {
+  }.cal-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px 2px; margin-top: 10px; }.cal-footer button {
     background: transparent; border: none; font-size: 12px; font-weight: 600;
     cursor: pointer; font-family: inherit; padding: 4px 8px; border-radius: 6px;
-  }
-
-  .cal-a {
+  }.cal-a {
     background: #151B26; color: #F5F4F2;
     border: 1px solid #2A3344;
     box-shadow: 0 10px 36px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.25);
-  }
-  .cal-a .cal-title { color: #F5F4F2; }
-  .cal-a .cal-nav button { color: #A3AEBE; }
-  .cal-a .cal-nav button:hover { background: #1F2A3C; color: #F5F4F2; }
-  .cal-a .cal-dow span { color: #A3AEBE; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
-  .cal-a .cal-day { color: #F5F4F2; }
-  .cal-a .cal-day:hover:not(.selected) { background: #1F2A3C; }
-  .cal-a .cal-day.outside { color: #A3AEBE; opacity: 0.45; }
-  .cal-a .cal-day.today { color: #F5A623; font-weight: 700; }
-  .cal-a .cal-day.selected { background: #FC636B; color: #fff; font-weight: 600; }
-  .cal-a .cal-footer { border-top: 1px solid #2A3344; }
-  .cal-a .cal-footer button { color: #A3AEBE; }
-  .cal-a .cal-footer button:hover { color: #F5F4F2; background: #1F2A3C; }
-
-  .cal-b {
+  }.cal-a .cal-title { color: #F5F4F2; }.cal-a .cal-nav button { color: #A3AEBE; }.cal-a .cal-nav button:hover { background: #1F2A3C; color: #F5F4F2; }.cal-a .cal-dow span { color: #A3AEBE; letter-spacing: -0.005em; font-size: 11.5px; }.cal-a .cal-day { color: #F5F4F2; }.cal-a .cal-day:hover:not(.selected) { background: #1F2A3C; }.cal-a .cal-day.outside { color: #A3AEBE; opacity: 0.45; }.cal-a .cal-day.today { color: #F5A623; font-weight: 700; }.cal-a .cal-day.selected { background: #FC636B; color: #fff; font-weight: 600; }.cal-a .cal-footer { border-top: 1px solid #2A3344; }.cal-a .cal-footer button { color: #A3AEBE; }.cal-a .cal-footer button:hover { color: #F5F4F2; background: #1F2A3C; }.cal-b {
     background: #FFFFFF;
     border: 1px solid #E0E4E8;
     box-shadow: 0 10px 36px rgba(30,31,33,0.14), 0 2px 8px rgba(0,0,0,0.06);
-  }
-  .cal-b .cal-title { color: #0A0B0D; }
-  .cal-b .cal-nav button { color: #6F7782; }
-  .cal-b .cal-nav button:hover { background: #EBEDF0; color: #0A0B0D; }
-  .cal-b .cal-dow span { color: #8A8E94; }
-  .cal-b .cal-day { color: #0A0B0D; }
-  .cal-b .cal-day:hover:not(.selected) { background: #EBEDF0; }
-  .cal-b .cal-day.outside { color: #8A8E94; opacity: 0.5; }
-  .cal-b .cal-day.today { color: #F5A623; font-weight: 700; background: rgba(245,166,35,0.14); }
-  .cal-b .cal-day.selected { background: #FC636B; color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(252,99,107,0.32); }
-  .cal-b .cal-footer { border-top: 1px solid #EAECEF; }
-  .cal-b .cal-footer button { color: #6F7782; }
-  .cal-b .cal-footer button:hover { color: #0A0B0D; background: #EBEDF0; }
-  .cal-b .cal-clear { color: #FC636B; }
-  .cal-b .cal-clear:hover { background: rgba(252,99,107,0.10); color: #FC636B; }
-
-  .cal-c {
+  }.cal-b .cal-title { color: #0A0B0D; }.cal-b .cal-nav button { color: #6F7782; }.cal-b .cal-nav button:hover { background: #EBEDF0; color: #0A0B0D; }.cal-b .cal-dow span { color: #8A8E94; }.cal-b .cal-day { color: #0A0B0D; }.cal-b .cal-day:hover:not(.selected) { background: #EBEDF0; }.cal-b .cal-day.outside { color: #8A8E94; opacity: 0.5; }.cal-b .cal-day.today { color: #F5A623; font-weight: 700; background: rgba(245,166,35,0.14); }.cal-b .cal-day.selected { background: #FC636B; color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(252,99,107,0.32); }.cal-b .cal-footer { border-top: 1px solid #EAECEF; }.cal-b .cal-footer button { color: #6F7782; }.cal-b .cal-footer button:hover { color: #0A0B0D; background: #EBEDF0; }.cal-b .cal-clear { color: #FC636B; }.cal-b .cal-clear:hover { background: rgba(252,99,107,0.10); color: #FC636B; }.cal-c {
     background: #F9F6F1;
     border: 1px solid #E8E2D6;
     box-shadow: 0 8px 28px rgba(80,60,30,0.10), 0 2px 6px rgba(0,0,0,0.04);
     border-radius: 14px; padding: 16px;
-  }
-  .cal-c .cal-title { color: #0A0B0D; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
-  .cal-c .cal-title .year { font-weight: 400; color: #8A8E94; margin-left: 4px; font-size: 14px; }
-  .cal-c .cal-nav button { color: #6F7782; }
-  .cal-c .cal-nav button:hover { background: #F0EADA; color: #0A0B0D; }
-  .cal-c .cal-dow span { color: #8A8E94; }
-  .cal-c .cal-day { color: #0A0B0D; font-size: 14px; border-radius: 8px; }
-  .cal-c .cal-day:hover:not(.selected) { background: #F0EADA; }
-  .cal-c .cal-day.outside { color: #8A8E94; opacity: 0.5; }
-  .cal-c .cal-day.today { color: #F5A623; font-weight: 700; }
-  .cal-c .cal-day.today::after {
+  }.cal-c .cal-title { color: #0A0B0D; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }.cal-c .cal-title .year { font-weight: 400; color: #8A8E94; margin-left: 4px; font-size: 14px; }.cal-c .cal-nav button { color: #6F7782; }.cal-c .cal-nav button:hover { background: #F0EADA; color: #0A0B0D; }.cal-c .cal-dow span { color: #8A8E94; }.cal-c .cal-day { color: #0A0B0D; font-size: 14px; border-radius: 8px; }.cal-c .cal-day:hover:not(.selected) { background: #F0EADA; }.cal-c .cal-day.outside { color: #8A8E94; opacity: 0.5; }.cal-c .cal-day.today { color: #F5A623; font-weight: 700; }.cal-c .cal-day.today::after {
     content: ''; position: absolute; bottom: 4px; left: 50%;
     transform: translateX(-50%); width: 4px; height: 4px;
     background: #F5A623; border-radius: 50%;
-  }
-  .cal-c .cal-day.selected { background: #0A0B0D; color: #fff; font-weight: 600; }
-  .cal-c .cal-day.selected.today::after { background: #fff; }
-  .cal-c .cal-footer { border-top: 1px solid #E8E2D6; padding: 14px 2px 2px; margin-top: 12px; }
-  .cal-c .cal-footer button { color: #6F7782; padding: 5px 10px; }
-  .cal-c .cal-footer button:hover { color: #0A0B0D; background: #F0EADA; }
-
-  .chev { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-
-  .anchor-note { margin-top: 18px; font-size: 12px; color: #8A8E94; line-height: 1.55; max-width: 288px; }
-  .anchor-note strong { color: #6F7782; }
+  }.cal-c .cal-day.selected { background: #0A0B0D; color: #fff; font-weight: 600; }.cal-c .cal-day.selected.today::after { background: #fff; }.cal-c .cal-footer { border-top: 1px solid #E8E2D6; padding: 14px 2px 2px; margin-top: 12px; }.cal-c .cal-footer button { color: #6F7782; padding: 5px 10px; }.cal-c .cal-footer button:hover { color: #0A0B0D; background: #F0EADA; }.chev { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }.anchor-note { margin-top: 18px; font-size: 12px; color: #8A8E94; line-height: 1.55; max-width: 288px; }.anchor-note strong { color: #6F7782; }
 </style>
 </head>
 <body>

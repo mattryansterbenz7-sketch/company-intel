@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Coop chat polish v2 — #251</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
+<style>* { box-sizing: border-box; margin: 0; padding: 0; }body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -13,21 +11,14 @@
     background: #F0F2F5;
     padding: 40px 32px 80px;
     min-height: 100vh;
-  }
-
-  /* ───── Page header ───── */
-  .page-head { max-width: 1360px; margin-bottom: 36px; }
-  h1 {
+  }/* ───── Page header ───── */
+  .page-head { max-width: 1360px; margin-bottom: 36px; }h1 {
     font-size: 22px; font-weight: 700; margin: 0 0 6px;
     letter-spacing: -0.015em;
-  }
-  .page-sub {
+  }.page-sub {
     color: #6F7782; font-size: 13px; line-height: 1.55;
     max-width: 760px; margin: 0 0 8px;
-  }
-  .page-sub a { color: #4573D2; text-decoration: none; }
-  .page-sub a:hover { text-decoration: underline; }
-  .reply-ask {
+  }.page-sub a { color: #4573D2; text-decoration: none; }.page-sub a:hover { text-decoration: underline; }.reply-ask {
     display: inline-flex; align-items: center; gap: 8px;
     margin-top: 10px;
     padding: 6px 12px;
@@ -35,17 +26,12 @@
     border: 1px solid #E0E4E8;
     border-radius: 999px;
     font-size: 12px; color: #6F7782;
-  }
-  .reply-ask strong { color: #0A0B0D; font-weight: 600; }
-  .reply-ask code {
+  }.reply-ask strong { color: #0A0B0D; font-weight: 600; }.reply-ask code {
     background: #EBEDF0; padding: 1px 6px; border-radius: 4px;
     font-family: 'SF Mono', Menlo, monospace; font-size: 11px;
     color: #0A0B0D;
-  }
-
-  /* ───── Section headers ───── */
-  section { max-width: 1360px; margin-bottom: 56px; }
-  .section-head {
+  }/* ───── Section headers ───── */
+  section { max-width: 1360px; margin-bottom: 56px; }.section-head {
     display: flex; align-items: baseline; gap: 12px;
     margin-bottom: 6px;
     padding-bottom: 10px;
@@ -55,59 +41,42 @@
     font-size: 11px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.08em;
     color: #8A8E94;
-  }
-  .section-title {
+  }.section-title {
     font-size: 17px; font-weight: 700;
     letter-spacing: -0.01em; color: #0A0B0D;
-  }
-  .section-badge {
+  }.section-badge {
     font-size: 11px; font-weight: 600;
     padding: 2px 8px; border-radius: 999px;
     background: rgba(54,179,126,0.12); color: #1B7E53;
-  }
-  .section-badge.reject {
+  }.section-badge.reject {
     background: rgba(232,56,79,0.07); color: #B72638;
-  }
-  .section-sub {
+  }.section-sub {
     font-size: 13px; color: #6F7782;
     max-width: 800px; line-height: 1.55;
     margin-top: 14px; margin-bottom: 24px;
-  }
-
-  /* ───── Grid layout for A-F artifacts ───── */
+  }/* ───── Grid layout for A-F artifacts ───── */
   .hero-grid {
     display: grid;
     grid-template-columns: 460px 1fr;
     gap: 32px;
-  }
-  .hero-left { display: flex; flex-direction: column; gap: 20px; }
-  .hero-right { display: grid; gap: 24px; }
-
-  .artifact {
+  }.hero-left { display: flex; flex-direction: column; gap: 20px; }.hero-right { display: grid; gap: 24px; }.artifact {
     background: #FFFFFF;
     border: 1px solid #E0E4E8;
     border-radius: 12px;
     padding: 20px;
-  }
-  .artifact-head {
+  }.artifact-head {
     display: flex; align-items: baseline; gap: 10px;
     margin-bottom: 14px;
-  }
-  .artifact-letter {
+  }.artifact-letter {
     font-size: 11px; font-weight: 700;
-    color: #8A8E94; letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .artifact-title {
+    color: #8A8E94; letter-spacing: -0.005em;
+  }.artifact-title {
     font-size: 14px; font-weight: 700;
     letter-spacing: -0.005em;
-  }
-  .artifact-sub {
+  }.artifact-sub {
     font-size: 12px; color: #6F7782;
     margin-bottom: 16px; line-height: 1.5;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
+  }/* ═══════════════════════════════════════════════════════════════════
      THE CHAT PANEL — core component
      ═══════════════════════════════════════════════════════════════════ */
   .chat {
@@ -119,125 +88,88 @@
     box-shadow: 0 20px 48px rgba(30,31,33,0.14), 0 4px 12px rgba(0,0,0,0.06);
     display: flex; flex-direction: column;
     overflow: hidden;
-  }
-  .chat.compact { height: 560px; }
-  .chat.short { height: 440px; }
-
-  /* ── Header ── */
+  }.chat.compact { height: 560px; }.chat.short { height: 440px; }/* ── Header ── */
   .chat-head {
     display: flex; align-items: center; gap: 10px;
     padding: 11px 12px 11px 14px;
     background: #151B26; color: #F5F4F2;
     user-select: none;
     flex-shrink: 0;
-  }
-  .chat-head-id {
+  }.chat-head-id {
     display: flex; align-items: center; gap: 10px;
     min-width: 0; flex: 1;
-  }
-  .chat-avatar {
+  }.chat-avatar {
     width: 28px; height: 28px; border-radius: 50%;
     background: #FC636B;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
     position: relative;
-  }
-  .chat-avatar svg { display: block; }
-  .chat-title {
+  }.chat-avatar svg { display: block; }.chat-title {
     font-size: 14px; font-weight: 600;
     letter-spacing: -0.005em; line-height: 1.2;
-  }
-  .chat-subtitle {
+  }.chat-subtitle {
     font-size: 11px; color: #A3AEBE;
     margin-top: 1px; line-height: 1.2;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .chat-head-controls {
+  }.chat-head-controls {
     display: flex; gap: 1px; align-items: center;
-  }
-  .chat-ctrl {
+  }.chat-ctrl {
     width: 26px; height: 26px;
     display: flex; align-items: center; justify-content: center;
     color: #A3AEBE; cursor: pointer;
     border-radius: 6px;
     transition: background 120ms, color 120ms;
-  }
-  .chat-ctrl:hover { background: #1F2A3C; color: #F5F4F2; }
-  .chat-ctrl svg { display: block; }
-
-  /* ── Body ── */
+  }.chat-ctrl:hover { background: #1F2A3C; color: #F5F4F2; }.chat-ctrl svg { display: block; }/* ── Body ── */
   .chat-body {
     flex: 1; overflow-y: auto;
     padding: 20px 18px 8px;
     display: flex; flex-direction: column;
-  }
-
-  /* ── Messages — typographic rhythm, no bubbles ── */
-  .turn { margin-bottom: 24px; }
-  .turn:last-child { margin-bottom: 12px; }
-
-  .sender-cap {
+  }/* ── Messages — typographic rhythm, no bubbles ── */
+  .turn { margin-bottom: 24px; }.turn:last-child { margin-bottom: 12px; }.sender-cap {
     font-size: 12px;
     font-weight: 600;
     letter-spacing: -0.005em;
     color: #6F7782;
     margin-bottom: 6px;
     display: flex; align-items: center; gap: 7px;
-  }
-  .sender-cap-dot {
+  }.sender-cap-dot {
     width: 5px; height: 5px; border-radius: 50%;
     background: #FC636B;
-  }
-  .sender-cap.user .sender-cap-dot {
+  }.sender-cap.user .sender-cap-dot {
     background: #151B26;
-  }
-
-  /* Sender = Matt = weight 500 */
+  }/* Sender = Matt = weight 500 */
   .msg-user-body {
     font-size: 13.5px;
     line-height: 1.55;
     color: #0A0B0D;
     font-weight: 500;
-  }
-
-  /* Coop = weight 400, real paragraph rhythm */
+  }/* Coop = weight 400, real paragraph rhythm */
   .msg-coop-body {
     font-size: 13.5px;
     line-height: 1.58;
     color: #0A0B0D;
     font-weight: 400;
-  }
-  .msg-coop-body p { margin-bottom: 12px; }
-  .msg-coop-body p:last-child { margin-bottom: 0; }
-  .msg-coop-body strong { font-weight: 600; color: #0A0B0D; }
-  .msg-coop-body h4 {
+  }.msg-coop-body p { margin-bottom: 12px; }.msg-coop-body p:last-child { margin-bottom: 0; }.msg-coop-body strong { font-weight: 600; color: #0A0B0D; }.msg-coop-body h4 {
     font-size: 13.5px;
     font-weight: 600;
     margin: 16px 0 6px;
     letter-spacing: -0.005em;
-  }
-  .msg-coop-body h4:first-child { margin-top: 0; }
-  .msg-coop-body ul {
+  }.msg-coop-body h4:first-child { margin-top: 0; }.msg-coop-body ul {
     margin: 6px 0 12px 18px;
     padding: 0;
-  }
-  .msg-coop-body li {
+  }.msg-coop-body li {
     margin-bottom: 4px;
     line-height: 1.55;
-  }
-
-  /* ── Action chips — grouped, semantic ── */
+  }/* ── Action chips — grouped, semantic ── */
   .chips-row {
     margin-top: 14px;
     display: flex; align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-  }
-  .chip-group {
+  }.chip-group {
     display: flex; align-items: center; gap: 6px;
     flex-wrap: wrap;
-  }
-  .chip {
+  }.chip {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 5px 10px;
     background: #FFFFFF;
@@ -249,65 +181,50 @@
     cursor: pointer;
     transition: border-color 120ms, background 120ms;
     white-space: nowrap;
-  }
-  .chip:hover {
+  }.chip:hover {
     border-color: #C4CAD1;
     background: #F9FAFB;
-  }
-  .chip svg {
+  }.chip svg {
     width: 11px; height: 11px;
     opacity: 0.65;
-  }
-  .chip-divider {
+  }.chip-divider {
     width: 1px;
     height: 16px;
     background: #EAECEF;
     margin: 0 2px;
-  }
-
-  /* ── Input ── */
+  }/* ── Input ── */
   .chat-input-wrap {
     padding: 10px 14px 12px;
     border-top: 1px solid #EAECEF;
     flex-shrink: 0;
-  }
-  .chat-input {
+  }.chat-input {
     display: flex; align-items: center; gap: 8px;
     padding: 8px 10px 8px 14px;
     background: #F9FAFB;
     border: 1px solid #E0E4E8;
     border-radius: 10px;
     transition: border-color 120ms;
-  }
-  .chat-input:focus-within {
+  }.chat-input:focus-within {
     border-color: #C4CAD1;
     background: #FFFFFF;
-  }
-  .chat-input input {
+  }.chat-input input {
     flex: 1; border: none; outline: none;
     background: transparent;
     font-size: 13px; color: #0A0B0D;
     font-family: inherit;
-  }
-  .chat-input input::placeholder { color: #8A8E94; }
-  .send-btn {
+  }.chat-input input::placeholder { color: #8A8E94; }.send-btn {
     width: 28px; height: 28px; border-radius: 8px;
     background: #FC636B; color: #fff;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; border: none;
     flex-shrink: 0;
-  }
-  .send-btn:hover { background: #E04E56; }
-  .send-btn.disabled { background: #E0E4E8; color: #8A8E94; cursor: not-allowed; }
-
-  /* ── Foot row — model pill + nothing else by default ── */
+  }.send-btn:hover { background: #E04E56; }.send-btn.disabled { background: #E0E4E8; color: #8A8E94; cursor: not-allowed; }/* ── Foot row — model pill + nothing else by default ── */
   .chat-foot {
     padding: 0 14px 10px;
     display: flex; align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-  }
-  .model-pill {
+  }.model-pill {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 3px 8px 3px 7px;
     background: transparent;
@@ -318,55 +235,42 @@
     cursor: pointer;
     font-family: inherit;
     transition: border-color 120ms, background 120ms;
-  }
-  .model-pill:hover {
+  }.model-pill:hover {
     border-color: #C4CAD1;
     background: #F9FAFB;
-  }
-  .model-dot {
+  }.model-dot {
     width: 5px; height: 5px; border-radius: 50%;
     background: #10A37F;
-  }
-  .model-dot.anthropic { background: #FC636B; }
-  .model-dot.haiku { background: #F5A623; }
-  .model-pill-meta {
+  }.model-dot.anthropic { background: #FC636B; }.model-dot.haiku { background: #F5A623; }.model-pill-meta {
     font-size: 11px; color: #8A8E94;
     margin-left: 6px;
     font-weight: 400;
-  }
-  .model-pill-meta .sep {
+  }.model-pill-meta .sep {
     color: #C4CAD1; margin: 0 5px;
-  }
-
-  /* ── Empty state ── */
+  }/* ── Empty state ── */
   .empty {
     flex: 1;
     display: flex; flex-direction: column;
     align-items: flex-start; justify-content: flex-end;
     padding: 18px 4px 4px;
-  }
-  .empty-face {
+  }.empty-face {
     width: 40px; height: 40px; border-radius: 50%;
     background: #FC636B;
     display: flex; align-items: center; justify-content: center;
     margin-bottom: 14px;
-  }
-  .empty-greeting {
+  }.empty-greeting {
     font-size: 16px; font-weight: 600;
     color: #0A0B0D;
     letter-spacing: -0.01em;
     margin-bottom: 4px;
-  }
-  .empty-sub {
+  }.empty-sub {
     font-size: 13px; color: #6F7782;
     line-height: 1.5;
     margin-bottom: 18px;
-  }
-  .empty-prompts {
+  }.empty-prompts {
     display: flex; flex-direction: column;
     gap: 6px; width: 100%;
-  }
-  .empty-prompt {
+  }.empty-prompt {
     padding: 10px 12px;
     background: #F5F7F9;
     border: 1px solid transparent;
@@ -376,20 +280,16 @@
     cursor: pointer;
     text-align: left;
     transition: border-color 120ms, background 120ms;
-  }
-  .empty-prompt:hover {
+  }.empty-prompt:hover {
     border-color: #C4CAD1;
     background: #FFFFFF;
-  }
-  .empty-prompt-sub {
+  }.empty-prompt-sub {
     display: block;
     font-size: 11.5px;
     color: #6F7782;
     font-weight: 400;
     margin-top: 2px;
-  }
-
-  /* ── Error state ── */
+  }/* ── Error state ── */
   .error-banner {
     margin-top: 10px;
     padding: 9px 12px;
@@ -401,28 +301,21 @@
     display: flex; align-items: center;
     justify-content: space-between;
     gap: 10px;
-  }
-  .error-banner .retry {
+  }.error-banner .retry {
     color: #B72638;
     font-weight: 600;
     cursor: pointer;
     text-decoration: none;
-  }
-  .error-banner .retry:hover { text-decoration: underline; }
-
-  /* ── Fallback note ── */
+  }.error-banner .retry:hover { text-decoration: underline; }/* ── Fallback note ── */
   .fallback-note {
     margin-top: 8px;
     font-size: 11.5px;
     color: #8A8E94;
     font-style: italic;
     display: flex; align-items: center; gap: 6px;
-  }
-  .fallback-note svg {
+  }.fallback-note svg {
     opacity: 0.6;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
+  }/* ═══════════════════════════════════════════════════════════════════
      Close-up artifact framing
      ═══════════════════════════════════════════════════════════════════ */
   .closeup {
@@ -433,25 +326,19 @@
     display: flex; align-items: center; justify-content: center;
     min-height: 240px;
     overflow: hidden;
-  }
-  .closeup.tight { min-height: 180px; padding: 18px; }
-
-  .annotate {
+  }.closeup.tight { min-height: 180px; padding: 18px; }.annotate {
     position: relative;
-  }
-  .annotate-line {
+  }.annotate-line {
     position: absolute;
     background: #C4CAD1;
     height: 1px;
-  }
-  .annotate-dot {
+  }.annotate-dot {
     position: absolute;
     width: 7px; height: 7px; border-radius: 50%;
     background: #FC636B;
     border: 2px solid #FFFFFF;
     box-shadow: 0 0 0 1px #FC636B;
-  }
-  .annotate-label {
+  }.annotate-label {
     position: absolute;
     font-size: 11px;
     color: #0A0B0D;
@@ -461,97 +348,74 @@
     border: 1px solid #E0E4E8;
     border-radius: 4px;
     white-space: nowrap;
-  }
-  .annotate-label em {
+  }.annotate-label em {
     color: #6F7782;
     font-style: normal;
     font-weight: 400;
     margin-left: 4px;
-  }
-
-  /* Scaled preview for closeups */
+  }/* Scaled preview for closeups */
   .turn-preview {
     background: #FFFFFF;
     padding: 18px 20px;
     border-radius: 8px;
     border: 1px solid #EAECEF;
     width: 380px;
-  }
-
-  /* Cost footer — default vs expanded */
+  }/* Cost footer — default vs expanded */
   .cost-demo {
     display: flex; flex-direction: column; gap: 14px;
     width: 100%;
-  }
-  .cost-row {
+  }.cost-row {
     display: flex; align-items: center; gap: 14px;
-  }
-  .cost-label {
+  }.cost-label {
     font-size: 11px;
     font-weight: 600;
     color: #8A8E94;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     min-width: 70px;
-  }
-  .cost-demo .model-pill {
+  }.cost-demo .model-pill {
     cursor: default;
-  }
-
-  /* ── Before / after layout ── */
+  }/* ── Before / after layout ── */
   .compare-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 40px;
     align-items: start;
-  }
-  .compare-col { position: relative; }
-  .compare-label {
+  }.compare-col { position: relative; }.compare-label {
     display: inline-flex; align-items: center; gap: 8px;
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     color: #6F7782;
     margin-bottom: 12px;
-  }
-  .compare-label.after { color: #1B7E53; }
-  .compare-label-sub {
+  }.compare-label.after { color: #1B7E53; }.compare-label-sub {
     font-size: 12px;
     color: #6F7782;
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
     margin-left: 6px;
-  }
-
-  /* ── Why not B/C ── */
+  }/* ── Why not B/C ── */
   .alt-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 24px;
-  }
-  .alt-card {
+  }.alt-card {
     background: #FFFFFF;
     border: 1px solid #E0E4E8;
     border-radius: 10px;
     padding: 20px 22px;
-  }
-  .alt-head {
+  }.alt-head {
     display: flex; align-items: center; gap: 10px;
     margin-bottom: 10px;
-  }
-  .alt-letter {
+  }.alt-letter {
     font-size: 13px;
     font-weight: 700;
     color: #8A8E94;
-  }
-  .alt-title {
+  }.alt-title {
     font-size: 14px;
     font-weight: 600;
     color: #0A0B0D;
-  }
-  .alt-reject {
+  }.alt-reject {
     font-size: 11px;
     font-weight: 600;
     padding: 2px 8px;
@@ -559,66 +423,49 @@
     background: rgba(232,56,79,0.07);
     color: #B72638;
     margin-left: auto;
-  }
-  .alt-body {
+  }.alt-body {
     font-size: 13px;
     color: #6F7782;
     line-height: 1.55;
-  }
-  .alt-body strong { color: #0A0B0D; font-weight: 600; }
-
-  /* ── Notes / open questions ── */
+  }.alt-body strong { color: #0A0B0D; font-weight: 600; }/* ── Notes / open questions ── */
   .notes {
     background: #FFFFFF;
     border: 1px solid #E0E4E8;
     border-radius: 12px;
     padding: 22px 26px;
-  }
-  .notes h3 {
+  }.notes h3 {
     font-size: 14px;
     font-weight: 700;
     letter-spacing: -0.005em;
     margin-bottom: 14px;
-  }
-  .notes-list { display: flex; flex-direction: column; gap: 12px; }
-  .notes-item {
+  }.notes-list { display: flex; flex-direction: column; gap: 12px; }.notes-item {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 20px;
     padding-bottom: 12px;
     border-bottom: 1px solid #EAECEF;
-  }
-  .notes-item:last-child { border-bottom: none; padding-bottom: 0; }
-  .notes-tag {
+  }.notes-item:last-child { border-bottom: none; padding-bottom: 0; }.notes-tag {
     font-size: 11px;
     font-weight: 600;
     color: #8A8E94;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .notes-body {
+    letter-spacing: -0.005em;
+  }.notes-body {
     font-size: 13px;
     color: #0A0B0D;
     line-height: 1.55;
-  }
-  .notes-body em {
+  }.notes-body em {
     color: #6F7782;
     font-style: normal;
-  }
-  .notes-body code {
+  }.notes-body code {
     background: #EBEDF0;
     padding: 1px 6px;
     border-radius: 4px;
     font-family: 'SF Mono', Menlo, monospace;
     font-size: 12px;
-  }
-
-  /* ── Shipped panel (before) — reproduces #234 feel ── */
+  }/* ── Shipped panel (before) — reproduces #234 feel ── */
   .chat.shipped .turn {
     margin-bottom: 18px;
-  }
-  .chat.shipped .sender-cap { display: none; }
-  .chat.shipped .msg-user-body {
+  }.chat.shipped .sender-cap { display: none; }.chat.shipped .msg-user-body {
     background: #151B26; color: #F5F4F2;
     padding: 9px 13px;
     border-radius: 14px 14px 4px 14px;
@@ -626,23 +473,18 @@
     max-width: 88%;
     align-self: flex-end;
     font-weight: 400;
-  }
-  .chat.shipped .turn.user {
+  }.chat.shipped .turn.user {
     display: flex; flex-direction: column; align-items: flex-end;
-  }
-  .chat.shipped .msg-coop-body h4 {
+  }.chat.shipped .msg-coop-body h4 {
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     color: #8A8E94;
     margin-top: 14px; margin-bottom: 6px;
-  }
-  .chat.shipped .chips-row-shipped {
+  }.chat.shipped .chips-row-shipped {
     margin-top: 10px;
     display: flex; flex-wrap: wrap; gap: 6px;
-  }
-  .chat.shipped .chip-shipped {
+  }.chat.shipped .chip-shipped {
     padding: 5px 10px;
     background: #F0F2F5;
     border: none;
@@ -650,48 +492,38 @@
     font-size: 11.5px;
     color: #0A0B0D;
     cursor: pointer;
-  }
-  .chat.shipped .cost-footer-shipped {
+  }.chat.shipped .cost-footer-shipped {
     padding: 8px 14px;
     font-size: 11px;
     color: #6F7782;
     font-family: 'SF Mono', Menlo, monospace;
     border-top: 1px solid #EAECEF;
     display: flex; align-items: center; gap: 8px;
-  }
-  .chat.shipped .chat-head-shipped-model {
+  }.chat.shipped .chat-head-shipped-model {
     background: linear-gradient(135deg, #FC636B, #F89B29);
     color: #fff;
     padding: 2px 8px;
     border-radius: 999px;
-    font-size: 10px;
+    font-size: 11.5px;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  /* Utility */
+    letter-spacing: -0.005em;
+  }/* Utility */
   .sr-only {
     position: absolute; width: 1px; height: 1px;
     padding: 0; margin: -1px; overflow: hidden;
     clip: rect(0,0,0,0); white-space: nowrap; border: 0;
-  }
-
-  /* Mini-mockup pairs */
+  }/* Mini-mockup pairs */
   .mini-pair {
     display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-  }
-  .mini-card {
+  }.mini-card {
     background: #F5F7F9;
     border: 1px solid #EAECEF;
     border-radius: 10px;
     padding: 16px;
-  }
-  .mini-label {
+  }.mini-label {
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: -0.005em;
     color: #8A8E94;
     margin-bottom: 10px;
   }
@@ -961,7 +793,7 @@
           <div class="closeup tight">
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <div style="position: relative;">
-                <div style="position: absolute; top: -22px; left: 0; font-size: 10.5px; font-weight: 600; color: #8A8E94; letter-spacing: 0.04em; text-transform: uppercase;">Refine this answer</div>
+                <div style="position: absolute; top: -22px; left: 0; font-size: 11.5px; font-weight: 600; color: #8A8E94; letter-spacing: -0.005em;">Refine this answer</div>
                 <div class="chip-group">
                   <button class="chip">Say more</button>
                   <button class="chip">Key takeaways</button>
@@ -971,7 +803,7 @@
               </div>
               <div class="chip-divider" style="height: 20px;"></div>
               <div style="position: relative;">
-                <div style="position: absolute; top: -22px; left: 0; font-size: 10.5px; font-weight: 600; color: #8A8E94; letter-spacing: 0.04em; text-transform: uppercase;">New action</div>
+                <div style="position: absolute; top: -22px; left: 0; font-size: 11.5px; font-weight: 600; color: #8A8E94; letter-spacing: -0.005em;">New action</div>
                 <div class="chip-group">
                   <button class="chip">
                     <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1377,19 +1209,19 @@
     <!-- Delta callouts -->
     <div style="margin-top: 28px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
       <div style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #E0E4E8; border-radius: 8px;">
-        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8A8E94; margin-bottom: 4px;">Turn separation</div>
+        <div style="font-size: 11.5px; font-weight: 700; letter-spacing: -0.005em; color: #8A8E94; margin-bottom: 4px;">Turn separation</div>
         <div style="font-size: 12.5px; color: #0A0B0D; line-height: 1.45;">Bubble & dark pill → sender-cap + weight differentiation.</div>
       </div>
       <div style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #E0E4E8; border-radius: 8px;">
-        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8A8E94; margin-bottom: 4px;">Section headers</div>
+        <div style="font-size: 11.5px; font-weight: 700; letter-spacing: -0.005em; color: #8A8E94; margin-bottom: 4px;">Section headers</div>
         <div style="font-size: 12.5px; color: #0A0B0D; line-height: 1.45;">H4 uppercase tiny-caps → real paragraphs, no labels.</div>
       </div>
       <div style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #E0E4E8; border-radius: 8px;">
-        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8A8E94; margin-bottom: 4px;">Chip row</div>
+        <div style="font-size: 11.5px; font-weight: 700; letter-spacing: -0.005em; color: #8A8E94; margin-bottom: 4px;">Chip row</div>
         <div style="font-size: 12.5px; color: #0A0B0D; line-height: 1.45;">Flat strip of 5 → two groups + divider, semantic.</div>
       </div>
       <div style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #E0E4E8; border-radius: 8px;">
-        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8A8E94; margin-bottom: 4px;">Cost footer</div>
+        <div style="font-size: 11.5px; font-weight: 700; letter-spacing: -0.005em; color: #8A8E94; margin-bottom: 4px;">Cost footer</div>
         <div style="font-size: 12.5px; color: #0A0B0D; line-height: 1.45;">Dollar-sign mono strip → hidden behind model pill.</div>
       </div>
     </div>
