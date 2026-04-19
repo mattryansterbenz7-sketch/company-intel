@@ -83,6 +83,11 @@
   .mock-num { font-weight: 700; color: var(--ci-text-primary); }
   .mock-name { color: var(--ci-text-primary); font-weight: 600; }
   .mock-fires { color: var(--ci-text-tertiary); font-size: 11px; margin-top: 2px; }
+  .mock-caption {
+    font-size: 11.5px; color: var(--ci-text-tertiary);
+    line-height: 1.55; max-width: 340px;
+    padding: 2px 4px 14px; margin-top: -6px;
+  }
 
   /* ── Side panel mockup shell ── */
   .sp {
@@ -146,7 +151,7 @@
     min-width: 0;
   }
   .sp-chip-kicker {
-    font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    font-size: 11.5px; font-weight: 600; letter-spacing: -0.005em;
     color: var(--ci-accent-primary);
   }
   .sp-chip-kicker.muted { color: var(--ci-text-tertiary); }
@@ -161,6 +166,42 @@
     0%, 100% { opacity: 0.35; }
     50%      { opacity: 1; }
   }
+
+  /* Persistent Pipeline/Today segmented toggle — Matt's ask to always reach his task list */
+  .sp-toggle {
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: var(--ci-bg-inset);
+    border-radius: var(--ci-radius-md);
+    padding: 3px;
+    margin: 8px 12px 10px;
+    gap: 3px;
+  }
+  .sp-toggle-btn {
+    font-size: 12px; font-weight: 600;
+    letter-spacing: -0.005em;
+    padding: 7px 10px;
+    border-radius: calc(var(--ci-radius-md) - 3px);
+    color: var(--ci-text-secondary);
+    text-align: center;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    transition: background var(--motion-xs), color var(--motion-xs);
+  }
+  .sp-toggle-btn:hover { color: var(--ci-text-primary); }
+  .sp-toggle-btn.active {
+    background: var(--ci-bg-raised);
+    color: var(--ci-text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+  .sp-toggle-badge {
+    font-size: 10px; font-weight: 700;
+    padding: 1px 6px; border-radius: 99px;
+    background: var(--ci-accent-primary); color: #fff;
+    min-width: 16px; text-align: center;
+    line-height: 1.3;
+  }
+  .sp-toggle-btn.active .sp-toggle-badge { background: var(--ci-accent-primary); }
+
   .sp-chip-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
   .sp-chip-name { font-size: 12px; font-weight: 700; color: var(--ci-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sp-chip-domain { font-size: 10px; color: var(--ci-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -684,8 +725,8 @@
          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="mock-cell">
       <div class="mock-label">
-        <div><span class="mock-num">01</span> · <span class="mock-name">Global dashboard</span></div>
-        <div class="mock-fires">Fires when: no company detected, or user clicked Show pipeline</div>
+        <div><span class="mock-num">01</span> · <span class="mock-name">Pipeline Dashboard</span></div>
+        <div class="mock-fires">Fires when: no company detected, not a company page, or user clicked Show pipeline — chip adapts to context, body stays the same.</div>
       </div>
       <div class="sp">
         <!-- Identity -->
@@ -697,6 +738,14 @@
             <span class="sp-logo">Coop<span class="dot">.ai</span></span>
           </div>
           <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
         </div>
         <!-- Chip row -->
         <div class="sp-chip-row">
@@ -764,6 +813,9 @@
         </div>
       </div>
     </div>
+      <div class="mock-caption">
+        Chip at top adapts based on context: "No company detected" (new tab / extension page), "Not a company page · mail.google.com" (non-company site), or "Pipeline view" (explicit toggle). Body content stays identical in all three — it's always the pipeline dashboard.
+      </div>
 
     <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          STATE 2 — Detected, Not Saved
@@ -782,6 +834,14 @@
             <span class="sp-logo">Coop<span class="dot">.ai</span></span>
           </div>
           <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
         </div>
         <div class="sp-chip-row">
           <div class="sp-chip">
@@ -837,6 +897,14 @@
             <span class="sp-logo">Coop<span class="dot">.ai</span></span>
           </div>
           <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
         </div>
         <div class="sp-chip-row">
           <div class="sp-chip">
@@ -904,6 +972,14 @@
           </div>
           <span class="sp-spend">$0.82 today</span>
         </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
+        </div>
         <div class="sp-chip-row">
           <div class="sp-chip">
             <span class="sp-chip-dot amber"></span>
@@ -963,6 +1039,14 @@
             <span class="sp-logo">Coop<span class="dot">.ai</span></span>
           </div>
           <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
         </div>
         <div class="sp-chip-row">
           <div class="sp-chip">
@@ -1024,6 +1108,14 @@
           </div>
           <span class="sp-spend">$0.82 today</span>
         </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
+        </div>
         <div class="sp-chip-row">
           <div class="sp-chip">
             <span class="apply-pill">
@@ -1074,82 +1166,11 @@
     </div>
 
     <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         STATE 7 — Non-company page
+         STATE 7 — Extension-internal page
          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="mock-cell">
       <div class="mock-label">
-        <div><span class="mock-num">07</span> · <span class="mock-name">Non-company page</span></div>
-        <div class="mock-fires">Fires when: Gmail, Calendar, news sites, anywhere detection fails</div>
-      </div>
-      <div class="sp">
-        <div class="sp-identity">
-          <div class="sp-id-left">
-            <div class="sp-avatar">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
-            </div>
-            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
-          </div>
-          <span class="sp-spend">$0.82 today</span>
-        </div>
-        <div class="sp-chip-row">
-          <div class="sp-chip">
-            <span class="sp-chip-dot muted"></span>
-            <div class="sp-chip-text">
-              <span class="sp-chip-kicker muted">Not a company page</span>
-              <span class="sp-chip-name" style="font-weight:500; color:var(--ci-text-secondary); font-size:10px;">mail.google.com</span>
-            </div>
-          </div>
-          <span class="sp-chip-esc">&nbsp;</span>
-        </div>
-        <div class="sp-body subdued">
-          <div class="search">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            <span>Search pipeline…</span>
-          </div>
-          <div class="stat-grid">
-            <div class="stat">
-              <div class="stat-label">Active</div>
-              <div class="stat-value">17</div>
-              <div class="stat-sub">3 their court</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Queue</div>
-              <div class="stat-value">4</div>
-              <div class="stat-sub">Unscored</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">Today</div>
-            <div class="task-list">
-              <div class="task">
-                <div class="task-box"></div>
-                <div class="task-text">Follow up w/ Topo.io — Pia</div>
-                <div class="task-meta">Due</div>
-              </div>
-              <div class="task">
-                <div class="task-box"></div>
-                <div class="task-text">Prep Q&A — Hex interview</div>
-                <div class="task-meta">Thu</div>
-              </div>
-            </div>
-          </div>
-          <div style="font-size:11px; color:var(--ci-text-tertiary); text-align:center; padding:4px;">
-            Navigate to a company page to see it here
-          </div>
-        </div>
-        <div class="sp-chat">
-          <div class="sp-chat-input">Ask about your pipeline…</div>
-          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         STATE 8 — Extension-internal page
-         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="mock-cell">
-      <div class="mock-label">
-        <div><span class="mock-num">08</span> · <span class="mock-name">Extension-internal</span></div>
+        <div><span class="mock-num">07</span> · <span class="mock-name">Extension-internal</span></div>
         <div class="mock-fires">Fires when: saved.html, company.html, preferences.html, etc.</div>
       </div>
       <div class="sp">
@@ -1161,6 +1182,14 @@
             <span class="sp-logo">Coop<span class="dot">.ai</span></span>
           </div>
           <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Persistent Pipeline/Today toggle — always visible, always reachable -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn active">Pipeline</div>
+          <div class="sp-toggle-btn">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
         </div>
         <div class="sp-chip-row">
           <div class="sp-chip">
@@ -1212,21 +1241,123 @@
   </div> <!-- /grid-8 -->
 
   <!-- ═════════════════════════════════════════════════════════
+       SECTION — TODAY VIEW (accessible via toggle from any state)
+       ═════════════════════════════════════════════════════════ -->
+  <div class="sec-head" style="margin-top: 56px;">
+    <h2>Today view — always one click away</h2>
+    <p>Matt uses the task list and next-steps view daily across all pipeline contexts. The persistent Pipeline/Today toggle at the top of the side panel means Matt can flip to this view from anywhere — detected company, saved opp, random webpage, anywhere. Flipping back to Pipeline restores the contextual view that was live before.</p>
+  </div>
+
+  <div style="display: flex; justify-content: center; padding: 16px 0 24px;">
+    <div class="mock-cell" style="max-width: 340px;">
+      <div class="mock-label">
+        <div><span class="mock-num">T</span> · <span class="mock-name">Today — task list + next steps</span></div>
+        <div class="mock-fires">Fires when: user taps the "Today" toggle at top of side panel. Works from any detected state. Persists until user flips back to Pipeline.</div>
+      </div>
+      <div class="sp">
+        <!-- Identity (unchanged) -->
+        <div class="sp-identity">
+          <div class="sp-id-left">
+            <div class="sp-avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1" fill="#fff"/><circle cx="15" cy="10" r="1" fill="#fff"/></svg>
+            </div>
+            <span class="sp-logo">Coop<span class="dot">.ai</span></span>
+          </div>
+          <span class="sp-spend">$0.82 today</span>
+        </div>
+        <!-- Toggle — Today is now active -->
+        <div class="sp-toggle">
+          <div class="sp-toggle-btn">Pipeline</div>
+          <div class="sp-toggle-btn active">
+            <span>Today</span>
+            <span class="sp-toggle-badge">3</span>
+          </div>
+        </div>
+        <!-- Today body -->
+        <div class="sp-body">
+          <!-- Summary line -->
+          <div style="font-size: 12px; color: var(--ci-text-secondary); padding: 4px 2px 12px; line-height: 1.5;">
+            <span style="color: var(--ci-text-primary); font-weight: 600;">3 tasks due today</span> · 5 this week · 2 waiting on them
+          </div>
+
+          <!-- Due today -->
+          <div class="card">
+            <div class="card-title">Due today</div>
+            <div class="task-list">
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Follow up w/ Pia at Topo.io</div>
+                <div class="task-meta" style="color: var(--ci-accent-red);">Due</div>
+              </div>
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Send Q&amp;A prep to Anjali — Hex</div>
+                <div class="task-meta" style="color: var(--ci-accent-red);">Due</div>
+              </div>
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Check in on Retool offer status</div>
+                <div class="task-meta" style="color: var(--ci-accent-red);">Due</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- This week -->
+          <div class="card" style="margin-top: 10px;">
+            <div class="card-title">This week</div>
+            <div class="task-list">
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Prep Hex interview</div>
+                <div class="task-meta">Thu</div>
+              </div>
+              <div class="task">
+                <div class="task-box"></div>
+                <div class="task-text">Thank-you note · Ramp recruiter</div>
+                <div class="task-meta">Fri</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Next steps -->
+          <div class="card" style="margin-top: 10px;">
+            <div class="card-title">Next steps · by opp</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-size: 12px; line-height: 1.45;">
+                <div style="font-weight: 600; color: var(--ci-text-primary);">Topo.io · Senior PMM</div>
+                <div style="color: var(--ci-text-secondary);">Waiting on Pia's reply — nudge today</div>
+              </div>
+              <div style="font-size: 12px; line-height: 1.45;">
+                <div style="font-weight: 600; color: var(--ci-text-primary);">Hex · Product Marketing Lead</div>
+                <div style="color: var(--ci-text-secondary);">Interview Thu 2pm — prep Q&amp;A tonight</div>
+              </div>
+              <div style="font-size: 12px; line-height: 1.45;">
+                <div style="font-weight: 600; color: var(--ci-text-primary);">Retool · Senior PMM</div>
+                <div style="color: var(--ci-text-secondary);">Offer received — decision by Friday</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Chat -->
+        <div class="sp-chat">
+          <div class="sp-chat-input">Ask about your day…</div>
+          <div class="sp-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════
        SECTION — STATE MACHINE DIAGRAM
        ═════════════════════════════════════════════════════════ -->
   <div class="sec-head" style="margin-top: 56px;">
     <h2>State machine diagram</h2>
-    <p>How states connect. Solid lines are automatic transitions fired by the detection layer. Coral lines are user-initiated. The Apply Mode overlay can activate from any state and returns to whichever state was underneath.</p>
+    <p>How states connect. Solid lines are automatic transitions fired by the detection layer. Coral lines are user-initiated. The Apply Mode overlay can activate from any state and returns to whichever state was underneath. The Today view toggle is orthogonal to this state machine — it's a display-layer flip from Pipeline to Today that works from any of the 7 states.</p>
   </div>
 
   <div class="diagram">
     <div class="diagram-grid">
       <!-- Row 1 -->
-      <div class="node muted">
-        <div class="node-num">07</div>
-        <div class="node-title">Non-company</div>
-        <div class="node-desc">Gmail, Calendar, other. Subdued global dashboard.</div>
-      </div>
       <div class="node">
         <div class="node-num">01</div>
         <div class="node-title">Global dashboard</div>
@@ -1244,7 +1375,7 @@
       </div>
       <!-- Row 2 -->
       <div class="node muted">
-        <div class="node-num">08</div>
+        <div class="node-num">07</div>
         <div class="node-title">Extension-internal</div>
         <div class="node-desc">saved.html etc. Subdued helper view.</div>
       </div>
@@ -1278,7 +1409,7 @@
       <div class="edge"><span class="from">04 Stale</span><span class="arrow">&rarr;</span><span class="to">03 Fresh</span><span class="trigger">Refresh research</span></div>
       <div class="edge"><span class="from">05 Job ATS</span><span class="arrow">&rarr;</span><span class="to">03 Fresh</span><span class="trigger">Save as opportunity</span></div>
       <div class="edge"><span class="from">Any</span><span class="arrow">&rarr;</span><span class="to">06 Apply Mode</span><span class="trigger">toggle ⌘⇧A</span></div>
-      <div class="edge"><span class="from">07 Non-company</span><span class="arrow">&rarr;</span><span class="to">01 Global</span><span class="trigger">default fallback</span></div>
+      <div class="edge"><span class="from">01 Pipeline</span><span class="arrow">&rarr;</span><span class="to">02 Not saved</span><span class="trigger">nav to company page (from non-company)</span></div>
       <div class="edge"><span class="from">Any detected</span><span class="arrow">&rarr;</span><span class="to">01 Global</span><span class="trigger">click Show pipeline</span></div>
     </div>
   </div>
@@ -1365,27 +1496,27 @@
        SECTION — OPEN QUESTIONS
        ═════════════════════════════════════════════════════════ -->
   <div class="sec-head" style="margin-top: 56px;">
-    <h2>Open questions</h2>
-    <p>Three things still up for debate before writing the code.</p>
+    <h2>Open questions — resolved</h2>
+    <p>Three items Matt verdicted in the workshop.</p>
   </div>
 
   <div class="qlist">
     <div class="q">
-      <div class="q-title">User override — is Show pipeline enough?</div>
+      <div class="q-title">✅ User override — is Show pipeline enough?</div>
       <div class="q-body">
-        One-click escape to global dashboard from any detected state is in Option A. Do we also need a <em>Don't detect this domain</em> setting for sites where detection is consistently wrong? Leaning no until we see a repeat offender — but if LinkedIn job-vs-company keeps misfiring, this becomes essential.
+        <strong>Matt: enough for now.</strong> We ship with Show pipeline as the manual escape and hold off on per-domain blocklist until a repeat offender emerges in real use.
       </div>
     </div>
     <div class="q">
-      <div class="q-title">Loading states — what does the chip say mid-detection?</div>
+      <div class="q-title">✅ Loading states — what does the chip say mid-detection?</div>
       <div class="q-body">
-        LinkedIn in particular takes a beat (React hydration) before the content script finds selectors. Proposal: the chip shows "Checking…" with a subtle shimmer on the dot (the muted-pulse animation shown in state 1 if we force an example). Resolve or fall back to state 7 after ~1.5s timeout.
+        <strong>Matt: approved the "Checking…" shimmer idea.</strong> The chip dot pulses mid-detection; content area holds the prior state visible to avoid a jarring blank. Resolve or fall back to Pipeline Dashboard after ~1.5s timeout.
       </div>
     </div>
     <div class="q">
-      <div class="q-title">Transition motion — fade or swap?</div>
+      <div class="q-title">✅ Transition motion — fade or swap?</div>
       <div class="q-body">
-        When state changes mid-session (user navigates from a company page to Gmail), does the content block fade out (200ms ease-out) before the new one fades in, or hard-swap? Leaning crossfade at <code style="background:var(--ci-bg-inset); padding:1px 4px; border-radius:3px; font-family:var(--ci-font-mono); font-size:11px;">var(--motion-sm)</code> — matches the "tab switch" cadence in design tokens and avoids motion sickness on fast nav.
+        <strong>Matt: crossfade approved.</strong> Content block fades out at <code style="background:var(--ci-bg-inset); padding:1px 4px; border-radius:3px; font-family:var(--ci-font-mono); font-size:11px;">var(--motion-sm)</code> ease-out, new block fades in at the same duration. Matches the tab-switch cadence in design tokens. No hard swaps — they feel cheap and cause motion sickness on fast nav.
       </div>
     </div>
   </div>
