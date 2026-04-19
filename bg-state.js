@@ -89,7 +89,7 @@ export const DEFAULT_PIPELINE_CONFIG = {
     enabled: true,             // allow fallback at all
     allowExpensive: false,     // if false, only cheap models (haiku, gpt-4.1-mini)
     showIndicator: true,       // show clear indicator when fallback used
-  }
+  },
 };
 
 // Initialize pipelineConfig with defaults

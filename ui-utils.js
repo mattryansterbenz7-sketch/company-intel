@@ -458,6 +458,126 @@ function autoSaveOnBlur(input, callback, options = {}) {
   });
 }
 
+// ── Task row renderer ─────────────────────────────────────────────────────────
+//
+// Shared primitive consumed by:
+//   #261 saved dashboard (tasks panel, left 30%)
+//   #260 opportunity shell (Tasks tab)
+//   #253 side panel (Today view)
+//
+// task shape: { id, title|text, dueDate, priority, completed, companyId, company, source }
+// options:
+//   showCompanyChip {boolean=true}  — render the company/opp chip below the title
+//   compact         {boolean=false} — smaller padding for dense surfaces
+//
+// CSS lives in task-row.css (shared file loaded by every consumer).
+
+/**
+ * Derive a stable background color for a company initials logo.
+ * Uses a lightweight hash of the company name so the same company always
+ * gets the same color across renders.
+ * @param {string} name
+ * @returns {{ bg: string, color: string }}
+ */
+function _taskOppLogoColors(name) {
+  const PALETTES = [
+    { bg: '#FFE9D6', color: '#B24A00' },
+    { bg: '#E1E6FF', color: '#3344C0' },
+    { bg: '#E4F5E8', color: '#1B7E53' },
+    { bg: '#EEE8FE', color: '#5840C0' },
+    { bg: '#FFE0E2', color: '#B8434A' },
+    { bg: '#E0F4FF', color: '#0369A1' },
+    { bg: '#FFF3CD', color: '#92400E' },
+    { bg: '#F0E8FF', color: '#7E22CE' },
+  ];
+  if (!name) return PALETTES[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return PALETTES[Math.abs(h) % PALETTES.length];
+}
+
+/**
+ * Render a single task as an HTML row matching the v6 mockup treatment.
+ * @param {Object} task
+ * @param {Object} [options]
+ * @param {boolean} [options.showCompanyChip=true]
+ * @param {boolean} [options.compact=false]
+ * @returns {string} HTML string
+ */
+function renderTaskRow(task, options = {}) {
+  const { showCompanyChip = true, compact = false } = options;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })();
+
+  const title  = escapeHtml(task.title || task.text || '');
+  const completed = !!task.completed;
+  const dueDate   = task.dueDate || '';
+
+  // Priority pill
+  const priRaw  = (task.priority || '').toLowerCase();
+  const priCls  = (priRaw === 'high' || priRaw === 'p1') ? 'p1'
+                : (priRaw === 'normal' || priRaw === 'p2' || priRaw === 'medium') ? 'p2'
+                : 'p3';
+  const priLabel = priCls === 'p1' ? 'P1' : priCls === 'p2' ? 'P2' : 'P3';
+
+  // Date chip
+  let dateCls = '';
+  let dateLabel = '';
+  if (dueDate) {
+    if (dueDate < todayStr) {
+      const ms  = new Date(todayStr + 'T12:00:00') - new Date(dueDate + 'T12:00:00');
+      const days = Math.round(ms / 86400000);
+      dateCls   = 'overdue';
+      dateLabel = days === 1 ? '1d' : `${days}d`;
+    } else if (dueDate === todayStr) {
+      dateCls   = 'today';
+      dateLabel = 'Today';
+    } else if (dueDate === tomorrowStr) {
+      dateCls   = 'upcoming';
+      dateLabel = 'Tomorrow';
+    } else {
+      dateCls   = 'upcoming';
+      const d   = new Date(dueDate + 'T12:00:00');
+      dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  }
+
+  // Company / opp logo
+  const company    = task.company || '';
+  const initials   = company ? company.slice(0, 2) : '';
+  const logoColors = company ? _taskOppLogoColors(company) : null;
+  const logoHtml   = logoColors
+    ? `<div class="task-opp-logo" style="background:${logoColors.bg};color:${logoColors.color};">${escapeHtml(initials)}</div>`
+    : `<div class="task-opp-logo task-opp-logo--none">—</div>`;
+
+  // Chip below title — also carries task-company-editable for inline-edit handler
+  const chipHtml = showCompanyChip
+    ? `<span class="task-row-opp-chip task-company-editable" data-task-id="${escapeHtml(String(task.id || ''))}">${company ? escapeHtml(company) : '<span style="opacity:0.6">No opp</span>'}</span>`
+    : '';
+
+  const taskId = escapeHtml(String(task.id || ''));
+  const rowCls = ['task-row', completed ? 'tr-done' : '', compact ? 'tr-compact' : ''].filter(Boolean).join(' ');
+
+  return `<div class="${rowCls}" data-task-id="${taskId}">
+    <div class="task-check-box${completed ? ' checked' : ''}" data-check="${taskId}"></div>
+    ${logoHtml}
+    <div class="task-row-main">
+      <span class="task-row-title task-text-editable" data-task-id="${taskId}">${title}</span>
+      ${chipHtml}
+    </div>
+    <div class="task-row-controls">
+      <span class="task-pri-pill ${priCls}">${priLabel}</span>
+      ${dateLabel
+        ? `<span class="task-date-chip ${dateCls} task-due-editable" data-task-id="${taskId}" data-due="${escapeHtml(dueDate)}">${escapeHtml(dateLabel)}</span>`
+        : `<span class="task-date-chip task-due-editable" data-task-id="${taskId}" data-due="" style="opacity:0.45">+ date</span>`}
+      ${!completed ? `<button class="task-act-btn task-snooze" data-task-id="${taskId}" title="Snooze 1 day" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--ci-text-tertiary);font-size:13px;">&#9201;</button>` : ''}
+      <button class="task-act-btn task-trash" data-task-id="${taskId}" title="Delete task" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--ci-text-tertiary);font-size:13px;">&#128465;</button>
+    </div>
+  </div>`;
+}
+window.renderTaskRow = renderTaskRow;
+
 // ── Flag display ─────────────────────────────────────────────────────────────
 
 function boldKeyPhrase(text) {

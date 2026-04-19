@@ -1475,7 +1475,37 @@ function load() {
     }
     if (data.stageCelebrations) stageCelebrations = data.stageCelebrations;
     if (data.actionStatuses) customActionStatuses = data.actionStatuses;
-    if (data.statCardConfigs?.length) statCardConfigs = data.statCardConfigs;
+    // ── Goals seed migration (v6 dashboard) ─────────────────────────────────
+    // Seeds default stat cards if absent, using _migratedGoalsSeed as a guard.
+    // Check storage value (data.statCardConfigs), NOT the in-memory variable which
+    // is pre-seeded with DEFAULT_STAT_CARDS and would always appear non-empty.
+    if (data.statCardConfigs?.length) {
+      statCardConfigs = data.statCardConfigs;
+    } else {
+      // Storage is empty/missing — seed v6 defaults synchronously so the
+      // first render (below) sees them immediately without a second repaint.
+      chrome.storage.local.get(['_migratedGoalsSeed'], ({ _migratedGoalsSeed }) => {
+        if (_migratedGoalsSeed) return; // guard: only seed once
+        const DEFAULT_OPP_STAGES = customOpportunityStages || [];
+        const appliedKey   = (DEFAULT_OPP_STAGES.find(s => s.stageType === 'outreach' && /applied/i.test(s.key)) || DEFAULT_OPP_STAGES.find(s => /applied/i.test(s.key)))?.key || 'applied';
+        const outreachKeys = DEFAULT_OPP_STAGES.filter(s => s.stageType === 'outreach').map(s => s.key);
+        const convoKeys    = DEFAULT_OPP_STAGES.filter(s => s.stageType === 'active').map(s => s.key);
+        const seeded = [
+          { key: 'saves',         label: 'Opportunities saved',   stages: ['*'],         mode: 'activity', hasGoal: true, color: '#4573D2' },
+          { key: 'applications',  label: 'Applications sent',     stages: appliedKey ? [appliedKey] : ['applied'], mode: 'activity', hasGoal: true, color: '#FC636B' },
+          { key: 'outreach',      label: 'Outreach attempts',     stages: outreachKeys.length ? outreachKeys : ['applied','intro_requested'], mode: 'activity', hasGoal: true, color: '#F5A623' },
+          { key: 'convos',        label: 'Conversations started', stages: convoKeys.length ? convoKeys : ['conversations'], mode: 'activity', hasGoal: true, color: '#7C6EF0' },
+        ];
+        // Assign in-memory first so next renderActivitySection() call sees them
+        statCardConfigs = seeded;
+        // Persist to storage and set migration guard
+        chrome.storage.local.set({ statCardConfigs: seeded, _migratedGoalsSeed: true }, () => {
+          // Re-render activity section so goal cards appear without requiring a reload
+          renderActivitySection();
+        });
+      });
+    }
+
     updateStageDynamicCSS();
     allCompanies = (savedCompanies || []).sort((a, b) => b.savedAt - a.savedAt);
 
@@ -5065,90 +5095,92 @@ function renderActivitySection() {
     return { ...card, count, goal: goals[card.key] || 0, tooltip };
   });
 
-  const goalCardsHtml = goalDefs.map(g => {
+  // ── v6 goal cards (bar + left-border style) ──
+  // Map statCardConfig key → goal type class for color accents.
+  // Type classes: type-saves, type-applications, type-outreach, type-convos, type-interviews
+  // Falls back to no type class (neutral) for unknown keys.
+  const _keyToType = key => {
+    if (/save|saved/i.test(key)) return 'type-saves';
+    if (/appl/i.test(key)) return 'type-applications';
+    if (/outreach|reach|intro/i.test(key)) return 'type-outreach';
+    if (/conv|interview|interview/i.test(key)) return 'type-convos';
+    if (/offer|accept/i.test(key)) return 'type-interviews';
+    return '';
+  };
+
+  const v6GoalCardsHtml = goalDefs.map(g => {
     const showGoal = g.hasGoal !== false && g.goal > 0;
-    return `
-    <div class="goal-card" data-goal-key="${g.key}">
-      <span class="goal-info-icon" title="${g.tooltip}${g.mode === 'snapshot' ? ' (snapshot)' : ''}">i</span>
-      <div class="goal-drill-area" data-goal-key="${g.key}" title="View entries">
-        ${showGoal ? `<div class="goal-ring">${goalRingSvg(g.count, g.goal, g.color)}</div>` : `<div class="goal-ring-plain" style="color:${g.color}">${g.count}</div>`}
-        <div class="goal-text">
-          <div class="goal-fraction">${g.count}${showGoal ? `<span class="goal-denom">/${g.goal}</span>` : ''}</div>
-          <div class="goal-metric-label">${g.label}</div>
-          ${showGoal ? '<div class="goal-edit-hint">edit goal</div>' : `<div class="goal-edit-hint" style="color:#94a3b8">${g.mode === 'snapshot' ? 'live count' : 'tracking'}</div>`}
-        </div>
+    const pct = showGoal && g.goal > 0 ? Math.min(1, g.count / g.goal) : 0;
+    const pctLabel = showGoal ? (pct >= 1 ? 'Met ✓' : `${Math.round(pct * 100)}%`) : '';
+    const typeClass = _keyToType(g.key);
+    const met = showGoal && g.count >= g.goal;
+    const periodLabel2 = { daily: 'Today', weekly: 'This week', monthly: 'This month' }[activityPeriod] || activityPeriod;
+    return `<div class="goal-card-v6 ${typeClass}${met ? ' gc-met' : ''}" data-goal-key="${escHtml(g.key)}" title="${escHtml(g.tooltip)}">
+      <div class="gc-name">${escHtml(g.label)}</div>
+      <div class="gc-values">
+        <span class="gc-current">${g.count}</span>
+        ${showGoal ? `<span class="gc-target">/ ${g.goal}</span>` : ''}
       </div>
-      ${showGoal ? `<div class="goal-edit-form">
-        <label class="goal-edit-label">${g.label} goal</label>
-        <div style="display:flex;gap:7px;align-items:center">
-          <input class="goal-edit-input" type="number" min="0" max="999" value="${g.goal}" data-goal-key="${g.key}">
-          <button class="goal-save-btn-inline" data-goal-key="${g.key}">Save</button>
-          <button class="goal-cancel-btn">✕</button>
-        </div>
-      </div>` : ''}
+      ${showGoal ? `<div class="gc-bar"><div class="gc-bar-fill" style="width:${Math.round(pct * 100)}%;"></div></div>` : ''}
+      <div class="gc-footer">
+        <span>${escHtml(periodLabel2)}</span>
+        ${pctLabel ? `<span class="gc-pct">${escHtml(pctLabel)}</span>` : ''}
+      </div>
     </div>`;
-  }).join('');
+  }).join('') + `<div class="goal-card-v6-add" id="goal-card-add-btn">+ Add goal</div>`;
 
   // Format dates for <input type="date"> value (YYYY-MM-DD)
   const toInputDate = ts => new Date(ts).toISOString().slice(0, 10);
 
-  // Header subtitle data
-  const todayDate = new Date();
-  const dayLabel = todayDate.toLocaleDateString('en-US', { weekday: 'long' });
-  const dateLabel = todayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const companyCount = allCompanies.filter(c => !c.isOpportunity).length;
-  const oppCount = allCompanies.filter(c => c.isOpportunity).length;
-  const periodLabel = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[activityPeriod];
-
-  // Tasks scope tabs
-  const scope = localStorage.getItem('ci_tasksScope') || 'today';
   const autoBadge = range.custom ? '' : ' <span class="act-auto-badge">auto</span>';
 
+  // ── v6 30/70 top-strip layout ──
   section.innerHTML = `
-    <div class="activity-head">
-      <div class="activity-head-left">
-        <span class="activity-section-title">Pipeline Overview</span>
-        <span class="activity-section-sub">${dayLabel}, ${dateLabel} · ${companyCount} ${companyCount === 1 ? 'company' : 'companies'} · ${oppCount} ${oppCount === 1 ? 'opportunity' : 'opportunities'}</span>
+    <div class="top-strip-grid">
+
+      <!-- Tasks panel (left 30%) -->
+      <div class="tasks-panel-strip">
+        <div class="tasks-panel-head">
+          <span class="tp-title">Tasks</span>
+          <span class="tp-count tp-zero" id="tp-count-badge"><span class="tp-dot"></span><span id="tp-count-num">0</span></span>
+          <span class="tp-spacer"></span>
+          <div class="tp-toggle" id="tp-toggle">
+            <span class="active" data-tp-view="focused">Today + Overdue</span>
+            <span data-tp-view="all">All</span>
+          </div>
+        </div>
+        <div class="tasks-panel-body" id="tp-tasks-body">Loading…</div>
+        <button class="tasks-panel-add" id="tp-add-btn">
+          <span>+ Add task</span>
+          <span class="tp-kbd">N</span>
+        </button>
       </div>
-      <div class="activity-head-right">
-        <div class="period-toggle">
+
+      <!-- Pipeline Overview (right 70%) -->
+      <div class="pipeline-overview-panel">
+        <div class="overview-head">
+          <span class="overview-title">Pipeline Overview</span>
           <div class="period-tabs">
             <button class="period-tab${activityPeriod==='daily'?' active':''}" data-period="daily">Daily</button>
             <button class="period-tab${activityPeriod==='weekly'?' active':''}" data-period="weekly">Weekly</button>
             <button class="period-tab${activityPeriod==='monthly'?' active':''}" data-period="monthly">Monthly</button>
           </div>
-        </div>
-        <span class="activity-period-label" id="act-date-label" title="Click to set custom date range" style="cursor:pointer">&#128197; ${label}${autoBadge}</span>
-        <div class="act-date-picker" id="act-date-picker" style="display:none">
-          <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
-          <span style="color:var(--ci-text-tertiary);font-size:13px">–</span>
-          <input type="date" id="act-date-end" class="act-date-input" value="${toInputDate(end)}">
-          <button class="act-date-apply">Apply</button>
-          ${range.custom ? `<button class="act-date-reset">Reset to auto</button>` : ''}
-        </div>
-      </div>
-    </div>
-    <div class="activity-body-split">
-      <div class="activity-stats-col">
-        <div class="activity-col-title">Pipeline <span class="count">${periodLabel}</span>
-          <button class="stat-cards-edit-btn" id="stat-cards-edit-btn" title="Configure stat cards">&#9881;</button>
-        </div>
-        <div class="activity-goals-grid">
-          ${goalCardsHtml}
-        </div>
-      </div>
-      <div class="activity-split-divider"></div>
-      <div class="activity-tasks-col">
-        <div class="activity-col-title">
-          <span>Today <span class="count" id="tasks-count-label"></span></span>
-          <div class="activity-scope-tabs">
-            <span class="scope-tab${scope==='today'?' active':''}" data-scope="today">Today</span>
-            <span class="scope-tab${scope==='week'?' active':''}" data-scope="week">Week</span>
-            <span class="scope-tab${scope==='all'?' active':''}" data-scope="all">All</span>
+          <span class="activity-period-label" id="act-date-label" title="Click to set custom date range">&#128197; ${label}${autoBadge}</span>
+          <div class="act-date-picker" id="act-date-picker" style="display:none">
+            <input type="date" id="act-date-start" class="act-date-input" value="${toInputDate(start)}">
+            <span style="color:var(--ci-text-tertiary);font-size:13px">–</span>
+            <input type="date" id="act-date-end" class="act-date-input" value="${toInputDate(end)}">
+            <button class="act-date-apply">Apply</button>
+            ${range.custom ? `<button class="act-date-reset">Reset to auto</button>` : ''}
           </div>
+          <span class="overview-spacer"></span>
+          <button class="edit-goals-btn" id="stat-cards-edit-btn" title="Configure goals">Edit goals</button>
         </div>
-        <div class="activity-tasks-list" id="activity-tasks-list">Loading…</div>
+        <div class="goal-grid-v6">
+          ${v6GoalCardsHtml}
+        </div>
       </div>
+
     </div>
   `;
 
@@ -5159,15 +5191,6 @@ function renderActivitySection() {
       activityCustomRange = null;
       localStorage.removeItem('ci_activityCustomRange');
       renderActivitySection();
-    });
-  });
-
-  // Scope tabs — re-render tasks panel only (stats stay)
-  section.querySelectorAll('.scope-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      localStorage.setItem('ci_tasksScope', tab.dataset.scope);
-      section.querySelectorAll('.scope-tab').forEach(t => t.classList.toggle('active', t === tab));
-      populateActivityTasksPanel(section, start, end);
     });
   });
 
@@ -5193,51 +5216,41 @@ function renderActivitySection() {
     });
   }
 
-  section.querySelectorAll('.goal-drill-area').forEach(drillArea => {
-    drillArea.addEventListener('click', e => {
-      if (e.target.closest('.goal-edit-hint')) {
-        // "edit goal" hint — open edit form instead
-        e.stopPropagation();
-        const card = drillArea.closest('.goal-card');
-        section.querySelectorAll('.goal-card').forEach(c => c.classList.remove('editing'));
-        card.classList.add('editing');
-        card.querySelector('.goal-edit-input')?.select();
-        return;
-      }
-      const key = drillArea.dataset.goalKey;
+  // v6 goal cards — click to drill down (goal-card-v6 is the whole clickable card)
+  section.querySelectorAll('.goal-card-v6[data-goal-key]').forEach(card => {
+    card.addEventListener('click', e => {
+      const key = card.dataset.goalKey;
       const def = goalDefs.find(g => g.key === key);
       if (def) showMetricDrillDown(def, range);
     });
   });
 
-  section.querySelectorAll('.goal-cancel-btn').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); renderActivitySection(); });
-  });
+  // "Add goal" button → opens stat card editor
+  section.querySelector('#goal-card-add-btn')?.addEventListener('click', () => openStatCardEditor());
 
-  section.querySelectorAll('.goal-save-btn-inline').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const key = btn.dataset.goalKey;
-      const val = Math.max(0, parseInt(section.querySelector(`.goal-edit-input[data-goal-key="${key}"]`).value) || 0);
-      activityGoals[activityPeriod][key] = val;
-      chrome.storage.local.set({ activityGoals }, () => { void chrome.runtime.lastError; renderActivitySection(); });
-    });
-  });
-
-  section.querySelectorAll('.goal-edit-input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') section.querySelector(`.goal-save-btn-inline[data-goal-key="${inp.dataset.goalKey}"]`)?.click();
-      if (e.key === 'Escape') renderActivitySection();
-    });
-    inp.addEventListener('click', e => e.stopPropagation());
-  });
-
-  // Stat card editor button
-  // Gear button — use delegation since direct binding sometimes misses
+  // "Edit goals" button (stat card editor) — use delegation for robustness
   section.addEventListener('click', e => {
     if (e.target.closest('#stat-cards-edit-btn')) {
       e.stopPropagation();
       openStatCardEditor();
+    }
+  });
+
+  // Tasks panel — view toggle (Today + Overdue / All)
+  section.querySelectorAll('#tp-toggle span').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.tpView;
+      localStorage.setItem('ci_tpView', view);
+      section.querySelectorAll('#tp-toggle span').forEach(s => s.classList.toggle('active', s === btn));
+      populateActivityTasksPanel(section, start, end);
+    });
+  });
+
+  // "+ Add task" button — open the inline task composer in the tasks panel
+  section.querySelector('#tp-add-btn')?.addEventListener('click', () => {
+    const list = section.querySelector('#tp-tasks-body') || section.querySelector('#activity-tasks-list');
+    if (list) {
+      showOverviewTaskComposer(section, start, end, list);
     }
   });
 
@@ -5265,14 +5278,16 @@ function renderActivitySection() {
 }
 
 function populateActivityTasksPanel(section, start, end) {
-  const list = section.querySelector('#activity-tasks-list');
+  // v6: target the new tasks-panel-body container; fall back to legacy id for safety
+  const list = section.querySelector('#tp-tasks-body') || section.querySelector('#activity-tasks-list');
   if (!list) return;
 
-  const scope = localStorage.getItem('ci_tasksScope') || 'today';
+  // v6 view toggle: 'focused' = today + overdue (default), 'all' = everything
+  const tpView = localStorage.getItem('ci_tpView') || 'focused';
   const showDone = localStorage.getItem('ci_tasksShowDone') === 'true';
   const todayStr = new Date().toISOString().slice(0, 10);
   const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })();
-  const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
+  const priVal = p => (p === 'high' || p === 'p1') ? 0 : (p === 'normal' || p === 'p2' || p === 'medium') ? 1 : 2;
 
   // Helpers
   const formatShort = dateStr => {
@@ -5327,69 +5342,73 @@ function populateActivityTasksPanel(section, start, end) {
   }
 
   loadTasks(tasks => {
-    // Build in-scope active task list
-    const inScope = tasks.filter(t => {
-      if (!t.dueDate || t.completed) return false;
-      if (scope === 'today') {
-        return t.dueDate <= todayStr; // overdue + today
-      }
-      if (scope === 'week') {
-        const now = new Date(); const day = now.getDay() || 7;
-        const mon = new Date(now); mon.setDate(now.getDate() - (day - 1));
-        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-        const s = mon.toISOString().slice(0, 10); const e = sun.toISOString().slice(0, 10);
-        return t.dueDate >= s && t.dueDate <= e;
-      }
-      return true; // 'all'
+    const activeTasks = tasks.filter(t => !t.completed && t.dueDate);
+    const overdueTasks = activeTasks.filter(t => t.dueDate < todayStr);
+    const todayTasks   = activeTasks.filter(t => t.dueDate === todayStr);
+    const futureTasks  = activeTasks.filter(t => t.dueDate > todayStr);
+
+    const sortByPriThenDate = arr => [...arr].sort((a, b) => {
+      const pd = priVal(a.priority) - priVal(b.priority);
+      if (pd !== 0) return pd;
+      return a.dueDate.localeCompare(b.dueDate);
     });
 
-    // Sort: overdue first (oldest first), then today, then upcoming ascending, then by priority
-    inScope.sort((a, b) => {
-      const aOver = a.dueDate < todayStr ? 0 : a.dueDate === todayStr ? 1 : 2;
-      const bOver = b.dueDate < todayStr ? 0 : b.dueDate === todayStr ? 1 : 2;
-      if (aOver !== bOver) return aOver - bOver;
-      if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-      return priVal(a.priority) - priVal(b.priority);
-    });
+    // Focused view = today + overdue. All view = everything active + optionally done.
+    const focused = tpView !== 'all';
 
-    // Done items for today (for collapse footer)
-    const doneToday = tasks.filter(t => {
-      if (!t.completed) return false;
-      if (t.completedAt) return t.completedAt.startsWith(todayStr);
-      return t.dueDate === todayStr;
-    });
-
-    // Update count label in col title
-    const countLabel = section.querySelector('#tasks-count-label');
-    if (countLabel) {
-      const overdueCnt = inScope.filter(t => t.dueDate < todayStr).length;
-      const todayCnt = inScope.filter(t => t.dueDate === todayStr).length;
-      if (inScope.length === 0) countLabel.textContent = '';
-      else if (overdueCnt > 0 && todayCnt > 0) countLabel.textContent = `${overdueCnt} overdue · ${todayCnt} due`;
-      else if (overdueCnt > 0) countLabel.textContent = `${overdueCnt} overdue`;
-      else countLabel.textContent = `${todayCnt} due`;
+    // Count badge: overdue+today regardless of toggle
+    const totalBadge = overdueTasks.length + todayTasks.length;
+    const countBadge = section.querySelector('#tp-count-badge');
+    const countNum   = section.querySelector('#tp-count-num');
+    if (countBadge && countNum) {
+      countNum.textContent = totalBadge;
+      countBadge.className = 'tp-count' +
+        (overdueTasks.length > 0 ? '' : todayTasks.length > 0 ? ' tp-clean' : ' tp-zero');
+      countBadge.style.display = totalBadge === 0 ? 'none' : '';
     }
 
-    // Build HTML
+    // Build HTML using renderTaskRow from ui-utils.js
     let html = '';
 
-    if (inScope.length === 0) {
-      html += `<div class="today-empty">
-        <div class="today-empty-title">Clear slate.</div>
-        <div>Nothing due${scope === 'today' ? ' today' : ''}. <span class="today-empty-cta" id="empty-add-task">Add a task &#8594;</span></div>
-      </div>`;
+    const useRenderTaskRow = typeof renderTaskRow === 'function';
+
+    if (focused) {
+      // Grouped: Overdue, then Today
+      if (overdueTasks.length === 0 && todayTasks.length === 0) {
+        html += `<div class="tasks-panel-empty">Clear slate — nothing due today.</div>`;
+      } else {
+        if (overdueTasks.length > 0) {
+          html += `<div class="tasks-panel-group">
+            <div class="tasks-panel-group-hd overdue">Overdue <span class="tasks-panel-group-count">${overdueTasks.length}</span></div>
+            ${sortByPriThenDate(overdueTasks).map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('')}
+          </div>`;
+        }
+        if (todayTasks.length > 0) {
+          html += `<div class="tasks-panel-group">
+            <div class="tasks-panel-group-hd">Today <span class="tasks-panel-group-count">${todayTasks.length}</span></div>
+            ${sortByPriThenDate(todayTasks).map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('')}
+          </div>`;
+        }
+      }
     } else {
-      html += inScope.map(t => taskRowHtml(t)).join('');
-    }
-
-    // Add-task ghost row
-    html += `<button class="task-add" id="overview-task-add"><span class="task-add-circle">+</span>Add a task</button>`;
-
-    // Done collapse footer
-    if (doneToday.length > 0) {
-      html += `<div class="done-collapse">${doneToday.length} completed today · <span class="show-link" id="toggle-done">${showDone ? 'hide' : 'show'}</span></div>`;
-      if (showDone) {
-        html += doneToday.map(t => taskRowHtml(t)).join('');
+      // All view: overdue + today + future, ungrouped
+      const allActive = [...sortByPriThenDate(overdueTasks), ...sortByPriThenDate(todayTasks), ...sortByPriThenDate(futureTasks)];
+      if (allActive.length === 0) {
+        html += `<div class="tasks-panel-empty">No tasks yet.</div>`;
+      } else {
+        html += allActive.map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('');
+      }
+      // Done items
+      const doneToday = tasks.filter(t => {
+        if (!t.completed) return false;
+        if (t.completedAt) return t.completedAt.startsWith(todayStr);
+        return t.dueDate === todayStr;
+      });
+      if (doneToday.length > 0) {
+        html += `<div class="done-collapse">${doneToday.length} completed today · <span class="show-link" id="toggle-done">${showDone ? 'hide' : 'show'}</span></div>`;
+        if (showDone) {
+          html += doneToday.map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('');
+        }
       }
     }
 
@@ -5609,7 +5628,8 @@ function showTaskUndoBanner(section, start, end, deletedTask, remainingTasks) {
   if (existing) existing.remove();
   if (_taskUndoTimer) { clearTimeout(_taskUndoTimer); _taskUndoTimer = null; }
 
-  const tasksCol = section.querySelector('.activity-tasks-col');
+  // v6: target the tasks panel strip; fall back to legacy column selector
+  const tasksCol = section.querySelector('.tasks-panel-strip') || section.querySelector('.activity-tasks-col');
   if (!tasksCol) return;
 
   const banner = document.createElement('div');

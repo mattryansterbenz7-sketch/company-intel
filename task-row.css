@@ -1,0 +1,151 @@
+/*
+ * task-row.css — Shared task row styles.
+ * Consumed by:
+ *   - saved.html/.js  (#261 — dashboard tasks panel)
+ *   - opportunity.html/.js (#260 — opp-scoped Tasks tab)
+ *   - sidepanel.html/.js  (#253 — Today view)
+ *
+ * These classes match the v6 mockup treatment exactly.
+ * renderTaskRow() in ui-utils.js generates the HTML.
+ */
+
+/* ── Task row ─────────────────────────────────────────────────────────── */
+.task-row {
+  display: grid;
+  grid-template-columns: 16px 22px 1fr auto;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  align-items: center;
+  transition: background 120ms;
+}
+.task-row:hover { background: var(--ci-bg-inset, #EBEDF0); }
+
+/* ── Checkbox ─────────────────────────────────────────────────────────── */
+.task-check-box {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--ci-border-strong, #C4CAD1);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: background 120ms, border-color 120ms;
+}
+.task-check-box.checked {
+  background: var(--ci-stage-active, #36B37E);
+  border-color: var(--ci-stage-active, #36B37E);
+}
+.task-check-box.checked::after {
+  content: '\2713';
+  position: absolute;
+  top: -2px;
+  left: 2px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ── Opportunity logo ─────────────────────────────────────────────────── */
+.task-opp-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: inherit;
+}
+.task-opp-logo.task-opp-logo--none {
+  background: var(--ci-bg-inset, #EBEDF0);
+  color: var(--ci-text-tertiary);
+  border: 1px dashed var(--ci-border-strong, #C4CAD1);
+}
+
+/* ── Task content ─────────────────────────────────────────────────────── */
+.task-row-main {
+  min-width: 0;
+}
+.task-row-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ci-text-primary, #0A0B0D);
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-left: -4px;
+  display: block;
+  transition: background 120ms;
+}
+.task-row-title:hover { background: rgba(10, 11, 13, 0.04); }
+
+.task-row-opp-chip {
+  font-size: 10.5px;
+  color: var(--ci-text-tertiary, #6F7782);
+  margin-top: 1px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Controls (priority pill + date chip) ─────────────────────────────── */
+.task-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.task-pri-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+.task-pri-pill.p1 {
+  background: rgba(232, 56, 79, 0.08);
+  color: #E8384F;
+  border: 1px solid rgba(232, 56, 79, 0.2);
+}
+.task-pri-pill.p2 {
+  background: rgba(245, 166, 35, 0.12);
+  color: #8E5C00;
+  border: 1px solid rgba(245, 166, 35, 0.26);
+}
+.task-pri-pill.p3 {
+  background: var(--ci-bg-inset, #EBEDF0);
+  color: var(--ci-text-tertiary, #6F7782);
+  border: 1px solid var(--ci-border-subtle, #EAECEF);
+}
+.task-date-chip {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+.task-date-chip.overdue {
+  background: rgba(232, 56, 79, 0.08);
+  color: #E8384F;
+}
+.task-date-chip.today {
+  background: rgba(245, 166, 35, 0.12);
+  color: #8E5C00;
+}
+.task-date-chip.upcoming {
+  background: var(--ci-bg-inset, #EBEDF0);
+  color: var(--ci-text-secondary, #4A4E54);
+}
+
+/* ── Completed state ──────────────────────────────────────────────────── */
+.task-row.tr-done .task-row-title {
+  text-decoration: line-through;
+  color: var(--ci-text-tertiary, #6F7782);
+}
