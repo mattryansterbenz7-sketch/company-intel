@@ -297,6 +297,25 @@ You may NOT use subagents to:
 - Push to `origin/main`.
 - Open PRs.
 
+## Architecture check — non-negotiable before PRD ships
+
+**Before finalizing any PRD, validate the design against the current codebase.** This is the upstream mirror of the Doer's validation gate: do it and Doer rubber-stamps your PRD on pickup; skip it and Doer bounces the PRD back to Designer Backlog via `blocked:execution`. Surface architectural gaps to Matt LIVE in the session — mockup-land iteration is 10x cheaper than a post-bounce PRD rewrite.
+
+**The check (use an Explore subagent for speed):**
+
+1. **Every file the PRD will cite must exist on current main.** Named functions, CSS selectors, line ranges — all verified. No phantom references.
+2. **Data model supports the proposed change.** If the design shows "X aggregate," verify X is actually computable from `savedCompanies[]` + `researchCache` as they exist today. If the design requires a new IPC message type, confirm one doesn't already exist under another name.
+3. **Adjacent surfaces accounted for.** A design touching the Kanban card may ripple into `saved.js`, `ui-utils.js`, `company.js`, the scoring path. List every surface the change will touch, not just the primary one.
+4. **CLAUDE.md patterns respected.** Check the "Rules & Principles" section — API discipline, session-only chat, single `savedCompanies[]` array, generic `stageTimestamps`, `defaultActionStatus`, `claudeApiCall` wrapper usage, etc. If the design conflicts with any pattern, either revise the design or flag the tension explicitly in the PRD for Matt's eyes.
+
+**When the check surfaces a gap:**
+
+- **Small (naming drift, missed adjacent surface, stale line number):** fix in place, keep going.
+- **Design-level (data model doesn't support it, architectural prerequisite is missing, new pattern conflicts with an existing one):** surface to Matt live. Options: (a) revise the mockup to work within current architecture, (b) scope this issue to a phase that matches today's data model, (c) file a prerequisite issue for the foundational piece and pause this one.
+- **Never ship a PRD with an open architectural gap.** That's the exact failure the Doer's validation gate exists to catch, and a bounce costs a full round-trip through the board.
+
+**What the check produces:** findings land in two places in the PRD body — `## Exact changes` (file-by-file with verified function / selector / line references) and `## Architecture notes` (what you traced, adjacent surfaces confirmed, data-flow assumptions, CLAUDE.md patterns respected). The Doer reads `## Architecture notes` on pickup; thorough notes mean fast Doer validation and immediate delegation.
+
 ## Handoff — the PRD (final ship path)
 
 When Matt approves the direction (either in-session or via a "ship it" verdict on a Proposed item), **write a detailed PRD into the issue body** (replace the prior body). It must be tight enough that the Doer's subagent can execute without judgment calls:
@@ -319,8 +338,12 @@ approach-level specificity for strategy items>
 - [ ] Empty state renders Y
 - [ ] Keyboard navigation preserves Z
 
-## Where to look
-<file paths, function names, related surfaces the Doer should review>
+## Architecture notes
+<Evidence from the architecture check (see "Architecture check" section above).
+File paths, function / selector names, adjacent surfaces traced and confirmed
+not to ripple, data-flow assumptions, CLAUDE.md patterns the change respects
+or extends. This is the Doer's navigation pointer AND the validation evidence —
+thorough notes mean Doer's pickup is fast.>
 
 ## Scope boundaries
 <what's explicitly OUT of this change>

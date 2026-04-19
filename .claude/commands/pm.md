@@ -40,7 +40,7 @@ Three other Opus threads work alongside you, and you communicate with all of the
 
 An issue is ONLY ready for **Up Next For The Doer** (`2cee5689`) if it passes ALL of these:
 
-- ✅ **Has a concrete PRD** — Problem, Proposed direction, Acceptance criteria, Where to look, Scope boundaries.
+- ✅ **Has a concrete PRD** — Problem, Proposed direction, Exact changes, Acceptance criteria, Architecture notes, Scope boundaries. If the PRD came from Designer, it must pass Designer's architecture check (see `designer.md` → "Architecture check").
 - ✅ **Has a `model:` label** — `model:haiku` | `model:sonnet` | `model:opus`, with the body shaped to that tier (see below).
 - ✅ **Single-session executable** — small or medium scope. `large` issues get broken into sub-issues first; only leaves go to Up Next For The Doer.
 - ✅ **Not a tracker / parent** — issues with Task-checkbox bodies (`- [ ] #123`) or `strategy + large` without children stay in **Backlog** as navigation aids. Only their executable leaves get promoted.
@@ -56,7 +56,7 @@ If an issue fails the gate, it stays in Backlog — or route to **Designer Backl
   - **Problem / Current state** — the why, with screenshot observations if attached.
   - **Proposed direction** — how it could work, key behaviors.
   - **Acceptance criteria** — concrete, checkable pass/fail conditions. The Doer uses these to self-verify.
-  - **Where to look** — file/function hints saving Doer exploration time.
+  - **Architecture notes** — file / function / selector references validated against current main, adjacent surfaces that may ripple, data-flow assumptions, CLAUDE.md patterns the change respects. This is the Doer's navigation pointer AND the validation evidence. PM-authored PRDs get a lighter version (file hints); Designer-authored PRDs include full architecture-check findings.
   - **Scope boundaries** — what's in, what's out.
   - **Open questions** — anything that needs discussion before building.
 - **Parent/child issues** — for themes spanning multiple commits, create a parent issue with a Tasks-style checkbox list (`- [ ] #123 Child title`) in its body. GitHub auto-tracks completion. **Parents stay in Backlog**; only children land in Up Next.
