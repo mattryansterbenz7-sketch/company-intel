@@ -1072,17 +1072,21 @@
     .gc-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
     #gc-float .gc-messages { flex: 1 1 auto; min-height: 40px; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
     #gc-float .gc-empty { color: var(--ci-text-tertiary); font-size: 13px; padding: 32px 20px; text-align: center; line-height: 1.6; }
-    #gc-float .gc-msg { display: flex; flex-direction: column; }
-    #gc-float .gc-msg-user { align-items: flex-end; }
-    #gc-float .gc-msg-assistant { align-items: flex-start; }
-    #gc-float .gc-msg-user .gc-bubble { background: var(--ci-bg-inset); color: var(--ci-text-primary); padding: 8px 12px; border-radius: 10px 10px 3px 10px; font-size: 13px; line-height: 1.5; max-width: 85%; }
-    #gc-float .gc-msg-assistant .gc-bubble { font-size: 13px; line-height: 1.6; color: var(--ci-text-primary); padding: 2px 0; max-width: 100%; }
-    #gc-float .gc-msg-assistant .gc-bubble strong { font-weight: 600; color: var(--ci-text-primary); }
-    #gc-float .gc-msg-assistant .gc-bubble p { margin: 0 0 5px; }
-    #gc-float .gc-msg-assistant .gc-bubble p:last-child { margin-bottom: 0; }
-    #gc-float .gc-msg-assistant .gc-bubble ul { margin: 6px 0 6px 2px; padding: 0; list-style: none; }
-    #gc-float .gc-msg-assistant .gc-bubble li { padding-left: 16px; position: relative; margin-bottom: 3px; }
-    #gc-float .gc-msg-assistant .gc-bubble li::before { content: '\2022'; position: absolute; left: 3px; color: var(--ci-text-on-dark-muted); }
+    /* Pipeline Advisor message turns — shared .chat-turn shape (DESIGN.md decision #10) */
+    #gc-float .chat-turn { margin-bottom: 18px; }
+    #gc-float .chat-turn:last-child { margin-bottom: 6px; }
+    #gc-float .sender-cap { font-size: 12px; font-weight: 600; letter-spacing: -0.005em; color: #6F7782; margin-bottom: 5px; display: flex; align-items: center; gap: 7px; }
+    #gc-float .sender-cap-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ci-accent-primary); flex-shrink: 0; }
+    #gc-float .sender-cap-dot-user { background: var(--ci-text-primary); }
+    #gc-float .msg-user-body { font-size: 13px; line-height: 1.55; color: var(--ci-text-primary); font-weight: 500; }
+    #gc-float .msg-coop-body { font-size: 13px; line-height: 1.6; color: var(--ci-text-primary); font-weight: 400; }
+    #gc-float .msg-coop-body p { margin-bottom: 10px; }
+    #gc-float .msg-coop-body p:last-child { margin-bottom: 0; }
+    #gc-float .msg-coop-body strong { font-weight: 600; color: var(--ci-text-primary); }
+    #gc-float .msg-coop-body h4 { font-size: 13px; font-weight: 600; margin: 12px 0 4px; letter-spacing: -0.005em; }
+    #gc-float .msg-coop-body h4:first-child { margin-top: 0; }
+    #gc-float .msg-coop-body ul { margin: 6px 0 10px 18px; padding: 0; }
+    #gc-float .msg-coop-body li { margin-bottom: 3px; line-height: 1.55; }
     #gc-float .gc-input-row { padding: 10px 14px; border-top: 1px solid var(--ci-border-subtle); display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
     #gc-float .gc-input { background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); color: var(--ci-text-primary); font-size: 14px; padding: 12px 14px; resize: none; font-family: inherit; flex: 1; min-width: 0; min-height: 48px; line-height: 1.5; }
     #gc-float .gc-input:focus { outline: none; border-color: var(--ci-accent-primary); }

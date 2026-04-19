@@ -5811,19 +5811,29 @@ function openStatCardEditor() {
         ? `<div class="gc-empty">${COOP.emptyStateHTML('global')}</div>`
         : '<div class="gc-empty">Ask anything about your pipeline — compare opportunities, draft follow-ups, get strategic advice.</div>';
     } else {
+      // Thinking state: same streaming-caret pattern as company/opportunity chat (DESIGN.md)
       const thinkingHTML = showThinking
-        ? (typeof COOP !== 'undefined' ? `<div class="gc-msg gc-msg-assistant">${COOP.thinkingHTML()}</div>` : '<div class="gc-msg gc-msg-assistant"><div class="gc-bubble gc-thinking"><span class="gc-thinking-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div></div>')
+        ? `<div class="chat-turn chat-turn-coop"><div class="sender-cap"><span class="sender-cap-dot"></span><span>Coop</span></div><div class="msg-coop-body">${typeof COOP !== 'undefined' ? COOP.thinkingHTML() : '<span class="streaming-caret"></span>'}</div></div>`
         : '';
       msgsEl.innerHTML = history.map(m => {
         const text = m.content;
-        const bubble = m.role === 'assistant'
-          ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escHtml(text))
-          : escHtml(text);
-        const prefix = m.role === 'assistant' && typeof COOP !== 'undefined' ? COOP.messagePrefixHTML() : '';
-        const toolBadge = (m.role === 'assistant' && m._toolCalls?.length && typeof renderContextManifest === 'function')
+        if (m.role !== 'assistant') {
+          // User turn — same sender-cap / msg-user-body shape as company/opportunity chat
+          return `<div class="chat-turn chat-turn-user">
+            <div class="sender-cap sender-cap-user"><span class="sender-cap-dot sender-cap-dot-user"></span><span>You</span></div>
+            <div class="msg-user-body">${escHtml(text)}</div>
+          </div>`;
+        }
+        // Assistant (Coop) turn
+        const rendered = typeof renderMarkdown === 'function' ? renderMarkdown(text) : `<p>${escHtml(text)}</p>`;
+        const toolBadge = (m._toolCalls?.length && typeof renderContextManifest === 'function')
           ? renderContextManifest(m._contextManifest, m._toolCalls, 'gc')
           : '';
-        return `<div class="gc-msg gc-msg-${m.role}">${prefix}<div class="gc-bubble">${bubble}</div>${toolBadge}</div>`;
+        return `<div class="chat-turn chat-turn-coop">
+          <div class="sender-cap"><span class="sender-cap-dot"></span><span>Coop</span></div>
+          <div class="msg-coop-body">${rendered}</div>
+          ${toolBadge}
+        </div>`;
       }).join('') + thinkingHTML;
     }
     msgsEl.scrollTop = msgsEl.scrollHeight;

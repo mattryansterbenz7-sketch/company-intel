@@ -6,6 +6,31 @@ function setChatContext(key, context) {
   _chatContextOverrides[key] = context;
 }
 
+// ── User first-name derivation ─────────────────────────────────────────────────
+// Resolved once from chrome.storage.sync prefs, shared across all panels.
+// Fallback: 'You'. Never hardcoded to a specific person's name.
+let _chatUserFirstName = 'You';
+// Callbacks registered by buildChatPanel() to re-render sender labels once the
+// name resolves. Allows panels that rendered before the async callback fired to
+// update without a page reload.
+const _chatUserNameReadyCallbacks = [];
+(function _loadChatUserName() {
+  function _applyPrefsName(prefs) {
+    const raw = (prefs && (prefs.name || prefs.fullName)) || '';
+    const derived = raw ? raw.split(/\s/)[0] : 'You';
+    if (derived !== _chatUserFirstName) {
+      _chatUserFirstName = derived;
+      _chatUserNameReadyCallbacks.forEach(cb => { try { cb(); } catch (e) {} });
+    }
+  }
+  try {
+    chrome.storage.sync.get(['prefs'], d => { _applyPrefsName(d.prefs); });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'sync' && changes.prefs) _applyPrefsName(changes.prefs.newValue);
+    });
+  } catch (e) { /* extension context may not be ready — fallback stays 'You' */ }
+})();
+
 // ── Dynamic chat sizing ───────────────────────────────────────────────────────
 // Auto-grows the floating chat panel within [260px, min(75vh, 720px)].
 // Grow-only mid-conversation; user override (preset click or drag) disables
@@ -243,19 +268,19 @@ function buildChatPanel(container, entry) {
       const msgCount = sess.messages.length;
       const userCount = sess.messages.filter(m => m.role === 'user').length;
       const sessionId = `prev-sess-${panelId}-${idx}`;
+      const prevUserName = _chatUserFirstName || 'You';
       const msgsHTML = sess.messages.map(m => {
         const text = typeof m.content === 'string' ? m.content : (m.content?.[0]?.text || '');
-        const bubble = m.role === 'assistant'
-          ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escapeHtml(text))
-          : escapeHtml(text);
-        const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
-          const inp = m._usage.input || 0, out = m._usage.output || 0;
-          const total = inp + (m._usage.cacheCreation || 0) + (m._usage.cacheRead || 0) + out;
-          const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
-          return `<div class="chat-usage">${modelShort ? modelShort + ' · ' : ''}${total.toLocaleString()} tok</div>`;
-        })() : '';
-        return `<div class="chat-msg chat-msg-${m.role} chat-msg-readonly">
-          <div class="chat-msg-bubble">${bubble}</div>${usageBadge}
+        if (m.role === 'user') {
+          return `<div class="chat-turn chat-turn-user chat-turn-readonly">
+            <div class="sender-cap sender-cap-user"><span class="sender-cap-dot sender-cap-dot-user"></span><span>${escapeHtml(prevUserName)}</span></div>
+            <div class="msg-user-body">${escapeHtml(text)}</div>
+          </div>`;
+        }
+        const bubble = typeof renderMarkdown === 'function' ? renderMarkdown(text) : `<p>${escapeHtml(text)}</p>`;
+        return `<div class="chat-turn chat-turn-coop chat-turn-readonly">
+          <div class="sender-cap"><span class="sender-cap-dot"></span><span>Coop</span></div>
+          <div class="msg-coop-body">${bubble}</div>
         </div>`;
       }).join('');
       return `<div class="prev-session-item" id="${sessionId}">
@@ -374,6 +399,25 @@ function buildChatPanel(container, entry) {
   // Structured meetings (populated by "Load meeting notes" button or auto-fetch)
   let meetingsContext = (entry.cachedMeetings?.length) ? entry.cachedMeetings : null;
 
+  // ── Cost disclosure helper ────────────────────────────────────────────────────
+  // Returns { html, cost, tokenStr, modelShort } for a message's usage data.
+  // The HTML is the hidden .chat-cost-detail span; revealed on .chat-cost-toggle click.
+  function _buildCostData(m) {
+    if (!m._usage) return null;
+    const inp = m._usage.input || 0, out = m._usage.output || 0;
+    const cacheW = m._usage.cacheCreation || 0, cacheR = m._usage.cacheRead || 0;
+    const total = inp + cacheW + cacheR + out;
+    const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
+    const isGpt = (m._model || '').startsWith('gpt');
+    const isMini = (m._model || '').includes('mini') || (m._model || '').includes('nano');
+    const isHaiku = (m._model || '').includes('haiku');
+    const inRate = isGpt ? (isMini ? 0.0004 : 0.01) : (isHaiku ? 0.001 : 0.003);
+    const outRate = isGpt ? (isMini ? 0.0016 : 0.03) : (isHaiku ? 0.005 : 0.015);
+    const cost = (inp / 1000) * inRate + (cacheW / 1000) * inRate * 1.25 + (cacheR / 1000) * inRate * 0.10 + (out / 1000) * outRate;
+    const costStr = cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
+    return { modelShort, total, costStr };
+  }
+
   function renderHistory(showThinking) {
     const isMeetingChat = isMeetingChatKey(chatKey);
     const promptSet = isMeetingChat ? _meetingQuickPrompts : _chatQuickPrompts;
@@ -385,66 +429,134 @@ function buildChatPanel(container, entry) {
       : `<div class="chat-empty">Ask anything about ${entry.company}${entry.jobTitle ? ' — ' + entry.jobTitle : ''}.${qpHTML}</div>`;
     // Thinking state: streaming caret only — no bouncing dots (DESIGN.md)
     const thinkingHTML = showThinking
-      ? `<div class="chat-msg chat-msg-assistant">${typeof COOP !== 'undefined' ? COOP.thinkingHTML() : '<span class="streaming-caret"></span>'}</div>`
+      ? `<div class="chat-turn chat-turn-coop"><div class="sender-cap"><span class="sender-cap-dot"></span><span>Coop</span></div><div class="msg-coop-body">${typeof COOP !== 'undefined' ? COOP.thinkingHTML() : '<span class="streaming-caret"></span>'}</div></div>`
       : '';
+
+    // Determine which assistant message is the last (for cost disclosure)
+    let lastAssistantIdx = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'assistant') { lastAssistantIdx = i; break; }
+    }
+
+    const userName = _chatUserFirstName || 'You';
+
     msgsEl.innerHTML = history.length === 0
       ? emptyHTML
       : history.map((m, idx) => {
           const text = m.content[0]?.text || m.content;
-          const bubble = m.role === 'assistant'
-            ? (typeof renderMarkdown === 'function' ? renderMarkdown(text) : escapeHtml(text))
-            : escapeHtml(text);
-          const isLastAssistant = m.role === 'assistant' && idx === history.length - 1;
-          const followup = isLastAssistant
-            ? `<div class="chat-followups"><button class="chat-followup-btn" data-followup="Say more">Say more</button><button class="chat-followup-btn" data-followup="What are the key takeaways?">Key takeaways</button></div>`
-            : '';
-          const saveBtn = m.role === 'assistant' ? `<button class="chat-save-answer" data-idx="${idx}" title="Save as reusable answer pattern" style="background:none;border:none;font-size:11px;cursor:pointer;opacity:0.4;padding:2px;font-family:inherit;color:var(--ci-text-tertiary);">Save</button>` : '';
-          const copyBtn = m.role === 'assistant' ? `<button class="chat-copy-answer" data-idx="${idx}" title="Copy to clipboard" style="background:none;border:none;font-size:11px;cursor:pointer;opacity:0.4;padding:2px;font-family:inherit;color:var(--ci-text-tertiary);">Copy</button>` : '';
-          // No messagePrefixHTML — assistant messages are plain typographic body (DESIGN.md)
-          const prefix = '';
-          const usageBadge = (m.role === 'assistant' && m._usage) ? (() => {
-            const inp = m._usage.input || 0, out = m._usage.output || 0;
-            const cacheW = m._usage.cacheCreation || 0, cacheR = m._usage.cacheRead || 0;
-            const totalIn = inp + cacheW + cacheR, total = totalIn + out;
-            const modelShort = (m._model || '').replace('claude-', '').replace('-20251001', '').replace('gpt-', 'GPT-');
-            const isGpt = (m._model || '').startsWith('gpt');
-            const isMini = (m._model || '').includes('mini') || (m._model || '').includes('nano');
-            const isHaiku = (m._model || '').includes('haiku');
-            const inRate = isGpt ? (isMini ? 0.0004 : 0.01) : (isHaiku ? 0.001 : 0.003);
-            const outRate = isGpt ? (isMini ? 0.0016 : 0.03) : (isHaiku ? 0.005 : 0.015);
-            const cost = (inp / 1000) * inRate + (cacheW / 1000) * inRate * 1.25 + (cacheR / 1000) * inRate * 0.10 + (out / 1000) * outRate;
-            const costStr = cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
-            const cacheHint = (cacheW || cacheR) ? ` · <span style="color:#8a8e94;">cache +${cacheW.toLocaleString()}w/${cacheR.toLocaleString()}r</span>` : '';
-            return `<div class="chat-usage">${modelShort} · ${total.toLocaleString()} tok${cacheHint} · ${costStr}</div>`;
-          })() : '';
-          const toolBadge = (m.role === 'assistant' && m._toolCalls?.length)
+          const isAssistant = m.role === 'assistant';
+          const isLastAssistant = isAssistant && idx === lastAssistantIdx && !showThinking;
+
+          // Inline error turn — model call errors stored in history as assistant messages flagged with _isError
+          if (m._isError) {
+            const errText = escapeHtml(text || 'Something went wrong. Try again.');
+            const retryPrompt = m._retryPrompt ? escapeHtml(m._retryPrompt) : '';
+            return `<div class="chat-turn chat-turn-coop chat-turn-error">
+              <div class="sender-cap"><span class="sender-cap-dot"></span><span>Coop</span></div>
+              <div class="chat-error-banner">
+                <span class="chat-error-text">${errText}</span>
+                ${retryPrompt ? `<button class="chat-error-retry" data-retry-prompt="${retryPrompt}" tabindex="0">Retry</button>` : ''}
+              </div>
+            </div>`;
+          }
+
+          if (!isAssistant) {
+            // User turn — weight 500, sender cap with near-black dot
+            return `<div class="chat-turn chat-turn-user">
+              <div class="sender-cap sender-cap-user"><span class="sender-cap-dot sender-cap-dot-user"></span><span>${escapeHtml(userName)}</span></div>
+              <div class="msg-user-body">${escapeHtml(text)}</div>
+            </div>`;
+          }
+
+          // Assistant (Coop) turn — weight 400, paragraph rhythm
+          const rendered = typeof renderMarkdown === 'function' ? renderMarkdown(text) : `<p>${escapeHtml(text)}</p>`;
+
+          // Tool-use badge
+          const toolBadge = m._toolCalls?.length
             ? (typeof renderContextManifest === 'function'
               ? renderContextManifest(m._contextManifest, m._toolCalls, 'chat')
-              : `<div class="chat-usage" style="color:#7C6EF0;">↳ Coop pulled: ${[...new Set(m._toolCalls.map(t => t.name))].join(', ')}</div>`)
+              : `<div class="chat-tool-badge">↳ Coop pulled: ${escapeHtml([...new Set(m._toolCalls.map(t => t.name))].join(', '))}</div>`)
             : '';
-          const fallbackNote = (m.role === 'assistant' && m._fellBackFrom) ? (() => {
+
+          // Fallback note — subtle italic note under reply (first fallback only per session handled upstream)
+          const fallbackNote = m._fellBackFrom ? (() => {
             const origLabel = CHAT_MODELS.find(x => x.id === m._fellBackFrom)?.label || m._fellBackFrom;
             const newLabel  = CHAT_MODELS.find(x => x.id === m._model)?.label || m._model;
-            return `<div class="chat-fallback-note">Answered by ${escapeHtml(newLabel)} — ${escapeHtml(origLabel)} unavailable</div>`;
+            return `<div class="chat-fallback-note">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 5L5 8L8 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              answered by ${escapeHtml(newLabel)} — ${escapeHtml(origLabel)} unavailable
+            </div>`;
           })() : '';
-          return `<div class="chat-msg chat-msg-${m.role}">${prefix}<div class="chat-msg-bubble">${bubble}</div>${copyBtn}${saveBtn}${toolBadge}${fallbackNote}${usageBadge}${followup}</div>`;
+
+          // Cost disclosure — hidden by default, toggled by "costs" affordance on last turn only
+          const costData = _buildCostData(m);
+          const costHTML = (isLastAssistant && costData) ? `<div class="chat-cost-wrap">
+            <button class="chat-cost-toggle" tabindex="0" aria-expanded="false">costs</button>
+            <span class="chat-cost-detail" hidden>${escapeHtml(costData.modelShort)} · ${costData.total.toLocaleString()} tok · ${escapeHtml(costData.costStr)}</span>
+          </div>` : '';
+
+          // Quick reactions group: copy + save (thumbs up/down are future — scope boundary)
+          const copyBtn = `<button class="chat-chip chat-chip-copy" data-idx="${idx}" tabindex="0" title="Copy to clipboard">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 1h6v2H3v5H1V1z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            Copy
+          </button>`;
+          const saveBtn = `<button class="chat-chip chat-chip-save" data-idx="${idx}" tabindex="0" title="Save as reusable answer pattern">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M5.5 1v7M2.5 5l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 9h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            Save
+          </button>`;
+
+          // Refine group chips — only on last assistant turn with followup chips
+          let chipsHTML = '';
+          if (isLastAssistant) {
+            const refineChips = [
+              { label: 'Say more', followup: 'Say more' },
+              { label: 'Key takeaways', followup: 'What are the key takeaways?' },
+              { label: 'Tighten', followup: 'Tighten this — cut 30% without losing the key points.' },
+              { label: 'Warmer', followup: 'Make this warmer and more conversational.' },
+            ];
+            const refineHTML = refineChips.map(c =>
+              `<button class="chat-chip chat-followup-btn" data-followup="${escapeHtml(c.followup)}" tabindex="0">${escapeHtml(c.label)}</button>`
+            ).join('');
+            // Two semantic groups with divider
+            chipsHTML = `<div class="chat-chips-row" role="group" aria-label="Message actions">
+              <div class="chat-chip-group">${copyBtn}${saveBtn}</div>
+              <div class="chat-chip-divider" aria-hidden="true"></div>
+              <div class="chat-chip-group">${refineHTML}</div>
+            </div>`;
+          } else {
+            // Non-last turns: just copy+save, no Refine group
+            chipsHTML = `<div class="chat-chips-row" role="group" aria-label="Message actions">
+              <div class="chat-chip-group">${copyBtn}${saveBtn}</div>
+            </div>`;
+          }
+
+          return `<div class="chat-turn chat-turn-coop">
+            <div class="sender-cap"><span class="sender-cap-dot"></span><span>Coop</span></div>
+            <div class="msg-coop-body">${rendered}</div>
+            ${toolBadge}${fallbackNote}
+            ${chipsHTML}
+            ${costHTML}
+          </div>`;
         }).join('') + thinkingHTML;
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
     // Bind context manifest expand/collapse
     if (typeof bindContextManifestEvents === 'function') bindContextManifestEvents(msgsEl);
 
-    // Bind follow-up chip clicks
+    // Bind follow-up chip clicks (Refine group)
     msgsEl.querySelectorAll('.chat-followup-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         inputEl.value = btn.dataset.followup;
         inputEl.focus();
         send();
       });
+      btn.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
+      });
     });
 
-    // Copy answer buttons
-    msgsEl.querySelectorAll('.chat-copy-answer').forEach(btn => {
+    // Copy chips
+    msgsEl.querySelectorAll('.chat-chip-copy').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.idx);
         let text = (typeof history[idx]?.content === 'string' ? history[idx].content : history[idx]?.content?.[0]?.text) || '';
@@ -453,31 +565,30 @@ function buildChatPanel(container, entry) {
         const delimCount = (text.match(/^[\s]*---[\s]*$/gm) || []).length;
         if (delimCount === 2) {
           const match = text.match(/^[\s]*---[\s]*$([\s\S]*?)^[\s]*---[\s]*$/m);
-          if (match && match[1]) {
-            text = match[1].trim();
-          }
+          if (match && match[1]) text = match[1].trim();
         }
 
         // Remove common opening phrases (case-insensitive)
         text = text.replace(/^(?:here['\s]*s(?:\s+my)?|i['\s]*d\s+(?:suggest|say|emphasize|highlight|point\s+out)|i\s+think|i\s+would|the\s+answer|my\s+answer|this\s+would\s+be)[:\s]*/i, '').trim();
 
-        // Remove common closing questions/offers (after the answer)
+        // Remove common closing questions/offers
         text = text.replace(/\n\n(?:does\s+that|what(?:\s+do\s+)?you|feel\s+free|let\s+me|you\s+could|happy\s+to|does\s+this|would\s+that|any\s+other)[\w\s.,?;!-]*/i, '').trim();
 
-        // Strip outer quotation marks if present
         const clean = text.replace(/^["']|["']$/g, '').trim();
-
         navigator.clipboard.writeText(clean).then(() => {
-          btn.textContent = '✓ Copied';
-          btn.style.color = '#00BDA5';
-          btn.style.opacity = '0.7';
-          setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.opacity = '0.4'; }, 1500);
+          const orig = btn.innerHTML;
+          btn.textContent = 'Copied';
+          btn.classList.add('chat-chip-active');
+          setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('chat-chip-active'); }, 1500);
         });
+      });
+      btn.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
       });
     });
 
-    // Save answer buttons
-    msgsEl.querySelectorAll('.chat-save-answer').forEach(btn => {
+    // Save chips
+    msgsEl.querySelectorAll('.chat-chip-save').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.idx);
         const m = history[idx];
@@ -502,13 +613,48 @@ function buildChatPanel(container, entry) {
             source: 'manual-save'
           });
           chrome.storage.local.set({ storyTime: st }, () => {
-            btn.textContent = '✓ Saved';
-            btn.style.opacity = '0.7';
-            btn.style.color = '#15803d';
+            const orig = btn.innerHTML;
+            btn.textContent = 'Saved';
+            btn.classList.add('chat-chip-active');
             btn.disabled = true;
-            setTimeout(() => { btn.textContent = 'Save'; btn.style.opacity = '0.4'; btn.style.color = ''; btn.disabled = false; }, 2000);
+            setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('chat-chip-active'); btn.disabled = false; }, 2000);
           });
         });
+      });
+      btn.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
+      });
+    });
+
+    // Cost disclosure toggle — click "costs" to expand inline detail
+    msgsEl.querySelectorAll('.chat-cost-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const detail = btn.nextElementSibling;
+        if (!detail) return;
+        const expanded = !detail.hidden;
+        detail.hidden = expanded;
+        btn.setAttribute('aria-expanded', String(!expanded));
+      });
+      btn.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
+      });
+    });
+
+    // Retry buttons on error turns
+    msgsEl.querySelectorAll('.chat-error-retry').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const prompt = btn.dataset.retryPrompt;
+        if (!prompt) return;
+        // Remove only the error turn — the original user turn stays in history.
+        // Pass fromRetry:true so send() skips pushing a second user turn.
+        const errorIdx = history.findIndex(m => m._isError && (m._retryPrompt === prompt));
+        if (errorIdx >= 0) history.splice(errorIdx, 1);
+        inputEl.value = prompt;
+        inputEl.dispatchEvent(new Event('input'));
+        send({ fromRetry: true });
+      });
+      btn.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
       });
     });
   }
@@ -517,7 +663,7 @@ function buildChatPanel(container, entry) {
     scheduleSave();
   }
 
-  async function send() {
+  async function send({ fromRetry = false } = {}) {
     const text = inputEl.value.trim();
     if (!text) return;
 
@@ -525,7 +671,10 @@ function buildChatPanel(container, entry) {
     inputEl.style.height = '';
     // Toggle send button state back to empty
     sendBtn.classList.remove('has-text');
-    history.push({ role: 'user', content: [{ type: 'text', text }] });
+    // On retry the user turn is already in history — skip the push to avoid duplicates
+    if (!fromRetry) {
+      history.push({ role: 'user', content: [{ type: 'text', text }] });
+    }
     renderHistory(true);
 
     // Grow panel to fit the thinking state
@@ -590,8 +739,19 @@ function buildChatPanel(container, entry) {
       if (result.contextManifest) msgEntry._contextManifest = result.contextManifest;
       history.push(msgEntry);
     } else {
-      const errMsg = result?.error || 'Sorry, something went wrong. Try again.';
-      history.push({ role: 'assistant', content: [{ type: 'text', text: errMsg }] });
+      // Errors render as inline Coop turns — not toasts, not plain text (DESIGN.md / #251)
+      const errMsg = result?.error || 'Couldn\'t reach the model. Network or rate limit.';
+      // Find the most recent user message to use as the retry prompt
+      const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
+      const retryPrompt = lastUserMsg
+        ? (typeof lastUserMsg.content === 'string' ? lastUserMsg.content : lastUserMsg.content?.[0]?.text || '')
+        : '';
+      history.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: errMsg }],
+        _isError: true,
+        _retryPrompt: retryPrompt,
+      });
     }
 
     saveHistory();
@@ -725,6 +885,12 @@ function buildChatPanel(container, entry) {
 
   renderHistory();
 
+  // Re-render sender labels when the user's first name resolves asynchronously.
+  // This handles the race where buildChatPanel() ran before the storage callback
+  // fired and rendered "You" instead of the actual name. Also fires when the
+  // user later changes their name in Preferences (via the onChanged listener above).
+  _chatUserNameReadyCallbacks.push(() => { renderHistory(); });
+
   // Quick prompt click handler (delegated on messages area)
   msgsEl.addEventListener('click', e => {
     const btn = e.target.closest('[data-qp-prompt]');
@@ -737,7 +903,7 @@ function buildChatPanel(container, entry) {
   // Listen for INSIGHTS_CAPTURED broadcasts and annotate the last assistant message
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'INSIGHTS_CAPTURED' && msg.insights?.length) {
-      const allMsgs = msgsEl.querySelectorAll('.chat-msg-assistant');
+      const allMsgs = msgsEl.querySelectorAll('.chat-turn-coop');
       const lastMsg = allMsgs[allMsgs.length - 1];
       if (lastMsg && !lastMsg.querySelector('.insight-annotation')) {
         lastMsg.insertAdjacentHTML('beforeend', `<div class="insight-annotation">
