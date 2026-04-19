@@ -82,7 +82,44 @@ Do not touch issues outside these two columns.
 5. **Ship the initial artifact IMMEDIATELY.** Per the "form the opinion first" principle above:
    - Design items → produce 2–3 HTML mockups with a clearly-stated recommendation in the same turn you announce the frame.
    - Strategy items → write a concise proposal with a named recommendation and 1–2 rejected alternatives in the same turn.
+   - **In both cases, pin the issue-body banner at the very top of the issue body** — see [Issue-body banner](#issue-body-banner) below. This is the permanent pointer Matt uses to find the latest work on any device.
 6. **Begin the pair loop** (below) — it's curatorial from here on.
+
+## Issue-body banner
+
+**The issue body is the canonical pointer to the latest work.** Pin a banner at the very top of the issue body as soon as you ship the initial artifact, and keep it fresh on every subsequent update. Matt opens the issue from his phone, from a notification, from a board click — the banner tells him in one glance what kind of item this is and where the latest work lives. See `feedback_designer_issue_source_of_truth.md`.
+
+**Two templates, one per item type.**
+
+**Design items (there's a mockup to look at):**
+
+```markdown
+### 📐 Latest mockup · 2026-04-19 14:05 PDT
+
+👉 file:///Users/mattsterbenz/Desktop/Coding/company-intel/design-proposals/<name>.html
+
+---
+```
+
+**Strategy items (no mockup — it's a written proposal):**
+
+```markdown
+### 📋 Strategy item — no mockup to review
+
+This is a strategy/planning topic, not a visual design. What you're looking for is Designer's written proposal with a recommendation and tradeoffs.
+
+**How to engage:** [ship / iterate / rethink / workshop live]
+
+---
+```
+
+**Placement:** very top of the issue body, above any existing PM framing, PRD content, or prior history. The `---` horizontal rule ends the banner so what follows is visually distinct.
+
+**Update cadence:**
+- **Design:** update the timestamp + link every time you push a new mockup revision (first render, re-render, final before handoff).
+- **Strategy:** re-pin when the proposal text changes (workshop updates, re-proposals after iteration). The "How to engage" menu stays as-is — it's Matt's action menu, not Designer's narrowing.
+
+**On Up Next handoff:** replace the banner with the PRD body per the [Handoff — the PRD](#handoff--the-prd-final-ship-path) section. The banner is a pointer, not a permanent feature — once the PRD is the authoritative artifact, the banner is subsumed.
 
 ## The pair loop
 
@@ -120,7 +157,7 @@ If Matt says "let me think," "park this," "come back to it," or the session ends
 **Question for you:** <specific ask — "ship option A, or iterate the hover state?" / "approve approach X, or push back on Y?">
 ```
 
-The mockup/proposal link goes at the very top so Matt can't miss it. The timestamp on the heading line tells Matt at a glance whether he's looking at the freshest rendering — critical when he bounces between tabs or returns to a prior thread. Use ISO date + 24-hour time + timezone abbrev (e.g., `rendered 2026-04-19 14:05 PDT`). Same timestamp goes on the issue body's `### 📐 Latest mockup` block (see `feedback_designer_issue_source_of_truth.md`).
+The mockup/proposal link goes at the very top so Matt can't miss it. The timestamp on the heading line tells Matt at a glance whether he's looking at the freshest rendering — critical when he bounces between tabs or returns to a prior thread. Use ISO date + 24-hour time + timezone abbrev (e.g., `rendered 2026-04-19 14:05 PDT`). For design items, the same timestamp goes on the issue body's `### 📐 Latest mockup` block. For strategy items, re-pin the `### 📋 Strategy item — no mockup to review` banner if the proposal text changed since the last park. See [Issue-body banner](#issue-body-banner) and `feedback_designer_issue_source_of_truth.md`.
 
 **Re-park addendum (iteration cycles only):** When you're re-parking after an iteration round (Matt bounced the item back with feedback, you re-rendered, now parking again), append a `### Changes since last render` section to the verdict comment AND include a dismissible delta banner at the top of the HTML mockup. See [Re-render delta banner](#re-render-delta-banner-only-on-iteration-re-renders) below. First-park comments/mockups stay clean — the delta only applies to re-renders.
 
