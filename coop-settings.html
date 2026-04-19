@@ -530,6 +530,682 @@
       .cost-summary-row { grid-template-columns: 1fr; }
       .cost-provider-grid { grid-template-columns: 1fr; }
     }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       Apply Mode — Answer Library
+       All colors use existing design tokens only. No background washes on
+       bucket accents — dot + left border only (DESIGN.md compliance).
+    ══════════════════════════════════════════════════════════════════════ */
+
+    /* Shell layout: narrow left nav + main pane */
+    .am-shell {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    /* Left nav */
+    .am-nav {
+      position: sticky;
+      top: 16px;
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-md);
+      padding: 12px 8px;
+      box-shadow: var(--ci-shadow-sm);
+    }
+    .am-nav-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--ci-text-tertiary);
+      padding: 0 10px 8px;
+    }
+    .am-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ci-text-secondary);
+      background: none;
+      border: none;
+      border-radius: var(--ci-radius-sm);
+      cursor: pointer;
+      font-family: inherit;
+      text-align: left;
+      transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+    }
+    .am-nav-item:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .am-nav-item.active {
+      background: var(--ci-bg-raised);
+      color: var(--ci-text-primary);
+      font-weight: 600;
+      box-shadow: var(--ci-shadow-sm);
+    }
+    .am-nav-item svg { color: var(--ci-text-tertiary); flex-shrink: 0; }
+    .am-nav-item.active svg { color: var(--ci-accent-primary); }
+
+    /* Main pane */
+    .am-main { min-width: 0; }
+    .am-crumbs { font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 6px; }
+    .am-title { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+    .am-lede { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.5; margin-bottom: 24px; max-width: 640px; }
+
+    /* ── Bucket taxonomy (Section 1) ── */
+    .am-tax-wrap {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 24px;
+      align-items: start;
+      margin-bottom: 28px;
+    }
+    .am-tax-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    /* Bucket semantic color variable — dot + left border only, no bg wash */
+    .b-comp   { --b: var(--ci-accent-teal); }
+    .b-spon   { --b: var(--ci-accent-blue); }
+    .b-avail  { --b: var(--ci-accent-amber); }
+    .b-exp    { --b: var(--ci-accent-purple); }
+    .b-mot    { --b: var(--ci-accent-primary); }
+    .b-why    { --b: var(--ci-accent-red); }
+    .b-other  { --b: var(--ci-text-tertiary); }
+
+    .am-bucket-pill {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 9px 13px 10px;
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-left: 2px solid var(--b, var(--ci-border-strong));
+      border-radius: 4px var(--ci-radius-full) var(--ci-radius-full) 4px;
+      min-width: 160px;
+    }
+    .am-pill-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ci-text-primary);
+      letter-spacing: -0.005em;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .am-pill-name::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--b, var(--ci-border-strong));
+      flex-shrink: 0;
+    }
+    .am-pill-desc {
+      font-size: 11px;
+      color: var(--ci-text-secondary);
+      line-height: 1.4;
+      padding-left: 14px;
+    }
+
+    /* Matching callout */
+    .am-matching-note {
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-left: 3px solid var(--ci-accent-primary);
+      border-radius: var(--ci-radius-md);
+      padding: 14px 18px;
+    }
+    .am-matching-note-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ci-text-primary);
+      margin-bottom: 6px;
+    }
+    .am-matching-note p {
+      font-size: 12.5px;
+      color: var(--ci-text-secondary);
+      line-height: 1.55;
+      margin-bottom: 6px;
+    }
+    .am-matching-note p:last-child { margin-bottom: 0; }
+    .am-mn-sub { font-size: 11.5px !important; color: var(--ci-text-tertiary) !important; }
+    .am-matching-note strong { color: var(--ci-text-primary); font-weight: 600; }
+
+    /* b-mini inline bucket chip used inside callout */
+    .b-mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 1px 7px 1px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--ci-border-default);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ci-text-primary);
+      background: var(--ci-bg-raised);
+    }
+    .b-mini::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--b, var(--ci-border-strong));
+    }
+
+    /* Why 7 collapse card */
+    .am-why7-card {
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-md);
+      padding: 16px 18px;
+    }
+    .am-why7-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ci-text-primary);
+      margin-bottom: 6px;
+    }
+    .am-why7-body {
+      font-size: 12px;
+      color: var(--ci-text-secondary);
+      line-height: 1.55;
+    }
+    .am-why7-body strong { color: var(--ci-text-primary); font-weight: 600; }
+
+    /* ── Library head: counter + search ── */
+    .am-lib-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .am-lib-counter {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ci-text-primary);
+      letter-spacing: -0.005em;
+    }
+    .am-lib-search {
+      position: relative;
+      width: 260px;
+    }
+    .am-lib-search svg {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--ci-text-tertiary);
+      pointer-events: none;
+    }
+    .am-lib-search input {
+      width: 100%;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 10px 7px 30px;
+      background: var(--ci-bg-inset);
+      border: 1px solid transparent;
+      border-radius: var(--ci-radius-sm);
+      color: var(--ci-text-primary);
+      outline: none;
+      transition: border-color var(--motion-xs) var(--ease-out);
+    }
+    .am-lib-search input::placeholder { color: var(--ci-text-tertiary); }
+    .am-lib-search input:focus { border-color: var(--ci-border-strong); background: var(--ci-bg-raised); }
+
+    /* ── Library list ── */
+    .am-lib-list {
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-md);
+      overflow: hidden;
+    }
+
+    /* Skeleton rows (loading state — not a spinner) */
+    .am-skeleton-row {
+      height: 52px;
+      background: var(--ci-bg-raised);
+      border-bottom: 1px solid var(--ci-border-subtle);
+      position: relative;
+      overflow: hidden;
+    }
+    .am-skeleton-row:last-child { border-bottom: none; }
+    .am-skeleton-row::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%);
+      animation: am-shimmer 1.4s ease-in-out infinite;
+    }
+    @keyframes am-shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    /* Bucket row */
+    .am-bucket-row {
+      background: var(--ci-bg-raised);
+      border-bottom: 1px solid var(--ci-border-subtle);
+      border-left: 3px solid var(--b, var(--ci-border-default));
+      cursor: pointer;
+      transition: background var(--motion-xs) var(--ease-out);
+    }
+    .am-bucket-row:last-child { border-bottom: none; }
+    .am-bucket-row:hover { background: #FAFBFC; }
+
+    .am-bucket-row-header {
+      display: grid;
+      grid-template-columns: 180px 1fr 80px 32px;
+      gap: 16px;
+      align-items: center;
+      padding: 13px 18px 13px 15px;
+      user-select: none;
+    }
+    .am-row-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ci-text-primary);
+      letter-spacing: -0.005em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .am-row-name::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--b, var(--ci-border-strong));
+      flex-shrink: 0;
+    }
+    .am-row-preview {
+      font-size: 12px;
+      color: var(--ci-text-secondary);
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-style: italic;
+    }
+    .am-row-preview.empty { font-style: normal; color: var(--ci-text-tertiary); }
+    .am-row-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ci-text-secondary);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .am-row-count .n { font-size: 13px; color: var(--ci-text-primary); }
+    .am-row-caret {
+      color: var(--ci-text-tertiary);
+      transition: transform var(--motion-sm) var(--ease-out);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .am-bucket-row.expanded .am-row-caret {
+      transform: rotate(90deg);
+      color: var(--ci-text-primary);
+    }
+
+    /* Expanded content area */
+    .am-expanded {
+      display: none;
+      padding: 4px 18px 16px 15px;
+      background: #F7F9FB;
+      border-top: 1px solid var(--ci-border-subtle);
+    }
+    .am-bucket-row.expanded .am-expanded { display: block; }
+
+    .am-expanded-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 2px 12px;
+    }
+    .am-expanded-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--ci-text-tertiary);
+    }
+    .am-add-btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 10px;
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm);
+      color: var(--ci-text-secondary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: color var(--motion-xs), border-color var(--motion-xs);
+    }
+    .am-add-btn:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+
+    /* Empty state */
+    .am-empty-state {
+      text-align: center;
+      padding: 24px 16px;
+      color: var(--ci-text-tertiary);
+      font-size: 13px;
+    }
+    .am-empty-state .am-empty-cta {
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ci-accent-primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 0;
+    }
+    .am-empty-cta:hover { opacity: 0.8; }
+
+    /* Pairing card */
+    .am-pair-card {
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-md);
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      position: relative;
+      transition: box-shadow var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    }
+    .am-pair-card:last-child { margin-bottom: 0; }
+    .am-pair-card:hover { box-shadow: var(--ci-shadow-sm); border-color: var(--ci-border-strong); }
+    .am-pair-card.editing { border-color: var(--ci-accent-primary); box-shadow: 0 0 0 3px rgba(252,99,107,0.08); }
+
+    /* Pair view mode */
+    .am-pair-view {}
+    .am-pair-q-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--ci-text-tertiary);
+      margin-bottom: 3px;
+    }
+    .am-pair-q {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ci-text-primary);
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+    .am-pair-a-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--ci-text-tertiary);
+      margin-bottom: 4px;
+    }
+    .am-pair-a {
+      font-size: 13px;
+      color: var(--ci-text-primary);
+      line-height: 1.55;
+      padding: 9px 11px;
+      background: var(--ci-bg-base);
+      border-radius: var(--ci-radius-sm);
+      border: 1px solid var(--ci-border-subtle);
+    }
+    .am-pair-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--ci-border-subtle);
+    }
+    .am-pair-verbatim-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ci-accent-purple);
+      background: rgba(124,110,240,0.08);
+      padding: 2px 8px;
+      border-radius: var(--ci-radius-full);
+    }
+    .am-pair-updated {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--ci-text-tertiary);
+    }
+
+    /* Pair action buttons (edit/delete) — visible on hover */
+    .am-pair-actions {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity var(--motion-xs);
+    }
+    .am-pair-card:hover .am-pair-actions { opacity: 1; }
+    .am-pair-action-btn {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      border-radius: var(--ci-radius-sm);
+      color: var(--ci-text-tertiary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--motion-xs), color var(--motion-xs);
+    }
+    .am-pair-action-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .am-pair-action-btn.danger:hover { background: rgba(232,56,79,0.07); color: var(--ci-accent-red); }
+
+    /* Edit mode */
+    .am-pair-edit { display: none; }
+    .am-pair-card.editing .am-pair-view { display: none; }
+    .am-pair-card.editing .am-pair-edit { display: block; }
+    .am-pair-card.editing .am-pair-actions { display: none; }
+
+    .am-edit-field { margin-bottom: 12px; }
+    .am-edit-field:last-child { margin-bottom: 0; }
+    .am-edit-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--ci-text-tertiary);
+      display: block;
+      margin-bottom: 5px;
+    }
+    .am-edit-input {
+      width: 100%;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--ci-text-primary);
+      padding: 8px 10px;
+      background: var(--ci-bg-base);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm);
+      line-height: 1.5;
+      outline: none;
+      transition: border-color var(--motion-xs), box-shadow var(--motion-xs);
+    }
+    .am-edit-input:focus {
+      border-color: var(--ci-accent-primary);
+      box-shadow: 0 0 0 3px rgba(252,99,107,0.08);
+      background: var(--ci-bg-raised);
+    }
+    textarea.am-edit-input { resize: vertical; min-height: 80px; font-family: inherit; }
+
+    .am-edit-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+
+    /* "Use literally" toggle in edit form */
+    .am-verbatim-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0 0;
+    }
+    .am-verbatim-label {
+      font-size: 12px;
+      color: var(--ci-text-secondary);
+      flex: 1;
+    }
+    .am-verbatim-label strong { color: var(--ci-text-primary); font-weight: 600; }
+
+    /* Bucket dropdown in edit form */
+    .am-bucket-select {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 10px;
+      background: var(--ci-bg-base);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm);
+      color: var(--ci-text-primary);
+      outline: none;
+      width: 100%;
+    }
+    .am-bucket-select:focus { border-color: var(--ci-accent-primary); }
+
+    /* Edit footer */
+    .am-edit-foot {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--ci-border-subtle);
+    }
+    .am-edit-done {
+      margin-left: auto;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      background: var(--ci-text-primary);
+      color: var(--ci-bg-raised);
+      border: none;
+      border-radius: var(--ci-radius-sm);
+      cursor: pointer;
+      transition: opacity var(--motion-xs);
+    }
+    .am-edit-done:hover { opacity: 0.85; }
+    .am-edit-cancel {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      background: transparent;
+      color: var(--ci-text-secondary);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm);
+      cursor: pointer;
+    }
+    .am-edit-cancel:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+    .am-edit-delete {
+      font-family: inherit;
+      font-size: 11px;
+      color: var(--ci-accent-red);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .am-edit-delete:hover { opacity: 0.8; }
+
+    /* Inline delete-confirm prompt (view-mode two-step delete) */
+    .am-pair-delete-confirm { display: none; }
+    .am-pair-card.deleting .am-pair-view   { display: none; }
+    .am-pair-card.deleting .am-pair-edit   { display: none; }
+    .am-pair-card.deleting .am-pair-actions { display: none; }
+    .am-pair-card.deleting .am-pair-delete-confirm {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 6px 0;
+      background: var(--ci-bg-subtle, var(--ci-bg-inset));
+      border-radius: var(--ci-radius-md);
+    }
+    .am-pair-delete-confirm-label {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ci-text-primary);
+    }
+    .am-pair-delete-confirm-btns {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .am-pair-delete-cancel-btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 12px;
+      background: transparent;
+      color: var(--ci-text-secondary);
+      border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-sm);
+      cursor: pointer;
+      transition: border-color var(--motion-xs), color var(--motion-xs);
+    }
+    .am-pair-delete-cancel-btn:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+    .am-pair-delete-btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      background: var(--ci-accent-red);
+      color: #fff;
+      border: none;
+      border-radius: var(--ci-radius-sm);
+      cursor: pointer;
+      transition: opacity var(--motion-xs);
+    }
+    .am-pair-delete-btn:hover { opacity: 0.88; }
+
+    /* Inline compose card (add new pairing) */
+    .am-compose-card {
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-accent-primary);
+      border-radius: var(--ci-radius-md);
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      box-shadow: 0 0 0 3px rgba(252,99,107,0.06);
+    }
+    .am-compose-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ci-text-primary);
+      margin-bottom: 12px;
+    }
+
+    /* Search no-results */
+    .am-no-results {
+      padding: 32px 24px;
+      text-align: center;
+      color: var(--ci-text-tertiary);
+      font-size: 13px;
+      background: var(--ci-bg-raised);
+    }
+
+    @media (max-width: 900px) {
+      .am-shell { grid-template-columns: 1fr; }
+      .am-nav { position: static; }
+      .am-tax-wrap { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -557,6 +1233,7 @@
   <div class="page-tabs">
     <button class="page-tab active" data-tab="settings">Settings</button>
     <button class="page-tab" data-tab="memory">Memory</button>
+    <button class="page-tab" data-tab="apply-mode">Apply Mode</button>
     <button class="page-tab" data-tab="usage">Usage &amp; Costs</button>
   </div>
 
@@ -937,6 +1614,78 @@
     </div>
   </div><!-- /tab-memory -->
 
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- APPLY MODE TAB                                                        -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-apply-mode" class="tab-panel">
+    <div class="am-shell">
+
+      <!-- Left nav -->
+      <nav class="am-nav">
+        <div class="am-nav-label">Apply Mode</div>
+        <button class="am-nav-item active" data-am-section="answer-library">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Answer Library
+        </button>
+      </nav>
+
+      <!-- Main pane -->
+      <div class="am-main">
+        <!-- Answer Library section -->
+        <div id="am-answer-library">
+          <div class="am-crumbs">Coop Settings &rsaquo; Apply Mode &rsaquo; Answer Library</div>
+          <h2 class="am-title">Answer Library</h2>
+          <p class="am-lede">Your standard answers to the questions applications ask over and over. Coop pulls from this library when you're in Apply Mode — so the draft sounds like you, not like a profile summary. Organized by bucket.</p>
+
+          <!-- Section 1: Bucket taxonomy -->
+          <div class="am-tax-wrap">
+            <div class="am-tax-main">
+              <div class="am-tax-pills" id="am-tax-pills">
+                <div class="am-bucket-pill b-comp"><span class="am-pill-name">Compensation</span><span class="am-pill-desc">Base, OTE, equity, bonus expectations</span></div>
+                <div class="am-bucket-pill b-spon"><span class="am-pill-name">Sponsorship &amp; Location</span><span class="am-pill-desc">Work authorization, visa, relocation, remote</span></div>
+                <div class="am-bucket-pill b-avail"><span class="am-pill-name">Availability</span><span class="am-pill-desc">Start date, notice period, timeline</span></div>
+                <div class="am-bucket-pill b-exp"><span class="am-pill-name">Experience</span><span class="am-pill-desc">Years in role, specific skills, proof points</span></div>
+                <div class="am-bucket-pill b-mot"><span class="am-pill-name">Motivation</span><span class="am-pill-desc">Career story, drivers, what you're after</span></div>
+                <div class="am-bucket-pill b-why"><span class="am-pill-name">Why this opportunity</span><span class="am-pill-desc">Why this role, this company, this moment</span></div>
+                <div class="am-bucket-pill b-other"><span class="am-pill-name">Other</span><span class="am-pill-desc">Catch-all for novel questions</span></div>
+              </div>
+              <div class="am-matching-note">
+                <div class="am-matching-note-title">How matching works (semantic, not regex)</div>
+                <p>When a form question comes in, <strong>Claude reads it and routes by meaning</strong>. &ldquo;What&rsquo;s your target OTE?&rdquo; &middot; &ldquo;Salary expectations incl. commission?&rdquo; &middot; &ldquo;Total comp year one?&rdquo; all land in <span class="b-mini b-comp">Compensation</span> &mdash; and Coop <strong>re-writes</strong> a fresh answer from the stored pairings to fit the exact phrasing being asked. Nothing robotic, nothing regex-bound.</p>
+                <p class="am-mn-sub">Verbatim paste only if you mark a pairing &ldquo;Use literally.&rdquo; No bucket match &rarr; falls back to your profile.</p>
+              </div>
+            </div>
+            <div class="am-why7-card">
+              <div class="am-why7-title">Why 7 instead of 9</div>
+              <p class="am-why7-body">&ldquo;Sponsorship&rdquo; and &ldquo;Location/work arrangement&rdquo; frequently co-occur in one question (&ldquo;Are you authorized to work in X and willing to relocate?&rdquo;) &mdash; splitting them forces awkward routing. &ldquo;Culture/motivation&rdquo; and &ldquo;Why this role/company&rdquo; collapse into <strong>Motivation</strong> (how you talk about yourself) and <strong>Why this opportunity</strong> (how you talk about them). The talk-track boundary stays clean.</p>
+            </div>
+          </div>
+
+          <!-- Section 2: Answer Library -->
+          <div class="am-lib-head">
+            <div class="am-lib-counter" id="am-lib-counter">7 buckets &middot; 0 answers</div>
+            <div class="am-lib-search">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <input id="am-search" type="text" placeholder="Search questions, answers, buckets&hellip;" autocomplete="off">
+            </div>
+          </div>
+
+          <!-- Library list (JS-rendered) -->
+          <div class="am-lib-list" id="am-lib-list">
+            <!-- Skeleton rows shown during load -->
+            <div class="am-skeleton-row"></div>
+            <div class="am-skeleton-row"></div>
+            <div class="am-skeleton-row"></div>
+            <div class="am-skeleton-row"></div>
+            <div class="am-skeleton-row"></div>
+            <div class="am-skeleton-row"></div>
+            <div class="am-skeleton-row"></div>
+          </div>
+        </div><!-- /am-answer-library -->
+      </div><!-- /am-main -->
+    </div><!-- /am-shell -->
+  </div><!-- /tab-apply-mode -->
+
 </div>
 
 <!-- Save confirmation toast -->
@@ -946,6 +1695,7 @@
 <script src="coop.js"></script>
 <script src="date-picker.js"></script>
 <script src="coop-settings.js"></script>
+<script src="coop-settings-apply-mode.js"></script>
 
 </body>
 </html>
