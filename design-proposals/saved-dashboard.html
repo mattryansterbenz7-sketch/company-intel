@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>#261 Saved dashboard — full-surface design pass</title>
+<title>#261 Saved dashboard — iteration 2 re-design</title>
 <style>/* Inlined from ../design-tokens.css so this file renders standalone */
   :root {
     --ci-bg-base: #F0F2F5;
@@ -38,459 +38,361 @@
     --motion-md: 300ms;
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  }*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }body {
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
     font-family: var(--ci-font-family);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     color: var(--ci-text-primary);
     background: var(--ci-bg-base);
     padding: 36px 40px 60px;
-  }/* ── Page chrome ── */
-  .page-head {
-    max-width: 1480px; margin: 0 auto 24px;
-  }.page-eyebrow {
-    font-size: 11px; font-weight: 700; letter-spacing: -0.005em;
-    color: var(--ci-text-tertiary);
-    margin-bottom: 6px;
-  }h1 {
-    font-size: 26px; font-weight: 700; letter-spacing: -0.015em;
-    color: var(--ci-text-primary); margin-bottom: 10px;
-  }.page-matt {
-    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
-    max-width: 880px; margin-bottom: 6px;
-  }.page-matt .tag {
-    display: inline-block; font-size: 11px; font-weight: 600;
-    padding: 1px 7px; border-radius: 4px; margin-right: 6px;
-    background: var(--ci-bg-inset); color: var(--ci-text-secondary);
-  }.page-matt .tag.rec { background: rgba(54,179,126,0.10); color: #1B7E53; }.section-label {
-    max-width: 1480px; margin: 44px auto 12px;
-    font-size: 13px; font-weight: 700; letter-spacing: -0.005em;
-    color: var(--ci-text-primary);
-  }.section-label .num {
-    display: inline-block; width: 20px; height: 20px; line-height: 20px;
-    text-align: center; font-size: 11px; font-weight: 700;
-    border-radius: 50%; background: var(--ci-bg-header); color: var(--ci-text-on-dark);
-    margin-right: 8px; vertical-align: 1px;
-  }.section-sub {
-    max-width: 880px; margin: 0 auto 18px;
-    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.6;
-  }/* Center the max-width wrappers */
-  .page-head, .section-label, .section-sub, .surface-frame, .storyboard, .states-grid, .open-q {
-    margin-left: auto; margin-right: auto;
-  }/* ── Dashboard surface frame (simulates the app) ── */
-  .surface-frame {
-    max-width: 1480px;
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-default);
-    border-radius: var(--ci-radius-md);
-    overflow: hidden;
-    box-shadow: var(--ci-shadow-sm);
-  }.topbar {
-    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
-    padding: 10px 22px; display: flex; align-items: center; gap: 18px;
-    font-size: 13px;
-  }.topbar-brand { display: flex; align-items: center; gap: 9px; }.topbar-brand-dot {
-    width: 16px; height: 16px; border-radius: 50%;
-    background: var(--ci-accent-primary);
-  }.topbar-brand-name { font-weight: 700; letter-spacing: -0.005em; }.topbar-nav { display: flex; gap: 16px; font-size: 12px; color: var(--ci-text-on-dark-muted); }.topbar-nav .on { color: var(--ci-text-on-dark); font-weight: 600; }.topbar-spacer { flex: 1; }.topbar-user {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: var(--ci-accent-primary); color: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
-  }/* ── Pipeline Overview header (shipped via #231) ── */
-  .overview {
-    padding: 20px 24px 18px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-  }.overview-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; gap: 24px; }.overview-title { font-size: 19px; font-weight: 700; letter-spacing: -0.015em; color: var(--ci-text-primary); }.overview-sub { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 2px; }.overview-pipeline {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-size: 12px; color: var(--ci-text-secondary); font-weight: 500;
-    padding: 6px 10px;
-    background: var(--ci-bg-inset);
-    border-radius: var(--ci-radius-sm);
-    cursor: pointer;
-  }.overview-pipeline:hover { background: #E4E6EA; }.overview-pipeline .chev { color: var(--ci-text-tertiary); font-size: 10px; }.stat-cards {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 10px;
-  }.stat {
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-subtle);
-    border-left: 3px solid transparent;
-    border-radius: var(--ci-radius-sm);
-    padding: 12px 14px;
-    cursor: pointer;
-    transition: border-color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
-  }.stat:hover { border-color: var(--ci-border-strong); }.stat-label {
-    font-size: 11px; font-weight: 500;
-    color: var(--ci-text-tertiary); text-transform: none; letter-spacing: 0;
-    margin-bottom: 4px;
-  }.stat-value {
-    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
-    color: var(--ci-text-primary); line-height: 1;
-    font-variant-numeric: tabular-nums;
-  }.stat-delta {
-    font-size: 11px; color: var(--ci-text-tertiary);
-    margin-top: 4px; font-weight: 500;
-  }.stat-delta.up { color: #1B7E53; }.stat-delta.warn { color: #b45309; }.stat.active {
-    border-left-color: var(--ci-accent-primary);
-    background: var(--ci-accent-primary-soft);
-  }.stat.active .stat-label { color: var(--ci-accent-primary); font-weight: 600; }/* ── Filter bar ── */
-  .filter-bar {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 24px;
+  }
+
+  /* ── Page chrome ── */
+  .page-head { max-width: 1480px; margin: 0 auto 24px; }
+  .page-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: -0.005em; color: var(--ci-text-tertiary); margin-bottom: 6px; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; color: var(--ci-text-primary); margin-bottom: 10px; }
+  .page-matt { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; max-width: 880px; margin-bottom: 6px; }
+  .page-matt .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-right: 6px; background: var(--ci-bg-inset); color: var(--ci-text-secondary); }
+  .page-matt .tag.rec { background: rgba(54,179,126,0.10); color: #1B7E53; }
+  .section-label { max-width: 1480px; margin: 44px auto 12px; font-size: 13px; font-weight: 700; letter-spacing: -0.005em; color: var(--ci-text-primary); }
+  .section-label .num { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; font-size: 11px; font-weight: 700; border-radius: 50%; background: var(--ci-bg-header); color: var(--ci-text-on-dark); margin-right: 8px; vertical-align: 1px; }
+  .section-sub { max-width: 880px; margin: 0 auto 18px; font-size: 12px; color: var(--ci-text-secondary); line-height: 1.6; }
+  .page-head, .section-label, .section-sub, .surface-frame, .storyboard, .states-grid, .open-q { margin-left: auto; margin-right: auto; }
+
+  /* ── Dashboard surface frame ── */
+  .surface-frame { max-width: 1480px; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; box-shadow: var(--ci-shadow-sm); }
+
+  /* ── Topbar ── */
+  .topbar { background: var(--ci-bg-header); color: var(--ci-text-on-dark); padding: 10px 22px; display: flex; align-items: center; gap: 18px; font-size: 13px; }
+  .topbar-brand { display: flex; align-items: center; gap: 9px; }
+  .topbar-brand-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--ci-accent-primary); }
+  .topbar-brand-name { font-weight: 700; letter-spacing: -0.005em; }
+  .topbar-nav { display: flex; gap: 16px; font-size: 12px; color: var(--ci-text-on-dark-muted); }
+  .topbar-nav .on { color: var(--ci-text-on-dark); font-weight: 600; }
+  .topbar-spacer { flex: 1; }
+  .topbar-user { width: 28px; height: 28px; border-radius: 50%; background: var(--ci-accent-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+
+  /* ── Hero: Today's Tasks panel ── */
+  .tasks-hero {
+    padding: 16px 24px 14px;
     border-bottom: 1px solid var(--ci-border-subtle);
     background: var(--ci-bg-raised);
-  }.pick {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 500;
-    color: var(--ci-text-primary);
-    background: var(--ci-bg-inset);
-    border: 1px solid transparent;
-    border-radius: var(--ci-radius-sm);
-    padding: 6px 10px; cursor: pointer;
-    transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
-  }.pick:hover { background: #E4E6EA; }.pick .k { color: var(--ci-text-tertiary); font-weight: 500; margin-right: 2px; }.pick .v { color: var(--ci-text-primary); font-weight: 600; }.pick .chev { color: var(--ci-text-tertiary); font-size: 10px; margin-left: 2px; }.pick.set { background: var(--ci-accent-primary-soft); border-color: rgba(252,99,107,0.2); }.pick.set .k { color: var(--ci-accent-primary); }.pick.set .v { color: var(--ci-accent-primary); }.filter-spacer { flex: 1; }/* View switcher */
-  .view-switch {
-    display: inline-flex; background: var(--ci-bg-inset);
-    border-radius: var(--ci-radius-sm); padding: 2px;
-  }.view-btn {
-    font-size: 12px; font-weight: 500; font-family: inherit;
-    padding: 5px 11px; border: none; background: transparent;
-    color: var(--ci-text-tertiary); cursor: pointer;
-    border-radius: 4px;
-    display: inline-flex; align-items: center; gap: 5px;
-    transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
-  }.view-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; }.view-btn.active {
-    background: var(--ci-bg-raised); color: var(--ci-text-primary);
-    font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-  }.view-btn:hover:not(.active) { color: var(--ci-text-secondary); }/* ── Main content area ── */
-  .main {
-    display: flex;
-    min-height: 640px;
-    background: var(--ci-bg-inset);
-    position: relative;
-  }.main-view { flex: 1; min-width: 0; display: flex; flex-direction: column; }/* ── Kanban ── */
-  .kanban {
-    flex: 1; min-height: 0;
-    padding: 16px 20px 20px;
-    display: flex; gap: 12px;
-    overflow-x: auto;
-    align-items: flex-start;
-  }.col {
-    flex-shrink: 0;
-    width: 260px;
-    background: var(--ci-bg-base);
-    border-radius: var(--ci-radius-md);
-    display: flex; flex-direction: column;
-    max-height: 600px;
-  }.col-head {
-    display: flex; align-items: center; gap: 8px;
-    padding: 11px 12px 10px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-  }.col-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--stage-color, var(--ci-text-tertiary));
-    flex-shrink: 0;
-  }.col-title {
-    font-size: 12.5px; font-weight: 600;
-    color: var(--ci-text-primary); letter-spacing: -0.005em;
-  }.col-count {
-    font-size: 11px; font-weight: 700;
-    padding: 1px 7px; background: var(--ci-bg-raised);
-    color: var(--ci-text-secondary); border-radius: 99px;
-    font-variant-numeric: tabular-nums;
-  }.col-count.zero { color: var(--ci-text-tertiary); opacity: 0.6; }.col-cards {
-    display: flex; flex-direction: column; gap: 7px;
-    padding: 8px 8px 4px; overflow-y: auto;
-    flex: 1;
-  }.col-add {
-    padding: 7px 10px 9px;
+  }
+  .tasks-hero-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .tasks-hero-left { display: flex; align-items: center; gap: 12px; }
+  .tasks-hero-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--ci-text-primary); }
+  .tasks-hero-chips { display: flex; gap: 5px; }
+  .th-chip {
     font-size: 11.5px; font-weight: 500; font-family: inherit;
-    color: var(--ci-text-tertiary);
-    background: transparent; border: none; cursor: pointer;
-    display: flex; align-items: center; gap: 6px;
-    transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
-  }.col-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-raised); border-radius: 0 0 var(--ci-radius-md) var(--ci-radius-md); }.col-add-circ {
-    width: 14px; height: 14px; border-radius: 50%;
-    border: 1px dashed var(--ci-border-strong);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; color: var(--ci-text-tertiary);
-  }.col-empty {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 28px 14px 20px; gap: 6px; text-align: center;
-  }.col-empty-t { font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); }.col-empty-h { font-size: 11px; color: var(--ci-text-tertiary); line-height: 1.4; max-width: 200px; }/* Kanban card — compact, following Tier 1A #194 grammar */
-  .kc {
-    background: var(--ci-bg-raised);
+    padding: 3px 10px; border-radius: 99px;
     border: 1px solid var(--ci-border-default);
-    border-radius: var(--ci-radius-sm);
-    padding: 10px 11px;
-    display: flex; flex-direction: column; gap: 7px;
-    cursor: grab;
-    transition: border-color var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out), transform var(--motion-xs) var(--ease-out);
-  }.kc:hover {
-    border-color: var(--ci-border-strong);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-    transform: translateY(-1px);
-  }.kc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }.kc-ident { min-width: 0; }.kc-title-row { display: flex; align-items: center; gap: 6px; }.kc-fav {
-    width: 14px; height: 14px; border-radius: 3px;
-    background: var(--ci-border-default); flex-shrink: 0;
-  }.kc-company { font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; color: var(--ci-text-primary); }.kc-role {
-    font-size: 11.5px; color: var(--ci-text-secondary);
-    margin-top: 1px; line-height: 1.35;
-  }.kc-score {
-    font-size: 12.5px; font-weight: 600;
-    font-variant-numeric: tabular-nums; line-height: 1; padding-top: 1px;
-    white-space: nowrap;
-  }.kc-score .d { font-weight: 400; color: var(--ci-text-tertiary); }.kc-score.green { color: #047857; }.kc-score.amber { color: #b45309; }.kc-score.orange { color: #c2410c; }.kc-score.red { color: #b91c1c; }.kc-meta {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 0 7px;
-    font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4;
-  }.kc-meta .sep {
-    width: 3px; height: 3px; border-radius: 50%;
-    background: var(--ci-text-tertiary); opacity: 0.55;
-    display: inline-block;
-  }.kc-foot {
-    display: flex; align-items: center; justify-content: space-between;
-    font-size: 10.5px; color: var(--ci-text-tertiary);
-    gap: 8px;
-  }.kc-action { font-weight: 500; }.kc-action.my { color: var(--ci-accent-red); }.kc-action.their { color: #b45309; }.kc-action.scheduled { color: var(--ci-accent-blue); }.kc-due { color: var(--ci-text-tertiary); }.kc-due.overdue { color: var(--ci-accent-red); font-weight: 500; }/* ── Tasks drawer ── */
-  .tasks-drawer {
-    flex-shrink: 0;
-    width: 48px;
-    background: var(--ci-bg-raised);
-    border-left: 1px solid var(--ci-border-subtle);
-    display: flex; flex-direction: column;
-    align-items: center;
-    padding: 14px 0 0;
-    cursor: pointer;
-    transition: width var(--motion-sm) var(--ease-out), background var(--motion-xs) var(--ease-out);
-  }.tasks-drawer:hover { background: var(--ci-bg-inset); }.tasks-drawer .drawer-label {
-    writing-mode: vertical-rl; transform: rotate(180deg);
-    font-size: 12px; font-weight: 600; color: var(--ci-text-secondary);
-    letter-spacing: 0.04em; margin-top: 8px;
-    display: flex; align-items: center; gap: 6px;
-  }.tasks-drawer .drawer-chev { color: var(--ci-text-tertiary); font-size: 13px; margin-bottom: 10px; }.tasks-drawer .drawer-count {
-    font-size: 10px; font-weight: 700;
-    background: var(--ci-accent-primary); color: #fff;
-    padding: 1px 6px; border-radius: 99px;
-    margin-top: 4px;
-    writing-mode: horizontal-tb;
-  }/* Tasks drawer — expanded variant (storyboard) */
-  .tasks-drawer.open {
-    width: 320px; cursor: default;
-    align-items: stretch; padding: 0;
-  }.tasks-head {
-    padding: 16px 18px 12px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-    display: flex; align-items: center; justify-content: space-between;
-  }.tasks-head-title {
-    font-size: 14px; font-weight: 700; letter-spacing: -0.005em;
-  }.tasks-head-count {
-    font-size: 11px; font-weight: 700;
-    background: var(--ci-accent-primary); color: #fff;
-    padding: 1px 7px; border-radius: 99px;
-  }.tasks-head-close {
-    border: none; background: transparent; color: var(--ci-text-tertiary);
-    cursor: pointer; font-size: 15px; line-height: 1;
-  }.tasks-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }.tasks-group-label {
-    font-size: 10.5px; font-weight: 700; letter-spacing: -0.005em; color: var(--ci-text-tertiary);
-    padding: 10px 6px 4px;
-  }.task {
-    display: flex; align-items: flex-start; gap: 9px;
-    padding: 8px 8px;
+    background: transparent; color: var(--ci-text-secondary);
+    cursor: pointer; transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+  }
+  .th-chip:hover { background: var(--ci-bg-inset); }
+  .th-chip.active { background: var(--ci-bg-header); color: var(--ci-text-on-dark); border-color: var(--ci-bg-header); font-weight: 600; }
+  .th-chip.overdue-chip { border-color: rgba(232,56,79,0.3); color: var(--ci-accent-red); }
+  .tasks-hero-viewall { font-size: 11.5px; font-weight: 500; color: var(--ci-text-link); cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .tasks-hero-viewall:hover { text-decoration: underline; }
+  .tasks-hero-rows { display: flex; flex-direction: column; }
+  .th-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 6px;
     border-radius: var(--ci-radius-sm);
     cursor: pointer;
     transition: background var(--motion-xs) var(--ease-out);
-  }.task:hover { background: var(--ci-bg-inset); }.task-check {
-    width: 14px; height: 14px; border-radius: 4px;
-    border: 1.5px solid var(--ci-border-strong);
-    flex-shrink: 0; margin-top: 1px;
-  }.task-body { min-width: 0; flex: 1; }.task-title {
-    font-size: 12px; font-weight: 500;
-    color: var(--ci-text-primary); line-height: 1.4;
-  }.task-sub {
-    font-size: 11px; color: var(--ci-text-tertiary);
-    margin-top: 2px; display: flex; align-items: center; gap: 6px;
-  }.task-company { color: var(--ci-text-secondary); font-weight: 500; }.task-due.overdue { color: var(--ci-accent-red); font-weight: 500; }/* ── Table view ── */
-  .table-wrap {
-    flex: 1;
-    padding: 16px 20px 20px;
-    overflow: auto;
-    background: var(--ci-bg-inset);
-  }table.dash-table {
-    width: 100%;
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-subtle);
-    border-radius: var(--ci-radius-md);
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 12px;
-    overflow: hidden;
-  }.dash-table thead th {
-    font-size: 10.5px; font-weight: 700;
-    letter-spacing: -0.005em;
-    color: var(--ci-text-tertiary);
-    text-align: left;
-    padding: 10px 14px 9px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-    background: var(--ci-bg-raised);
-  }.dash-table tbody tr { transition: background var(--motion-xs) var(--ease-out); }.dash-table tbody tr:hover { background: var(--ci-bg-inset); }.dash-table td {
-    padding: 11px 14px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-    vertical-align: middle;
-  }.dash-table tbody tr:last-child td { border-bottom: none; }.td-company {
+  }
+  .th-row:hover { background: var(--ci-bg-inset); }
+  .th-row + .th-row { border-top: 1px solid var(--ci-border-subtle); }
+  .th-check { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--ci-border-strong); flex-shrink: 0; }
+  .th-body { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; }
+  .th-title { font-size: 12.5px; font-weight: 500; color: var(--ci-text-primary); line-height: 1.3; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .th-company { font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-inset); padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
+  .th-due { font-size: 11px; color: var(--ci-text-tertiary); white-space: nowrap; }
+  .th-due.overdue { color: var(--ci-accent-red); font-weight: 500; }
+  .th-add-row {
     display: flex; align-items: center; gap: 8px;
-    font-weight: 600; color: var(--ci-text-primary);
-  }.td-company .f { width: 14px; height: 14px; border-radius: 3px; background: var(--ci-border-default); }.td-role { color: var(--ci-text-secondary); }.td-stage { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }.td-stage .d { width: 7px; height: 7px; border-radius: 50%; }.td-action.my { color: var(--ci-accent-red); font-weight: 500; }.td-action.their { color: #b45309; font-weight: 500; }.td-action.scheduled { color: var(--ci-accent-blue); font-weight: 500; }.td-score {
-    font-variant-numeric: tabular-nums; font-weight: 600;
-  }.td-score.green { color: #047857; }.td-score.amber { color: #b45309; }.td-score.orange { color: #c2410c; }.td-score.red { color: #b91c1c; }.td-updated { color: var(--ci-text-tertiary); }/* ── Grid view ── */
-  .grid-wrap {
-    flex: 1;
-    padding: 20px 24px 20px;
-    background: var(--ci-bg-inset);
+    padding: 8px 6px; margin-top: 2px;
+    border: 1.5px dashed var(--ci-border-strong);
+    border-radius: var(--ci-radius-sm);
+    color: var(--ci-text-tertiary); font-size: 12px;
+    cursor: pointer;
+    transition: border-color var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+  }
+  .th-add-row:hover { border-color: var(--ci-border-strong); color: var(--ci-text-secondary); }
+
+  /* ── Goal Ribbon ── */
+  .goal-ribbon {
+    padding: 16px 24px 18px;
+    border-bottom: 1px solid var(--ci-border-subtle);
+    background: var(--ci-bg-raised);
+  }
+  .goal-ribbon-head {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 14px; gap: 16px;
+  }
+  .gr-kicker { font-size: 11px; font-weight: 600; color: var(--ci-text-tertiary); letter-spacing: -0.005em; margin-bottom: 3px; }
+  .gr-title { font-size: 17px; font-weight: 700; letter-spacing: -0.015em; color: var(--ci-text-primary); }
+  .gr-actions { display: flex; align-items: center; gap: 8px; }
+  .gr-period-btn, .gr-edit-btn {
+    font-size: 12px; font-weight: 500; font-family: inherit;
+    padding: 6px 12px; border-radius: var(--ci-radius-sm);
+    cursor: pointer; transition: background var(--motion-xs) var(--ease-out);
+  }
+  .gr-period-btn { background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default); color: var(--ci-text-primary); }
+  .gr-period-btn:hover { background: #E4E6EA; }
+  .gr-edit-btn { background: transparent; border: 1px solid var(--ci-border-default); color: var(--ci-text-secondary); }
+  .gr-edit-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+  .gr-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 14px;
-    align-content: start;
-  }.gc {
-    width: 100%; height: 200px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .gr-card {
     background: var(--ci-bg-raised);
     border: 1px solid var(--ci-border-default);
     border-radius: var(--ci-radius-md);
     padding: 14px 16px;
-    display: flex; flex-direction: column; gap: 8px;
-    transition: border-color var(--motion-xs) var(--ease-out), transform var(--motion-xs) var(--ease-out);
-  }.gc:hover { border-color: var(--ci-border-strong); transform: translateY(-1px); }.gc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }.gc-company { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }.gc-role { font-size: 12px; color: var(--ci-text-secondary); margin-top: 2px; }.gc-score { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }.gc-score.green { color: #047857; }.gc-score.amber { color: #b45309; }.gc-score.orange { color: #c2410c; }.gc-score.red { color: #b91c1c; }.gc-meta { font-size: 11px; color: var(--ci-text-secondary); line-height: 1.5; }.gc-foot {
-    margin-top: auto; display: flex; align-items: center;
-    justify-content: space-between; font-size: 11px;
-    padding-top: 8px; border-top: 1px solid var(--ci-border-subtle);
-  }.gc-stage { display: inline-flex; align-items: center; gap: 6px; color: var(--ci-text-secondary); font-weight: 500; }.gc-stage .d { width: 7px; height: 7px; border-radius: 50%; }/* ── Storyboard (3-up) ── */
-  .storyboard {
-    max-width: 1480px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin-top: 16px;
-  }.frame {
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-default);
-    border-radius: var(--ci-radius-md);
-    overflow: hidden;
-  }.frame-head {
-    padding: 10px 14px 9px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-    font-size: 11px; font-weight: 700;
-    color: var(--ci-text-secondary);
-    letter-spacing: 0.02em;
-    display: flex; align-items: center; gap: 8px;
-  }.frame-step {
-    width: 18px; height: 18px; border-radius: 50%;
-    background: var(--ci-bg-header); color: var(--ci-text-on-dark);
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 700;
-  }.frame-body {
-    padding: 0; background: var(--ci-bg-inset);
-    min-height: 320px; position: relative;
-  }/* Mini overview for storyboard */
-  .mini { padding: 12px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-subtle); }.mini-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }.mini-stat {
+    box-shadow: var(--ci-shadow-sm);
+  }
+  .gr-card-label { font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); letter-spacing: -0.005em; margin-bottom: 6px; }
+  .gr-card-ratio { display: flex; align-items: baseline; gap: 2px; margin-bottom: 8px; line-height: 1; }
+  .gr-actual { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--ci-text-primary); font-variant-numeric: tabular-nums; }
+  .gr-slash { font-size: 20px; font-weight: 400; color: var(--ci-text-tertiary); margin: 0 1px; }
+  .gr-goal { font-size: 18px; font-weight: 500; color: var(--ci-text-tertiary); font-variant-numeric: tabular-nums; }
+  .gr-unit { font-size: 15px; font-weight: 500; color: var(--ci-text-secondary); margin-left: 4px; }
+  .gr-bar { height: 4px; background: rgba(252,99,107,0.12); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+  .gr-bar-fill { height: 100%; background: var(--ci-accent-primary); border-radius: 99px; }
+  .gr-bar-fill.on-pace { background: var(--ci-accent-teal); }
+  .gr-bar-fill.behind { background: var(--ci-accent-amber); }
+  .gr-card-sub { font-size: 11px; color: var(--ci-text-tertiary); }
+  .gr-card-sub .on-pace-txt { color: #1B7E53; font-weight: 500; }
+  .gr-card-sub .behind-txt { color: #b45309; font-weight: 500; }
+  .gr-card-metric .gr-card-ratio { margin-bottom: 4px; }
+  .gr-card-metric .gr-actual { color: var(--ci-accent-blue); }
+
+  /* ── Filter bar ── */
+  .filter-bar { display: flex; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--ci-border-subtle); background: var(--ci-bg-raised); }
+  .pick { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ci-text-primary); background: var(--ci-bg-inset); border: 1px solid transparent; border-radius: var(--ci-radius-sm); padding: 6px 10px; cursor: pointer; transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out); }
+  .pick:hover { background: #E4E6EA; }
+  .pick .k { color: var(--ci-text-tertiary); font-weight: 500; margin-right: 2px; }
+  .pick .v { color: var(--ci-text-primary); font-weight: 600; }
+  .pick .chev { color: var(--ci-text-tertiary); font-size: 10px; margin-left: 2px; }
+  .pick.set { background: var(--ci-accent-primary-soft); border-color: rgba(252,99,107,0.2); }
+  .pick.set .k { color: var(--ci-accent-primary); }
+  .pick.set .v { color: var(--ci-accent-primary); }
+  .filter-spacer { flex: 1; }
+
+  /* View switcher — Kanban / Table only */
+  .view-switch { display: inline-flex; background: var(--ci-bg-inset); border-radius: var(--ci-radius-sm); padding: 2px; }
+  .view-btn { font-size: 12px; font-weight: 500; font-family: inherit; padding: 5px 11px; border: none; background: transparent; color: var(--ci-text-tertiary); cursor: pointer; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out); }
+  .view-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+  .view-btn.active { background: var(--ci-bg-raised); color: var(--ci-text-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .view-btn:hover:not(.active) { color: var(--ci-text-secondary); }
+
+  /* ── Main content area ── */
+  .main { display: flex; min-height: 640px; background: var(--ci-bg-inset); position: relative; }
+  .main-view { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  /* ── Kanban ── */
+  .kanban { flex: 1; min-height: 0; padding: 16px 20px 20px; display: flex; gap: 12px; overflow-x: auto; align-items: flex-start; }
+  .col { flex-shrink: 0; width: 260px; background: var(--ci-bg-base); border-radius: var(--ci-radius-md); display: flex; flex-direction: column; max-height: 600px; }
+  .col-head { display: flex; align-items: center; gap: 8px; padding: 11px 12px 10px; border-bottom: 1px solid var(--ci-border-subtle); }
+  .col-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stage-color, var(--ci-text-tertiary)); flex-shrink: 0; }
+  .col-title { font-size: 12.5px; font-weight: 600; color: var(--ci-text-primary); letter-spacing: -0.005em; flex: 1; }
+  .col-count { font-size: 11px; font-weight: 700; padding: 1px 7px; background: var(--ci-bg-raised); color: var(--ci-text-secondary); border-radius: 99px; font-variant-numeric: tabular-nums; }
+  .col-count.zero { color: var(--ci-text-tertiary); opacity: 0.6; }
+
+  /* Stage-edit affordance — gear icon */
+  .col-gear {
+    width: 20px; height: 20px; border-radius: 4px;
+    border: none; background: transparent;
+    color: var(--ci-text-tertiary);
+    font-size: 13px; cursor: pointer; line-height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+    flex-shrink: 0;
+  }
+  .col-head:hover .col-gear { opacity: 1; }
+  .col-gear:hover { background: var(--ci-bg-raised); color: var(--ci-text-secondary); }
+
+  /* Gear tooltip hint */
+  .col-gear-note { font-size: 10px; color: var(--ci-text-tertiary); padding: 2px 12px 7px; line-height: 1.4; }
+
+  .col-cards { display: flex; flex-direction: column; gap: 7px; padding: 8px 8px 4px; overflow-y: auto; flex: 1; }
+  .col-add { padding: 7px 10px 9px; font-size: 11.5px; font-weight: 500; font-family: inherit; color: var(--ci-text-tertiary); background: transparent; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out); }
+  .col-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-raised); border-radius: 0 0 var(--ci-radius-md) var(--ci-radius-md); }
+  .col-add-circ { width: 14px; height: 14px; border-radius: 50%; border: 1px dashed var(--ci-border-strong); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--ci-text-tertiary); }
+  .col-empty { display: flex; flex-direction: column; align-items: center; padding: 28px 14px 20px; gap: 6px; text-align: center; }
+  .col-empty-t { font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); }
+  .col-empty-h { font-size: 11px; color: var(--ci-text-tertiary); line-height: 1.4; max-width: 200px; }
+
+  /* Kanban card */
+  .kc { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); padding: 10px 11px; display: flex; flex-direction: column; gap: 7px; cursor: grab; transition: border-color var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out), transform var(--motion-xs) var(--ease-out); }
+  .kc:hover { border-color: var(--ci-border-strong); box-shadow: 0 1px 4px rgba(0,0,0,0.06); transform: translateY(-1px); }
+  .kc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .kc-ident { min-width: 0; }
+  .kc-title-row { display: flex; align-items: center; gap: 6px; }
+  .kc-fav { width: 14px; height: 14px; border-radius: 3px; background: var(--ci-border-default); flex-shrink: 0; }
+  .kc-company { font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; color: var(--ci-text-primary); }
+  .kc-role { font-size: 11.5px; color: var(--ci-text-secondary); margin-top: 1px; line-height: 1.35; }
+  .kc-score { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; padding-top: 1px; white-space: nowrap; }
+  .kc-score .d { font-weight: 400; color: var(--ci-text-tertiary); }
+  .kc-score.green { color: #047857; }
+  .kc-score.amber { color: #b45309; }
+  .kc-score.orange { color: #c2410c; }
+  .kc-score.red { color: #b91c1c; }
+  .kc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0 7px; font-size: 11px; color: var(--ci-text-secondary); line-height: 1.4; }
+  .kc-meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--ci-text-tertiary); opacity: 0.55; display: inline-block; }
+  .kc-foot { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--ci-text-tertiary); gap: 8px; }
+  .kc-action { font-weight: 500; }
+  .kc-action.my { color: var(--ci-accent-red); }
+  .kc-action.their { color: #b45309; }
+  .kc-action.scheduled { color: var(--ci-accent-blue); }
+  .kc-due { color: var(--ci-text-tertiary); }
+  .kc-due.overdue { color: var(--ci-accent-red); font-weight: 500; }
+
+  /* ── Tasks drawer — secondary (right side) ── */
+  .tasks-drawer { flex-shrink: 0; width: 48px; background: var(--ci-bg-raised); border-left: 1px solid var(--ci-border-subtle); display: flex; flex-direction: column; align-items: center; padding: 14px 0 0; cursor: pointer; transition: width var(--motion-sm) var(--ease-out), background var(--motion-xs) var(--ease-out); }
+  .tasks-drawer:hover { background: var(--ci-bg-inset); }
+  .tasks-drawer .drawer-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 600; color: var(--ci-text-secondary); letter-spacing: 0.04em; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+  .tasks-drawer .drawer-chev { color: var(--ci-text-tertiary); font-size: 13px; margin-bottom: 10px; }
+  .tasks-drawer .drawer-count { font-size: 10px; font-weight: 700; background: var(--ci-accent-primary); color: #fff; padding: 1px 6px; border-radius: 99px; margin-top: 4px; writing-mode: horizontal-tb; }
+
+  /* Tasks drawer — expanded variant (storyboard) */
+  .tasks-drawer.open { width: 320px; cursor: default; align-items: stretch; padding: 0; }
+  .tasks-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--ci-border-subtle); display: flex; align-items: center; justify-content: space-between; }
+  .tasks-head-title { font-size: 14px; font-weight: 700; letter-spacing: -0.005em; }
+  .tasks-head-count { font-size: 11px; font-weight: 700; background: var(--ci-accent-primary); color: #fff; padding: 1px 7px; border-radius: 99px; }
+  .tasks-head-close { border: none; background: transparent; color: var(--ci-text-tertiary); cursor: pointer; font-size: 15px; line-height: 1; }
+  .tasks-head-sub { font-size: 11px; color: var(--ci-text-tertiary); padding: 6px 18px 10px; border-bottom: 1px solid var(--ci-border-subtle); line-height: 1.4; }
+  .tasks-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .tasks-group-label { font-size: 10.5px; font-weight: 700; letter-spacing: -0.005em; color: var(--ci-text-tertiary); padding: 10px 6px 4px; }
+  .task { display: flex; align-items: flex-start; gap: 9px; padding: 8px 8px; border-radius: var(--ci-radius-sm); cursor: pointer; transition: background var(--motion-xs) var(--ease-out); }
+  .task:hover { background: var(--ci-bg-inset); }
+  .task-check { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--ci-border-strong); flex-shrink: 0; margin-top: 1px; }
+  .task-body { min-width: 0; flex: 1; }
+  .task-title { font-size: 12px; font-weight: 500; color: var(--ci-text-primary); line-height: 1.4; }
+  .task-sub { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .task-company { color: var(--ci-text-secondary); font-weight: 500; }
+  .task-due.overdue { color: var(--ci-accent-red); font-weight: 500; }
+
+  /* ── Table view ── */
+  .table-wrap { flex: 1; padding: 16px 20px 20px; overflow: auto; background: var(--ci-bg-inset); }
+  table.dash-table { width: 100%; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-radius: var(--ci-radius-md); border-collapse: separate; border-spacing: 0; font-size: 12px; overflow: hidden; }
+  .dash-table thead th { font-size: 10.5px; font-weight: 700; letter-spacing: -0.005em; color: var(--ci-text-tertiary); text-align: left; padding: 10px 14px 9px; border-bottom: 1px solid var(--ci-border-subtle); background: var(--ci-bg-raised); }
+  .dash-table tbody tr { transition: background var(--motion-xs) var(--ease-out); }
+  .dash-table tbody tr:hover { background: var(--ci-bg-inset); }
+  .dash-table td { padding: 11px 14px; border-bottom: 1px solid var(--ci-border-subtle); vertical-align: middle; }
+  .dash-table tbody tr:last-child td { border-bottom: none; }
+  .td-company { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ci-text-primary); }
+  .td-company .f { width: 14px; height: 14px; border-radius: 3px; background: var(--ci-border-default); }
+  .td-role { color: var(--ci-text-secondary); }
+  .td-stage { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .td-stage .d { width: 7px; height: 7px; border-radius: 50%; }
+  .td-action.my { color: var(--ci-accent-red); font-weight: 500; }
+  .td-action.their { color: #b45309; font-weight: 500; }
+  .td-action.scheduled { color: var(--ci-accent-blue); font-weight: 500; }
+  .td-score { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .td-score.green { color: #047857; }
+  .td-score.amber { color: #b45309; }
+  .td-score.orange { color: #c2410c; }
+  .td-score.red { color: #b91c1c; }
+  .td-updated { color: var(--ci-text-tertiary); }
+
+  /* ── Storyboard (3-up) ── */
+  .storyboard { max-width: 1480px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+  .frame { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; }
+  .frame-head { padding: 10px 14px 9px; border-bottom: 1px solid var(--ci-border-subtle); font-size: 11px; font-weight: 700; color: var(--ci-text-secondary); letter-spacing: 0.02em; display: flex; align-items: center; gap: 8px; }
+  .frame-step { width: 18px; height: 18px; border-radius: 50%; background: var(--ci-bg-header); color: var(--ci-text-on-dark); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+  .frame-body { padding: 0; background: var(--ci-bg-inset); min-height: 320px; position: relative; }
+
+  /* Mini overview for storyboard */
+  .mini { padding: 12px; background: var(--ci-bg-raised); border-bottom: 1px solid var(--ci-border-subtle); }
+  .mini-goal-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .mini-goal {
     background: var(--ci-bg-raised);
     border: 1px solid var(--ci-border-subtle);
-    border-left: 2px solid transparent;
     border-radius: 4px;
     padding: 6px 8px;
-  }.mini-stat-l { font-size: 9.5px; color: var(--ci-text-tertiary); margin-bottom: 2px; }.mini-stat-v { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }.mini-stat.active { border-left-color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }.mini-stat.active .mini-stat-l { color: var(--ci-accent-primary); font-weight: 600; }.mini-stat.active .mini-stat-v { color: var(--ci-accent-primary); }/* Mini kanban */
-  .mini-kanban { padding: 10px; display: flex; gap: 6px; overflow: hidden; }.mini-col {
-    flex-shrink: 0; flex: 1;
-    background: var(--ci-bg-base);
-    border-radius: 6px;
-    padding: 8px 6px;
-    min-height: 180px;
-  }.mini-col.faded { opacity: 0.28; }.mini-col.solo { flex: 0 0 220px; }.mini-col-head { display: flex; align-items: center; gap: 5px; padding: 0 3px 6px; }.mini-col-d { width: 6px; height: 6px; border-radius: 50%; background: var(--stage-color, var(--ci-text-tertiary)); }.mini-col-t { font-size: 10px; font-weight: 600; }.mini-col-c { font-size: 9px; font-weight: 700; padding: 0 5px; background: var(--ci-bg-raised); color: var(--ci-text-secondary); border-radius: 99px; margin-left: auto; }.mini-kc {
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-subtle);
-    border-radius: 4px;
-    padding: 5px 6px;
-    margin-bottom: 4px;
-  }.mini-kc-t { font-size: 10px; font-weight: 600; }.mini-kc-s { font-size: 9px; color: var(--ci-text-tertiary); margin-top: 1px; }/* ── Empty state ── */
-  .empty-state-frame {
-    max-width: 1480px;
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-default);
-    border-radius: var(--ci-radius-md);
-    overflow: hidden;
-    margin-left: auto; margin-right: auto;
-  }.empty-state {
-    padding: 80px 40px 96px;
-    background: var(--ci-bg-inset);
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-    text-align: center;
-  }.empty-avatar {
-    width: 64px; height: 64px; border-radius: 50%;
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-default);
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: var(--ci-shadow-sm);
-  }.empty-avatar svg { width: 36px; height: 36px; }.empty-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }.empty-hint {
-    font-size: 13px; color: var(--ci-text-secondary);
-    max-width: 440px; line-height: 1.55;
-  }.empty-cta {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 13px; font-weight: 600; font-family: inherit;
-    padding: 9px 16px; background: var(--ci-bg-header); color: var(--ci-text-on-dark);
-    border: none; border-radius: var(--ci-radius-sm);
-    cursor: pointer; margin-top: 6px;
-    transition: background var(--motion-xs) var(--ease-out);
-  }.empty-cta:hover { background: var(--ci-bg-header-hover); }/* ── Grid kill/keep comparison ── */
-  .states-grid {
-    max-width: 1480px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-  }.kill-frame { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; }.kill-head {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--ci-border-subtle);
-    display: flex; align-items: center; justify-content: space-between;
-  }.kill-head-l { display: flex; align-items: center; gap: 8px; }.kill-title { font-size: 13px; font-weight: 700; }.kill-tag {
-    font-size: 11.5px; font-weight: 700; letter-spacing: -0.005em;
-    padding: 2px 8px; border-radius: 4px;
-  }.kill-tag.kill { background: rgba(232,56,79,0.08); color: var(--ci-accent-red); }.kill-tag.keep { background: rgba(54,179,126,0.10); color: #1B7E53; }.kill-body { padding: 16px; background: var(--ci-bg-inset); min-height: 240px; }.kill-note {
-    padding: 12px 16px;
-    font-size: 12px; color: var(--ci-text-secondary); line-height: 1.55;
-    background: var(--ci-bg-raised);
-    border-top: 1px solid var(--ci-border-subtle);
-  }.kill-note strong { color: var(--ci-text-primary); font-weight: 600; }.mini-table-head { display: grid; grid-template-columns: 1.4fr 1.6fr 1fr 0.8fr 0.6fr; gap: 8px; font-size: 11.5px; font-weight: 700; color: var(--ci-text-tertiary); letter-spacing: -0.005em; padding: 8px 10px; background: var(--ci-bg-raised); border-radius: 6px 6px 0 0; border: 1px solid var(--ci-border-subtle); border-bottom: none; }.mini-table-row { display: grid; grid-template-columns: 1.4fr 1.6fr 1fr 0.8fr 0.6fr; gap: 8px; font-size: 10.5px; padding: 7px 10px; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-top: none; align-items: center; }.mini-table-row .c { font-weight: 600; display: flex; align-items: center; gap: 6px; }.mini-table-row .c .f { width: 11px; height: 11px; border-radius: 2px; background: var(--ci-border-default); }.mini-table-row .r { color: var(--ci-text-secondary); }.mini-table-row .s { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }.mini-table-row .s .d { width: 6px; height: 6px; border-radius: 50%; }.mini-table-row .sc { font-variant-numeric: tabular-nums; font-weight: 600; }.mini-table-row .sc.green { color: #047857; }.mini-table-row .sc.amber { color: #b45309; }.mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }.mini-gc {
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-default);
-    border-radius: 6px;
-    padding: 10px 12px;
-    height: 100px;
-    display: flex; flex-direction: column;
-  }.mini-gc-t { font-size: 11px; font-weight: 600; }.mini-gc-r { font-size: 10px; color: var(--ci-text-secondary); margin-top: 1px; }.mini-gc-foot { margin-top: auto; font-size: 9.5px; color: var(--ci-text-tertiary); display: flex; align-items: center; justify-content: space-between; padding-top: 6px; border-top: 1px solid var(--ci-border-subtle); }/* ── Open questions ── */
-  .open-q {
-    max-width: 1480px;
-    background: var(--ci-bg-raised);
-    border: 1px solid var(--ci-border-default);
-    border-radius: var(--ci-radius-md);
-    padding: 22px 26px;
-    font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6;
-    margin-top: 24px;
-  }.open-q h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 10px; }.open-q ol { padding-left: 22px; }.open-q li { margin-bottom: 10px; }.open-q li strong { color: var(--ci-text-primary); font-weight: 600; }.open-q .pick-me { color: var(--ci-accent-primary); font-weight: 600; }
+  }
+  .mini-goal-l { font-size: 9.5px; color: var(--ci-text-tertiary); margin-bottom: 3px; }
+  .mini-goal-ratio { display: flex; align-items: baseline; gap: 1px; line-height: 1; margin-bottom: 4px; }
+  .mini-goal-actual { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--ci-text-primary); }
+  .mini-goal-slash { font-size: 12px; color: var(--ci-text-tertiary); margin: 0 1px; }
+  .mini-goal-target { font-size: 12px; color: var(--ci-text-tertiary); font-variant-numeric: tabular-nums; }
+  .mini-goal-bar { height: 3px; background: rgba(252,99,107,0.12); border-radius: 99px; overflow: hidden; }
+  .mini-goal-fill { height: 100%; background: var(--ci-accent-primary); border-radius: 99px; }
+
+  /* Mini kanban */
+  .mini-kanban { padding: 10px; display: flex; gap: 6px; overflow: hidden; }
+  .mini-col { flex-shrink: 0; flex: 1; background: var(--ci-bg-base); border-radius: 6px; padding: 8px 6px; min-height: 180px; }
+  .mini-col.faded { opacity: 0.28; }
+  .mini-col.solo { flex: 0 0 220px; }
+  .mini-col-head { display: flex; align-items: center; gap: 5px; padding: 0 3px 6px; }
+  .mini-col-d { width: 6px; height: 6px; border-radius: 50%; background: var(--stage-color, var(--ci-text-tertiary)); }
+  .mini-col-t { font-size: 10px; font-weight: 600; flex: 1; }
+  .mini-col-c { font-size: 9px; font-weight: 700; padding: 0 5px; background: var(--ci-bg-raised); color: var(--ci-text-secondary); border-radius: 99px; margin-left: auto; }
+  .mini-col-gear { font-size: 10px; color: var(--ci-text-tertiary); margin-left: 2px; }
+  .mini-kc { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-subtle); border-radius: 4px; padding: 5px 6px; margin-bottom: 4px; }
+  .mini-kc-t { font-size: 10px; font-weight: 600; }
+  .mini-kc-s { font-size: 9px; color: var(--ci-text-tertiary); margin-top: 1px; }
+
+  /* ── Empty state ── */
+  .empty-state-frame { max-width: 1480px; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); overflow: hidden; margin-left: auto; margin-right: auto; }
+  .empty-state { padding: 80px 40px 96px; background: var(--ci-bg-inset); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+  .empty-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); display: flex; align-items: center; justify-content: center; box-shadow: var(--ci-shadow-sm); }
+  .empty-avatar svg { width: 36px; height: 36px; }
+  .empty-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .empty-hint { font-size: 13px; color: var(--ci-text-secondary); max-width: 440px; line-height: 1.55; }
+  .empty-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; font-family: inherit; padding: 9px 16px; background: var(--ci-bg-header); color: var(--ci-text-on-dark); border: none; border-radius: var(--ci-radius-sm); cursor: pointer; margin-top: 6px; transition: background var(--motion-xs) var(--ease-out); }
+  .empty-cta:hover { background: var(--ci-bg-header-hover); }
+
+  /* ── Open questions ── */
+  .open-q { max-width: 1480px; background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 22px 26px; font-size: 13px; color: var(--ci-text-secondary); line-height: 1.6; margin-top: 24px; }
+  .open-q h3 { font-size: 13px; font-weight: 700; color: var(--ci-text-primary); margin-bottom: 10px; }
+  .open-q ol { padding-left: 22px; }
+  .open-q li { margin-bottom: 10px; }
+  .open-q li strong { color: var(--ci-text-primary); font-weight: 600; }
+  .open-q .pick-me { color: var(--ci-accent-primary); font-weight: 600; }
+
+  /* ── Annotation callout ── */
+  .annotation {
+    max-width: 1480px; margin: 8px auto 0;
+    background: rgba(69,115,210,0.06); border: 1px solid rgba(69,115,210,0.2);
+    border-radius: var(--ci-radius-sm); padding: 9px 14px;
+    font-size: 11.5px; color: #2d5caa; line-height: 1.5;
+  }
+  .annotation strong { color: #1a3d7a; }
 </style>
 </head>
 <body>
 
 <div class="page-head">
   <div class="page-eyebrow">#261</div>
-  <h1>Saved dashboard — full-surface design pass</h1>
+  <h1>Saved dashboard — iteration 2 re-design</h1>
+
+  <p class="redesign-intent" style="max-width: 820px; font-size: 13.5px; color: var(--ci-text-secondary); line-height: 1.6; margin: 8px 0 28px;">
+    <strong style="color: var(--ci-text-primary);">Iteration 2:</strong> re-framing the dashboard around <em>what have I done, how am I tracking, what do I have to do next.</em>
+    Today's tasks become the hero. Pipeline overview turns into goal-based progress ratios (configurable, time-period-aware).
+    Grid view killed. Kanban default + Table toggle. Stage editing added. Tasks drawer on the right kept as a secondary deep-management surface.
+  </p>
+
   <p class="page-matt">
     <span class="tag rec">Recommended</span>
-    Zoom-out on <code style="font-size:12px">saved.html</code>. How Pipeline Overview header (#231 shipped), filter bar, view switcher, Kanban / Table / Grid, and the new Tasks drawer (#239 territory) compose into one surface. Stat cards act as filters. Default view is Kanban. Grid view up for debate.
+    Command-center re-frame. Hero row = Today's tasks. Progress ribbon = goal-based ratios (Applications X/Y, Saves X/Y, Avg reply time). View switcher simplified to Kanban / Table. Stage editing via gear icon on column headers. Tasks drawer preserved as secondary surface for cross-opp deep management.
   </p>
 </div>
 
-<!-- ══════════════════ 1. HERO — KANBAN ══════════════════ -->
-<div class="section-label"><span class="num">1</span>Hero · Kanban · default view</div>
+<!-- ══════════════════ 1. HERO — FULL DASHBOARD (KANBAN) ══════════════════ -->
+<div class="section-label"><span class="num">1</span>Hero · Full dashboard · Kanban view (default)</div>
 <div class="section-sub">
-  Full dashboard at ~1440px. Overview header + filter bar + Kanban with 6 columns + Tasks drawer collapsed at right edge. Using the shipped Tier 1A Kanban card grammar (#194) in compact form.
+  Full dashboard at ~1440px. Top-to-bottom: topbar → Today's tasks hero → Goal Ribbon → filter bar + view switcher → Kanban with stage editing → Tasks drawer (collapsed, secondary). This is the "what do I have to do / how am I tracking / where is everything" command center.
 </div>
 
 <div class="surface-frame">
@@ -511,54 +413,117 @@
     <div class="topbar-user">MS</div>
   </div>
 
-  <!-- Pipeline Overview -->
-  <div class="overview">
-    <div class="overview-top">
-      <div>
-        <div class="overview-title">Pipeline Overview</div>
-        <div class="overview-sub">32 opportunities · 5 active this week · last sync 4m ago</div>
+  <!-- B. Today's Tasks Hero -->
+  <div class="tasks-hero">
+    <div class="tasks-hero-head">
+      <div class="tasks-hero-left">
+        <div class="tasks-hero-title">Today</div>
+        <div class="tasks-hero-chips">
+          <button class="th-chip active">Today</button>
+          <button class="th-chip">Tomorrow</button>
+          <button class="th-chip">This Week</button>
+          <button class="th-chip overdue-chip">Overdue · 2</button>
+          <button class="th-chip">All</button>
+        </div>
       </div>
-      <div class="overview-pipeline">
-        <span style="color:var(--ci-text-tertiary)">Pipeline:</span>
-        <span>GTM Senior PM / Product Leader</span>
-        <span class="chev">▾</span>
-      </div>
+      <a class="tasks-hero-viewall">All tasks ›</a>
     </div>
-    <div class="stat-cards">
-      <div class="stat">
-        <div class="stat-label">Saved</div>
-        <div class="stat-value">32</div>
-        <div class="stat-delta up">+4 this week</div>
+    <div class="tasks-hero-rows">
+      <div class="th-row">
+        <div class="th-check"></div>
+        <div class="th-body">
+          <div class="th-title">Send cover letter and writing sample</div>
+          <span class="th-company">Notion</span>
+          <span class="th-due">due today</span>
+        </div>
       </div>
-      <div class="stat">
-        <div class="stat-label">Watch list</div>
-        <div class="stat-value">12</div>
-        <div class="stat-delta">5 unscored</div>
+      <div class="th-row">
+        <div class="th-check"></div>
+        <div class="th-body">
+          <div class="th-title">Prep for round 3 system design panel</div>
+          <span class="th-company">Slack</span>
+          <span class="th-due">due today · Apr 22</span>
+        </div>
       </div>
-      <div class="stat">
-        <div class="stat-label">Researching</div>
-        <div class="stat-value">6</div>
-        <div class="stat-delta warn">2 overdue</div>
+      <div class="th-row">
+        <div class="th-check"></div>
+        <div class="th-body">
+          <div class="th-title">Follow up with Rachel on outreach timeline</div>
+          <span class="th-company">Ramp</span>
+          <span class="th-due overdue">overdue 2d</span>
+        </div>
       </div>
-      <div class="stat">
-        <div class="stat-label">Applied</div>
-        <div class="stat-value">8</div>
-        <div class="stat-delta">avg 7d since reply</div>
+      <div class="th-row">
+        <div class="th-check"></div>
+        <div class="th-body">
+          <div class="th-title">Research Head of Product background before call</div>
+          <span class="th-company">Transform VXR</span>
+          <span class="th-due">due today</span>
+        </div>
       </div>
-      <div class="stat">
-        <div class="stat-label">Interviewing</div>
-        <div class="stat-value">3</div>
-        <div class="stat-delta up">Slack · Ramp · Notion</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Offer</div>
-        <div class="stat-value">0</div>
-        <div class="stat-delta">—</div>
+      <div class="th-add-row">
+        <span style="font-size:14px; line-height:1; color: var(--ci-text-tertiary); margin-top:-1px;">+</span>
+        <span>Add a task for today…</span>
       </div>
     </div>
   </div>
 
-  <!-- Filter bar -->
+  <!-- C. Goal Ribbon -->
+  <div class="goal-ribbon">
+    <div class="goal-ribbon-head">
+      <div>
+        <div class="gr-kicker">This month · April 2026</div>
+        <h2 class="gr-title">How you're tracking</h2>
+      </div>
+      <div class="gr-actions">
+        <button class="gr-period-btn">This month <span>▾</span></button>
+        <button class="gr-edit-btn">Edit goals</button>
+      </div>
+    </div>
+    <div class="gr-grid">
+      <div class="gr-card">
+        <div class="gr-card-label">Applications</div>
+        <div class="gr-card-ratio">
+          <span class="gr-actual">8</span>
+          <span class="gr-slash">/</span>
+          <span class="gr-goal">15</span>
+        </div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 53%;"></div></div>
+        <div class="gr-card-sub">53% · <span class="behind-txt">slightly behind</span> · 7 days left</div>
+      </div>
+      <div class="gr-card">
+        <div class="gr-card-label">Saves</div>
+        <div class="gr-card-ratio">
+          <span class="gr-actual">32</span>
+          <span class="gr-slash">/</span>
+          <span class="gr-goal">50</span>
+        </div>
+        <div class="gr-bar"><div class="gr-bar-fill on-pace" style="width: 64%;"></div></div>
+        <div class="gr-card-sub">64% · <span class="on-pace-txt">on pace</span></div>
+      </div>
+      <div class="gr-card">
+        <div class="gr-card-label">First outreach</div>
+        <div class="gr-card-ratio">
+          <span class="gr-actual">12</span>
+          <span class="gr-slash">/</span>
+          <span class="gr-goal">20</span>
+        </div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 60%;"></div></div>
+        <div class="gr-card-sub">60% · 7 days left</div>
+      </div>
+      <div class="gr-card gr-card-metric">
+        <div class="gr-card-label">Avg days to reply</div>
+        <div class="gr-card-ratio">
+          <span class="gr-actual">7</span>
+          <span class="gr-unit">days</span>
+        </div>
+        <div class="gr-bar" style="background: rgba(69,115,210,0.12);"><div class="gr-bar-fill" style="width: 70%; background: var(--ci-accent-blue);"></div></div>
+        <div class="gr-card-sub">Across 18 sent · median 5 days</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- D. Filter bar — Kanban / Table only -->
   <div class="filter-bar">
     <div class="pick">
       <span class="k">Excitement</span>
@@ -581,14 +546,14 @@
       <span class="chev">▾</span>
     </div>
     <div class="filter-spacer"></div>
+    <!-- No Grid option — Kanban / Table only -->
     <div class="view-switch">
       <button class="view-btn active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
       <button class="view-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
-      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Grid</button>
     </div>
   </div>
 
-  <!-- Main -->
+  <!-- Main: Kanban with E. Stage editing affordance -->
   <div class="main">
     <div class="main-view">
       <div class="kanban">
@@ -598,6 +563,8 @@
             <div class="col-dot"></div>
             <div class="col-title">Watch list</div>
             <span class="col-count">12</span>
+            <!-- E. Gear icon — visible on col-head hover -->
+            <button class="col-gear" title="Rename / Reorder / Delete stage">⚙</button>
           </div>
           <div class="col-cards">
             <div class="kc">
@@ -661,6 +628,7 @@
             <div class="col-dot"></div>
             <div class="col-title">Researching</div>
             <span class="col-count">6</span>
+            <button class="col-gear" title="Rename / Reorder / Delete stage">⚙</button>
           </div>
           <div class="col-cards">
             <div class="kc">
@@ -726,6 +694,7 @@
             <div class="col-dot"></div>
             <div class="col-title">Applied</div>
             <span class="col-count">8</span>
+            <button class="col-gear" title="Rename / Reorder / Delete stage">⚙</button>
           </div>
           <div class="col-cards">
             <div class="kc">
@@ -786,6 +755,7 @@
             <div class="col-dot"></div>
             <div class="col-title">Interviewing</div>
             <span class="col-count">3</span>
+            <button class="col-gear" title="Rename / Reorder / Delete stage">⚙</button>
           </div>
           <div class="col-cards">
             <div class="kc">
@@ -846,6 +816,7 @@
             <div class="col-dot"></div>
             <div class="col-title">Offer</div>
             <span class="col-count zero">0</span>
+            <button class="col-gear" title="Rename / Reorder / Delete stage">⚙</button>
           </div>
           <div class="col-cards">
             <div class="col-empty">
@@ -862,6 +833,7 @@
             <div class="col-dot"></div>
             <div class="col-title">Closed</div>
             <span class="col-count">3</span>
+            <button class="col-gear" title="Rename / Reorder / Delete stage">⚙</button>
           </div>
           <div class="col-cards">
             <div class="kc">
@@ -902,19 +874,24 @@
       </div>
     </div>
 
-    <!-- Tasks drawer (collapsed) -->
+    <!-- F. Tasks drawer — collapsed, secondary surface -->
     <div class="tasks-drawer">
       <div class="drawer-chev">‹</div>
-      <div class="drawer-label">Tasks</div>
-      <div class="drawer-count">5</div>
+      <div class="drawer-label">All tasks</div>
+      <div class="drawer-count">12</div>
     </div>
   </div>
 </div>
 
+<div class="annotation">
+  <strong>Stage editing:</strong> Hover any column header to reveal the ⚙ gear icon. Clicking it opens an inline menu with Rename stage / Reorder / Delete. Changes apply immediately across all views. New stages can be added via the "+" at the end of the column row.
+  <br/><strong>Tasks drawer:</strong> The collapsed right-side strip is the secondary tasks surface — all tasks across all opportunities, filterable by company / priority / due date. Click to expand to 320px. The hero "Today" panel at the top is the quick-view; the drawer is for deep cross-opp task management.
+</div>
+
 <!-- ══════════════════ 2. TABLE VIEW ══════════════════ -->
-<div class="section-label"><span class="num">2</span>Table view</div>
+<div class="section-label"><span class="num">2</span>Table view · same top strip, view switcher flipped</div>
 <div class="section-sub">
-  Same dashboard, view switcher flipped to Table. Filters preserved. Columns: Company / Role / Stage / Action / Score / Updated. Sortable by any column (default: Updated desc).
+  Same header structure: Today's Tasks hero + Goal Ribbon + filter bar. View switcher flipped to Table. Kanban / Table only — no Grid.
 </div>
 
 <div class="surface-frame">
@@ -934,25 +911,82 @@
     <div class="topbar-user">MS</div>
   </div>
 
-  <div class="overview">
-    <div class="overview-top">
-      <div>
-        <div class="overview-title">Pipeline Overview</div>
-        <div class="overview-sub">32 opportunities · 5 active this week · last sync 4m ago</div>
+  <!-- Today's tasks (collapsed for brevity) -->
+  <div class="tasks-hero">
+    <div class="tasks-hero-head">
+      <div class="tasks-hero-left">
+        <div class="tasks-hero-title">Today</div>
+        <div class="tasks-hero-chips">
+          <button class="th-chip active">Today</button>
+          <button class="th-chip">Tomorrow</button>
+          <button class="th-chip">This Week</button>
+          <button class="th-chip overdue-chip">Overdue · 2</button>
+          <button class="th-chip">All</button>
+        </div>
       </div>
-      <div class="overview-pipeline">
-        <span style="color:var(--ci-text-tertiary)">Pipeline:</span>
-        <span>GTM Senior PM / Product Leader</span>
-        <span class="chev">▾</span>
+      <a class="tasks-hero-viewall">All tasks ›</a>
+    </div>
+    <div class="tasks-hero-rows">
+      <div class="th-row">
+        <div class="th-check"></div>
+        <div class="th-body">
+          <div class="th-title">Send cover letter and writing sample</div>
+          <span class="th-company">Notion</span>
+          <span class="th-due">due today</span>
+        </div>
+      </div>
+      <div class="th-row">
+        <div class="th-check"></div>
+        <div class="th-body">
+          <div class="th-title">Prep for round 3 system design panel</div>
+          <span class="th-company">Slack</span>
+          <span class="th-due">due today</span>
+        </div>
+      </div>
+      <div class="th-add-row">
+        <span style="font-size:14px; line-height:1; color: var(--ci-text-tertiary); margin-top:-1px;">+</span>
+        <span>Add a task for today…</span>
       </div>
     </div>
-    <div class="stat-cards">
-      <div class="stat"><div class="stat-label">Saved</div><div class="stat-value">32</div><div class="stat-delta up">+4 this week</div></div>
-      <div class="stat"><div class="stat-label">Watch list</div><div class="stat-value">12</div><div class="stat-delta">5 unscored</div></div>
-      <div class="stat"><div class="stat-label">Researching</div><div class="stat-value">6</div><div class="stat-delta warn">2 overdue</div></div>
-      <div class="stat"><div class="stat-label">Applied</div><div class="stat-value">8</div><div class="stat-delta">avg 7d since reply</div></div>
-      <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value">3</div><div class="stat-delta up">Slack · Ramp · Notion</div></div>
-      <div class="stat"><div class="stat-label">Offer</div><div class="stat-value">0</div><div class="stat-delta">—</div></div>
+  </div>
+
+  <!-- Goal ribbon (abbreviated) -->
+  <div class="goal-ribbon">
+    <div class="goal-ribbon-head">
+      <div>
+        <div class="gr-kicker">This month · April 2026</div>
+        <h2 class="gr-title">How you're tracking</h2>
+      </div>
+      <div class="gr-actions">
+        <button class="gr-period-btn">This month <span>▾</span></button>
+        <button class="gr-edit-btn">Edit goals</button>
+      </div>
+    </div>
+    <div class="gr-grid">
+      <div class="gr-card">
+        <div class="gr-card-label">Applications</div>
+        <div class="gr-card-ratio"><span class="gr-actual">8</span><span class="gr-slash">/</span><span class="gr-goal">15</span></div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 53%;"></div></div>
+        <div class="gr-card-sub">53% · <span class="behind-txt">slightly behind</span></div>
+      </div>
+      <div class="gr-card">
+        <div class="gr-card-label">Saves</div>
+        <div class="gr-card-ratio"><span class="gr-actual">32</span><span class="gr-slash">/</span><span class="gr-goal">50</span></div>
+        <div class="gr-bar"><div class="gr-bar-fill on-pace" style="width: 64%;"></div></div>
+        <div class="gr-card-sub">64% · <span class="on-pace-txt">on pace</span></div>
+      </div>
+      <div class="gr-card">
+        <div class="gr-card-label">First outreach</div>
+        <div class="gr-card-ratio"><span class="gr-actual">12</span><span class="gr-slash">/</span><span class="gr-goal">20</span></div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 60%;"></div></div>
+        <div class="gr-card-sub">60% · 7 days left</div>
+      </div>
+      <div class="gr-card gr-card-metric">
+        <div class="gr-card-label">Avg days to reply</div>
+        <div class="gr-card-ratio"><span class="gr-actual">7</span><span class="gr-unit">days</span></div>
+        <div class="gr-bar" style="background: rgba(69,115,210,0.12);"><div class="gr-bar-fill" style="width: 70%; background: var(--ci-accent-blue);"></div></div>
+        <div class="gr-card-sub">Across 18 sent · median 5 days</div>
+      </div>
     </div>
   </div>
 
@@ -962,10 +996,10 @@
     <div class="pick"><span class="k">Status</span><span class="v">Active</span><span class="chev">▾</span></div>
     <div class="pick"><span class="k">Tags</span><span class="v">All</span><span class="chev">▾</span></div>
     <div class="filter-spacer"></div>
+    <!-- D. Kanban / Table only — no Grid -->
     <div class="view-switch">
       <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
       <button class="view-btn active"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
-      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Grid</button>
     </div>
   </div>
 
@@ -1069,244 +1103,265 @@
       </div>
     </div>
 
+    <!-- F. Tasks drawer — collapsed secondary -->
     <div class="tasks-drawer">
       <div class="drawer-chev">‹</div>
-      <div class="drawer-label">Tasks</div>
-      <div class="drawer-count">5</div>
+      <div class="drawer-label">All tasks</div>
+      <div class="drawer-count">12</div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════ 3. GRID VIEW ══════════════════ -->
-<div class="section-label"><span class="num">3</span>Grid view · if kept</div>
+<!-- ══════════════════ 3. TASKS DRAWER EXPANDED ══════════════════ -->
+<div class="section-label"><span class="num">3</span>Tasks drawer · expanded state · secondary deep-management surface</div>
 <div class="section-sub">
-  Tiled 280×200 cards. Shown for comparison — recommendation in the kill/keep frame below.
+  Right-side drawer opened. This is the all-tasks view across all opportunities. Filterable by company, priority, due date. Kept from v1 at Matt's request — complements the hero Today panel at the top (quick view) with a full cross-opp deep-management view.
 </div>
 
 <div class="surface-frame">
   <div class="topbar">
-    <div class="topbar-brand">
-      <div class="topbar-brand-dot"></div>
-      <div class="topbar-brand-name">Coop</div>
-    </div>
-    <div class="topbar-nav">
-      <span class="on">Saved</span>
-      <span>Apply Queue</span>
-      <span>Inbox</span>
-      <span>Docs</span>
-      <span>Settings</span>
-    </div>
+    <div class="topbar-brand"><div class="topbar-brand-dot"></div><div class="topbar-brand-name">Coop</div></div>
+    <div class="topbar-nav"><span class="on">Saved</span><span>Apply Queue</span><span>Inbox</span><span>Docs</span><span>Settings</span></div>
     <div class="topbar-spacer"></div>
     <div class="topbar-user">MS</div>
   </div>
 
-  <div class="filter-bar">
-    <div class="pick"><span class="k">Excitement</span><span class="v">All</span><span class="chev">▾</span></div>
-    <div class="pick"><span class="k">Action On</span><span class="v">All</span><span class="chev">▾</span></div>
-    <div class="pick"><span class="k">Status</span><span class="v">Active</span><span class="chev">▾</span></div>
-    <div class="pick"><span class="k">Tags</span><span class="v">All</span><span class="chev">▾</span></div>
-    <div class="filter-spacer"></div>
-    <div class="view-switch">
-      <button class="view-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18"/><rect x="10" y="3" width="6" height="13"/><rect x="17" y="3" width="6" height="8"/></svg>Kanban</button>
-      <button class="view-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>Table</button>
-      <button class="view-btn active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Grid</button>
-    </div>
-  </div>
-
-  <div class="main">
+  <div class="main" style="min-height: 520px;">
+    <!-- Kanban abbreviated -->
     <div class="main-view">
-      <div class="grid-wrap">
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Slack</div><div class="gc-role">Staff PM, Platform</div></div>
-            <div class="gc-score green">8.9<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$280–340K OTE · Remote · 4.4 Glassdoor</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span>
-            <span style="color:var(--ci-accent-blue); font-weight: 500;">Round 3 · Apr 22</span>
+      <div class="kanban" style="min-height: 520px;">
+        <div class="col" style="--stage-color: #FC636B">
+          <div class="col-head"><div class="col-dot"></div><div class="col-title">Watch list</div><span class="col-count">12</span><button class="col-gear">⚙</button></div>
+          <div class="col-cards">
+            <div class="kc"><div class="kc-head"><div class="kc-ident"><div class="kc-title-row"><div class="kc-fav"></div><div class="kc-company">Transform VXR</div></div><div class="kc-role">Senior PM, GTM</div></div><div class="kc-score green">8.2<span class="d">/10</span></div></div></div>
+            <div class="kc"><div class="kc-head"><div class="kc-ident"><div class="kc-title-row"><div class="kc-fav"></div><div class="kc-company">Unitbase, Inc.</div></div><div class="kc-role">Head of Product</div></div><div class="kc-score green">7.8<span class="d">/10</span></div></div></div>
           </div>
         </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Ramp</div><div class="gc-role">Senior PM, GTM</div></div>
-            <div class="gc-score amber">7.0<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$220–260K OTE · Remote · 4.1 Glassdoor</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #F5A623"></span>Researching</span>
-            <span style="color:var(--ci-accent-red); font-weight: 500;">My court · Apr 21</span>
-          </div>
-        </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Notion</div><div class="gc-role">Head of GTM Strategy</div></div>
-            <div class="gc-score green">7.6<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$300K OTE · SF hybrid · 4.3 Glassdoor</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span>
-            <span style="color:var(--ci-accent-red); font-weight: 500;">Panel · Apr 24</span>
-          </div>
-        </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Clay</div><div class="gc-role">Head of GTM</div></div>
-            <div class="gc-score green">8.1<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$260K base · NYC · Series B</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #36B37E"></span>Applied</span>
-            <span style="color:#b45309; font-weight: 500;">Their court · 7d</span>
-          </div>
-        </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Transform VXR</div><div class="gc-role">Senior PM, GTM</div></div>
-            <div class="gc-score green">8.2<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$230–270K OTE · Remote · Series C</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #FC636B"></span>Watch list</span>
-            <span style="color:var(--ci-accent-red); font-weight: 500;">Score match</span>
-          </div>
-        </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Figma</div><div class="gc-role">Senior PM, Enterprise</div></div>
-            <div class="gc-score amber">7.2<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$270K OTE · SF hybrid · 4.6 Glassdoor</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #4573D2"></span>Interviewing</span>
-            <span style="color:#b45309; font-weight: 500;">Their court</span>
-          </div>
-        </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Product Genius</div><div class="gc-role">Sr PM, Platform</div></div>
-            <div class="gc-score green">8.4<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$250K OTE · Remote · Seed</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #36B37E"></span>Applied</span>
-            <span style="color:#b45309; font-weight: 500;">Their court · 3d</span>
-          </div>
-        </div>
-        <div class="gc">
-          <div class="gc-head">
-            <div><div class="gc-company">Wonderlic</div><div class="gc-role">Product Lead</div></div>
-            <div class="gc-score amber">7.5<span style="font-weight:400;color:var(--ci-text-tertiary)">/10</span></div>
-          </div>
-          <div class="gc-meta">$200K base · Remote · 3.6 Glassdoor</div>
-          <div class="gc-foot">
-            <span class="gc-stage"><span class="d" style="background: #F5A623"></span>Researching</span>
-            <span style="color:#b45309; font-weight: 500;">Their court</span>
+        <div class="col" style="--stage-color: #4573D2">
+          <div class="col-head"><div class="col-dot"></div><div class="col-title">Interviewing</div><span class="col-count">3</span><button class="col-gear">⚙</button></div>
+          <div class="col-cards">
+            <div class="kc"><div class="kc-head"><div class="kc-ident"><div class="kc-title-row"><div class="kc-fav"></div><div class="kc-company">Slack</div></div><div class="kc-role">Staff PM, Platform</div></div><div class="kc-score green">8.9<span class="d">/10</span></div></div><div class="kc-foot"><span class="kc-action scheduled">Scheduled</span><span class="kc-due">Apr 22</span></div></div>
+            <div class="kc"><div class="kc-head"><div class="kc-ident"><div class="kc-title-row"><div class="kc-fav"></div><div class="kc-company">Notion</div></div><div class="kc-role">Head of GTM Strategy</div></div><div class="kc-score green">7.6<span class="d">/10</span></div></div><div class="kc-foot"><span class="kc-action my">My court</span><span class="kc-due">Apr 24</span></div></div>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="tasks-drawer">
-      <div class="drawer-chev">‹</div>
-      <div class="drawer-label">Tasks</div>
-      <div class="drawer-count">5</div>
+    <!-- Tasks drawer — open/expanded state -->
+    <div class="tasks-drawer open">
+      <div class="tasks-head">
+        <div>
+          <div class="tasks-head-title">All tasks</div>
+        </div>
+        <div style="display:flex; align-items:center; gap: 8px;">
+          <span class="tasks-head-count">12</span>
+          <button class="tasks-head-close">›</button>
+        </div>
+      </div>
+      <div class="tasks-head-sub">
+        Secondary surface — all tasks across opportunities. Filter by company, priority, or due date. The hero "Today" panel at top is the quick-view; this drawer is deep cross-opp management.
+      </div>
+      <div class="tasks-list">
+        <div class="tasks-group-label">Overdue</div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Follow up with Rachel on outreach timeline</div>
+            <div class="task-sub"><span class="task-company">Ramp</span><span class="task-due overdue">Overdue 2d</span></div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Review job description and flag gaps</div>
+            <div class="task-sub"><span class="task-company">Luminous</span><span class="task-due overdue">Overdue 3d</span></div>
+          </div>
+        </div>
+        <div class="tasks-group-label">Today · Apr 18</div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Send cover letter and writing sample</div>
+            <div class="task-sub"><span class="task-company">Notion</span><span class="task-due">Due today</span></div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Prep for round 3 system design panel</div>
+            <div class="task-sub"><span class="task-company">Slack</span><span class="task-due">Due today</span></div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Research Head of Product background before call</div>
+            <div class="task-sub"><span class="task-company">Transform VXR</span><span class="task-due">Due today</span></div>
+          </div>
+        </div>
+        <div class="tasks-group-label">This week</div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Prepare panel presentation slides</div>
+            <div class="task-sub"><span class="task-company">Notion</span><span class="task-due">Apr 23</span></div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="task-check"></div>
+          <div class="task-body">
+            <div class="task-title">Send thank-you to recruiting team</div>
+            <div class="task-sub"><span class="task-company">Figma</span><span class="task-due">Apr 24</span></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════ 4. STAT CARD → FILTER STORYBOARD ══════════════════ -->
-<div class="section-label"><span class="num">4</span>Stat card as filter · 3-step storyboard</div>
+<!-- ══════════════════ 4. GOAL RIBBON — STORYBOARD ══════════════════ -->
+<div class="section-label"><span class="num">4</span>Goal Ribbon · 3-state storyboard</div>
 <div class="section-sub">
-  Click a stat card to filter the main view. Active stat gets a 3px coral left border + soft coral background. Click again to clear. Persists across Kanban / Table / Grid switches.
+  Three states: default (mixed tracking), period switched to "This week", and goal-met celebration (Saves hit 50/50).
 </div>
 
 <div class="storyboard">
   <!-- Frame 1: Default -->
   <div class="frame">
-    <div class="frame-head"><span class="frame-step">1</span>Default · no filter</div>
-    <div class="frame-body">
-      <div class="mini">
-        <div class="mini-row">
-          <div class="mini-stat"><div class="mini-stat-l">Saved</div><div class="mini-stat-v">32</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Watch list</div><div class="mini-stat-v">12</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Researching</div><div class="mini-stat-v">6</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Applied</div><div class="mini-stat-v">8</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Interviewing</div><div class="mini-stat-v">3</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Offer</div><div class="mini-stat-v">0</div></div>
-        </div>
-      </div>
-      <div class="mini-kanban">
-        <div class="mini-col" style="--stage-color: #FC636B">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Watch list</div><span class="mini-col-c">12</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Transform VXR</div><div class="mini-kc-s">Senior PM · 8.2</div></div>
-          <div class="mini-kc"><div class="mini-kc-t">Unitbase</div><div class="mini-kc-s">Head of Product · 7.8</div></div>
-        </div>
-        <div class="mini-col" style="--stage-color: #F5A623">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Researching</div><span class="mini-col-c">6</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Ramp</div><div class="mini-kc-s">Senior PM · 7.0</div></div>
-          <div class="mini-kc"><div class="mini-kc-t">Luminous</div><div class="mini-kc-s">PM · 7.1</div></div>
-        </div>
-        <div class="mini-col" style="--stage-color: #4573D2">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Interviewing</div><span class="mini-col-c">3</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Slack</div><div class="mini-kc-s">Staff PM · 8.9</div></div>
-          <div class="mini-kc"><div class="mini-kc-t">Notion</div><div class="mini-kc-s">GTM · 7.6</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Frame 2: Hover/click -->
-  <div class="frame">
-    <div class="frame-head"><span class="frame-step">2</span>Click "Interviewing"</div>
-    <div class="frame-body">
-      <div class="mini">
-        <div class="mini-row">
-          <div class="mini-stat"><div class="mini-stat-l">Saved</div><div class="mini-stat-v">32</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Watch list</div><div class="mini-stat-v">12</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Researching</div><div class="mini-stat-v">6</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Applied</div><div class="mini-stat-v">8</div></div>
-          <div class="mini-stat" style="border: 1px solid var(--ci-border-strong); box-shadow: 0 0 0 2px var(--ci-accent-primary-soft);"><div class="mini-stat-l">Interviewing</div><div class="mini-stat-v">3</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Offer</div><div class="mini-stat-v">0</div></div>
-        </div>
-      </div>
-      <div class="mini-kanban">
-        <div class="mini-col" style="--stage-color: #FC636B">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Watch list</div><span class="mini-col-c">12</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Transform VXR</div><div class="mini-kc-s">Senior PM · 8.2</div></div>
-        </div>
-        <div class="mini-col" style="--stage-color: #F5A623">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Researching</div><span class="mini-col-c">6</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Ramp</div><div class="mini-kc-s">Senior PM · 7.0</div></div>
-        </div>
-        <div class="mini-col" style="--stage-color: #4573D2">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Interviewing</div><span class="mini-col-c">3</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Slack</div><div class="mini-kc-s">Staff PM · 8.9</div></div>
+    <div class="frame-head"><span class="frame-step">1</span>Default · This month</div>
+    <div class="frame-body" style="min-height: auto;">
+      <div class="mini" style="padding: 14px;">
+        <div style="font-size: 9px; color: var(--ci-text-tertiary); margin-bottom: 8px;">This month · April 2026 — How you're tracking</div>
+        <div class="mini-goal-row">
+          <div class="mini-goal">
+            <div class="mini-goal-l">Applications</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">8</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">15</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 53%;"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">Saves</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">32</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">50</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 64%; background: var(--ci-accent-teal);"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">First outreach</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">12</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">20</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 60%;"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">Avg reply time</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual" style="color: var(--ci-accent-blue);">7</span>
+              <span class="mini-goal-slash" style="font-size: 11px; color: var(--ci-text-secondary);"> days</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 70%; background: var(--ci-accent-blue);"></div></div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Frame 3: Filtered -->
+  <!-- Frame 2: Period switched -->
   <div class="frame">
-    <div class="frame-head"><span class="frame-step">3</span>Filtered · only Interviewing</div>
-    <div class="frame-body">
-      <div class="mini">
-        <div class="mini-row">
-          <div class="mini-stat"><div class="mini-stat-l">Saved</div><div class="mini-stat-v">32</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Watch list</div><div class="mini-stat-v">12</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Researching</div><div class="mini-stat-v">6</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Applied</div><div class="mini-stat-v">8</div></div>
-          <div class="mini-stat active"><div class="mini-stat-l">Interviewing</div><div class="mini-stat-v">3</div></div>
-          <div class="mini-stat"><div class="mini-stat-l">Offer</div><div class="mini-stat-v">0</div></div>
+    <div class="frame-head"><span class="frame-step">2</span>Period switched → This week</div>
+    <div class="frame-body" style="min-height: auto;">
+      <div class="mini" style="padding: 14px;">
+        <div style="font-size: 9px; color: var(--ci-text-tertiary); margin-bottom: 8px;">This week · Apr 14–20 — How you're tracking</div>
+        <div class="mini-goal-row">
+          <div class="mini-goal">
+            <div class="mini-goal-l">Applications</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">2</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">4</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 50%;"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">Saves</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">6</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">10</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 60%;"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">First outreach</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">3</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">5</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 60%;"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">Avg reply time</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual" style="color: var(--ci-accent-blue);">7</span>
+              <span class="mini-goal-slash" style="font-size: 11px; color: var(--ci-text-secondary);"> days</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 70%; background: var(--ci-accent-blue);"></div></div>
+          </div>
         </div>
       </div>
-      <div class="mini-kanban" style="justify-content: center;">
-        <div class="mini-col solo" style="--stage-color: #4573D2">
-          <div class="mini-col-head"><div class="mini-col-d"></div><div class="mini-col-t">Interviewing</div><span class="mini-col-c">3</span></div>
-          <div class="mini-kc"><div class="mini-kc-t">Slack</div><div class="mini-kc-s">Staff PM · 8.9 · Round 3</div></div>
-          <div class="mini-kc"><div class="mini-kc-t">Notion</div><div class="mini-kc-s">GTM Strategy · 7.6 · Panel</div></div>
-          <div class="mini-kc"><div class="mini-kc-t">Figma</div><div class="mini-kc-s">Senior PM · 7.2 · Waiting</div></div>
+    </div>
+  </div>
+
+  <!-- Frame 3: Goal met -->
+  <div class="frame">
+    <div class="frame-head"><span class="frame-step">3</span>Goal met · Saves 50/50 → card goes green</div>
+    <div class="frame-body" style="min-height: auto;">
+      <div class="mini" style="padding: 14px;">
+        <div style="font-size: 9px; color: var(--ci-text-tertiary); margin-bottom: 8px;">This month · April 2026 — How you're tracking</div>
+        <div class="mini-goal-row">
+          <div class="mini-goal">
+            <div class="mini-goal-l">Applications</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">8</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">15</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 53%;"></div></div>
+          </div>
+          <div class="mini-goal" style="background: rgba(54,179,126,0.08); border-color: rgba(54,179,126,0.3);">
+            <div class="mini-goal-l" style="color: #1B7E53;">Saves · goal met</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual" style="color: #047857;">50</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">50</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 100%; background: var(--ci-accent-teal);"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">First outreach</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual">12</span>
+              <span class="mini-goal-slash">/</span>
+              <span class="mini-goal-target">20</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 60%;"></div></div>
+          </div>
+          <div class="mini-goal">
+            <div class="mini-goal-l">Avg reply time</div>
+            <div class="mini-goal-ratio">
+              <span class="mini-goal-actual" style="color: var(--ci-accent-blue);">7</span>
+              <span class="mini-goal-slash" style="font-size: 11px; color: var(--ci-text-secondary);"> days</span>
+            </div>
+            <div class="mini-goal-bar"><div class="mini-goal-fill" style="width: 70%; background: var(--ci-accent-blue);"></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1316,46 +1371,73 @@
 <!-- ══════════════════ 5. EMPTY STATE ══════════════════ -->
 <div class="section-label"><span class="num">5</span>Empty state · cold start</div>
 <div class="section-sub">
-  First-visit state when <code style="font-size:12px">savedCompanies[]</code> is empty. Coop avatar + short title + hint + CTA. Header and filter bar render normally (with zero stats) so users immediately understand the shape of the surface.
+  First-visit state when <code style="font-size:12px">savedCompanies[]</code> is empty. Goal Ribbon renders with dashes (no data yet); tasks hero shows "nothing due today" empty state. Header renders normally so users immediately understand the surface shape.
 </div>
 
 <div class="empty-state-frame">
   <div class="topbar">
-    <div class="topbar-brand">
-      <div class="topbar-brand-dot"></div>
-      <div class="topbar-brand-name">Coop</div>
-    </div>
-    <div class="topbar-nav">
-      <span class="on">Saved</span>
-      <span>Apply Queue</span>
-      <span>Inbox</span>
-      <span>Docs</span>
-      <span>Settings</span>
-    </div>
+    <div class="topbar-brand"><div class="topbar-brand-dot"></div><div class="topbar-brand-name">Coop</div></div>
+    <div class="topbar-nav"><span class="on">Saved</span><span>Apply Queue</span><span>Inbox</span><span>Docs</span><span>Settings</span></div>
     <div class="topbar-spacer"></div>
     <div class="topbar-user">MS</div>
   </div>
 
-  <div class="overview">
-    <div class="overview-top">
-      <div>
-        <div class="overview-title">Pipeline Overview</div>
-        <div class="overview-sub">0 opportunities · nothing saved yet</div>
+  <div class="tasks-hero">
+    <div class="tasks-hero-head">
+      <div class="tasks-hero-left">
+        <div class="tasks-hero-title">Today</div>
+        <div class="tasks-hero-chips">
+          <button class="th-chip active">Today</button>
+          <button class="th-chip">Tomorrow</button>
+          <button class="th-chip">This Week</button>
+          <button class="th-chip">All</button>
+        </div>
       </div>
     </div>
-    <div class="stat-cards">
-      <div class="stat"><div class="stat-label">Saved</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
-      <div class="stat"><div class="stat-label">Watch list</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
-      <div class="stat"><div class="stat-label">Researching</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
-      <div class="stat"><div class="stat-label">Applied</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
-      <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
-      <div class="stat"><div class="stat-label">Offer</div><div class="stat-value" style="color: var(--ci-text-tertiary)">0</div><div class="stat-delta">—</div></div>
+    <div style="padding: 18px 6px 12px; text-align: center; color: var(--ci-text-tertiary); font-size: 12.5px;">Nothing due today. Add your first task once you save an opportunity.</div>
+  </div>
+
+  <div class="goal-ribbon">
+    <div class="goal-ribbon-head">
+      <div>
+        <div class="gr-kicker">This month · April 2026</div>
+        <h2 class="gr-title">How you're tracking</h2>
+      </div>
+      <div class="gr-actions">
+        <button class="gr-period-btn">This month <span>▾</span></button>
+        <button class="gr-edit-btn">Set goals</button>
+      </div>
+    </div>
+    <div class="gr-grid">
+      <div class="gr-card" style="opacity: 0.55;">
+        <div class="gr-card-label">Applications</div>
+        <div class="gr-card-ratio"><span class="gr-actual" style="color:var(--ci-text-tertiary);">0</span><span class="gr-slash">/</span><span class="gr-goal">—</span></div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 0%;"></div></div>
+        <div class="gr-card-sub">Set a monthly goal</div>
+      </div>
+      <div class="gr-card" style="opacity: 0.55;">
+        <div class="gr-card-label">Saves</div>
+        <div class="gr-card-ratio"><span class="gr-actual" style="color:var(--ci-text-tertiary);">0</span><span class="gr-slash">/</span><span class="gr-goal">—</span></div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 0%;"></div></div>
+        <div class="gr-card-sub">Set a monthly goal</div>
+      </div>
+      <div class="gr-card" style="opacity: 0.55;">
+        <div class="gr-card-label">First outreach</div>
+        <div class="gr-card-ratio"><span class="gr-actual" style="color:var(--ci-text-tertiary);">0</span><span class="gr-slash">/</span><span class="gr-goal">—</span></div>
+        <div class="gr-bar"><div class="gr-bar-fill" style="width: 0%;"></div></div>
+        <div class="gr-card-sub">Set a monthly goal</div>
+      </div>
+      <div class="gr-card gr-card-metric" style="opacity: 0.55;">
+        <div class="gr-card-label">Avg days to reply</div>
+        <div class="gr-card-ratio"><span class="gr-actual" style="color:var(--ci-text-tertiary);">—</span></div>
+        <div class="gr-bar"></div>
+        <div class="gr-card-sub">No data yet</div>
+      </div>
     </div>
   </div>
 
   <div class="empty-state">
     <div class="empty-avatar">
-      <!-- Coop avatar (simplified) -->
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="24" cy="24" r="18" fill="#FC636B"/>
         <circle cx="18" cy="21" r="2.5" fill="#151B26"/>
@@ -1372,109 +1454,34 @@
   </div>
 </div>
 
-<!-- ══════════════════ 6. GRID KILL / KEEP ══════════════════ -->
-<div class="section-label"><span class="num">6</span>Grid view · kill or keep</div>
-<div class="section-sub">
-  Open question for Matt. Gut: kill. Kanban is the primary mental model for pipeline; Table is for audit + sort + search. Grid is a third way to look at the same data that doesn't earn its keep — it shows less info than a Kanban card while taking up more space.
-</div>
-
-<div class="states-grid">
-  <!-- A. Keep (polished) -->
-  <div class="kill-frame">
-    <div class="kill-head">
-      <div class="kill-head-l">
-        <div class="kill-title">Option A · Keep grid, polish</div>
-      </div>
-      <span class="kill-tag keep">Keep</span>
-    </div>
-    <div class="kill-body">
-      <div class="mini-grid">
-        <div class="mini-gc">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div><div class="mini-gc-t">Slack</div><div class="mini-gc-r">Staff PM</div></div>
-            <div style="font-size:11px; font-weight:600; color:#047857; font-variant-numeric:tabular-nums;">8.9</div>
-          </div>
-          <div class="mini-gc-foot"><span>Interviewing</span><span>Apr 22</span></div>
-        </div>
-        <div class="mini-gc">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div><div class="mini-gc-t">Ramp</div><div class="mini-gc-r">Senior PM</div></div>
-            <div style="font-size:11px; font-weight:600; color:#b45309; font-variant-numeric:tabular-nums;">7.0</div>
-          </div>
-          <div class="mini-gc-foot"><span>Researching</span><span>My court</span></div>
-        </div>
-        <div class="mini-gc">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div><div class="mini-gc-t">Notion</div><div class="mini-gc-r">GTM Strategy</div></div>
-            <div style="font-size:11px; font-weight:600; color:#047857; font-variant-numeric:tabular-nums;">7.6</div>
-          </div>
-          <div class="mini-gc-foot"><span>Interviewing</span><span>Apr 24</span></div>
-        </div>
-        <div class="mini-gc">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div><div class="mini-gc-t">Clay</div><div class="mini-gc-r">Head of GTM</div></div>
-            <div style="font-size:11px; font-weight:600; color:#047857; font-variant-numeric:tabular-nums;">8.1</div>
-          </div>
-          <div class="mini-gc-foot"><span>Applied</span><span>7d ago</span></div>
-        </div>
-      </div>
-    </div>
-    <div class="kill-note">
-      <strong>What it costs</strong>: a third view to maintain and design-pass. <strong>What it earns</strong>: visual browsing for users who prefer tile layouts over column layouts. Honestly — hard to name a moment where Grid beats Kanban or Table.
-    </div>
-  </div>
-
-  <!-- B. Kill -->
-  <div class="kill-frame">
-    <div class="kill-head">
-      <div class="kill-head-l">
-        <div class="kill-title">Option B · Kill grid, Kanban / Table only</div>
-      </div>
-      <span class="kill-tag kill">Recommended</span>
-    </div>
-    <div class="kill-body">
-      <div style="background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 12px;">
-        <div class="mini-table-head">
-          <div>Company</div>
-          <div>Role</div>
-          <div>Stage</div>
-          <div>Action</div>
-          <div>Score</div>
-        </div>
-        <div class="mini-table-row"><div class="c"><div class="f"></div>Slack</div><div class="r">Staff PM, Platform</div><div class="s"><span class="d" style="background: #4573D2"></span>Interviewing</div><div style="font-size:10px; color: var(--ci-accent-blue); font-weight:500;">Apr 22</div><div class="sc green">8.9</div></div>
-        <div class="mini-table-row"><div class="c"><div class="f"></div>Ramp</div><div class="r">Senior PM, GTM</div><div class="s"><span class="d" style="background: #F5A623"></span>Researching</div><div style="font-size:10px; color: var(--ci-accent-red); font-weight:500;">My court</div><div class="sc amber">7.0</div></div>
-        <div class="mini-table-row"><div class="c"><div class="f"></div>Notion</div><div class="r">GTM Strategy</div><div class="s"><span class="d" style="background: #4573D2"></span>Interviewing</div><div style="font-size:10px; color: var(--ci-accent-red); font-weight:500;">Apr 24</div><div class="sc green">7.6</div></div>
-      </div>
-      <div style="margin-top: 10px; font-size: 11px; color: var(--ci-text-tertiary); text-align: center; line-height: 1.5;">
-        View switcher becomes <span style="font-weight: 600; color: var(--ci-text-secondary)">Kanban / Table</span> only.<br/>One clearer primary mental model, one dense audit surface.
-      </div>
-    </div>
-    <div class="kill-note">
-      <strong>Why</strong>: Kanban covers "where is everything" visually. Table covers "let me sort, search, scan everything at once." Grid sits between them with less info than Kanban (no next step / action context) and less density than Table (fewer rows per page). No moment where it's the right tool.
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════ 7. OPEN QUESTIONS ══════════════════ -->
-<div class="section-label"><span class="num">7</span>Open questions</div>
+<!-- ══════════════════ 6. OPEN QUESTIONS ══════════════════ -->
+<div class="section-label"><span class="num">6</span>Open questions — iteration 2</div>
 
 <div class="open-q">
-  <h3>Three calls for Matt before spec</h3>
+  <h3>Open calls before spec (iteration 2)</h3>
   <ol>
     <li>
-      <strong>Tasks drawer default state.</strong>
-      Collapsed on first load (shown in hero) — preserves main-view real estate, user expands when they want it. Alt: expanded by default so users discover it. <span class="pick-me">Gut: collapsed.</span> Remember last-used state per session.
+      <strong>Goal editing UX.</strong>
+      "Edit goals" button opens a modal with per-metric goal inputs — or does each card inline-expand to reveal an editable number? <span class="pick-me">Gut: modal.</span> Modal is cleaner; inline-expand per card is fiddly when you want to update all four goals at once in one pass.
     </li>
     <li>
-      <strong>Stat-card filter persistence.</strong>
-      Persistent across view switches (click "Interviewing" in Kanban → switch to Table → still filtered to Interviewing) or reset on switch? <span class="pick-me">Gut: persistent.</span> Filters are state about the data, views are state about the visualization — they're orthogonal.
+      <strong>Goal defaults on first run.</strong>
+      When a user sets up the dashboard for the first time, what are the default goal values? Generic numbers (15 apps/month, 50 saves/month, 20 outreach/month) — or derived from user's current pace over the prior 30 days? <span class="pick-me">Gut: generic.</span> New users have no pace data; experienced users will override immediately.
     </li>
     <li>
-      <strong>Grid view.</strong>
-      Kill (Kanban + Table only) or keep (polish it)? <span class="pick-me">Gut: kill.</span> No moment where it beats Kanban or Table. Switcher simplifies to a 2-state toggle. If kept, cards get a DESIGN.md pass but we own a third surface forever.
+      <strong>Goal met UX.</strong>
+      When a goal is hit (e.g. Applications reaches 15/15), does the card celebrate (border turns green, small confetti burst) or just silently render green? <span class="pick-me">Gut: subtle green treatment only.</span> Celebration risks feeling gamified; green border + "Goal met" label on the card is dignified enough.
+    </li>
+    <li>
+      <strong>Tasks hero: default expanded vs collapsible.</strong>
+      Hero Today panel is expanded by default. Is it collapsible (via a chevron), or always pinned? <span class="pick-me">Gut: collapsible.</span> Some days you just want to see pipeline immediately. Expanded by default on first load; last-used collapse state persists per session.
+    </li>
+    <li>
+      <strong>Stage editing — in-place vs settings page.</strong>
+      The gear icon reveals Rename / Reorder / Delete inline. Reordering might need drag handles. Alt: gear icon navigates to Pipeline Settings page where all stages are listed as a sortable list. <span class="pick-me">Gut: inline with rename + delete; full reorder in Settings.</span>
     </li>
   </ol>
-  <p style="margin-top: 14px; color: var(--ci-text-primary); font-weight: 500;">Reply <strong>"ship it"</strong> if the three gut-calls look right, otherwise name which to change.</p>
+  <p style="margin-top: 14px; color: var(--ci-text-primary); font-weight: 500;">Reply <strong>"ship it"</strong> if these calls look right, or name which ones to workshop before spec.</p>
 </div>
 
 </body>
