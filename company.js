@@ -233,6 +233,8 @@ let collapsedPanels = {};
 function init() {
   const id = new URLSearchParams(location.search).get('id');
   if (!id) { showError('No company ID specified.'); return; }
+  // Reset role-brief view mode on every fresh navigation so Raw JD state never leaks between entries
+  _rbViewMode = 'brief';
 
   chrome.storage.local.get(['savedCompanies', 'allTags', 'companyStages', 'opportunityStages', 'customStages', 'companyFieldDefs', 'researchCache', 'gmailUserEmail', 'stageCelebrations'], data => {
     if (data.stageCelebrations) _stageCelebrations = data.stageCelebrations;
@@ -653,35 +655,44 @@ function renderHeader() {
     saveEntry({ status: sel.value });
   });
 
-  document.getElementById('hdr-opp-stage')?.addEventListener('change', e => {
-    const sel = e.target;
-    const c = stageColor(sel.value, customOpportunityStages);
-    sel.style.borderColor = c + '66'; sel.style.color = c;
+  // Canonical stage-change handler — called from the header select AND footer action buttons
+  function changeOppStage(newStage) {
     // Record stage entry timestamp + clear timestamps for stages ahead when moving backward
-    const toIdx = customOpportunityStages.findIndex(s => s.key === sel.value);
+    const toIdx = customOpportunityStages.findIndex(s => s.key === newStage);
     const ts = { ...(entry.stageTimestamps || {}) };
-    if (!ts[sel.value]) ts[sel.value] = Date.now();
+    if (!ts[newStage]) ts[newStage] = Date.now();
     for (const s of customOpportunityStages) {
       const sIdx = customOpportunityStages.findIndex(st => st.key === s.key);
       if (sIdx > toIdx && ts[s.key]) delete ts[s.key];
     }
-    const stageChanges = { jobStage: sel.value, stageTimestamps: ts };
-    applyAutoStage(entry, sel.value, stageChanges);
+    const stageChanges = { jobStage: newStage, stageTimestamps: ts };
+    applyAutoStage(entry, newStage, stageChanges);
     // Auto-seed applied date
-    if (sel.value === 'applied' && !entry.appliedDate) {
+    if (newStage === 'applied' && !entry.appliedDate) {
       stageChanges.appliedDate = Date.now();
     }
     saveEntry(stageChanges);
+    // Sync the header stage pill to the new value
+    const hdrSel = document.getElementById('hdr-opp-stage');
+    if (hdrSel) {
+      hdrSel.value = newStage;
+      const c = stageColor(newStage, customOpportunityStages);
+      hdrSel.style.borderColor = c + '66'; hdrSel.style.color = c;
+    }
     // Update Action On dropdown if visible
     const actionSel = document.getElementById('opp-action-status');
     if (actionSel && stageChanges.actionStatus) actionSel.value = stageChanges.actionStatus;
     // Fire celebration if configured
-    const celebCfg = _getCelebrationConfig(sel.value);
-    if (celebCfg) _fireCelebration({ ...celebCfg, stageKey: sel.value });
+    const celebCfg = _getCelebrationConfig(newStage);
+    if (celebCfg) _fireCelebration({ ...celebCfg, stageKey: newStage });
     // Auto-rescore on stage transition — unified scoring picks up all accumulated context
-    if (sel.value !== 'rejected' && entry.isOpportunity) {
+    if (newStage !== 'rejected' && entry.isOpportunity) {
       maybeRescore('stage_transition');
     }
+  }
+
+  document.getElementById('hdr-opp-stage')?.addEventListener('change', e => {
+    changeOppStage(e.target.value);
   });
 
   document.getElementById('hdr-stars')?.querySelectorAll('.hdr-star').forEach(btn => {
@@ -786,7 +797,7 @@ function renderHeader() {
           }, result => {
             if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
             if (result?.content) {
-              const updates = { roleBrief: { content: result.content, generatedAt: Date.now() } };
+              const updates = { roleBrief: { ...(entry.roleBrief || {}), content: result.content, generatedAt: Date.now() } };
               // Apply extracted fields from role brief
               if (result.briefFields) {
                 if (result.briefFields.jobTitle && !entry.jobTitle) updates.jobTitle = result.briefFields.jobTitle;
@@ -1999,12 +2010,15 @@ function bindHubReviews() {
 }
 
 function buildIntelTab() {
+  // For opportunities, show the redesigned Role Brief tab (#255)
+  if (entry.isOpportunity) return buildRoleBriefTab();
+
   const overview = buildOverview();
   const intel    = buildIntel();
   const hasIntel = !intel.includes('p-empty');
 
-  // Fit section — always shown for opportunities; prompt to add if not
-  const fitHtml = (entry.isOpportunity || entry.jobMatch)
+  // Fit section — shown when jobMatch data is present
+  const fitHtml = entry.jobMatch
     ? buildFitSection()
     : `<div class="hub-section-label">Job Fit Analysis</div>
        <div class="p-empty" style="text-align:left">Add this company to the Opportunity Pipeline to enable fit analysis against your preferences, meetings, and emails.</div>`;
@@ -2032,7 +2046,6 @@ function buildIntelTab() {
     ${conflictBanner}
     <div class="hub-intel-block">${overview}</div>
     ${hasIntel ? `<div class="hub-intel-block">${intel}</div>` : ''}
-    ${entry.isOpportunity ? `<div class="hub-intel-block" id="hub-role-brief-block">${buildRoleBriefSection()}</div>` : ''}
     <div class="hub-intel-block" id="hub-fit-block">${fitHtml}</div>
     <div class="hub-intel-block" id="hub-reviews-block">
       <div class="hub-section-label">Employee Reviews</div>
@@ -2044,6 +2057,352 @@ function buildIntelTab() {
     </div>
     ${researchMetaHtml}
   `.trim();
+}
+
+// ── Role Brief Tab (#255) — opportunity-only redesign ─────────────────────────
+// Renders: summary card (score + 5-dim bars + qualifications) +
+//          Brief/Raw JD toggle + body content + sticky footer actions.
+// State: toggle mode stored in rb_viewMode (in-memory, per-session).
+let _rbViewMode = 'brief'; // 'brief' | 'raw' — in-memory per session, resets on nav
+
+function _rbScoreColor(score) {
+  if (!score) return 'var(--ci-text-tertiary)';
+  if (score >= 7.5) return 'var(--ci-accent-teal)';
+  if (score >= 6.0) return 'var(--ci-accent-amber)';
+  if (score >= 4.5) return 'var(--ci-accent-primary)';
+  return 'var(--ci-accent-red)';
+}
+
+function buildRoleBriefTab() {
+  const jm    = entry.jobMatch || {};
+  const score = jm.score;
+  const structured = entry.roleBrief?.structured;
+  const hasJD = !!(entry.jobDescription);
+  const hasBrief = !!(structured?.whatItIs?.summary);
+
+  // ── Summary card ──
+  const summaryCardHtml = _buildRbSummaryCard(jm, score);
+
+  // ── Mode toggle ──
+  const toggleHtml = `
+    <div class="rb2-mode-switch" id="rb2-mode-switch">
+      <button class="rb2-mode-btn${_rbViewMode === 'brief' ? ' active' : ''}" data-mode="brief">Brief</button>
+      <button class="rb2-mode-btn${_rbViewMode === 'raw' ? ' active' : ''}" data-mode="raw">Raw JD</button>
+    </div>`;
+
+  // ── Body content ──
+  let bodyHtml = '';
+  if (_rbViewMode === 'raw' || !hasBrief) {
+    // Raw JD mode
+    if (hasJD) {
+      const jdEscaped = escapeHtml(entry.jobDescription);
+      bodyHtml = `<div class="rb2-jd-body">${jdEscaped}</div>`;
+    } else {
+      bodyHtml = `<div class="rb2-empty-msg">No job description saved. Add one via the Docs tab.</div>`;
+    }
+    // Show synthesize CTA when in brief mode but no brief exists yet
+    if (_rbViewMode === 'brief' && !hasBrief && hasJD) {
+      bodyHtml = `
+        <div class="rb2-cta-block">
+          <div class="rb2-cta-label">Coop hasn't synthesized this JD yet.</div>
+          <button class="rb2-synthesize-btn" id="rb2-synthesize-btn">Synthesize brief</button>
+        </div>
+        ${bodyHtml}`;
+    }
+  } else {
+    // Brief mode with structured content
+    bodyHtml = _buildRbBriefBody(structured);
+  }
+
+  // ── Sticky footer ──
+  const footerHtml = _buildRbFooter();
+
+  // Note: hub-pane itself is the scroll container (overflow-y: auto).
+  // rb2-footer uses position: sticky; bottom: 0 to stay at the bottom of the scroll container.
+  return `
+    <div class="rb2-inner">
+      ${summaryCardHtml}
+      <div class="rb2-toggle-row">
+        ${toggleHtml}
+        ${hasBrief && _rbViewMode === 'brief' ? `<button class="rb2-regen-btn" id="rb2-regen-btn">Regenerate</button>` : ''}
+      </div>
+      <div class="rb2-content" id="rb2-content">
+        ${bodyHtml}
+      </div>
+      ${footerHtml}
+    </div>`;
+}
+
+function _buildRbSummaryCard(jm, score) {
+  const verdict = jm.verdict || (score ? scoreToVerdict(score).label : null);
+  const coopTake = jm.coopTake || '';
+  const scoreColor = _rbScoreColor(score);
+
+  // 5 dimension micro-bars from scoreBreakdown
+  const breakdown = jm.scoreBreakdown || {};
+  const DIM_DEFS = [
+    { key: 'qualificationFit', label: 'Qualification' },
+    { key: 'roleFit',          label: 'Role fit' },
+    { key: 'cultureFit',       label: 'Culture fit' },
+    { key: 'companyFit',       label: 'Company fit' },
+    { key: 'compFit',          label: 'Comp fit' },
+  ];
+  const hasDims = DIM_DEFS.some(d => breakdown[d.key] != null);
+  const barsHtml = hasDims ? `
+    <div class="rb2-bars" id="rb2-bars">
+      ${DIM_DEFS.map(dim => {
+        const val = breakdown[dim.key];
+        if (val == null) return '';
+        const pct = Math.min(100, val * 10);
+        const barColor = _rbScoreColor(val);
+        return `<div class="rb2-bar-item">
+          <span class="rb2-bar-label">${dim.label}</span>
+          <div class="rb2-bar-track"><div class="rb2-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  // Qualifications compact bullets
+  const quals = jm.qualifications || [];
+  const qualIcon = s => s === 'met' ? '✓' : s === 'unmet' ? '✗' : s === 'partial' ? '◐' : '?';
+  const qualColor = s => s === 'met' ? 'var(--ci-accent-teal)' : s === 'unmet' ? 'var(--ci-accent-red)' : s === 'partial' ? 'var(--ci-accent-amber)' : 'var(--ci-text-tertiary)';
+  const qualsHtml = quals.length ? `
+    <div class="rb2-quals" id="rb2-quals">
+      ${quals.slice(0, 6).map(q => `
+        <span class="rb2-qual">
+          <span class="rb2-qual-mark" style="color:${qualColor(q.status)}">${qualIcon(q.status)}</span>
+          ${escapeHtml(q.requirement || '')}
+          ${q.evidence ? `<span class="rb2-qual-note">${escapeHtml(q.evidence.slice(0, 80))}</span>` : ''}
+        </span>`).join('')}
+    </div>` : '';
+
+  // Expanded detail section (hidden by default)
+  // Shows when hasDims (dimension breakdown) OR when there are more than 6 quals to overflow into
+  const dimRationale = jm.dimensionRationale || {};
+  const hasExpandable = hasDims || quals.length > 6;
+  const expandedHtml = hasExpandable ? `
+    <div class="rb2-expand-detail" id="rb2-expand-detail" style="display:none">
+      ${hasDims ? `<div class="rb2-dim-grid">
+        ${DIM_DEFS.map(dim => {
+          const val = breakdown[dim.key];
+          if (val == null) return '';
+          const rationale = dimRationale[dim.key] || dimRationale[dim.key.replace('Fit','')] || '';
+          const color = _rbScoreColor(val);
+          return `<div class="rb2-dim-block">
+            <div class="rb2-dim-header">
+              <span class="rb2-dim-name">${dim.label}</span>
+              <span class="rb2-dim-score" style="color:${color}">${Number(val).toFixed(1)}</span>
+            </div>
+            ${rationale ? `<div class="rb2-dim-rationale">${escapeHtml(rationale)}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+      ${quals.length > 6 ? `
+        <div class="rb2-quals-full">
+          ${quals.slice(6).map(q => `
+            <div class="rb2-qual-row">
+              <span class="rb2-qual-mark" style="color:${qualColor(q.status)}">${qualIcon(q.status)}</span>
+              <div>
+                <div class="rb2-qual-req">${escapeHtml(q.requirement || '')}</div>
+                ${q.evidence ? `<div class="rb2-qual-ev">${escapeHtml(q.evidence)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+    </div>` : '';
+
+  if (!score) {
+    return `<div class="rb2-summary-card rb2-no-score">
+      <div class="rb2-no-score-msg">No fit score yet. Scoring will run automatically when this opportunity is active.</div>
+    </div>`;
+  }
+
+  return `
+    <div class="rb2-summary-card" id="rb2-summary-card">
+      <div class="rb2-sum-top">
+        <div class="rb2-sum-left">
+          ${verdict ? `<div class="rb2-verdict"><span class="rb2-verdict-label" style="color:${scoreColor}">${escapeHtml(verdict)}.</span> ${escapeHtml(coopTake || jm.verdict || '')}</div>` : ''}
+        </div>
+        <div class="rb2-score" style="color:${scoreColor}">${typeof score === 'number' ? score.toFixed(1) : score}</div>
+      </div>
+      ${barsHtml}
+      ${qualsHtml}
+      ${hasExpandable ? `<button class="rb2-show-details-btn" id="rb2-show-details-btn">Show details <span class="rb2-caret" id="rb2-caret">▾</span></button>` : ''}
+      ${expandedHtml}
+    </div>`;
+}
+
+function _buildRbBriefBody(structured) {
+  const sections = [
+    { key: 'whatItIs', label: 'What this role actually is' },
+    { key: 'whatTheyCareAbout', label: 'What they care about' },
+    { key: 'whoTheyWant', label: 'Who they want' },
+  ];
+  return `<div class="rb2-brief-body">
+    ${sections.map(s => {
+      const sec = structured[s.key];
+      if (!sec?.summary) return '';
+      return `
+        <div class="rb2-section">
+          <h3 class="rb2-section-h">${escapeHtml(s.label)}</h3>
+          <p class="rb2-section-summary"><strong>${escapeHtml(sec.summary)}</strong></p>
+          ${sec.detail ? `<p class="rb2-section-detail">${escapeHtml(sec.detail)}</p>` : ''}
+        </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function _buildRbFooter() {
+  const stage = entry.jobStage || 'needs_review';
+  const stages = customOpportunityStages;
+  const stageObj = stages.find(s => s.key === stage);
+  const stageIdx = stages.findIndex(s => s.key === stage);
+
+  // "Apply" dims out once already applied or in terminal stages
+  const alreadyApplied = ['applied', 'intro_requested', 'conversations', 'offer_stage', 'accepted', 'rejected'].includes(stage);
+  const isTerminal = ['rejected', 'accepted'].includes(stage);
+  const applyDim = alreadyApplied;
+  const notInterestedDim = isTerminal;
+
+  return `
+    <div class="rb2-footer" id="rb2-footer">
+      <button class="rb2-footer-btn rb2-btn-ghost" id="rb2-not-interested-btn"${notInterestedDim ? ' disabled' : ''}>Not interested</button>
+      <button class="rb2-footer-btn" id="rb2-cover-letter-btn">Draft cover letter</button>
+      <button class="rb2-footer-btn rb2-btn-primary" id="rb2-apply-btn"${applyDim ? ' disabled' : ''}>${alreadyApplied ? 'Already applied' : 'Apply'}</button>
+    </div>`;
+}
+
+function bindRoleBriefTabEvents() {
+  if (!entry.isOpportunity) return;
+
+  // Mode toggle
+  const modeSwitchEl = document.getElementById('rb2-mode-switch');
+  modeSwitchEl?.querySelectorAll('.rb2-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _rbViewMode = btn.dataset.mode;
+      // Re-render intel tab content in place
+      const pane = document.getElementById('hub-intel');
+      if (pane) {
+        pane.innerHTML = buildRoleBriefTab();
+        bindRoleBriefTabEvents();
+      }
+    });
+  });
+
+  // Summary card expand/collapse
+  const showDetailsBtn = document.getElementById('rb2-show-details-btn');
+  const expandDetail = document.getElementById('rb2-expand-detail');
+  const caret = document.getElementById('rb2-caret');
+  if (showDetailsBtn && expandDetail) {
+    showDetailsBtn.addEventListener('click', () => {
+      const isOpen = expandDetail.style.display !== 'none';
+      expandDetail.style.display = isOpen ? 'none' : 'block';
+      if (caret) caret.style.transform = isOpen ? '' : 'rotate(180deg)';
+    });
+  }
+
+  // Synthesize CTA
+  document.getElementById('rb2-synthesize-btn')?.addEventListener('click', () => {
+    _generateRbStructured();
+  });
+
+  // Regenerate
+  document.getElementById('rb2-regen-btn')?.addEventListener('click', () => {
+    _generateRbStructured();
+  });
+
+  // Apply footer button — advance stage to 'applied' or open apply URL
+  document.getElementById('rb2-apply-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('rb2-apply-btn');
+    if (btn?.disabled) return;
+    // Open job URL if present
+    if (entry.jobUrl) {
+      window.open(entry.jobUrl, '_blank', 'noopener');
+    }
+    // Advance stage to 'applied' if not already there — routes through canonical handler
+    const stage = entry.jobStage || 'needs_review';
+    if (!['applied', 'intro_requested', 'conversations', 'offer_stage', 'accepted', 'rejected'].includes(stage)) {
+      changeOppStage('applied');
+      // Re-render pane to reflect new stage
+      const pane = document.getElementById('hub-intel');
+      if (pane) { pane.innerHTML = buildRoleBriefTab(); bindRoleBriefTabEvents(); }
+    }
+  });
+
+  // Draft cover letter — inject prompt into Coop chat panel
+  document.getElementById('rb2-cover-letter-btn')?.addEventListener('click', () => {
+    const coverLetterPrompt = 'Help me write a custom cover letter for this role. Use what you know about me and the company to make it specific and compelling.';
+    // Always ensure the floating chat panel is open first, then seed the input
+    const floatTrigger = document.getElementById('fch-trigger');
+    const floatEl = document.getElementById('ci-float-chat');
+    if (floatEl && floatEl.classList.contains('fch-hidden') && floatTrigger) {
+      floatTrigger.click();
+    }
+    // Find the active chat input in the floating chat or any visible chat panel
+    const chatInput = document.querySelector('[data-chat-panel] .chat-input-box, .fch-body .chat-input-box');
+    if (chatInput) {
+      chatInput.value = coverLetterPrompt;
+      chatInput.dispatchEvent(new Event('input'));
+      chatInput.focus();
+    }
+  });
+
+  // Not interested — move to 'rejected' stage — routes through canonical handler
+  document.getElementById('rb2-not-interested-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('rb2-not-interested-btn');
+    if (btn?.disabled) return;
+    changeOppStage('rejected');
+    // Re-render footer to reflect new stage
+    const pane = document.getElementById('hub-intel');
+    if (pane) {
+      pane.innerHTML = buildRoleBriefTab();
+      bindRoleBriefTabEvents();
+    }
+  });
+}
+
+function _generateRbStructured() {
+  const btn = document.getElementById('rb2-synthesize-btn') || document.getElementById('rb2-regen-btn');
+  const btnOriginalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Synthesizing…'; }
+
+  // Show loading state in content area
+  const contentEl = document.getElementById('rb2-content');
+  if (contentEl) {
+    contentEl.innerHTML = `<div class="rb2-loading"><div class="coop-thinking-overlay inline">${coopThinkingHTML('Reading the JD\u2026', 'Coop is extracting what this role actually is')}</div></div>`;
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'GENERATE_ROLE_BRIEF_STRUCTURED',
+    company:        entry.company,
+    jobTitle:       entry.jobTitle,
+    jobDescription: entry.jobDescription,
+    jobSnapshot:    entry.jobSnapshot,
+    employees:      entry.employees,
+    funding:        entry.funding,
+    industry:       entry.industry,
+  }, result => {
+    void chrome.runtime.lastError;
+    if (result?.structured) {
+      const prev = entry.roleBrief || {};
+      saveEntry({ roleBrief: { ...prev, structured: result.structured, structuredAt: Date.now() } });
+      _rbViewMode = 'brief';
+      const pane = document.getElementById('hub-intel');
+      if (pane) {
+        pane.innerHTML = buildRoleBriefTab();
+        bindRoleBriefTabEvents();
+      }
+    } else {
+      // Show inline error in content area
+      if (contentEl) {
+        contentEl.innerHTML = `<div class="rb2-error-block">
+          <span>Synthesis failed: ${escapeHtml(result?.error || 'Unknown error')}</span>
+          <button class="rb2-retry-btn" id="rb2-retry-btn">Retry</button>
+        </div>`;
+        document.getElementById('rb2-retry-btn')?.addEventListener('click', _generateRbStructured);
+      }
+      if (btn) { btn.disabled = false; btn.textContent = btn.id === 'rb2-synthesize-btn' ? 'Synthesize brief' : (btnOriginalText || 'Regenerate'); }
+    }
+  });
 }
 
 // Called when the Intel tab is first opened — fetches missing research data and triggers fit analysis
@@ -2150,20 +2509,12 @@ function initIntelTab() {
     });
   });
 
-  // Bind role brief events
-  bindRoleBriefEvents();
-
-  // Auto-generate long-form role brief only for opportunities in configured rescore stages
-  // All other stages require manual trigger via the Generate button
-  if (entry.isOpportunity && !entry.roleBrief && !entry.jobMatch?.roleBrief?.roleSummary
-      && (entry.jobDescription || entry.cachedMeetings?.length || entry.cachedEmails?.length)) {
-    chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
-      const rescoreStages = coopConfig?.rescoreStages || [];
-      const currentStage = entry.jobStage || 'needs_review';
-      if (rescoreStages.length && rescoreStages.includes(currentStage)) {
-        setTimeout(() => generateRoleBrief(), 1000);
-      }
-    });
+  // For opportunities: bind the redesigned Role Brief tab events (#255)
+  if (entry.isOpportunity) {
+    bindRoleBriefTabEvents();
+  } else {
+    // Non-opportunity: bind old role brief events
+    bindRoleBriefEvents();
   }
 }
 
@@ -2191,7 +2542,7 @@ function generateRoleBrief() {
         meetingCount: (entry.cachedMeetings || []).length + (entry.manualMeetings || []).length,
         notesLength: (entry.notes || '').length,
       };
-      saveEntry({ roleBrief: { content: result.content, generatedAt: Date.now(), sourceVersions } });
+      saveEntry({ roleBrief: { ...(entry.roleBrief || {}), content: result.content, generatedAt: Date.now(), sourceVersions } });
 
       // Backfill empty or placeholder fields from role brief extraction
       console.log('[RoleBrief] briefFields:', result.briefFields ? JSON.stringify(result.briefFields) : 'null/undefined');

@@ -1305,6 +1305,156 @@
     .rb-empty-sub { font-size: 12px; color: var(--ci-text-tertiary); margin-top: 8px; }
     .rb-empty-msg { font-size: 13px; color: var(--ci-text-tertiary); font-style: italic; padding: 16px 0; }
 
+    /* ── Role Brief Tab v2 (#255) ── */
+    /* hub-pane is the scroll container; rb2-footer sticks to its bottom */
+    .rb2-inner { max-width: 720px; margin: 0 auto; width: 100%; padding-bottom: 8px; }
+
+    /* Summary card */
+    .rb2-summary-card {
+      border: 1px solid var(--ci-border-default); border-radius: 10px;
+      padding: 16px 18px; background: var(--ci-bg-raised); margin-bottom: 20px;
+    }
+    .rb2-no-score { background: var(--ci-bg-inset); }
+    .rb2-no-score-msg { font-size: 13px; color: var(--ci-text-tertiary); text-align: center; padding: 8px 0; }
+    .rb2-sum-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .rb2-sum-left { flex: 1; min-width: 0; }
+    .rb2-verdict { font-size: 14px; font-weight: 500; color: var(--ci-text-primary); line-height: 1.5; }
+    .rb2-verdict-label { font-weight: 700; margin-right: 5px; }
+    .rb2-score { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; padding-top: 2px; flex-shrink: 0; }
+
+    /* Dimension micro-bars */
+    .rb2-bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+    .rb2-bar-item { display: flex; flex-direction: column; gap: 5px; }
+    .rb2-bar-label { font-size: 11px; color: var(--ci-text-secondary); }
+    .rb2-bar-track { height: 3px; background: var(--ci-border-subtle); border-radius: 2px; overflow: hidden; position: relative; }
+    .rb2-bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; transition: width var(--motion-sm) var(--ease-out); }
+
+    /* Qualification pills */
+    .rb2-quals {
+      display: flex; flex-wrap: wrap; gap: 8px 14px;
+      margin-top: 14px; padding-top: 12px;
+      border-top: 1px solid var(--ci-border-subtle);
+    }
+    .rb2-qual { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ci-text-primary); }
+    .rb2-qual-mark { font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .rb2-qual-note { color: var(--ci-text-tertiary); }
+
+    /* Show details toggle */
+    .rb2-show-details-btn {
+      background: none; border: none; font-size: 12px; font-weight: 500;
+      color: var(--ci-text-tertiary); padding: 10px 0 0; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px; font-family: inherit;
+    }
+    .rb2-show-details-btn:hover { color: var(--ci-text-primary); }
+    .rb2-caret { display: inline-block; transition: transform var(--motion-xs) var(--ease-out); }
+
+    /* Expanded detail */
+    .rb2-expand-detail { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ci-border-subtle); }
+    .rb2-dim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
+    .rb2-dim-block {}
+    .rb2-dim-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .rb2-dim-name { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); }
+    .rb2-dim-score { font-size: 12px; font-weight: 600; }
+    .rb2-dim-rationale { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; }
+    .rb2-quals-full { margin-top: 14px; }
+    .rb2-qual-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--ci-border-subtle); }
+    .rb2-qual-row:last-child { border-bottom: none; }
+    .rb2-qual-req { font-size: 12px; color: var(--ci-text-primary); font-weight: 500; }
+    .rb2-qual-ev { font-size: 11px; color: var(--ci-text-tertiary); margin-top: 2px; line-height: 1.4; }
+
+    /* Mode toggle + regenerate row */
+    .rb2-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .rb2-mode-switch {
+      display: inline-flex; padding: 3px; background: var(--ci-bg-inset);
+      border-radius: 8px; border: 1px solid var(--ci-border-default);
+    }
+    .rb2-mode-btn {
+      font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+      color: var(--ci-text-secondary); background: transparent; border: none; cursor: pointer;
+      font-family: inherit; transition: all var(--motion-xs) var(--ease-out);
+    }
+    .rb2-mode-btn.active {
+      background: var(--ci-bg-raised); color: var(--ci-text-primary); font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .rb2-regen-btn {
+      font-size: 12px; font-weight: 500; color: var(--ci-text-tertiary); background: none;
+      border: 1px solid var(--ci-border-default); border-radius: 6px; padding: 5px 12px;
+      cursor: pointer; font-family: inherit; transition: all var(--motion-xs) var(--ease-out);
+    }
+    .rb2-regen-btn:hover { border-color: var(--ci-border-strong); color: var(--ci-text-primary); }
+
+    /* Brief body */
+    .rb2-brief-body { font-size: 15px; line-height: 1.65; color: var(--ci-text-primary); }
+    .rb2-section { margin-bottom: 28px; }
+    .rb2-section:last-child { margin-bottom: 0; }
+    .rb2-section-h {
+      font-size: 12px; font-weight: 600; color: var(--ci-text-tertiary);
+      letter-spacing: -0.005em; margin: 0 0 8px;
+    }
+    .rb2-section-summary { margin: 0 0 0.8em; line-height: 1.65; }
+    .rb2-section-detail { margin: 0 0 1.2em; color: var(--ci-text-secondary); line-height: 1.65; }
+    .rb2-section-detail:last-child { margin-bottom: 0; }
+
+    /* Raw JD body */
+    .rb2-jd-body {
+      font-size: 14px; color: var(--ci-text-secondary); line-height: 1.65;
+      white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* Synthesize CTA */
+    .rb2-cta-block {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+      padding: 16px 18px; margin-bottom: 20px;
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+      border-radius: 10px;
+    }
+    .rb2-cta-label { font-size: 13px; color: var(--ci-text-secondary); }
+    .rb2-synthesize-btn {
+      font-size: 13px; font-weight: 600; color: var(--ci-text-on-dark);
+      background: var(--ci-bg-header); border: none; border-radius: 8px;
+      padding: 9px 20px; cursor: pointer; font-family: inherit;
+      transition: background var(--ci-transition-fast);
+    }
+    .rb2-synthesize-btn:hover { background: var(--ci-accent-primary); }
+    .rb2-synthesize-btn:disabled { opacity: 0.55; cursor: default; }
+
+    /* Loading + error states */
+    .rb2-loading { padding: 24px 0; }
+    .rb2-empty-msg { font-size: 13px; color: var(--ci-text-tertiary); font-style: italic; padding: 16px 0; }
+    .rb2-error-block {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; background: var(--ci-accent-red-soft);
+      border: 1px solid rgba(232,56,79,0.18); border-radius: 8px;
+      font-size: 12px; color: var(--ci-accent-red);
+    }
+    .rb2-retry-btn {
+      background: none; border: none; font-size: 12px; font-weight: 600;
+      color: var(--ci-accent-red); cursor: pointer; font-family: inherit; padding: 0;
+    }
+    .rb2-retry-btn:hover { text-decoration: underline; }
+
+    /* Sticky footer — negative horizontal margins cancel hub-pane padding so footer spans full width */
+    .rb2-footer {
+      position: sticky; bottom: -20px;
+      background: linear-gradient(to top, var(--ci-bg-base) 70%, rgba(240,242,245,0));
+      padding: 20px 24px 22px;
+      margin: 0 -24px -20px;
+      display: flex; gap: 8px; align-items: center; justify-content: flex-end;
+    }
+    .rb2-footer-btn {
+      font-size: 13px; font-weight: 500; padding: 8px 14px;
+      border-radius: 7px; cursor: pointer; border: 1px solid var(--ci-border-default);
+      background: var(--ci-bg-raised); color: var(--ci-text-primary);
+      font-family: inherit; transition: all var(--motion-xs) var(--ease-out);
+    }
+    .rb2-footer-btn:hover:not(:disabled) { border-color: var(--ci-border-strong); }
+    .rb2-footer-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .rb2-btn-ghost { border: none; background: transparent; color: var(--ci-text-secondary); }
+    .rb2-btn-ghost:hover:not(:disabled) { color: var(--ci-text-primary); }
+    .rb2-btn-primary { border-color: var(--ci-text-primary); background: var(--ci-text-primary); color: #fff; }
+    .rb2-btn-primary:hover:not(:disabled) { background: #000; border-color: #000; }
+
     /* ── Activity Timeline ── */
     #activity-timeline { display: flex; flex-direction: column; }
     .timeline-entry { display: flex; gap: 14px; position: relative; }

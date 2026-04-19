@@ -225,6 +225,90 @@ Then write the full role brief below.`;
   }
 }
 
+// ── Structured Role Brief Synthesis (#255) ───────────────────────────────────
+// Generates { whatItIs, whatTheyCareAbout, whoTheyWant } from the JD + company context.
+// Each section: { summary: "bolded 1-2 sentence lead", detail: "supporting paragraph(s)" }
+// Stored as roleBrief.structured. Triggered on first save when JD is present.
+// Routes through chatWithFallback — never calls providers directly.
+
+export async function generateRoleBriefStructured({ company, jobTitle, jobDescription, jobSnapshot, employees, funding, industry }) {
+  if (!jobDescription || jobDescription.length < 100) return { error: 'Job description too short for synthesis' };
+
+  const contextLines = [`Company: ${company || 'Unknown'}`, `Role: ${jobTitle || 'Unknown'}`];
+  if (employees) contextLines.push(`Size: ${employees}`);
+  if (funding) contextLines.push(`Funding: ${funding}`);
+  if (industry) contextLines.push(`Industry: ${industry}`);
+  if (jobSnapshot) {
+    const snap = typeof jobSnapshot === 'string' ? jobSnapshot : JSON.stringify(jobSnapshot);
+    contextLines.push(`Job metadata: ${snap.slice(0, 500)}`);
+  }
+
+  const prompt = `You are synthesizing a job description into a concise 3-section role brief for a job seeker.
+
+${contextLines.join('\n')}
+
+=== JOB DESCRIPTION ===
+${jobDescription.slice(0, 6000)}
+
+Return ONLY valid JSON — no markdown fences, no explanation. Structure:
+{
+  "whatItIs": {
+    "summary": "1-2 punchy sentences explaining what the role actually is — scope, function, real mandate. Make this load-bearing — a reader should understand the role from just this.",
+    "detail": "2-4 sentences of supporting context: reporting structure, team size, daily reality, how the scope differs from the title."
+  },
+  "whatTheyCareAbout": {
+    "summary": "1-2 sentences naming the 2-3 things this company actually prioritizes in a hire. Be specific — cite numbers, tools, or signals from the JD if present.",
+    "detail": "2-4 sentences explaining each priority with evidence from the posting."
+  },
+  "whoTheyWant": {
+    "summary": "1-2 sentences distilling the must-have profile. Lead with the most differentiating requirement.",
+    "detail": "Bullet-style detail on required background, experience bands, and any bonus signals. Keep it crisp."
+  }
+}
+
+Rules:
+- summary fields are the bolded lead — make them specific and load-bearing, not generic
+- detail fields add context, not repetition
+- Be concrete: cite years, tools, metrics, or org signals when the JD provides them
+- If the JD is sparse, write shorter summaries rather than padding
+- Return valid JSON only`;
+
+  try {
+    const result = await chatWithFallback({
+      model: getModelForTask('roleBrief'),
+      system: 'You extract structured role intelligence from job descriptions. Return valid JSON only.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1200,
+      tag: 'RoleBriefStructured',
+      opTag: 'scoring',
+      context: company || undefined,
+    });
+    if (result.error) return { error: result.error };
+
+    let raw = result.reply.trim();
+    // Strip markdown fences if model added them
+    raw = raw.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
+
+    let structured;
+    try {
+      structured = JSON.parse(raw);
+    } catch (e) {
+      console.warn('[RoleBriefStructured] JSON parse failed:', e.message, '| raw:', raw.slice(0, 200));
+      return { error: 'Failed to parse structured brief' };
+    }
+
+    // Validate shape
+    const requiredKeys = ['whatItIs', 'whatTheyCareAbout', 'whoTheyWant'];
+    for (const k of requiredKeys) {
+      if (!structured[k]?.summary) return { error: `Missing ${k}.summary in response` };
+    }
+
+    return { structured };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 // ── Lightweight Field Extraction (Tier 2 — runs on new content only) ────────
 
 export async function extractFieldsFromNewContent(entryId, newContent, contentType) {
@@ -663,6 +747,34 @@ export async function handleSaveOpportunity(message) {
 
   if (triggerResearch && company) {
     researchCompany(company).catch(err => console.error('[SaveOpp] Research error:', err));
+  }
+
+  // ── Synthesize structured role brief on first save if JD is present (#255) ──
+  // This is explicit user action (save) — not auto-firing on page load.
+  // Only runs when JD is present and roleBrief.structured hasn't been generated yet.
+  if (entry.isOpportunity && entry.jobDescription && !entry.roleBrief?.structured) {
+    generateRoleBriefStructured({
+      company:        entry.company,
+      jobTitle:       entry.jobTitle,
+      jobDescription: entry.jobDescription,
+      jobSnapshot:    entry.jobSnapshot,
+      employees:      entry.employees,
+      funding:        entry.funding,
+      industry:       entry.industry,
+    }).then(async result => {
+      if (result.structured) {
+        const { savedCompanies: latest } = await new Promise(r => chrome.storage.local.get(['savedCompanies'], r));
+        const arr = latest || [];
+        const i = arr.findIndex(e => e.id === entry.id);
+        if (i === -1) return;
+        const prev = arr[i].roleBrief || {};
+        arr[i] = { ...arr[i], roleBrief: { ...prev, structured: result.structured, structuredAt: Date.now() } };
+        await new Promise(r => chrome.storage.local.set({ savedCompanies: arr }, r));
+        console.log('[RoleBriefStructured] Saved structured brief for', entry.company);
+      } else {
+        console.warn('[RoleBriefStructured] Failed for', entry.company, ':', result.error);
+      }
+    }).catch(err => console.warn('[RoleBriefStructured] Error:', err.message));
   }
 
   return { entry, isDuplicate: false };

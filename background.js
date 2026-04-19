@@ -9,7 +9,7 @@ import { buildGranolaIndex, searchGranolaNotes } from './granola.js';
 import { researchCompany, quickLookup } from './research.js';
 import { interpretProfileSection, scoreOpportunity, processQueue, computeStructuralMatches, handleDevMockScore } from './scoring.js';
 import { consolidateProfile } from './memory.js';
-import { syncEntryFields, generateRoleBrief, extractNextSteps, extractEmailTasks, extractFieldsFromNewContent, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
+import { syncEntryFields, generateRoleBrief, generateRoleBriefStructured, extractNextSteps, extractEmailTasks, extractFieldsFromNewContent, backfillMissingWebsites, migrateJobsToCompanies, handleSaveOpportunity } from './sync.js';
 import { handleCoopMessage, handleChatMessage, handleGlobalChatMessage, handleCoopAssistRewrite } from './coop-chat.js';
 import { handleQuickEnrichFirmo } from './search.js';
 import { initProfileCompiler } from './profile-compiler.js';
@@ -614,6 +614,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'GENERATE_ROLE_BRIEF') {
     generateRoleBrief(message).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GENERATE_ROLE_BRIEF_STRUCTURED') {
+    generateRoleBriefStructured(message).then(sendResponse);
     return true;
   }
   // DEEP_FIT_ANALYSIS removed — unified into scoreOpportunity (scoring.js)
