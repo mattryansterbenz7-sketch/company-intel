@@ -398,6 +398,51 @@
     font-size: 13px; color: var(--ci-text-primary); line-height: 1.55;
   }.oq-q { color: var(--ci-accent-primary); font-weight: 700; min-width: 20px; font-size: 14px; }.oq-text { color: var(--ci-text-primary); }.oq-text .lean { display: inline-block; font-size: 11px; font-weight: 600; color: var(--ci-text-secondary); background: var(--ci-bg-inset); padding: 1px 7px; border-radius: var(--ci-radius-full); margin-left: 6px; }
 
+/* ─── Red vs Green comparison ─── */
+.rvg-section { margin: 32px 0 40px; max-width: 900px; }
+.rvg-head { margin-bottom: 18px; }
+.rvg-kicker { font-size: 11px; font-weight: 700; color: var(--ci-accent-primary); letter-spacing: -0.005em; display: block; margin-bottom: 4px; }
+.rvg-head h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
+.rvg-sub { font-size: 13px; color: var(--ci-text-secondary); line-height: 1.55; }
+.rvg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rvg-card { background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-md); padding: 18px 20px; }
+.pill-demo { padding: 16px 4px; }
+.rvg-note { font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5; }
+
+/* ─── Architecture note ─── */
+.arch-note {
+  background: var(--ci-bg-raised);
+  border: 1px solid var(--ci-border-default);
+  border-left: 3px solid var(--ci-accent-primary);
+  border-radius: var(--ci-radius-md);
+  padding: 14px 18px;
+  max-width: 820px;
+  margin: 20px 0;
+}
+.arch-note-kicker {
+  font-size: 11px; font-weight: 700;
+  color: var(--ci-accent-primary);
+  letter-spacing: -0.005em;
+  margin-bottom: 4px;
+}
+.arch-note h4 {
+  font-size: 14px; font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--ci-text-primary);
+  margin-bottom: 6px;
+}
+.arch-note p {
+  font-size: 12.5px; color: var(--ci-text-secondary);
+  line-height: 1.55;
+}
+.arch-note code {
+  background: var(--ci-bg-inset);
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
 </style>
 </head>
 <body>
@@ -410,6 +455,12 @@
 </div>
 
 <div class="rec-strap">Recommended — Option A: dedicated "Apply Mode" tab within Coop Settings</div>
+
+<div class="arch-note">
+  <div class="arch-note-kicker">Architecture · ties into #244</div>
+  <h4>Answer Library pairings are single-source-of-truth with Profile</h4>
+  <p>Apply Mode pulls from the Answer Library built in <a href="#" style="color: var(--ci-accent-primary); text-decoration: none;">#244</a>. Each pairing is either a raw user-authored answer OR a live reference to a Profile field (<code>prefs.salaryFloor</code>, <code>prefs.workAuthorization</code>, etc.). Edit the profile → the pairing updates. Edit the pairing → prompt: "update profile, or create override?" No silent divergence between surfaces.</p>
+</div>
 
 <!-- ═════════════════════════════ SECTION: RECOMMENDED ═════════════════════════════ -->
 <div class="section-label">Recommended — Option A</div>
@@ -464,7 +515,7 @@
 
       <div class="ql-list">
         <div class="ql-row">
-          <div class="ql-icon">
+          <div class="ql-icon" style="color: #0A66C2; opacity: 0.78;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><line x1="7" y1="10" x2="7" y2="18"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><path d="M11 18v-4.5a2.5 2.5 0 0 1 5 0V18"/><line x1="11" y1="10" x2="11" y2="18"/></svg>
           </div>
           <div class="ql-name">LinkedIn</div>
@@ -480,7 +531,7 @@
         </div>
 
         <div class="ql-row">
-          <div class="ql-icon">
+          <div class="ql-icon" style="color: #181717; opacity: 0.78;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4 1.5-4-2.5-6-3m12 5v-3.5a3.5 3.5 0 0 0-1-2.5c3.3-.4 6.7-1.6 6.7-7A5.4 5.4 0 0 0 19 3.8 5 5 0 0 0 18.9.7S17.7.4 15 2.2a13 13 0 0 0-6 0C6.3.4 5.1.7 5.1.7a5 5 0 0 0-.1 3.1 5.4 5.4 0 0 0-1.3 3.7c0 5.4 3.3 6.6 6.6 7a3.2 3.2 0 0 0-1 2.5V21"/></svg>
           </div>
           <div class="ql-name">GitHub</div>
@@ -496,7 +547,7 @@
         </div>
 
         <div class="ql-row">
-          <div class="ql-icon">
+          <div class="ql-icon" style="color: var(--ci-accent-primary); opacity: 0.78;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
           </div>
           <div class="ql-name">Portfolio</div>
@@ -512,7 +563,7 @@
         </div>
 
         <div class="ql-row">
-          <div class="ql-icon">
+          <div class="ql-icon" style="color: var(--ci-accent-primary); opacity: 0.78;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 0 1 0 18A13 13 0 0 1 12 3z"/></svg>
           </div>
           <div class="ql-name">Website</div>
@@ -528,7 +579,7 @@
         </div>
 
         <div class="ql-row">
-          <div class="ql-icon">
+          <div class="ql-icon" style="color: #4285F4; opacity: 0.78;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
           </div>
           <div class="ql-name">Booking</div>
@@ -548,6 +599,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add link
       </div>
+
+      <p class="frame-caption" style="margin-top: 10px; font-size: 12px; color: var(--ci-text-tertiary); line-height: 1.5; max-width: 620px;">
+        <strong style="color: var(--ci-text-primary);">Brand-adjacent logos:</strong> subtle color cues per service (Google blue, LinkedIn blue, GitHub neutral, etc.) at ~75% opacity. Accent without shouting.
+      </p>
     </div>
 
     <!-- ── Answer Library ── -->
@@ -599,6 +654,37 @@
       <div class="config-caption">Not included in the extension's shipped manifest. Toggle is shown here so the feature is discoverable when enabled in future releases.</div>
     </div>
 
+  </div>
+</div>
+
+<!-- ════ Red vs Green pill comparison ════ -->
+<div class="rvg-section">
+  <div class="rvg-head">
+    <span class="rvg-kicker">Red vs green — picked: coral</span>
+    <h3>Apply Mode status pill · coral vs green</h3>
+    <p class="rvg-sub">Coral (recommended): Apply Mode is an active, attention-drawing state. "Coop is doing something on your behalf right now." Consistent with coral meaning "Coop-authored" elsewhere. Green reads passive / "healthy idle" — wrong vibe for an active mode.</p>
+  </div>
+  <div class="rvg-grid">
+    <div class="rvg-card">
+      <div class="rvg-kicker" style="margin-bottom: 10px;">Option A · Coral (recommended)</div>
+      <div class="pill-demo">
+        <span class="apply-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #FC636B; color: #FFFFFF; padding: 4px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 600; letter-spacing: -0.005em;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #FFFFFF;"></span>
+          Apply Mode active
+        </span>
+      </div>
+      <p class="rvg-note">Active, coop-authored, consistent.</p>
+    </div>
+    <div class="rvg-card">
+      <div class="rvg-kicker" style="margin-bottom: 10px;">Option B · Green</div>
+      <div class="pill-demo">
+        <span class="apply-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #36B37E; color: #FFFFFF; padding: 4px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 600; letter-spacing: -0.005em;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #FFFFFF;"></span>
+          Apply Mode active
+        </span>
+      </div>
+      <p class="rvg-note">Reads passive / healthy-idle. Wrong signal for an active mode.</p>
+    </div>
   </div>
 </div>
 
