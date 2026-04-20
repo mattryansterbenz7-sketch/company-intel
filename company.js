@@ -2095,17 +2095,23 @@ const TAB_PANE_HTML = {
   emails: '<div class="p-empty" id="act-emails-status">Loading emails\u2026</div><div id="act-emails-list"></div>',
   meetings: '<div class="p-empty" id="act-meetings-status">Loading meetings\u2026</div><div id="act-meetings-content"></div>',
   docs: `<div class="docs-section">
-    <div class="docs-upload-zone" id="docs-drop-zone">
-      <div class="docs-upload-text">Drop files here or click to upload</div>
-      <div class="docs-upload-sub">PDF, images (.png, .jpg), or paste text</div>
-      <input type="file" id="docs-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple style="display:none">
-      <button class="docs-upload-btn" id="docs-upload-btn">Choose files</button>
+    <div class="docs-toolbar">
+      <div class="docs-toolbar-left">
+        <span class="docs-toolbar-title">Docs</span>
+        <span class="docs-toolbar-count" id="docs-toolbar-count"></span>
+      </div>
+      <button class="docs-paste-trigger" id="docs-paste-trigger">
+        <svg viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h6l2 2v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h1"/><path d="M6 2h4v2H6z"/><path d="M6 8h4M6 11h3"/></svg>
+        Paste text
+      </button>
     </div>
-    <div class="docs-paste-zone">
-      <textarea class="docs-paste-input" id="docs-paste-input" placeholder="Or paste a job description, offer details, or any text here..." rows="3"></textarea>
-      <button class="docs-paste-btn" id="docs-paste-save">Save text</button>
+    <div class="docs-drop-zone" id="docs-drop-zone">
+      <input type="file" id="docs-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.docx" multiple>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ci-text-tertiary)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="docs-drop-label">Drag &amp; drop files here · or click to browse</div>
+      <div class="docs-drop-hint">PDF, TXT, MD, DOCX, PNG, JPG · multi-file OK</div>
     </div>
-    <div class="docs-list" id="docs-list"></div>
+    <div id="docs-list-root"></div>
   </div>`,
 };
 
@@ -3221,27 +3227,58 @@ function bindHubTabs() {
 
 // ── Documents tab ────────────────────────────────────────────────────────────
 
+function _docsGenId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+function _docsGetAll() {
+  // Read contextDocuments; migrate legacy entries missing coopContextEnabled
+  const raw = entry.contextDocuments || [];
+  return raw.map(d => {
+    if (d.coopContextEnabled === undefined) {
+      // Default ON for text/pdf/docx/pasted-text, OFF for images
+      d.coopContextEnabled = (d.type !== 'image');
+    }
+    return d;
+  });
+}
+
+function _docsGetTypeLabel(d) {
+  if (d.type === 'pasted-text') return 'Pasted text';
+  if (d.type === 'image') return 'Image';
+  if (d.type === 'pdf') return 'PDF';
+  if (d.type === 'docx') return 'DOCX';
+  if (d.type === 'md') return 'Markdown';
+  return 'Text';
+}
+
+function _docsGetTypeIcon(type) {
+  if (type === 'pdf') return `<svg viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1H3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6z"/><path d="M9 1v5h5"/><path d="M5 10h2M5 12h5"/></svg>`;
+  if (type === 'image') return `<svg viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><circle cx="6" cy="6" r="1"/><path d="M2 11l3-3 3 3 2-2 4 4"/></svg>`;
+  if (type === 'docx') return `<svg viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1H3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6z"/><path d="M9 1v5h5"/><path d="M4 10l1 3 1-2 1 2 1-3"/></svg>`;
+  // text / pasted-text / md
+  return `<svg viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1H3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6z"/><path d="M9 1v5h5"/><path d="M4.5 9h7M4.5 11h7M4.5 13h5"/></svg>`;
+}
+
 function initDocsTab() {
   const dropZone = document.getElementById('docs-drop-zone');
-  const fileInput = document.getElementById('docs-file-input');
-  const uploadBtn = document.getElementById('docs-upload-btn');
-  const pasteInput = document.getElementById('docs-paste-input');
-  const pasteSaveBtn = document.getElementById('docs-paste-save');
   if (!dropZone) return;
+  const fileInput = document.getElementById('docs-file-input');
+  const pasteTrigger = document.getElementById('docs-paste-trigger');
 
-  // Render existing docs
+  // Render existing docs and update chat indicator
   renderDocsList();
+  updateDocsContextIndicator();
 
-  // Click to upload
-  uploadBtn.addEventListener('click', () => fileInput.click());
+  // Drop zone click → open file picker
   dropZone.addEventListener('click', e => {
-    if (e.target === uploadBtn || e.target === fileInput) return;
+    if (e.target === fileInput) return;
     fileInput.click();
   });
 
   // File input change
   fileInput.addEventListener('change', () => {
-    if (fileInput.files.length) handleFiles(Array.from(fileInput.files));
+    if (fileInput.files.length) handleDocsFiles(Array.from(fileInput.files));
     fileInput.value = '';
   });
 
@@ -3251,57 +3288,149 @@ function initDocsTab() {
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length) handleFiles(Array.from(e.dataTransfer.files));
+    if (e.dataTransfer.files.length) handleDocsFiles(Array.from(e.dataTransfer.files));
   });
 
-  // Paste text save
-  pasteSaveBtn.addEventListener('click', () => {
-    const text = pasteInput.value.trim();
-    if (!text) return;
-    const filename = 'Pasted text — ' + text.slice(0, 30).replace(/\n/g, ' ');
-    const doc = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      filename,
-      type: 'text',
-      extractedText: text,
-      addedAt: new Date().toISOString(),
-      tokenEstimate: Math.ceil(text.length / 4)
-    };
-    const docs = entry.contextDocuments || [];
-    docs.push(doc);
-    saveEntry({ contextDocuments: docs });
-    pasteInput.value = '';
-    renderDocsList();
-  });
+  // Paste text modal trigger
+  pasteTrigger?.addEventListener('click', openPasteTextModal);
 
-  // Delete handler (delegated)
-  document.getElementById('docs-list')?.addEventListener('click', e => {
-    const delBtn = e.target.closest('.doc-delete');
-    if (!delBtn) return;
-    const docId = delBtn.dataset.docId;
-    const docs = (entry.contextDocuments || []).filter(d => d.id !== docId);
-    saveEntry({ contextDocuments: docs });
-    renderDocsList();
-  });
+  // Delegated list interactions
+  const listRoot = document.getElementById('docs-list-root');
+  if (listRoot) {
+    listRoot.addEventListener('click', e => {
+      // Context toggle — don't let it propagate to row expand
+      const toggleEl = e.target.closest('.doc-ctx-toggle');
+      if (toggleEl) {
+        e.stopPropagation();
+        const docId = toggleEl.dataset.docId;
+        const docs = _docsGetAll();
+        const idx = docs.findIndex(d => d.id === docId);
+        if (idx !== -1) {
+          docs[idx].coopContextEnabled = !docs[idx].coopContextEnabled;
+          saveEntry({ contextDocuments: docs });
+          renderDocsList();
+          updateDocsContextIndicator();
+        }
+        return;
+      }
+
+      // Delete / more button
+      const moreBtn = e.target.closest('.doc-more-btn');
+      if (moreBtn) {
+        e.stopPropagation();
+        const docId = moreBtn.dataset.docId;
+        (async () => {
+          const confirmed = await ciConfirm('Remove this document?', { confirmLabel: 'Remove', danger: true });
+          if (!confirmed) return;
+          const docs = (entry.contextDocuments || []).filter(d => d.id !== docId);
+          saveEntry({ contextDocuments: docs });
+          renderDocsList();
+          updateDocsContextIndicator();
+        })();
+        return;
+      }
+
+      // Inline preview Collapse button
+      const collapseBtn = e.target.closest('.doc-preview-collapse-btn');
+      if (collapseBtn) {
+        e.stopPropagation();
+        const previewEl = collapseBtn.closest('.doc-inline-preview');
+        if (previewEl) {
+          previewEl.style.display = 'none';
+          // Find sibling row to update the expanded class
+          const previewId = previewEl.id;
+          const docId = previewId?.replace('doc-preview-', '');
+          if (docId) document.getElementById(`doc-row-${docId}`)?.classList.remove('expanded');
+        }
+        return;
+      }
+
+      // Row click → expand/collapse inline preview
+      const row = e.target.closest('.doc-row');
+      if (row && !row.classList.contains('extracting')) {
+        const docId = row.dataset.docId;
+        const previewEl = document.getElementById(`doc-preview-${docId}`);
+        if (previewEl) {
+          const visible = previewEl.style.display !== 'none';
+          previewEl.style.display = visible ? 'none' : '';
+          row.classList.toggle('expanded', !visible);
+        }
+      }
+    });
+  }
 }
 
-async function handleFiles(files) {
+function openPasteTextModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'docs-paste-modal-overlay';
+  overlay.innerHTML = `
+    <div class="docs-paste-modal">
+      <div class="docs-paste-modal-head">
+        <span class="docs-paste-modal-title">Paste text as doc</span>
+        <button class="docs-paste-modal-close" id="docs-modal-close">&times;</button>
+      </div>
+      <label for="docs-modal-name">Name <span style="font-weight:400;color:var(--ci-text-tertiary)">(optional)</span></label>
+      <input type="text" id="docs-modal-name" placeholder="e.g. Rejection from Asana recruiter">
+      <label for="docs-modal-body">Text</label>
+      <textarea id="docs-modal-body" placeholder="Paste any text — rejection emails, offer details, research notes, job descriptions…"></textarea>
+      <div class="docs-paste-modal-actions">
+        <button class="docs-paste-cancel" id="docs-modal-cancel">Cancel</button>
+        <button class="docs-paste-save" id="docs-modal-save">Save as doc</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const nameInput = overlay.querySelector('#docs-modal-name');
+  const bodyInput = overlay.querySelector('#docs-modal-body');
+  overlay.querySelector('#docs-modal-close').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#docs-modal-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#docs-modal-save').addEventListener('click', () => {
+    const text = bodyInput.value.trim();
+    if (!text) { bodyInput.focus(); return; }
+    const rawName = nameInput.value.trim();
+    const filename = rawName || ('Pasted text — ' + text.slice(0, 30).replace(/\n/g, ' '));
+    const doc = {
+      id: _docsGenId(),
+      filename,
+      type: 'pasted-text',
+      content: text,
+      extractedText: text,
+      coopContextEnabled: true,
+      addedAt: new Date().toISOString(),
+      sizeBytes: new Blob([text]).size,
+      tokenEstimate: Math.ceil(text.length / 4),
+    };
+    const docs = _docsGetAll();
+    docs.push(doc);
+    saveEntry({ contextDocuments: docs });
+    overlay.remove();
+    renderDocsList();
+    updateDocsContextIndicator();
+  });
+
+  bodyInput.focus();
+}
+
+async function handleDocsFiles(files) {
   for (const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
     if (ext === 'pdf') {
-      await handlePdfFile(file);
+      await handleDocsPdfFile(file);
     } else if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
-      await handleImageFile(file);
+      await handleDocsImageFile(file);
+    } else if (['txt', 'md'].includes(ext)) {
+      await handleDocsTextFile(file, ext);
+    } else if (ext === 'docx') {
+      await handleDocsDocxFile(file);
     }
   }
 }
 
-async function handlePdfFile(file) {
-  // Add placeholder card
-  const placeholderId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-  const docs = entry.contextDocuments || [];
-  const placeholder = { id: placeholderId, filename: file.name, type: 'pdf', extractedText: '', addedAt: new Date().toISOString(), tokenEstimate: 0, _extracting: true };
-  docs.push(placeholder);
+async function handleDocsPdfFile(file) {
+  const placeholderId = _docsGenId();
+  const docs = _docsGetAll();
+  docs.push({ id: placeholderId, filename: file.name, type: 'pdf', content: '', extractedText: '', coopContextEnabled: true, addedAt: new Date().toISOString(), sizeBytes: file.size, tokenEstimate: 0, _extracting: true });
   saveEntry({ contextDocuments: docs });
   renderDocsList();
 
@@ -3317,96 +3446,218 @@ async function handlePdfFile(file) {
       pages.push(content.items.map(item => item.str).join(' '));
     }
     const text = pages.join('\n\n');
-    // Update placeholder with extracted text
-    const currentDocs = entry.contextDocuments || [];
+    // Also store base64 for PDF iframe preview
+    const b64 = btoa(new Uint8Array(arrayBuffer).reduce((s, b) => s + String.fromCharCode(b), ''));
+    const currentDocs = _docsGetAll();
     const idx = currentDocs.findIndex(d => d.id === placeholderId);
     if (idx !== -1) {
       currentDocs[idx].extractedText = text;
+      currentDocs[idx].content = 'data:application/pdf;base64,' + b64;
       currentDocs[idx].tokenEstimate = Math.ceil(text.length / 4);
       delete currentDocs[idx]._extracting;
       saveEntry({ contextDocuments: currentDocs });
     }
     renderDocsList();
+    updateDocsContextIndicator();
   } catch (e) {
     console.error('[Docs] PDF extraction failed:', e);
-    // Remove failed placeholder
     const currentDocs = (entry.contextDocuments || []).filter(d => d.id !== placeholderId);
     saveEntry({ contextDocuments: currentDocs });
     renderDocsList();
   }
 }
 
-async function handleImageFile(file) {
-  const placeholderId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-  const docs = entry.contextDocuments || [];
-  const placeholder = { id: placeholderId, filename: file.name, type: 'image', extractedText: '', addedAt: new Date().toISOString(), tokenEstimate: 0, _extracting: true };
-  docs.push(placeholder);
+async function handleDocsImageFile(file) {
+  const placeholderId = _docsGenId();
+  const docs = _docsGetAll();
+  docs.push({ id: placeholderId, filename: file.name, type: 'image', content: '', extractedText: '', coopContextEnabled: false, addedAt: new Date().toISOString(), sizeBytes: file.size, tokenEstimate: 0, _extracting: true });
   saveEntry({ contextDocuments: docs });
   renderDocsList();
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+    const b64 = btoa(new Uint8Array(arrayBuffer).reduce((s, byte) => s + String.fromCharCode(byte), ''));
     const extToMime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
     const ext = file.name.split('.').pop().toLowerCase();
     const mediaType = extToMime[ext] || 'image/png';
+    const dataUrl = `data:${mediaType};base64,${b64}`;
 
+    // Send to background for OCR text extraction
     const result = await new Promise(resolve => {
-      chrome.runtime.sendMessage({ type: 'EXTRACT_IMAGE_TEXT', imageBase64: base64, mediaType, filename: file.name }, resolve);
+      chrome.runtime.sendMessage({ type: 'EXTRACT_IMAGE_TEXT', imageBase64: b64, mediaType, filename: file.name }, resolve);
     });
 
     const text = result?.text || '';
-    const currentDocs = entry.contextDocuments || [];
+    const currentDocs = _docsGetAll();
     const idx = currentDocs.findIndex(d => d.id === placeholderId);
     if (idx !== -1) {
+      currentDocs[idx].content = dataUrl;
       currentDocs[idx].extractedText = text;
       currentDocs[idx].tokenEstimate = Math.ceil(text.length / 4);
       delete currentDocs[idx]._extracting;
       saveEntry({ contextDocuments: currentDocs });
     }
     renderDocsList();
+    updateDocsContextIndicator();
   } catch (e) {
-    console.error('[Docs] Image extraction failed:', e);
+    console.error('[Docs] Image handling failed:', e);
     const currentDocs = (entry.contextDocuments || []).filter(d => d.id !== placeholderId);
     saveEntry({ contextDocuments: currentDocs });
     renderDocsList();
   }
 }
 
+async function handleDocsTextFile(file, ext) {
+  const text = await file.text();
+  const doc = {
+    id: _docsGenId(),
+    filename: file.name,
+    type: ext === 'md' ? 'md' : 'text',
+    content: text,
+    extractedText: text,
+    coopContextEnabled: true,
+    addedAt: new Date().toISOString(),
+    sizeBytes: file.size,
+    tokenEstimate: Math.ceil(text.length / 4),
+  };
+  const docs = _docsGetAll();
+  docs.push(doc);
+  saveEntry({ contextDocuments: docs });
+  renderDocsList();
+  updateDocsContextIndicator();
+}
+
+async function handleDocsDocxFile(file) {
+  // DOCX: store as-is, no inline text extraction (no library available).
+  // Coop context toggle will be ON but extractedText will be null.
+  // Limitation: Coop cannot read DOCX content without text extraction.
+  const doc = {
+    id: _docsGenId(),
+    filename: file.name,
+    type: 'docx',
+    content: null,       // no base64 stored — too large and no preview
+    extractedText: null, // DOCX text extraction not supported without a library
+    coopContextEnabled: true,
+    addedAt: new Date().toISOString(),
+    sizeBytes: file.size,
+    tokenEstimate: 0,
+  };
+  const docs = _docsGetAll();
+  docs.push(doc);
+  saveEntry({ contextDocuments: docs });
+  renderDocsList();
+  updateDocsContextIndicator();
+}
+
 function renderDocsList() {
-  const listEl = document.getElementById('docs-list');
-  if (!listEl) return;
-  const docs = entry.contextDocuments || [];
+  const root = document.getElementById('docs-list-root');
+  if (!root) return;
+  const docs = _docsGetAll();
+
+  // Update toolbar count
+  const countEl = document.getElementById('docs-toolbar-count');
+  const ctxCount = docs.filter(d => d.coopContextEnabled && d.extractedText).length;
+  if (countEl) {
+    countEl.textContent = docs.length
+      ? `${docs.length} item${docs.length !== 1 ? 's' : ''} · ${ctxCount} in context`
+      : '';
+  }
+
   if (!docs.length) {
-    listEl.innerHTML = '';
+    root.innerHTML = `<div class="docs-empty-state">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <div class="docs-empty-title">No docs yet</div>
+      <div class="docs-empty-sub">Drop a JD PDF, paste a rejection email, or upload a deck. Coop can reference these in chat.</div>
+      <div class="docs-empty-actions">
+        <button class="docs-empty-btn primary" id="docs-empty-browse">Browse files</button>
+        <button class="docs-empty-btn" id="docs-empty-paste">Paste text</button>
+      </div>
+    </div>`;
+    root.querySelector('#docs-empty-browse')?.addEventListener('click', () => document.getElementById('docs-file-input')?.click());
+    root.querySelector('#docs-empty-paste')?.addEventListener('click', openPasteTextModal);
     return;
   }
 
-  const typeIcons = { pdf: '\ud83d\udcc4', image: '\ud83d\uddbc\ufe0f', text: '\ud83d\udcdd' };
-  let totalTokens = 0;
-
-  listEl.innerHTML = docs.map(d => {
-    totalTokens += d.tokenEstimate || 0;
-    const icon = typeIcons[d.type] || '\ud83d\udcc4';
+  const rowsHtml = docs.map(d => {
+    const typeLabel = _docsGetTypeLabel(d);
+    const icon = _docsGetTypeIcon(d.type);
     const date = d.addedAt ? new Date(d.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-    const preview = d._extracting
-      ? '<div class="doc-extracting-text">Extracting text…</div>'
-      : `<div class="doc-preview">${escapeHtml((d.extractedText || '').slice(0, 150))}${d.extractedText?.length > 150 ? '...' : ''}</div>`;
-    return `<div class="doc-card${d._extracting ? ' extracting' : ''}" data-doc-id="${d.id}">
-      <div class="doc-icon">${icon}</div>
-      <div class="doc-info">
-        <div class="doc-filename">${escapeHtml(d.filename)}</div>
-        <div class="doc-meta">${date} · ~${d.tokenEstimate} tokens</div>
-        ${preview}
+    const sizeStr = d.sizeBytes ? _docsFormatSize(d.sizeBytes) : '';
+    const source = (d.type === 'pasted-text') ? 'Pasted' : 'Uploaded';
+    const metaParts = [date, sizeStr, source].filter(Boolean);
+    const isOn = !!d.coopContextEnabled;
+    const metaHtml = d._extracting
+      ? `<div class="doc-row-extracting">Extracting text…</div>`
+      : `<div class="doc-row-meta">${metaParts.join(' · ')}</div>`;
+
+    // Inline preview (hidden by default)
+    const previewHtml = _docsRenderPreview(d);
+
+    return `<div class="doc-row${d._extracting ? ' extracting' : ''}" data-doc-id="${d.id}" id="doc-row-${d.id}">
+      <div class="doc-row-icon">${icon}</div>
+      <div class="doc-row-info">
+        <div class="doc-row-name">${escapeHtml(d.filename)}<span class="doc-row-type">${typeLabel}</span></div>
+        ${metaHtml}
       </div>
-      <button class="doc-delete" data-doc-id="${d.id}" title="Remove">\u2715</button>
+      <div class="doc-ctx-toggle${isOn ? ' on' : ''}" data-doc-id="${d.id}" title="${isOn ? 'Coop is reading this doc — click to exclude' : 'Click to include in Coop\'s context'}">
+        <span class="track"></span><span class="doc-ctx-label">${isOn ? 'In context' : 'Off'}</span>
+      </div>
+      <button class="doc-more-btn" data-doc-id="${d.id}" title="Remove">&#8942;</button>
+    </div>
+    <div class="doc-inline-preview" id="doc-preview-${d.id}" style="display:none">
+      <div class="doc-preview-inner">${previewHtml}</div>
     </div>`;
   }).join('');
 
-  // Token budget warning
-  if (totalTokens > 4000) {
-    listEl.insertAdjacentHTML('beforeend', `<div class="docs-budget-warn">Context budget exceeded (${totalTokens} tokens). Oldest documents may be truncated in AI conversations.</div>`);
+  root.innerHTML = `<div class="docs-list">${rowsHtml}</div>`;
+}
+
+function _docsFormatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function _docsRenderPreview(d) {
+  if (d.type === 'image' && d.content) {
+    return `<div class="doc-preview-img"><img src="${d.content}" alt="${escapeHtml(d.filename)}"></div>
+      <div class="doc-preview-footer"><button class="doc-preview-collapse-btn">Collapse</button></div>`;
   }
+  if (d.type === 'pdf' && d.content) {
+    return `<div class="doc-preview-pdf"><iframe src="${d.content}" title="${escapeHtml(d.filename)}"></iframe></div>
+      <div class="doc-preview-footer"><button class="doc-preview-collapse-btn">Collapse</button></div>`;
+  }
+  if (d.type === 'docx') {
+    return `<div class="doc-preview-docx">
+      <div class="doc-preview-docx-icon">DOC</div>
+      <div class="doc-preview-docx-msg">Inline preview not available for DOCX. Coop can read the file once text extraction is supported.</div>
+    </div>`;
+  }
+  // text / md / pasted-text
+  if (d.extractedText) {
+    return `<div class="doc-preview-text">${escapeHtml(d.extractedText.slice(0, 3000))}${d.extractedText.length > 3000 ? '\n\n[truncated…]' : ''}</div>
+      <div class="doc-preview-footer"><button class="doc-preview-collapse-btn">Collapse</button></div>`;
+  }
+  return `<div class="doc-preview-text" style="color:var(--ci-text-tertiary);font-style:italic;">No preview available.</div>`;
+}
+
+// Update the chat rail "N docs in context" indicator.
+// Called after any toggle change or after renderDocsList.
+function updateDocsContextIndicator() {
+  const indicator = document.getElementById('chat-docs-indicator');
+  if (!indicator) return;
+  const docs = _docsGetAll();
+  const active = docs.filter(d => d.coopContextEnabled && d.extractedText);
+  if (!active.length) {
+    indicator.style.display = 'none';
+    return;
+  }
+  indicator.style.display = '';
+  const names = active.slice(0, 4).map(d =>
+    `<span class="doc-chip">${escapeHtml(d.filename.length > 22 ? d.filename.slice(0, 20) + '…' : d.filename)}</span>`
+  ).join(' ');
+  const extra = active.length > 4 ? ` <span style="color:var(--ci-text-tertiary)">+${active.length - 4} more</span>` : '';
+  indicator.innerHTML = `<span style="color:var(--ci-text-tertiary)">${active.length} doc${active.length !== 1 ? 's' : ''} in context:</span> ${names}${extra}`;
 }
 
 function formatCacheAge(ts) {
@@ -5901,6 +6152,17 @@ function initFloatingChat() {
   chatContainer.setAttribute('data-chat-panel', entry.id);
   body.appendChild(chatContainer);
   buildChatPanel(chatContainer, entry);
+
+  // Docs-in-context indicator — inserted just above the input wrap
+  const docsIndicatorEl = document.createElement('div');
+  docsIndicatorEl.id = 'chat-docs-indicator';
+  docsIndicatorEl.className = 'chat-docs-indicator';
+  docsIndicatorEl.style.display = 'none';
+  const inputWrap = chatContainer.querySelector('.chat-input-wrap');
+  if (inputWrap) inputWrap.before(docsIndicatorEl);
+  else chatContainer.appendChild(docsIndicatorEl);
+  // Populate immediately in case docs already exist
+  updateDocsContextIndicator();
 
   let isMinimized = false;
   // sizeState: 0=normal, 1=large, 2=fullscreen

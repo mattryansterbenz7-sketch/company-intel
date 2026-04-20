@@ -421,6 +421,21 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
   const system = _buildSlimCoopSystemPrompt({ boundCompany, isGlobalChat, todayStr, profileSummary, applicationMode, questionArchetype: context._questionArchetype, careerOSChat: !!careerOSChat, voiceProfile });
   const toolCtx = { boundCompany, boundEntryId };
 
+  // ── Docs-in-context injection ──────────────────────────────────────────────
+  // Docs toggled ON by the user are appended to the system tail so Coop can
+  // directly answer questions about their content without a tool call.
+  const _contextDocs = (context.contextDocuments || []).filter(d => d.coopContextEnabled && d.extractedText);
+  let _docsSystemTail = '';
+  if (_contextDocs.length) {
+    const docBlocks = _contextDocs.slice(0, 6).map(d => {
+      const label = `[${d.filename}]`;
+      const text = (d.extractedText || '').slice(0, 4000);
+      return `${label}\n${text}`;
+    }).join('\n\n---\n\n');
+    _docsSystemTail = `\n\n=== UPLOADED DOCUMENTS (${_contextDocs.length} in context) ===\nThe user has shared these documents for this opportunity. Reference them directly when answering questions.\n\n${docBlocks}`;
+    dlog(`[Coop][Docs] Injecting ${_contextDocs.length} doc(s) into context (~${Math.round(_docsSystemTail.length / 4)} tokens)`);
+  }
+
   const _approxTokens = (s) => Math.round(s.length / 4);
   console.log(`[Coop][ToolUse] model=${effectiveModel} (requested=${model}) provider=${useOpenAI ? 'openai' : 'anthropic'} embed=${isHaiku ? 'standard' : 'manifest'}`);
   console.log(`[Coop][ToolUse] prompt base ~${_approxTokens(system.base)} tok | tail ~${_approxTokens(system.tail)} tok`);
@@ -459,7 +474,8 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
 
     if (useOpenAI) {
       // OpenAI tool-use path
-      const oaiMessages = [{ role: 'system', content: system.base + '\n' + system.tail }];
+      const oaiSystemContent = system.base + '\n' + system.tail + (_docsSystemTail || '');
+      const oaiMessages = [{ role: 'system', content: oaiSystemContent }];
       for (const m of conversation) {
         if (m.role === 'user' && Array.isArray(m.content) && m.content[0]?.type === 'tool_result') {
           // Convert Claude tool_result format to OpenAI tool messages
@@ -546,13 +562,17 @@ async function handleCoopMessageToolUse({ messages, context, globalChat, chatMod
 
     } else {
       // Claude tool-use path (with prompt caching)
+      const claudeSystemBlocks = [
+        { type: 'text', text: system.base, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: system.tail, cache_control: { type: 'ephemeral' } },
+      ];
+      if (_docsSystemTail) {
+        claudeSystemBlocks.push({ type: 'text', text: _docsSystemTail });
+      }
       res = await claudeApiCall({
         model: effectiveModel,
         max_tokens: 2048,
-        system: [
-          { type: 'text', text: system.base, cache_control: { type: 'ephemeral' } },
-          { type: 'text', text: system.tail, cache_control: { type: 'ephemeral' } },
-        ],
+        system: claudeSystemBlocks,
         messages: conversation,
         tools: COOP_TOOLS,
       }, 3, 'chat', boundCompany || (globalChat ? 'global' : undefined));
