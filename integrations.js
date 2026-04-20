@@ -1,309 +1,252 @@
-// integrations.js — provider config + key management UI
+// integrations.js — registry-driven provider config + key management UI
+// INTEGRATION_REGISTRY and checkIntegrationGate() are defined in integrations-registry.js,
+// loaded before this file via <script> in integrations.html.
 
-const PROVIDERS = [
-  // ── AI Engine ──
-  {
-    id: 'anthropic', name: 'Anthropic (Claude)', category: 'AI Engine',
-    description: 'Powers all AI features — company intelligence, job match scoring, chat, and passive learning.',
-    storageKey: 'anthropic_key', placeholder: 'sk-ant-api03-...', required: true,
-    status: 'active', docsUrl: 'https://console.anthropic.com/',
-  },
-  {
-    id: 'openai', name: 'OpenAI', category: 'AI Engine',
-    description: 'Alternative AI engine — powers web search fallback when Serper is exhausted.',
-    storageKey: 'openai_key', placeholder: 'sk-...',
-    status: 'active', docsUrl: 'https://platform.openai.com/api-keys',
-  },
-  {
-    id: 'gemini', name: 'Google Gemini', category: 'AI Engine',
-    description: 'Ultra-cheap extraction — Flash-Lite is ~20× cheaper than Haiku ($0.05/M input). Used as fallback in the model chain.',
-    storageKey: 'gemini_key', placeholder: 'AIza...',
-    status: 'active', docsUrl: 'https://aistudio.google.com/app/apikey',
-  },
-  // ── Company Data & Enrichment ──
-  {
-    id: 'apollo', name: 'Apollo.io', category: 'Company Data & Enrichment',
-    description: 'Company firmographics — employees, funding, industry, founded year, leadership.',
-    storageKey: 'apollo_key', placeholder: 'Your Apollo API key',
-    status: 'active', docsUrl: 'https://app.apollo.io/',
-  },
-  {
-    id: 'peopledatalabs', name: 'PeopleDataLabs', category: 'Company Data & Enrichment',
-    description: 'Person and company enrichment — alternative to Apollo.',
-    status: 'planned',
-  },
-  {
-    id: 'clearbit', name: 'Clearbit', category: 'Company Data & Enrichment',
-    description: 'Company and contact enrichment.',
-    status: 'planned',
-  },
-  {
-    id: 'crunchbase', name: 'Crunchbase', category: 'Company Data & Enrichment',
-    description: 'Funding rounds, investors, company financials.',
-    status: 'planned',
-  },
-  // ── Search Providers ──
-  {
-    id: 'serper', name: 'Serper (Google Search)', category: 'Search Providers',
-    description: 'Google search — leadership profiles, reviews, hiring signals, web research.',
-    storageKey: 'serper_key', placeholder: 'Your Serper API key',
-    status: 'active', docsUrl: 'https://serper.dev/',
-  },
-  {
-    id: 'claude_search', name: 'Claude Web Search', category: 'Search Providers',
-    description: 'AI-powered web search via Anthropic — automatic fallback when Serper is exhausted.',
-    storageKey: 'anthropic_key', placeholder: 'Your Anthropic API key (same as AI Engine above)',
-    sharedWith: 'Anthropic (Claude)',
-    status: 'active', docsUrl: 'https://console.anthropic.com/settings/keys',
-  },
-  {
-    id: 'openai_search', name: 'OpenAI Web Search', category: 'Search Providers',
-    description: 'Web search via OpenAI — fallback after Claude search.',
-    storageKey: 'openai_key', placeholder: 'Your OpenAI API key (same as AI Engine above)',
-    sharedWith: 'OpenAI',
-    status: 'active', docsUrl: 'https://platform.openai.com/api-keys',
-  },
-  {
-    id: 'google_cse', name: 'Google Custom Search', category: 'Search Providers',
-    description: 'Direct Google search — free 100 queries/day, fallback when Serper credits are exhausted.',
-    storageKey: 'google_cse_key', placeholder: 'Your Google API key',
-    extraFields: [{ key: 'google_cse_cx', label: 'Search Engine ID (CX)', placeholder: 'Your CX ID' }],
-    docsUrl: 'https://programmablesearchengine.google.com/',
-  },
-  {
-    id: 'brave', name: 'Brave Search', category: 'Search Providers',
-    description: 'Independent search index — privacy-focused alternative.',
-    status: 'planned',
-  },
-  {
-    id: 'tavily', name: 'Tavily', category: 'Search Providers',
-    description: 'AI-optimized search — pre-processed results for LLMs.',
-    status: 'planned',
-  },
-  // ── Email & Calendar ──
-  {
-    id: 'gmail', name: 'Gmail', category: 'Email & Calendar',
-    description: 'Email threads and known contacts per company.',
-    status: 'active', oauth: true,
-  },
-  {
-    id: 'gcal', name: 'Google Calendar', category: 'Email & Calendar',
-    description: 'Upcoming meetings with company contacts. Shares Gmail OAuth.',
-    status: 'active', oauth: true, sharedWith: 'gmail',
-  },
-  {
-    id: 'outlook', name: 'Outlook / Microsoft 365', category: 'Email & Calendar',
-    description: 'Email and calendar for Microsoft users.',
-    status: 'planned',
-  },
-  // ── Meeting Transcripts ──
-  {
-    id: 'granola', name: 'Granola', category: 'Meeting Transcripts',
-    description: 'Meeting notes and full call transcripts. Uses Personal API key (Business plan).',
-    storageKey: 'granola_key', placeholder: 'Your Granola Personal API key',
-    status: 'active', docsUrl: 'https://granola.ai/settings',
-  },
-  {
-    id: 'otter', name: 'Otter.ai', category: 'Meeting Transcripts',
-    description: 'Meeting transcription and notes.',
-    status: 'planned',
-  },
-  {
-    id: 'fireflies', name: 'Fireflies.ai', category: 'Meeting Transcripts',
-    description: 'Meeting transcription and conversation intelligence.',
-    status: 'planned',
-  },
-  {
-    id: 'fathom', name: 'Fathom', category: 'Meeting Transcripts',
-    description: 'AI meeting assistant and transcript capture.',
-    status: 'planned',
-  },
-  // ── Communication ──
-  {
-    id: 'slack', name: 'Slack', category: 'Communication',
-    description: 'Track conversations with recruiters and contacts.',
-    status: 'planned',
-  },
-  {
-    id: 'linkedin_api', name: 'LinkedIn', category: 'Communication',
-    description: 'Profile enrichment and connection data.',
-    status: 'planned',
-  },
-];
+// ── SVG check / x icons for test results ──
+const ICON_CHECK = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:inline-block;vertical-align:middle"><path d="M2.5 6.5L5 9l4.5-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_X    = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:inline-block;vertical-align:middle"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const ICON_WARN = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:inline-block;vertical-align:middle"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5M6 8.2v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
 
 // ── Render ──
 
 async function renderIntegrations() {
-  const container = document.getElementById('providers-container');
   const { integrations = {}, gmailConnected = false } = await new Promise(r =>
     chrome.storage.local.get(['integrations', 'gmailConnected'], r)
   );
   const keyStatus = await new Promise(r => chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, r));
-  keyStatus.gmail = !!gmailConnected;
-  keyStatus.granola = !!integrations.granola_key;
 
-  // Group by category
-  const categories = {};
-  PROVIDERS.forEach(p => {
-    if (!categories[p.category]) categories[p.category] = [];
-    categories[p.category].push(p);
-  });
+  // Build a flat configuredKeys map: { providerId: boolean }
+  const configuredKeys = buildConfiguredKeys(integrations, keyStatus, gmailConnected);
 
-  // Split into two columns
-  const leftCats = ['AI Engine', 'Search Providers'];
-  const rightCats = ['Company Data & Enrichment', 'Email & Calendar', 'Meeting Transcripts', 'Communication'];
+  // Render gate banner
+  renderGateBanner(configuredKeys);
 
-  let leftHtml = '', rightHtml = '';
-  for (const [cat, providers] of Object.entries(categories)) {
-    const catHtml = `<div class="category-title">${cat}</div>` + providers.map(p => renderProviderCard(p, integrations, keyStatus)).join('');
-    if (leftCats.includes(cat)) leftHtml += catHtml;
-    else rightHtml += catHtml;
-  }
+  // Split registry into tiers
+  const required    = INTEGRATION_REGISTRY.filter(p => p.tier === 'required');
+  const recommended = INTEGRATION_REGISTRY.filter(p => p.tier === 'recommended');
+  const deprecated  = INTEGRATION_REGISTRY.filter(p => p.tier === 'deprecated');
 
-  const leftCol = document.getElementById('providers-left');
-  const rightCol = document.getElementById('providers-right');
-  if (leftCol) leftCol.innerHTML = leftHtml;
-  if (rightCol) rightCol.innerHTML = rightHtml;
+  // Required: group by REQUIRED_GROUPS order, render sub-headers
+  document.getElementById('required-cards').innerHTML =
+    renderRequiredTier(required, integrations, keyStatus, gmailConnected, configuredKeys);
+
+  document.getElementById('recommended-cards').innerHTML =
+    recommended.map(p => renderProviderCard(p, integrations, keyStatus, gmailConnected)).join('');
+
+  document.getElementById('deprecated-cards').innerHTML =
+    deprecated.map(p => renderDeprecatedCard(p, integrations, keyStatus)).join('');
+
   bindEvents(integrations);
 }
 
-function renderProviderCard(p, integrations, keyStatus) {
-  if (p.status === 'planned') {
-    return `<div class="provider-card planned">
-      <div class="provider-header">
-        <div class="provider-name">${p.name} <span class="badge-planned">Coming soon</span></div>
-      </div>
-      <div class="provider-desc">${p.description}</div>
-    </div>`;
+// Build a { providerId: boolean } map from storage + keyStatus
+function buildConfiguredKeys(integrations, keyStatus, gmailConnected) {
+  const map = {};
+  for (const p of INTEGRATION_REGISTRY) {
+    if (p.oauth) {
+      if (p.id === 'gmail') {
+        map[p.id] = !!gmailConnected;
+      } else if (p.id === 'gcal') {
+        // GCal shares Gmail OAuth
+        map[p.id] = !!gmailConnected;
+      } else {
+        map[p.id] = false;
+      }
+    } else if (p.storageKey) {
+      const inStorage = !!integrations[p.storageKey];
+      const inConfig  = !!(keyStatus && keyStatus[p.id]);
+      map[p.id] = inStorage || inConfig;
+    } else {
+      map[p.id] = false;
+    }
   }
+  return map;
+}
 
-  if (p.status === 'ready') {
-    // Ready to activate but not wired up yet
-    const hasKey = !!integrations[p.storageKey];
-    return `<div class="provider-card">
-      <div class="provider-header">
-        <div class="provider-name">${p.name} <span class="badge-planned">Ready to activate</span></div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="status-dot ${hasKey ? 'green' : 'grey'}"></span>
-          <span class="status-label">${hasKey ? 'Key set' : 'Not configured'}</span>
-        </div>
-      </div>
-      <div class="provider-desc">${p.description}</div>
-      <div class="key-row">
-        <input class="key-input" type="password" id="key-${p.storageKey}" value="${integrations[p.storageKey] || ''}" placeholder="${p.placeholder || ''}">
-        <button class="key-toggle" data-target="key-${p.storageKey}">Show</button>
-      </div>
-      ${(p.extraFields || []).map(f => `
-        <div class="key-row">
-          <input class="key-input" type="password" id="key-${f.key}" value="${integrations[f.key] || ''}" placeholder="${f.placeholder || f.label}">
-          <button class="key-toggle" data-target="key-${f.key}">Show</button>
-        </div>
-      `).join('')}
-      <div class="provider-actions">
-        <button class="btn-save" data-provider="${p.id}">Save</button>
-      </div>
-    </div>`;
+function renderGateBanner(configuredKeys) {
+  const gate   = checkIntegrationGate(configuredKeys);
+  const banner = document.getElementById('gate-banner');
+  if (!banner) return;
+
+  if (gate.satisfied) {
+    banner.className = 'gate-banner satisfied';
+    banner.style.display = 'flex';
+    banner.innerHTML = `
+      <span class="gate-dot satisfied"></span>
+      <div>
+        <div class="gate-banner-text"><b>All required integrations connected.</b> Coop is ready to research and score.</div>
+        ${gate.recommendedMissing.length ? `<div class="gate-banner-sub">${gate.recommendedMissing.length} recommended integration${gate.recommendedMissing.length > 1 ? 's' : ''} not connected — add them to enhance Coop's context.</div>` : ''}
+      </div>`;
+  } else {
+    const labels = gate.missingGroups.map(g => {
+      const found = REQUIRED_GROUPS.find(r => r.group === g);
+      return found ? found.label.split(' · ')[0] : g;
+    });
+    banner.className = 'gate-banner missing';
+    banner.style.display = 'flex';
+    banner.innerHTML = `
+      <span class="gate-dot missing"></span>
+      <div>
+        <div class="gate-banner-text"><b>Missing required integrations:</b> ${labels.join(', ')}.</div>
+        <div class="gate-banner-sub">Connect the highlighted groups below to unlock full Coop functionality.</div>
+      </div>`;
   }
+}
 
-  // OAuth providers (Gmail, Granola, GCal)
-  if (p.oauth) {
-    return renderOAuthCard(p, keyStatus);
+function renderRequiredTier(providers, integrations, keyStatus, gmailConnected, configuredKeys) {
+  let html = '';
+  const gate = checkIntegrationGate(configuredKeys);
+
+  for (const { group, label } of REQUIRED_GROUPS) {
+    const members = providers.filter(p => p.group === group);
+    if (!members.length) continue;
+    const groupSatisfied = !gate.missingGroups.includes(group);
+    const subHeadStyle   = groupSatisfied ? '' : 'color:var(--ci-accent-primary);';
+    html += `<div class="group-subhead" style="${subHeadStyle}">${label}</div>`;
+    html += members.map(p => renderProviderCard(p, integrations, keyStatus, gmailConnected)).join('');
   }
+  return html;
+}
 
-  // API key providers
-  const inStorage = !!integrations[p.storageKey];
-  const inConfig = !!keyStatus[p.id];
-  const hasKey = inStorage || inConfig;
-  const isExhausted = keyStatus[p.id + 'Exhausted'];
-  let statusDot = 'grey', statusText = 'Not configured';
-  if (hasKey && isExhausted) { statusDot = 'yellow'; statusText = 'Credits exhausted'; }
-  else if (inStorage) { statusDot = 'green'; statusText = 'Connected'; }
-  else if (inConfig) { statusDot = 'green'; statusText = 'Connected (via config)'; }
+// ── Per-card rendering ──
 
-  const badges = [];
-  if (p.required) badges.push('<span class="badge-required">Required</span>');
-  const docsLink = p.docsUrl ? `<a href="${p.docsUrl}" target="_blank" style="font-size:11px;color:#FF7A59;text-decoration:none;font-weight:600">Get API key →</a>` : '';
+function renderProviderCard(p, integrations, keyStatus, gmailConnected) {
+  if (p.oauth) return renderOAuthCard(p, keyStatus, gmailConnected);
+
+  const inStorage  = !!integrations[p.storageKey];
+  const inConfig   = !!(keyStatus && keyStatus[p.id]);
+  const hasKey     = inStorage || inConfig;
+  const isExhausted = keyStatus && keyStatus[p.id + 'Exhausted'];
+
+  let statusClass = 's-none', statusText = 'Not connected';
+  if (hasKey && isExhausted) { statusClass = 's-exhausted'; statusText = 'Credits exhausted'; }
+  else if (inStorage)        { statusClass = 's-connected'; statusText = 'Connected'; }
+  else if (inConfig)         { statusClass = 's-connected'; statusText = 'Connected (via config)'; }
+
+  const chipClass  = `chip-${p.tier}`;
+  const chipLabel  = p.tier.charAt(0).toUpperCase() + p.tier.slice(1);
+  const docsLink   = p.docsUrl ? `<a href="${p.docsUrl}" target="_blank">Get a key →</a>` : '';
+  const nameClass  = p.tier === 'deprecated' ? 'prov-name deprecated-name' : 'prov-name';
+
+  const hasKeyForTest = hasKey || inStorage;
+  const currentVal = integrations[p.storageKey] || '';
+  const placeholder = hasKey && !inStorage ? 'Set via config.js (override here)' : (p.placeholder || '');
 
   return `<div class="provider-card">
-    <div class="provider-header">
-      <div class="provider-name">${p.name} ${badges.join(' ')}</div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="status-dot ${statusDot}"></span>
-        <span class="status-label ${statusDot === 'green' ? 'connected' : statusDot === 'yellow' ? 'exhausted' : ''}">${statusText}</span>
+    <div class="prov-logo ${p.logoClass || ''}">${p.logoText || ''}</div>
+    <div class="prov-main">
+      <div class="prov-head">
+        <span class="${nameClass}">${p.name}</span>
+        <span class="tier-chip ${chipClass}">${chipLabel}</span>
+      </div>
+      <p class="prov-desc">${p.description}</p>
+      <div class="prov-meta">
+        ${docsLink}
+        ${p.costHint ? `<span class="cost">${p.costHint}</span>` : ''}
+      </div>
+      <div class="key-row">
+        <input class="key-input" type="password" id="key-${p.id}" data-storage-key="${p.storageKey}"
+          value="${currentVal}" placeholder="${placeholder}">
+        <button class="btn btn-ghost key-toggle-btn" data-target="key-${p.id}">Show</button>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-primary btn-save" data-provider="${p.id}">Save</button>
+        <button class="btn btn-test" data-provider="${p.id}" ${!hasKeyForTest && !currentVal ? 'disabled' : ''}>Test</button>
+        <span class="test-result" id="test-${p.id}"></span>
       </div>
     </div>
-    <div class="provider-desc">${p.description} ${docsLink}</div>
-    ${p.sharedWith ? `<div style="font-size:11px;color:#7c98b6;margin-bottom:8px">🔗 Shares API key with ${p.sharedWith} — enter it here or in AI Engine above</div>` : ''}
-    <div class="key-row">
-      <input class="key-input" type="password" id="key-${p.id}" data-storage-key="${p.storageKey}" value="${integrations[p.storageKey] || ''}" placeholder="${hasKey && !integrations[p.storageKey] ? 'Set via config.js (override here)' : p.placeholder || ''}">
-      <button class="key-toggle" data-target="key-${p.id}">Show</button>
-    </div>
-    <div class="provider-actions">
-      <button class="btn-save" data-provider="${p.id}">Save</button>
-      <button class="btn-test" data-provider="${p.id}" ${!hasKey && !integrations[p.storageKey] ? 'disabled' : ''}>Test Connection</button>
-      <span class="test-result" id="test-${p.id}"></span>
-    </div>
+    <span class="prov-status ${statusClass}"><span class="dot"></span>${statusText}</span>
   </div>`;
 }
 
-function renderOAuthCard(p, keyStatus) {
-  if (p.sharedWith) {
-    // GCal shares Gmail OAuth — just show status
+function renderOAuthCard(p, keyStatus, gmailConnected) {
+  if (p.id === 'gcal') {
+    // Google Calendar shares Gmail OAuth
+    const connected = !!gmailConnected;
+    const statusClass = connected ? 's-connected' : 's-none';
+    const statusText  = connected ? 'Connected via Gmail' : 'Connect Gmail first';
+    const scopeItems  = (p.scopes || []).map(s => `<li>${s}</li>`).join('');
     return `<div class="provider-card">
-      <div class="provider-header">
-        <div class="provider-name">${p.name}</div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="status-dot ${keyStatus.gmail ? 'green' : 'grey'}"></span>
-          <span class="status-label ${keyStatus.gmail ? 'connected' : ''}">${keyStatus.gmail ? 'Connected via Gmail' : 'Connect Gmail first'}</span>
+      <div class="prov-logo ${p.logoClass || ''}">${p.logoText || ''}</div>
+      <div class="prov-main">
+        <div class="prov-head">
+          <span class="prov-name">${p.name}</span>
+          <span class="tier-chip chip-required">Required</span>
         </div>
+        <p class="prov-desc">${p.description}</p>
+        <div class="prov-meta">${p.costHint ? `<span>${p.costHint}</span>` : ''}</div>
+        ${scopeItems.length ? `<ul class="scope-list">${scopeItems}</ul>` : ''}
       </div>
-      <div class="provider-desc">${p.description}</div>
+      <span class="prov-status ${statusClass}"><span class="dot"></span>${statusText}</span>
     </div>`;
   }
 
   if (p.id === 'gmail') {
+    const connected  = !!gmailConnected;
+    const statusClass = connected ? 's-connected' : 's-none';
+    const statusText  = connected ? 'Connected' : 'Not connected';
+    const scopeItems  = (p.scopes || []).map(s => `<li>${s}</li>`).join('');
     return `<div class="provider-card">
-      <div class="provider-header">
-        <div class="provider-name">${p.name}</div>
-        <div class="oauth-status" id="gmail-status-row">
-          <span class="status-dot grey" id="gmail-dot"></span>
-          <span class="status-label" id="gmail-status-text">Checking...</span>
+      <div class="prov-logo ${p.logoClass || ''}">${p.logoText || ''}</div>
+      <div class="prov-main">
+        <div class="prov-head">
+          <span class="prov-name">${p.name}</span>
+          <span class="tier-chip chip-required">Required</span>
         </div>
-      </div>
-      <div class="provider-desc">${p.description}</div>
-      <div class="provider-actions">
-        <button class="oauth-btn oauth-connect" id="gmail-connect-btn">Connect Gmail</button>
-        <button class="oauth-btn oauth-disconnect" id="gmail-disconnect-btn" style="display:none">Disconnect</button>
-      </div>
-      <div class="oauth-note">Uses Chrome's built-in OAuth. Read-only access. No password stored.</div>
-    </div>`;
-  }
-
-  if (p.id === 'granola') {
-    return `<div class="provider-card">
-      <div class="provider-header">
-        <div class="provider-name">${p.name}</div>
-        <div class="oauth-status" id="granola-status-row">
-          <span class="status-dot grey" id="granola-dot"></span>
-          <span class="status-label" id="granola-status-text">Checking...</span>
+        <p class="prov-desc">${p.description}</p>
+        <div class="prov-meta">${p.costHint ? `<span>${p.costHint}</span>` : ''}</div>
+        <div class="actions-row" id="gmail-actions">
+          <button class="btn btn-oauth" id="gmail-connect-btn" ${connected ? 'style="display:none"' : ''}>
+            <span style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#EA4335,#FBBC05);display:inline-block;flex-shrink:0;"></span>
+            Connect Google account
+          </button>
+          <button class="btn btn-disconnect" id="gmail-disconnect-btn" ${!connected ? 'style="display:none"' : ''}>Disconnect</button>
+          <span id="gmail-status-inline" style="font-size:12px;color:var(--ci-text-tertiary)"></span>
         </div>
+        ${scopeItems.length ? `<ul class="scope-list">${scopeItems}</ul>` : ''}
+        <div class="oauth-note">Uses Chrome's built-in OAuth. Read-only access. No password stored.</div>
       </div>
-      <div class="provider-desc">${p.description}</div>
-      <div class="provider-actions">
-        <button class="oauth-btn oauth-connect" id="granola-connect-btn">Connect Granola</button>
-        <button class="oauth-btn oauth-disconnect" id="granola-disconnect-btn" style="display:none">Disconnect</button>
-      </div>
+      <span class="prov-status ${statusClass}" id="gmail-status-pill"><span class="dot"></span><span id="gmail-status-text">${statusText}</span></span>
     </div>`;
   }
 
   return '';
 }
 
+function renderDeprecatedCard(p, integrations, keyStatus) {
+  const currentVal = integrations[p.storageKey] || '';
+  return `<div class="provider-card">
+    <div class="prov-logo ${p.logoClass || ''}">${p.logoText || ''}</div>
+    <div class="prov-main">
+      <div class="prov-head">
+        <span class="prov-name deprecated-name">${p.name}</span>
+        <span class="tier-chip chip-deprecated">Deprecated</span>
+      </div>
+      <p class="prov-desc">${p.description}</p>
+      <div class="prov-meta">
+        ${p.docsUrl ? `<a href="${p.docsUrl}" target="_blank">Get a key →</a>` : ''}
+        ${p.costHint ? `<span>${p.costHint}</span>` : ''}
+      </div>
+      <div class="key-row">
+        <input class="key-input" type="password" id="key-${p.id}" data-storage-key="${p.storageKey}"
+          value="${currentVal}" placeholder="${p.placeholder || ''}">
+        <button class="btn btn-ghost key-toggle-btn" data-target="key-${p.id}">Show</button>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-ghost btn-save" data-provider="${p.id}">Save</button>
+        <span class="test-result" id="test-${p.id}"></span>
+      </div>
+      ${p.deprecationNote ? `<div class="dep-warning"><b>Heads up:</b> ${p.deprecationNote}</div>` : ''}
+    </div>
+    <span class="prov-status s-none"><span class="dot"></span>Not connected</span>
+  </div>`;
+}
+
 // ── Events ──
 
 function bindEvents(integrations) {
   // Show/hide key toggle
-  document.querySelectorAll('.key-toggle').forEach(btn => {
+  document.querySelectorAll('.key-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = document.getElementById(btn.dataset.target);
       if (!input) return;
@@ -316,22 +259,19 @@ function bindEvents(integrations) {
   // Save buttons
   document.querySelectorAll('.btn-save').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const provider = PROVIDERS.find(p => p.id === btn.dataset.provider);
+      const provider = INTEGRATION_REGISTRY.find(p => p.id === btn.dataset.provider);
       if (!provider) return;
-      const { integrations: current = {} } = await new Promise(r => chrome.storage.local.get(['integrations'], r));
+      const { integrations: current = {} } = await new Promise(r =>
+        chrome.storage.local.get(['integrations'], r)
+      );
       if (provider.storageKey) {
-        const input = document.getElementById('key-' + provider.id) || document.getElementById('key-' + provider.storageKey);
+        const input = document.getElementById('key-' + provider.id);
         if (input) current[provider.storageKey] = input.value.trim();
       }
-      if (provider.extraFields) {
-        provider.extraFields.forEach(f => {
-          const input = document.getElementById('key-' + f.key);
-          if (input) current[f.key] = input.value.trim();
-        });
-      }
       chrome.storage.local.set({ integrations: current }, () => {
-        btn.textContent = '✓ Saved';
-        setTimeout(() => { btn.textContent = 'Save'; renderIntegrations(); }, 1500);
+        const orig = btn.textContent;
+        btn.textContent = 'Saved';
+        setTimeout(() => { btn.textContent = orig; renderIntegrations(); }, 1500);
       });
     });
   });
@@ -339,78 +279,82 @@ function bindEvents(integrations) {
   // Test buttons
   document.querySelectorAll('.btn-test').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const provider = PROVIDERS.find(p => p.id === btn.dataset.provider);
+      const provider = INTEGRATION_REGISTRY.find(p => p.id === btn.dataset.provider);
       if (!provider?.storageKey) return;
-      const input = document.getElementById('key-' + provider.id) || document.getElementById('key-' + provider.storageKey);
+      const input = document.getElementById('key-' + provider.id);
       let key = input?.value?.trim();
-      // If input is empty, test the currently active key (from config.js or storage)
       if (!key) {
-        const activeKey = await new Promise(r => chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, r));
+        const activeKey = await new Promise(r =>
+          chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, r)
+        );
         if (!activeKey?.[provider.id]) {
           const resultEl = document.getElementById('test-' + provider.id);
-          resultEl.textContent = 'No key to test';
-          resultEl.className = 'test-result fail';
-          setTimeout(() => { resultEl.textContent = ''; }, 3000);
+          if (resultEl) {
+            resultEl.innerHTML = `${ICON_X} No key to test`;
+            resultEl.className = 'test-result fail';
+            setTimeout(() => { resultEl.textContent = ''; resultEl.className = 'test-result'; }, 3000);
+          }
           return;
         }
-        // Use a sentinel to tell background to test with the active in-memory key
         key = '__USE_ACTIVE_KEY__';
       }
       const resultEl = document.getElementById('test-' + provider.id);
       btn.disabled = true;
-      btn.textContent = 'Testing...';
-      const result = await new Promise(r => chrome.runtime.sendMessage({ type: 'TEST_API_KEY', provider: provider.id, key }, r));
+      btn.textContent = 'Testing…';
+      const result = await new Promise(r =>
+        chrome.runtime.sendMessage({ type: 'TEST_API_KEY', provider: provider.id, key }, r)
+      );
       btn.disabled = false;
-      btn.textContent = 'Test Connection';
+      btn.textContent = 'Test';
+      if (!resultEl) return;
       if (result?.ok) {
-        resultEl.textContent = '✓ Connected';
+        resultEl.innerHTML = `${ICON_CHECK} Connected`;
         resultEl.className = 'test-result ok';
         if (provider.id === 'granola') chrome.runtime.sendMessage({ type: 'GRANOLA_BUILD_INDEX' });
       } else if (result?.reason) {
-        // Distinguish between auth failures and credit/billing issues
         const isCredits = /credit|billing|rate/i.test(result.reason);
-        resultEl.textContent = isCredits ? `⚠ ${result.reason}` : `✗ ${result.reason}`;
+        resultEl.innerHTML = isCredits ? `${ICON_WARN} ${result.reason}` : `${ICON_X} ${result.reason}`;
         resultEl.className = isCredits ? 'test-result warn' : 'test-result fail';
       } else {
-        resultEl.textContent = `✗ Failed (${result?.status || result?.error || 'unknown'})`;
+        resultEl.innerHTML = `${ICON_X} Failed (${result?.status || result?.error || 'unknown'})`;
         resultEl.className = 'test-result fail';
       }
-      setTimeout(() => { resultEl.textContent = ''; }, 5000);
+      setTimeout(() => { resultEl.textContent = ''; resultEl.className = 'test-result'; }, 5000);
     });
   });
 
   // Gmail OAuth
   initGmailOAuth();
-  // Granola is now API key-based — no OAuth init needed
 }
 
-// ── Gmail OAuth (moved from preferences.js pattern) ──
+// ── Gmail OAuth ──
 
 function initGmailOAuth() {
-  const connectBtn = document.getElementById('gmail-connect-btn');
-  const disconnBtn = document.getElementById('gmail-disconnect-btn');
-  const dot = document.getElementById('gmail-dot');
-  const text = document.getElementById('gmail-status-text');
+  const connectBtn  = document.getElementById('gmail-connect-btn');
+  const disconnBtn  = document.getElementById('gmail-disconnect-btn');
+  const statusPill  = document.getElementById('gmail-status-pill');
+  const statusText  = document.getElementById('gmail-status-text');
+  const statusInline = document.getElementById('gmail-status-inline');
   if (!connectBtn) return;
 
   function setConnected(yes) {
-    dot.className = 'status-dot ' + (yes ? 'green' : 'grey');
-    text.textContent = yes ? 'Connected' : 'Not connected';
-    text.className = 'status-label' + (yes ? ' connected' : '');
+    if (statusPill) statusPill.className = 'prov-status ' + (yes ? 's-connected' : 's-none');
+    if (statusText) statusText.textContent = yes ? 'Connected' : 'Not connected';
     connectBtn.style.display = yes ? 'none' : '';
     disconnBtn.style.display = yes ? '' : 'none';
+    if (statusInline) statusInline.textContent = '';
   }
 
-  // Check current state
   chrome.storage.local.get(['gmailConnected'], ({ gmailConnected }) => {
     setConnected(!!gmailConnected);
   });
 
   connectBtn.addEventListener('click', () => {
+    if (statusInline) statusInline.textContent = 'Connecting…';
     chrome.runtime.sendMessage({ type: 'GMAIL_AUTH' }, result => {
       void chrome.runtime.lastError;
-      if (result?.token) setConnected(true);
-      else text.textContent = 'Connection failed';
+      if (result?.token) { setConnected(true); }
+      else { if (statusInline) statusInline.textContent = 'Connection failed'; }
     });
   });
 
@@ -424,7 +368,7 @@ function initGmailOAuth() {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Data Pipeline Configuration
+// Data Pipeline Configuration (unchanged from prior implementation)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ENRICHMENT_META = {
@@ -497,7 +441,7 @@ let _pipelineKeyStatus = null;
 
 function savePipelineConfig(config) {
   _pipelineConfig = config;
-  chrome.runtime.sendMessage({ type: 'SET_PIPELINE_CONFIG', config }, (resp) => {
+  chrome.runtime.sendMessage({ type: 'SET_PIPELINE_CONFIG', config }, () => {
     void chrome.runtime.lastError;
     const toast = document.getElementById('pipeline-save-toast');
     if (toast) {
@@ -512,23 +456,17 @@ function pipelineStatusDot(providerId, keyStatus) {
   if (!keyStatus) return '';
   const meta = ENRICHMENT_META[providerId] || SEARCH_META[providerId];
   const keyField = meta?.keyField;
-
-  // Web Research is healthy if any search + anthropic key are available
   if (providerId === 'webResearch') {
     const healthy = keyStatus.anthropic && (keyStatus.serper || keyStatus.google_cse || keyStatus.openai);
     return healthy
       ? '<span class="status-dot healthy"></span><span class="status-label">healthy</span>'
       : '<span class="status-dot nokey"></span><span class="status-label">no key</span>';
   }
-
   if (!keyField) return '';
   const hasKey = keyStatus[keyField];
   if (!hasKey) return '<span class="status-dot nokey"></span><span class="status-label">no key</span>';
-
-  // Check exhaustion flags
   if (providerId === 'apollo' && keyStatus.apolloExhausted) return '<span class="status-dot exhausted"></span><span class="status-label">exhausted</span>';
   if (providerId === 'serper' && keyStatus.serperExhausted) return '<span class="status-dot exhausted"></span><span class="status-label">exhausted</span>';
-
   return '<span class="status-dot healthy"></span><span class="status-label">healthy</span>';
 }
 
@@ -607,39 +545,32 @@ function renderSearchCounts(config) {
 
 function renderScoringSection(config) {
   const scoring = config.scoring || { scoutEnabled: true, scoutResultCount: 3, scoutCacheDays: 7, autoResearch: false };
-
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">Scoring & Research</div>';
   html += '<div class="pipeline-sub-desc">Control when research runs and what data the quick scoring model gets.</div>';
-
-  // Auto-research toggle
   html += `<div class="pipeline-count-row" style="margin-bottom:8px">
     <div>
       <div class="pipeline-count-label" style="font-weight:600">Auto-research on sidebar open</div>
-      <div style="font-size:10px;color:#7c98b6">When disabled, full research only runs when you click the Research button.</div>
+      <div style="font-size:10px;color:var(--ci-text-tertiary)">When disabled, full research only runs when you click the Research button.</div>
     </div>
     <label class="pipeline-toggle">
       <input type="checkbox" id="scoring-auto-research" ${scoring.autoResearch ? 'checked' : ''}>
       <span class="pipeline-toggle-track"></span>
     </label>
   </div>`;
-
-  // Scout toggle
   html += `<div class="pipeline-count-row" style="margin-bottom:8px">
     <div>
       <div class="pipeline-count-label" style="font-weight:600">Company scout on quick score</div>
-      <div style="font-size:10px;color:#7c98b6">Runs 1 lightweight search when scoring a job so the AI has real company context. Costs 1 Serper credit per new company, cached after first fetch.</div>
+      <div style="font-size:10px;color:var(--ci-text-tertiary)">Runs 1 lightweight search when scoring a job so the AI has real company context. Costs 1 Serper credit per new company, cached after first fetch.</div>
     </div>
     <label class="pipeline-toggle">
       <input type="checkbox" id="scoring-scout-enabled" ${scoring.scoutEnabled ? 'checked' : ''}>
       <span class="pipeline-toggle-track"></span>
     </label>
   </div>`;
-
-  // Scout result count stepper
   html += `<div class="pipeline-count-row" style="margin-bottom:8px">
     <div>
       <div class="pipeline-count-label" style="font-weight:600">Scout results per search</div>
-      <div style="font-size:10px;color:#7c98b6">More results = richer context for scoring, but larger prompt.</div>
+      <div style="font-size:10px;color:var(--ci-text-tertiary)">More results = richer context for scoring, but larger prompt.</div>
     </div>
     <div class="pipeline-stepper">
       <button data-scout-count-dir="-1">-</button>
@@ -647,15 +578,12 @@ function renderScoringSection(config) {
       <button data-scout-count-dir="1">+</button>
     </div>
   </div>`;
-
-  // Scout cache duration
   html += `<div class="pipeline-count-row">
     <div><div class="pipeline-count-label" style="font-weight:600">Scout cache duration</div></div>
     <select class="pipeline-model-select" id="scout-cache-days">
       ${SCOUT_CACHE_OPTIONS.map(o => `<option value="${o.value}" ${(scoring.scoutCacheDays ?? 7) === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
     </select>
   </div>`;
-
   html += '</div>';
   return html;
 }
@@ -664,18 +592,14 @@ function renderPhotosSection(config) {
   const photos = config.photos || { sourceOrder: ['linkedin_thumbnail', 'serper_images'], maxPerCompany: 3, fetchScope: 'leaders_only', cacheTTLDays: 30 };
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">People & Photos</div>';
   html += '<div class="pipeline-sub-desc">Control how Coop.ai fetches and displays photos for leaders and contacts.</div>';
-
-  // Max leader photos stepper
   html += `<div class="pipeline-count-row" style="margin-bottom:10px">
-    <div><div class="pipeline-count-label" style="font-weight:600">Max leader photos per company</div><div style="font-size:10px;color:#7c98b6">Photos fetched per company research. Set to 0 for initials only.</div></div>
+    <div><div class="pipeline-count-label" style="font-weight:600">Max leader photos per company</div><div style="font-size:10px;color:var(--ci-text-tertiary)">Photos fetched per company research. Set to 0 for initials only.</div></div>
     <div class="pipeline-stepper">
       <button data-photo-max-dir="-1">-</button>
       <span id="photo-max-val">${photos.maxPerCompany ?? 3}</span>
       <button data-photo-max-dir="1">+</button>
     </div>
   </div>`;
-
-  // Photo source priority (drag-to-reorder)
   html += '<div style="margin-bottom:10px"><div class="pipeline-count-label" style="font-weight:600;margin-bottom:4px">Photo source priority</div>';
   html += '<div id="photo-source-list">';
   const sourceOrder = photos.sourceOrder || ['linkedin_thumbnail', 'serper_images'];
@@ -686,14 +610,10 @@ function renderPhotosSection(config) {
     html += `<div class="pipeline-row" draggable="true" data-photosrc-idx="${i}">
       <span class="pipeline-drag">&#9776;</span>
       <div><div class="pipeline-name">${meta.name}</div><div class="pipeline-desc">${meta.desc}</div></div>
-      <div class="pipeline-status">
-        <span class="pipeline-cost ${costClass}">${costLabel}</span>
-      </div>
+      <div class="pipeline-status"><span class="pipeline-cost ${costClass}">${costLabel}</span></div>
     </div>`;
   });
   html += '</div></div>';
-
-  // Fetch scope radio
   html += '<div style="margin-bottom:10px"><div class="pipeline-count-label" style="font-weight:600;margin-bottom:4px">Fetch photos for</div>';
   html += '<div class="photo-scope-radios">';
   PHOTO_SCOPE_OPTIONS.forEach(opt => {
@@ -702,15 +622,12 @@ function renderPhotosSection(config) {
     </label>`;
   });
   html += '</div></div>';
-
-  // Cache duration dropdown
   html += `<div class="pipeline-count-row">
     <div><div class="pipeline-count-label" style="font-weight:600">Photo cache duration</div></div>
     <select class="pipeline-model-select" id="photo-cache-ttl">
       ${PHOTO_CACHE_OPTIONS.map(o => `<option value="${o.value}" ${(photos.cacheTTLDays ?? 30) === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
     </select>
   </div>`;
-
   html += '</div>';
   return html;
 }
@@ -726,24 +643,18 @@ function renderPipelineOverview(config, keyStatus) {
   const models = config.aiModels || {};
   const counts = config.searchCounts || {};
   const enrichOrder = (config.enrichmentOrder || []).filter(p => p.enabled);
-
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">Pipeline Overview</div>';
   html += '<div class="pipeline-sub-desc">What happens with current settings.</div>';
 
-  // Helper to make a synced model dropdown
   function overviewDropdown(taskKey) {
     return `<select class="pipeline-overview-select" data-model-key="${taskKey}">${buildModelDropdown(taskKey, models)}</select>`;
   }
-
-  // Helper for flow pill with status dot
   function pill(label, providerId) {
     const dot = providerId && keyStatus ? pipelineStatusDot(providerId, keyStatus).replace(/<span class="status-label">.*?<\/span>/, '') : '';
     return `<span class="flow-pill">${dot}${label}</span>`;
   }
-
   const arrow = '<span class="flow-arrow">&rarr;</span>';
 
-  // Row 1: On research
   html += '<div class="flow-row"><span class="flow-label">On research:</span><div class="flow-chain">';
   const enrichPills = enrichOrder.map(p => pill(ENRICHMENT_META[p.id]?.name || p.id, p.id)).join(arrow);
   html += enrichPills + arrow;
@@ -753,7 +664,6 @@ function renderPipelineOverview(config, keyStatus) {
   html += overviewDropdown('companyIntelligence');
   html += '</div></div>';
 
-  // Row 2: On save (quick score)
   const scoring = config.scoring || {};
   const scoutPill = scoring.scoutEnabled !== false
     ? pill(`Scout &times;${scoring.scoutResultCount || 3}`, 'serper') + arrow
@@ -761,23 +671,17 @@ function renderPipelineOverview(config, keyStatus) {
   html += `<div class="flow-row"><span class="flow-label">On save:</span><div class="flow-chain">
     ${scoutPill}${pill('Quick score')} ${arrow} ${overviewDropdown('quickFitScoring')}
   </div></div>`;
-
-  // Row 3: On refresh (re-runs same scorer with latest context)
   html += `<div class="flow-row"><span class="flow-label">On refresh:</span><div class="flow-chain">
     ${scoutPill}${pill('Re-score')} ${arrow} ${overviewDropdown('quickFitScoring')}
   </div></div>`;
-
-  // Row 4: On chat
   html += `<div class="flow-row"><span class="flow-label">On chat:</span><div class="flow-chain">
     ${pill('Chat')} ${arrow} ${overviewDropdown('chat')}
   </div></div>`;
 
-  // Cost estimate
   const searchCredits = (counts.reviewScout || 3) + (counts.leaders || 5) + (counts.jobs || 5) + (counts.product || 3) + (counts.reviewDrill || 2);
   const notes = [];
   if (keyStatus?.apolloExhausted) notes.push('Apollo exhausted — enrichment will fall through to web research');
   if (keyStatus?.serperExhausted) notes.push('Serper exhausted — search will use fallback providers');
-
   const scoutCredits = (scoring.scoutEnabled !== false) ? 1 : 0;
   html += `<div class="cost-estimate">
     <div class="cost-row">Est. per full research: ~${searchCredits} Serper credits + 1 Apollo credit + 2 AI calls</div>
@@ -786,67 +690,55 @@ function renderPipelineOverview(config, keyStatus) {
     <div class="cost-row" style="margin-top:4px;color:#0ea5e9">Full research only runs when you click the Research button${scoring.autoResearch ? ' or open the sidebar on a company page' : ''}.</div>
     ${notes.map(n => `<div class="cost-note">${n}</div>`).join('')}
   </div>`;
-
   html += '</div>';
   return html;
 }
 
 function renderChatFallbackSection(config) {
   const fb = config.chatFallback || { enabled: true, allowExpensive: false, showIndicator: true };
-
   let html = '<div class="pipeline-subsection"><div class="pipeline-sub-title">Chat Model Fallback</div>';
   html += '<div class="pipeline-sub-desc">When the primary chat model fails (rate limit, outage), Coop can try other models. Control which models are allowed.</div>';
-
-  // Fallback enabled toggle
   html += `<div class="pipeline-count-row" style="margin-bottom:8px">
     <div>
       <div class="pipeline-count-label" style="font-weight:600">Enable fallback</div>
-      <div style="font-size:10px;color:#7c98b6">If disabled, Coop will show an error instead of trying another model.</div>
+      <div style="font-size:10px;color:var(--ci-text-tertiary)">If disabled, Coop will show an error instead of trying another model.</div>
     </div>
     <label class="pipeline-toggle">
       <input type="checkbox" id="fb-enabled" ${fb.enabled ? 'checked' : ''}>
       <span class="pipeline-toggle-track"></span>
     </label>
   </div>`;
-
-  // Allow expensive models toggle
   html += `<div class="pipeline-count-row" style="margin-bottom:8px">
     <div>
       <div class="pipeline-count-label" style="font-weight:600">Allow expensive fallback models</div>
-      <div style="font-size:10px;color:#7c98b6">When OFF, fallback is limited to cheap models (Haiku, GPT-4.1 Mini). When ON, Sonnet and GPT-4.1 are also available as fallbacks — these cost 3-5x more per message.</div>
+      <div style="font-size:10px;color:var(--ci-text-tertiary)">When OFF, fallback is limited to cheap models (Haiku, GPT-4.1 Mini). When ON, Sonnet and GPT-4.1 are also available as fallbacks.</div>
     </div>
     <label class="pipeline-toggle">
       <input type="checkbox" id="fb-allow-expensive" ${fb.allowExpensive ? 'checked' : ''}>
       <span class="pipeline-toggle-track"></span>
     </label>
   </div>`;
-
-  // Show fallback indicator toggle
   html += `<div class="pipeline-count-row">
     <div>
       <div class="pipeline-count-label" style="font-weight:600">Show fallback indicator in chat</div>
-      <div style="font-size:10px;color:#7c98b6">Display a notice when Coop used a different model than your selected one.</div>
+      <div style="font-size:10px;color:var(--ci-text-tertiary)">Display a notice when Coop used a different model than your selected one.</div>
     </div>
     <label class="pipeline-toggle">
       <input type="checkbox" id="fb-show-indicator" ${fb.showIndicator ? 'checked' : ''}>
       <span class="pipeline-toggle-track"></span>
     </label>
   </div>`;
-
-  // Current fallback order display
   const cheapModels = ['Haiku ($1/$5 per MTok)', 'GPT-4.1 Mini ($0.40/$1.60 per MTok)'];
   const expensiveModels = ['Sonnet ($3/$15 per MTok)', 'GPT-4.1 ($2/$8 per MTok)'];
-  html += `<div style="margin-top:10px;padding:10px 12px;background:var(--ci-bg-secondary, #f5f0eb);border-radius:8px;font-size:11px;color:#7c98b6">
-    <div style="font-weight:600;margin-bottom:4px;color:var(--ci-text-primary, #2d2a26)">Current fallback order:</div>
+  html += `<div style="margin-top:10px;padding:10px 12px;background:var(--ci-bg-inset);border-radius:8px;font-size:11px;color:var(--ci-text-tertiary)">
+    <div style="font-weight:600;margin-bottom:4px;color:var(--ci-text-primary)">Current fallback order:</div>
     <div>Your selected model → ${cheapModels.join(' → ')}${fb.allowExpensive ? ' → ' + expensiveModels.join(' → ') : ''}</div>
-    ${!fb.enabled ? '<div style="color:var(--ci-accent-red, #c44040);margin-top:4px;font-weight:600">Fallback disabled — errors will surface directly.</div>' : ''}
+    ${!fb.enabled ? '<div style="color:var(--ci-accent-red);margin-top:4px;font-weight:600">Fallback disabled — errors will surface directly.</div>' : ''}
   </div>`;
-
   html += '</div>';
   return html;
 }
 
-// ── Auto-rescore section ──
 function loadAutoRescoreSection() {
   chrome.storage.local.get(['coopConfig', 'savedCompanies'], data => {
     const DEFAULT_AUTOMATIONS = {
@@ -854,7 +746,6 @@ function loadAutoRescoreSection() {
       rescoreOnProfileChange: false, rescoreOnPrefChange: false, rescoreOnNewData: false,
     };
     const cfg = { automations: { ...DEFAULT_AUTOMATIONS, ...(data.coopConfig?.automations || {}) }, rescoreStages: data.coopConfig?.rescoreStages || [], ...data.coopConfig };
-
     const DEFAULT_STAGES = [
       { key: 'needs_review', label: "Coop's AI Scoring Queue" },
       { key: 'want_to_apply', label: 'I Want to Apply' },
@@ -865,11 +756,9 @@ function loadAutoRescoreSection() {
       { key: 'accepted', label: 'Accepted' },
       { key: 'rejected', label: "Rejected / DQ'd" },
     ];
-
     chrome.storage.local.get(['opportunityStages', 'customStages'], stageData => {
       const stages = stageData.opportunityStages || stageData.customStages || DEFAULT_STAGES;
       const selected = cfg.rescoreStages?.length ? cfg.rescoreStages : [];
-
       const anyEnabled = cfg.automations.rescoreOnProfileChange || cfg.automations.rescoreOnPrefChange || cfg.automations.rescoreOnNewData;
       const container = document.getElementById('auto-rescore-section');
       if (!container) return;
@@ -912,19 +801,15 @@ function loadAutoRescoreSection() {
         cfg.rescoreStages = [...container.querySelectorAll('.rescore-stage-cb:checked')].map(el => el.value);
         chrome.storage.local.set({ coopConfig: cfg });
         const toast = document.getElementById('pipeline-save-toast');
-        if (toast) { toast.style.opacity = '1'; setTimeout(() => toast.style.opacity = '0', 1800); }
+        if (toast) { toast.style.opacity = '1'; setTimeout(() => { toast.style.opacity = '0'; }, 1800); }
         const any = cfg.automations.rescoreOnProfileChange || cfg.automations.rescoreOnPrefChange || cfg.automations.rescoreOnNewData;
         stageList.style.opacity = any ? '1' : '0.4';
         stageList.style.pointerEvents = any ? '' : 'none';
       }
 
       container.querySelectorAll('.rescore-trigger-cb').forEach(cb => {
-        cb.addEventListener('change', () => {
-          cfg.automations[cb.dataset.key] = cb.checked;
-          saveCoopConfig();
-        });
+        cb.addEventListener('change', () => { cfg.automations[cb.dataset.key] = cb.checked; saveCoopConfig(); });
       });
-
       container.querySelectorAll('.rescore-stage-cb').forEach(cb => {
         cb.addEventListener('change', saveCoopConfig);
       });
@@ -932,7 +817,6 @@ function loadAutoRescoreSection() {
   });
 }
 
-// ── Drag-to-reorder helper ──
 function setupDragReorder(containerId, arr, prefix, config) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -944,14 +828,8 @@ function setupDragReorder(containerId, arr, prefix, config) {
       e.dataTransfer.effectAllowed = 'move';
       row.style.opacity = '0.5';
     });
-    row.addEventListener('dragend', () => {
-      row.style.opacity = '';
-      dragIdx = null;
-    });
-    row.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    });
+    row.addEventListener('dragend', () => { row.style.opacity = ''; dragIdx = null; });
+    row.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
     row.addEventListener('drop', e => {
       e.preventDefault();
       const dropIdx = parseInt(row.dataset[prefix + 'Idx']);
@@ -964,7 +842,6 @@ function setupDragReorder(containerId, arr, prefix, config) {
   });
 }
 
-// ── Main pipeline config loader ──
 async function loadPipelineConfig() {
   const config = await new Promise(r => chrome.runtime.sendMessage({ type: 'GET_PIPELINE_CONFIG' }, r));
   const keyStatus = await new Promise(r => chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' }, r));
@@ -987,7 +864,6 @@ async function loadPipelineConfig() {
 
   loadAutoRescoreSection();
 
-  // ── Toggle switches (enrichment) ──
   body.querySelectorAll('[data-enrichment-toggle]').forEach(input => {
     input.addEventListener('change', () => {
       const idx = parseInt(input.dataset.enrichmentToggle);
@@ -997,7 +873,6 @@ async function loadPipelineConfig() {
     });
   });
 
-  // ── Toggle switches (search) ──
   body.querySelectorAll('[data-search-toggle]').forEach(input => {
     input.addEventListener('change', () => {
       const idx = parseInt(input.dataset.searchToggle);
@@ -1007,20 +882,17 @@ async function loadPipelineConfig() {
     });
   });
 
-  // ── All model dropdowns (Pipeline Overview) ──
   body.querySelectorAll('[data-model-key]').forEach(select => {
     select.addEventListener('change', () => {
       if (!config.aiModels) config.aiModels = {};
       config.aiModels[select.dataset.modelKey] = select.value;
       savePipelineConfig(config);
-      // Sync all dropdowns with the same key
       body.querySelectorAll(`[data-model-key="${select.dataset.modelKey}"]`).forEach(s => {
         if (s !== select) s.value = select.value;
       });
     });
   });
 
-  // ── Stepper buttons (search counts) ──
   body.querySelectorAll('[data-count-key]').forEach(btn => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.countKey;
@@ -1035,7 +907,6 @@ async function loadPipelineConfig() {
     });
   });
 
-  // ── Photo max stepper ──
   body.querySelectorAll('[data-photo-max-dir]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!config.photos) config.photos = {};
@@ -1047,7 +918,6 @@ async function loadPipelineConfig() {
     });
   });
 
-  // ── Photo scope radios ──
   body.querySelectorAll('input[name="photo-scope"]').forEach(radio => {
     radio.addEventListener('change', () => {
       if (!config.photos) config.photos = {};
@@ -1056,7 +926,6 @@ async function loadPipelineConfig() {
     });
   });
 
-  // ── Photo cache TTL ──
   const cacheTTL = document.getElementById('photo-cache-ttl');
   if (cacheTTL) {
     cacheTTL.addEventListener('change', () => {
@@ -1066,7 +935,6 @@ async function loadPipelineConfig() {
     });
   }
 
-  // ── Scoring & Research controls ──
   const autoResearchToggle = document.getElementById('scoring-auto-research');
   if (autoResearchToggle) {
     autoResearchToggle.addEventListener('change', () => {
@@ -1075,6 +943,7 @@ async function loadPipelineConfig() {
       savePipelineConfig(config);
     });
   }
+
   const scoutToggle = document.getElementById('scoring-scout-enabled');
   if (scoutToggle) {
     scoutToggle.addEventListener('change', () => {
@@ -1083,6 +952,7 @@ async function loadPipelineConfig() {
       savePipelineConfig(config);
     });
   }
+
   body.querySelectorAll('[data-scout-count-dir]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!config.scoring) config.scoring = {};
@@ -1093,6 +963,7 @@ async function loadPipelineConfig() {
       savePipelineConfig(config);
     });
   });
+
   const scoutCacheDays = document.getElementById('scout-cache-days');
   if (scoutCacheDays) {
     scoutCacheDays.addEventListener('change', () => {
@@ -1102,7 +973,6 @@ async function loadPipelineConfig() {
     });
   }
 
-  // ── Chat Fallback controls ──
   const fbEnabled = document.getElementById('fb-enabled');
   if (fbEnabled) {
     fbEnabled.addEventListener('change', () => {
@@ -1128,28 +998,21 @@ async function loadPipelineConfig() {
     });
   }
 
-  // ── Drag-to-reorder ──
   setupDragReorder('enrichment-list', config.enrichmentOrder, 'enrichment', config);
   setupDragReorder('search-chain-list', config.searchFallbackOrder, 'search', config);
-  // Photo source drag-reorder
   if (config.photos?.sourceOrder) {
     setupDragReorder('photo-source-list', config.photos.sourceOrder, 'photosrc', config);
   }
 }
 
-// ── Pipeline section collapsible toggle ──
 function initPipelineCollapse() {
   const header = document.getElementById('pipeline-config-header');
-  const body = document.getElementById('pipeline-config-body');
+  const body   = document.getElementById('pipeline-config-body');
   if (!header || !body) return;
-
   header.addEventListener('click', () => {
     const collapsed = header.classList.toggle('collapsed');
     body.classList.toggle('hidden', collapsed);
-    // Load pipeline config on first expand
-    if (!collapsed && !_pipelineConfig) {
-      loadPipelineConfig();
-    }
+    if (!collapsed && !_pipelineConfig) loadPipelineConfig();
   });
 }
 
