@@ -1298,7 +1298,7 @@
                 </label>
                 <div style="display:flex;align-items:center;gap:6px;">
                   <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="e.g. $100K">
-                  <span class="settings-saved-chip" id="chip-salary-floor"></span>
+                  <span class="settings-saved-chip" id="chip-salary-floor">&#10003; Saved</span>
                 </div>
               </div>
               <div class="field">
@@ -1308,7 +1308,7 @@
                 </label>
                 <div style="display:flex;align-items:center;gap:6px;">
                   <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="e.g. $150K">
-                  <span class="settings-saved-chip" id="chip-salary-strong"></span>
+                  <span class="settings-saved-chip" id="chip-salary-strong">&#10003; Saved</span>
                 </div>
               </div>
             </div>
@@ -1321,7 +1321,7 @@
                 </label>
                 <div style="display:flex;align-items:center;gap:6px;">
                   <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="e.g. $200K">
-                  <span class="settings-saved-chip" id="chip-ote-floor"></span>
+                  <span class="settings-saved-chip" id="chip-ote-floor">&#10003; Saved</span>
                 </div>
               </div>
               <div class="field">
@@ -1331,7 +1331,7 @@
                 </label>
                 <div style="display:flex;align-items:center;gap:6px;">
                   <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="e.g. $250K">
-                  <span class="settings-saved-chip" id="chip-ote-strong"></span>
+                  <span class="settings-saved-chip" id="chip-ote-strong">&#10003; Saved</span>
                 </div>
               </div>
             </div>
@@ -1573,9 +1573,10 @@
 <!-- Save status toast (kept for legacy showSaveStatus calls in JS) -->
 <div class="save-status" id="save-status"><span class="save-spinner"></span><span class="save-check">&#10003;</span> <span id="save-status-text">Saved</span></div>
 
-    <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- TAB 1: YOUR PROFILE                                                 -->
-    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- LEGACY layout below — kept hidden as backward-compat for JS handlers
+         that reference IDs in this block. Once handlers migrate to the new
+         rail-shell IDs (top of file), this block can be excised entirely. -->
+    <div style="display:none" aria-hidden="true">
     <div class="cos-tab-panel active" data-panel="profile">
 
     <div class="card" id="card-personal" data-card="personal">
@@ -2075,6 +2076,7 @@
 
     </div><!-- /.cos-content -->
     </div><!-- /.career-os-shell -->
+    </div><!-- end legacy hidden wrapper -->
 
   </div><!-- /.page -->
 
