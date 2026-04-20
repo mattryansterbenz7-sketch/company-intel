@@ -1522,8 +1522,9 @@ function _oppRenderMeetingDetail(contentEl, meeting, allMeetings) {
       btn.addEventListener('click', () => {
         const nid = btn.dataset.detailNoteId;
         entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== nid);
-        const latest = [...entry.notesFeed].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
-        saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+        // Don't write HTML to entry.notes — that field is now markdown owned by the
+        // Notes tab editor (#258). notesFeed is the per-meeting note storage.
+        saveEntry({ notesFeed: entry.notesFeed });
         _renderOppDetailNotesList();
       });
     });
@@ -1555,8 +1556,8 @@ function _oppRenderMeetingDetail(contentEl, meeting, allMeetings) {
         meetingId: meeting.id,
       };
       entry.notesFeed = [newNote, ...(entry.notesFeed || [])];
-      const latest = [...entry.notesFeed].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
-      saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+      // Don't write HTML to entry.notes — markdown owned by Notes tab editor (#258).
+      saveEntry({ notesFeed: entry.notesFeed });
       coopEditable.innerHTML = '';
       coopEditable.classList.add('notes-empty-edit');
       coopSaveBtn.disabled = true;

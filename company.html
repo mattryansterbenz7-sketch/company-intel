@@ -832,6 +832,246 @@
       max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .note-card-meeting-chip:hover { color: var(--ci-accent-primary); }
+
+    /* ── Notes Tab v2 (two-pane: doc + Coop pinned) ── */
+    /* Override hub-pane for notes to enable flex column layout */
+    #hub-notes.hub-pane.active {
+      display: flex; flex-direction: column;
+      padding: 0; overflow: hidden;
+    }
+    #notes-tab-root { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+
+    /* Doc scroll pane (top) */
+    .nt-doc-scroll {
+      flex: 1 1 auto; overflow-y: auto; padding: 24px 28px 32px; position: relative;
+      min-height: 0;
+    }
+    /* View-source toggle */
+    .nt-source-toggle {
+      position: absolute; top: 14px; right: 16px;
+      font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
+      background: var(--ci-bg-inset); border: 1px solid var(--ci-border-default);
+      border-radius: 5px; padding: 3px 9px; cursor: pointer; font-family: inherit;
+      transition: all var(--motion-xs) var(--ease-out);
+    }
+    .nt-source-toggle:hover { color: var(--ci-text-primary); border-color: var(--ci-border-strong); }
+    /* Autosave indicator */
+    .nt-save-indicator {
+      position: absolute; top: 18px; right: 100px;
+      font-size: 11px; color: var(--ci-text-tertiary);
+      display: flex; align-items: center; gap: 5px;
+      opacity: 0; transition: opacity var(--motion-xs) var(--ease-out);
+    }
+    .nt-save-indicator.visible { opacity: 1; }
+    .nt-save-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ci-accent-teal); }
+
+    /* The contenteditable editor */
+    .nt-editor {
+      outline: none; min-height: 220px; font-size: 14px;
+      line-height: 1.7; color: var(--ci-text-primary);
+      caret-color: var(--ci-accent-primary);
+    }
+    .nt-editor:empty::before {
+      content: attr(data-placeholder); color: var(--ci-text-tertiary);
+      font-style: italic; pointer-events: none;
+    }
+    /* Source view textarea */
+    .nt-source-view {
+      display: none; width: 100%; min-height: 300px; resize: none;
+      border: none; outline: none; padding: 0;
+      font-family: var(--ci-font-mono); font-size: 12.5px; line-height: 1.7;
+      color: var(--ci-text-secondary); background: transparent;
+    }
+    /* Doc headings */
+    .nt-editor .nt-h1 { font-size: 22px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.25; }
+    .nt-editor .nt-h2 { font-size: 16px; font-weight: 700; margin: 24px 0 8px; letter-spacing: -0.005em; }
+    .nt-editor .nt-h3 { font-size: 13px; font-weight: 600; color: var(--ci-text-secondary); margin: 18px 0 6px; }
+    .nt-editor p { margin: 0 0 10px; }
+    .nt-editor ul, .nt-editor ol { margin: 4px 0 10px; padding-left: 22px; }
+    .nt-editor li { margin-bottom: 3px; }
+    .nt-editor blockquote {
+      margin: 10px 0 14px; padding: 8px 14px;
+      border-left: 3px solid var(--ci-border-default);
+      color: var(--ci-text-secondary); font-size: 13.5px; line-height: 1.6;
+      position: relative;
+    }
+    .nt-editor blockquote.nt-paste-quote { border-left-color: var(--ci-accent-primary); }
+    .nt-editor code { font-family: var(--ci-font-mono); font-size: 12.5px; padding: 1px 5px; background: var(--ci-bg-inset); border-radius: 4px; }
+    .nt-editor pre { font-family: var(--ci-font-mono); font-size: 12.5px; padding: 12px 14px; background: var(--ci-bg-inset); border-radius: 6px; overflow-x: auto; margin: 0 0 14px; line-height: 1.55; }
+    .nt-editor strong { font-weight: 650; }
+    .nt-editor em { font-style: italic; }
+    .nt-editor a { color: var(--ci-text-link); }
+    .nt-editor hr { border: none; border-top: 1px solid var(--ci-border-default); margin: 14px 0; }
+
+    /* Paste blockquote unquote button */
+    .nt-unquote-btn {
+      position: absolute; top: 6px; right: 8px;
+      font-size: 10px; color: var(--ci-text-secondary);
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+      border-radius: 4px; padding: 2px 7px; cursor: pointer; white-space: nowrap;
+      display: none;
+    }
+    .nt-editor blockquote:hover .nt-unquote-btn,
+    .nt-editor blockquote:focus-within .nt-unquote-btn { display: block; }
+
+    /* Markdown-hint footer (empty state) */
+    .nt-md-hint {
+      margin-top: 24px; padding-top: 12px;
+      border-top: 1px solid var(--ci-border-subtle);
+      display: flex; gap: 14px; flex-wrap: wrap;
+      font-size: 11px; color: var(--ci-text-tertiary);
+    }
+    .nt-md-hint code { font-family: var(--ci-font-mono); color: var(--ci-text-secondary); font-weight: 600; }
+
+    /* Restore bar — shown when Coop pane is session-hidden */
+    .nt-restore-bar {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px;
+      background: var(--ci-bg-raised); border-top: 1px solid var(--ci-border-subtle);
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.02);
+    }
+    .nt-restore-bar-label {
+      font-size: 11.5px; color: var(--ci-text-tertiary);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .nt-restore-bar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary); opacity: 0.5; }
+    .nt-restore-bar-btn {
+      background: none; border: 1px solid var(--ci-border-default);
+      border-radius: 5px; padding: 4px 10px;
+      font-size: 11px; color: var(--ci-text-secondary);
+      cursor: pointer; font-family: inherit;
+      transition: all var(--motion-xs) var(--ease-out);
+    }
+    .nt-restore-bar-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+
+    /* ── Floating selection toolbar ── */
+    .nt-sel-toolbar {
+      position: fixed; z-index: 9990;
+      background: #151B26; border-radius: 7px; padding: 2px;
+      display: none; align-items: center; gap: 0;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    }
+    .nt-sel-toolbar.visible { display: flex; }
+    .nt-sel-btn {
+      background: none; border: none; color: rgba(245,244,242,0.9);
+      padding: 5px 9px; font-size: 13px; font-weight: 600;
+      font-family: inherit; cursor: pointer; border-radius: 5px;
+      white-space: nowrap; line-height: 1;
+      transition: background var(--motion-xs) var(--ease-out);
+    }
+    .nt-sel-btn:hover { background: rgba(255,255,255,0.12); }
+    .nt-sel-btn.nt-sel-sep { cursor: default; }
+    .nt-sel-btn.nt-sel-sep:hover { background: none; }
+    .nt-sel-div { width: 1px; height: 16px; background: rgba(255,255,255,0.15); margin: 0 2px; }
+
+    /* ── Slash command picker ── */
+    .nt-slash-picker {
+      position: fixed; z-index: 9991;
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+      border-radius: 9px; padding: 4px; min-width: 200px;
+      box-shadow: var(--ci-shadow-md);
+    }
+    .nt-slash-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px; border-radius: 6px;
+      font-size: 12.5px; cursor: pointer;
+      transition: background var(--motion-xs) var(--ease-out);
+    }
+    .nt-slash-item:hover, .nt-slash-item.active { background: var(--ci-accent-primary-soft); }
+    .nt-slash-icon { font-family: var(--ci-font-mono); font-size: 10px; color: var(--ci-text-tertiary); width: 22px; text-align: center; flex-shrink: 0; }
+    .nt-slash-label { color: var(--ci-text-primary); font-weight: 500; }
+
+    /* ── Coop pinned pane (bottom) ── */
+    .nt-coop-pane {
+      flex: 0 0 auto; max-height: 280px; min-height: 120px;
+      overflow-y: auto; border-top: 2px solid var(--ci-border-default);
+      background: var(--ci-bg-raised);
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.03);
+      position: relative; transition: max-height var(--motion-sm) var(--ease-out);
+    }
+    .nt-coop-pane.collapsed { max-height: 42px; overflow: hidden; }
+    /* Resize handle */
+    .nt-coop-resize {
+      position: absolute; top: -3px; left: 0; right: 0; height: 6px;
+      cursor: row-resize; background: transparent; z-index: 3;
+    }
+    .nt-coop-resize:hover { background: var(--ci-accent-primary-soft); }
+    /* Coop pane header */
+    .nt-coop-head {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px 7px;
+      background: var(--ci-bg-raised);
+      border-bottom: 1px solid var(--ci-border-subtle);
+    }
+    .nt-coop-head-left {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11.5px; font-weight: 600; color: var(--ci-text-secondary);
+    }
+    .nt-coop-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ci-accent-primary); flex-shrink: 0; }
+    .nt-coop-count {
+      font-size: 10px; font-weight: 600; color: var(--ci-text-tertiary);
+      padding: 1px 7px; border-radius: 99px; background: var(--ci-bg-inset);
+    }
+    .nt-coop-head-actions { display: flex; align-items: center; gap: 4px; }
+    .nt-coop-head-btn {
+      background: none; border: none; cursor: pointer; color: var(--ci-text-tertiary);
+      font-size: 11px; padding: 4px 8px; border-radius: 4px; font-family: inherit;
+      transition: all var(--motion-xs) var(--ease-out);
+    }
+    .nt-coop-head-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    /* Coop pane dropdown menu */
+    .nt-coop-menu-wrap { position: relative; }
+    .nt-coop-menu {
+      display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
+      background: var(--ci-bg-raised); border: 1px solid var(--ci-border-default);
+      border-radius: 9px; box-shadow: var(--ci-shadow-md);
+      min-width: 200px; padding: 4px; z-index: 20;
+    }
+    .nt-coop-menu.open { display: block; }
+    .nt-coop-menu-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; font-size: 12px; color: var(--ci-text-primary);
+      border-radius: 5px; cursor: pointer; white-space: nowrap;
+      transition: background var(--motion-xs) var(--ease-out);
+    }
+    .nt-coop-menu-item:hover { background: var(--ci-bg-inset); }
+    .nt-coop-menu-sub { font-size: 10px; color: var(--ci-text-tertiary); font-weight: 500; }
+    .nt-coop-menu-div { height: 1px; background: var(--ci-border-subtle); margin: 4px 2px; }
+    /* Coop entries */
+    .nt-coop-entry {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 14px; border-top: 1px solid var(--ci-border-subtle);
+    }
+    .nt-coop-entry:first-of-type { border-top: none; }
+    .nt-coop-av {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--ci-accent-primary);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+    }
+    .nt-coop-entry-body { flex: 1; min-width: 0; }
+    .nt-coop-meta { font-size: 11px; color: var(--ci-text-tertiary); margin-bottom: 4px; }
+    .nt-coop-content { font-size: 13.5px; line-height: 1.55; color: var(--ci-text-primary); }
+    .nt-coop-content p { margin: 0 0 5px; font-size: 13.5px; }
+    .nt-coop-content ul { margin: 3px 0 5px; padding-left: 18px; font-size: 13.5px; }
+    .nt-coop-content li { margin-bottom: 2px; }
+    .nt-coop-actions { display: flex; align-items: flex-start; gap: 2px; flex-shrink: 0; margin-top: 1px; }
+    .nt-promote-btn {
+      font-size: 11px; color: var(--ci-text-secondary);
+      background: none; border: 1px solid var(--ci-border-default);
+      border-radius: 4px; padding: 3px 8px; cursor: pointer; font-family: inherit;
+      white-space: nowrap; transition: all var(--motion-xs) var(--ease-out);
+    }
+    .nt-promote-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); }
+    .nt-dismiss-btn {
+      font-size: 11px; color: var(--ci-text-tertiary);
+      background: none; border: 1px solid transparent;
+      border-radius: 4px; padding: 3px 8px; cursor: pointer; font-family: inherit;
+      transition: all var(--motion-xs) var(--ease-out);
+    }
+    .nt-dismiss-btn:hover { border-color: var(--ci-border-default); color: var(--ci-text-secondary); }
+
     .detail-takeaways { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
     .detail-takeaways li { font-size: 14px; color: var(--ci-text-primary); line-height: 1.6; padding-left: 18px; position: relative; }
     .detail-takeaways li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ci-accent-amber); }

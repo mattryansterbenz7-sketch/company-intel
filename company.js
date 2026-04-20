@@ -2091,7 +2091,7 @@ const TAB_PANE_HTML = {
   activity: '<div id="activity-feed-root"></div>',
   tasks: '<div id="company-tasks-container"></div>',
   intel: '', // filled by buildIntelTab()
-  notes: '<div id="hub-notes-container" data-editing="0"></div>',
+  notes: '<div id="notes-tab-root"></div>',
   emails: '<div class="p-empty" id="act-emails-status">Loading emails\u2026</div><div id="act-emails-list"></div>',
   meetings: '<div class="p-empty" id="act-meetings-status">Loading meetings\u2026</div><div id="act-meetings-content"></div>',
   docs: `<div class="docs-section">
@@ -3085,7 +3085,7 @@ function bindHubTabs() {
   if (!container) return;
   const tabBar = container.querySelector('.hub-tab-bar');
 
-  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false, activityInited = false, tasksInited = false;
+  let emailsLoaded = false, meetingsLoaded = false, intelInited = false, docsInited = false, activityInited = false, tasksInited = false, notesInited = false;
 
   // Init the default (first) tab
   let tabOrder = JSON.parse(localStorage.getItem('ci_tabOrder') || 'null') || DEFAULT_TAB_ORDER;
@@ -3096,6 +3096,7 @@ function bindHubTabs() {
     if (defaultTab === 'intel' && !intelInited) { intelInited = true; initIntelTab(); }
     else if (defaultTab === 'activity' && !activityInited) { activityInited = true; initActivityTab(); }
     else if (defaultTab === 'tasks') { tasksInited = true; initTasksTab(); }
+    else if (defaultTab === 'notes' && !notesInited) { notesInited = true; renderNotesTab(entry); }
     else if (defaultTab === 'emails' && !emailsLoaded) { emailsLoaded = true; loadHubEmails(); }
     else if (defaultTab === 'meetings' && !meetingsLoaded) { meetingsLoaded = true; loadHubMeetings(); }
     else if (defaultTab === 'docs' && !docsInited) { docsInited = true; initDocsTab(); }
@@ -3113,6 +3114,7 @@ function bindHubTabs() {
       if (tab.dataset.tab === 'activity') initActivityTab();
       if (tab.dataset.tab === 'tasks') { tasksInited = true; initTasksTab(); }
       if (tab.dataset.tab === 'intel' && !intelInited) { intelInited = true; initIntelTab(); }
+      if (tab.dataset.tab === 'notes' && !notesInited) { notesInited = true; renderNotesTab(entry); }
       if (tab.dataset.tab === 'emails' && !emailsLoaded) { emailsLoaded = true; loadHubEmails(); }
       if (tab.dataset.tab === 'meetings' && !meetingsLoaded) { meetingsLoaded = true; loadHubMeetings(); }
       if (tab.dataset.tab === 'docs' && !docsInited) { docsInited = true; initDocsTab(); }
@@ -3153,8 +3155,6 @@ function bindHubTabs() {
       localStorage.setItem('ci_tabOrder', JSON.stringify(newOrder));
     });
   });
-
-  renderNotesEditor();
 
   // Thumbs feedback on match verdict
   document.addEventListener('click', e => {
@@ -4271,10 +4271,8 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
         const nid = btn.dataset.detailNoteId;
         entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== nid);
         const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
-        saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+        saveEntry({ notesFeed: entry.notesFeed });
         _renderDetailNotesList();
-        // Re-render the private notes panel if it's visible
-        if (typeof renderNotesFeed === 'function') renderNotesFeed();
       });
     });
   }
@@ -4308,14 +4306,11 @@ function _renderMeetingDetailShared(contentEl, meeting, events, granolaNotes) {
         meetingId: meeting.id,
       };
       entry.notesFeed = [newNote, ...(entry.notesFeed || [])];
-      const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
-      saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
+      saveEntry({ notesFeed: entry.notesFeed });
       coopEditable.innerHTML = '<p><br></p>';
       coopEditable.classList.add('notes-empty-edit');
       coopSaveBtn.disabled = true;
       _renderDetailNotesList();
-      // Re-render the private notes panel if it's visible
-      if (typeof renderNotesFeed === 'function') renderNotesFeed();
       // Brief flash on the saved indicator
       if (coopSavedIndicator) {
         coopSavedIndicator.style.opacity = '1';
@@ -6015,6 +6010,713 @@ function openChatPanel() {
   }, 300);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notes Tab v2 — Two-pane: live-markdown editor (top) + Coop pane (bottom)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Markdown parser: MD string → HTML ────────────────────────────────────────
+function notesMarkdownToHtml(md) {
+  if (!md) return '';
+  const lines = md.split('\n');
+  const out = [];
+  let inUl = false, inOl = false, inPre = false, preBuf = [];
+
+  const flushList = () => {
+    if (inUl) { out.push('</ul>'); inUl = false; }
+    if (inOl) { out.push('</ol>'); inOl = false; }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+
+    // Fenced code block
+    if (raw.startsWith('```')) {
+      if (inPre) {
+        out.push('<pre>' + escapeHtml(preBuf.join('\n')) + '</pre>');
+        preBuf = []; inPre = false;
+      } else {
+        flushList(); inPre = true;
+      }
+      continue;
+    }
+    if (inPre) { preBuf.push(raw); continue; }
+
+    flushList();
+
+    // Headings
+    if (raw.startsWith('### ')) { out.push(`<div class="nt-h3">${inlineMarkdown(raw.slice(4))}</div>`); continue; }
+    if (raw.startsWith('## '))  { out.push(`<div class="nt-h2">${inlineMarkdown(raw.slice(3))}</div>`); continue; }
+    if (raw.startsWith('# '))   { out.push(`<div class="nt-h1">${inlineMarkdown(raw.slice(2))}</div>`); continue; }
+
+    // Blockquote
+    if (raw.startsWith('> ')) {
+      out.push(`<blockquote>${inlineMarkdown(raw.slice(2))}</blockquote>`);
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^---+$/.test(raw.trim())) { out.push('<hr>'); continue; }
+
+    // Unordered list
+    if (/^[-*] /.test(raw)) {
+      if (!inUl) { out.push('<ul>'); inUl = true; }
+      out.push(`<li>${inlineMarkdown(raw.slice(2))}</li>`);
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\. /.test(raw)) {
+      if (!inOl) { out.push('<ol>'); inOl = true; }
+      out.push(`<li>${inlineMarkdown(raw.replace(/^\d+\. /, ''))}</li>`);
+      continue;
+    }
+
+    // Blank line
+    if (raw.trim() === '') { out.push('<p><br></p>'); continue; }
+
+    // Paragraph
+    out.push(`<p>${inlineMarkdown(raw)}</p>`);
+  }
+
+  if (inPre) out.push('<pre>' + escapeHtml(preBuf.join('\n')) + '</pre>');
+  if (inUl) out.push('</ul>');
+  if (inOl) out.push('</ol>');
+
+  return out.join('\n');
+}
+
+function inlineMarkdown(text) {
+  let s = escapeHtml(text);
+  // Bold+italic
+  s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+  // Bold
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  // Italic
+  s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+  // Inline code
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Links
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return s;
+}
+
+// ── HTML → Markdown (serialise editor DOM back to MD string) ─────────────────
+function notesEditorToMarkdown(rootEl) {
+  const lines = [];
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      lines.push(node.textContent);
+      return;
+    }
+    const tag = node.tagName?.toLowerCase();
+    if (!tag) return;
+
+    if (tag === 'pre') { lines.push('```\n' + node.textContent + '\n```'); return; }
+    if (tag === 'hr') { lines.push('---'); return; }
+    if (tag === 'br') { lines.push('\n'); return; }
+    if (tag === 'h1' || node.classList?.contains('nt-h1')) { lines.push('# ' + node.textContent); return; }
+    if (tag === 'h2' || node.classList?.contains('nt-h2')) { lines.push('## ' + node.textContent); return; }
+    if (tag === 'h3' || node.classList?.contains('nt-h3')) { lines.push('### ' + node.textContent); return; }
+    if (tag === 'blockquote') { lines.push('> ' + node.textContent.trim()); return; }
+    if (tag === 'ul') {
+      node.querySelectorAll(':scope > li').forEach(li => lines.push('- ' + li.textContent));
+      return;
+    }
+    if (tag === 'ol') {
+      [...node.querySelectorAll(':scope > li')].forEach((li, idx) => lines.push(`${idx + 1}. ` + li.textContent));
+      return;
+    }
+    if (tag === 'p') {
+      // Inline: serialize children
+      let text = '';
+      node.childNodes.forEach(child => {
+        if (child.nodeType === Node.TEXT_NODE) { text += child.textContent; return; }
+        const ct = child.tagName?.toLowerCase();
+        if (ct === 'strong' || ct === 'b') text += `**${child.textContent}**`;
+        else if (ct === 'em' || ct === 'i') text += `_${child.textContent}_`;
+        else if (ct === 'code') text += '`' + child.textContent + '`';
+        else if (ct === 'a') text += `[${child.textContent}](${child.href})`;
+        else if (ct === 'br') text += '\n';
+        else text += child.textContent;
+      });
+      lines.push(text || '');
+      return;
+    }
+    if (tag === 'div') {
+      // Could be nt-h1/h2/h3 or just a plain div
+      if (node.classList?.contains('nt-h1')) { lines.push('# ' + node.textContent); return; }
+      if (node.classList?.contains('nt-h2')) { lines.push('## ' + node.textContent); return; }
+      if (node.classList?.contains('nt-h3')) { lines.push('### ' + node.textContent); return; }
+      // Treat as paragraph
+      lines.push(node.textContent);
+      return;
+    }
+    // Fallback: recurse
+    node.childNodes.forEach(child => walk(child));
+  }
+  rootEl.childNodes.forEach(child => walk(child));
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ── Main render function ──────────────────────────────────────────────────────
+function renderNotesTab(entryRef) {
+  const root = document.getElementById('notes-tab-root');
+  if (!root) return;
+
+  const coopEntries = entryRef.coopPendingNotes ? [...entryRef.coopPendingNotes] : [];
+  const sessionKey = `coop.notesHidden.${entryRef.id || entryRef.company}`;
+  const isHidden = sessionStorage.getItem(sessionKey) === '1';
+
+  // Coop pane only renders real entries from coopPendingNotes. The auto-generation
+  // pipeline that populates this array is owned by separate work; until then the
+  // pane is hidden whenever the array is empty (per acceptance criteria).
+  const hasCoopEntries = coopEntries.length > 0;
+
+  root.innerHTML = `
+    <div class="nt-doc-scroll" id="nt-doc-scroll">
+      <button class="nt-source-toggle" id="nt-source-toggle">View source</button>
+      <div class="nt-save-indicator" id="nt-save-indicator"><span class="nt-save-dot"></span><span>Saved</span></div>
+      <div class="nt-editor" id="nt-editor" contenteditable="true" spellcheck="true"
+           data-placeholder="Start typing your notes about ${escapeHtml(entryRef.company || 'this opportunity')}…"></div>
+      <textarea class="nt-source-view" id="nt-source-view" spellcheck="false"></textarea>
+      ${!entryRef.notes ? `<div class="nt-md-hint" id="nt-md-hint">
+        <span><code>#</code> heading</span>
+        <span><code>##</code> subheading</span>
+        <span><code>-</code> list</span>
+        <span><code>&gt;</code> quote</span>
+        <span><code>\`code\`</code></span>
+        <span><code>**bold**</code></span>
+        <span><code>_italic_</code></span>
+      </div>` : ''}
+      ${isHidden ? `<div class="nt-restore-bar" id="nt-restore-bar">
+        <div class="nt-restore-bar-label"><span class="nt-restore-bar-dot"></span>Coop's notes hidden</div>
+        <button class="nt-restore-bar-btn" id="nt-restore-btn">Show</button>
+      </div>` : ''}
+    </div>
+    ${hasCoopEntries && !isHidden ? buildCoopPane(coopEntries) : ''}
+  `;
+
+  // ── Populate editor with existing notes ──
+  const editorEl = document.getElementById('nt-editor');
+  const sourceEl = document.getElementById('nt-source-view');
+  let rawMd = entryRef.notes || '';
+  // Legacy users may have HTML in entry.notes from the pre-#258 storage shape
+  // (when meeting note cards wrote HTML to this field). Detect and strip to plain
+  // text so the editor doesn't render escaped tags as visible content.
+  if (rawMd && /<[a-z][^>]*>/i.test(rawMd)) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = rawMd;
+    rawMd = (tmp.textContent || '').trim();
+  }
+  if (rawMd) {
+    editorEl.innerHTML = notesMarkdownToHtml(rawMd);
+    document.getElementById('nt-md-hint')?.remove();
+  }
+
+  // ── Autosave (debounced 500ms) ──
+  let saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 500);
+  }
+  function doSave() {
+    // Guard: skip save if editor was unmounted (tab switch can fire blur after
+    // the DOM is gone, which would serialize an empty editor and wipe the notes).
+    if (!document.body.contains(editorEl)) return;
+    const md = notesEditorToMarkdown(editorEl);
+    entryRef.notes = md;
+    saveEntry({ notes: md });
+    showSavedIndicator();
+    // Hide hint once content exists
+    if (md.trim()) document.getElementById('nt-md-hint')?.remove();
+  }
+  function showSavedIndicator() {
+    const ind = document.getElementById('nt-save-indicator');
+    if (!ind) return;
+    ind.classList.add('visible');
+    setTimeout(() => ind.classList.remove('visible'), 2000);
+  }
+
+  editorEl.addEventListener('input', scheduleSave);
+  editorEl.addEventListener('blur', () => { clearTimeout(saveTimer); doSave(); });
+
+  // ── View source toggle ──
+  let sourceMode = false;
+  document.getElementById('nt-source-toggle').addEventListener('click', () => {
+    sourceMode = !sourceMode;
+    if (sourceMode) {
+      sourceEl.value = notesEditorToMarkdown(editorEl);
+      sourceEl.style.display = 'block';
+      editorEl.style.display = 'none';
+      document.getElementById('nt-source-toggle').textContent = 'Back to editor';
+    } else {
+      const md = sourceEl.value;
+      editorEl.innerHTML = notesMarkdownToHtml(md);
+      sourceEl.style.display = 'none';
+      editorEl.style.display = '';
+      document.getElementById('nt-source-toggle').textContent = 'View source';
+      doSave();
+    }
+  });
+
+  // ── Paste handling: long pastes → blockquote ──
+  editorEl.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    const html = e.clipboardData.getData('text/html');
+    if (text.length > 300) {
+      // Wrap in blockquote
+      const bq = document.createElement('blockquote');
+      bq.className = 'nt-paste-quote';
+      bq.innerHTML = inlineMarkdown(escapeHtml(text));
+      // Insert at cursor
+      const sel = window.getSelection();
+      if (sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(bq);
+        range.setStartAfter(bq);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editorEl.appendChild(bq);
+      }
+    } else if (html) {
+      document.execCommand('insertHTML', false, html);
+    } else {
+      document.execCommand('insertText', false, text);
+    }
+    scheduleSave();
+  });
+
+  // ── Keyboard shortcuts ──
+  editorEl.addEventListener('keydown', e => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+
+    if (e.key === 'b' && !e.shiftKey) { e.preventDefault(); document.execCommand('bold', false, null); return; }
+    if (e.key === 'i' && !e.shiftKey) { e.preventDefault(); document.execCommand('italic', false, null); return; }
+    if (e.key === 'e' && !e.shiftKey) { e.preventDefault(); wrapSelectionInline('code'); return; }
+    if (e.key === 'k' && !e.shiftKey) {
+      e.preventDefault();
+      const url = prompt('Enter URL:');
+      if (url) document.execCommand('createLink', false, url);
+      return;
+    }
+    // Headings: Cmd+Shift+1/2/3
+    if (e.shiftKey) {
+      if (e.key === '1' || e.key === '!') { e.preventDefault(); setBlockFormat('nt-h1', 'H1'); return; }
+      if (e.key === '2' || e.key === '@') { e.preventDefault(); setBlockFormat('nt-h2', 'H2'); return; }
+      if (e.key === '3' || e.key === '#') { e.preventDefault(); setBlockFormat('nt-h3', 'H3'); return; }
+      // Cmd+Shift+7 → ordered list
+      if (e.key === '7' || e.key === '&') { e.preventDefault(); document.execCommand('insertOrderedList', false, null); return; }
+      // Cmd+Shift+8 → unordered list
+      if (e.key === '8' || e.key === '*') { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); return; }
+    }
+  });
+
+  function wrapSelectionInline(tag) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const el = document.createElement(tag);
+    try { range.surroundContents(el); } catch (_) { /* partial selection */ }
+  }
+
+  function setBlockFormat(cls, label) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    // Find block-level ancestor inside editor
+    let node = sel.anchorNode;
+    while (node && node !== editorEl && node.parentNode !== editorEl) node = node.parentNode;
+    if (!node || node === editorEl) return;
+    // Toggle: if already that heading, convert back to p
+    if (node.classList && node.classList.contains(cls)) {
+      const p = document.createElement('p');
+      p.innerHTML = node.innerHTML;
+      node.replaceWith(p);
+    } else {
+      const div = document.createElement('div');
+      div.className = cls;
+      div.innerHTML = node.innerHTML || node.textContent;
+      node.replaceWith(div);
+    }
+  }
+
+  // ── Slash command picker ──
+  const slashPicker = document.createElement('div');
+  slashPicker.className = 'nt-slash-picker';
+  slashPicker.style.display = 'none';
+  document.body.appendChild(slashPicker);
+
+  const slashCommands = [
+    { key: 'h1', icon: 'H1', label: 'Heading 1', fn: () => setBlockFormat('nt-h1', 'H1') },
+    { key: 'h2', icon: 'H2', label: 'Heading 2', fn: () => setBlockFormat('nt-h2', 'H2') },
+    { key: 'h3', icon: 'H3', label: 'Heading 3', fn: () => setBlockFormat('nt-h3', 'H3') },
+    { key: 'quote', icon: '❝', label: 'Quote', fn: () => document.execCommand('formatBlock', false, 'BLOCKQUOTE') },
+    { key: 'code', icon: '<>', label: 'Code block', fn: () => document.execCommand('formatBlock', false, 'PRE') },
+    { key: 'bullet', icon: '•', label: 'Bullet list', fn: () => document.execCommand('insertUnorderedList', false, null) },
+    { key: 'numbered', icon: '1.', label: 'Numbered list', fn: () => document.execCommand('insertOrderedList', false, null) },
+    { key: 'divider', icon: '—', label: 'Divider', fn: () => document.execCommand('insertHorizontalRule', false, null) },
+  ];
+
+  let slashActive = false, slashQuery = '', slashAnchorRange = null, slashSelIdx = 0;
+
+  function renderSlashPicker(query) {
+    const filtered = slashCommands.filter(c =>
+      !query || c.key.startsWith(query) || c.label.toLowerCase().includes(query)
+    );
+    if (!filtered.length) { closeSlash(); return; }
+    slashPicker.innerHTML = filtered.map((c, i) =>
+      `<div class="nt-slash-item${i === slashSelIdx ? ' active' : ''}" data-idx="${i}">
+        <span class="nt-slash-icon">${c.icon}</span>
+        <span class="nt-slash-label">${c.label}</span>
+      </div>`
+    ).join('');
+    slashPicker.querySelectorAll('.nt-slash-item').forEach((el, i) => {
+      el.addEventListener('mousedown', ev => { ev.preventDefault(); selectSlash(filtered[i]); });
+    });
+    // Position near cursor
+    const sel = window.getSelection();
+    if (sel.rangeCount) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      slashPicker.style.top = (rect.bottom + 6 + window.scrollY) + 'px';
+      slashPicker.style.left = Math.max(8, rect.left) + 'px';
+    }
+    slashPicker.style.display = 'block';
+  }
+
+  function selectSlash(cmd) {
+    closeSlash();
+    // Delete the slash + query characters
+    if (slashAnchorRange) {
+      const sel = window.getSelection();
+      const endRange = sel.rangeCount ? sel.getRangeAt(0) : slashAnchorRange;
+      const delRange = slashAnchorRange.cloneRange();
+      delRange.setEnd(endRange.endContainer, endRange.endOffset);
+      delRange.deleteContents();
+    }
+    cmd.fn();
+    scheduleSave();
+  }
+
+  function closeSlash() {
+    slashActive = false; slashQuery = ''; slashAnchorRange = null; slashSelIdx = 0;
+    slashPicker.style.display = 'none';
+  }
+
+  editorEl.addEventListener('keydown', e => {
+    if (!slashActive) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeSlash(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const items = slashPicker.querySelectorAll('.nt-slash-item');
+      slashSelIdx = Math.min(slashSelIdx + 1, items.length - 1);
+      renderSlashPicker(slashQuery);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      slashSelIdx = Math.max(slashSelIdx - 1, 0);
+      renderSlashPicker(slashQuery);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const items = slashPicker.querySelectorAll('.nt-slash-item');
+      const activeEl = items[slashSelIdx];
+      if (activeEl) activeEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      return;
+    }
+    if (e.key === 'Backspace') {
+      if (slashQuery.length === 0) { closeSlash(); return; }
+      slashQuery = slashQuery.slice(0, -1);
+      renderSlashPicker(slashQuery);
+    }
+  });
+
+  editorEl.addEventListener('input', e => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    // Check if last char is '/'
+    const text = node.nodeType === Node.TEXT_NODE ? node.textContent : '';
+    const offset = range.startOffset;
+    if (!slashActive) {
+      // Check if '/' just typed at start of line or after whitespace
+      if (text.slice(offset - 1, offset) === '/' && (offset === 1 || /\s/.test(text.slice(offset - 2, offset - 1)))) {
+        slashActive = true;
+        slashQuery = '';
+        slashSelIdx = 0;
+        slashAnchorRange = range.cloneRange();
+        slashAnchorRange.setStart(node, offset - 1);
+        renderSlashPicker('');
+      }
+    } else {
+      // Update query
+      slashQuery = text.slice(slashAnchorRange.startOffset + 1, offset).toLowerCase();
+      renderSlashPicker(slashQuery);
+    }
+  });
+
+  // Close slash picker on outside click
+  document.addEventListener('mousedown', e => {
+    if (!slashPicker.contains(e.target)) closeSlash();
+  }, { once: false });
+
+  // ── Selection toolbar ──
+  const selToolbar = document.createElement('div');
+  selToolbar.className = 'nt-sel-toolbar';
+  selToolbar.id = 'nt-sel-toolbar';
+  selToolbar.innerHTML = `
+    <button class="nt-sel-btn" data-cmd="bold" title="Bold (Cmd+B)"><strong>B</strong></button>
+    <button class="nt-sel-btn" data-cmd="italic" title="Italic (Cmd+I)"><em>I</em></button>
+    <div class="nt-sel-div"></div>
+    <button class="nt-sel-btn" data-cmd="link" title="Link (Cmd+K)">&#128279;</button>
+    <button class="nt-sel-btn" data-cmd="code" title="Inline code (Cmd+E)">&lt;/&gt;</button>
+    <button class="nt-sel-btn" data-cmd="quote" title="Blockquote">&#10077;</button>
+    <div class="nt-sel-div"></div>
+    <button class="nt-sel-btn" data-cmd="h1" title="Heading 1">H1</button>
+    <button class="nt-sel-btn" data-cmd="h2" title="Heading 2">H2</button>
+    <button class="nt-sel-btn" data-cmd="h3" title="Heading 3">H3</button>
+  `;
+  document.body.appendChild(selToolbar);
+
+  selToolbar.querySelectorAll('.nt-sel-btn').forEach(btn => {
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const cmd = btn.dataset.cmd;
+      if (cmd === 'bold') document.execCommand('bold', false, null);
+      else if (cmd === 'italic') document.execCommand('italic', false, null);
+      else if (cmd === 'code') wrapSelectionInline('code');
+      else if (cmd === 'quote') document.execCommand('formatBlock', false, 'BLOCKQUOTE');
+      else if (cmd === 'h1') setBlockFormat('nt-h1', 'H1');
+      else if (cmd === 'h2') setBlockFormat('nt-h2', 'H2');
+      else if (cmd === 'h3') setBlockFormat('nt-h3', 'H3');
+      else if (cmd === 'link') {
+        const url = prompt('Enter URL:');
+        if (url) document.execCommand('createLink', false, url);
+      }
+      selToolbar.classList.remove('visible');
+      scheduleSave();
+    });
+  });
+
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) {
+      selToolbar.classList.remove('visible');
+      return;
+    }
+    // Only show inside editor
+    const range = sel.getRangeAt(0);
+    if (!editorEl.contains(range.commonAncestorContainer)) {
+      selToolbar.classList.remove('visible');
+      return;
+    }
+    const rect = range.getBoundingClientRect();
+    if (rect.width < 2) { selToolbar.classList.remove('visible'); return; }
+    selToolbar.style.top = (rect.top - 44 + window.scrollY) + 'px';
+    selToolbar.style.left = (rect.left + rect.width / 2 - 80) + 'px';
+    selToolbar.classList.add('visible');
+  });
+
+  // Hide toolbar on click outside
+  document.addEventListener('mousedown', e => {
+    if (!selToolbar.contains(e.target) && e.target !== editorEl) {
+      selToolbar.classList.remove('visible');
+    }
+  });
+
+  // ── Coop pane event wiring ──
+  wireCoopPane(entryRef, coopEntries, sessionKey, isHidden);
+
+  // Restore bar
+  document.getElementById('nt-restore-btn')?.addEventListener('click', () => {
+    sessionStorage.removeItem(sessionKey);
+    renderNotesTab(entryRef); // re-render
+  });
+
+  // ── Cleanup on tab switch ──
+  // Remove floating UI elements when user navigates away
+  const observer = new MutationObserver(() => {
+    if (!document.getElementById('notes-tab-root')) {
+      selToolbar.remove();
+      slashPicker.remove();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function buildCoopPane(entries) {
+  const entriesHtml = entries.map(e => `
+    <div class="nt-coop-entry" data-coop-id="${escapeHtml(e.id)}">
+      <div class="nt-coop-av">C</div>
+      <div class="nt-coop-entry-body">
+        <div class="nt-coop-meta">${escapeHtml(e.meta || '')}</div>
+        <div class="nt-coop-content">${e.content || ''}</div>
+      </div>
+      <div class="nt-coop-actions">
+        <button class="nt-promote-btn" data-coop-id="${escapeHtml(e.id)}">Promote ↑</button>
+        <button class="nt-dismiss-btn" data-coop-id="${escapeHtml(e.id)}">Dismiss</button>
+      </div>
+    </div>`
+  ).join('');
+
+  return `
+    <div class="nt-coop-pane" id="nt-coop-pane">
+      <div class="nt-coop-resize" id="nt-coop-resize"></div>
+      <div class="nt-coop-head">
+        <div class="nt-coop-head-left">
+          <span class="nt-coop-dot"></span>
+          <span>Coop's notes</span>
+          <span class="nt-coop-count" id="nt-coop-count">${entries.length} new</span>
+        </div>
+        <div class="nt-coop-head-actions">
+          <button class="nt-coop-head-btn" id="nt-dismiss-all-btn">Dismiss all</button>
+          <div class="nt-coop-menu-wrap">
+            <button class="nt-coop-head-btn" id="nt-coop-chevron-btn" title="Pane options">&#9662;</button>
+            <div class="nt-coop-menu" id="nt-coop-menu">
+              <div class="nt-coop-menu-item" id="nt-collapse-pane">Collapse pane <span class="nt-coop-menu-sub">shrink to header</span></div>
+              <div class="nt-coop-menu-div"></div>
+              <div class="nt-coop-menu-item" id="nt-hide-session">Hide for this session <span class="nt-coop-menu-sub">until page reload</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="nt-coop-entries">${entriesHtml}</div>
+    </div>`;
+}
+
+function wireCoopPane(entryRef, coopEntries, sessionKey, isHidden) {
+  const pane = document.getElementById('nt-coop-pane');
+  if (!pane) return;
+
+  // ── Resize handle ──
+  const resizeHandle = document.getElementById('nt-coop-resize');
+  if (resizeHandle) {
+    resizeHandle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = pane.getBoundingClientRect().height;
+      const onMove = ev => {
+        const delta = startY - ev.clientY;
+        const newH = Math.max(120, Math.min(280, startH + delta));
+        pane.style.maxHeight = newH + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // ── Dropdown menu ──
+  const chevronBtn = document.getElementById('nt-coop-chevron-btn');
+  const menu = document.getElementById('nt-coop-menu');
+  if (chevronBtn && menu) {
+    chevronBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    document.addEventListener('mousedown', e => {
+      if (!menu.contains(e.target) && e.target !== chevronBtn) menu.classList.remove('open');
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') menu.classList.remove('open');
+    });
+  }
+
+  // Collapse pane
+  document.getElementById('nt-collapse-pane')?.addEventListener('click', () => {
+    pane.classList.toggle('collapsed');
+    menu?.classList.remove('open');
+  });
+
+  // Hide for this session
+  document.getElementById('nt-hide-session')?.addEventListener('click', () => {
+    sessionStorage.setItem(sessionKey, '1');
+    menu?.classList.remove('open');
+    renderNotesTab(entryRef); // re-render to show restore bar + hide pane
+  });
+
+  // ── Promote / Dismiss entries ──
+  function removeCoop(id) {
+    // Remove from live coopEntries array and from entry if real
+    const idx = coopEntries.findIndex(e => e.id === id);
+    if (idx !== -1) coopEntries.splice(idx, 1);
+    if (entryRef.coopPendingNotes) {
+      entryRef.coopPendingNotes = entryRef.coopPendingNotes.filter(e => e.id !== id);
+    }
+    // Update count
+    const countEl = document.getElementById('nt-coop-count');
+    if (countEl) countEl.textContent = coopEntries.length + ' new';
+    // If no more entries, hide whole pane
+    if (coopEntries.length === 0) pane.remove();
+  }
+
+  function logDismissal(coopEntry) {
+    chrome.storage.local.get({ 'coop.dismissedNoteTypes': [] }, data => {
+      const arr = data['coop.dismissedNoteTypes'];
+      arr.push({ source: coopEntry.source || 'unknown', type: coopEntry.type || 'unknown', dismissedAt: Date.now() });
+      chrome.storage.local.set({ 'coop.dismissedNoteTypes': arr });
+    });
+  }
+
+  pane.addEventListener('click', e => {
+    const promoteBtn = e.target.closest('.nt-promote-btn');
+    const dismissBtn = e.target.closest('.nt-dismiss-btn');
+
+    if (promoteBtn) {
+      const id = promoteBtn.dataset.coopId;
+      const ce = coopEntries.find(x => x.id === id);
+      if (ce) {
+        // Append to editor under H2 heading
+        const editorEl = document.getElementById('nt-editor');
+        if (editorEl) {
+          const heading = document.createElement('div');
+          heading.className = 'nt-h2';
+          heading.textContent = ce.meta?.split('·')[0]?.trim() || 'Coop note';
+          const content = document.createElement('div');
+          content.innerHTML = ce.content || '';
+          editorEl.appendChild(heading);
+          editorEl.appendChild(content);
+          // Save
+          const md = notesEditorToMarkdown(editorEl);
+          entryRef.notes = md;
+          saveEntry({ notes: md });
+        }
+        promoteBtn.closest('.nt-coop-entry')?.remove();
+        removeCoop(id);
+      }
+    }
+
+    if (dismissBtn) {
+      const id = dismissBtn.dataset.coopId;
+      const ce = coopEntries.find(x => x.id === id);
+      if (ce) logDismissal(ce);
+      dismissBtn.closest('.nt-coop-entry')?.remove();
+      removeCoop(id);
+    }
+  });
+
+  // ── Dismiss all ──
+  document.getElementById('nt-dismiss-all-btn')?.addEventListener('click', () => {
+    coopEntries.forEach(ce => logDismissal(ce));
+    coopEntries.length = 0;
+    if (entryRef.coopPendingNotes) entryRef.coopPendingNotes = [];
+    pane.remove();
+  });
+}
+
+// ── Legacy compat: sanitizeNotesHtml still used by meeting note card paths ───
 function sanitizeNotesHtml(html) {
   const allowed = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'del', 'div', 'span'];
   const div = document.createElement('div');
@@ -6027,301 +6729,10 @@ function sanitizeNotesHtml(html) {
     if (!allowed.includes(el.tagName.toLowerCase())) {
       el.replaceWith(...el.childNodes);
     }
-    // Strip style/class attributes except on allowed elements
     el.removeAttribute('class');
     el.removeAttribute('style');
   });
   return div.innerHTML;
-}
-
-// Convert old plain text / markdown notes to simple HTML for the WYSIWYG editor
-function notesToHtml(raw) {
-  if (!raw) return '';
-  // If it already looks like HTML, return sanitized
-  if (/<[a-z][\s>]/i.test(raw)) return sanitizeNotesHtml(raw);
-  // Convert markdown-ish patterns to HTML
-  if (typeof marked !== 'undefined') {
-    marked.setOptions({ breaks: true, gfm: true });
-    return sanitizeNotesHtml(marked.parse(raw));
-  }
-  // Plain text fallback
-  return raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-}
-
-function migrateNotesFeed() {
-  // Migrate old single entry.notes string to notesFeed[] array
-  if (!entry.notesFeed && entry.notes) {
-    entry.notesFeed = [{
-      id: 'note_migrated',
-      content: notesToHtml(entry.notes),
-      createdAt: entry.savedAt || Date.now(),
-      updatedAt: entry.savedAt || Date.now(),
-    }];
-    saveEntry({ notesFeed: entry.notesFeed });
-  }
-  if (!entry.notesFeed) entry.notesFeed = [];
-}
-
-function renderNotesEditor() {
-  const container = document.getElementById('hub-notes-container');
-  if (!container) return;
-  migrateNotesFeed();
-
-  const feed = entry.notesFeed || [];
-
-  // Compose area at top + feed below
-  container.innerHTML = `
-    <div class="notes-compose">
-      <div class="notes-toolbar">
-        <button class="notes-tb-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
-        <button class="notes-tb-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-        <button class="notes-tb-btn" data-cmd="formatBlock:H2" title="Heading">H</button>
-        <span class="notes-tb-sep"></span>
-        <button class="notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
-        <button class="notes-tb-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
-        <button class="notes-tb-btn" data-cmd="createLink" title="Link">🔗</button>
-        <div style="margin-left:auto">
-          <button class="notes-save-btn" id="notes-save-btn">+ Add note</button>
-        </div>
-      </div>
-      <div class="notes-editable notes-compose-area" id="hub-notes-editable" contenteditable="true"><p><br></p></div>
-    </div>
-    <div class="notes-feed" id="notes-feed">
-      ${feed.length ? feed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(n => renderNoteCard(n)).join('') : '<div class="notes-feed-empty">No notes yet — add one above</div>'}
-    </div>`;
-
-  const editable = container.querySelector('#hub-notes-editable');
-  const saveBtn = container.querySelector('#notes-save-btn');
-
-  // Placeholder
-  function updatePlaceholder() {
-    editable.classList.toggle('notes-empty-edit', !editable.textContent.trim());
-  }
-  updatePlaceholder();
-  editable.addEventListener('input', updatePlaceholder);
-
-  // Toolbar
-  container.querySelectorAll('.notes-tb-btn').forEach(btn => {
-    btn.addEventListener('mousedown', e => e.preventDefault());
-    btn.addEventListener('click', () => {
-      const cmd = btn.dataset.cmd;
-      if (cmd.startsWith('formatBlock:')) {
-        const tag = cmd.split(':')[1];
-        const current = document.queryCommandValue('formatBlock');
-        document.execCommand('formatBlock', false, current.toLowerCase() === tag.toLowerCase() ? 'P' : tag);
-      } else if (cmd === 'createLink') {
-        const url = prompt('Enter URL:');
-        if (url) document.execCommand('createLink', false, url);
-      } else {
-        document.execCommand(cmd, false, null);
-      }
-      editable.focus();
-    });
-  });
-
-  // Save button — add new note
-  saveBtn.addEventListener('mousedown', e => e.preventDefault());
-  saveBtn.addEventListener('click', () => {
-    const html = sanitizeNotesHtml(editable.innerHTML);
-    if (!editable.textContent.trim()) return;
-    const note = {
-      id: 'note_' + Date.now().toString(36) + Math.random().toString(36).substr(2),
-      content: html,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    if (!entry.notesFeed) entry.notesFeed = [];
-    entry.notesFeed.push(note);
-    // Also update legacy notes field with latest for backward compat (chat context, etc.)
-    saveEntry({ notesFeed: entry.notesFeed, notes: html });
-    editable.innerHTML = '<p><br></p>';
-    updatePlaceholder();
-    renderNotesFeed();
-  });
-
-  // Keyboard shortcuts
-  editable.addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b') { e.preventDefault(); document.execCommand('bold', false, null); }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'i') { e.preventDefault(); document.execCommand('italic', false, null); }
-    // Ctrl+Enter to save
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); saveBtn.click(); }
-  });
-
-  // Paste handler
-  editable.addEventListener('paste', e => {
-    e.preventDefault();
-    const html = e.clipboardData.getData('text/html');
-    const text = e.clipboardData.getData('text/plain');
-    if (html) {
-      document.execCommand('insertHTML', false, sanitizeNotesHtml(html));
-    } else {
-      document.execCommand('insertText', false, text);
-    }
-  });
-
-  // Auto-save compose area on blur so content isn't lost if the user navigates away
-  editable.addEventListener('blur', () => {
-    if (!editable.textContent.trim()) return;
-    saveBtn.click();
-  });
-
-  // Bind edit/delete on existing note cards
-  bindNoteCardEvents();
-}
-
-function renderNoteCard(n) {
-  const d = new Date(n.createdAt);
-  const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  // Resolve meeting source chip if note is tagged to a meeting
-  let meetingChipHtml = '';
-  if (n.meetingId) {
-    const allMeetings = [...(entry.cachedMeetings || []), ...(entry.manualMeetings || [])];
-    const srcMeeting = allMeetings.find(m => m.id === n.meetingId);
-    if (srcMeeting) {
-      const chipTitle = escapeHtml(srcMeeting.title || 'Meeting');
-      meetingChipHtml = `<span class="note-card-meeting-chip" data-meeting-id="${escapeHtml(n.meetingId)}" title="${chipTitle}">↗ ${chipTitle}</span>`;
-    }
-  }
-  return `
-    <div class="note-card" data-note-id="${n.id}">
-      <div class="note-card-header">
-        <span class="note-card-date">${dateStr} · ${timeStr}</span>
-        ${meetingChipHtml}
-        <span class="note-card-actions">
-          <button class="note-del-btn" data-note-id="${n.id}" title="Delete">✕</button>
-        </span>
-      </div>
-      <div class="note-card-body-wrap collapsed" data-note-id="${n.id}">
-        <div class="note-card-body" data-note-id="${n.id}">${n.content}</div>
-      </div>
-      <button class="note-card-toggle" data-note-id="${n.id}" style="display:none">Show more</button>
-    </div>`;
-}
-
-function renderNotesFeed() {
-  const feedEl = document.getElementById('notes-feed');
-  if (!feedEl) return;
-  const feed = (entry.notesFeed || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  feedEl.innerHTML = feed.length
-    ? feed.map(n => renderNoteCard(n)).join('')
-    : '<div class="notes-feed-empty">No notes yet — add one above</div>';
-  bindNoteCardEvents();
-}
-
-function bindNoteCardEvents() {
-  const container = document.getElementById('hub-notes-container');
-  if (!container) return;
-
-  // Show/hide toggle based on whether content overflows collapsed height
-  container.querySelectorAll('.note-card-body-wrap').forEach(wrap => {
-    const toggle = wrap.nextElementSibling;
-    if (!toggle || !toggle.classList.contains('note-card-toggle')) return;
-    // Temporarily measure full height vs collapsed max-height
-    wrap.classList.remove('collapsed');
-    const full = wrap.scrollHeight;
-    wrap.classList.add('collapsed');
-    if (full > 120) {
-      toggle.style.display = 'block';
-    }
-  });
-
-  // Toggle expand/collapse
-  container.querySelectorAll('.note-card-toggle').forEach(toggle => {
-    toggle.addEventListener('click', () => {
-      const id = toggle.dataset.noteId;
-      const wrap = container.querySelector(`.note-card-body-wrap[data-note-id="${id}"]`);
-      if (!wrap) return;
-      const collapsed = wrap.classList.toggle('collapsed');
-      toggle.textContent = collapsed ? 'Show more' : 'Show less';
-    });
-  });
-
-  // Delete
-  container.querySelectorAll('.note-del-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.noteId;
-      entry.notesFeed = (entry.notesFeed || []).filter(n => n.id !== id);
-      const latest = entry.notesFeed.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
-      saveEntry({ notesFeed: entry.notesFeed, notes: latest?.content || '' });
-      renderNotesFeed();
-    });
-  });
-
-  // Edit — make card body contenteditable inline
-  container.querySelectorAll('.note-card-body').forEach(bodyEl => {
-    bodyEl.addEventListener('click', (e) => {
-      if (e.target.closest('a')) return;
-      const id = bodyEl.dataset.noteId;
-      if (bodyEl.contentEditable === 'true') return;
-      const wrap = container.querySelector(`.note-card-body-wrap[data-note-id="${id}"]`);
-      // Expand while editing so nothing is clipped
-      if (wrap) wrap.classList.remove('collapsed');
-      bodyEl.contentEditable = 'true';
-      bodyEl.classList.add('note-card-editing');
-      bodyEl.focus();
-
-      let done = false;
-      const finishEdit = () => {
-        if (done) return;
-        done = true;
-        bodyEl.removeEventListener('blur', finishEdit);
-        bodyEl.removeEventListener('keydown', onKeydown);
-        bodyEl.contentEditable = 'false';
-        bodyEl.classList.remove('note-card-editing');
-        const note = (entry.notesFeed || []).find(n => n.id === id);
-        if (note) {
-          note.content = sanitizeNotesHtml(bodyEl.innerHTML);
-          note.updatedAt = Date.now();
-          saveEntry({ notesFeed: entry.notesFeed, notes: note.content });
-        }
-        // Re-evaluate overflow after edit
-        if (wrap) {
-          wrap.classList.add('collapsed');
-          const toggle = wrap.nextElementSibling;
-          if (toggle && toggle.classList.contains('note-card-toggle')) {
-            wrap.classList.remove('collapsed');
-            const full = wrap.scrollHeight;
-            wrap.classList.add('collapsed');
-            toggle.style.display = full > 120 ? 'block' : 'none';
-            toggle.textContent = 'Show more';
-          }
-        }
-      };
-
-      const onKeydown = (e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          bodyEl.blur();
-        }
-      };
-
-      bodyEl.addEventListener('blur', finishEdit);
-      bodyEl.addEventListener('keydown', onKeydown);
-    });
-  });
-
-  // Meeting chip click → jump to that meeting's detail view
-  container.querySelectorAll('.note-card-meeting-chip[data-meeting-id]').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const mid = chip.dataset.meetingId;
-      const contentEl = document.getElementById('act-meetings-content');
-      if (!contentEl) return;
-      // Switch to Meetings tab first
-      const meetingsTab = document.querySelector('.hub-tab[data-tab="meetings"]');
-      if (meetingsTab) meetingsTab.click();
-      // Find and render the meeting detail
-      const allMeetings = [
-        ...(entry.cachedMeetings || []).map(m => ({ ...m, _isManual: false })),
-        ...(entry.manualMeetings || []).map(m => ({ ...m, _isManual: true })),
-      ];
-      const meeting = allMeetings.find(m => m.id === mid);
-      if (meeting) {
-        if (meeting._isManual) renderManualMeetingDetail(contentEl, meeting, entry.cachedCalendarEvents || [], null);
-        else renderMeetingDetail(contentEl, meeting, entry.cachedCalendarEvents || [], null);
-      }
-    });
-  });
 }
 
 // escapeHtml — provided by ui-utils.js
