@@ -49,6 +49,31 @@ function applyExcitementModifier(baseScore, rating) {
   return { final, mod };
 }
 
+// ── Follow-up chips parser ───────────────────────────────────────────────────
+//
+// Coop appends a <chips type="draft|answer|summary">["L1","L2","L3"]</chips>
+// block at the end of every response. This helper strips that block from
+// the visible text and returns the chip labels + reply type so renderers can
+// display them without an extra API call.
+//
+// Returns: { cleanedText: string, chips: string[], replyType: string|null }
+// On any parse failure, chips is [] and cleanedText is the original text.
+
+function parseFollowUpChips(text) {
+  if (!text) return { cleanedText: text, chips: [], replyType: null };
+  const m = text.match(/<chips(?:\s+type="([^"]+)")?>\s*(\[[\s\S]*?\])\s*<\/chips>/);
+  if (!m) return { cleanedText: text, chips: [], replyType: null };
+  let chips = [];
+  try {
+    const parsed = JSON.parse(m[2]);
+    if (Array.isArray(parsed)) {
+      chips = parsed.filter(c => typeof c === 'string' && c.trim()).slice(0, 3);
+    }
+  } catch (_) { /* swallow — leave chips as [] */ }
+  const cleanedText = text.replace(m[0], '').trim();
+  return { cleanedText, chips, replyType: m[1] || null };
+}
+
 // ── Stage type taxonomy ──────────────────────────────────────────────────────
 //
 // 5 hardcoded types drive visual treatment across all stage-label render sites.

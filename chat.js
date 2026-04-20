@@ -505,18 +505,22 @@ function buildChatPanel(container, entry) {
             Save
           </button>`;
 
-          // Refine group chips — only on last assistant turn with followup chips
+          // Refine group chips — only on last assistant turn
+          // Dynamic chips from Coop's inline <chips> block, with static fallback
+          const STATIC_CHIP_FALLBACK = ['Make shorter', 'Say more', 'Try again'];
           let chipsHTML = '';
           if (isLastAssistant) {
-            const refineChips = [
-              { label: 'Say more', followup: 'Say more' },
-              { label: 'Key takeaways', followup: 'What are the key takeaways?' },
-              { label: 'Tighten', followup: 'Tighten this — cut 30% without losing the key points.' },
-              { label: 'Warmer', followup: 'Make this warmer and more conversational.' },
-            ];
-            const refineHTML = refineChips.map(c =>
-              `<button class="chat-chip chat-followup-btn" data-followup="${escapeHtml(c.followup)}" tabindex="0">${escapeHtml(c.label)}</button>`
-            ).join('');
+            const dynamicChips = (m._chips && m._chips.length) ? m._chips : STATIC_CHIP_FALLBACK;
+            const replyType = m._chipsType || null;
+            // "Something else…" placeholder varies by reply type
+            const somethingPlaceholder = replyType === 'draft'
+              ? 'Tell Coop what to do with this draft…'
+              : replyType === 'summary'
+                ? 'Ask Coop to reframe this…'
+                : 'Ask Coop a follow-up…';
+            const refineHTML = dynamicChips.slice(0, 3).map(label =>
+              `<button class="chat-chip chat-followup-btn" data-followup="${escapeHtml(label)}" tabindex="0">${escapeHtml(label)}</button>`
+            ).join('') + `<button class="chat-chip chat-followup-btn chat-chip-something-else" data-something-else="1" data-placeholder="${escapeHtml(somethingPlaceholder)}" tabindex="0">Something else…</button>`;
             // Two semantic groups with divider
             chipsHTML = `<div class="chat-chips-row" role="group" aria-label="Message actions">
               <div class="chat-chip-group">${copyBtn}${saveBtn}</div>
@@ -546,6 +550,13 @@ function buildChatPanel(container, entry) {
     // Bind follow-up chip clicks (Refine group)
     msgsEl.querySelectorAll('.chat-followup-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.somethingElse) {
+          // "Something else…" — focus input with contextual placeholder, don't send
+          inputEl.value = '';
+          if (btn.dataset.placeholder) inputEl.placeholder = btn.dataset.placeholder;
+          inputEl.focus();
+          return;
+        }
         inputEl.value = btn.dataset.followup;
         inputEl.focus();
         send();
@@ -718,7 +729,13 @@ function buildChatPanel(container, entry) {
     sendBtn.disabled = false;
 
     if (result?.reply) {
-      const msgEntry = { role: 'assistant', content: [{ type: 'text', text: result.reply }] };
+      // Strip the inline <chips> block before storing so rendered text is clean
+      const { cleanedText: cleanedReply, chips: aiChips, replyType: chipsType } =
+        (typeof parseFollowUpChips === 'function')
+          ? parseFollowUpChips(result.reply)
+          : { cleanedText: result.reply, chips: [], replyType: null };
+      const msgEntry = { role: 'assistant', content: [{ type: 'text', text: cleanedReply }] };
+      if (aiChips && aiChips.length) { msgEntry._chips = aiChips; msgEntry._chipsType = chipsType; }
       if (result.usage) msgEntry._usage = result.usage;
       if (result.model) {
         msgEntry._model = result.model;

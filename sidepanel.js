@@ -5628,57 +5628,60 @@ function renderContactsSection(el, contacts) {
         updateModelLabel();
       }
     }
-    const msgEntry = { role: 'assistant', content: replyText + fallbackNote };
+    // Parse inline <chips> block from reply before storing — zero extra API calls
+    const SP_CHIP_FALLBACK = ['Make shorter', 'Say more', 'Try again'];
+    const { cleanedText: cleanedReply, chips: aiChips, replyType: chipsType } =
+      (typeof parseFollowUpChips === 'function')
+        ? parseFollowUpChips(replyText)
+        : { cleanedText: replyText, chips: [], replyType: null };
+    const msgEntry = { role: 'assistant', content: cleanedReply + fallbackNote };
     // Store usage metadata for display
     if (result?.usage) msgEntry._usage = result.usage;
     if (result?.model) msgEntry._model = result.model;
     if (result?.routed) msgEntry._routed = result.routed;
     if (result?.toolCalls) msgEntry._toolCalls = result.toolCalls;
     if (result?.contextManifest) msgEntry._contextManifest = result.contextManifest;
+    if (aiChips && aiChips.length) { msgEntry._chips = aiChips; msgEntry._chipsType = chipsType; }
     history.push(msgEntry);
     renderMessages();
-    generateFollowUpChips(replyText);
+    renderFollowUpChips(msgEntry);
   }
 
-  // ── Follow-up suggestion chips ────────────────────────────────────────────
-  function generateFollowUpChips(lastReply) {
+  // ── Follow-up chips — inline, zero extra API calls ────────────────────────
+  function renderFollowUpChips(msgEntry) {
     if (_coopConfig.automations?.followUpChips === false) return;
-    // Remove any existing chips
     document.getElementById('sp-followup-chips')?.remove();
-    // Ask the model for 2-3 short follow-up questions based on the last reply
-    const context = history.slice(-4).map(m => `${m.role}: ${(m.content || '').slice(0, 400)}`).join('\n');
-    chrome.runtime.sendMessage({
-      type: 'COOP_CHAT',
-      messages: [{ role: 'user', content: `Based on this conversation, suggest exactly 3 very short follow-up questions the user might want to ask next. Return ONLY a JSON array of strings, no explanation. Each question max 8 words.\n\n${context}` }],
-      globalChat: true,
-      chatModel: 'gpt-4.1-nano',
-    }, result => {
-      if (!result?.reply) return;
-      let chips;
-      try {
-        const cleaned = result.reply.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-        chips = JSON.parse(cleaned);
-        if (!Array.isArray(chips)) return;
-      } catch { return; }
-      chips = chips.slice(0, 3).filter(c => typeof c === 'string' && c.trim());
-      if (!chips.length) return;
-      const container = document.createElement('div');
-      container.id = 'sp-followup-chips';
-      container.className = 'sp-followup-chips';
-      container.innerHTML = chips.map(c =>
-        `<button class="sp-followup-chip" data-prompt="${c.replace(/"/g, '&quot;')}">${c}</button>`
-      ).join('');
-      container.querySelectorAll('.sp-followup-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-          inputEl.value = btn.dataset.prompt;
-          inputEl.dispatchEvent(new Event('input'));
+    const SP_CHIP_FALLBACK = ['Make shorter', 'Say more', 'Try again'];
+    const chips = (msgEntry._chips && msgEntry._chips.length) ? msgEntry._chips : SP_CHIP_FALLBACK;
+    const replyType = msgEntry._chipsType || null;
+    const somethingPlaceholder = replyType === 'draft'
+      ? 'Tell Coop what to do with this draft…'
+      : replyType === 'summary'
+        ? 'Ask Coop to reframe this…'
+        : 'Ask Coop a follow-up…';
+    const container = document.createElement('div');
+    container.id = 'sp-followup-chips';
+    container.className = 'sp-followup-chips';
+    container.innerHTML = chips.slice(0, 3).map(c =>
+      `<button class="sp-followup-chip" data-prompt="${c.replace(/"/g, '&quot;')}">${escHtml(c)}</button>`
+    ).join('') + `<button class="sp-followup-chip sp-followup-chip-something" data-something-else="1">${escHtml('Something else…')}</button>`;
+    container.querySelectorAll('.sp-followup-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.somethingElse) {
+          inputEl.value = '';
+          inputEl.placeholder = somethingPlaceholder;
+          inputEl.focus();
           container.remove();
-          send();
-        });
+          return;
+        }
+        inputEl.value = btn.dataset.prompt;
+        inputEl.dispatchEvent(new Event('input'));
+        container.remove();
+        send();
       });
-      msgsEl.appendChild(container);
-      msgsEl.scrollTop = msgsEl.scrollHeight;
     });
+    msgsEl.appendChild(container);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
   // ── @ Mention autocomplete ──

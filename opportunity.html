@@ -278,6 +278,9 @@
     .chat-chip:hover { border-color: var(--ci-border-strong); background: var(--ci-bg-inset); }
     .chat-chip:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ci-accent-primary-soft), 0 0 0 3px var(--ci-accent-primary); }
     .chat-chip.chat-chip-active { color: var(--ci-accent-teal); border-color: var(--ci-accent-teal-soft); }
+    /* ── "Something else…" escape hatch chip ── */
+    .chat-chip-something-else { color: var(--ci-text-tertiary); font-style: italic; border-style: dashed; background: transparent; }
+    .chat-chip-something-else:hover { color: var(--ci-text-secondary); background: transparent; border-style: dashed; }
     /* ── Cost disclosure (last turn only, hidden by default) ── */
     .chat-cost-wrap { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
     .chat-cost-toggle { background: none; border: none; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--ci-text-tertiary); cursor: pointer; padding: 0; opacity: 0.55; transition: opacity var(--motion-xs) var(--ease-out); }
