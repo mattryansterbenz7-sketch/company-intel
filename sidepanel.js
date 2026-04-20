@@ -415,18 +415,8 @@ function renderTodayView() {
       .slice(0, 5);
 
     if (allTasks.length > 0) {
-      const rows = allTasks.map(t => {
-        const daysUntil = t.daysUntil;
-        const whenClass = daysUntil < 0 ? 'overdue' : 'today';
-        const whenLabel = daysUntil < 0 ? `${Math.abs(daysUntil)}d overdue` : 'Today';
-        const title = (t.text || t.title || '').slice(0, 60);
-        const company = t.company ? `<strong>${t.company}</strong> · ` : '';
-        return `<div class="sp-today-item">
-          <span class="sp-today-when ${whenClass}">${whenLabel}</span>
-          <span>${company}${title}</span>
-        </div>`;
-      }).join('');
-      sections.push(`<div class="sp-today-section"><h4>Tasks</h4>${rows}</div>`);
+      const rows = allTasks.map(t => window.renderTaskRow(t, { showCompanyChip: true })).join('');
+      sections.push(`<div class="sp-today-section sp-today-tasks-section"><h4>Tasks</h4>${rows}</div>`);
     }
 
     // ── 2. Next up (next steps with dates) ────────────────────────────────
@@ -489,6 +479,202 @@ function renderTodayView() {
     }
   });
 }
+
+// ── Today view task handlers (delegated, registered once at module level) ─────
+// Guards against re-binding on every renderTodayView call.
+(function _wireTodayTaskHandlers() {
+  // Helpers mirroring saved.js loadTasks / saveTasks
+  function _spLoadTasks(cb) {
+    chrome.storage.local.get(['userTasks'], data => cb(data.userTasks || []));
+  }
+  function _spSaveTasks(tasks, cb) {
+    chrome.storage.local.set({ userTasks: tasks }, () => {
+      void chrome.runtime.lastError;
+      if (cb) cb();
+    });
+  }
+
+  document.addEventListener('click', e => {
+    // Only handle clicks inside the Today tasks section
+    if (!e.target.closest('.sp-today-tasks-section')) return;
+    // Don't interfere with active inline-edit widgets
+    if (e.target.closest('[data-task-edit]')) return;
+
+    // ── Checkbox toggle ──────────────────────────────────────────────────
+    const checkBtn = e.target.closest('.task-check-box[data-check]');
+    if (checkBtn) {
+      e.stopPropagation();
+      const id = checkBtn.dataset.check;
+      _spLoadTasks(all => {
+        const idx = all.findIndex(t => t.id === id);
+        if (idx === -1) return;
+        all[idx].completed = !all[idx].completed;
+        if (all[idx].completed) all[idx].completedAt = new Date().toISOString();
+        _spSaveTasks(all, () => renderTodayView());
+      });
+      return;
+    }
+
+    // ── Snooze (+1 day) ──────────────────────────────────────────────────
+    const snoozeBtn = e.target.closest('.task-snooze[data-task-id]');
+    if (snoozeBtn) {
+      e.stopPropagation();
+      const id = snoozeBtn.dataset.taskId;
+      _spLoadTasks(all => {
+        const t = all.find(x => x.id === id);
+        if (t) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const d = new Date((t.dueDate || todayStr) + 'T12:00:00');
+          d.setDate(d.getDate() + 1);
+          t.dueDate = d.toISOString().split('T')[0];
+          _spSaveTasks(all, () => renderTodayView());
+        }
+      });
+      return;
+    }
+
+    // ── Trash (permanent delete, no undo banner in side panel) ──────────
+    const trashBtn = e.target.closest('.task-trash[data-task-id]');
+    if (trashBtn) {
+      e.stopPropagation();
+      const id = trashBtn.dataset.taskId;
+      _spLoadTasks(all => {
+        const remaining = all.filter(x => x.id !== id);
+        _spSaveTasks(remaining, () => renderTodayView());
+      });
+      return;
+    }
+
+    // ── Title inline edit ────────────────────────────────────────────────
+    const textEl = e.target.closest('.task-text-editable[data-task-id]');
+    if (textEl) {
+      const id = textEl.dataset.taskId;
+      if (id && !textEl.querySelector('input')) {
+        _spLoadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (!t) return;
+          const inp = document.createElement('input');
+          inp.type = 'text';
+          inp.className = 'task-edit-input';
+          inp.value = t.text || t.title || '';
+          inp.setAttribute('data-task-edit', '');
+          let done = false;
+          const save = () => {
+            if (done) return; done = true;
+            inp.removeEventListener('blur', save);
+            const v = inp.value.trim();
+            if (v && v !== (t.text || t.title || '')) {
+              t.text = v;
+              _spSaveTasks(all, () => renderTodayView());
+            } else {
+              renderTodayView();
+            }
+          };
+          inp.addEventListener('blur', save);
+          inp.addEventListener('keydown', ev => {
+            if (ev.key === 'Enter') { save(); ev.preventDefault(); }
+            else if (ev.key === 'Escape') { done = true; inp.removeEventListener('blur', save); renderTodayView(); ev.preventDefault(); }
+          });
+          textEl.replaceWith(inp);
+          inp.focus(); inp.select();
+        });
+      }
+      return;
+    }
+
+    // ── Company inline edit (select from saved companies) ────────────────
+    const companyEl = e.target.closest('.task-company-editable[data-task-id]');
+    if (companyEl) {
+      const id = companyEl.dataset.taskId;
+      if (id && !companyEl.querySelector('select')) {
+        _spLoadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (!t) return;
+          chrome.storage.local.get(['savedCompanies'], ({ savedCompanies }) => {
+            const allCompanies = savedCompanies || [];
+            const select = document.createElement('select');
+            select.className = 'task-edit-company-select';
+            select.setAttribute('data-task-edit', '');
+            const optNone = document.createElement('option');
+            optNone.value = '';
+            optNone.textContent = 'No company';
+            select.appendChild(optNone);
+            // Preserve current value even if not in savedCompanies
+            if (t.company && !allCompanies.some(c => c.company === t.company)) {
+              const opt = document.createElement('option');
+              opt.value = t.company;
+              opt.textContent = t.company + ' (not in pipeline)';
+              opt.selected = true;
+              select.appendChild(opt);
+            }
+            const seen = new Set();
+            allCompanies.filter(c => c.company).forEach(c => {
+              if (seen.has(c.company)) return;
+              seen.add(c.company);
+              const opt = document.createElement('option');
+              opt.value = c.company;
+              opt.textContent = c.company;
+              opt.selected = (t.company === c.company);
+              select.appendChild(opt);
+            });
+            let done = false;
+            const save = () => {
+              if (done) return; done = true;
+              select.removeEventListener('blur', save);
+              const newVal = select.value || null;
+              const origVal = t.company || null;
+              if (newVal !== origVal) {
+                t.company = newVal;
+                _spSaveTasks(all, () => renderTodayView());
+              } else {
+                renderTodayView();
+              }
+            };
+            select.addEventListener('blur', save);
+            select.addEventListener('change', save);
+            select.addEventListener('keydown', ev => {
+              if (ev.key === 'Escape') { done = true; select.removeEventListener('blur', save); renderTodayView(); ev.preventDefault(); }
+            });
+            companyEl.replaceWith(select);
+            select.focus();
+          });
+        });
+      }
+      return;
+    }
+
+    // ── Due-date inline edit ─────────────────────────────────────────────
+    const dueEl = e.target.closest('.task-due-editable[data-task-id]');
+    if (dueEl) {
+      const id = dueEl.dataset.taskId;
+      if (id && !dueEl.querySelector('input')) {
+        _spLoadTasks(all => {
+          const t = all.find(x => x.id === id);
+          if (!t) return;
+          const dateInput = document.createElement('input');
+          dateInput.type = 'date';
+          dateInput.className = 'task-edit-date';
+          dateInput.value = t.dueDate || '';
+          dateInput.setAttribute('data-task-edit', '');
+          let saved = false;
+          const save = () => {
+            if (saved) return; saved = true;
+            t.dueDate = dateInput.value || null;
+            _spSaveTasks(all, () => renderTodayView());
+          };
+          dateInput.addEventListener('change', save);
+          dateInput.addEventListener('blur', () => setTimeout(() => { if (!saved) save(); }, 200));
+          dateInput.addEventListener('keydown', ev => {
+            if (ev.key === 'Escape') { saved = true; renderTodayView(); ev.preventDefault(); }
+          });
+          dueEl.replaceWith(dateInput);
+          dateInput.focus();
+        });
+      }
+      return;
+    }
+  });
+}());
 
 // Apply Mode action card wiring — delegate to existing snip/screenshare buttons
 document.getElementById('sp-apply-snip')?.addEventListener('click', () => {
