@@ -5534,47 +5534,6 @@ function populateActivityTasksPanel(section, start, end) {
     return Math.round(ms / 86400000);
   };
 
-  function taskRowHtml(t) {
-    const overdue = !t.completed && t.dueDate && t.dueDate < todayStr;
-    const isToday = t.dueDate === todayStr;
-    const isAuto = t.source === 'email';
-    const unreviewed = isAuto && !t.reviewed && !t.completed;
-    let dueLabel = '';
-    if (t.dueDate) {
-      if (overdue) dueLabel = `${daysAgo(t.dueDate)}d overdue`;
-      else if (isToday) dueLabel = 'Today';
-      else if (t.dueDate === tomorrowStr) dueLabel = 'Tomorrow';
-      else dueLabel = formatShort(t.dueDate);
-    }
-    const dueCls = overdue ? 'overdue' : isToday ? 'today' : '';
-    const rowCls = ['task-row', overdue ? 'overdue' : '', t.completed ? 'done' : '', unreviewed ? 'has-source-dot' : ''].filter(Boolean).join(' ');
-    // Company and due-date elements get data-task-id so inline-edit clicks can find the task
-    const companyHtml = t.company
-      ? `<span class="task-company task-company-editable" data-task-id="${t.id}" data-company="${escHtml(t.company)}" title="Click to change company">${escHtml(t.company)}</span>`
-      : `<span class="task-company task-no-company task-company-editable" data-task-id="${t.id}" title="Click to add company">+ company</span>`;
-    const dueHtml = dueLabel
-      ? `<span class="task-due ${dueCls} task-due-editable" data-task-id="${t.id}" data-due="${escHtml(t.dueDate || '')}" title="Click to change date">${dueLabel}</span>`
-      : `<span class="task-no-date task-due-editable" data-task-id="${t.id}" data-due="" title="Click to set date">+ date</span>`;
-    return `<div class="${rowCls}" data-task-id="${t.id}">
-      ${unreviewed ? '<div class="task-source-dot" title="Suggested from email"></div>' : ''}
-      <div class="task-check" data-check="${t.id}" title="${t.completed ? 'Mark incomplete' : 'Mark complete'}">${t.completed ? '&#10003;' : ''}</div>
-      <div class="task-body">
-        <div class="task-text task-text-editable" data-task-id="${t.id}">${escHtml(t.text)}</div>
-        <div class="task-meta">
-          ${companyHtml}
-          ${(t.company && dueLabel) ? '<span class="task-meta-sep">·</span>' : ''}
-          ${dueHtml}
-          ${unreviewed ? `<span class="task-review"><a class="task-keep" href="#" data-task-id="${t.id}">keep</a><span class="task-meta-sep">·</span><a class="task-dismiss" href="#" data-task-id="${t.id}">dismiss</a></span>` : ''}
-        </div>
-      </div>
-      <div class="task-actions">
-        ${!t.completed && !unreviewed ? `
-          <button class="task-act-btn task-snooze" data-task-id="${t.id}" title="Snooze 1 day">&#9201;</button>
-          <button class="task-act-btn task-open" data-task-id="${t.id}" title="Open company">&#8599;</button>` : ''}
-        <button class="task-act-btn task-trash" data-task-id="${t.id}" title="Delete task">&#128465;</button>
-      </div>
-    </div>`;
-  }
 
   loadTasks(tasks => {
     const activeTasks = tasks.filter(t => !t.completed && t.dueDate);
@@ -5605,8 +5564,6 @@ function populateActivityTasksPanel(section, start, end) {
     // Build HTML using renderTaskRow from ui-utils.js
     let html = '';
 
-    const useRenderTaskRow = typeof renderTaskRow === 'function';
-
     if (focused) {
       // Grouped: Overdue, then Today
       if (overdueTasks.length === 0 && todayTasks.length === 0) {
@@ -5615,13 +5572,13 @@ function populateActivityTasksPanel(section, start, end) {
         if (overdueTasks.length > 0) {
           html += `<div class="tasks-panel-group">
             <div class="tasks-panel-group-hd overdue">Overdue <span class="tasks-panel-group-count">${overdueTasks.length}</span></div>
-            ${sortByPriThenDate(overdueTasks).map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('')}
+            ${sortByPriThenDate(overdueTasks).map(t => renderTaskRow(t)).join('')}
           </div>`;
         }
         if (todayTasks.length > 0) {
           html += `<div class="tasks-panel-group">
             <div class="tasks-panel-group-hd">Today <span class="tasks-panel-group-count">${todayTasks.length}</span></div>
-            ${sortByPriThenDate(todayTasks).map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('')}
+            ${sortByPriThenDate(todayTasks).map(t => renderTaskRow(t)).join('')}
           </div>`;
         }
       }
@@ -5631,7 +5588,7 @@ function populateActivityTasksPanel(section, start, end) {
       if (allActive.length === 0) {
         html += `<div class="tasks-panel-empty">No tasks yet.</div>`;
       } else {
-        html += allActive.map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('');
+        html += allActive.map(t => renderTaskRow(t)).join('');
       }
       // Done items
       const doneToday = tasks.filter(t => {
@@ -5642,7 +5599,7 @@ function populateActivityTasksPanel(section, start, end) {
       if (doneToday.length > 0) {
         html += `<div class="done-collapse">${doneToday.length} completed today · <span class="show-link" id="toggle-done">${showDone ? 'hide' : 'show'}</span></div>`;
         if (showDone) {
-          html += doneToday.map(t => useRenderTaskRow ? renderTaskRow(t) : taskRowHtml(t)).join('');
+          html += doneToday.map(t => renderTaskRow(t)).join('');
         }
       }
     }

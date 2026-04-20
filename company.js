@@ -1827,7 +1827,9 @@ function showCompanyTaskUndoBanner(container, deletedTask) {
     chrome.storage.local.get(['userTasks'], d => {
       const tasks = d.userTasks || [];
       if (!tasks.find(x => x.id === deletedTask.id)) tasks.push(deletedTask);
-      chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
+      chrome.storage.local.set({ userTasks: tasks }, () => {
+        if (document.getElementById('opp-tasks-root')) renderOppTasks(entry);
+      });
     });
   });
 
@@ -2243,13 +2245,6 @@ function _saveNewOppTask(text, currentEntry, callback) {
   });
 }
 
-// Legacy alias: kept so any remaining callers (email rescan callback) don't throw.
-// The rescan callback checks for company-tasks-container before calling; since that
-// element no longer exists the guard fires first, but the alias prevents hard errors
-// if the pattern ever appears from cached contexts.
-function renderCompanyTasks() {
-  if (document.getElementById('opp-tasks-root')) renderOppTasks(entry);
-}
 
 // ── CSS injected once for opp tasks UI (pane-local only) ──────────────────────
 (function _injectOppTasksCss() {
