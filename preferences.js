@@ -4331,6 +4331,69 @@ function initUrlFetchInTextareas() {
 
 // ── Auto-save on blur ────────────────────────────────────────────────────────
 
+// ── Rail scroll-spy ──────────────────────────────────────────────────────────
+
+function initRailScrollSpy() {
+  const rail = document.getElementById('prefs-rail');
+  if (!rail) return;
+
+  // Click on a rail link → smooth scroll to that section anchor
+  rail.querySelectorAll('.settings-rail-link[data-section]').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const id = link.dataset.section;
+      const anchor = document.getElementById(id);
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      // Immediately update active state on click (before observer fires)
+      rail.querySelectorAll('.settings-rail-link').forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
+
+  // IntersectionObserver — watch each .settings-section-anchor
+  const anchors = document.querySelectorAll('.settings-section-anchor[id]');
+  if (!anchors.length) return;
+
+  let _scheduledFrame = null;
+  const _sectionVisibility = {};
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      _sectionVisibility[entry.target.id] = entry.isIntersecting;
+    });
+    if (_scheduledFrame) return;
+    _scheduledFrame = requestAnimationFrame(() => {
+      _scheduledFrame = null;
+      // Find the topmost visible section
+      let topmost = null;
+      let topmostY = Infinity;
+      anchors.forEach(anchor => {
+        if (_sectionVisibility[anchor.id]) {
+          const rect = anchor.getBoundingClientRect();
+          if (rect.top < topmostY) {
+            topmostY = rect.top;
+            topmost = anchor;
+          }
+        }
+      });
+      if (!topmost) return;
+      const target = topmost.id;
+      const activeLink = rail.querySelector(`.settings-rail-link[data-section="${target}"]`);
+      if (!activeLink || activeLink.classList.contains('active')) return;
+      rail.querySelectorAll('.settings-rail-link').forEach(l => l.classList.remove('active'));
+      activeLink.classList.add('active');
+    });
+  }, {
+    // rootMargin: top-heavy — trigger when section is within top 70% of viewport
+    rootMargin: '0px 0px -30% 0px',
+    threshold: 0,
+  });
+
+  anchors.forEach(anchor => observer.observe(anchor));
+}
+
 // ── Rich text editor ────────────────────────────────────────────────────────
 
 // Fix Enter key inside columns — prevent browser from escaping the column
@@ -4596,7 +4659,13 @@ function loadRichTextEditors(data) {
 }
 
 function initAutoSave() {
-  // Bucket textarea fields
+  // ── Helper: find the nearest .settings-field-row ancestor to attach chip to ──
+  // Falls back to the element's parentElement if not inside a field row.
+  function fieldRowChipTarget(el) {
+    return el.closest('.settings-field-row') || el.parentElement;
+  }
+
+  // ── Bucket textarea fields — each saves its own storage key ──────────────────
   const bucketFields = {
     'profile-story':               'profileStory',
     'profile-experience':          'profileExperience',
@@ -4612,40 +4681,59 @@ function initAutoSave() {
   Object.entries(bucketFields).forEach(([elId, storageKey]) => {
     const el = document.getElementById(elId);
     if (!el) return;
-    el.addEventListener('blur', () => {
-      saveBucket(storageKey, el.value.trim());
+    autoSaveOnBlur(el, val => saveBucket(storageKey, val.trim()), {
+      chipTarget: fieldRowChipTarget(el),
     });
   });
 
-  // Profile links fields — save all on any blur
+  // ── Profile links — each field individually, all share saveProfileLinks ───────
   const linkIds = ['link-linkedin', 'link-github', 'link-website', 'link-email', 'link-phone', 'link-booking'];
   linkIds.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('blur', saveProfileLinks);
+    autoSaveOnBlur(el, () => saveProfileLinks(), {
+      chipTarget: fieldRowChipTarget(el),
+    });
   });
 
-  // Sync prefs fields — save on blur/change
-  const syncFields = [
+  // ── Sync prefs text inputs — each wires autoSaveOnBlur calling saveSyncPrefs ──
+  const syncTextFields = [
     'pref-name', 'pref-location-city', 'pref-location-state', 'pref-max-travel',
     'pref-salary-floor', 'pref-salary-strong', 'pref-ote-floor', 'pref-ote-strong',
-    'pref-staleness-days'
+    'pref-staleness-days',
   ];
-  syncFields.forEach(id => {
+  syncTextFields.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('blur', () => saveSyncPrefs(true));
-    el.addEventListener('change', () => saveSyncPrefs(true));
+    autoSaveOnBlur(el, () => saveSyncPrefs(false), {
+      chipTarget: fieldRowChipTarget(el),
+    });
   });
 
-  // Work arrangement checkboxes
+  // ── Work arrangement checkboxes — fire on change (no chip needed) ─────────────
   document.querySelectorAll('input[name="work-arr"]').forEach(cb => {
-    cb.addEventListener('change', () => saveSyncPrefs(true));
+    cb.addEventListener('change', () => saveSyncPrefs(false));
   });
 
-  // Job match toggle
-  document.getElementById('pref-job-match-toggle').addEventListener('change', () => saveSyncPrefs(true));
-
+  // ── Job match toggle — fire on change, show chip on the field row ─────────────
+  const toggleEl = document.getElementById('pref-job-match-toggle');
+  if (toggleEl) {
+    toggleEl.addEventListener('change', () => {
+      saveSyncPrefs(false);
+      // Show a transient chip on the nearest field row
+      const chipTarget = fieldRowChipTarget(toggleEl);
+      let chip = chipTarget.querySelector(':scope > .settings-saved-chip');
+      if (!chip) {
+        chip = document.createElement('span');
+        chip.className = 'settings-saved-chip';
+        chip.textContent = '\u2713 Saved';
+        chipTarget.appendChild(chip);
+      }
+      chip.classList.add('visible');
+      clearTimeout(chip._hideTimer);
+      chip._hideTimer = setTimeout(() => chip.classList.remove('visible'), 1500);
+    });
+  }
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -4763,37 +4851,27 @@ loadPrefsWithMigration(syncPrefs => {
     const targetFlagId = urlParams.get('flagId');
 
     if (targetSection === 'experience') {
-      // Switch to the Experience tab
-      document.querySelectorAll('.cos-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'fit'));
-      document.querySelectorAll('.cos-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === 'fit'));
-
-      // Expand the Experience card and scroll to it
-      const expCard = document.getElementById('experience-entries-list')?.closest('.cos-collapsible');
-      if (expCard) {
-        expCard.classList.add('open');
-        setTimeout(() => {
-          expCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          if (addTag) {
-            const banner = document.createElement('div');
-            banner.style.cssText = 'margin:8px 0 12px;padding:10px 14px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;font-size:13px;color:#5D4037;display:flex;align-items:center;gap:8px;';
-            banner.innerHTML = `<span style="font-size:16px;">🏷️</span> <span>Tag <strong>${addTag.replace(/</g, '&lt;')}</strong> on the experience entry where you used this skill, then rescore.</span>`;
-            const list = document.getElementById('experience-entries-list');
-            if (list) list.parentNode.insertBefore(banner, list);
-          }
-        }, 150);
-      }
+      // Deep-link to the Story Time section (experience is surfaced there in the new layout)
+      // and optionally show a tag banner
+      setTimeout(() => {
+        const storyAnchor = document.getElementById('sec-story');
+        if (storyAnchor) storyAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (addTag) {
+          const banner = document.createElement('div');
+          banner.style.cssText = 'margin:8px 0 12px;padding:10px 14px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;font-size:13px;color:#5D4037;display:flex;align-items:center;gap:8px;';
+          banner.innerHTML = `<span>Tag <strong>${addTag.replace(/</g, '&lt;')}</strong> on the experience entry where you used this skill, then rescore.</span>`;
+          const list = document.getElementById('experience-entries-list');
+          if (list) list.parentNode.insertBefore(banner, list);
+        }
+      }, 150);
     }
 
     // ICP deep-link: ?dim=roleFit or ?dim=roleFit&flagId=abc123
     if (targetDim) {
       const applyDimDeepLink = () => {
-        // Switch to the ICP & Preferences tab
-        document.querySelectorAll('.cos-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'icp'));
-        document.querySelectorAll('.cos-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === 'icp'));
-
-        // Expand parent collapsible if ICP section is inside one
-        const icpCollapsible = document.getElementById('icp-scoring-section')?.closest('.cos-collapsible');
-        if (icpCollapsible) icpCollapsible.classList.add('open');
+        // Scroll to the scoring weights section
+        const scoringAnchor = document.getElementById('sec-scoring-weights');
+        if (scoringAnchor) scoringAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
         // Expand the target dimension
         const dimBody = document.getElementById('dim-body-' + targetDim);
@@ -4834,6 +4912,7 @@ loadPrefsWithMigration(syncPrefs => {
     }
   });
   initCoopChatDrawer();
+  initRailScrollSpy();
 });
 
 // ── Stages ───────────────────────────────────────────────────────────────────

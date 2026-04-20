@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="icons/coop-monogram.svg">
   <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="settings-shell.css">
   <title>Coop.ai — My Profile</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -993,54 +994,584 @@
   </div>
 </div>
 
-<div class="settings-content" style="padding: 24px 20px 80px; max-width: 1700px; margin: 0 auto;">
+<!-- ── Page Header (hidden, kept for JS compat) ── -->
+<div class="page-header" style="display:none;"></div>
+<!-- Hidden legacy containers (backward-compat) -->
+<div id="attracted-to-entries" style="display:none;"></div>
+<div id="dealbreaker-entries" style="display:none;"></div>
+<textarea class="field-input" id="profile-green-lights" style="display:none;"></textarea>
+<textarea class="field-input" id="profile-red-lights" style="display:none;"></textarea>
+<div class="ai-toggle" data-ai="greenLights" style="display:none"></div>
+<div class="ai-panel" data-ai-panel="greenLights" style="display:none"></div>
+<div class="ai-toggle" data-ai="redLights" style="display:none"></div>
+<div class="ai-panel" data-ai-panel="redLights" style="display:none"></div>
+<!-- Stages section (hidden) -->
+<div id="stages-section" style="display:none"></div>
 
-  <div class="page">
+<div class="settings-rail-shell">
 
-    <!-- ── Job Match toggle + Pipeline alerts ── -->
-    <div class="card" style="margin-bottom:10px;">
-      <div style="padding: 12px 16px;">
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-label-text" style="font-size:13px;">Job Match Insights</div>
-            <div class="toggle-desc" style="font-size:11px;">Score postings against your profile</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="pref-job-match-toggle">
-            <span class="toggle-track"></span>
-          </label>
+  <!-- ══════════════════════════════════════════════════════════════
+       LEFT RAIL
+       ══════════════════════════════════════════════════════════════ -->
+  <nav class="settings-rail" id="prefs-rail">
+
+    <!-- Profile -->
+    <div class="settings-rail-group">
+      <span class="settings-rail-group-label">Profile</span>
+      <a class="settings-rail-link active" href="#sec-personal" data-section="sec-personal">Name</a>
+      <a class="settings-rail-link" href="#sec-links" data-section="sec-links">Personal info &amp; links</a>
+      <a class="settings-rail-link" href="#sec-resume" data-section="sec-resume">Resume</a>
+      <a class="settings-rail-link" href="#sec-story" data-section="sec-story">Story Time</a>
+    </div>
+
+    <!-- Job match -->
+    <div class="settings-rail-group">
+      <span class="settings-rail-group-label">Job match</span>
+      <a class="settings-rail-link" href="#sec-compensation" data-section="sec-compensation">Compensation</a>
+      <a class="settings-rail-link" href="#sec-work-arrangement" data-section="sec-work-arrangement">Work arrangement</a>
+      <a class="settings-rail-link" href="#sec-roles" data-section="sec-roles">Roles of interest</a>
+    </div>
+
+    <!-- Coop behavior -->
+    <div class="settings-rail-group">
+      <span class="settings-rail-group-label">Coop behavior</span>
+      <a class="settings-rail-link" href="#sec-principles" data-section="sec-principles">Operating principles</a>
+      <a class="settings-rail-link" href="#sec-scoring-weights" data-section="sec-scoring-weights">Scoring weights</a>
+      <a class="settings-rail-link" href="#sec-auto-rescore" data-section="sec-auto-rescore">Auto-rescore triggers</a>
+    </div>
+
+    <!-- Data pipeline -->
+    <div class="settings-rail-group">
+      <span class="settings-rail-group-label">Data pipeline</span>
+      <a class="settings-rail-link" href="#sec-data-sync" data-section="sec-data-sync">Data sync settings</a>
+      <a class="settings-rail-link" href="#sec-providers" data-section="sec-providers">Provider preferences</a>
+    </div>
+
+  </nav><!-- /.settings-rail -->
+
+  <!-- ══════════════════════════════════════════════════════════════
+       CONTENT AREA
+       ══════════════════════════════════════════════════════════════ -->
+  <div class="settings-rail-content">
+
+    <!-- ════════════════════════════════════════
+         GROUP: PROFILE
+         ════════════════════════════════════════ -->
+
+    <!-- sec-personal: Name -->
+    <div class="settings-section-anchor" id="sec-personal">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Name</h4>
+          <p>Used throughout Coop wherever your name appears.</p>
         </div>
-        <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 10px; padding-top: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-          <div class="toggle-info" style="flex: 1; min-width: 180px;">
-            <div class="toggle-label-text" style="font-size:13px;">Stale pipeline alert</div>
-            <div class="toggle-desc" style="font-size:11px;">Flag active opportunities with no activity after this many days. Set to 0 to disable.</div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-            <input type="number" id="pref-staleness-days" min="0" max="365" step="1" placeholder="7"
-              style="width: 64px; font-size: 13px; font-weight: 600; padding: 5px 8px; border: 1px solid var(--ci-border-default); border-radius: var(--ci-radius-sm); background: var(--ci-bg-inset); color: var(--ci-text-primary); font-family: inherit; text-align: center; outline: none;">
-            <span style="font-size: 12px; color: var(--ci-text-tertiary);">days</span>
+        <div class="settings-card-body">
+          <div class="field">
+            <label class="field-label" for="pref-name">Full name</label>
+            <input type="text" class="field-input" id="pref-name" placeholder="First and last name">
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ── Page Header (hidden, kept for JS compat) ── -->
-    <div class="page-header"></div>
+    <!-- sec-links: Personal info & links -->
+    <div class="settings-section-anchor" id="sec-links">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Personal info &amp; links</h4>
+          <p>Contact details and profile URLs surfaced in context and autofill.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="grid-3">
+            <div class="field">
+              <label class="field-label">LinkedIn URL</label>
+              <input type="text" class="field-input" id="link-linkedin" placeholder="linkedin.com/in/you">
+            </div>
+            <div class="field">
+              <label class="field-label">GitHub URL</label>
+              <input type="text" class="field-input" id="link-github" placeholder="github.com/you">
+            </div>
+            <div class="field">
+              <label class="field-label">Website</label>
+              <input type="text" class="field-input" id="link-website" placeholder="yoursite.com">
+            </div>
+          </div>
+          <div class="grid-3" style="margin-top:4px;">
+            <div class="field">
+              <label class="field-label">Email</label>
+              <input type="email" class="field-input" id="link-email" placeholder="you@email.com">
+            </div>
+            <div class="field">
+              <label class="field-label">Phone</label>
+              <input type="tel" class="field-input" id="link-phone" placeholder="(555) 123-4567">
+            </div>
+            <div class="field">
+              <label class="field-label">Booking link</label>
+              <input type="text" class="field-input" id="link-booking" placeholder="calendly.com/you">
+            </div>
+          </div>
 
-    <!-- ── Career OS Shell: left nav + center content ── -->
-    <div class="career-os-shell">
-    <div class="cos-tabs">
-      <button class="cos-tab active" data-tab="profile">Profile</button>
-      <button class="cos-tab" data-tab="fit">Experience</button>
-      <button class="cos-tab" data-tab="icp">ICP &amp; Scoring</button>
-      <div class="cos-sub-links" id="icp-sub-links">
-        <button class="cos-sub-link" data-anchor="section-role-icp">Role ICP</button>
-        <button class="cos-sub-link" data-anchor="section-company-icp">Company ICP</button>
-        <button class="cos-sub-link" data-anchor="section-comp">Compensation</button>
+          <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 16px; padding-top: 16px;">
+            <div class="section-label" style="margin-bottom:8px;">LinkedIn import</div>
+            <div class="helper-text" style="margin-bottom:10px;">
+              Open your LinkedIn profile in another tab, then click below. Scrapes your <strong>name, headline, about, experience, education, and skills</strong> into the Experience section.
+            </div>
+            <div class="import-row">
+              <button class="import-btn" id="import-linkedin-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+                Import from LinkedIn tab
+              </button>
+            </div>
+            <div class="import-status" id="import-status"></div>
+          </div>
+        </div>
       </div>
-      <button class="cos-tab" data-tab="weights">Scoring Weights</button>
     </div>
-    <div class="cos-content">
+
+    <!-- sec-resume: Resume -->
+    <div class="settings-section-anchor" id="sec-resume">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Resume</h4>
+          <p>Upload a text version. Coop uses this for scoring and applications — separate from LinkedIn data.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="resume-upload" id="resume-drop-zone">
+            <div class="resume-upload-text">Drop .txt, .md, or paste-friendly PDF</div>
+            <button class="resume-upload-btn" id="resume-upload-btn">Upload resume</button>
+            <input type="file" id="resume-file-input" accept=".pdf,.txt,.md" style="display:none">
+          </div>
+          <div class="resume-file-info" id="resume-file-info" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span id="resume-filename"></span>
+            <button class="replace-btn" id="resume-replace-btn">Replace</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sec-story: Story Time -->
+    <div class="settings-section-anchor" id="sec-story">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Story Time</h4>
+          <p>Your career narrative — what drives you, where you've been, where you're headed. Coop uses this to understand your trajectory.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="field">
+            <label class="field-label">My story <span class="field-info" data-tip="Your career narrative. Coop uses this to understand your trajectory and frame your background when drafting responses.">i</span></label>
+            <textarea class="field-input" id="profile-story" style="display:none;"></textarea>
+            <div class="rt-editor-wrap">
+              <div class="rt-toolbar" data-target="profile-story-rt">
+                <button data-cmd="bold" title="Bold"><b>B</b></button>
+                <button data-cmd="italic" title="Italic"><i>I</i></button>
+                <div class="rt-sep"></div>
+                <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+                <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+                <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+                <button data-cmd="outdent" title="Outdent">←</button>
+                <div class="rt-sep"></div>
+                <button data-cmd="formatBlock" data-val="H3" title="Heading">H</button>
+                <div class="rt-sep"></div>
+                <button data-cmd="insertColumns" title="Insert 2-column layout">⫴</button>
+              </div>
+              <div class="rt-editable" id="profile-story-rt" contenteditable="true" data-placeholder="Tell your career story — what drives you, where you've been, where you're headed..." data-bucket="profileStory"></div>
+            </div>
+            <div class="ai-toggle" data-ai="story">
+              <span class="ai-toggle-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="ai-g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#AFA9EC"/><stop offset="100%" style="stop-color:#5DCAA5"/></linearGradient></defs><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="ai-toggle-text">How Coop reads this</span>
+              <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+            </div>
+            <div class="ai-panel" data-ai-panel="story">AI interpretation will appear here in a future update.</div>
+          </div>
+
+          <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 16px; padding-top: 16px;">
+            <div class="section-label" style="margin-bottom:8px;">Motivators &amp; values</div>
+            <div class="field">
+              <label class="field-label">Operating principles</label>
+              <textarea class="field-input" id="profile-principles" style="display:none;"></textarea>
+              <div class="rt-editor-wrap">
+                <div class="rt-toolbar" data-target="profile-principles-rt">
+                  <button data-cmd="bold" title="Bold"><b>B</b></button>
+                  <button data-cmd="italic" title="Italic"><i>I</i></button>
+                  <div class="rt-sep"></div>
+                  <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+                  <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+                  <button data-cmd="outdent" title="Outdent">←</button>
+                  <div class="rt-sep"></div>
+                  <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+                </div>
+                <div class="rt-editable rt-sm" id="profile-principles-rt" contenteditable="true" data-placeholder="How you operate — ownership, speed, collaboration style, decision-making..." data-bucket="profilePrinciples"></div>
+              </div>
+            </div>
+            <div class="field" style="margin-top:10px;">
+              <label class="field-label">What drives you</label>
+              <textarea class="field-input" id="profile-motivators" style="display:none;"></textarea>
+              <div class="rt-editor-wrap">
+                <div class="rt-toolbar" data-target="profile-motivators-rt">
+                  <button data-cmd="bold" title="Bold"><b>B</b></button>
+                  <button data-cmd="italic" title="Italic"><i>I</i></button>
+                  <div class="rt-sep"></div>
+                  <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+                  <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+                  <button data-cmd="outdent" title="Outdent">←</button>
+                  <div class="rt-sep"></div>
+                  <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+                </div>
+                <div class="rt-editable rt-sm" id="profile-motivators-rt" contenteditable="true" data-placeholder="What fuels you — competition, autonomy, learning, building?" data-bucket="profileMotivators"></div>
+              </div>
+            </div>
+            <div class="ai-toggle" data-ai="principles" style="margin-top:8px;">
+              <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="ai-toggle-text">How Coop reads this</span>
+              <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+            </div>
+            <div class="ai-panel" data-ai-panel="principles">Add content above to generate an AI interpretation.</div>
+            <div class="ai-toggle" data-ai="motivators" style="display:none"></div>
+            <div class="ai-panel" data-ai-panel="motivators" style="display:none"></div>
+          </div>
+
+          <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 16px; padding-top: 16px;">
+            <div class="section-label" style="margin-bottom:8px;">Voice &amp; style</div>
+            <div class="field">
+              <textarea class="field-input" id="profile-voice" style="display:none;"></textarea>
+              <div class="rt-editor-wrap">
+                <div class="rt-toolbar" data-target="profile-voice-rt">
+                  <button data-cmd="bold" title="Bold"><b>B</b></button>
+                  <button data-cmd="italic" title="Italic"><i>I</i></button>
+                  <div class="rt-sep"></div>
+                  <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+                  <button data-cmd="indent" title="Indent (sub-bullet)">→</button>
+                  <button data-cmd="outdent" title="Outdent">←</button>
+                  <div class="rt-sep"></div>
+                  <button data-cmd="insertColumns" title="Insert columns">⫴</button>
+                </div>
+                <div class="rt-editable rt-sm" id="profile-voice-rt" contenteditable="true" data-placeholder="Direct? Conversational? Do you use humor? Formal in writing but casual in speech?" data-bucket="profileVoice"></div>
+              </div>
+              <div class="helper-text">Helps Coop match your tone in emails and applications</div>
+              <div class="ai-toggle" data-ai="voice">
+                <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="ai-toggle-text">How Coop reads this</span>
+                <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+              </div>
+              <div class="ai-panel" data-ai-panel="voice"></div>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 16px; padding-top: 16px;">
+            <div class="section-label" style="margin-bottom:8px;">FAQ / polished responses</div>
+            <textarea class="field-input" id="profile-faq" style="display:none;"></textarea>
+            <div id="faq-pairs-list"></div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button id="faq-add-pair" style="font-size:12px;font-weight:600;padding:6px 14px;border:1px dashed var(--ci-border-default);border-radius:var(--ci-radius-sm);background:none;color:var(--ci-text-tertiary);cursor:pointer;font-family:inherit;transition:all 0.12s;">+ Add Q&amp;A pair</button>
+            </div>
+            <div class="ai-toggle" data-ai="faq" style="margin-top:8px;">
+              <span class="ai-toggle-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.5 2 6 4.5 6 7c0 1-.5 2-1.5 2.5C3.5 10 2 11.5 2 13.5 2 15.5 3.5 17 5 17.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5.5-.5 1-1.5 1-2.5s-.5-2-1-2.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-3 3-3s3 1.5 3 3c0 1-.5 2-1 2.5-.5.5-1 1.5-1 2.5s.5 2 1 2.5c.5.5 1 1.5 1 2.5v2h4v-2c0-1 .5-2 1-2.5 1.5-.5 3-2 3-4 0-2-1.5-3.5-2.5-4C17.5 9 17 8 17 7c0-2.5-2.5-5-5-5z" stroke="url(#ai-g1)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="ai-toggle-text">How Coop reads this</span>
+              <svg class="ai-toggle-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>
+            </div>
+            <div class="ai-panel" data-ai-panel="faq"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         GROUP: JOB MATCH
+         ════════════════════════════════════════ -->
+
+    <!-- sec-compensation: Compensation (base + OTE merged) -->
+    <div class="settings-section-anchor" id="sec-compensation">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Compensation</h4>
+          <p>Set floors and strong targets for base salary and OTE. Coop auto-flags roles that fall short.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="grid-2">
+            <div>
+              <div class="section-label" style="margin-bottom:8px;">Base salary</div>
+              <div class="field">
+                <label class="field-label" style="display:flex;align-items:center;gap:4px;">
+                  Floor
+                  <span class="field-info" data-tip="Hard minimum — Coop auto-flags any role where posted base falls below this as a severity-5 dealbreaker.">i</span>
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <input type="text" class="field-input salary-input" id="pref-salary-floor" placeholder="e.g. $100K">
+                  <span class="settings-saved-chip" id="chip-salary-floor"></span>
+                </div>
+              </div>
+              <div class="field">
+                <label class="field-label" style="display:flex;align-items:center;gap:4px;">
+                  Strong match
+                  <span class="field-info" data-tip="Target ceiling — when posted base meets or exceeds this, Coop boosts the match score.">i</span>
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <input type="text" class="field-input salary-input" id="pref-salary-strong" placeholder="e.g. $150K">
+                  <span class="settings-saved-chip" id="chip-salary-strong"></span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="section-label" style="margin-bottom:8px;">OTE target</div>
+              <div class="field">
+                <label class="field-label" style="display:flex;align-items:center;gap:4px;">
+                  Floor
+                  <span class="field-info" data-tip="OTE walk-away — Coop flags low OTE even if the base looks fine.">i</span>
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <input type="text" class="field-input salary-input" id="pref-ote-floor" placeholder="e.g. $200K">
+                  <span class="settings-saved-chip" id="chip-ote-floor"></span>
+                </div>
+              </div>
+              <div class="field">
+                <label class="field-label" style="display:flex;align-items:center;gap:4px;">
+                  Strong match
+                  <span class="field-info" data-tip="Aspirational OTE target — Coop boosts match score when total comp opportunity meets or exceeds this.">i</span>
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <input type="text" class="field-input salary-input" id="pref-ote-strong" placeholder="e.g. $250K">
+                  <span class="settings-saved-chip" id="chip-ote-strong"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sec-work-arrangement: Work arrangement -->
+    <div class="settings-section-anchor" id="sec-work-arrangement">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Work arrangement</h4>
+          <p>Coop auto-generates scoring flags based on these selections. Uncheck arrangements you won't accept.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="field">
+            <label class="field-label" style="display:flex;align-items:center;gap:4px;">
+              Acceptable arrangements
+              <span class="field-info" data-tip="Check every arrangement you're willing to accept. Coop auto-generates green and red flags in your scoring settings based on these selections.">i</span>
+              <a href="docs.html#icp-flags" target="_blank" class="docs-link-tiny" title="Learn how these settings sync to your scoring flags">↗</a>
+            </label>
+            <div class="check-group" style="margin-top:6px;">
+              <label class="check-label"><input type="checkbox" name="work-arr" value="Remote"> Remote</label>
+              <label class="check-label"><input type="checkbox" name="work-arr" value="Hybrid"> Hybrid</label>
+              <label class="check-label"><input type="checkbox" name="work-arr" value="On-site"> On-site</label>
+            </div>
+          </div>
+          <div class="grid-3" style="margin-top:8px;">
+            <div class="field">
+              <label class="field-label">City</label>
+              <input type="text" class="field-input" id="pref-location-city" placeholder="City" autocomplete="off">
+            </div>
+            <div class="field">
+              <label class="field-label">State</label>
+              <select class="field-input" id="pref-location-state" style="height:38px;">
+                <option value="">State</option>
+                <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option><option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option><option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option><option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option><option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option><option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option><option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option><option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option><option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option><option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option><option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option><option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option><option>Wisconsin</option><option>Wyoming</option><option>Washington DC</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" style="display:flex;align-items:center;gap:4px;">
+                Max travel
+                <span class="field-info" data-tip="Coop flags roles with travel requirements above this threshold.">i</span>
+              </label>
+              <input type="text" class="field-input" id="pref-max-travel" placeholder="e.g. 15%">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sec-roles: Roles of interest (ICP) -->
+    <div class="settings-section-anchor" id="sec-roles">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Roles of interest</h4>
+          <p>Your ideal role and company profiles. Coop compares every posting against these criteria.</p>
+        </div>
+        <div class="settings-card-body">
+          <!-- Role ICP -->
+          <div id="section-role-icp">
+            <div class="section-label" style="margin-bottom:8px;">
+              Role ICP
+              <span class="field-info" data-tip="Your ideal role profile. Coop compares every job posting against these criteria for the Role Fit score.">i</span>
+              <a href="docs.html#icp-flags" target="_blank" class="docs-link-tiny" title="How ICP settings sync to scoring flags">↗</a>
+            </div>
+            <button class="icp-autofill-btn" id="role-icp-autofill">Let Coop fill this in</button>
+            <textarea class="field-input" id="role-icp-text" style="font-size:13px;" placeholder="Describe your ideal next role in your own words..."></textarea>
+            <div class="icp-attrs" style="margin-top:8px;">
+              <div class="field"><label class="field-label">Target function</label><div class="icp-picklist" id="role-icp-function" data-field="targetFunction"></div></div>
+              <div class="field"><label class="field-label">Seniority</label><input type="text" class="field-input" id="role-icp-seniority" placeholder="e.g. VP, Director, IC"></div>
+              <div class="field"><label class="field-label">Scope</label><input type="text" class="field-input" id="role-icp-scope" placeholder="e.g. Full P&amp;L, Regional, Team of 10"></div>
+              <div class="field"><label class="field-label">Selling motion</label><input type="text" class="field-input" id="role-icp-selling-motion" placeholder="e.g. Enterprise, PLG, Mid-market"></div>
+              <div class="field"><label class="field-label">Team size preference</label><input type="text" class="field-input" id="role-icp-team-size" placeholder="e.g. 5-15 direct reports"></div>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--ci-border-subtle); margin-top: 16px; padding-top: 16px;">
+            <!-- Company ICP -->
+            <div id="section-company-icp">
+              <div class="section-label" style="margin-bottom:8px;">
+                Company ICP
+                <span class="field-info" data-tip="Your ideal company profile. Coop checks company stage, size, and culture signals against these.">i</span>
+                <a href="docs.html#icp-flags" target="_blank" class="docs-link-tiny" title="How ICP settings sync to scoring flags">↗</a>
+              </div>
+              <button class="icp-autofill-btn" id="company-icp-autofill">Let Coop fill this in</button>
+              <textarea class="field-input" id="company-icp-text" style="font-size:13px;" placeholder="Describe your ideal company in your own words..."></textarea>
+              <div class="icp-attrs" style="margin-top:8px;">
+                <div class="field"><label class="field-label">Stage</label><div class="icp-picklist" id="company-icp-stage" data-field="stage"></div></div>
+                <div class="field"><label class="field-label">Size range</label><div class="icp-picklist" id="company-icp-size" data-field="sizeRange"></div></div>
+                <div class="field"><label class="field-label">Industries</label><div class="icp-picklist" id="company-icp-industries" data-field="industryPreferences"></div></div>
+                <div class="field"><label class="field-label">Culture markers</label><input type="text" class="field-input" id="company-icp-culture" placeholder="e.g. transparent, async-first, ownership"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         GROUP: COOP BEHAVIOR
+         ════════════════════════════════════════ -->
+
+    <!-- sec-principles: Operating principles -->
+    <div class="settings-section-anchor" id="sec-principles">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Operating principles</h4>
+          <p>Governs how Coop frames advice, filters opportunities, and personalizes responses.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="settings-field-row">
+            <div class="settings-field-info">
+              <span class="settings-field-label">Job Match Insights</span>
+              <span class="settings-field-desc">Score postings against your profile</span>
+            </div>
+            <label class="settings-toggle">
+              <input type="checkbox" id="pref-job-match-toggle">
+              <span class="settings-toggle-track"></span>
+            </label>
+          </div>
+          <div class="settings-field-row">
+            <div class="settings-field-info">
+              <span class="settings-field-label">Stale pipeline alert</span>
+              <span class="settings-field-desc">Flag active opportunities with no activity. Set to 0 to disable.</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              <input type="number" id="pref-staleness-days" min="0" max="365" step="1" placeholder="7"
+                style="width:64px;font-size:13px;font-weight:600;padding:5px 8px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-inset);color:var(--ci-text-primary);font-family:inherit;text-align:center;outline:none;">
+              <span style="font-size:12px;color:var(--ci-text-tertiary);">days</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sec-scoring-weights: Scoring weights -->
+    <div class="settings-section-anchor" id="sec-scoring-weights">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Scoring weights</h4>
+          <p>Adjust how much each dimension contributes to the overall job match score. Total must equal 100%.</p>
+        </div>
+        <div class="settings-card-body">
+          <div id="icp-scoring-section">
+            <div class="scoring-weights-card" style="border:none;padding:0;margin:0;box-shadow:none;">
+              <div class="scoring-weights-top">
+                <span class="scoring-weights-title">Dimension weights</span>
+                <button class="icp-autofill-btn" id="icp-reset-weights" style="margin-bottom:0;padding:4px 12px;font-size:11px;">Reset</button>
+                <span class="scoring-weights-total">Total: <span id="icp-weight-total" class="valid">100%</span></span>
+              </div>
+              <div class="scoring-sliders-row" id="icp-sliders-row"><!-- rendered by JS --></div>
+              <div class="scoring-autobalance-note">Weights auto-balance across other dimensions when you move a slider — total always stays at 100%</div>
+            </div>
+            <div id="icp-dim-qualificationFit" class="icp-dim-row" style="margin-top:12px;"></div>
+            <div id="icp-dim-roleFit" class="icp-dim-row"></div>
+            <div id="icp-dim-cultureFit" class="icp-dim-row"></div>
+            <div id="icp-dim-companyFit" class="icp-dim-row"></div>
+            <div id="icp-dim-compFit" class="icp-dim-row"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sec-auto-rescore: Auto-rescore triggers -->
+    <div class="settings-section-anchor" id="sec-auto-rescore">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Auto-rescore triggers</h4>
+          <p>All triggers are off by default. Enable to automatically re-score opportunities when the associated data changes.</p>
+        </div>
+        <div class="settings-card-body" id="auto-rescore-body">
+          <div id="pipeline-rescore-settings"><!-- rendered by JS --></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         GROUP: DATA PIPELINE
+         ════════════════════════════════════════ -->
+
+    <!-- sec-data-sync: Data sync settings -->
+    <div class="settings-section-anchor" id="sec-data-sync">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Data sync settings</h4>
+          <p>Configure how Coop fetches and refreshes company, email, and meeting data.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="integrations-link">
+            <a href="integrations.html">Configure integrations (Gmail, Calendar, Granola) →</a>
+            <div class="sub" style="font-size:12px;color:var(--ci-text-tertiary);margin-top:4px;">API keys and OAuth connections</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sec-providers: Provider preferences -->
+    <div class="settings-section-anchor" id="sec-providers">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h4>Provider preferences</h4>
+          <p>AI model and research provider settings. Changes here affect enrichment quality and cost.</p>
+        </div>
+        <div class="settings-card-body">
+          <div class="integrations-link">
+            <a href="coop-settings.html">Configure Coop AI settings →</a>
+            <div class="sub" style="font-size:12px;color:var(--ci-text-tertiary);margin-top:4px;">Models, memory, personality, usage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.settings-rail-content -->
+
+</div><!-- /.settings-rail-shell -->
+
+<!-- Quick Links — kept outside shell for backward compat -->
+<section class="pref-section" id="pref-quicklinks" style="display:none;">
+  <div id="ql-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
+  <button class="pref-add-btn" id="ql-add">+ Add link</button>
+</section>
+
+<style>
+  .ql-row { display:flex;gap:8px;align-items:center; }
+  .ql-input-label { flex:1;min-width:0; }
+  .ql-input-url { flex:2;min-width:0; }
+  .ql-input-label, .ql-input-url { font-size:13px;padding:6px 10px;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);background:var(--ci-bg-inset);color:var(--ci-text-primary);font-family:inherit;outline:none;transition:border-color 0.15s; }
+  .ql-input-label:focus, .ql-input-url:focus { border-color:var(--ci-accent-primary); }
+  .ql-del { background:none;border:none;color:var(--ci-text-tertiary);cursor:pointer;font-size:16px;padding:4px;line-height:1;border-radius:4px;transition:color 0.12s; }
+  .ql-del:hover { color:var(--ci-accent-red); }
+  .pref-add-btn { display:inline-flex;align-items:center;gap:4px;padding:6px 14px;font-size:13px;font-weight:500;font-family:inherit;border:1px dashed var(--ci-border-default);border-radius:8px;background:transparent;color:var(--ci-text-secondary);cursor:pointer;transition:all 0.15s; }
+  .pref-add-btn:hover { border-color:var(--ci-accent-primary);color:var(--ci-accent-primary);background:rgba(252,99,107,0.04); }
+  /* field-label needs display:block for grid gap */
+  label.field-label { display: block; }
+</style>
+
+<!-- Save status toast (kept for legacy showSaveStatus calls in JS) -->
+<div class="save-status" id="save-status"><span class="save-spinner"></span><span class="save-check">&#10003;</span> <span id="save-status-text">Saved</span></div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <!-- TAB 1: YOUR PROFILE                                                 -->

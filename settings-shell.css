@@ -224,3 +224,85 @@
 .settings-toggle input:checked + .settings-toggle-track::before {
   transform: translateX(18px);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Left-rail shell — used by preferences.html (#263)
+   Different IA from top-tabs (coop-settings) — too many sections for tabs.
+   Both primitives share design language but differ in nav primitive.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Outer grid: [220px rail] [1fr content] */
+.settings-rail-shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  min-height: 100vh;
+  align-items: start;
+}
+
+/* Sticky left rail */
+.settings-rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  padding: 28px 0 28px 0;
+  background: var(--ci-bg-sidebar);
+  border-right: 1px solid var(--ci-border-default);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.settings-rail::-webkit-scrollbar { display: none; }
+
+/* Group block */
+.settings-rail-group {
+  margin-bottom: 18px;
+}
+
+/* Group label — uppercase per Asana/Linear convention (group labels only, not links) */
+.settings-rail-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ci-text-tertiary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 20px 6px;
+  display: block;
+}
+
+/* Sub-section link */
+.settings-rail-link {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ci-text-secondary);
+  padding: 8px 20px 8px 17px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--motion-xs, 80ms) var(--ease-out, ease),
+              color var(--motion-xs, 80ms) var(--ease-out, ease),
+              border-color var(--motion-xs, 80ms) var(--ease-out, ease);
+}
+.settings-rail-link:hover {
+  background: var(--ci-bg-raised);
+  color: var(--ci-text-primary);
+}
+.settings-rail-link.active {
+  background: var(--ci-bg-raised);
+  color: var(--ci-text-primary);
+  border-left-color: var(--ci-accent-primary);
+  font-weight: 600;
+}
+
+/* Content column */
+.settings-rail-content {
+  padding: 36px 40px 80px;
+  max-width: 820px;
+}
+
+/* Section anchor — provides scroll target with negative offset so the header isn't hidden */
+.settings-section-anchor {
+  padding-top: 16px;
+  margin-top: -16px;
+}
