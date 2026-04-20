@@ -13,6 +13,16 @@
 // the memory-correct spectrum inline rather than modifying scoreToVerdict,
 // to avoid regressions on other surfaces (saved.js, etc.).
 
+// Delegated image-error handler for sibling-reveal fallback (CSP compliance).
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  if (img.dataset.imgFallback === 'sibling-reveal') {
+    img.style.display = 'none';
+    img.nextElementSibling?.style.removeProperty('display');
+  }
+}, true);
+
 // ── Score color + verdict ─────────────────────────────────────────────────
 
 /** Return CSS class suffix for the score number per memory rule. */
@@ -206,7 +216,7 @@ function renderOppShellHeader(entry, options = {}) {
   // ── Logo / favicon ────────────────────────────────────────────────────
   const faviconDomain = (entry.companyWebsite || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const logoHtml = faviconDomain
-    ? `<img class="osh-logo" src="https://www.google.com/s2/favicons?domain=${escapeHtml(faviconDomain)}&sz=64" alt="" onerror="this.style.display='none';this.nextElementSibling?.style.removeProperty('display')">`
+    ? `<img class="osh-logo" src="https://www.google.com/s2/favicons?domain=${escapeHtml(faviconDomain)}&sz=64" alt="" data-img-fallback="sibling-reveal">`
       + `<span class="osh-logo-placeholder" style="display:none">${escapeHtml((entry.company || '?')[0])}</span>`
     : `<span class="osh-logo-placeholder">${escapeHtml((entry.company || '?')[0])}</span>`;
 

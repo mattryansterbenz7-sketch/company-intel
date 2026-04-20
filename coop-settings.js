@@ -176,7 +176,7 @@ function renderChatFallbackSection(config, rateLimitedModel) {
   if (isSingleModel) {
     if (rateLimitedModel) {
       html += `<div style="margin-bottom:12px;padding:10px 12px;background:var(--ci-bg-raised);border:1px solid #d97706;border-radius:var(--ci-radius-md);font-size:12px;color:var(--ci-text-primary);line-height:1.5;">
-        <strong>${escapeHtml(rateLimitedModel)}</strong> is over its rate limit. Add another model in <a href="#" onclick="chrome.runtime.openOptionsPage();return false;" style="color:var(--ci-accent-primary);text-decoration:none;">Integrations</a> to keep Coop responsive.
+        <strong>${escapeHtml(rateLimitedModel)}</strong> is over its rate limit. Add another model in <a href="#" data-action="open-options" style="color:var(--ci-accent-primary);text-decoration:none;">Integrations</a> to keep Coop responsive.
       </div>`;
     } else {
       html += `<div style="margin-bottom:12px;padding:10px 12px;background:var(--ci-bg-raised);border:1px solid #d97706;border-radius:var(--ci-radius-md);font-size:12px;color:var(--ci-text-primary);line-height:1.5;">
@@ -2529,6 +2529,14 @@ function initApplyModePanel() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════════════════════
+
+// Delegated click handler — handles data-action="open-options" links (CSP compliance).
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('[data-action="open-options"]');
+  if (!link) return;
+  e.preventDefault();
+  chrome.runtime.openOptionsPage();
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   // Panel 1: AI Models + Chat Fallback

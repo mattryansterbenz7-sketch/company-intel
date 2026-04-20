@@ -56,7 +56,7 @@ const TABLE_COLUMNS = [
     renderCell: c => {
       const isJob = !!c.isOpportunity;
       const fav = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
-      const favHtml = fav ? `<img class="tbl-favicon" src="https://www.google.com/s2/favicons?domain=${fav}&sz=64" alt="" onerror="this.style.display='none'">` : '';
+      const favHtml = fav ? `<img class="tbl-favicon" src="https://www.google.com/s2/favicons?domain=${fav}&sz=64" alt="" data-img-fallback="hide">` : '';
       return `<div class="tbl-company">${favHtml}<div><a class="tbl-name" href="${chrome.runtime.getURL('company.html')}?id=${c.id}">${escapeHtml(c.company)}</a><div style="margin-top:1px;"><span class="tbl-type-badge ${isJob ? 'opp' : 'co'}">${isJob ? 'Opp' : 'Co'}</span></div></div></div>`;
     }
   },
@@ -478,7 +478,7 @@ function renderCompactCard(c) {
   // Favicon
   const favDomain = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
   const favHtml = favDomain
-    ? `<img class="compact-favicon" src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" alt="" onerror="this.style.display='none'">`
+    ? `<img class="compact-favicon" src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" alt="" data-img-fallback="hide">`
     : '';
 
   // Tags
@@ -762,7 +762,7 @@ function openScoreModal(entry) {
 
   // Favicon
   const favDomain = entry.companyWebsite ? entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
-  const favHtml = favDomain ? `<img src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" style="width:20px;height:20px;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : '';
+  const favHtml = favDomain ? `<img src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" style="width:20px;height:20px;border-radius:4px;flex-shrink:0" data-img-fallback="hide">` : '';
 
   // Job summary + role brief
   const summary = jm.jobSummary || jm.roleBrief?.roleSummary || jm.verdict || '';
@@ -1263,6 +1263,13 @@ function initSwipeGesture(entry) {
 }
 
 // Close modal handlers
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const strategy = img.dataset.imgFallback;
+  if (strategy === 'hide') img.style.display = 'none';
+}, true);
+
 document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('score-modal-overlay');
   if (!overlay) return;
@@ -3070,7 +3077,7 @@ function renderKanbanCard(c) {
   // Favicon
   const faviconDomain = c.companyWebsite?.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const faviconHtml = faviconDomain
-    ? `<img class="kc-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" onerror="this.style.display='none'">`
+    ? `<img class="kc-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" data-img-fallback="hide">`
     : '<span class="kc-favicon kc-favicon-placeholder"></span>';
 
   // Indicator state + day counts

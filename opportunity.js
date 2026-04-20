@@ -253,6 +253,19 @@ function saveEntry(changes) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+// Delegated image-error handler — replaces all inline onerror attributes (CSP compliance).
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const strategy = img.dataset.imgFallback;
+  if (strategy === 'hide') img.style.display = 'none';
+}, true);
+
+// Delegated click handler — stops propagation on Granola links inside meeting cards.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.mtg-granola-link')) e.stopPropagation();
+}, true);
+
 function init() {
   chrome.storage.local.get(['savedCompanies', 'allTags', 'opportunityStages', 'customStages'], (data) => {
     allTags = data.allTags || [];
@@ -330,7 +343,7 @@ function renderHeader() {
     ? entry.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
     : null;
   const faviconHtml = faviconDomain
-    ? `<img class="hdr-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" onerror="this.style.display='none'">`
+    ? `<img class="hdr-favicon" src="https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64" alt="" data-img-fallback="hide">`
     : '';
 
   const statusOptions = stages.map(s =>
@@ -1237,7 +1250,7 @@ function _oppRenderMeetingsTimeline(contentEl, meetings) {
         contentHtml = `<p class="mtg-summary"><em>No notes yet</em></p>`;
       }
       const granolaChip = m.url
-        ? `<a class="mtg-granola-link" href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><span class="granola-glyph"></span>Granola ↗</a>`
+        ? `<a class="mtg-granola-link" href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer"><span class="granola-glyph"></span>Granola ↗</a>`
         : '';
       html += `
         <div class="mtg-card" data-opp-meeting-id="${escapeHtml(m.id)}">

@@ -176,7 +176,7 @@ function renderSenderAvatar(emailAddr, fromName, size, extraClass) {
   const photoUrl = gravatarUrl(emailAddr, size * 3);
   return `<div class="${extraClass} email-avatar-photo" style="width:${size}px;height:${size}px;">
     <img src="${photoUrl}" alt="" loading="lazy"
-         onerror="this.closest('.email-avatar-photo').classList.add('email-avatar-fallback');this.remove();">
+         data-img-fallback="email-avatar">
     <span class="email-avatar-initials" style="background:${color};">${escHtml(initialsStr)}</span>
   </div>`;
 }
@@ -202,7 +202,7 @@ function renderSidebarCompanyLogo(company) {
   const initialsStr = initials(company);
   return `<div class="sb-item-logo sb-item-logo-wrap">
     <img src="${logoUrl}" alt="" loading="lazy"
-         onerror="this.closest('.sb-item-logo').classList.add('sb-logo-fallback');this.remove();">
+         data-img-fallback="sb-logo">
     <span class="sb-item-logo-initials" style="background:${color};">${escHtml(initialsStr)}</span>
   </div>`;
 }
@@ -212,7 +212,7 @@ function renderCompanyTag(company) {
   const logoUrl = companyLogoUrl(company);
   return `<span class="email-company-tag">
     <img class="email-company-tag-logo" src="${logoUrl}" alt="" loading="lazy"
-         onerror="this.remove();">
+         data-img-fallback="remove">
     ${escHtml(company)}
   </span>`;
 }
@@ -318,6 +318,21 @@ function buildEmailIndex() {
 // ── Initialization ──────────────────────────────────────────────────────────
 
 function init() {
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const strategy = img.dataset.imgFallback;
+    if (strategy === 'email-avatar') {
+      img.closest('.email-avatar-photo')?.classList.add('email-avatar-fallback');
+      img.remove();
+    } else if (strategy === 'sb-logo') {
+      img.closest('.sb-item-logo')?.classList.add('sb-logo-fallback');
+      img.remove();
+    } else if (strategy === 'remove') {
+      img.remove();
+    }
+  }, true);
+
   // Back button
   document.getElementById('back-btn').addEventListener('click', () => {
     coopNavigate(chrome.runtime.getURL('saved.html'));
@@ -715,7 +730,7 @@ function renderDetail(email) {
 
   // Build detail HTML
   const companyTagHtml = email._company ? `<span class="detail-tag company">
-    <img class="detail-tag-logo" src="${escHtml(companyLogoUrl(email._company) || '')}" alt="" loading="lazy" onerror="this.remove();">
+    <img class="detail-tag-logo" src="${escHtml(companyLogoUrl(email._company) || '')}" alt="" loading="lazy" data-img-fallback="remove">
     ${escHtml(email._company)}
   </span>` : '';
   const stageTagHtml = email._stage ? stageLabelHtml(email._stage) : '';

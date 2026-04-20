@@ -882,7 +882,7 @@ function renderLinkedInProfileMode(profileData, state = 'preview', opts = {}) {
   const initials = _liInitials(name);
 
   const avatarInner = photoUrl
-    ? `<img src="${_spEscape(photoUrl)}" alt="${_spEscape(initials)}" onerror="this.onerror=null;this.parentElement.textContent=this.alt;">`
+    ? `<img src="${_spEscape(photoUrl)}" alt="${_spEscape(initials)}" data-img-fallback="initials-text">`
     : _spEscape(initials);
 
   // ── Banner ──
@@ -3627,6 +3627,19 @@ function startLoaderTextCycle(container) {
   }, 1800);
 }
 
+// Delegated image-error handler — replaces all inline onerror attributes (CSP compliance).
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const strategy = img.dataset.imgFallback;
+  if (strategy === 'initials-text') {
+    img.onerror = null;
+    img.parentElement.textContent = img.alt;
+  } else if (strategy === 'favicon-span-replace') {
+    img.outerHTML = '<span class="sp-tab-indicator-icon-fallback">&#9679;</span>';
+  }
+}, true);
+
 // Thumbs feedback handler (delegated)
 document.addEventListener('click', e => {
   const thumbBtn = e.target.closest('.thumb-btn');
@@ -4717,7 +4730,7 @@ function renderContactsSection(el, contacts) {
       const host = u.hostname;
       if (host.includes('linkedin.com')) return `<span class="sp-tab-indicator-icon-fallback" style="color:#0A66C2;">in</span>`;
       if (url.includes('chrome-extension://')) return `<span class="sp-tab-indicator-icon-fallback" style="color:#FF7A59;">&#9670;</span>`;
-      return `<img class="sp-tab-indicator-icon" src="https://www.google.com/s2/favicons?domain=${host}&sz=32" onerror="this.outerHTML='<span class=sp-tab-indicator-icon-fallback>&#9679;</span>'" />`;
+      return `<img class="sp-tab-indicator-icon" src="https://www.google.com/s2/favicons?domain=${host}&sz=32" data-img-fallback="favicon-span-replace" />`;
     } catch { return `<span class="sp-tab-indicator-icon-fallback">&#9679;</span>`; }
   }
 

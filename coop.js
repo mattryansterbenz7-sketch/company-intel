@@ -37,7 +37,8 @@ const COOP = {
     return `<img src="${url}" width="${size}" height="${size}" alt="Coop"
       class="coop-portrait"
       style="flex-shrink:0;border-radius:50%;object-fit:cover;background:#1F3542;"
-      onerror="this.onerror=null;this.src='${fallbackDataUrl}';this.style.background='transparent';">`;
+      data-img-fallback="coop-avatar"
+      data-fallback-src="${fallbackDataUrl}">`;
   },
 
   badge(size = 24) { return this.avatar(size); },
@@ -77,3 +78,18 @@ const COOP = {
 // Legacy global assignment for non-module contexts (content scripts, HTML pages)
 if (typeof window !== 'undefined') window.COOP = COOP;
 if (typeof globalThis !== 'undefined') globalThis.COOP = COOP;
+
+// Delegated image-error handler for coop-avatar fallback (CSP compliance).
+// Guard prevents double-binding when coop.js is loaded alongside other page scripts.
+if (typeof window !== 'undefined' && !window.__coopImgFallbackBound) {
+  window.__coopImgFallbackBound = true;
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    if (img.dataset.imgFallback === 'coop-avatar') {
+      img.onerror = null;
+      img.src = img.dataset.fallbackSrc || '';
+      img.style.background = 'transparent';
+    }
+  }, true);
+}

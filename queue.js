@@ -23,6 +23,13 @@ let currentQueueStage = QUEUE_STAGE_FALLBACK; // resolved on load
 let allStages = []; // populated on load, used for Move-to dropdown
 
 // Update header title for current mode
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const strategy = img.dataset.imgFallback;
+  if (strategy === 'hide') img.style.display = 'none';
+}, true);
+
 document.addEventListener('DOMContentLoaded', () => {
   const titleEl = document.querySelector('.header-title');
   if (titleEl) titleEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;flex-shrink:0;"><circle cx="50" cy="50" r="50" fill="#3B5068"/><clipPath id="cq2"><circle cx="50" cy="50" r="48"/></clipPath><g clip-path="url(#cq2)"><ellipse cx="50" cy="100" rx="48" ry="28" fill="#435766"/><path d="M26 100L40 77L50 88L60 77L74 100" fill="#364854"/><path d="M40 77L50 94L60 77" fill="#F0EAE0"/><path d="M41 78Q44 73 50 76Q44 79 41 78Z" fill="#3D4F5F"/><path d="M59 78Q56 73 50 76Q56 79 59 78Z" fill="#3D4F5F"/><ellipse cx="50" cy="76.5" rx="2" ry="1.8" fill="#364854"/><rect x="43" y="71" width="14" height="8" rx="2" fill="#E8C4A0"/><path d="M28 43Q28 27 39 21Q50 16 61 21Q72 27 72 43Q72 53 68 58L63 64L56 68L50 70L44 68L37 64Q32 58 28 53Q28 48 28 43Z" fill="#EDBB92"/><ellipse cx="29" cy="44" rx="3" ry="4.5" fill="#DFB088"/><ellipse cx="71" cy="44" rx="3" ry="4.5" fill="#DFB088"/><path d="M27 40Q27 15 50 10Q73 15 73 40L71 32Q69 16 50 13Q31 16 29 32Z" fill="#2D1F16"/><path d="M29 31Q30 13 50 10Q70 13 71 31Q69 17 50 13Q31 17 29 31Z" fill="#3D2A1E"/><ellipse cx="41" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="41.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="41.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="42.2" cy="43" r="0.8" fill="white" opacity="0.7"/><ellipse cx="59" cy="44" rx="5" ry="4.5" fill="white"/><circle cx="59.5" cy="44.2" r="3" fill="#5B8C3E"/><circle cx="59.5" cy="44.2" r="2.2" fill="#4A7A30"/><circle cx="60.2" cy="43" r="0.8" fill="white" opacity="0.7"/><path d="M35 36.5Q38 34 41 34Q44 34 47 36" fill="#2D1F16" opacity="0.8"/><path d="M53 36Q56 34 59 34Q62 34 65 36.5" fill="#2D1F16" opacity="0.8"/><path d="M47 53Q48 55 50 55.5Q52 55 53 53" fill="none" stroke="#C8966E" stroke-width="0.7" stroke-linecap="round"/><path d="M42 60Q50 58 58 60" fill="none" stroke="#9B7055" stroke-width="0.6"/><path d="M42 60Q46 63 50 63.5Q54 63 58 60" fill="none" stroke="#9B7055" stroke-width="0.8" stroke-linecap="round"/><path d="M58 59.5Q60 58 61 58.5" fill="none" stroke="#9B7055" stroke-width="0.6" stroke-linecap="round"/></g></svg><span>${CFG.title}</span>`;
@@ -385,7 +392,7 @@ function renderCurrent() {
 
   // Favicon
   const favDomain = c.companyWebsite ? c.companyWebsite.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
-  const favHtml = favDomain ? `<img class="qc-company-favicon" src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" onerror="this.style.display='none'">` : '';
+  const favHtml = favDomain ? `<img class="qc-company-favicon" src="https://www.google.com/s2/favicons?domain=${favDomain}&sz=32" data-img-fallback="hide">` : '';
 
   // Score timestamp with hours/minutes
   const isMockScore = jm.lastScoringUsage?.model === 'dev-mock';

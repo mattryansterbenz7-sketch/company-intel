@@ -230,6 +230,22 @@ let collapsedPanels = {};
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 
+// Delegated image-error handler — replaces all inline onerror attributes (CSP compliance).
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const strategy = img.dataset.imgFallback;
+  if (strategy === 'initials-text') {
+    img.onerror = null;
+    img.parentElement.textContent = img.alt;
+  }
+}, true);
+
+// Delegated click handler — stops propagation on Granola links inside meeting cards.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.mtg-granola-link')) e.stopPropagation();
+}, true);
+
 function init() {
   const id = new URLSearchParams(location.search).get('id');
   if (!id) { showError('No company ID specified.'); return; }
@@ -4262,7 +4278,7 @@ function renderMeetingsTimeline(events, granolaNotes, granolaError) {
         }
 
         const granolaChip = (!m._isManual && m.url)
-          ? `<a class="mtg-granola-link" href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><span class="granola-glyph"></span>Granola ↗</a>`
+          ? `<a class="mtg-granola-link" href="${safeUrl(m.url)}" target="_blank" rel="noopener noreferrer"><span class="granola-glyph"></span>Granola ↗</a>`
           : '';
 
         const dismissBtn = !m._isManual
@@ -5442,7 +5458,7 @@ function buildContacts() {
 
         // ── Avatar ──
         const avatarContent = c.photoUrl
-          ? `<img src="${safeUrl(c.photoUrl)}" alt="${escapeHtml(initials)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.onerror=null;this.parentElement.textContent=this.alt;">`
+          ? `<img src="${safeUrl(c.photoUrl)}" alt="${escapeHtml(initials)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" data-img-fallback="initials-text">`
           : escapeHtml(initials);
 
         return `
