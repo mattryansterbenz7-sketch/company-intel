@@ -1777,7 +1777,7 @@ function maybeExtractEmailTasks(newEmails) {
         });
         if (added) {
           chrome.storage.local.set({ userTasks: tasks }, () => {
-            if (document.getElementById('company-tasks-container')) renderCompanyTasks();
+            if (document.getElementById('opp-tasks-root')) renderOppTasks(entry);
           });
         }
       });
@@ -1823,273 +1823,494 @@ function showCompanyTaskUndoBanner(container, deletedTask) {
 }
 
 function initTasksTab() {
-  const container = document.getElementById('company-tasks-container');
-  if (!container) return;
-  renderCompanyTasks();
+  const root = document.getElementById('opp-tasks-root');
+  if (!root) return;
+  renderOppTasks(entry);
 }
 
-function renderCompanyTasks(onRendered) {
-  const container = document.getElementById('company-tasks-container');
-  if (!container) return;
-  const companyName = entry.company;
+// ── renderOppTasks ──────────────────────────────────────────────────────────
+// Renders the Tasks tab for the current opportunity (entry).
+// Groups tasks by due status: Overdue / Today / Upcoming / Done.
+// Delegates row HTML to renderTaskRow() from ui-utils.js.
+// Handler binding is done locally on #opp-tasks-root (document-level delegation
+// is not used because saved.js handlers target its own root and should stay
+// isolated from the opp view).
+
+function renderOppTasks(currentEntry) {
+  const root = document.getElementById('opp-tasks-root');
+  if (!root) return;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   chrome.storage.local.get(['userTasks'], data => {
     const allTasks = data.userTasks || [];
-    const companyTasks = allTasks.filter(t => t.company === companyName);
-    const priVal = p => p === 'high' ? 0 : p === 'normal' ? 1 : 2;
-    companyTasks.sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      const da = a.dueDate || '9999-12-31', db = b.dueDate || '9999-12-31';
-      if (da !== db) return da.localeCompare(db);
-      return priVal(a.priority) - priVal(b.priority);
-    });
 
-    function dateLabel(dateStr) {
-      if (!dateStr) return { text: '', cls: '' };
-      const d = new Date(dateStr + 'T12:00:00');
-      const now = new Date(); now.setHours(12,0,0,0);
-      const diff = Math.round((d - now) / 86400000);
-      if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, cls: 'overdue' };
-      if (diff === 0) return { text: 'Today', cls: 'today' };
-      if (diff === 1) return { text: 'Tomorrow', cls: 'upcoming' };
-      return { text: `in ${diff}d`, cls: 'upcoming' };
+    // Filter to this opp: match by companyId (additive field) OR company name (legacy)
+    const tasks = allTasks.filter(t =>
+      (currentEntry.id && t.companyId === currentEntry.id) ||
+      (t.company && t.company === currentEntry.company)
+    );
+
+    // Group
+    const overdue   = tasks.filter(t => !t.completed && t.dueDate && t.dueDate < todayStr);
+    const today     = tasks.filter(t => !t.completed && t.dueDate === todayStr);
+    const upcoming  = tasks.filter(t => !t.completed && t.dueDate && t.dueDate > todayStr);
+    const noDue     = tasks.filter(t => !t.completed && !t.dueDate);
+    const done      = tasks.filter(t => !!t.completed);
+
+    // Update the past-due badge on the Tasks tab button
+    _updateOppTasksBadge(overdue.length);
+
+    // ── Empty state ──
+    if (!tasks.length) {
+      root.innerHTML = `
+        <div class="opp-tasks-empty">
+          <div class="opp-tasks-empty-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          </div>
+          <div class="opp-tasks-empty-title">No tasks yet</div>
+          <div class="opp-tasks-empty-sub">Add a task to track next steps for ${escapeHtml(currentEntry.company || 'this opportunity')}.</div>
+          <button class="opp-tasks-empty-add" id="opp-tasks-empty-add-btn">+ Add task</button>
+        </div>`;
+      root.querySelector('#opp-tasks-empty-add-btn')?.addEventListener('click', () => {
+        root.innerHTML = '';
+        _renderOppTasksShell(root, currentEntry, [], [], [], [], []);
+        root.querySelector('.opp-add-task-row')?.click();
+      });
+      return;
     }
 
-    const unreviewedCount = companyTasks.filter(t => t.source === 'email' && !t.reviewed && !t.completed).length;
-
-    container.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-top:8px;">
-        <div style="font-size:13px;font-weight:700;color:#516f90;text-transform:uppercase;letter-spacing:0.06em">Tasks for ${escapeHtml(companyName)}${unreviewedCount ? ` <span style="background:#FF7A59;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">${unreviewedCount} new</span>` : ''}</div>
-        <div style="display:flex;gap:6px">
-          <button class="mtg-add-btn" id="company-task-rescan-btn" title="Re-scan most recent 10 emails for tasks" style="background:#fff;color:#516f90;border:1px solid #dfe3eb">↻ Scan emails</button>
-          <button class="mtg-add-btn" id="company-task-add-btn">+ Add Task</button>
-        </div>
-      </div>
-      <div id="company-task-form-wrap"></div>
-      <div id="company-task-list">
-        ${companyTasks.length ? companyTasks.map(t => {
-          const dl = dateLabel(t.dueDate);
-          const isAuto = t.source === 'email';
-          const unreviewed = isAuto && !t.reviewed && !t.completed;
-          const priColors = { high: { bg: '#FEE2E2', color: '#991B1B' }, normal: { bg: '#FEF3C7', color: '#92400E' }, low: { bg: '#DBEAFE', color: '#1D4ED8' } };
-          const pc = priColors[t.priority] || priColors.normal;
-          return `<div class="ct-item${t.completed ? ' ct-completed' : ''}" data-task-id="${t.id}" style="${unreviewed ? 'border-left:3px solid #FF7A59;' : ''}">
-            <div style="width:18px;height:18px;margin-top:1px;border-radius:50%;border:2px solid ${t.completed ? '#5DCAA5' : '#dfe3eb'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:${t.completed ? '#fff' : 'transparent'};background:${t.completed ? '#5DCAA5' : 'transparent'};flex-shrink:0" class="ct-check">${t.completed ? '✓' : ''}</div>
-            <div style="flex:1;min-width:0">
-              <div class="ct-text" title="Click to edit" style="font-size:13px;font-weight:600;color:#2d3e50;cursor:pointer;${t.completed ? 'text-decoration:line-through' : ''}">${escapeHtml(t.text)}</div>
-              <div style="font-size:11px;color:#7c98b6;display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
-                <span class="ct-priority" title="Click to change priority" style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;cursor:pointer;background:${pc.bg};color:${pc.color}">${t.priority || 'normal'}</span>
-                ${isAuto ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:#FFF1EC;color:#FF7A59">from email</span>` : ''}
-                <span class="ct-date" title="Click to set due date" style="cursor:pointer;color:${dl.cls === 'overdue' ? '#ef4444' : dl.cls === 'today' ? '#FF7A59' : '#7c98b6'};font-weight:${dl.cls ? '600' : '400'}">${dl.text || (t.dueDate ? t.dueDate : '<span style="opacity:0.5">set date</span>')}</span>
-                ${isAuto && t.sourceEmailId ? `<a href="#" class="ct-jump" data-email-id="${t.sourceEmailId}" style="color:#516f90;text-decoration:underline">view source</a>` : ''}
-                ${unreviewed ? `<a href="#" class="ct-keep" style="color:#FF7A59;font-weight:600">keep</a> · <a href="#" class="ct-dismiss" style="color:#7c98b6">dismiss</a>` : ''}
-              </div>
-              ${isAuto && t.rationale ? `<div style="font-size:11px;color:#7c98b6;font-style:italic;margin-top:2px">"${escapeHtml(t.rationale)}"</div>` : ''}
-            </div>
-            <button class="ct-del" data-task-id="${t.id}">&times;</button>
-          </div>`;
-        }).join('') : '<div style="text-align:center;color:#7c98b6;padding:24px;font-size:13px;">No tasks for this company yet</div>'}
-      </div>`;
-
-    if (typeof onRendered === 'function') onRendered();
-
-    container.querySelector('#company-task-rescan-btn')?.addEventListener('click', () => {
-      const btn = container.querySelector('#company-task-rescan-btn');
-      btn.textContent = 'Scanning…'; btn.disabled = true;
-      rescanAllEmailsForTasks();
-      setTimeout(() => { btn.textContent = '↻ Scan emails'; btn.disabled = false; renderCompanyTasks(); }, 1500);
-    });
-
-    container.querySelectorAll('.ct-keep').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        const id = el.closest('[data-task-id]').dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          const t = tasks.find(t => t.id === id);
-          if (t) { t.reviewed = true; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
-        });
-      });
-    });
-    container.querySelectorAll('.ct-dismiss').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        const id = el.closest('[data-task-id]').dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          const t = tasks.find(t => t.id === id);
-          if (t) { t.reviewed = true; t.completed = true; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
-        });
-      });
-    });
-    container.querySelectorAll('.ct-jump').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        const emailId = el.dataset.emailId;
-        const emailsTab = document.querySelector('.hub-tab[data-tab="emails"]');
-        if (emailsTab) emailsTab.click();
-        setTimeout(() => {
-          const target = document.querySelector(`[data-email-id="${emailId}"]`);
-          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 200);
-      });
-    });
-
-    // Wire events
-    container.querySelector('#company-task-add-btn')?.addEventListener('click', () => {
-      const wrap = container.querySelector('#company-task-form-wrap');
-      wrap.innerHTML = `
-        <div class="mtg-add-form" style="margin-bottom:12px">
-          <div class="mtg-add-fields">
-            <input type="text" class="mtg-add-input" id="ct-text" placeholder="What needs to be done?">
-            <div style="display:flex;gap:8px">
-              <input type="date" class="mtg-add-input" id="ct-date" style="width:auto">
-              <select class="mtg-add-input" id="ct-priority" style="width:auto">
-                <option value="high">High</option>
-                <option value="normal" selected>Normal</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button class="mtg-add-save" id="ct-save">Add Task</button>
-              <button class="mtg-add-cancel" id="ct-cancel">Cancel</button>
-            </div>
-          </div>
-        </div>`;
-      wrap.querySelector('#ct-text')?.focus();
-      wrap.querySelector('#ct-save').addEventListener('click', () => {
-        const text = wrap.querySelector('#ct-text').value.trim();
-        if (!text) return;
-        const dueDate = wrap.querySelector('#ct-date').value || null;
-        const priority = wrap.querySelector('#ct-priority').value;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          tasks.push({
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-            text, company: companyName, companyId: entry.id,
-            dueDate, priority, completed: false, createdAt: Date.now()
-          });
-          chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
-        });
-      });
-      wrap.querySelector('#ct-cancel').addEventListener('click', () => { wrap.innerHTML = ''; });
-    });
-
-    container.querySelectorAll('.ct-check').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = el.closest('[data-task-id]').dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          const t = tasks.find(t => t.id === id);
-          if (t) { t.completed = !t.completed; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
-        });
-      });
-    });
-    container.querySelectorAll('.ct-del').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const allTasks = d.userTasks || [];
-          const deletedTask = allTasks.find(t => t.id === id);
-          if (!deletedTask) return;
-          chrome.storage.local.set({ userTasks: allTasks.filter(t => t.id !== id) }, () => {
-            renderCompanyTasks(() => showCompanyTaskUndoBanner(container, deletedTask));
-          });
-        });
-      });
-    });
-
-    // Inline edit: text
-    container.querySelectorAll('.ct-text').forEach(el => {
-      el.addEventListener('click', () => {
-        const taskItem = el.closest('[data-task-id]');
-        if (!taskItem || taskItem.querySelector('[data-ct-editing]')) return;
-        const id = taskItem.dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          const t = tasks.find(t => t.id === id);
-          if (!t) return;
-          const input = document.createElement('input');
-          input.type = 'text';
-          input.value = t.text;
-          input.className = 'ct-edit-input';
-          input.setAttribute('data-ct-editing', '');
-          let saved = false;
-          const save = () => {
-            if (saved) return; saved = true;
-            const val = input.value.trim();
-            if (val && val !== t.text) { t.text = val; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
-            else renderCompanyTasks();
-          };
-          input.addEventListener('blur', save);
-          input.addEventListener('keydown', e => {
-            if (e.key === 'Enter') { e.preventDefault(); save(); }
-            else if (e.key === 'Escape') { e.preventDefault(); saved = true; renderCompanyTasks(); }
-          });
-          el.replaceWith(input);
-          input.focus();
-          input.select();
-        });
-      });
-    });
-
-    // Inline edit: priority (cycle)
-    container.querySelectorAll('.ct-priority').forEach(el => {
-      el.addEventListener('click', () => {
-        const taskItem = el.closest('[data-task-id]');
-        if (!taskItem) return;
-        const id = taskItem.dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          const t = tasks.find(t => t.id === id);
-          if (!t) return;
-          const cycles = ['normal', 'high', 'low'];
-          const idx = cycles.indexOf(t.priority || 'normal');
-          t.priority = cycles[(idx + 1) % cycles.length];
-          chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks());
-        });
-      });
-    });
-
-    // Inline edit: due date
-    container.querySelectorAll('.ct-date').forEach(el => {
-      el.addEventListener('click', () => {
-        const taskItem = el.closest('[data-task-id]');
-        if (!taskItem || taskItem.querySelector('[data-ct-editing]')) return;
-        const id = taskItem.dataset.taskId;
-        chrome.storage.local.get(['userTasks'], d => {
-          const tasks = d.userTasks || [];
-          const t = tasks.find(t => t.id === id);
-          if (!t) return;
-          const input = document.createElement('input');
-          input.type = 'date';
-          input.value = t.dueDate || '';
-          input.className = 'ct-edit-date';
-          input.setAttribute('data-ct-editing', '');
-          let saved = false;
-          const save = () => {
-            if (saved) return; saved = true;
-            const val = input.value || null;
-            if (val !== (t.dueDate || null)) { t.dueDate = val; chrome.storage.local.set({ userTasks: tasks }, () => renderCompanyTasks()); }
-            else renderCompanyTasks();
-          };
-          input.addEventListener('change', save);
-          input.addEventListener('blur', save);
-          input.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); saved = true; renderCompanyTasks(); } });
-          el.replaceWith(input);
-          input.focus();
-          input.click();
-        });
-      });
-    });
+    _renderOppTasksShell(root, currentEntry, overdue, today, upcoming, noDue, done);
   });
 }
+
+function _updateOppTasksBadge(overdueCount) {
+  const badge = document.querySelector('.opp-tasks-tab-badge');
+  if (!badge) return;
+  if (overdueCount > 0) {
+    badge.textContent = overdueCount;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function _renderOppTasksShell(root, currentEntry, overdue, today, upcoming, noDue, done) {
+  const company = currentEntry.company || '';
+
+  const metaParts = [];
+  if (overdue.length)  metaParts.push(`${overdue.length} overdue`);
+  if (today.length)    metaParts.push(`${today.length} today`);
+  if (upcoming.length) metaParts.push(`${upcoming.length} upcoming`);
+  if (noDue.length)    metaParts.push(`${noDue.length} unscheduled`);
+  if (done.length)     metaParts.push(`${done.length} done`);
+  const metaStr = metaParts.join(' · ');
+
+  function renderGroup(label, tasks, cls, expanded) {
+    if (!tasks.length) return '';
+    const rows = tasks.map(t => renderTaskRow(t, { showCompanyChip: false })).join('');
+    const caretCls = expanded ? '' : ' collapsed';
+    const borderLeft = cls === 'overdue' ? 'border-left:2px solid var(--ci-accent-red);padding-left:10px;border-top:none;margin-top:2px;' : '';
+    return `
+      <div class="opp-task-group ${cls}">
+        <div class="opp-task-group-head" data-group="${cls}">
+          <span class="opp-task-group-caret${caretCls}">▾</span>
+          <span class="opp-task-group-name">${label}</span>
+          <span class="opp-task-group-count">${tasks.length}</span>
+        </div>
+        <div class="opp-task-group-body" style="${expanded ? '' : 'display:none'}${borderLeft}">
+          ${rows}
+        </div>
+      </div>`;
+  }
+
+  root.innerHTML = `
+    <div class="opp-tasks-toolbar">
+      <span class="opp-tasks-toolbar-title">Tasks for ${escapeHtml(company)}</span>
+      <span class="opp-tasks-toolbar-meta">${escapeHtml(metaStr)}</span>
+    </div>
+    <div class="opp-add-task-row" id="opp-add-task-row" tabindex="0" role="button" aria-label="Add task">
+      <span class="opp-add-task-plus">+</span>
+      <span class="opp-add-task-label">Add task</span>
+      <span class="opp-add-task-hint">N</span>
+    </div>
+    ${renderGroup('Overdue', overdue, 'overdue', true)}
+    ${renderGroup('Today', today, 'today', true)}
+    ${renderGroup('Upcoming', upcoming, 'upcoming', false)}
+    ${renderGroup('Unscheduled', noDue, 'unscheduled', false)}
+    ${renderGroup('Done', done, 'done', false)}
+  `;
+
+  _bindOppTasksHandlers(root, currentEntry);
+}
+
+function _bindOppTasksHandlers(root, currentEntry) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // ── Add-task row ──
+  const addRow = root.querySelector('#opp-add-task-row');
+  function activateAddRow() {
+    if (addRow.classList.contains('active')) return;
+    addRow.classList.add('active');
+    addRow.innerHTML = `
+      <input class="opp-add-task-input" id="opp-add-task-input" type="text" placeholder="Task name…" autocomplete="off">
+      <span class="opp-add-task-kbd">Enter</span>
+      <span class="opp-add-task-kbd">Esc</span>
+    `;
+    const inp = addRow.querySelector('#opp-add-task-input');
+    inp?.focus();
+
+    inp?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const text = inp.value.trim();
+        if (!text) { deactivateAddRow(); return; }
+        _saveNewOppTask(text, currentEntry, () => renderOppTasks(currentEntry));
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        deactivateAddRow();
+      }
+    });
+
+    inp?.addEventListener('blur', () => {
+      // Small delay so Enter can fire first
+      setTimeout(() => {
+        const text = inp.value.trim();
+        if (text) {
+          _saveNewOppTask(text, currentEntry, () => renderOppTasks(currentEntry));
+        } else {
+          deactivateAddRow();
+        }
+      }, 150);
+    });
+  }
+
+  function deactivateAddRow() {
+    addRow.classList.remove('active');
+    addRow.innerHTML = `
+      <span class="opp-add-task-plus">+</span>
+      <span class="opp-add-task-label">Add task</span>
+      <span class="opp-add-task-hint">N</span>
+    `;
+    _rebindAddRow();
+  }
+
+  function _rebindAddRow() {
+    addRow.onclick = activateAddRow;
+    addRow.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') activateAddRow(); };
+  }
+  _rebindAddRow();
+
+  // ── Group collapse/expand ──
+  root.querySelectorAll('.opp-task-group-head').forEach(head => {
+    head.addEventListener('click', () => {
+      const body = head.nextElementSibling;
+      const caret = head.querySelector('.opp-task-group-caret');
+      const isCollapsed = body.style.display === 'none';
+      body.style.display = isCollapsed ? '' : 'none';
+      caret.classList.toggle('collapsed', !isCollapsed);
+    });
+  });
+
+  // ── Checkbox toggle ──
+  root.addEventListener('click', e => {
+    const checkBox = e.target.closest('.task-check-box');
+    if (!checkBox) return;
+    const taskId = checkBox.dataset.check;
+    if (!taskId) return;
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      const t = tasks.find(t => String(t.id) === String(taskId));
+      if (!t) return;
+      t.completed = !t.completed;
+      if (t.completed) t.completedAt = Date.now();
+      else delete t.completedAt;
+      chrome.storage.local.set({ userTasks: tasks }, () => renderOppTasks(currentEntry));
+    });
+  });
+
+  // ── Title inline edit ──
+  root.addEventListener('click', e => {
+    const titleEl = e.target.closest('.task-text-editable');
+    if (!titleEl) return;
+    const taskId = titleEl.dataset.taskId;
+    if (!taskId) return;
+    if (titleEl.tagName === 'INPUT') return; // already editing
+
+    const originalText = titleEl.textContent.trim();
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = originalText;
+    inp.className = 'opp-task-title-edit';
+    inp.style.cssText = 'flex:1;font-size:12.5px;font-weight:500;border:1px solid var(--ci-accent-primary);border-radius:4px;padding:2px 5px;margin-left:-6px;outline:none;font-family:inherit;box-shadow:0 0 0 2px var(--ci-accent-primary-soft);color:var(--ci-text-primary);background:var(--ci-bg-raised);';
+    titleEl.replaceWith(inp);
+    inp.focus();
+    inp.select();
+
+    let saved = false;
+    const save = () => {
+      if (saved) return; saved = true;
+      const newVal = inp.value.trim();
+      chrome.storage.local.get(['userTasks'], d => {
+        const tasks = d.userTasks || [];
+        const t = tasks.find(t => String(t.id) === String(taskId));
+        if (t && newVal && newVal !== (t.title || t.text)) {
+          t.title = newVal; t.text = newVal;
+          chrome.storage.local.set({ userTasks: tasks }, () => renderOppTasks(currentEntry));
+        } else {
+          renderOppTasks(currentEntry);
+        }
+      });
+    };
+    inp.addEventListener('blur', save);
+    inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); saved = true; renderOppTasks(currentEntry); }
+    });
+  });
+
+  // ── Priority pill click ──
+  root.addEventListener('click', e => {
+    const pill = e.target.closest('.task-pri-pill');
+    if (!pill) return;
+    const row = pill.closest('.task-row');
+    if (!row) return;
+    const taskId = row.dataset.taskId;
+    if (!taskId) return;
+
+    // Remove any existing picker
+    document.querySelectorAll('.opp-pri-picker').forEach(p => p.remove());
+
+    const picker = document.createElement('div');
+    picker.className = 'opp-pri-picker';
+    picker.innerHTML = `
+      <div class="opp-pri-picker-item" data-pri="p1"><span class="opp-pri-tag p1">P1</span> Urgent</div>
+      <div class="opp-pri-picker-item" data-pri="p2"><span class="opp-pri-tag p2">P2</span> Normal</div>
+      <div class="opp-pri-picker-item" data-pri="p3"><span class="opp-pri-tag p3">P3</span> Low</div>
+    `;
+    const rect = pill.getBoundingClientRect();
+    picker.style.cssText = `position:fixed;z-index:9999;top:${rect.bottom + 4}px;left:${rect.left}px;background:#fff;border:1px solid var(--ci-border-default);border-radius:8px;padding:4px;box-shadow:0 8px 20px rgba(0,0,0,0.12);min-width:130px;`;
+    document.body.appendChild(picker);
+
+    picker.querySelectorAll('.opp-pri-picker-item').forEach(item => {
+      item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px;font-size:12.5px;cursor:pointer;';
+      item.addEventListener('mouseenter', () => item.style.background = 'var(--ci-bg-inset)');
+      item.addEventListener('mouseleave', () => item.style.background = '');
+      item.addEventListener('click', () => {
+        picker.remove();
+        const priMap = { p1: 'high', p2: 'normal', p3: 'low' };
+        const newPri = priMap[item.dataset.pri] || 'normal';
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => String(t.id) === String(taskId));
+          if (t) { t.priority = newPri; chrome.storage.local.set({ userTasks: tasks }, () => renderOppTasks(currentEntry)); }
+        });
+      });
+    });
+
+    const closePicker = ev => {
+      if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', closePicker, true); }
+    };
+    setTimeout(() => document.addEventListener('click', closePicker, true), 0);
+  });
+
+  // ── Due date chip click ──
+  root.addEventListener('click', e => {
+    const chip = e.target.closest('.task-due-editable');
+    if (!chip) return;
+    const taskId = chip.dataset.taskId;
+    if (!taskId) return;
+    const currentDue = chip.dataset.due || '';
+
+    const inp = document.createElement('input');
+    inp.type = 'date';
+    inp.value = currentDue;
+    inp.style.cssText = 'font-size:12px;border:1px solid var(--ci-border-strong);border-radius:4px;padding:2px 6px;outline:none;';
+    chip.replaceWith(inp);
+    inp.focus();
+    inp.showPicker?.();
+
+    let saved = false;
+    const save = () => {
+      if (saved) return; saved = true;
+      const newDue = inp.value || null;
+      if (newDue !== currentDue) {
+        chrome.storage.local.get(['userTasks'], d => {
+          const tasks = d.userTasks || [];
+          const t = tasks.find(t => String(t.id) === String(taskId));
+          if (t) { t.dueDate = newDue; chrome.storage.local.set({ userTasks: tasks }, () => renderOppTasks(currentEntry)); }
+          else renderOppTasks(currentEntry);
+        });
+      } else {
+        renderOppTasks(currentEntry);
+      }
+    };
+    inp.addEventListener('change', save);
+    inp.addEventListener('blur', save);
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.preventDefault(); saved = true; renderOppTasks(currentEntry); } });
+  });
+
+  // ── Snooze (1-day push) ──
+  root.addEventListener('click', e => {
+    const btn = e.target.closest('.task-snooze');
+    if (!btn) return;
+    const taskId = btn.dataset.taskId;
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      const t = tasks.find(t => String(t.id) === String(taskId));
+      if (!t) return;
+      const base = t.dueDate && t.dueDate >= todayStr ? t.dueDate : todayStr;
+      const next = new Date(base + 'T12:00:00');
+      next.setDate(next.getDate() + 1);
+      t.dueDate = next.toISOString().slice(0, 10);
+      chrome.storage.local.set({ userTasks: tasks }, () => renderOppTasks(currentEntry));
+    });
+  });
+
+  // ── Trash / delete ──
+  root.addEventListener('click', e => {
+    const btn = e.target.closest('.task-trash');
+    if (!btn) return;
+    const taskId = btn.dataset.taskId;
+    chrome.storage.local.get(['userTasks'], d => {
+      const tasks = d.userTasks || [];
+      const idx = tasks.findIndex(t => String(t.id) === String(taskId));
+      if (idx === -1) return;
+      tasks.splice(idx, 1);
+      chrome.storage.local.set({ userTasks: tasks }, () => renderOppTasks(currentEntry));
+    });
+  });
+
+  // ── N keyboard shortcut ──
+  // Register once on root; clean up on next render via one-shot listener
+  const nKeyHandler = e => {
+    if (!document.getElementById('opp-tasks-root')) {
+      document.removeEventListener('keydown', nKeyHandler, true);
+      return;
+    }
+    if (e.key !== 'n' && e.key !== 'N') return;
+    const active = document.activeElement;
+    const isEditable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    if (isEditable) return;
+    // Only fire when Tasks tab is visible
+    const tasksPane = document.getElementById('hub-tasks');
+    if (!tasksPane?.classList.contains('active')) return;
+    e.preventDefault();
+    const addTaskRow = document.getElementById('opp-add-task-row');
+    if (addTaskRow && !addTaskRow.classList.contains('active')) activateAddRow();
+  };
+  // Remove any previously registered handler before adding a new one
+  if (window._oppTasksNKeyHandler) document.removeEventListener('keydown', window._oppTasksNKeyHandler, true);
+  window._oppTasksNKeyHandler = nKeyHandler;
+  document.addEventListener('keydown', nKeyHandler, true);
+}
+
+function _saveNewOppTask(text, currentEntry, callback) {
+  chrome.storage.local.get(['userTasks'], d => {
+    const tasks = d.userTasks || [];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    tasks.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      title: text,
+      text,
+      company: currentEntry.company || '',
+      companyId: currentEntry.id || null,
+      dueDate: todayStr,
+      priority: 'low',  // P3 default
+      completed: false,
+      createdAt: Date.now(),
+      source: 'user'
+    });
+    chrome.storage.local.set({ userTasks: tasks }, callback);
+  });
+}
+
+// Legacy alias: kept so any remaining callers (email rescan callback) don't throw.
+// The rescan callback checks for company-tasks-container before calling; since that
+// element no longer exists the guard fires first, but the alias prevents hard errors
+// if the pattern ever appears from cached contexts.
+function renderCompanyTasks() {
+  if (document.getElementById('opp-tasks-root')) renderOppTasks(entry);
+}
+
+// ── CSS injected once for opp tasks UI (pane-local only) ──────────────────────
+(function _injectOppTasksCss() {
+  if (document.getElementById('opp-tasks-css')) return;
+  const s = document.createElement('style');
+  s.id = 'opp-tasks-css';
+  s.textContent = `
+    /* Tasks tab toolbar */
+    .opp-tasks-toolbar { display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px; }
+    .opp-tasks-toolbar-title { font-size:15px;font-weight:700;letter-spacing:-0.005em;color:var(--ci-text-primary); }
+    .opp-tasks-toolbar-meta { font-size:12px;color:var(--ci-text-tertiary); }
+
+    /* Add-task row */
+    .opp-add-task-row {
+      display:flex;align-items:center;gap:10px;
+      padding:9px 12px;margin-bottom:16px;
+      border:1px dashed var(--ci-border-default);border-radius:8px;
+      color:var(--ci-text-tertiary);font-size:13px;cursor:text;
+      transition:border-color 120ms,color 120ms,background 120ms;
+    }
+    .opp-add-task-row:hover { border-color:var(--ci-accent-primary);color:var(--ci-accent-primary);background:var(--ci-accent-primary-soft); }
+    .opp-add-task-row.active { border-style:solid;border-color:var(--ci-border-strong);background:var(--ci-bg-raised);color:var(--ci-text-primary); }
+    .opp-add-task-plus { font-size:15px;font-weight:500;line-height:1; }
+    .opp-add-task-label { flex:1; }
+    .opp-add-task-hint { font-family:monospace;font-size:11px;color:var(--ci-text-tertiary);background:var(--ci-bg-inset);border:1px solid var(--ci-border-subtle);padding:1px 6px;border-radius:4px; }
+    .opp-add-task-input { flex:1;border:none;outline:none;background:transparent;font-size:13px;font-family:inherit;color:var(--ci-text-primary); }
+    .opp-add-task-kbd { font-family:monospace;font-size:10px;color:var(--ci-text-tertiary);background:var(--ci-bg-inset);border:1px solid var(--ci-border-subtle);padding:1px 5px;border-radius:4px; }
+
+    /* Group headers */
+    .opp-task-group { margin-bottom:20px; }
+    .opp-task-group-head { display:flex;align-items:center;gap:9px;padding:5px 4px;margin-bottom:5px;cursor:pointer;user-select:none; }
+    .opp-task-group-caret { font-size:10px;color:var(--ci-text-tertiary);width:10px;display:inline-block;transition:transform 120ms;line-height:1; }
+    .opp-task-group-caret.collapsed { transform:rotate(-90deg); }
+    .opp-task-group-name { font-size:13px;font-weight:600;letter-spacing:-0.005em;color:var(--ci-text-primary); }
+    .opp-task-group-count { font-size:11px;color:var(--ci-text-tertiary);background:var(--ci-bg-inset);padding:1px 7px;border-radius:9999px;font-weight:500; }
+    .opp-task-group.overdue .opp-task-group-name { color:var(--ci-accent-red); }
+    .opp-task-group.overdue .opp-task-group-count { background:var(--ci-accent-red-soft);color:var(--ci-accent-red); }
+    .opp-task-group-body { display:flex;flex-direction:column;border-top:1px solid var(--ci-border-subtle); }
+    .opp-task-group.overdue .opp-task-group-body { border-left:2px solid var(--ci-accent-red);padding-left:10px;border-top:none;margin-top:2px; }
+
+    /* Past-due tab badge */
+    .opp-tasks-tab-badge {
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:17px;height:17px;padding:0 4px;margin-left:5px;
+      border-radius:99px;background:var(--ci-accent-red);
+      color:#fff;font-size:10px;font-weight:700;
+      letter-spacing:-0.005em;font-variant-numeric:tabular-nums;
+      vertical-align:middle;
+    }
+
+    /* Empty state */
+    .opp-tasks-empty { padding:64px 28px;text-align:center;color:var(--ci-text-secondary); }
+    .opp-tasks-empty-icon { width:44px;height:44px;border:1.5px dashed var(--ci-border-strong);border-radius:10px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:var(--ci-text-tertiary); }
+    .opp-tasks-empty-title { font-size:15px;font-weight:600;color:var(--ci-text-primary);margin-bottom:5px; }
+    .opp-tasks-empty-sub { font-size:13px;max-width:340px;margin:0 auto 18px;line-height:1.55; }
+    .opp-tasks-empty-add { display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 14px;border:1px solid var(--ci-accent-primary);color:var(--ci-accent-primary);border-radius:9999px;cursor:pointer;background:transparent;font-family:inherit; }
+    .opp-tasks-empty-add:hover { background:var(--ci-accent-primary);color:#fff; }
+
+    /* Priority picker */
+    .opp-pri-picker-item { color:var(--ci-text-primary); }
+    .opp-pri-tag { display:inline-flex;align-items:center;justify-content:center;width:22px;height:17px;border-radius:4px;font-size:10px;font-weight:700; }
+    .opp-pri-tag.p1 { background:rgba(232,56,79,0.08);color:#E8384F;border:1px solid rgba(232,56,79,0.2); }
+    .opp-pri-tag.p2 { background:rgba(245,166,35,0.12);color:#8E5C00;border:1px solid rgba(245,166,35,0.26); }
+    .opp-pri-tag.p3 { background:var(--ci-bg-inset);color:var(--ci-text-tertiary);border:1px solid var(--ci-border-subtle); }
+  `;
+  document.head.appendChild(s);
+})();
+
+// ── stub: old add-task path below this point was removed ─────────────────────
+// The code block below was previously the inline add-task form injected by
+// #company-task-add-btn. Superseded by the add-task ghost row above.
 
 const DEFAULT_TAB_ORDER = ['intel', 'activity', 'tasks', 'notes', 'emails', 'meetings', 'docs'];
 const TAB_LABELS = { intel: 'Role Brief', activity: 'Activity', tasks: 'Tasks', notes: 'Notes', emails: 'Emails', meetings: 'Meetings', docs: 'Docs' };
 const TAB_PANE_HTML = {
   activity: '<div id="activity-feed-root"></div>',
-  tasks: '<div id="company-tasks-container"></div>',
+  tasks: '<div id="opp-tasks-root"></div>',
   intel: '', // filled by buildIntelTab()
   notes: '<div id="notes-tab-root"></div>',
   emails: '<div class="p-empty" id="act-emails-status">Loading emails\u2026</div><div id="act-emails-list"></div>',
@@ -2123,7 +2344,7 @@ function renderMainTabs() {
   const defaultTab = tabOrder[0]; // first tab is the default
 
   const tabButtons = tabOrder.map(t =>
-    `<button class="hub-tab${t === defaultTab ? ' active' : ''}" data-tab="${t}" draggable="true">${TAB_LABELS[t] || t}</button>`
+    `<button class="hub-tab${t === defaultTab ? ' active' : ''}" data-tab="${t}" draggable="true">${TAB_LABELS[t] || t}${t === 'tasks' ? '<span class="opp-tasks-tab-badge" style="display:none"></span>' : ''}</button>`
   ).join('');
 
   const panes = tabOrder.map(t => {
