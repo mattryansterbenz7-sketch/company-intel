@@ -42,6 +42,8 @@ let activeStatus = 'all';
 let activeTag = null;
 let activeActionFilter = 'all'; // 'all' | 'my_court' | 'their_court'
 let viewMode = localStorage.getItem('ci_viewMode') || 'kanban';
+let boardSearch = localStorage.getItem('ci_boardSearch') || '';
+let activeFilter = localStorage.getItem('ci_boardFilter') || 'all';
 let tblSortCol = 'savedAt';
 let tblSortDir = 'desc'; // 'asc' | 'desc'
 let tblFilters = {}; // { [colKey]: string[] } — included values; empty = no filter
@@ -175,22 +177,22 @@ function getActiveCols() {
 function setActiveCols(keys) { localStorage.setItem('ci_tblCols', JSON.stringify(keys)); }
 
 const DEFAULT_OPPORTUNITY_STAGES = [
-  { key: 'needs_review',    label: "Coop's AI Scoring Queue",  color: '#64748b', stageType: 'queue'       },
-  { key: 'want_to_apply',   label: 'I Want to Apply',          color: '#22d3ee', stageType: 'queue'       },
-  { key: 'applied',         label: 'Applied',                  color: '#60a5fa', stageType: 'outreach'    },
-  { key: 'intro_requested', label: 'Intro Requested',          color: '#a78bfa', stageType: 'outreach'    },
-  { key: 'conversations',   label: 'Conversations in Progress',color: '#fb923c', stageType: 'active'      },
-  { key: 'offer_stage',     label: 'Offer Stage',              color: '#a3e635', stageType: 'active'      },
-  { key: 'accepted',        label: 'Accepted',                 color: '#4ade80', stageType: 'active'      },
-  { key: 'rejected',        label: "Rejected / DQ'd",          color: '#f87171', stageType: 'closed_lost' },
+  { key: 'needs_review',    label: "Coop's AI Scoring Queue",  color: '#64748b', stageType: 'queue',       emptyHint: 'New opportunities land here for scoring.' },
+  { key: 'want_to_apply',   label: 'I Want to Apply',          color: '#22d3ee', stageType: 'queue',       emptyHint: 'Roles you\'ve flagged to apply to.' },
+  { key: 'applied',         label: 'Applied',                  color: '#60a5fa', stageType: 'outreach',    emptyHint: 'Applications you\'ve submitted.' },
+  { key: 'intro_requested', label: 'Intro Requested',          color: '#a78bfa', stageType: 'outreach',    emptyHint: 'Waiting on warm intros to land.' },
+  { key: 'conversations',   label: 'Conversations in Progress',color: '#fb923c', stageType: 'active',      emptyHint: 'Active discussions and interview loops.' },
+  { key: 'offer_stage',     label: 'Offer Stage',              color: '#a3e635', stageType: 'active',      emptyHint: 'Offers in hand or being negotiated.' },
+  { key: 'accepted',        label: 'Accepted',                 color: '#4ade80', stageType: 'active',      emptyHint: 'Offers you\'ve signed.' },
+  { key: 'rejected',        label: "Rejected / DQ'd",          color: '#f87171', stageType: 'closed_lost', emptyHint: 'Roles that didn\'t move forward.' },
 ];
 const DEFAULT_COMPANY_STAGES = [
-  { key: 'co_watchlist',   label: 'Watch List',      color: '#64748b', stageType: 'queue'  },
-  { key: 'co_researching', label: 'Researching',     color: '#22d3ee', stageType: 'active' },
-  { key: 'co_networking',  label: 'Networking',      color: '#a78bfa', stageType: 'active' },
-  { key: 'co_interested',  label: 'Strong Interest', color: '#fb923c', stageType: 'active' },
-  { key: 'co_applied',     label: 'Applied There',   color: '#60a5fa', stageType: 'outreach'},
-  { key: 'co_archived',    label: 'Archived',        color: '#374151', stageType: 'paused' },
+  { key: 'co_watchlist',   label: 'Watch List',      color: '#64748b', stageType: 'queue',   emptyHint: 'Companies you\'re tracking.' },
+  { key: 'co_researching', label: 'Researching',     color: '#22d3ee', stageType: 'active',  emptyHint: 'Actively exploring.' },
+  { key: 'co_networking',  label: 'Networking',      color: '#a78bfa', stageType: 'active',  emptyHint: 'Building connections here.' },
+  { key: 'co_interested',  label: 'Strong Interest', color: '#fb923c', stageType: 'active',  emptyHint: 'Companies you\'re excited about.' },
+  { key: 'co_applied',     label: 'Applied There',   color: '#60a5fa', stageType: 'outreach', emptyHint: 'Companies where you\'ve submitted an application.' },
+  { key: 'co_archived',    label: 'Archived',        color: '#374151', stageType: 'paused',  emptyHint: 'Companies set aside for now.' },
 ];
 let customOpportunityStages = [...DEFAULT_OPPORTUNITY_STAGES];
 let customCompanyStages = [...DEFAULT_COMPANY_STAGES];
@@ -1776,12 +1778,32 @@ function render() {
   if (viewMode === 'kanban' && activePipeline !== 'all') {
     grid.style.display = 'none';
     kanbanBoard.style.display = 'flex';
+    const _tbRowShow = document.getElementById('kanban-toolbar-row');
+    if (_tbRowShow) _tbRowShow.style.display = '';
     if (statusToolbar) statusToolbar.style.display = 'none';
+    // Apply board toolbar quick-filter chip
+    if (activeFilter === 'my_court') {
+      filtered = filtered.filter(c => c.actionStatus === 'my_court');
+    } else if (activeFilter === 'overdue') {
+      const todayTs = new Date().setHours(0, 0, 0, 0);
+      filtered = filtered.filter(c => c.nextStepDate && new Date(c.nextStepDate).setHours(0, 0, 0, 0) < todayTs);
+    } else if (activeFilter === 'qualified') {
+      // Qualified = score >= 7.5 (matches the green tier in the score color spectrum memory)
+      filtered = filtered.filter(c => {
+        const score = c.jobMatch?.score || c.fitScore || 0;
+        return score >= 7.5;
+      });
+    } else if (activeFilter === 'starred') {
+      filtered = filtered.filter(c => (c.rating || 0) >= 4);
+    }
     renderKanban(filtered);
     return;
   }
 
   kanbanBoard.style.display = 'none';
+  // Hide toolbar row when switching away from kanban
+  const _tbRow = document.getElementById('kanban-toolbar-row');
+  if (_tbRow) _tbRow.style.display = 'none';
   grid.style.display = '';
   if (statusToolbar) statusToolbar.style.display = '';
 
@@ -2792,6 +2814,42 @@ function renderKanban(filtered) {
   const board = document.getElementById('kanban-board');
   const stages = currentStages();
   const validKeys = new Set(stages.map(s => s.key));
+
+  // ── Board toolbar ─────────────────────────────────────────────────────────
+  // Compute chip counts from allCompanies (filtered to current pipeline type)
+  const pipelineItems = allCompanies.filter(c =>
+    activePipeline === 'opportunity' ? !!c.isOpportunity : !c.isOpportunity
+  );
+  const today = new Date().setHours(0,0,0,0);
+  const chipCounts = {
+    all:      pipelineItems.length,
+    my_court: pipelineItems.filter(c => c.actionStatus === 'my_court').length,
+    overdue:  pipelineItems.filter(c => c.nextStepDate && new Date(c.nextStepDate).setHours(0,0,0,0) < today).length,
+  };
+
+  const toolbarHtml = `<div class="board-toolbar">
+    <div class="tb-search">
+      <span class="tb-search-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l3 3"/></svg></span>
+      <input class="tb-search-input" id="board-search" placeholder="Search companies, roles, tags\u2026" value="${escapeHtml(boardSearch || '')}">
+    </div>
+    <div class="tb-divider"></div>
+    <div class="tb-group">
+      <button class="tb-chip${activeFilter === 'all' ? ' active' : ''}" data-filter="all">All <span class="tb-chip-count">${chipCounts.all}</span></button>
+      <button class="tb-chip${activeFilter === 'my_court' ? ' active' : ''}" data-filter="my_court">My court <span class="tb-chip-count">${chipCounts.my_court}</span></button>
+      <button class="tb-chip${activeFilter === 'overdue' ? ' active' : ''}" data-filter="overdue">Overdue <span class="tb-chip-count">${chipCounts.overdue}</span></button>
+      <button class="tb-chip${activeFilter === 'qualified' ? ' active' : ''}" data-filter="qualified">Qualified</button>
+      <button class="tb-chip${activeFilter === 'starred' ? ' active' : ''}" data-filter="starred">Starred</button>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-view-toggle">
+      <button class="tb-view-btn${viewMode === 'kanban' ? ' active' : ''}" data-view="kanban"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="4" height="14" rx="1"/><rect x="6" y="1" width="4" height="14" rx="1"/><rect x="11" y="1" width="4" height="14" rx="1"/></svg> Kanban</button>
+      <button class="tb-view-btn${viewMode !== 'kanban' ? ' active' : ''}" data-view="grid"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg> Table</button>
+    </div>
+    <button class="tb-icon-btn" data-coming-soon="group" title="Group by"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M4 8h8M6 12h4"/></svg></button>
+    <button class="tb-icon-btn" data-coming-soon="sort" title="Sort"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l5-3 5 3M7 2v12M4 10l3 3 3-3"/></svg></button>
+    <button class="tb-icon-btn" data-coming-soon="more" title="More"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg></button>
+  </div>`;
+
   // Skip the scoring queue + apply queue columns in opportunity pipeline — they have dedicated pages
   // Always render closed_lost stage last regardless of storage order
   const stagesForRender = [...stages].sort((a, b) => {
@@ -2801,7 +2859,7 @@ function renderKanban(filtered) {
   });
 
   const renderStages = (activePipeline === 'opportunity') ? stagesForRender.filter(s => s.key !== QUEUE_STAGE && s.key !== 'want_to_apply') : stagesForRender;
-  board.innerHTML = renderStages.map((stageObj) => {
+  const columnsHtml = renderStages.map((stageObj) => {
     const statusKey = stageObj.key;
     const statusLabel = stageObj.label;
     const cards = filtered.filter(c => {
@@ -2856,16 +2914,24 @@ function renderKanban(filtered) {
     const isExpanded = _expandedQuietCols.has(statusKey);
     const showQuietMode = isQuietCandidate && !isExpanded;
 
+    const emptyBlock = `<div class="col-empty">
+          <div class="col-empty-title">Nothing here yet.</div>
+          <div class="col-empty-hint">${escapeHtml(stageObj.emptyHint || 'Drop a card when something lands in this stage.')}</div>
+        </div>`;
+
     return `
       <div class="kanban-col${isCollapsed ? ' collapsed' : ''}${showQuietMode ? ' quiet-col' : ''}" data-col-key="${statusKey}">
-        <div class="kanban-col-header" data-status="${statusKey}" style="border-top-color:${dotColor};border-left-color:${dotColor}">
-          <div class="col-color-dot" data-col="${statusKey}" style="background:${dotColor}"></div>
+        <div class="kanban-col-header board-col-header" data-status="${statusKey}" style="border-top-color:${dotColor};border-left-color:${dotColor}">
+          <div class="board-col-dot col-color-dot" data-col="${statusKey}" style="--stage-color:${dotColor};background:${dotColor}"></div>
           <span class="kanban-col-title">${escapeHtml(statusLabel)}</span>
           <span class="kanban-col-count">${cards.length}</span>
           ${statusKey === QUEUE_STAGE && activePipeline === 'opportunity' ? `<button class="col-rescore-btn" data-col="${statusKey}" title="Re-score all entries in queue">↻ Re-score</button>` : ''}
           ${showQuietMode ? `<button class="col-quiet-expand" data-col="${statusKey}" title="Show all ${cards.length} entries in this column">Expand</button>` : ''}
           ${!showQuietMode ? `<button class="col-view-toggle" data-col="${statusKey}" title="${toggleTitle}">${toggleIcon}</button>` : ''}
-          <button class="kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4L6 8l4 4"/></svg></button>
+          <div class="board-col-actions">
+            <button class="col-act kanban-col-collapse" data-collapse="${statusKey}" title="${isCollapsed ? 'Expand' : 'Collapse'}">⟨</button>
+            <button class="col-act col-act-menu" data-menu="${statusKey}" title="More">⋯</button>
+          </div>
         </div>
         <div class="kanban-cards" data-status="${statusKey}">
           ${showQuietMode
@@ -2873,10 +2939,29 @@ function renderKanban(filtered) {
                  <span style="font-size:13px;color:var(--ci-text-secondary)">${cards.length} entries — high volume</span>
                  <button class="col-quiet-expand-inline" data-col="${statusKey}" style="margin-top:8px;padding:6px 14px;font-size:12px;font-weight:600;background:transparent;border:1px solid var(--ci-border-default);border-radius:var(--ci-radius-sm);cursor:pointer;color:var(--ci-text-secondary);font-family:inherit;">Show all ${cards.length}</button>
                </div>`
-            : (cards.length ? cards.map(c => renderCard(c)).join('') : '<div class="kanban-empty">Empty</div>')}
+            : (cards.length ? cards.map(c => renderCard(c)).join('') : emptyBlock)}
+          <button class="board-col-add" data-stage="${statusKey}">
+            <span class="board-col-add-circle">+</span>Add card
+          </button>
         </div>
       </div>`;
   }).join('');
+
+  // Add-stage ghost column
+  const addStageHtml = `<button class="board-add-stage" id="board-add-stage">
+    <span class="board-add-stage-circle">+</span>
+    <span class="board-add-stage-label">Add stage</span>
+  </button>`;
+
+  // Toolbar goes in a sibling div above the board (not inside the flex-row board container)
+  let toolbarEl = document.getElementById('kanban-toolbar-row');
+  if (!toolbarEl) {
+    toolbarEl = document.createElement('div');
+    toolbarEl.id = 'kanban-toolbar-row';
+    board.parentNode.insertBefore(toolbarEl, board);
+  }
+  toolbarEl.innerHTML = toolbarHtml;
+  board.innerHTML = columnsHtml + addStageHtml;
 
   // Swipe overlays are now injected dynamically on swipe start (in bindKanbanEvents)
 
@@ -3833,6 +3918,147 @@ function bindKanbanEvents(board) {
       });
     }
   }
+
+  // ── Board toolbar event wiring ────────────────────────────────────────────
+
+  // Search
+  const boardSearchInput = document.getElementById('board-search');
+  if (boardSearchInput) {
+    boardSearchInput.addEventListener('input', () => {
+      boardSearch = boardSearchInput.value;
+      localStorage.setItem('ci_boardSearch', boardSearch);
+      applyBoardSearchFilter();
+    });
+    // Prevent search keystrokes from bubbling to page-level shortcut handlers
+    boardSearchInput.addEventListener('keydown', e => e.stopPropagation());
+  }
+
+  // Filter chips (toolbar is a sibling of board — use document scope)
+  const _toolbarEl = document.getElementById('kanban-toolbar-row');
+  if (_toolbarEl) {
+    _toolbarEl.querySelectorAll('.tb-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        activeFilter = chip.dataset.filter;
+        localStorage.setItem('ci_boardFilter', activeFilter);
+        render();
+      });
+    });
+
+    // View switcher (tb-view-btn) — route through setViewMode so existing
+    // legacy view-toggle button states + column-picker visibility update too.
+    _toolbarEl.querySelectorAll('.tb-view-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        if (view === viewMode) return;
+        if (typeof setViewMode === 'function') setViewMode(view);
+        else { viewMode = view; localStorage.setItem('ci_viewMode', view); render(); }
+      });
+    });
+
+    // Coming-soon icon buttons
+    _toolbarEl.querySelectorAll('.tb-icon-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showComingSoonPopover(btn, btn.dataset.comingSoon);
+      });
+    });
+  }
+
+  // Add card button
+  board.querySelectorAll('.board-col-add').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showInlineCardComposer(btn, btn.dataset.stage);
+    });
+  });
+
+  // Column action menu (⋯) — opens stage editor
+  board.querySelectorAll('.col-act-menu').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openStageEditor();
+    });
+  });
+
+  // Add stage ghost column
+  document.getElementById('board-add-stage')?.addEventListener('click', () => {
+    openStageEditor();
+  });
+
+  // Apply boardSearch filter immediately after render (restore persisted search state)
+  if (boardSearch) applyBoardSearchFilter();
+}
+
+// ── Board toolbar helpers ────────────────────────────────────────────────────
+
+function applyBoardSearchFilter() {
+  const q = (boardSearch || '').toLowerCase().trim();
+  const cards = document.querySelectorAll('.kanban-card, .compact-card');
+  if (!q) {
+    cards.forEach(c => { c.style.opacity = ''; c.style.boxShadow = ''; });
+    return;
+  }
+  cards.forEach(c => {
+    const text = c.textContent.toLowerCase();
+    const matches = text.includes(q);
+    c.style.opacity = matches ? '1' : '0.2';
+    c.style.boxShadow = matches ? '0 0 0 1px var(--ci-accent-amber)' : '';
+    c.style.transition = 'opacity var(--motion-xs) var(--ease-out), box-shadow var(--motion-xs) var(--ease-out)';
+  });
+}
+
+function showInlineCardComposer(anchor, stageKey) {
+  // Remove any existing composer first
+  document.querySelectorAll('.board-add-card-composer').forEach(el => el.remove());
+  const composer = document.createElement('div');
+  composer.className = 'board-add-card-composer';
+  composer.style.cssText = 'padding:8px;background:var(--ci-bg-raised);border:1px solid var(--ci-accent-primary);border-radius:6px;margin-top:6px;';
+  composer.innerHTML = `<input class="board-add-card-input" placeholder="Company name" style="width:100%;padding:6px;border:none;background:transparent;font-size:13px;font-family:inherit;outline:none;color:var(--ci-text-primary);">`;
+  anchor.parentNode.insertBefore(composer, anchor.nextSibling);
+  const input = composer.querySelector('input');
+  input.focus();
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      e.preventDefault();
+      const name = input.value.trim();
+      const isOpp = activePipeline === 'opportunity';
+      const newEntry = {
+        id: 'ci_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        company: name,
+        savedAt: Date.now(),
+        isOpportunity: isOpp,
+        ...(isOpp ? { jobStage: stageKey } : { status: stageKey })
+      };
+      allCompanies.unshift(newEntry);
+      chrome.storage.local.set({ savedCompanies: allCompanies }, () => {
+        composer.remove();
+        render();
+      });
+    } else if (e.key === 'Escape') {
+      composer.remove();
+    }
+  });
+  input.addEventListener('blur', () => { setTimeout(() => { composer.remove(); }, 200); });
+}
+
+function showComingSoonPopover(anchor, kind) {
+  document.querySelectorAll('.tb-coming-soon-popover').forEach(el => el.remove());
+  const pop = document.createElement('div');
+  pop.className = 'tb-coming-soon-popover';
+  pop.style.cssText = 'position:fixed;background:var(--ci-bg-raised);border:1px solid var(--ci-border-default);border-radius:8px;padding:10px 14px;box-shadow:var(--ci-shadow-md);z-index:1000;font-size:12px;color:var(--ci-text-primary);max-width:240px;';
+  const label = kind === 'group'
+    ? 'Group cards by stage, action, or rating.'
+    : kind === 'sort'
+    ? 'Sort by score, last activity, or saved date.'
+    : 'More board options on the way.';
+  pop.innerHTML = `<strong>Coming soon.</strong><br><span style="color:var(--ci-text-secondary);">${label}</span>`;
+  const rect = anchor.getBoundingClientRect();
+  pop.style.left = rect.left + 'px';
+  pop.style.top = (rect.bottom + 4) + 'px';
+  document.body.appendChild(pop);
+  setTimeout(() => {
+    document.addEventListener('click', () => pop.remove(), { once: true });
+  }, 50);
 }
 
 // View toggle
@@ -3872,6 +4098,8 @@ function setViewMode(mode) {
   if (mode === 'tasks') {
     grid.style.display = 'none';
     kanban.style.display = 'none';
+    const _tbRowTasks = document.getElementById('kanban-toolbar-row');
+    if (_tbRowTasks) _tbRowTasks.style.display = 'none';
     tasks.style.display = '';
     renderTasksView();
   } else {

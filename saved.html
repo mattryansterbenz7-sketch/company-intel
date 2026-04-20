@@ -385,8 +385,7 @@
     .kanban-col-collapse { background: none; border: none; color: var(--ci-text-tertiary); font-size: 14px; cursor: pointer; padding: 2px; border-radius: 4px; line-height: 1; opacity: 0.5; transition: opacity 0.15s; margin-left: auto; }
     .kanban-col-collapse:hover { opacity: 1; }
     .kanban-cards { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; padding: 8px 4px; border: none; background: transparent; transition: background 0.15s; border-radius: 0; }
-    .kanban-cards.drag-over { background: rgba(255,122,89,0.07) !important; border-radius: 6px; box-shadow: inset 0 0 0 1.5px rgba(255,122,89,0.35); }
-    .kanban-col-header.drag-over { background: rgba(255,122,89,0.10); box-shadow: inset 0 -2px 0 rgba(255,122,89,0.4); }
+    /* drag-over tokenized — see .board-chrome section below */
     /* Quiet column — outreach-type stages with > 10 entries collapse to compressed width */
     .kanban-col.quiet-col { width: 200px; opacity: 0.85; transition: width 0.25s ease, opacity 0.18s ease; }
     .kanban-col.quiet-col:hover { opacity: 1; }
@@ -481,6 +480,261 @@
     .kanban-card.swiping, .compact-card.swiping { transition: background 0.1s, box-shadow 0.1s; }
 
     .kanban-empty { font-size: 12px; color: var(--ci-text-tertiary); text-align: center; padding: 24px 0; }
+
+    /* ══════════════════════════════════════════════════════════════
+       Board chrome — #254  (.board-* added alongside .kanban-*)
+       ══════════════════════════════════════════════════════════════ */
+
+    /* Board toolbar */
+    .board-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--ci-border-subtle);
+      background: var(--ci-bg-raised);
+      flex-shrink: 0;
+    }
+    .board-toolbar .tb-group { display: flex; align-items: center; gap: 4px; }
+    .board-toolbar .tb-search { position: relative; flex: 0 1 280px; }
+    .board-toolbar .tb-search-input {
+      width: 100%; font-size: 12.5px; font-family: inherit;
+      padding: 6px 10px 6px 28px;
+      background: var(--ci-bg-inset);
+      border: 1px solid transparent; border-radius: var(--ci-radius-sm);
+      color: var(--ci-text-primary); outline: none;
+      transition: background var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    }
+    .board-toolbar .tb-search-input::placeholder { color: var(--ci-text-tertiary); }
+    .board-toolbar .tb-search-input:focus { background: var(--ci-bg-raised); border-color: var(--ci-border-strong); }
+    .board-toolbar .tb-search-icon {
+      position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+      color: var(--ci-text-tertiary); pointer-events: none;
+    }
+    .board-toolbar .tb-search-icon svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .board-toolbar .tb-divider { width: 1px; height: 20px; background: var(--ci-border-subtle); margin: 0 4px; }
+    .board-toolbar .tb-chip {
+      font-size: 12px; font-weight: 500;
+      padding: 5px 10px; border-radius: var(--ci-radius-sm);
+      background: transparent; color: var(--ci-text-secondary);
+      border: 1px solid transparent; cursor: pointer; font-family: inherit;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    }
+    .board-toolbar .tb-chip:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .board-toolbar .tb-chip.active {
+      background: var(--ci-accent-primary-soft);
+      color: var(--ci-accent-primary);
+      border-color: rgba(252,99,107,0.2);
+    }
+    .board-toolbar .tb-chip-count {
+      font-size: 10px; padding: 1px 5px; border-radius: 99px;
+      background: var(--ci-accent-primary); color: #fff; font-weight: 700;
+    }
+    .board-toolbar .tb-spacer { flex: 1; }
+    .board-toolbar .tb-view-toggle {
+      display: flex; background: var(--ci-bg-inset); border-radius: var(--ci-radius-sm); padding: 2px;
+    }
+    .board-toolbar .tb-view-btn {
+      font-size: 11.5px; font-weight: 500;
+      padding: 4px 9px; border-radius: 4px;
+      color: var(--ci-text-tertiary); background: transparent;
+      border: none; cursor: pointer; font-family: inherit;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+    }
+    .board-toolbar .tb-view-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+    .board-toolbar .tb-view-btn.active { background: var(--ci-bg-raised); color: var(--ci-text-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+    .board-toolbar .tb-icon-btn {
+      width: 26px; height: 26px; border-radius: var(--ci-radius-sm);
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ci-text-tertiary); background: transparent; border: none; cursor: pointer;
+      transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out);
+    }
+    .board-toolbar .tb-icon-btn:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .board-toolbar .tb-icon-btn svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Board column new-chrome classes (alongside .kanban-col/.kanban-col-header) */
+    .board-col-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px 8px;
+      border-bottom: 1px solid var(--ci-border-subtle);
+      cursor: default; user-select: none;
+    }
+    .board-col-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--stage-color, var(--ci-text-tertiary));
+      flex-shrink: 0;
+      box-shadow: 0 0 0 1.5px var(--ci-bg-base);
+    }
+    .board-col-title {
+      font-size: 13px; font-weight: 600;
+      color: var(--ci-text-primary);
+      letter-spacing: -0.005em;
+    }
+    .board-col-count {
+      font-size: 11px; font-weight: 700;
+      padding: 1px 7px;
+      background: var(--ci-bg-raised);
+      color: var(--ci-text-secondary);
+      border-radius: 99px;
+      font-variant-numeric: tabular-nums;
+    }
+    .board-col-count.zero { color: var(--ci-text-tertiary); opacity: 0.6; }
+    .board-col-actions {
+      margin-left: auto; display: flex; gap: 1px;
+      opacity: 0;
+      transition: opacity var(--motion-xs) var(--ease-out);
+    }
+    .kanban-col:hover .board-col-actions { opacity: 1; }
+    .kanban-col.collapsed .board-col-actions { display: none; }
+    .col-act {
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ci-text-tertiary); background: transparent;
+      border: none; cursor: pointer; border-radius: 4px;
+      transition: background var(--motion-xs), color var(--motion-xs);
+    }
+    .col-act:hover { background: var(--ci-bg-inset); color: var(--ci-text-primary); }
+    .col-act svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Drag states — tokenized */
+    .kanban-cards.drag-over {
+      background: var(--ci-accent-primary-soft) !important;
+      border-radius: 6px;
+      box-shadow: inset 0 0 0 1.5px var(--ci-accent-primary);
+    }
+    .kanban-col-header.drag-over {
+      background: var(--ci-accent-primary-soft);
+      box-shadow: inset 0 -2px 0 var(--ci-accent-primary);
+    }
+    /* Secondary tint on cards area when a column is drag-target (rgba is acceptable per #254 decision) */
+    .kanban-cards.drag-target { background: rgba(252,99,107,0.04); }
+
+    /* Drop indicator */
+    .drop-indicator {
+      height: 2px; background: var(--ci-accent-primary);
+      border-radius: 99px; margin: 0 2px; position: relative;
+    }
+    .drop-indicator::before, .drop-indicator::after {
+      content: ''; position: absolute;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ci-accent-primary);
+      top: 50%; transform: translateY(-50%);
+    }
+    .drop-indicator::before { left: -4px; }
+    .drop-indicator::after  { right: -4px; }
+
+    /* EmptyBlock-tight grammar */
+    .col-empty {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 28px 16px; gap: 6px; text-align: center;
+    }
+    .col-empty-title {
+      font-size: 12px; font-weight: 600;
+      color: var(--ci-text-secondary); letter-spacing: -0.002em;
+    }
+    .col-empty-hint {
+      font-size: 11px; color: var(--ci-text-tertiary);
+      line-height: 1.4; max-width: 200px;
+    }
+
+    /* + Add card row */
+    .board-col-add {
+      padding: 8px 10px;
+      font-size: 11.5px; font-weight: 500;
+      color: var(--ci-text-tertiary);
+      background: transparent; border: none;
+      border-top: 1px dashed transparent;
+      cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; gap: 6px;
+      flex-shrink: 0;
+      transition: color var(--motion-xs) var(--ease-out), background var(--motion-xs) var(--ease-out);
+    }
+    .board-col-add:hover { color: var(--ci-text-primary); background: var(--ci-bg-raised); }
+    .board-col-add-circle {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 1px dashed var(--ci-border-strong);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+    }
+    /* Inline composer (+ Add card form) */
+    .board-col-composer {
+      padding: 6px 8px 8px;
+      flex-shrink: 0;
+      border-top: 1px solid var(--ci-border-subtle);
+    }
+    .board-col-composer-input {
+      width: 100%; font-size: 12.5px; font-family: inherit;
+      padding: 7px 10px;
+      background: var(--ci-bg-raised);
+      border: 1px solid var(--ci-border-strong); border-radius: var(--ci-radius-sm);
+      color: var(--ci-text-primary); outline: none;
+    }
+    .board-col-composer-input:focus { border-color: var(--ci-accent-primary); }
+    .board-col-composer-hint {
+      font-size: 10.5px; color: var(--ci-text-tertiary);
+      margin-top: 4px; padding-left: 2px;
+    }
+
+    /* Ghost "+ Add stage" column */
+    .board-add-stage {
+      flex-shrink: 0; width: 220px;
+      min-height: 100px;
+      border-radius: var(--ci-radius-md);
+      border: 1px dashed var(--ci-border-strong);
+      background: transparent;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 20px 12px;
+      cursor: pointer; color: var(--ci-text-tertiary);
+      font-family: inherit;
+      align-self: stretch;
+      transition: background var(--motion-xs) var(--ease-out), color var(--motion-xs) var(--ease-out), border-color var(--motion-xs) var(--ease-out);
+    }
+    .board-add-stage:hover {
+      background: var(--ci-bg-raised); color: var(--ci-text-primary);
+      border-color: var(--ci-border-default); border-style: solid;
+    }
+    .board-add-stage-circle {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--ci-bg-raised); border: 1px dashed var(--ci-border-strong);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: inherit; font-weight: 700;
+    }
+    .board-add-stage-label { font-size: 12px; font-weight: 500; letter-spacing: -0.005em; }
+
+    /* Collapsed column — 44px, vertical title */
+    .kanban-col.collapsed.board-col-enhanced { width: 44px; min-width: 44px; }
+    .kanban-col.collapsed .board-col-header {
+      flex-direction: column;
+      padding: 12px 4px;
+      gap: 8px;
+      border-bottom: none;
+      height: 100%; min-height: 200px;
+      justify-content: flex-start;
+    }
+    .kanban-col.collapsed .board-col-title {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 10px;
+    }
+    .kanban-col.collapsed .board-col-count { font-size: 10px; padding: 2px 5px; }
+    .kanban-col.collapsed .board-col-add { display: none; }
+
+    /* "Coming soon" popover */
+    .board-coming-soon-popover {
+      position: fixed;
+      background: var(--ci-bg-overlay); border: 1px solid var(--ci-border-default);
+      border-radius: var(--ci-radius-md); box-shadow: var(--ci-shadow-lg);
+      padding: 12px 16px; z-index: 300; min-width: 180px;
+      font-size: 12px; color: var(--ci-text-secondary); line-height: 1.5;
+    }
+    .board-coming-soon-popover strong {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--ci-text-primary); margin-bottom: 4px;
+    }
+
+    /* Board-level search: dim non-matching cards */
+    .kanban-card.board-search-dim { opacity: 0.2; pointer-events: none; }
+    .kanban-card.board-search-match { outline: 1px solid var(--ci-accent-amber); outline-offset: 1px; transition: outline var(--motion-xs) var(--ease-out); }
 
     /* ── Header row ────────────────────────────────────────────────── */
     .kc-header {
