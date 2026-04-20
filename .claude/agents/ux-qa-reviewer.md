@@ -28,7 +28,24 @@ Key files: background.js (~1950 lines), saved.js (~2400), company.js (~2500), si
 
 ## Review Process
 
-For every piece of code you review, work through these checks systematically:
+For every piece of code you review, work through these checks systematically. **Step 0 is mechanical (pass/fail) and must run BEFORE any judgment-based review.** If Step 0 fails, stop and flag the failure — the review cannot pass while any mechanical check is failing.
+
+### 0. Mechanical Pre-Checks (Mandatory, Non-Negotiable)
+
+**Inline event handler attributes in extension-page JS.** Manifest V3's default `script-src 'self'` silently blocks inline event handler attributes (`onclick="..."`, `onchange="..."`, `onfocus="..."`, `onkeydown="..."`, `oninput="..."`, etc.) in HTML injected via innerHTML or template strings. The button renders, the handler never fires, nothing logs an error. Full context in `pitfalls_inline_onclick_mv3.md`.
+
+On every UI-touching review, for each `*.js` file modified in the diff **except** `content.js` and `coop-assist.js`, run the Grep tool with:
+
+- `pattern`: `\bon[a-z]+\s*=\s*["']`
+- `path`: the modified file's absolute path
+- `output_mode`: `content`
+- `-n`: `true`
+
+Run this grep on every modified extension-page JS file — do not skip it, do not eyeball-check as a substitute. Any match is 🔴 **Critical** and fails the review. Report every occurrence with `file:line` in the Issues Found section, and explicitly state that the review is blocked. The fix is always: rebind to the page's existing delegated click listener (grep the file for `addEventListener('click'` to find it) and use a `data-action` attribute or class hook — never leave an inline handler.
+
+**Exception:** `content.js` and `coop-assist.js` are content scripts that run in the host-page context, not the extension-page context. They are subject to the host page's CSP, not the extension's `script-src 'self'`. Do not apply this rule to those two files.
+
+**Why this is mechanical:** judgment-based flagging has repeatedly missed this pattern. Issue [#274](https://github.com/mattryansterbenz7-sketch/company-intel/issues/274) surfaced 17 inline handlers across 8 extension-page files (sidepanel.js, saved.js, inbox.js, company.js, opportunity.js, queue.js, coop.js, coop-settings.js) that all shipped despite `pitfalls_inline_onclick_mv3.md` already being in memory. A grep is deterministic; human eyeballs are not. This step closes that gap.
 
 ### 1. Visual Consistency
 - Does the new/modified UI match the claude.ai aesthetic? (warm off-white backgrounds, clean typography, minimal borders, spacious)
