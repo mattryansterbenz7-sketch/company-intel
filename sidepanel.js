@@ -197,16 +197,16 @@ function _applyTopLevelChatSize(size) {
 }
 
 function enterChatMode() {
-  const saved = localStorage.getItem('ci_sp_chat_size');
-  const size = CHAT_SIZES.includes(saved) ? saved : 'half';
-  _applyTopLevelChatSize(size);
+  // Cycle: minimized → half → full → minimized
+  const current = localStorage.getItem('ci_sp_chat_size') || 'minimized';
+  const idx = CHAT_SIZES.indexOf(current);
+  const next = CHAT_SIZES[(idx + 1) % CHAT_SIZES.length];
+  _applyTopLevelChatSize(next);
 }
 
 function exitChatMode() {
-  document.body.classList.remove('chat-mode', 'chat-half', 'chat-minimized');
-  const chatEl = document.getElementById('sp-chat');
-  if (chatEl) chatEl.style.display = '';
-  localStorage.removeItem('ci_sp_chat_size');
+  // Dock is always visible — shrink to minimized instead of hiding entirely
+  _applyTopLevelChatSize('minimized');
 }
 
 if (coopToggleBtn) {
@@ -222,7 +222,292 @@ const _savedSize = localStorage.getItem('ci_sp_chat_size');
 const _legacyChat = localStorage.getItem('ci_sp_mode') === 'chat';
 if (CHAT_SIZES.includes(_savedSize) || _legacyChat) {
   _applyTopLevelChatSize(CHAT_SIZES.includes(_savedSize) ? _savedSize : 'half');
+} else {
+  // Dock always visible — start minimized by default
+  _applyTopLevelChatSize('minimized');
 }
+document.body.classList.add('sp-dock-visible');
+
+// ── State machine ───────────────────────────────────────────────────────────
+// States: 'nothing' | 'detected' | 'in-pipeline' | 'pipeline-dashboard' | 'apply-mode'
+let _spCurrentState = 'nothing';
+let _spViewOverride = null; // 'today' | 'pipeline' | null (null = use state default)
+
+/**
+ * Detect ATS application form URLs (duplicated from chat IIFE to avoid scope issues).
+ * Returns true if the URL looks like an actual apply/application page.
+ */
+function _spIsApplyUrl(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    const path = u.pathname.toLowerCase();
+    const host = u.hostname.toLowerCase();
+    if (host.includes('greenhouse.io') && (path.includes('/application') || path.includes('/apply'))) return true;
+    if (host.includes('lever.co') && path.includes('/apply')) return true;
+    if (host.includes('myworkdayjobs.com') && (path.includes('/apply') || path.includes('/login'))) return true;
+    if (host.includes('ashbyhq.com') && path.includes('/application')) return true;
+    if (host.includes('jobvite.com') && path.includes('/apply')) return true;
+    if (host.includes('smartrecruiters.com') && path.includes('/apply')) return true;
+    if (host.includes('workable.com') && path.includes('/apply')) return true;
+    if (/\/applications?\//i.test(path) || /\/apply\b/i.test(path)) return true;
+    return false;
+  } catch { return false; }
+}
+
+/**
+ * Returns the current side panel state based on detection and URL.
+ * Called after detection results arrive; reads module-level variables.
+ */
+function getCurrentSidepanelState() {
+  // Apply mode is exclusive — check first
+  if (_spIsApplyUrl(currentUrl)) {
+    return 'apply-mode';
+  }
+  // In-pipeline: saved entry for this page
+  if (currentSavedEntry) return 'in-pipeline';
+  // Detected: content script found a company (home hidden = something detected)
+  const homeEl = document.getElementById('sp-home');
+  if (homeEl && homeEl.style.display === 'none') return 'detected';
+  return 'nothing';
+}
+
+/** Update the context chip row to match current state */
+function updateCtxRow(state) {
+  const chip = document.getElementById('sp-ctx-chip');
+  const chipLabel = document.getElementById('sp-ctx-chip-label');
+  const toggle = document.getElementById('sp-view-toggle');
+  if (!chip || !chipLabel || !toggle) return;
+
+  // Reset chip classes
+  chip.className = 'sp-ctx-chip';
+
+  switch (state) {
+    case 'nothing':
+      chipLabel.textContent = 'Today';
+      toggle.classList.add('hidden');
+      break;
+    case 'detected':
+      chip.classList.add('sp-chip-detected');
+      chipLabel.textContent = 'Detected';
+      toggle.classList.remove('hidden');
+      break;
+    case 'in-pipeline': {
+      chip.classList.add('sp-chip-in-pipeline');
+      const stage = currentSavedEntry?.jobStage || '';
+      chipLabel.textContent = stage ? `In pipeline · ${stage}` : 'In pipeline';
+      toggle.classList.remove('hidden');
+      break;
+    }
+    case 'pipeline-dashboard':
+      chip.classList.add('sp-chip-in-pipeline');
+      chipLabel.textContent = 'Pipeline';
+      toggle.classList.remove('hidden');
+      break;
+    case 'apply-mode':
+      chip.classList.add('sp-chip-apply');
+      chipLabel.textContent = currentSavedEntry?.company
+        ? `Apply mode · ${currentSavedEntry.company}`
+        : 'Apply mode';
+      toggle.classList.add('hidden');
+      break;
+  }
+
+  // Sync toggle active state
+  const todayBtn = document.getElementById('sp-toggle-today');
+  const pipelineBtn = document.getElementById('sp-toggle-pipeline');
+  const effectiveView = _spViewOverride || (state === 'nothing' ? 'today' : 'pipeline');
+  if (todayBtn) todayBtn.classList.toggle('active', effectiveView === 'today');
+  if (pipelineBtn) pipelineBtn.classList.toggle('active', effectiveView === 'pipeline');
+}
+
+/**
+ * Show/hide the correct body based on state + view override.
+ * Does NOT touch company content (research sections) — those are managed by existing code.
+ */
+function dispatchStateView(state) {
+  const todayView   = document.getElementById('sp-today-view');
+  const applyBody   = document.getElementById('sp-apply-mode-body');
+  const pipelineDash = document.getElementById('sp-pipeline-dash');
+  const mainScroll  = document.getElementById('sp-main-scroll');
+
+  // Determine effective view
+  const effectiveView = _spViewOverride || (state === 'nothing' ? 'today' : 'pipeline');
+
+  if (state === 'apply-mode') {
+    // Apply mode: show apply body, hide today + pipeline dash, keep main scroll (for company content if saved)
+    if (todayView)    todayView.style.display = 'none';
+    if (applyBody)    applyBody.classList.add('visible');
+    if (pipelineDash) pipelineDash.classList.remove('visible');
+    // Auto-expand Coop to half in apply mode
+    const currentSize = localStorage.getItem('ci_sp_chat_size');
+    if (!currentSize || currentSize === 'minimized') {
+      _applyTopLevelChatSize('half');
+    }
+    return;
+  }
+
+  // Not apply mode: hide apply body
+  if (applyBody) applyBody.classList.remove('visible');
+
+  if (effectiveView === 'today') {
+    if (todayView)    { todayView.style.display = 'flex'; }
+    if (pipelineDash) pipelineDash.classList.remove('visible');
+    if (mainScroll)   mainScroll.style.display = 'none';
+    renderTodayView();
+  } else {
+    // 'pipeline' view: show main scroll (existing company/research content)
+    if (todayView)    todayView.style.display = 'none';
+    if (pipelineDash) pipelineDash.classList.remove('visible');
+    if (mainScroll)   mainScroll.style.display = '';
+  }
+}
+
+/** Full state machine render: determine state, update chip, dispatch view */
+function renderSidepanelState() {
+  const state = getCurrentSidepanelState();
+  _spCurrentState = state;
+  updateCtxRow(state);
+
+  // Crossfade transition
+  const mainScroll = document.getElementById('sp-main-scroll');
+  const todayView  = document.getElementById('sp-today-view');
+  [mainScroll, todayView].forEach(el => { if (el) el.classList.add('sp-fading'); });
+  requestAnimationFrame(() => {
+    dispatchStateView(state);
+    requestAnimationFrame(() => {
+      [mainScroll, todayView].forEach(el => { if (el) el.classList.remove('sp-fading'); });
+    });
+  });
+}
+
+// Toggle button handlers
+document.getElementById('sp-toggle-today')?.addEventListener('click', () => {
+  _spViewOverride = 'today';
+  updateCtxRow(_spCurrentState);
+  dispatchStateView(_spCurrentState);
+});
+document.getElementById('sp-toggle-pipeline')?.addEventListener('click', () => {
+  _spViewOverride = 'pipeline';
+  updateCtxRow(_spCurrentState);
+  dispatchStateView(_spCurrentState);
+});
+
+/** Render the Today view: Tasks (top) → Next up → Pipeline nudges */
+function renderTodayView() {
+  const body = document.getElementById('sp-today-body');
+  if (!body) return;
+  body.innerHTML = '<div class="sp-shimmer"><div class="sp-shimmer-line"></div><div class="sp-shimmer-line"></div><div class="sp-shimmer-line"></div></div>';
+
+  chrome.storage.local.get(['userTasks', 'savedCompanies'], data => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const sections = [];
+
+    // ── 1. Tasks ──────────────────────────────────────────────────────────
+    const allTasks = (data.userTasks || [])
+      .filter(t => !t.completed && t.dueDate && t.dueDate <= todayStr)
+      .map(t => {
+        const daysUntil = Math.round((new Date(t.dueDate + 'T12:00:00') - today) / 86400000);
+        return { ...t, daysUntil };
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 5);
+
+    if (allTasks.length > 0) {
+      const rows = allTasks.map(t => {
+        const daysUntil = t.daysUntil;
+        const whenClass = daysUntil < 0 ? 'overdue' : 'today';
+        const whenLabel = daysUntil < 0 ? `${Math.abs(daysUntil)}d overdue` : 'Today';
+        const title = (t.text || t.title || '').slice(0, 60);
+        const company = t.company ? `<strong>${t.company}</strong> · ` : '';
+        return `<div class="sp-today-item">
+          <span class="sp-today-when ${whenClass}">${whenLabel}</span>
+          <span>${company}${title}</span>
+        </div>`;
+      }).join('');
+      sections.push(`<div class="sp-today-section"><h4>Tasks</h4>${rows}</div>`);
+    }
+
+    // ── 2. Next up (next steps with dates) ────────────────────────────────
+    const companies = data.savedCompanies || [];
+    const nextSteps = companies
+      .filter(c => c.isOpportunity && c.nextStepDate)
+      .map(c => {
+        const daysUntil = Math.round((new Date(c.nextStepDate + 'T12:00:00') - today) / 86400000);
+        return { company: c.company, text: (c.nextStep || '').slice(0, 50), daysUntil, id: c.id };
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 5);
+
+    if (nextSteps.length > 0) {
+      const rows = nextSteps.map(s => {
+        const whenClass = s.daysUntil < 0 ? 'overdue' : s.daysUntil === 0 ? 'today' : 'future';
+        const whenLabel = s.daysUntil < 0 ? `${Math.abs(s.daysUntil)}d overdue` : s.daysUntil === 0 ? 'Today' : s.daysUntil === 1 ? 'Fri' : `in ${s.daysUntil}d`;
+        return `<div class="sp-today-item" data-entry-id="${s.id}" style="cursor:pointer;" title="Open in CRM">
+          <span class="sp-today-when ${whenClass}">${whenLabel}</span>
+          <span><strong>${s.company}</strong>${s.text ? ' · ' + s.text : ''}</span>
+        </div>`;
+      }).join('');
+      const section = document.createElement('div');
+      section.className = 'sp-today-section';
+      section.innerHTML = `<h4>Next up</h4>${rows}`;
+      section.querySelectorAll('[data-entry-id]').forEach(el => {
+        el.addEventListener('click', () => {
+          coopNavigate(chrome.runtime.getURL('company.html?id=' + el.dataset.entryId), true);
+        });
+      });
+      sections.push(section.outerHTML);
+    }
+
+    // ── 3. Pipeline nudges ────────────────────────────────────────────────
+    const nudges = [];
+    const opps = companies.filter(c => c.isOpportunity);
+    // Stale: no stage change in 7+ days
+    const staleCount = opps.filter(c => {
+      const ts = c.stageTimestamps?.[c.jobStage];
+      return ts && (Date.now() - ts) > 7 * 86400000;
+    }).length;
+    if (staleCount > 0) {
+      nudges.push(`${staleCount} ${staleCount === 1 ? 'opportunity' : 'opportunities'} unchanged for 7+ days — review?`);
+    }
+    // High-score uncontacted
+    const hotCount = opps.filter(c => c.fitScore >= 7 && (!c.jobStage || c.jobStage === 'needs_review')).length;
+    if (hotCount > 0) {
+      nudges.push(`${hotCount} strong-fit ${hotCount === 1 ? 'role' : 'roles'} still in queue`);
+    }
+
+    if (nudges.length > 0) {
+      const rows = nudges.map(n => `<div class="sp-today-item"><span>${n}</span></div>`).join('');
+      sections.push(`<div class="sp-today-section"><h4>Pipeline nudges</h4>${rows}</div>`);
+    }
+
+    if (sections.length === 0) {
+      body.innerHTML = '<div class="sp-today-body"><div class="sp-today-section"><div class="sp-today-empty">All clear — nothing due today.</div></div></div>';
+    } else {
+      body.innerHTML = sections.join('');
+    }
+  });
+}
+
+// Apply Mode action card wiring — delegate to existing snip/screenshare buttons
+document.getElementById('sp-apply-snip')?.addEventListener('click', () => {
+  document.getElementById('sp-snip-btn')?.click();
+});
+document.getElementById('sp-apply-screenshare')?.addEventListener('click', () => {
+  document.getElementById('sp-screenshare-toggle')?.click();
+});
+document.getElementById('sp-apply-draft')?.addEventListener('click', () => {
+  const input = document.getElementById('sp-chat-input');
+  if (input) {
+    input.value = 'Help me draft a response to this application question.';
+    input.focus();
+    _applyTopLevelChatSize('half');
+  }
+});
+document.getElementById('sp-apply-library')?.addEventListener('click', () => {
+  coopNavigate(chrome.runtime.getURL('docs.html#answer-library'), true);
+});
 const savedBtn = document.getElementById('saved-btn'); // may be null if removed
 const companyNameEl = document.getElementById('company-name');
 const companyLinksEl = document.getElementById('company-links');
@@ -1229,7 +1514,7 @@ function showPipelineStats() {
     const fmtDate = ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const periodLabel = period === 'daily' ? 'Today' : `${fmtDate(start)} – ${fmtDate(end)}`;
 
-    el.innerHTML = `<span style="font-size:10px;font-weight:600;color:#7c98b6;text-transform:uppercase;letter-spacing:0.04em;margin-right:4px;">${periodLabel}</span>` +
+    el.innerHTML = `<span style="font-size:10px;font-weight:600;color:#7c98b6;margin-right:4px;">${periodLabel}</span>` +
     counts.map(c =>
       `<div class="sp-stat-chip">
         ${miniRing(c.count, c.goal, c.color)}
@@ -1254,6 +1539,10 @@ function markAsSaved() {
 
 // Show pipeline stats immediately on load
 showPipelineStats();
+
+// State machine: initial render — shows Today view (nothing detected yet)
+// Give DOM a moment to settle, then render state
+requestAnimationFrame(() => renderSidepanelState());
 
 // Detect company on load and auto-research
 chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
@@ -1306,6 +1595,9 @@ chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     detectedJobUrl = response.canonicalJobUrl || null;
     updateJobTitleBar();
     triggerResearch(response.company);
+
+    // State machine: company detected — update chip row after research starts
+    renderSidepanelState();
 
     // Concurrently extract description — fires in parallel with research
     if (currentJobTitle) {
@@ -1705,6 +1997,11 @@ function renderHomeState() {
   if (oppFields) oppFields.style.display = 'none';
   if (searchBtn) searchBtn.style.display = 'none';
   homeEl.style.display = '';
+
+  // State machine: home is showing — determine state and update chip row
+  // Reset view override when returning to home (nothing detected)
+  _spViewOverride = null;
+  renderSidepanelState();
 
   // Greeting
   const hour = new Date().getHours();
@@ -2208,11 +2505,11 @@ function renderHomeState() {
             editDiv.innerHTML = `
               <input class="sp-inline-text" type="text" value="${(el.dataset.taskText||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;outline:none;width:100%;box-sizing:border-box;background:#fff;">
               <div>
-                <div style="font-size:10px;font-weight:700;color:#9A9590;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Priority</div>
+                <div style="font-size:10px;font-weight:700;color:#9A9590;margin-bottom:6px;">Priority</div>
                 <div class="sp-inline-pri" style="display:flex;gap:6px;"></div>
               </div>
               <div>
-                <div style="font-size:10px;font-weight:700;color:#9A9590;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Due date</div>
+                <div style="font-size:10px;font-weight:700;color:#9A9590;margin-bottom:6px;">Due date</div>
                 <input class="sp-inline-date" type="date" value="${el.dataset.taskDate||''}" style="font-size:12px;padding:7px 10px;border:1px solid #E0DDD8;border-radius:6px;font-family:inherit;color:#3D3935;outline:none;width:100%;box-sizing:border-box;background:#fff;">
               </div>
               <div style="display:flex;gap:8px;">
@@ -2885,6 +3182,8 @@ function checkAlreadySaved(company) {
     if (manualLinkPanel) {
       manualLinkPanel.style.display = match ? 'none' : 'block';
     }
+    // State machine: update chip row now that saved entry status is known
+    renderSidepanelState();
     resolve();
   });
   });
@@ -3237,7 +3536,7 @@ function renderJobOpportunity(jobMatch, jobSnapshot) {
           const noteActive = fb?.type === 'note' ? ' active note' : '';
           return `
           <div class="verdict-row" style="margin-top:12px">
-            ${jobMatch.score ? `<span style="font-size:18px;font-weight:800;color:${jobMatch.score >= 7 ? '#00BDA5' : jobMatch.score >= 5 ? '#d97706' : '#f87171'};margin-right:4px"><span style="display:block;font-size:9px;font-weight:600;color:var(--ci-text-tertiary);text-transform:uppercase;letter-spacing:0.5px;line-height:1;">Coop's Score</span>${jobMatch.score}<span style="font-size:12px;opacity:0.6">/10</span></span>` : ''}
+            ${jobMatch.score ? `<span style="font-size:18px;font-weight:800;color:${jobMatch.score >= 7 ? '#00BDA5' : jobMatch.score >= 5 ? '#d97706' : '#f87171'};margin-right:4px"><span style="display:block;font-size:9px;font-weight:600;color:var(--ci-text-tertiary);line-height:1;">Coop's score</span>${jobMatch.score}<span style="font-size:12px;opacity:0.6">/10</span></span>` : ''}
             <span class="verdict-badge ${v.cls}">${v.label}</span>
             <span class="verdict-thumbs">
               <button class="thumb-btn${upActive}" data-dir="up" title="Agree with assessment">👍</button>
@@ -3742,7 +4041,7 @@ function renderResults(data) {
   const jobsHtml = allListings.length > 0
     ? allListings.map(j => `
         <a class="job-item${j.current ? ' current-posting' : ''}" href="${safeUrl(j.url)}" target="_blank">
-          <div class="job-title">${j.title}${j.current ? ' <span style="font-size:10px;color:#6366f1;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Viewing</span>' : ''}</div>
+          <div class="job-title">${j.title}${j.current ? ' <span style="font-size:10px;color:#6366f1;font-weight:600;">Viewing</span>' : ''}</div>
           <div class="job-snippet">${j.snippet || ''}</div>
         </a>`).join('')
     : '<div style="color:#555;font-size:13px">No open roles found</div>';
