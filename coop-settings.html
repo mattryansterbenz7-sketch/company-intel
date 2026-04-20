@@ -1290,6 +1290,128 @@
       .am-nav { position: static; }
       .am-tax-wrap { grid-template-columns: 1fr; }
     }
+
+    /* ── Apply Mode live pill (tab-bar right) ── */
+    .am-live-pill {
+      display: none; /* shown by JS when apply mode is active */
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ci-accent-primary);
+      padding: 4px 10px;
+      border: 1px solid var(--ci-accent-primary);
+      border-radius: var(--ci-radius-full);
+      margin-left: auto;
+      letter-spacing: 0.01em;
+      background: transparent;
+      flex-shrink: 0;
+    }
+    .am-live-pill.visible { display: inline-flex; }
+    .am-live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ci-accent-primary);
+      animation: am-redpulse 1.6s ease-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes am-redpulse {
+      0%   { box-shadow: 0 0 0 0 rgba(252,99,107,0.55); }
+      70%  { box-shadow: 0 0 0 6px rgba(252,99,107,0); }
+      100% { box-shadow: 0 0 0 0 rgba(252,99,107,0); }
+    }
+
+    /* ── Quick Links rows ── */
+    .am-ql-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 2px;
+      border-bottom: 1px solid var(--ci-border-subtle);
+      position: relative;
+    }
+    .am-ql-row:last-child { border-bottom: none; }
+    .am-ql-input-label {
+      width: 120px;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 8px;
+      border: 1px solid transparent;
+      border-radius: var(--ci-radius-sm);
+      background: transparent;
+      color: var(--ci-text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .am-ql-input-label:hover { background: var(--ci-bg-inset); border-color: var(--ci-border-default); }
+    .am-ql-input-label:focus { background: var(--ci-bg-inset); border-color: var(--ci-accent-primary); }
+    .am-ql-input-url {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      padding: 6px 8px;
+      border: 1px solid transparent;
+      border-radius: var(--ci-radius-sm);
+      background: transparent;
+      color: var(--ci-text-secondary);
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .am-ql-input-url:hover { background: var(--ci-bg-inset); border-color: var(--ci-border-default); }
+    .am-ql-input-url:focus { background: var(--ci-bg-inset); border-color: var(--ci-accent-primary); white-space: normal; }
+    .am-ql-del {
+      background: none; border: none;
+      color: var(--ci-text-tertiary); cursor: pointer;
+      font-size: 16px; padding: 4px 6px; line-height: 1;
+      border-radius: 4px; transition: color 0.12s;
+      flex-shrink: 0;
+    }
+    .am-ql-del:hover { color: var(--ci-accent-red); }
+    .am-ql-add-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      font-size: 12px; font-weight: 500; font-family: inherit;
+      border: 1px dashed var(--ci-border-default);
+      border-radius: var(--ci-radius-sm);
+      background: transparent; color: var(--ci-text-secondary);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .am-ql-add-btn:hover { border-color: var(--ci-accent-primary); color: var(--ci-accent-primary); background: var(--ci-accent-primary-soft); }
+
+    /* ── Answer Library bucket summary chips ── */
+    .am-al-buckets {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .am-al-bucket {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 10px 14px;
+      background: var(--ci-bg-inset);
+      border-radius: var(--ci-radius-sm);
+      min-width: 110px;
+    }
+    .am-al-bucket-name { font-size: 12px; font-weight: 600; color: var(--ci-text-primary); }
+    .am-al-bucket-count { font-size: 11px; color: var(--ci-text-tertiary); }
+    .am-al-loading { font-size: 12px; color: var(--ci-text-tertiary); }
+    .am-al-manage-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600;
+      color: var(--ci-text-link);
+      background: transparent;
+      border: 1px solid var(--ci-border-default);
+      padding: 6px 12px;
+      border-radius: var(--ci-radius-sm);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .am-al-manage-btn:hover { background: var(--ci-bg-inset); border-color: var(--ci-border-strong); }
   </style>
 </head>
 <body>
@@ -1322,6 +1444,9 @@
     <button class="settings-tab" data-panel="panel-behavior">Behavior</button>
     <button class="settings-tab" data-panel="panel-usage">Usage</button>
     <button class="settings-tab" data-panel="panel-apply-mode">Apply Mode</button>
+    <span class="am-live-pill" id="am-live-pill">
+      <span class="am-live-dot"></span>Apply Mode
+    </span>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════════ -->
@@ -1782,26 +1907,61 @@
   <!-- PANEL 6: APPLY MODE                                                     -->
   <!-- ════════════════════════════════════════════════════════════════════════ -->
   <div class="settings-panel" id="panel-apply-mode">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-header-text">
-          <div class="card-title">Apply Mode</div>
-          <div class="card-subtitle">Quick Links, Q&amp;A pairings, and snip settings</div>
-        </div>
+
+    <!-- ── Quick Links ── -->
+    <div class="settings-card" id="am-ql-card">
+      <div class="settings-card-head">
+        <h4>Quick Links</h4>
+        <p>URLs you paste into applications often — click a row to copy. Edit the label or URL and it saves automatically.</p>
       </div>
-      <div class="card-body">
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center;gap:16px;">
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="opacity:0.35;">
-            <rect x="6" y="8" width="28" height="24" rx="3" stroke="var(--ci-text-secondary)" stroke-width="1.5"/>
-            <path d="M12 16h16M12 21h10M12 26h7" stroke="var(--ci-text-secondary)" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--ci-text-primary);margin-bottom:6px;">Apply Mode is in development.</div>
-            <div style="font-size:13px;color:var(--ci-text-secondary);line-height:1.55;max-width:380px;">Configuration for Quick Links, Q&amp;A pairings, and snip settings will live here once <a href="https://github.com/mattryansterbenz7-sketch/company-intel/issues/246" target="_blank" rel="noopener" style="color:var(--ci-accent-primary);text-decoration:none;">#246</a> ships.</div>
-          </div>
+      <div class="settings-card-body">
+        <div id="am-ql-list" style="display:flex;flex-direction:column;gap:0;margin-bottom:12px;"></div>
+        <button class="am-ql-add-btn" id="am-ql-add">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add link
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Answer Library summary ── -->
+    <div class="settings-card" id="am-al-card">
+      <div class="settings-card-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+        <div>
+          <h4>Answer Library</h4>
+          <p>Reusable replies to common application questions — compensation, sponsorship, availability, experience, and motivation.</p>
+        </div>
+        <button class="am-al-manage-btn" id="am-al-manage-btn" title="Manage answers in the Answer Library tab">
+          Manage
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>
+        </button>
+      </div>
+      <div class="settings-card-body" style="padding-top:14px;">
+        <div class="am-al-buckets" id="am-al-buckets">
+          <!-- JS renders bucket count chips -->
+          <div class="am-al-loading">Loading&hellip;</div>
         </div>
       </div>
     </div>
+
+    <!-- ── Snip toggle ── -->
+    <div class="settings-card" id="am-snip-card">
+      <div class="settings-card-head">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;">
+          <div>
+            <h4>Snip</h4>
+            <p>Capture the application field you're focused on and send it to Coop for a draft response. Uses the snip button in the side panel toolbar.</p>
+          </div>
+          <label class="toggle-switch" style="flex-shrink:0;margin-top:2px;">
+            <input type="checkbox" id="am-snip-toggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <p class="am-snip-caption" id="am-snip-caption" style="margin-top:8px;font-size:11px;color:var(--ci-text-tertiary);line-height:1.5;">
+          Click the snip button in the side panel chat toolbar to capture a focused field.
+        </p>
+      </div>
+    </div>
+
   </div><!-- /panel-apply-mode -->
 
 </div>

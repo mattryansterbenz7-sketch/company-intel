@@ -669,14 +669,14 @@ function initApplyMode() {
 
 // Hook into the tab system: listen for Apply Mode tab clicks
 document.addEventListener('DOMContentLoaded', () => {
-  // Wire Apply Mode tab click — tab may already be active on hash load
-  const applyTab = document.querySelector('[data-tab="apply-mode"]');
+  // Wire Apply Mode tab click — tab uses data-panel="panel-apply-mode"
+  const applyTab = document.querySelector('[data-panel="panel-apply-mode"]');
   if (applyTab) {
     applyTab.addEventListener('click', initApplyMode);
   }
 
-  // Also init immediately if the hash targets apply-mode
-  if (location.hash === '#apply-mode') {
+  // Also init immediately if the hash targets the apply-mode panel
+  if (location.hash === '#panel-apply-mode') {
     // initTabs() in coop-settings.js handles the click; we just need to init
     setTimeout(initApplyMode, 0);
   }

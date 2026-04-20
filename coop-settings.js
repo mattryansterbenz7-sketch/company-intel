@@ -2353,6 +2353,180 @@ function initAutoRescoreToggles() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Apply Mode — Quick Links + Snip toggle + live pill
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Quick Links helpers (reads/writes chrome.storage.sync → prefs.quickLinks)
+// Mirrors the shape in preferences.js: [{ label, url }]
+
+function _amDebounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+const _amPersistQL = _amDebounce(() => amPersistQuickLinks(), 400);
+
+function amPersistQuickLinks() {
+  const rows = document.querySelectorAll('#am-ql-list .am-ql-row');
+  const links = [];
+  rows.forEach(row => {
+    const label = row.querySelector('.am-ql-input-label')?.value?.trim() || '';
+    const url   = row.querySelector('.am-ql-input-url')?.value?.trim()   || '';
+    links.push({ label, url });
+  });
+  chrome.storage.sync.get(['prefs'], ({ prefs: existing }) => {
+    void chrome.runtime.lastError;
+    const prefs = Object.assign({}, existing || {}, { quickLinks: links });
+    chrome.storage.sync.set({ prefs }, () => {
+      void chrome.runtime.lastError;
+      if (typeof showSaveStatus === 'function') showSaveStatus();
+    });
+  });
+}
+
+function amAddQLRow(list, label, url) {
+  const row = document.createElement('div');
+  row.className = 'am-ql-row';
+  row.innerHTML =
+    `<input type="text" class="am-ql-input-label" placeholder="Label" value="${escapeHtml(label || '')}">` +
+    `<input type="url"  class="am-ql-input-url"   placeholder="https://…" value="${escapeHtml(url || '')}">` +
+    `<button class="am-ql-del" title="Remove">&times;</button>`;
+  row.querySelector('.am-ql-del').addEventListener('click', () => {
+    row.remove();
+    amPersistQuickLinks();
+  });
+  row.querySelector('.am-ql-input-label').addEventListener('input', _amPersistQL);
+  row.querySelector('.am-ql-input-url').addEventListener('input', _amPersistQL);
+  list.appendChild(row);
+}
+
+function amRenderQuickLinks(links) {
+  const list = document.getElementById('am-ql-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const defaults = [
+    { label: 'LinkedIn Profile', url: '' },
+    { label: 'Personal Website', url: '' },
+    { label: 'GitHub', url: '' },
+    { label: 'Portfolio', url: '' },
+  ];
+  const rows = (links && links.length) ? links : defaults;
+  rows.forEach(link => amAddQLRow(list, link.label, link.url));
+}
+
+function initApplyModeQuickLinks() {
+  chrome.storage.sync.get(['prefs'], ({ prefs }) => {
+    void chrome.runtime.lastError;
+    amRenderQuickLinks((prefs || {}).quickLinks);
+    // Seed defaults if no quickLinks yet (preserves same logic as preferences.js)
+    if (!(prefs || {}).quickLinks) amPersistQuickLinks();
+  });
+
+  const addBtn = document.getElementById('am-ql-add');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const list = document.getElementById('am-ql-list');
+      if (list) amAddQLRow(list, '', '');
+    });
+  }
+}
+
+// ── Snip toggle (new flag: coopConfig.applyMode.snipEnabled, default true)
+
+function initApplyModeSnipToggle() {
+  const toggle = document.getElementById('am-snip-toggle');
+  if (!toggle) return;
+
+  chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
+    void chrome.runtime.lastError;
+    const snipEnabled = coopConfig?.applyMode?.snipEnabled ?? true;
+    toggle.checked = snipEnabled;
+  });
+
+  toggle.addEventListener('change', () => {
+    chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
+      void chrome.runtime.lastError;
+      const cfg = coopConfig || {};
+      cfg.applyMode = Object.assign({}, cfg.applyMode || {}, { snipEnabled: toggle.checked });
+      chrome.storage.local.set({ coopConfig: cfg }, () => {
+        void chrome.runtime.lastError;
+        if (typeof showSaveStatus === 'function') showSaveStatus();
+      });
+    });
+  });
+}
+
+// ── Answer Library summary buckets (reads from chrome.storage.local → applyMode)
+
+const _AM_SUMMARY_BUCKETS = [
+  { id: 'comp',  label: 'Compensation' },
+  { id: 'spon',  label: 'Sponsorship & Location' },
+  { id: 'avail', label: 'Availability' },
+  { id: 'exp',   label: 'Experience' },
+  { id: 'mot',   label: 'Motivation' },
+  { id: 'why',   label: 'Why this opportunity' },
+  { id: 'other', label: 'Other' },
+];
+
+function initApplyModeAnswerLibrarySummary() {
+  const container = document.getElementById('am-al-buckets');
+  if (!container) return;
+
+  chrome.storage.local.get(['applyMode'], ({ applyMode }) => {
+    void chrome.runtime.lastError;
+    const pairings = applyMode?.answerLibrary?.pairings || [];
+    if (pairings.length === 0) {
+      container.innerHTML = '<span class="am-al-loading" style="color:var(--ci-text-tertiary);font-size:12px;">No answers saved yet. Use the Answer Library tab to add pairings.</span>';
+      return;
+    }
+    const countByBucket = {};
+    pairings.forEach(p => { countByBucket[p.bucket] = (countByBucket[p.bucket] || 0) + 1; });
+    container.innerHTML = _AM_SUMMARY_BUCKETS.map(b => {
+      const n = countByBucket[b.id] || 0;
+      return `<div class="am-al-bucket">
+        <div class="am-al-bucket-name">${escapeHtml(b.label)}</div>
+        <div class="am-al-bucket-count">${n} saved</div>
+      </div>`;
+    }).join('');
+  });
+
+  // "Manage" button — scroll to Answer Library tab if it exists, else no-op
+  const manageBtn = document.getElementById('am-al-manage-btn');
+  if (manageBtn) {
+    manageBtn.addEventListener('click', () => {
+      // The Answer Library full UI lives in coop-settings-apply-mode.js on the same panel.
+      // For now, scroll to top of panel so user sees the Answer Library section when #244 ships.
+      // No-op that doesn't navigate away.
+      manageBtn.textContent = 'Coming in #244';
+      setTimeout(() => {
+        manageBtn.innerHTML = 'Manage <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>';
+      }, 1800);
+    });
+  }
+}
+
+// ── Red-pill live indicator — static for now (apply-mode-active state detection
+// requires a content script message; deferring real-time detection to a follow-up.
+// Pill is shown if applyMode detection is enabled in coopConfig.automations.)
+
+function initApplyModeLivePill() {
+  const pill = document.getElementById('am-live-pill');
+  if (!pill) return;
+  chrome.storage.local.get(['coopConfig'], ({ coopConfig }) => {
+    void chrome.runtime.lastError;
+    const enabled = coopConfig?.automations?.applicationModeDetection ?? true;
+    if (enabled) pill.classList.add('visible');
+  });
+}
+
+function initApplyModePanel() {
+  initApplyModeQuickLinks();
+  initApplyModeSnipToggle();
+  initApplyModeAnswerLibrarySummary();
+  initApplyModeLivePill();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2381,6 +2555,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Panel 5: Usage & Costs
   loadUsageDashboard();
+
+  // Panel 6: Apply Mode — Quick Links, Snip, Answer Library summary
+  initApplyModePanel();
 
   // Tab switching (v2)
   initTabs();
